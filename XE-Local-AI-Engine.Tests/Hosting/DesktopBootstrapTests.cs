@@ -55,7 +55,11 @@ public sealed class DesktopBootstrapTests : IDisposable
     [Test]
     public void DataDirectoryOverride_RejectsRelativeAndControlCharacterPathsBeforeFilesystemUse()
     {
-        foreach (var invalid in new[] { "relative/path", "/tmp/xe-data\nforged" })
+        foreach (var invalid in new[]
+                 {
+                     "relative/path",
+                     "/tmp/xe-data\nforged"
+                 })
         {
             Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, invalid);
 

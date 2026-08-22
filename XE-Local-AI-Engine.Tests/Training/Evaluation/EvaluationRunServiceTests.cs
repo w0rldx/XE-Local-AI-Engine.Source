@@ -59,7 +59,7 @@ public sealed class EvaluationRunServiceTests
 
         AssertEx.Contains(exception.Message, "target is required", StringComparison.OrdinalIgnoreCase);
         _ = await harness.Evaluations.DidNotReceiveWithAnyArgs()
-                                     .CreateAndEnqueueAsync(default!, CancellationToken.None);
+                         .CreateAndEnqueueAsync(default!, CancellationToken.None);
     }
 
     /// <summary>One service over substituted stores; only the irrelevant live dataset fingerprint varies.</summary>

@@ -176,16 +176,17 @@ public sealed record McpAgentDefinition(
 
 internal static class McpAdminWireNames
 {
-    public static string DownloadErrorCode(HuggingFaceDownloadFailure failure) => failure switch
-    {
-        HuggingFaceDownloadFailure.Network => "model_download_network_error",
-        HuggingFaceDownloadFailure.Gated or HuggingFaceDownloadFailure.Unauthorized => "model_source_unauthorized",
-        HuggingFaceDownloadFailure.DiskFull => "insufficient_disk_space",
-        HuggingFaceDownloadFailure.HashMismatch => "model_hash_mismatch",
-        HuggingFaceDownloadFailure.NotFound => "model_source_not_found",
-        HuggingFaceDownloadFailure.DestinationConflict => McpAdminToolFailureCodes.ModelPullConflict,
-        _ => throw new ArgumentOutOfRangeException(nameof(failure), failure, "Unknown Hugging Face download failure.")
-    };
+    public static string DownloadErrorCode(HuggingFaceDownloadFailure failure) =>
+        failure switch
+        {
+            HuggingFaceDownloadFailure.Network => "model_download_network_error",
+            HuggingFaceDownloadFailure.Gated or HuggingFaceDownloadFailure.Unauthorized => "model_source_unauthorized",
+            HuggingFaceDownloadFailure.DiskFull => "insufficient_disk_space",
+            HuggingFaceDownloadFailure.HashMismatch => "model_hash_mismatch",
+            HuggingFaceDownloadFailure.NotFound => "model_source_not_found",
+            HuggingFaceDownloadFailure.DestinationConflict => McpAdminToolFailureCodes.ModelPullConflict,
+            _ => throw new ArgumentOutOfRangeException(nameof(failure), failure, "Unknown Hugging Face download failure.")
+        };
 
     public static string DownloadErrorCode(string? errorCode)
     {
@@ -205,43 +206,45 @@ internal static class McpAdminWireNames
         };
     }
 
-    public static string SettingsField(NodeSettingsField field) => field switch
-    {
-        NodeSettingsField.DefaultModelName => "default_model_name",
-        NodeSettingsField.ToolCapableModels => "tool_capable_models",
-        NodeSettingsField.MaxMessageRequestTimeoutSeconds => "max_message_request_timeout_seconds",
-        NodeSettingsField.SpeculativeDraftModelName => "speculative_draft_model_name",
-        NodeSettingsField.SpeculativeMode => "speculative_mode",
-        NodeSettingsField.SpeculativeDraftMaxTokens => "speculative_draft_max_tokens",
-        NodeSettingsField.SpeculativeDraftGpuLayers => "speculative_draft_gpu_layers",
-        NodeSettingsField.ChatCacheReuse => "chat_cache_reuse",
-        NodeSettingsField.LlamaIdleTimeToLiveSeconds => "llama_idle_time_to_live_seconds",
-        NodeSettingsField.KeepModelWarmModelName => "keep_model_warm_model_name",
-        NodeSettingsField.LlamaMaxLoadedProcesses => "llama_max_loaded_processes",
-        NodeSettingsField.KeepModelWarmIntervalSeconds => "keep_model_warm_interval_seconds",
-        _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown node-settings field.")
-    };
+    public static string SettingsField(NodeSettingsField field) =>
+        field switch
+        {
+            NodeSettingsField.DefaultModelName => "default_model_name",
+            NodeSettingsField.ToolCapableModels => "tool_capable_models",
+            NodeSettingsField.MaxMessageRequestTimeoutSeconds => "max_message_request_timeout_seconds",
+            NodeSettingsField.SpeculativeDraftModelName => "speculative_draft_model_name",
+            NodeSettingsField.SpeculativeMode => "speculative_mode",
+            NodeSettingsField.SpeculativeDraftMaxTokens => "speculative_draft_max_tokens",
+            NodeSettingsField.SpeculativeDraftGpuLayers => "speculative_draft_gpu_layers",
+            NodeSettingsField.ChatCacheReuse => "chat_cache_reuse",
+            NodeSettingsField.LlamaIdleTimeToLiveSeconds => "llama_idle_time_to_live_seconds",
+            NodeSettingsField.KeepModelWarmModelName => "keep_model_warm_model_name",
+            NodeSettingsField.LlamaMaxLoadedProcesses => "llama_max_loaded_processes",
+            NodeSettingsField.KeepModelWarmIntervalSeconds => "keep_model_warm_interval_seconds",
+            _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown node-settings field.")
+        };
 
-    public static string SettingsArgument(string propertyName) => propertyName switch
-    {
-        nameof(NodeSettingsAgenticPatch.DefaultModelName) => "default_model_name",
-        nameof(NodeSettingsAgenticPatch.EnableTools) => "enable_tools",
-        nameof(NodeSettingsAgenticPatch.ToolCapableModels) => "tool_capable_models",
-        nameof(NodeSettingsAgenticPatch.HuggingFaceDefaultQuant) => "hugging_face_default_quant",
-        nameof(NodeSettingsAgenticPatch.LlamaMaxLoadedProcesses) => "llama_max_loaded_processes",
-        nameof(NodeSettingsAgenticPatch.LlamaIdleTimeToLiveSeconds) => "llama_idle_time_to_live_seconds",
-        nameof(NodeSettingsAgenticPatch.KeepModelWarmEnabled) => "keep_model_warm_enabled",
-        nameof(NodeSettingsAgenticPatch.KeepModelWarmModelName) => "keep_model_warm_model_name",
-        nameof(NodeSettingsAgenticPatch.KeepModelWarmIntervalSeconds) => "keep_model_warm_interval_seconds",
-        nameof(NodeSettingsAgenticPatch.MaxMessageRequestTimeoutSeconds) => "max_message_request_timeout_seconds",
-        nameof(NodeSettingsAgenticPatch.ChatCacheReuse) => "chat_cache_reuse",
-        nameof(NodeSettingsAgenticPatch.SpeculativeMode) => "speculative_mode",
-        nameof(NodeSettingsAgenticPatch.SpeculativeDraftModelName) => "speculative_draft_model_name",
-        nameof(NodeSettingsAgenticPatch.SpeculativeDraftMaxTokens) => "speculative_draft_max_tokens",
-        nameof(NodeSettingsAgenticPatch.SpeculativeDraftGpuLayers) => "speculative_draft_gpu_layers",
-        nameof(NodeSettingsAgenticPatch.RerankerModelName) => "reranker_model_name",
-        _ => throw new ArgumentOutOfRangeException(nameof(propertyName), propertyName, "Unknown agentic settings property.")
-    };
+    public static string SettingsArgument(string propertyName) =>
+        propertyName switch
+        {
+            nameof(NodeSettingsAgenticPatch.DefaultModelName) => "default_model_name",
+            nameof(NodeSettingsAgenticPatch.EnableTools) => "enable_tools",
+            nameof(NodeSettingsAgenticPatch.ToolCapableModels) => "tool_capable_models",
+            nameof(NodeSettingsAgenticPatch.HuggingFaceDefaultQuant) => "hugging_face_default_quant",
+            nameof(NodeSettingsAgenticPatch.LlamaMaxLoadedProcesses) => "llama_max_loaded_processes",
+            nameof(NodeSettingsAgenticPatch.LlamaIdleTimeToLiveSeconds) => "llama_idle_time_to_live_seconds",
+            nameof(NodeSettingsAgenticPatch.KeepModelWarmEnabled) => "keep_model_warm_enabled",
+            nameof(NodeSettingsAgenticPatch.KeepModelWarmModelName) => "keep_model_warm_model_name",
+            nameof(NodeSettingsAgenticPatch.KeepModelWarmIntervalSeconds) => "keep_model_warm_interval_seconds",
+            nameof(NodeSettingsAgenticPatch.MaxMessageRequestTimeoutSeconds) => "max_message_request_timeout_seconds",
+            nameof(NodeSettingsAgenticPatch.ChatCacheReuse) => "chat_cache_reuse",
+            nameof(NodeSettingsAgenticPatch.SpeculativeMode) => "speculative_mode",
+            nameof(NodeSettingsAgenticPatch.SpeculativeDraftModelName) => "speculative_draft_model_name",
+            nameof(NodeSettingsAgenticPatch.SpeculativeDraftMaxTokens) => "speculative_draft_max_tokens",
+            nameof(NodeSettingsAgenticPatch.SpeculativeDraftGpuLayers) => "speculative_draft_gpu_layers",
+            nameof(NodeSettingsAgenticPatch.RerankerModelName) => "reranker_model_name",
+            _ => throw new ArgumentOutOfRangeException(nameof(propertyName), propertyName, "Unknown agentic settings property.")
+        };
 }
 
 internal static class McpAdminToolResponseMapper

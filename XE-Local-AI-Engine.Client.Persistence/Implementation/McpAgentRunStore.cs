@@ -971,9 +971,9 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
     {
         return value is { Length: >= 1 and <= 32 }
                && value.All(static character => character is >= 'a' and <= 'z'
-                                                  or >= 'A' and <= 'Z'
-                                                  or >= '0' and <= '9'
-                                                  or '_' or '-');
+                   or >= 'A' and <= 'Z'
+                   or >= '0' and <= '9'
+                   or '_' or '-');
     }
 
     private static void ValidateFinalization(McpAgentRunFinalization finalization)

@@ -51,7 +51,11 @@ public sealed class McpAgentRunStoreTests : IDisposable
         await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
         await using var fixture = CreateFixture(databasePath);
 
-        foreach (var prefix in new[] { "xemcp bad", "xemcp.bad" })
+        foreach (var prefix in new[]
+                 {
+                     "xemcp bad",
+                     "xemcp.bad"
+                 })
         {
             var request = CreateAdmission(fixture.Protector, Guid.NewGuid(), "inspect") with
             {

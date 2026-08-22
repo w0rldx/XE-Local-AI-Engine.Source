@@ -1,7 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Hosting;
 
-using System.Text.Json;
 using System.Net;
+using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -92,8 +93,7 @@ public sealed class EngineCommandDispatchTests
 
         AssertEx.Null(result.App);
         AssertEx.Equal(expected: 1, result.ExitCode);
-        AssertEx.Equal(
-            $"The engine command failed unexpectedly (stage=preparation, type=InvalidOperationException).{Environment.NewLine}",
+        AssertEx.Equal($"The engine command failed unexpectedly (stage=preparation, type=InvalidOperationException).{Environment.NewLine}",
             error.ToString());
         AssertEx.False(error.ToString().Contains("secret-value", StringComparison.Ordinal));
     }
@@ -137,7 +137,7 @@ public sealed class EngineCommandDispatchTests
         DesktopPortStore.PersistReady(dataDirectory,
             new ReadyInfo("1.0.0", "http://127.0.0.1:41234", "http://127.0.0.1:41234/api/local/v1/mcp/server",
                 dataDirectory, Environment.ProcessId, DateTimeOffset.UtcNow),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+            NullLogger.Instance);
         using var output = new StringWriter();
         try
         {

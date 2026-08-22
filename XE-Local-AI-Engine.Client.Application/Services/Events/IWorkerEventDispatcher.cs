@@ -100,7 +100,7 @@ public interface IWorkerEventDispatcher
     ///     Recorded on the terminal state as <see cref="Events.InvocationState.FinishReason" />; it never changes the
     ///     status, so a turn cut off at the token budget still completes.
     /// </param>
-/// <param name="throughput">
+    /// <param name="throughput">
     ///     The turn's separated throughput facts (TTFT, pp/tg tokens and milliseconds), or null when the provider
     ///     reported none. Recorded on the terminal state as <see cref="Events.InvocationState.Throughput" />.
     /// </param>

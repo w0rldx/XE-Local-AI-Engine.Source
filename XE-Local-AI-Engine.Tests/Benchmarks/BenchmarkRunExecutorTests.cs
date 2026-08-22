@@ -670,7 +670,7 @@ public sealed class BenchmarkRunExecutorTests
              .Returns(true);
         string? failure = null;
         store.MarkPrimaryFailedAsync(run.Id, run.Version, Arg.Do<string>(message => failure = message), Arg.Any<long>(), Arg.Any<string?>(),
-                Arg.Any<CancellationToken>())
+                 Arg.Any<CancellationToken>())
              .Returns(run with
              {
                  PrimaryStatus = BenchmarkPrimaryStatus.Failed,

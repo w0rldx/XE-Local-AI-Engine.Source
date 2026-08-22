@@ -120,20 +120,20 @@ public sealed class BenchmarkJudgeExecutor(
             // dequeued by the SAME FIFO consumer that just ran the primary, so it routinely arrives while the primary's
             // llama-server is still handing its VRAM back. Wait and re-decide instead of terminalizing the attempt.
             var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
-                                     new CapacityRequest(runtime.Model.ModelName,
-                                         ModelRole.Chat,
-                                         runtime.Runtime.ContextTokens,
-                                         PublishLaunchAdmission: false,
-                                         runtime.Runtime.KvTypeK),
-                                     new BenchmarkAdmissionContext(work.RunId,
-                                         "judge",
-                                         runtime.RequestedContextTokens,
-                                         runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
-                                         CapacityRejectedMessage),
-                                     admissionRetry,
-                                     logger,
-                                     token)
-                                 .ConfigureAwait(false);
+                                                               new CapacityRequest(runtime.Model.ModelName,
+                                                                   ModelRole.Chat,
+                                                                   runtime.Runtime.ContextTokens,
+                                                                   PublishLaunchAdmission: false,
+                                                                   runtime.Runtime.KvTypeK),
+                                                               new BenchmarkAdmissionContext(work.RunId,
+                                                                   "judge",
+                                                                   runtime.RequestedContextTokens,
+                                                                   runtime.Runtime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                                                                   CapacityRejectedMessage),
+                                                               admissionRetry,
+                                                               logger,
+                                                               token)
+                                                           .ConfigureAwait(false);
 
             using var reservation = decision.Reservation;
             // Truncation is read through the shared predicate, not a local copy: the judging still runs — a truncated

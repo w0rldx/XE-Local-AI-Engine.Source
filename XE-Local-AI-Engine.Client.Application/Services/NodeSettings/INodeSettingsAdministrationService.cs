@@ -60,10 +60,12 @@ public sealed record NodeSettingsAdministrationResult(
     StoredNodeSettings Settings,
     IReadOnlyList<NodeSettingsValidationError> ValidationErrors)
 {
-    public static NodeSettingsAdministrationResult Saved(StoredNodeSettings settings) => new(true, settings, []);
+    public static NodeSettingsAdministrationResult Saved(StoredNodeSettings settings) =>
+        new(true, settings, []);
 
     public static NodeSettingsAdministrationResult Rejected(StoredNodeSettings settings,
-        IReadOnlyList<NodeSettingsValidationError> errors) => new(false, settings, errors);
+        IReadOnlyList<NodeSettingsValidationError> errors) =>
+        new(false, settings, errors);
 }
 
 /// <summary>Transport-neutral field validation for the restricted agentic settings patch.</summary>
@@ -131,7 +133,8 @@ public static class NodeSettingsAgenticPatchValidation
         return [];
     }
 
-    private static bool IsBetween(int value, int minimum, int maximum) => value >= minimum && value <= maximum;
+    private static bool IsBetween(int value, int minimum, int maximum) =>
+        value >= minimum && value <= maximum;
 
     private static IReadOnlyList<NodeSettingsValidationError> Reject(NodeSettingsField field, string message) =>
         [new NodeSettingsValidationError(field, message)];

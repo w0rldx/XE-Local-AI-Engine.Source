@@ -26,12 +26,11 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Inference;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Models;
-using XE_Local_AI_Engine.Client.Services.Training.Datasets;
-using XE_Local_AI_Engine.Client.Services.Training.Export;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
+using XE_Local_AI_Engine.Client.Services.Training.Export;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
@@ -450,8 +449,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.RemoveAll<ITransientLlamaServerLauncher>();
             services.AddSingleton<ITransientLlamaServerLauncher, TrainingLifecycleE2ETestDoubles.TransientLauncher>();
             services.RemoveAll<ITrainedModelSmokeGate>();
-            services.AddSingleton<ITrainedModelSmokeGate>(provider => new TrainedModelSmokeGate(
-                provider.GetRequiredService<ITransientLlamaServerLauncher>(),
+            services.AddSingleton<ITrainedModelSmokeGate>(provider => new TrainedModelSmokeGate(provider.GetRequiredService<ITransientLlamaServerLauncher>(),
                 provider.GetRequiredService<IInferenceChatClientFactory>(),
                 new TrainingLifecycleE2ETestDoubles.PropsHttpClientFactory(),
                 provider.GetRequiredService<IGpuModelLoadAdmission>(),
@@ -472,8 +470,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             services.RemoveAll<IInferenceChatClientFactory>();
             services.AddSingleton<IInferenceChatClientFactory, TrainingLifecycleE2ETestDoubles.ChatFactory>();
             services.RemoveAll<IEvaluationRunService>();
-            services.AddScoped<IEvaluationRunService>(provider => new EvaluationRunService(
-                provider.GetRequiredService<ITrainingEvaluationStore>(),
+            services.AddScoped<IEvaluationRunService>(provider => new EvaluationRunService(provider.GetRequiredService<ITrainingEvaluationStore>(),
                 provider.GetRequiredService<ITrainingRunStore>(),
                 provider.GetRequiredService<ITrainingDatasetStore>(),
                 provider.GetRequiredService<TrainingLifecycleE2ETestDoubles.InstalledModels>(),
@@ -482,8 +479,7 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
 
             services.AddSingleton<TrainingLifecycleE2ETestDoubles.Importer>();
             services.RemoveAll<IArtifactPromotionService>();
-            services.AddScoped<IArtifactPromotionService>(provider => new ArtifactPromotionService(
-                provider.GetRequiredService<ITrainingRunStore>(),
+            services.AddScoped<IArtifactPromotionService>(provider => new ArtifactPromotionService(provider.GetRequiredService<ITrainingRunStore>(),
                 provider.GetRequiredService<ITrainingBaseArtifactStore>(),
                 provider.GetRequiredService<TrainingLifecycleE2ETestDoubles.InstalledModels>(),
                 provider.GetRequiredService<IGgufAcquisitionPreflight>(),

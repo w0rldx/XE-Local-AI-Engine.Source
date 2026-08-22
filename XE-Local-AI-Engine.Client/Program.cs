@@ -57,7 +57,6 @@ namespace XE_Local_AI_Engine.Client
     using System.Text.Json;
     using FastEndpoints;
     using FastEndpoints.Swagger;
-    using FluentValidation;
     using Microsoft.AspNetCore.Diagnostics.HealthChecks;
     using Microsoft.AspNetCore.Hosting.Server;
     using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -66,11 +65,11 @@ namespace XE_Local_AI_Engine.Client
     using Serilog;
     using Serilog.Events;
     using XE_Local_AI_Engine.Client.Common.Extensions;
-    using XE_Local_AI_Engine.Client.Endpoints.Common;
+    using XE_Local_AI_Engine.Client.DependencyInjection;
     using XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
     using XE_Local_AI_Engine.Client.Endpoints.Auth.V1.Validators;
+    using XE_Local_AI_Engine.Client.Endpoints.Common;
     using XE_Local_AI_Engine.Client.Hosting;
-    using XE_Local_AI_Engine.Client.DependencyInjection;
     using XE_Local_AI_Engine.Client.Hubs;
     using XE_Local_AI_Engine.Client.Persistence.Entities;
     using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -79,10 +78,10 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Services.Chat;
     using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
     using XE_Local_AI_Engine.Client.Services.Development;
+    using XE_Local_AI_Engine.Client.Services.Mcp;
     using XE_Local_AI_Engine.Client.Services.Persistence;
     using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
     using XE_Local_AI_Engine.Client.Services.Proxy;
-    using XE_Local_AI_Engine.Client.Services.Mcp;
     using XE_Local_AI_Engine.Client.Services.Shutdown;
 
     /// <summary>
@@ -131,8 +130,7 @@ namespace XE_Local_AI_Engine.Client
             }
             catch (Exception exception)
             {
-                await standardError.WriteLineAsync(
-                                       $"The engine command failed unexpectedly (stage={commandContext.StageOutput}, type={exception.GetType().Name}).")
+                await standardError.WriteLineAsync($"The engine command failed unexpectedly (stage={commandContext.StageOutput}, type={exception.GetType().Name}).")
                                    .ConfigureAwait(false);
                 if (exception is DesktopDataDirectoryException dataDirectoryException)
                 {
@@ -271,6 +269,7 @@ namespace XE_Local_AI_Engine.Client
                         Log.Error("The engine is already running for this data directory. Use the HTTP path on the running "
                                   + "instance, or stop it before running this command.");
                     }
+
                     await Log.CloseAndFlushAsync().ConfigureAwait(false);
                     return new ProgramStartResult(App: null, ExitCode: setupRequested || mcpKeyRequested ? 4 : 1);
                 }
@@ -843,12 +842,12 @@ namespace XE_Local_AI_Engine.Client
             if (status.SetupRequired)
             {
                 await standardError.WriteLineAsync("An administrator account must be configured before an MCP key can be generated.")
-                             .ConfigureAwait(false);
+                                   .ConfigureAwait(false);
                 return 5;
             }
 
             await standardError.WriteLineAsync("warning: this invalidates any previously configured MCP client's key.")
-                         .ConfigureAwait(false);
+                               .ConfigureAwait(false);
             var apiKeyService = serviceScope.ServiceProvider.GetRequiredService<IMcpServerApiKeyService>();
             var generated = await apiKeyService.GenerateAsync(scope, CancellationToken.None).ConfigureAwait(false);
             await standardOutput.WriteLineAsync($"XE_MCP_KEY={generated.Key}").ConfigureAwait(false);
@@ -860,12 +859,15 @@ namespace XE_Local_AI_Engine.Client
             ArgumentNullException.ThrowIfNull(standardOutput);
             await standardOutput.WriteLineAsync("XE Local AI Engine").ConfigureAwait(false);
             await standardOutput.WriteLineAsync("Serve: --desktop | --mcp-only [--no-browser] [--port <1-65535>]").ConfigureAwait(false);
-            await standardOutput.WriteLineAsync("Commands: --setup [--admin-email <email>] [--admin-password <password> | --admin-password-stdin] | --mcp-key <delegate|agentic> | --status [--json] | --help")
-                                .ConfigureAwait(false);
+            await standardOutput
+                  .WriteLineAsync("Commands: --setup [--admin-email <email>] [--admin-password <password> | --admin-password-stdin] | --mcp-key <delegate|agentic> | --status [--json] | --help")
+                  .ConfigureAwait(false);
             await standardOutput.WriteLineAsync("Maintenance: --reset-admin-password <password> | --knowledge-downgrade-preflight | --knowledge-downgrade-export")
                                 .ConfigureAwait(false);
-            await standardOutput.WriteLineAsync("Credentials: scripts and installers must use XE_ADMIN_PASSWORD or --admin-password-stdin, never --admin-password on argv; argv exposes the password in process listings.")
-                                .ConfigureAwait(false);
+            await standardOutput
+                  .WriteLineAsync(
+                      "Credentials: scripts and installers must use XE_ADMIN_PASSWORD or --admin-password-stdin, never --admin-password on argv; argv exposes the password in process listings.")
+                  .ConfigureAwait(false);
             await standardOutput.WriteLineAsync("Data: XE_DATA_DIR must be an absolute path; status inspection never creates it.").ConfigureAwait(false);
             await standardOutput.WriteLineAsync("Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable.")
                                 .ConfigureAwait(false);
@@ -945,7 +947,8 @@ namespace XE_Local_AI_Engine.Client
             return await WriteStatusAsync(args, status, standardOutput).ConfigureAwait(false);
         }
 
-        private static string ResolveInstallKind(bool isManagedInstall) => isManagedInstall ? "velopack-managed" : "unmanaged";
+        private static string ResolveInstallKind(bool isManagedInstall) =>
+            isManagedInstall ? "velopack-managed" : "unmanaged";
 
         private static async Task<int> WriteStatusAsync(string[] args, EngineStatus status, TextWriter standardOutput)
         {
@@ -986,7 +989,8 @@ namespace XE_Local_AI_Engine.Client
             }
         }
 
-        private sealed record EngineStatus(bool Running,
+        private sealed record EngineStatus(
+            bool Running,
             string? Version,
             string? Url,
             string? McpUrl,
@@ -1007,17 +1011,19 @@ namespace XE_Local_AI_Engine.Client
         {
             internal OneShotCommandStage Stage { get; private set; } = OneShotCommandStage.Preparation;
 
-            internal string StageOutput => Stage switch
-            {
-                OneShotCommandStage.Preparation => "preparation",
-                OneShotCommandStage.Status => "status",
-                OneShotCommandStage.HostInitialization => "host-initialization",
-                OneShotCommandStage.Migrations => "migrations",
-                OneShotCommandStage.Handler => "handler",
-                _ => "unknown"
-            };
+            internal string StageOutput =>
+                Stage switch
+                {
+                    OneShotCommandStage.Preparation => "preparation",
+                    OneShotCommandStage.Status => "status",
+                    OneShotCommandStage.HostInitialization => "host-initialization",
+                    OneShotCommandStage.Migrations => "migrations",
+                    OneShotCommandStage.Handler => "handler",
+                    _ => "unknown"
+                };
 
-            internal void SetStage(OneShotCommandStage stage) => Stage = stage;
+            internal void SetStage(OneShotCommandStage stage) =>
+                Stage = stage;
         }
 
         private static async Task<int> RunKnowledgeDowngradeCommandAsync(IServiceProvider services, KnowledgeDowngradeCommand command)

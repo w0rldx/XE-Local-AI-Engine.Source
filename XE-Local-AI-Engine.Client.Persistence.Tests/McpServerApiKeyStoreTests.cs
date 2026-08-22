@@ -28,13 +28,28 @@ public sealed class McpServerApiKeyStoreTests : IDisposable
         await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
         var store = new McpServerApiKeyStore(context, new FixedTimeProvider());
 
-        _ = await store.SetAsync("xemcp_first", new byte[] { 1, 2, 3 }, 1).ConfigureAwait(false);
-        var replacement = await store.SetAsync("xemcp_second", new byte[] { 4, 5, 6 }, 0).ConfigureAwait(false);
+        _ = await store.SetAsync("xemcp_first", new byte[]
+        {
+            1,
+            2,
+            3
+        }, 1).ConfigureAwait(false);
+        var replacement = await store.SetAsync("xemcp_second", new byte[]
+        {
+            4,
+            5,
+            6
+        }, 0).ConfigureAwait(false);
 
         AssertEx.Equal(expected: 1, await context.McpServerApiKeys.CountAsync().ConfigureAwait(false));
         AssertEx.Equal("xemcp_second", replacement.Prefix);
         AssertEx.Equal(0, replacement.Scope);
-        AssertEx.True(replacement.KeyHash.Span.SequenceEqual(new byte[] { 4, 5, 6 }),
+        AssertEx.True(replacement.KeyHash.Span.SequenceEqual(new byte[]
+            {
+                4,
+                5,
+                6
+            }),
             "A rotation must expose only the replacement digest.");
     }
 
@@ -46,7 +61,12 @@ public sealed class McpServerApiKeyStoreTests : IDisposable
         var store = new McpServerApiKeyStore(context, new FixedTimeProvider());
 
         _ = await AssertEx.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            store.SetAsync("xemcp_invalid", new byte[] { 1, 2, 3 }, scope: 2)).ConfigureAwait(false);
+            store.SetAsync("xemcp_invalid", new byte[]
+            {
+                1,
+                2,
+                3
+            }, scope: 2)).ConfigureAwait(false);
 
         AssertEx.Equal(expected: 0, await context.McpServerApiKeys.CountAsync().ConfigureAwait(false));
     }
@@ -57,8 +77,18 @@ public sealed class McpServerApiKeyStoreTests : IDisposable
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(_databasePath, _keyHolder);
         await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
         var store = new McpServerApiKeyStore(context, new FixedTimeProvider());
-        var original = await store.SetAsync("xemcp_first", new byte[] { 1, 2, 3 }, scope: 1).ConfigureAwait(false);
-        var replacement = await store.SetAsync("xemcp_second", new byte[] { 4, 5, 6 }, scope: 0).ConfigureAwait(false);
+        var original = await store.SetAsync("xemcp_first", new byte[]
+        {
+            1,
+            2,
+            3
+        }, scope: 1).ConfigureAwait(false);
+        var replacement = await store.SetAsync("xemcp_second", new byte[]
+        {
+            4,
+            5,
+            6
+        }, scope: 0).ConfigureAwait(false);
 
         var touched = await store.TouchLastUsedAsync(original.GenerationId, timestampUtc: 999).ConfigureAwait(false);
 
@@ -70,6 +100,7 @@ public sealed class McpServerApiKeyStoreTests : IDisposable
 
     private sealed class FixedTimeProvider : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => DateTimeOffset.UnixEpoch.AddDays(1);
+        public override DateTimeOffset GetUtcNow() =>
+            DateTimeOffset.UnixEpoch.AddDays(1);
     }
 }

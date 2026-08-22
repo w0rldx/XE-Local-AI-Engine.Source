@@ -449,8 +449,8 @@ public sealed class McpServerInboundAuthTests
         var delegateAuthentication = await AuthenticateAsync(factory, delegateKey.Key).ConfigureAwait(false);
         AssertEx.True(delegateAuthentication.Succeeded);
         AssertEx.False((await authorization.AuthorizeAsync(AssertEx.NotNull(delegateAuthentication.Principal),
-            resource: null,
-            NodeAuthorizationPolicies.McpAgentic).ConfigureAwait(false)).Succeeded,
+                resource: null,
+                NodeAuthorizationPolicies.McpAgentic).ConfigureAwait(false)).Succeeded,
             "A valid delegate key must authenticate but remain forbidden by the agentic policy.");
     }
 
@@ -565,6 +565,8 @@ public sealed class McpServerInboundAuthTests
     }
 
     private sealed record KeyStatusBody(bool Configured, string EndpointUrl, KeyMetadataBody? ApiKey = null);
+
     private sealed record GeneratedKeyBody(string Key, KeyMetadataBody ApiKey);
+
     private sealed record KeyMetadataBody(string Scope);
 }

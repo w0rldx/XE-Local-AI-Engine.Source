@@ -141,16 +141,16 @@ internal sealed class HfDownloadClient
             try
             {
                 return await DownloadOnceAsync(requestUri,
-                                     commit => BuildResolveUri(repoId, commit, fileName),
-                                     expectedSha,
-                                     fallbackSha,
-                                     modelName,
-                                     partPath,
-                                     destinationPath,
-                                     expectedSizeBytes,
-                                     progress,
-                                     ct)
-                                 .ConfigureAwait(false);
+                        commit => BuildResolveUri(repoId, commit, fileName),
+                        expectedSha,
+                        fallbackSha,
+                        modelName,
+                        partPath,
+                        destinationPath,
+                        expectedSizeBytes,
+                        progress,
+                        ct)
+                    .ConfigureAwait(false);
             }
             catch (HuggingFaceDownloadException exception) when (IsTransient(exception.Reason) && attempt < _options.MaxDownloadRetries)
             {
@@ -988,7 +988,8 @@ internal sealed class HfDownloadClient
     private sealed record SingleStreamResume(long Bytes, string Revision);
 
     /// <summary>Everything a chunk needs that is identical for every chunk of one parallel download.</summary>
-    private sealed record ChunkContext(Uri RequestUri,
+    private sealed record ChunkContext(
+        Uri RequestUri,
         SafeFileHandle Handle,
         RangeResumeState State,
         string ModelName,
@@ -1156,10 +1157,10 @@ internal sealed class HfDownloadClient
             {
                 _cursors[index] = cursor;
                 var line = string.Join(' ',
-                    [
-                        FormatVersion, _totalBytes.ToString(CultureInfo.InvariantCulture), _revision,
-                        .. _cursors.Select(value => value.ToString(CultureInfo.InvariantCulture))
-                    ]);
+                [
+                    FormatVersion, _totalBytes.ToString(CultureInfo.InvariantCulture), _revision,
+                    .. _cursors.Select(value => value.ToString(CultureInfo.InvariantCulture))
+                ]);
                 try
                 {
                     File.WriteAllText(_sidecarPath, line);

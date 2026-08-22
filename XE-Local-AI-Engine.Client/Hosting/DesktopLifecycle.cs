@@ -217,8 +217,7 @@ internal sealed class DesktopLifecycle : IDisposable
                 DesktopPortStore.PersistReady(_dataDirectory,
                     new ReadyInfo(_version, canonicalUrl, mcpUrl, _dataDirectory, Environment.ProcessId, DateTimeOffset.UtcNow),
                     _logger);
-                _standardOutput.WriteLine(
-                    $"XE_READY=1 XE_VERSION={_version} XE_URL={canonicalUrl} XE_MCP_URL={mcpUrl} XE_DATA_DIR={_dataDirectory}");
+                _standardOutput.WriteLine($"XE_READY=1 XE_VERSION={_version} XE_URL={canonicalUrl} XE_MCP_URL={mcpUrl} XE_DATA_DIR={_dataDirectory}");
             }
         }
         catch (Exception exception)

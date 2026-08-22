@@ -39,7 +39,10 @@ public static class GenerationProvenance
 
     private static readonly JsonSerializerOptions PersistedOptions = new(JsonSerializerDefaults.Web)
     {
-        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
+        Converters =
+        {
+            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
+        }
     };
 
     public static string? Validate(GenerationMetadataInput? metadata)

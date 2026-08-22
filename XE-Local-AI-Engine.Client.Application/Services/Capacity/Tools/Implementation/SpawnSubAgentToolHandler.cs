@@ -99,7 +99,8 @@ internal sealed class SpawnSubAgentToolHandler : IClientLocalToolHandler
             : null;
     }
 
-    private static bool Exceeds(string? value, int maximumLength) => value is { Length: > 0 } && value.Length > maximumLength;
+    private static bool Exceeds(string? value, int maximumLength) =>
+        value is { Length: > 0 } && value.Length > maximumLength;
 
     private static string Exceeded(string argumentName, int maximumLength) =>
         $"spawn_subagent argument '{argumentName}' exceeded the maximum length of {maximumLength} characters.";

@@ -14,8 +14,10 @@ internal sealed class TransientLlamaServerEvaluationHarness(
     IGpuModelLoadAdmission loadAdmission) : ITransientLlamaServerEvaluationHarness
 {
     private readonly ILlamaCppBinaryManager _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
+
     private readonly ILlamaServerCapabilityManifestProbe _capabilityManifestProbe =
         capabilityManifestProbe ?? throw new ArgumentNullException(nameof(capabilityManifestProbe));
+
     private readonly TransientLlamaServerLauncher _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
     private readonly ILlamaServerLaunchPolicy _launchPolicy = launchPolicy ?? throw new ArgumentNullException(nameof(launchPolicy));
     private readonly IGpuModelLoadAdmission _loadAdmission = loadAdmission ?? throw new ArgumentNullException(nameof(loadAdmission));
@@ -55,14 +57,14 @@ internal sealed class TransientLlamaServerEvaluationHarness(
                 ? null
                 : await _loadAdmission.AcquireAsync(ct).ConfigureAwait(false);
             return await _launcher.RunEvaluationAsync(request,
-                    binary,
-                    variant,
-                    manifest,
-                    _launchPolicy,
-                    bindProvenance,
-                    body,
-                    ct)
-                .ConfigureAwait(false);
+                                      binary,
+                                      variant,
+                                      manifest,
+                                      _launchPolicy,
+                                      bindProvenance,
+                                      body,
+                                      ct)
+                                  .ConfigureAwait(false);
         }
     }
 }

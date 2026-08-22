@@ -219,8 +219,7 @@ public sealed class ArtifactQualityServiceTests
     [Test]
     [Arguments(true, false)]
     [Arguments(false, true)]
-    public async Task Decide_AfterTwoRevalidationCycles_RejectsOlderMixedSideReuseThenAcceptsFreshPair(
-        bool reuseOldestBase,
+    public async Task Decide_AfterTwoRevalidationCycles_RejectsOlderMixedSideReuseThenAcceptsFreshPair(bool reuseOldestBase,
         bool reuseOldestTuned)
     {
         var harness = Harness.Create(aggregateDelta: 0, kindDelta: 0);
@@ -360,15 +359,26 @@ public sealed class ArtifactQualityServiceTests
 
         public TrainingComparisonRecord AddComparisonPair(bool reuseOldestBase = false, bool reuseOldestTuned = false)
         {
-            var freshBase = reuseOldestBase ? _baseEvaluation : _baseEvaluation with { Id = Guid.NewGuid(), ComparisonId = null };
-            var freshTuned = reuseOldestTuned ? _tunedEvaluation : _tunedEvaluation with { Id = Guid.NewGuid(), ComparisonId = null };
+            var freshBase = reuseOldestBase
+                ? _baseEvaluation
+                : _baseEvaluation with
+                {
+                    Id = Guid.NewGuid(),
+                    ComparisonId = null
+                };
+            var freshTuned = reuseOldestTuned
+                ? _tunedEvaluation
+                : _tunedEvaluation with
+                {
+                    Id = Guid.NewGuid(),
+                    ComparisonId = null
+                };
             var fresh = Comparison with
             {
                 Id = Guid.NewGuid(),
                 BaseEvaluationRunId = freshBase.Id,
                 TunedEvaluationRunId = freshTuned.Id,
-                DeltasJson = JsonSerializer.SerializeToUtf8Bytes(
-                    ComparisonReportService.ComputeDeltas(freshBase, freshTuned, baseBenchmark: null, tunedBenchmark: null),
+                DeltasJson = JsonSerializer.SerializeToUtf8Bytes(ComparisonReportService.ComputeDeltas(freshBase, freshTuned, baseBenchmark: null, tunedBenchmark: null),
                     TrainingJson.Options)
             };
             _ = _evaluations.GetComparisonAsync(fresh.Id, Arg.Any<CancellationToken>()).Returns(fresh);
@@ -401,7 +411,13 @@ public sealed class ArtifactQualityServiceTests
             var firstSampleId = Guid.NewGuid();
             var secondSampleId = Guid.NewGuid();
             var kindOnlyRegression = aggregateDelta >= 0 && kindDelta < 0;
-            var sampleIds = kindOnlyRegression ? new[] { firstSampleId, secondSampleId } : [firstSampleId];
+            var sampleIds = kindOnlyRegression
+                ? new[]
+                {
+                    firstSampleId,
+                    secondSampleId
+                }
+                : [firstSampleId];
             var membership = JsonSerializer.SerializeToUtf8Bytes(new TrainingEvaluationMembershipV1
             {
                 TrainingRunId = runId,
@@ -441,8 +457,12 @@ public sealed class ArtifactQualityServiceTests
                 entries: tunedResults);
             if (evaluationRunMismatch)
             {
-                tunedEvaluation = tunedEvaluation with { TrainingRunId = Guid.NewGuid() };
+                tunedEvaluation = tunedEvaluation with
+                {
+                    TrainingRunId = Guid.NewGuid()
+                };
             }
+
             var deltas = ComparisonReportService.ComputeDeltas(baseEvaluation, tunedEvaluation, baseBenchmark: null, tunedBenchmark: null);
             if (currentEvaluationRegressed)
             {
@@ -488,17 +508,17 @@ public sealed class ArtifactQualityServiceTests
             _ = runs.GetArtifactAsync(artifactId, Arg.Any<CancellationToken>()).Returns(_ => artifact);
             _ = runs.GetAsync(runId, Arg.Any<CancellationToken>()).Returns(run);
             _ = runs.SetArtifactQualityDecisionAsync(artifactId, Arg.Any<long>(), Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(),
-                    Arg.Any<CancellationToken>())
-                .Returns(call =>
-                {
-                    artifact = artifact with
+                        Arg.Any<CancellationToken>())
+                    .Returns(call =>
                     {
-                        Version = artifact.Version + 1,
-                        QualityComparisonId = call.ArgAt<Guid>(2),
-                        QualityDecisionJson = call.ArgAt<ReadOnlyMemory<byte>>(3)
-                    };
-                    return artifact;
-                });
+                        artifact = artifact with
+                        {
+                            Version = artifact.Version + 1,
+                            QualityComparisonId = call.ArgAt<Guid>(2),
+                            QualityDecisionJson = call.ArgAt<ReadOnlyMemory<byte>>(3)
+                        };
+                        return artifact;
+                    });
             var evaluations = Substitute.For<ITrainingEvaluationStore>();
             _ = evaluations.GetComparisonAsync(comparison.Id, Arg.Any<CancellationToken>()).Returns(comparison);
             _ = evaluations.GetAsync(baseEvaluation.Id, Arg.Any<CancellationToken>()).Returns(baseEvaluation);

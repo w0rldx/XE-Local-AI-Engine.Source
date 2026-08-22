@@ -12,8 +12,8 @@ public sealed partial class McpToolsReferenceDriftTests
     public void McpToolsReference_NamesAndScopesExactlyMatchRegisteredTools()
     {
         var registered = RegisteredTools(typeof(NodeAgentMcpTools), "delegate")
-            .Concat(RegisteredTools(typeof(NodeAdminMcpTools), "agentic"))
-            .ToDictionary(static tool => tool.Name, static tool => tool.Scope, StringComparer.Ordinal);
+                         .Concat(RegisteredTools(typeof(NodeAdminMcpTools), "agentic"))
+                         .ToDictionary(static tool => tool.Name, static tool => tool.Scope, StringComparer.Ordinal);
         var documented = ParseDocumentedTools(RepositoryPaths.Combine("skills",
             "xe-local-ai-engine",
             "references",
@@ -32,7 +32,7 @@ public sealed partial class McpToolsReferenceDriftTests
             $"Documented MCP tools not registered: {string.Join(", ", missingFromRegistration)}");
 
         var wrongScopes = registered.Where(tool => !documented.TryGetValue(tool.Key, out var scope)
-                                                    || !string.Equals(tool.Value, scope, StringComparison.Ordinal))
+                                                   || !string.Equals(tool.Value, scope, StringComparison.Ordinal))
                                     .Select(tool => $"{tool.Key}: expected {tool.Value}, documented {documented.GetValueOrDefault(tool.Key, "<missing>")}")
                                     .Order()
                                     .ToArray();

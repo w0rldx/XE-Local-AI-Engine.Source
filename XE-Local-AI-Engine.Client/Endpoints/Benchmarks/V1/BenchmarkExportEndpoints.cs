@@ -7,10 +7,8 @@ using System.Text.Json;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 /// <summary>The agent identity a project's runs were frozen against, read from the runs themselves.</summary>
 public sealed class BenchmarkExportAgentResponse
@@ -177,8 +175,7 @@ internal static class BenchmarkExportProjection
     private const int MaxSlugLength = 40;
 
     /// <summary>Every run of a project, newest first, with the ranking they were ranked against.</summary>
-    public static async Task<(IReadOnlyList<BenchmarkRunRecord> Runs, BenchmarkRankCohort? RankCohort)> ListAllForExportAsync(
-        IBenchmarkStore store,
+    public static async Task<(IReadOnlyList<BenchmarkRunRecord> Runs, BenchmarkRankCohort? RankCohort)> ListAllForExportAsync(IBenchmarkStore store,
         Guid projectId,
         CancellationToken ct)
     {

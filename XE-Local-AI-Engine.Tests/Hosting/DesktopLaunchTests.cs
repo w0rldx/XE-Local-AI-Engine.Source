@@ -75,8 +75,7 @@ public sealed class DesktopLaunchTests
         AssertEx.False(DesktopLaunch.TryGetPort(["--port", "0"], out _, out _));
         AssertEx.True(DesktopLaunch.HasNoBrowserFlag(["--NO-BROWSER"]));
 
-        var setupRequested = DesktopLaunch.TryGetSetupCommand(
-            ["--setup", "--admin-email=agent@example.test", "--admin-password", "StrongPass123!"],
+        var setupRequested = DesktopLaunch.TryGetSetupCommand(["--setup", "--admin-email=agent@example.test", "--admin-password", "StrongPass123!"],
             static _ => null,
             static () => null,
             out var setup,
@@ -95,8 +94,20 @@ public sealed class DesktopLaunchTests
     {
         foreach (var args in new[]
                  {
-                     new[] { "--setup", "--admin-email=", "--admin-password", "StrongPass123!" },
-                     new[] { "--setup", "--admin-email", "--admin-password", "StrongPass123!" }
+                     new[]
+                     {
+                         "--setup",
+                         "--admin-email=",
+                         "--admin-password",
+                         "StrongPass123!"
+                     },
+                     new[]
+                     {
+                         "--setup",
+                         "--admin-email",
+                         "--admin-password",
+                         "StrongPass123!"
+                     }
                  })
         {
             var requested = DesktopLaunch.TryGetSetupCommand(args,

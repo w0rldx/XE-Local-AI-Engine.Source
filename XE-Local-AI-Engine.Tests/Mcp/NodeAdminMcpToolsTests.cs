@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Server;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.Agents.V1;
@@ -141,7 +142,12 @@ public sealed class NodeAdminMcpToolsTests
         var node = await harness.Tools.GetStatusAsync(CancellationToken.None);
         var runtime = await harness.Tools.GetRuntimeStatusAsync(CancellationToken.None);
         var acquisition = await harness.Tools.GetRuntimeAcquisition();
-        var json = JsonSerializer.Serialize(new { node, runtime, acquisition });
+        var json = JsonSerializer.Serialize(new
+        {
+            node,
+            runtime,
+            acquisition
+        });
 
         AssertEx.Equal("model-a", node.DefaultModelName!);
         AssertEx.Equal(2, node.LoadedProcessCount);
@@ -157,10 +163,8 @@ public sealed class NodeAdminMcpToolsTests
     {
         var harness = new Harness();
         var operationId = Guid.NewGuid();
-        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(
-            new LlamaCppRuntimeAcquisitionStartResult(true, "cuda", LlamaCppRuntimeAdministrationFailure.None, null));
-        harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>()).Returns(
-            new GgufDownloadTicket("repo/model:Q4_K_M", false, operationId));
+        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult(true, "cuda", LlamaCppRuntimeAdministrationFailure.None, null));
+        harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>()).Returns(new GgufDownloadTicket("repo/model:Q4_K_M", false, operationId));
         harness.Download.GetStatus("repo/model:Q4_K_M").Returns(new GgufDownloadStatus("repo/model:Q4_K_M",
             GgufDownloadPhase.Running,
             10,
@@ -168,10 +172,9 @@ public sealed class NodeAdminMcpToolsTests
             null,
             operationId));
         harness.Download.Cancel("repo/model:Q4_K_M").Returns(true);
-        harness.Models.DeleteAsync("repo/model:Q4_K_M", Arg.Any<CancellationToken>()).Returns(
-            new LocalModelDeletionResult(true, "repo/model:Q4_K_M", true));
-        harness.Models.SelectDefaultAsync("repo/model:Q4_K_M", LocalModelSelectionPolicy.InstalledLocalOnly, Arg.Any<CancellationToken>()).Returns(
-            new LocalModelSelectionResult(true, "repo/model:Q4_K_M", "old"));
+        harness.Models.DeleteAsync("repo/model:Q4_K_M", Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult(true, "repo/model:Q4_K_M", true));
+        harness.Models.SelectDefaultAsync("repo/model:Q4_K_M", LocalModelSelectionPolicy.InstalledLocalOnly, Arg.Any<CancellationToken>())
+               .Returns(new LocalModelSelectionResult(true, "repo/model:Q4_K_M", "old"));
 
         AssertEx.Equal("accepted", (await harness.Tools.StartRuntimeAcquisitionAsync(CancellationToken.None)).Status);
         AssertEx.Equal(McpAdminToolFailureCodes.InvalidVariant,
@@ -192,11 +195,10 @@ public sealed class NodeAdminMcpToolsTests
     public async Task MutationTools_MapApplicationRejectionsToStableFailureCodes()
     {
         var harness = new Harness();
-        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(
-            new LlamaCppRuntimeAcquisitionStartResult(false,
-                "cuda",
-                LlamaCppRuntimeAdministrationFailure.Busy,
-                "Runtime busy."));
+        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult(false,
+            "cuda",
+            LlamaCppRuntimeAdministrationFailure.Busy,
+            "Runtime busy."));
         harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>())
                .Returns<Task<GgufDownloadTicket>>(_ => throw new HuggingFaceDownloadException(HuggingFaceDownloadFailure.NotFound,
                    "Model source not found."));
@@ -204,11 +206,10 @@ public sealed class NodeAdminMcpToolsTests
             new LocalModelDeletionResult(false, null, false, LocalModelAdministrationFailureCodes.InvalidModelName, "Invalid model."));
         harness.Models.SelectDefaultAsync("missing", LocalModelSelectionPolicy.InstalledLocalOnly, Arg.Any<CancellationToken>()).Returns(
             new LocalModelSelectionResult(false, null, null, LocalModelAdministrationFailureCodes.ModelNotInstalled, "Model not installed."));
-        harness.Settings.ApplyAgenticPatchAsync(Arg.Any<NodeSettingsAgenticPatch>(), Arg.Any<CancellationToken>()).Returns(
-            NodeSettingsAdministrationResult.Rejected(new StoredNodeSettings(),
-            [
-                new NodeSettingsValidationError(NodeSettingsField.LlamaMaxLoadedProcesses, "Invalid process count.")
-            ]));
+        harness.Settings.ApplyAgenticPatchAsync(Arg.Any<NodeSettingsAgenticPatch>(), Arg.Any<CancellationToken>()).Returns(NodeSettingsAdministrationResult.Rejected(new StoredNodeSettings(),
+        [
+            new NodeSettingsValidationError(NodeSettingsField.LlamaMaxLoadedProcesses, "Invalid process count.")
+        ]));
 
         AssertEx.Equal(McpAdminToolFailureCodes.Busy,
             (await harness.Tools.StartRuntimeAcquisitionAsync(CancellationToken.None)).FailureCode!);
@@ -261,8 +262,7 @@ public sealed class NodeAdminMcpToolsTests
     [Arguments(HuggingFaceDownloadFailure.HashMismatch, "model_hash_mismatch")]
     [Arguments(HuggingFaceDownloadFailure.NotFound, "model_source_not_found")]
     [Arguments(HuggingFaceDownloadFailure.DestinationConflict, "model_pull_conflict")]
-    public async Task StartModelPull_UsesTheSameStableFailureVocabularyAsTerminalPolling(
-        HuggingFaceDownloadFailure failure,
+    public async Task StartModelPull_UsesTheSameStableFailureVocabularyAsTerminalPolling(HuggingFaceDownloadFailure failure,
         string expectedCode)
     {
         var harness = new Harness();
@@ -280,9 +280,9 @@ public sealed class NodeAdminMcpToolsTests
     public void AgenticSettings_AllSixteenPropertiesHaveStableSnakeCaseWireNames()
     {
         var mapped = typeof(NodeSettingsAgenticPatch).GetProperties()
-                                                       .Select(static property => McpAdminWireNames.SettingsArgument(property.Name))
-                                                       .OrderBy(static name => name, StringComparer.Ordinal)
-                                                       .ToArray();
+                                                     .Select(static property => McpAdminWireNames.SettingsArgument(property.Name))
+                                                     .OrderBy(static name => name, StringComparer.Ordinal)
+                                                     .ToArray();
 
         AssertEx.Equal(string.Join('|', ExpectedSettingsParameters), string.Join('|', mapped));
         AssertEx.False(mapped.Any(static name => name.Any(char.IsUpper)));
@@ -299,7 +299,10 @@ public sealed class NodeAdminMcpToolsTests
         var record = AgentRecord();
         harness.Agents.CreateAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.GetByKeyAsync("agent", Arg.Any<CancellationToken>()).Returns(record);
-        harness.Agents.UpdateAsync(record.Id, Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record with { Version = 2 });
+        harness.Agents.UpdateAsync(record.Id, Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record with
+        {
+            Version = 2
+        });
         harness.Agents.DeleteAsync(record.Id, Arg.Any<CancellationToken>()).Returns(true);
 
         AssertEx.Equal("current", (await harness.Tools.GetNodeSettingsAsync(CancellationToken.None)).DefaultModelName!);
@@ -339,7 +342,10 @@ public sealed class NodeAdminMcpToolsTests
         var harness = new Harness(time);
         AgentDefinitionInput? captured = null;
         harness.Agents.CreateAsync(Arg.Do<AgentDefinitionInput>(input => captured = input), Arg.Any<CancellationToken>())
-               .Returns(call => AgentRecord() with { GenerationMetadataJson = call.Arg<AgentDefinitionInput>().GenerationMetadataJson });
+               .Returns(call => AgentRecord() with
+               {
+                   GenerationMetadataJson = call.Arg<AgentDefinitionInput>().GenerationMetadataJson
+               });
         var contentHash = DraftContentHash.Compute("Agent", "Description", "Instructions");
         var mcpMetadata = new McpGenerationMetadataInput
         {
@@ -389,12 +395,18 @@ public sealed class NodeAdminMcpToolsTests
     {
         var harness = new Harness();
         AgentDefinitionInput? capturedUpdate = null;
-        var record = AgentRecord() with { GenerationMetadataJson = "{\"persisted\":true}" };
+        var record = AgentRecord() with
+        {
+            GenerationMetadataJson = "{\"persisted\":true}"
+        };
         harness.Agents.GetByKeyAsync("agent", Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.UpdateAsync(record.Id,
-                Arg.Do<AgentDefinitionInput>(input => capturedUpdate = input),
-                Arg.Any<CancellationToken>())
-               .Returns(record with { Version = 2 });
+                   Arg.Do<AgentDefinitionInput>(input => capturedUpdate = input),
+                   Arg.Any<CancellationToken>())
+               .Returns(record with
+               {
+                   Version = 2
+               });
         var tooLong = new string('x', ApplicationGenerationProvenance.MaxModelLength + 1);
         var httpError = ApplicationGenerationProvenance.Validate(new GenerationMetadataInput(tooLong,
             DraftMode.Create,
@@ -408,11 +420,19 @@ public sealed class NodeAdminMcpToolsTests
         var rejected = await harness.Tools.CreateAgentAsync("Agent",
             "Instructions",
             CancellationToken.None,
-            generation_metadata: new McpGenerationMetadataInput { Model = tooLong, Confidence = 0.5 });
+            generation_metadata: new McpGenerationMetadataInput
+            {
+                Model = tooLong,
+                Confidence = 0.5
+            });
         var invalidMode = await harness.Tools.CreateAgentAsync("Agent",
             "Instructions",
             CancellationToken.None,
-            generation_metadata: new McpGenerationMetadataInput { Mode = "unknown", Confidence = 0.5 });
+            generation_metadata: new McpGenerationMetadataInput
+            {
+                Mode = "unknown",
+                Confidence = 0.5
+            });
         var updated = await harness.Tools.UpdateAgentAsync("agent", "Agent", "Instructions", CancellationToken.None);
 
         AssertEx.Equal(McpAdminToolFailureCodes.ValidationFailed, rejected.FailureCode!);
@@ -431,7 +451,7 @@ public sealed class NodeAdminMcpToolsTests
         offers.GetKnownToolNamesAsync(Arg.Any<CancellationToken>()).Returns(["tool-a"]);
         var service = new AgentDefinitionService(store,
             offers,
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<AgentDefinitionService>.Instance);
+            NullLogger<AgentDefinitionService>.Instance);
         var harness = new Harness(agents: service);
 
         var empty = await harness.Tools.CreateAgentAsync("", "Instructions", CancellationToken.None);
@@ -439,31 +459,38 @@ public sealed class NodeAdminMcpToolsTests
             "Instructions",
             CancellationToken.None,
             allowed_tool_names: ["tool-a"],
-            tool_approvals: new Dictionary<string, bool> { ["tool-b"] = true });
+            tool_approvals: new Dictionary<string, bool>
+            {
+                ["tool-b"] = true
+            });
         var topology = await harness.Tools.CreateAgentAsync("Agent",
             "Instructions",
             CancellationToken.None,
             orchestration_topology_json: "{}",
             kind: "single");
         var now = DateTimeOffset.UnixEpoch;
-        var httpEmpty = await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(
-            new CreateAgentDefinitionRequest { Name = "", Instructions = "Instructions" }.ToInput(now)));
-        var httpOrphan = await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(
-            new CreateAgentDefinitionRequest
+        var httpEmpty = await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(new CreateAgentDefinitionRequest
+        {
+            Name = "",
+            Instructions = "Instructions"
+        }.ToInput(now)));
+        var httpOrphan = await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(new CreateAgentDefinitionRequest
+        {
+            Name = "Agent",
+            Instructions = "Instructions",
+            AllowedToolNames = ["tool-a"],
+            ToolApprovals = new Dictionary<string, bool>
             {
-                Name = "Agent",
-                Instructions = "Instructions",
-                AllowedToolNames = ["tool-a"],
-                ToolApprovals = new Dictionary<string, bool> { ["tool-b"] = true }
-            }.ToInput(now)));
-        var httpTopology = await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(
-            new CreateAgentDefinitionRequest
-            {
-                Name = "Agent",
-                Instructions = "Instructions",
-                Kind = AgentDefinitionKind.Single,
-                OrchestrationTopologyJson = "{}"
-            }.ToInput(now)));
+                ["tool-b"] = true
+            }
+        }.ToInput(now)));
+        var httpTopology = await AssertEx.ThrowsAsync<AgentDefinitionValidationException>(() => service.CreateAsync(new CreateAgentDefinitionRequest
+        {
+            Name = "Agent",
+            Instructions = "Instructions",
+            Kind = AgentDefinitionKind.Single,
+            OrchestrationTopologyJson = "{}"
+        }.ToInput(now)));
 
         AssertEx.Equal(httpEmpty.Message, empty.DisplayMessage!);
         AssertEx.Equal(httpOrphan.Message, orphan.DisplayMessage!);
@@ -487,7 +514,10 @@ public sealed class NodeAdminMcpToolsTests
         AssertEx.Equal(McpAdminToolFailureCodes.AgentNotFound, updateRace.FailureCode!);
         AssertEx.Equal(McpAdminToolFailureCodes.AgentNotFound, deleteRace.FailureCode!);
 
-        harness.Agents.UpdateAsync(record.Id, Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record with { Version = 7 });
+        harness.Agents.UpdateAsync(record.Id, Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record with
+        {
+            Version = 7
+        });
         var updated = await harness.Tools.UpdateAgentAsync("agent", "Agent", "Instructions", CancellationToken.None);
         AssertEx.Equal(7, AssertEx.NotNull(updated.Agent).Version);
     }
@@ -500,15 +530,13 @@ public sealed class NodeAdminMcpToolsTests
         harness.Settings.GetAgenticViewAsync(Arg.Any<CancellationToken>()).Returns(SettingsView("model"));
         harness.Settings.ApplyAgenticPatchAsync(Arg.Any<NodeSettingsAgenticPatch>(), Arg.Any<CancellationToken>())
                .Returns(new NodeSettingsAdministrationResult(true, new StoredNodeSettings(), []));
-        harness.Runtime.GetStatusAsync(false, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeStatus(
-            Installed: null,
+        harness.Runtime.GetStatusAsync(false, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeStatus(Installed: null,
             RecommendedTag: "b1",
             UpstreamLatestTag: null,
             UpdateAvailable: false,
             IsOffline: false,
             RunningProcessCount: 0));
-        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(
-            new LlamaCppRuntimeAcquisitionStartResult(true, "cpu", LlamaCppRuntimeAdministrationFailure.None, null));
+        harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult(true, "cpu", LlamaCppRuntimeAdministrationFailure.None, null));
         harness.Runtime.GetAcquisitionStatus().Returns(new LlamaCppRuntimeAcquisitionStatus(1,
             "idle",
             null,
@@ -518,18 +546,16 @@ public sealed class NodeAdminMcpToolsTests
             0,
             0,
             null));
-        harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>()).Returns(
-            new GgufDownloadTicket("repo/model:Q4_K_M", false, Guid.NewGuid()));
+        harness.Download.StartAsync(Arg.Any<GgufModelRequest>(), Arg.Any<CancellationToken>()).Returns(new GgufDownloadTicket("repo/model:Q4_K_M", false, Guid.NewGuid()));
         harness.Download.GetStatus("repo/model:Q4_K_M").Returns(new GgufDownloadStatus("repo/model:Q4_K_M",
             GgufDownloadPhase.Running,
             1,
             2,
             null));
         harness.Download.Cancel("repo/model:Q4_K_M").Returns(true);
-        harness.Models.DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(
-            new LocalModelDeletionResult(true, "repo/model:Q4_K_M", true));
-        harness.Models.SelectDefaultAsync(Arg.Any<string>(), LocalModelSelectionPolicy.InstalledLocalOnly, Arg.Any<CancellationToken>()).Returns(
-            new LocalModelSelectionResult(true, "repo/model:Q4_K_M", "old"));
+        harness.Models.DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult(true, "repo/model:Q4_K_M", true));
+        harness.Models.SelectDefaultAsync(Arg.Any<string>(), LocalModelSelectionPolicy.InstalledLocalOnly, Arg.Any<CancellationToken>())
+               .Returns(new LocalModelSelectionResult(true, "repo/model:Q4_K_M", "old"));
         harness.Agents.CreateAsync(Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.GetByKeyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(record);
         harness.Agents.UpdateAsync(record.Id, Arg.Any<AgentDefinitionInput>(), Arg.Any<CancellationToken>()).Returns(record);
@@ -555,7 +581,7 @@ public sealed class NodeAdminMcpToolsTests
         AssertEx.Equal(ExpectedToolNames.Length, auditEntries.Length);
         AssertEx.Equal(string.Join('|', ExpectedToolNames),
             string.Join('|', auditEntries.Select(static entry => (string)entry.Properties["Tool"]!)
-                                          .OrderBy(static name => name, StringComparer.Ordinal)));
+                                         .OrderBy(static name => name, StringComparer.Ordinal)));
         AssertEx.True(auditEntries.All(static entry => string.Equals((string)entry.Properties["Outcome"]!, "success", StringComparison.Ordinal)));
     }
 
@@ -683,8 +709,7 @@ public sealed class NodeAdminMcpToolsTests
     {
         var successLogger = new ThrowingLogger();
         var successful = new Harness(logger: successLogger);
-        successful.Models.DeleteAsync("model", Arg.Any<CancellationToken>()).Returns(
-            new LocalModelDeletionResult(true, "model", true));
+        successful.Models.DeleteAsync("model", Arg.Any<CancellationToken>()).Returns(new LocalModelDeletionResult(true, "model", true));
 
         var result = await successful.Tools.DeleteModelAsync("model", CancellationToken.None);
 
@@ -747,9 +772,9 @@ public sealed class NodeAdminMcpToolsTests
 
     private static IEnumerable<(MethodInfo Method, McpServerToolAttribute? Attribute)> ToolMethods() =>
         typeof(NodeAdminMcpTools).GetMethods(BindingFlags.Instance | BindingFlags.Public)
-                                  .Select(static method => (Method: method,
-                                      Attribute: method.GetCustomAttribute<McpServerToolAttribute>()))
-                                  .Where(static item => item.Attribute is not null);
+                                 .Select(static method => (Method: method,
+                                     Attribute: method.GetCustomAttribute<McpServerToolAttribute>()))
+                                 .Where(static item => item.Attribute is not null);
 
     private sealed class Harness
     {
@@ -784,8 +809,7 @@ public sealed class NodeAdminMcpToolsTests
     }
 
     private static ClaimsPrincipal AgenticPrincipal(string keyPrefix = "xemcp_audit123") =>
-        new(new ClaimsIdentity(
-        [
+        new(new ClaimsIdentity([
             new Claim(NodeAuthorizationPolicies.McpScopeClaimType, NodeAuthorizationPolicies.McpAgenticScope),
             new Claim(NodeAuthorizationPolicies.McpKeyPrefixClaimType, keyPrefix)
         ], "mcp-test"));
@@ -794,9 +818,11 @@ public sealed class NodeAdminMcpToolsTests
     {
         public List<LogEntry> Entries { get; } = [];
 
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull =>
+            null;
 
-        public bool IsEnabled(LogLevel logLevel) => true;
+        public bool IsEnabled(LogLevel logLevel) =>
+            true;
 
         public void Log<TState>(LogLevel logLevel,
             EventId eventId,
@@ -808,7 +834,7 @@ public sealed class NodeAdminMcpToolsTests
             Entries.Add(new LogEntry(eventId,
                 formatter(state, exception),
                 properties?.ToDictionary(static pair => pair.Key, static pair => pair.Value, StringComparer.Ordinal)
-                    ?? new Dictionary<string, object?>(StringComparer.Ordinal),
+                ?? new Dictionary<string, object?>(StringComparer.Ordinal),
                 exception));
         }
     }
@@ -817,9 +843,11 @@ public sealed class NodeAdminMcpToolsTests
     {
         public int CallCount { get; private set; }
 
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull =>
+            null;
 
-        public bool IsEnabled(LogLevel logLevel) => true;
+        public bool IsEnabled(LogLevel logLevel) =>
+            true;
 
         public void Log<TState>(LogLevel logLevel,
             EventId eventId,
@@ -832,7 +860,8 @@ public sealed class NodeAdminMcpToolsTests
         }
     }
 
-    private sealed record LogEntry(EventId EventId,
+    private sealed record LogEntry(
+        EventId EventId,
         string Message,
         IReadOnlyDictionary<string, object?> Properties,
         Exception? Exception);

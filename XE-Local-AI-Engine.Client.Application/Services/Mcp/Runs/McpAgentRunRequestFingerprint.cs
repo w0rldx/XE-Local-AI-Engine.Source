@@ -30,6 +30,7 @@ internal sealed class McpAgentRunRequestFingerprint(McpAgentRunPayloadProtector 
                 writer.WriteString("mcpScope", request.Binding.InboundContext.Scope.ToString());
                 writer.WriteString("mcpKeyPrefix", request.Binding.InboundContext.KeyPrefix);
             }
+
             if (request.WorkspaceId is { } workspaceId)
             {
                 writer.WriteString("workspaceId", workspaceId);

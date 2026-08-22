@@ -9,8 +9,8 @@ using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Client.Services.Mcp.Server;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -74,8 +74,7 @@ public sealed class NodeAgentMcpToolsTests
     public async Task ListModelsAsync_ReturnsDetailedOrderedModelsAndMarksTheExactDefault()
     {
         var harness = new Harness();
-        harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(
-        [
+        harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns([
             Descriptor("zeta-embed", 20),
             Descriptor("alpha-chat", 10),
             Descriptor("unavailable", 30, isAvailable: false)

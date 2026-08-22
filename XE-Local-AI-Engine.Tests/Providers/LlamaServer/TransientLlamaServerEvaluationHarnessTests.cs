@@ -220,7 +220,10 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
 #pragma warning restore CA2000
             var launcher = new FakeProcessLauncher(_ => handle);
             var admission = new TrackingGpuModelLoadAdmission();
-            var request = Request(modelPath) with { TeardownTimeout = TimeSpan.FromMilliseconds(20) };
+            var request = Request(modelPath) with
+            {
+                TeardownTimeout = TimeSpan.FromMilliseconds(20)
+            };
             var (harness, supervisor, _) = CreateHarness(GpuVariant.Cuda, launcher, loadAdmission: admission);
             await using (supervisor)
             {
@@ -289,7 +292,10 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
         var modelPath = await CreateModelFileAsync("candidate");
         try
         {
-            var healthProbe = new FakeHealthProbe { EndpointIdentityMatches = false };
+            var healthProbe = new FakeHealthProbe
+            {
+                EndpointIdentityMatches = false
+            };
             var (harness, supervisor, launcher) = CreateHarness(healthProbe: healthProbe);
             await using (supervisor)
             {
@@ -320,8 +326,7 @@ public sealed class TransientLlamaServerEvaluationHarnessTests
         }
     }
 
-    private static (ITransientLlamaServerEvaluationHarness Harness, LlamaServerProcessSupervisor Supervisor, FakeProcessLauncher Launcher) CreateHarness(
-        GpuVariant variant = GpuVariant.Cpu,
+    private static (ITransientLlamaServerEvaluationHarness Harness, LlamaServerProcessSupervisor Supervisor, FakeProcessLauncher Launcher) CreateHarness(GpuVariant variant = GpuVariant.Cpu,
         FakeProcessLauncher? launcher = null,
         FakeHealthProbe? healthProbe = null,
         IGpuModelLoadAdmission? loadAdmission = null)

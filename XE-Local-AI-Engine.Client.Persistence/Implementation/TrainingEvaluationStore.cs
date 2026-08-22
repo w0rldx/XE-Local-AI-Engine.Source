@@ -44,6 +44,7 @@ public sealed class TrainingEvaluationStore(NodeChatDbContext dbContext, TimePro
         {
             throw new TrainingNotFoundException("The training run was not found.");
         }
+
         if (command.TargetKind == EvaluationModelTargetKind.StagedTrainingArtifact)
         {
             var artifact = command.SourceArtifactId is { } sourceId

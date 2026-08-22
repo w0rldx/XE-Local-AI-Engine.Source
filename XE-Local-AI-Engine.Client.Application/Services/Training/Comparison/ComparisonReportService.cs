@@ -92,7 +92,12 @@ public sealed class ComparisonReportService(
         {
             var baseEvaluation = await _evaluations.GetAsync(comparison.BaseEvaluationRunId, cancellationToken).ConfigureAwait(false);
             var tunedEvaluation = await _evaluations.GetAsync(comparison.TunedEvaluationRunId, cancellationToken).ConfigureAwait(false);
-            var possibleRunIds = new[] { comparison.TrainingRunId, baseEvaluation?.TrainingRunId, tunedEvaluation?.TrainingRunId }
+            var possibleRunIds = new[]
+                                 {
+                                     comparison.TrainingRunId,
+                                     baseEvaluation?.TrainingRunId,
+                                     tunedEvaluation?.TrainingRunId
+                                 }
                                  .OfType<Guid>()
                                  .Distinct();
             foreach (var runId in possibleRunIds)
@@ -117,8 +122,8 @@ public sealed class ComparisonReportService(
 
         var artifacts = await _runs.ListArtifactsAsync(trainingRunId, cancellationToken).ConfigureAwait(false);
         var tunedArtifact = artifacts.FirstOrDefault(artifact => artifact.Kind != TrainingArtifactKind.HfAdapterDir
-                                                                  && artifact.DiscardedAtUtc is null
-                                                                  && !string.IsNullOrWhiteSpace(artifact.Sha256));
+                                                                 && artifact.DiscardedAtUtc is null
+                                                                 && !string.IsNullOrWhiteSpace(artifact.Sha256));
         var tunedModelName = tunedArtifact is null ? null : Path.GetFileName(tunedArtifact.Path);
         var existing = await _evaluations.ListAsync(trainingRunId, cancellationToken).ConfigureAwait(false);
 
@@ -126,7 +131,7 @@ public sealed class ComparisonReportService(
         // scored, and one stored flag that disagreed with the model name would be a second truth to keep in sync.
         var baseEvaluation = existing.FirstOrDefault(item => Matches(item.ModelName, run.LinkedInstalledModelName));
         var tunedEvaluation = existing.FirstOrDefault(item => item.TargetKind == EvaluationModelTargetKind.StagedTrainingArtifact
-                                                               && item.SourceArtifactId == tunedArtifact?.Id);
+                                                              && item.SourceArtifactId == tunedArtifact?.Id);
 
         var reason = UnavailableReason(run.LinkedInstalledModelName, tunedModelName);
         return new ComparisonSuggestion(trainingRunId,
@@ -190,8 +195,7 @@ public sealed class ComparisonReportService(
                           && resultIds.SetEquals(membership.HoldoutSampleIds);
         if (!fullyScored)
         {
-            throw new EvaluationRejectedException(
-                $"The {side} evaluation must have successfully scored every frozen hold-out sample before it can be compared.");
+            throw new EvaluationRejectedException($"The {side} evaluation must have successfully scored every frozen hold-out sample before it can be compared.");
         }
     }
 

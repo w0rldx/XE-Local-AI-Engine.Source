@@ -171,7 +171,8 @@ public sealed class EvaluationRunService(
             EvaluationModelTargetKind.InstalledModel, ArtifactId: null);
     }
 
-    private sealed record EvaluationTargetIdentity(string ModelName,
+    private sealed record EvaluationTargetIdentity(
+        string ModelName,
         string? Fingerprint,
         EvaluationModelTargetKind Kind,
         Guid? ArtifactId);

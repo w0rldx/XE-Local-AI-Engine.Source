@@ -41,9 +41,11 @@ internal sealed class ConversationSummarizer(
                                         """;
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
     private static readonly int MinimumRequestOverhead = SystemPrompt.Length
                                                          + JsonSerializer.Serialize(ToPromptModel(string.Empty,
                                                              [new ConversationSummarizerMessage("user", "😀")]), SerializerOptions).Length;
+
     private readonly ILogger<ConversationSummarizer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
 
@@ -122,8 +124,7 @@ internal sealed class ConversationSummarizer(
                 }
 
                 batch.Clear();
-            }
-            while (remainingContent.Length > 0);
+            } while (remainingContent.Length > 0);
         }
 
         if (batch.Count > 0)
@@ -160,7 +161,8 @@ internal sealed class ConversationSummarizer(
         return TruncateAtRuneBoundary(text, Math.Max(1, _options.MaxSummaryChars));
     }
 
-    internal static long GetMinimumRequestBudget(int maxSummaryChars) => MinimumRequestOverhead + (long)Math.Max(0, maxSummaryChars);
+    internal static long GetMinimumRequestBudget(int maxSummaryChars) =>
+        MinimumRequestOverhead + (long)Math.Max(0, maxSummaryChars);
 
     private static int FindLargestFittingPrefix(string role, string content, string? priorSummary, int budget)
     {

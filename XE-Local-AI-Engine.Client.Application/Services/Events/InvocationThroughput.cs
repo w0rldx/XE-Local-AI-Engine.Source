@@ -55,13 +55,11 @@ public sealed record InvocationThroughput(
     ///     Decode throughput in tokens per second — the figure <c>llama-bench</c> calls tg. Null unless the provider
     ///     reported both a token count and a decode duration.
     /// </summary>
-    public double? GenerationTokensPerSecond =>
-        GenerationTokens is { } tokens && GenerationMs is > 0 ? tokens * 1000d / GenerationMs.Value : null;
+    public double? GenerationTokensPerSecond => GenerationTokens is { } tokens && GenerationMs is > 0 ? tokens * 1000d / GenerationMs.Value : null;
 
     /// <summary>
     ///     Prompt-processing throughput in tokens per second — the figure <c>llama-bench</c> calls pp. Null unless the
     ///     provider reported both a token count and a prefill duration.
     /// </summary>
-    public double? PromptTokensPerSecond =>
-        PromptTokens is { } tokens && PromptMs is > 0 ? tokens * 1000d / PromptMs.Value : null;
+    public double? PromptTokensPerSecond => PromptTokens is { } tokens && PromptMs is > 0 ? tokens * 1000d / PromptMs.Value : null;
 }

@@ -109,9 +109,11 @@ public sealed partial class InvocationRunner
             return throughput.IsEmpty ? null : throughput;
         }
 
-        private static int? Add(int? total, int? value) => value is null ? total : (total ?? 0) + value.Value;
+        private static int? Add(int? total, int? value) =>
+            value is null ? total : (total ?? 0) + value.Value;
 
-        private static double? Add(double? total, double? value) => value is null ? total : (total ?? 0) + value.Value;
+        private static double? Add(double? total, double? value) =>
+            value is null ? total : (total ?? 0) + value.Value;
     }
 
     // The single emit path both branches use: it appends to the accumulator, enforces the response/reasoning byte

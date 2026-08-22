@@ -111,7 +111,8 @@ internal sealed class NodeSettingsAdministrationService(
         }
     }
 
-    private static string? TrimWhenProvided(string? value, string? current) => value is null ? current : value.Trim();
+    private static string? TrimWhenProvided(string? value, string? current) =>
+        value is null ? current : value.Trim();
 
     private static NodeSettingsAgenticView ToAgenticView(StoredNodeSettings settings) =>
         new(settings.DefaultModelName,

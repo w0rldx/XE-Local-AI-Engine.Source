@@ -179,8 +179,8 @@ internal sealed class LlamaServerHealthProbe(HttpClient httpClient) : ILlamaServ
             return document.RootElement.TryGetProperty("data", out var models)
                    && models.ValueKind == JsonValueKind.Array
                    && models.EnumerateArray().Any(model => model.TryGetProperty("id", out var id)
-                                                            && id.ValueKind == JsonValueKind.String
-                                                            && string.Equals(id.GetString(), expectedModelAlias, StringComparison.Ordinal));
+                                                           && id.ValueKind == JsonValueKind.String
+                                                           && string.Equals(id.GetString(), expectedModelAlias, StringComparison.Ordinal));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {

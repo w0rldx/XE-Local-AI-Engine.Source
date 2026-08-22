@@ -133,7 +133,12 @@ public sealed class BenchmarkEndpointTests
         using var document = JsonDocument.Parse(body);
         foreach (var field in new[]
                  {
-                     "ttftMs", "promptTokens", "promptTokensPerSecond", "generationTokens", "generationTokensPerSecond", "cachedPromptTokens",
+                     "ttftMs",
+                     "promptTokens",
+                     "promptTokensPerSecond",
+                     "generationTokens",
+                     "generationTokensPerSecond",
+                     "cachedPromptTokens",
                      "segmentCount"
                  })
         {

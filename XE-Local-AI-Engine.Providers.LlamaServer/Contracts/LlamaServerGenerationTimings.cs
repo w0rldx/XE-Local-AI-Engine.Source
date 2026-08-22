@@ -113,7 +113,9 @@ public sealed record LlamaServerGenerationTimings(
     }
 #pragma warning restore SCME0001
 
-    private static int? NonNegative(int? value) => value >= 0 ? value : null;
+    private static int? NonNegative(int? value) =>
+        value >= 0 ? value : null;
 
-    private static double? NonNegative(double? value) => value >= 0 ? value : null;
+    private static double? NonNegative(double? value) =>
+        value >= 0 ? value : null;
 }

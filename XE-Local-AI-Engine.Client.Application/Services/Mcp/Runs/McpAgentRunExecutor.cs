@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
-using XE_Local_AI_Engine.Client.Services.Mcp;
 
 /// <summary>
 ///     Seeds the root spawn budget missing from a detached worker before invoking the G001 execution boundary. The

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.ClientModel.Primitives;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using OpenAI.Chat;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -72,11 +73,11 @@ public sealed class LlamaServerGenerationTimingsTests
     }
 
     // The exact production chain: OpenAI chunk -> MEAI ChatResponseUpdate.RawRepresentation -> AgentResponseUpdate.
-    private static Microsoft.Agents.AI.AgentResponseUpdate AgentUpdate(string chunkJson)
+    private static AgentResponseUpdate AgentUpdate(string chunkJson)
     {
         var chunk = ModelReaderWriter.Read<StreamingChatCompletionUpdate>(BinaryData.FromString(chunkJson))
                     ?? throw new InvalidOperationException("The chunk fixture did not deserialize.");
-        return new Microsoft.Agents.AI.AgentResponseUpdate(new ChatResponseUpdate(ChatRole.Assistant, "hi")
+        return new AgentResponseUpdate(new ChatResponseUpdate(ChatRole.Assistant, "hi")
         {
             RawRepresentation = chunk
         });

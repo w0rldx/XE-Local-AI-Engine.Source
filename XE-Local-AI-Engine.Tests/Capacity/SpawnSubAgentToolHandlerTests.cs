@@ -19,10 +19,27 @@ public sealed class SpawnSubAgentToolHandlerTests
         var handler = new SpawnSubAgentToolHandler(provider.GetRequiredService<IServiceScopeFactory>());
         SubAgentSpawnRequest[] invalidRequests =
         [
-            new() { SubAgentKey = new string('k', 257), Task = "task" },
-            new() { ModelId = new string('m', 257), Task = "task" },
-            new() { ModelId = "model", Task = new string('t', 8001) },
-            new() { ModelId = "model", Task = "task", Instructions = new string('i', 8001) }
+            new()
+            {
+                SubAgentKey = new string('k', 257),
+                Task = "task"
+            },
+            new()
+            {
+                ModelId = new string('m', 257),
+                Task = "task"
+            },
+            new()
+            {
+                ModelId = "model",
+                Task = new string('t', 8001)
+            },
+            new()
+            {
+                ModelId = "model",
+                Task = "task",
+                Instructions = new string('i', 8001)
+            }
         ];
 
         foreach (var request in invalidRequests)

@@ -21,7 +21,8 @@ public sealed record BenchmarkAdmissionRetry(int MaxRetries, TimeSpan Interval)
 }
 
 /// <summary>The per-call identity carried into the admission log line and the caller-facing failure message.</summary>
-internal sealed record BenchmarkAdmissionContext(Guid RunId,
+internal sealed record BenchmarkAdmissionContext(
+    Guid RunId,
     string Phase,
     int RequestedContextTokens,
     string KvCacheType,
@@ -76,7 +77,6 @@ internal static class BenchmarkCapacityAdmission
             }
         }
 
-        throw new BenchmarkExecutionException(
-            $"{context.RejectedMessage} No capacity became free after {retry.Budget.TotalSeconds:0} s.");
+        throw new BenchmarkExecutionException($"{context.RejectedMessage} No capacity became free after {retry.Budget.TotalSeconds:0} s.");
     }
 }

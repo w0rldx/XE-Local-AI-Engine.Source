@@ -90,7 +90,7 @@ internal static class GenerationProvenance
     /// </summary>
     public static string? Validate(GenerationMetadata? metadata)
     {
-        return XE_Local_AI_Engine.Client.Services.Drafting.GenerationProvenance.Validate(metadata?.ToInput());
+        return Services.Drafting.GenerationProvenance.Validate(metadata?.ToInput());
     }
 
     /// <summary>
@@ -104,7 +104,7 @@ internal static class GenerationProvenance
         string? savedContent,
         DateTimeOffset acceptedAt)
     {
-        return XE_Local_AI_Engine.Client.Services.Drafting.GenerationProvenance.ToPersistedJson(metadata?.ToInput(),
+        return Services.Drafting.GenerationProvenance.ToPersistedJson(metadata?.ToInput(),
             savedName,
             savedDescription,
             savedContent,
@@ -118,7 +118,7 @@ internal static class GenerationProvenance
     /// </summary>
     public static GenerationMetadataResponse? FromPersistedJson(string? json)
     {
-        var persisted = XE_Local_AI_Engine.Client.Services.Drafting.GenerationProvenance.FromPersistedJson(json);
+        var persisted = Services.Drafting.GenerationProvenance.FromPersistedJson(json);
         return persisted is null
             ? null
             : new GenerationMetadataResponse

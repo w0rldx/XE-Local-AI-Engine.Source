@@ -135,7 +135,10 @@ public sealed class NodeSettingsAdministrationServiceTests
     public async Task ApplyAgenticPatchAsync_DefaultModelCloudTransition_UsesSharedCacheInvalidationPolicy()
     {
         var store = Substitute.For<INodeSettingsStore>();
-        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings { DefaultModelName = "old-cloud" });
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new StoredNodeSettings
+        {
+            DefaultModelName = "old-cloud"
+        });
         var cloudResolver = Substitute.For<ICloudModelResolver>();
         cloudResolver.IsCloudModelAsync("old-cloud", Arg.Any<CancellationToken>()).Returns(true);
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();

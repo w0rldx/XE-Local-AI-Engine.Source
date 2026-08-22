@@ -70,20 +70,20 @@ public sealed class BenchmarkRunExecutor(
             // A rejection is transient by nature — it means something holds the bytes RIGHT NOW — so the phase waits
             // and re-decides on a cadence instead of terminalizing the run on the first no.
             var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
-                                     new CapacityRequest(snapshot.PrimaryModel.ModelName,
-                                         ModelRole.Chat,
-                                         snapshot.PrimaryRuntime.ContextTokens,
-                                         PublishLaunchAdmission: false,
-                                         snapshot.PrimaryRuntime.KvTypeK),
-                                     new BenchmarkAdmissionContext(work.RunId,
-                                         "primary",
-                                         snapshot.RequestedContextTokens,
-                                         snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
-                                         CapacityRejectedMessage),
-                                     admissionRetry,
-                                     logger,
-                                     token)
-                                 .ConfigureAwait(false);
+                                                               new CapacityRequest(snapshot.PrimaryModel.ModelName,
+                                                                   ModelRole.Chat,
+                                                                   snapshot.PrimaryRuntime.ContextTokens,
+                                                                   PublishLaunchAdmission: false,
+                                                                   snapshot.PrimaryRuntime.KvTypeK),
+                                                               new BenchmarkAdmissionContext(work.RunId,
+                                                                   "primary",
+                                                                   snapshot.RequestedContextTokens,
+                                                                   snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                                                                   CapacityRejectedMessage),
+                                                               admissionRetry,
+                                                               logger,
+                                                               token)
+                                                           .ConfigureAwait(false);
 
             using var reservation = decision.Reservation;
             var package = BuildPrimaryPackage(snapshot, work.Run.InvocationTimeoutSeconds);

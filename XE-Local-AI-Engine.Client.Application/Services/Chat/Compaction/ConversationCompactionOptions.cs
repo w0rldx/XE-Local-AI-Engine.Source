@@ -63,8 +63,7 @@ public sealed class ConversationCompactionOptions : IValidatableObject
         if (MaxSummaryChars > 0
             && MaxInputCharsPerSummarizationCall < ConversationSummarizer.GetMinimumRequestBudget(MaxSummaryChars))
         {
-            yield return new ValidationResult(
-                "The total request character budget must fit the system prompt, the maximum intermediate summary, and at least one message Rune.");
+            yield return new ValidationResult("The total request character budget must fit the system prompt, the maximum intermediate summary, and at least one message Rune.");
         }
     }
 }

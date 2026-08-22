@@ -181,7 +181,7 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunFreezeService ru
             {
                 var created = await _runs.StartAsync(req.ProjectId, item.ModelName, expectedVersion, kvCacheType, req.RepeatCount,
                                              req.Warmup, ct)
-                                        .ConfigureAwait(false);
+                                         .ConfigureAwait(false);
                 expectedVersion += created.Count;
                 started.Add(new StartedBenchmarkRunBatchItemResponse
                 {

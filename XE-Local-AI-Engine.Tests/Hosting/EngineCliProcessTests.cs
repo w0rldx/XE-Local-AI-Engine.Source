@@ -46,7 +46,7 @@ public sealed class EngineCliProcessTests : IDisposable
         AssertEx.Equal(expected: 0, agentic.ExitCode, agentic.CombinedOutput);
         AssertEx.Equal(expected: 1,
             agentic.StandardOutput.Split(Environment.NewLine)
-                    .Count(static line => line.StartsWith("XE_MCP_KEY=xemcp_", StringComparison.Ordinal)));
+                   .Count(static line => line.StartsWith("XE_MCP_KEY=xemcp_", StringComparison.Ordinal)));
         AssertEx.False(agentic.StandardError.Contains("agentic scope is not yet enforced", StringComparison.Ordinal),
             "The CLI must stop claiming agentic scope is unenforced once scope persistence and policy enforcement ship.");
     }

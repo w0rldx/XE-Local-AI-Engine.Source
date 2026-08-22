@@ -43,7 +43,8 @@ public interface IMcpServerApiKeyStore
 ///     this record can be presented to the MCP endpoint, so no field here needs "reveal the key" handling. The
 ///     plaintext key exists only in the return value of the generate call that minted it.
 /// </summary>
-public sealed record McpServerApiKeyRecord(string Prefix,
+public sealed record McpServerApiKeyRecord(
+    string Prefix,
     ReadOnlyMemory<byte> KeyHash,
     int Scope,
     Guid GenerationId,

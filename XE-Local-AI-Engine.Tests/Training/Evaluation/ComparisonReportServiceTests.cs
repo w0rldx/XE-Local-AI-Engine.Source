@@ -134,8 +134,7 @@ public sealed class ComparisonReportServiceTests
     [Arguments(TrainingEvaluationStatus.Queued, TrainingWorkStatus.Queued, 0)]
     [Arguments(TrainingEvaluationStatus.Running, TrainingWorkStatus.Running, 1)]
     [Arguments(TrainingEvaluationStatus.Failed, TrainingWorkStatus.Failed, 2)]
-    public async Task Create_WhenAnEvaluationIsNotSuccessfullyComplete_IsRejected(
-        TrainingEvaluationStatus status,
+    public async Task Create_WhenAnEvaluationIsNotSuccessfullyComplete_IsRejected(TrainingEvaluationStatus status,
         TrainingWorkStatus workStatus,
         int scoredCount)
     {
@@ -144,13 +143,13 @@ public sealed class ComparisonReportServiceTests
             membership,
             [Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: true)]);
         var tunedEvaluation = Evaluation("tuned-model",
-            membership,
-            [Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: true)]) with
-        {
-            Status = status,
-            WorkStatus = workStatus,
-            ScoredCount = scoredCount
-        };
+                membership,
+                [Verdict(1, "tool-call", passed: true), Verdict(2, "tool-call", passed: true)]) with
+            {
+                Status = status,
+                WorkStatus = workStatus,
+                ScoredCount = scoredCount
+            };
 
         var rejection = await AssertRejectedAsync(baseEvaluation, tunedEvaluation);
 
@@ -290,12 +289,15 @@ public sealed class ComparisonReportServiceTests
         var historicalComparisonId = Guid.NewGuid();
         var currentComparisonId = Guid.NewGuid();
         var wrongStoredRunId = Guid.NewGuid();
-        var membership = Membership([SampleId(1)]) with { TrainingRunId = runId };
+        var membership = Membership([SampleId(1)]) with
+        {
+            TrainingRunId = runId
+        };
         var baseEvaluation = Evaluation("base", membership, CompleteVerdicts(membership));
         var tunedEvaluation = Evaluation("tuned", membership, CompleteVerdicts(membership));
         var evaluations = Substitute.For<ITrainingEvaluationStore>();
-        _ = evaluations.GetComparisonAsync(historicalComparisonId, Arg.Any<CancellationToken>()).Returns(new TrainingComparisonRecord(
-            historicalComparisonId, "historical", baseEvaluation.Id, tunedEvaluation.Id, null, null, wrongStoredRunId, "{}"u8.ToArray(), 1, 1, 1));
+        _ = evaluations.GetComparisonAsync(historicalComparisonId, Arg.Any<CancellationToken>()).Returns(new TrainingComparisonRecord(historicalComparisonId, "historical", baseEvaluation.Id,
+            tunedEvaluation.Id, null, null, wrongStoredRunId, "{}"u8.ToArray(), 1, 1, 1));
         _ = evaluations.GetAsync(baseEvaluation.Id, Arg.Any<CancellationToken>()).Returns(baseEvaluation);
         _ = evaluations.GetAsync(tunedEvaluation.Id, Arg.Any<CancellationToken>()).Returns(tunedEvaluation);
         var runs = Substitute.For<ITrainingRunStore>();

@@ -9,8 +9,7 @@ public sealed class ConversationCompactionOptionsTests
     [Test]
     public void Validation_WhenTotalBudgetEqualsExactMinimum_AcceptsConfiguration()
     {
-        var minimumBudget = checked((int)ConversationSummarizer.GetMinimumRequestBudget(
-            ConversationCompactionOptions.MaximumSummaryChars));
+        var minimumBudget = checked((int)ConversationSummarizer.GetMinimumRequestBudget(ConversationCompactionOptions.MaximumSummaryChars));
         var options = new ConversationCompactionOptions
         {
             MaxSummaryChars = ConversationCompactionOptions.MaximumSummaryChars,
@@ -23,8 +22,7 @@ public sealed class ConversationCompactionOptionsTests
     [Test]
     public void Validation_WhenTotalBudgetIsOneCharacterBelowExactMinimum_RejectsConfiguration()
     {
-        var minimumBudget = checked((int)ConversationSummarizer.GetMinimumRequestBudget(
-            ConversationCompactionOptions.MaximumSummaryChars));
+        var minimumBudget = checked((int)ConversationSummarizer.GetMinimumRequestBudget(ConversationCompactionOptions.MaximumSummaryChars));
         var options = new ConversationCompactionOptions
         {
             MaxSummaryChars = ConversationCompactionOptions.MaximumSummaryChars,
