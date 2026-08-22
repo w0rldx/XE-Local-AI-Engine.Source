@@ -80,7 +80,7 @@
 		"@biomejs/biome": "2.5.7",
 		"@cspell/dict-de-de": "^4.1.2",
 		"@cspell/dict-en_us": "4.4.33",
-		"@hey-api/openapi-ts": "0.97.1",
+		"@hey-api/openapi-ts": "0.97.3",
 		"@tanstack/devtools-vite": "^0.7.2",
 		"@tanstack/react-devtools": "^0.10.9",
 		"@tanstack/react-form-devtools": "^0.2.32",

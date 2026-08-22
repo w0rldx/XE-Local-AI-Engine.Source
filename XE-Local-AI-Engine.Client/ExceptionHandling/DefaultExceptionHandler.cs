@@ -26,8 +26,8 @@ public class DefaultExceptionHandler(ILogger<DefaultExceptionHandler> logger, IH
         // Kestrel connection id is kept separately as RequestId — it identifies the connection, not the W3C trace.
         logger.LogError(exception,
             "Unhandled exception while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}. SpanId: {SpanId}. RequestId: {RequestId}. UserId: {UserId}. ExceptionType: {ExceptionType}",
-            httpContext.Request.Method,
-            httpContext.Request.Path,
+            RequestLogSanitizer.Sanitize(httpContext.Request.Method),
+            RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),
             StatusCodes.Status500InternalServerError,
             ProblemDetailsExtensions.ResolveTraceId(httpContext),
             Activity.Current?.SpanId.ToString(),

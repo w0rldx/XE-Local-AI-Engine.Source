@@ -47,8 +47,8 @@ public sealed class DomainValidationExceptionHandler(ILogger<DomainValidationExc
 
         logger.LogWarning(exception,
             "Handled domain validation exception while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}. UserId: {UserId}. ExceptionType: {ExceptionType}",
-            httpContext.Request.Method,
-            httpContext.Request.Path,
+            RequestLogSanitizer.Sanitize(httpContext.Request.Method),
+            RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),
             StatusCodes.Status400BadRequest,
             httpContext.TraceIdentifier,
             httpContext.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "anonymous",

@@ -51,8 +51,8 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
 
         logger.LogWarning(exception,
             "Handled conflict exception while processing {Method} {Path}. StatusCode: {StatusCode}. TraceId: {TraceId}. UserId: {UserId}. ExceptionType: {ExceptionType}",
-            httpContext.Request.Method,
-            httpContext.Request.Path,
+            RequestLogSanitizer.Sanitize(httpContext.Request.Method),
+            RequestLogSanitizer.Sanitize(httpContext.Request.Path.Value),
             StatusCodes.Status409Conflict,
             httpContext.TraceIdentifier,
             httpContext.User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value ?? "anonymous",
