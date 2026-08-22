@@ -1,20 +1,13 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-	copyFileSync,
-	existsSync,
-	mkdirSync,
-	readdirSync,
-	readFileSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const reactRoot = resolve(scriptDirectory, "..");
 const repositoryRoot = resolve(reactRoot, "..");
+const curatedManifestRepositoryPath = "third-party/npm/frontend-license-overrides.json";
 
 function licenseFiles(packageRoot) {
 	const candidates = [];
@@ -50,6 +43,64 @@ function installedPackageRoot(entry, version) {
 		}
 	}
 	return undefined;
+}
+
+function npmPurlIdentity(purl) {
+	const prefix = "pkg:npm/";
+	if (typeof purl !== "string" || !purl.startsWith(prefix)) {
+		return undefined;
+	}
+	const versionSeparator = purl.lastIndexOf("@");
+	if (versionSeparator < prefix.length) {
+		return undefined;
+	}
+	try {
+		return {
+			name: decodeURIComponent(purl.slice(prefix.length, versionSeparator)),
+			version: decodeURIComponent(purl.slice(versionSeparator + 1)),
+		};
+	} catch {
+		return undefined;
+	}
+}
+
+function curatedEvidence(files) {
+	if (!Array.isArray(files)) {
+		return [];
+	}
+	return files.map((file) => ({
+		path: typeof file?.path === "string" ? file.path : "<missing curated evidence path>",
+		source: typeof file?.source === "string" ? file.source : "<missing curated source>",
+		sha256: typeof file?.sha256 === "string" ? file.sha256 : "<missing curated SHA-256>",
+	}));
+}
+
+function describeCuratedEvidence(evidence) {
+	if (evidence.length === 0) {
+		return "<missing curated evidence metadata>";
+	}
+	return evidence.map(({ path, source, sha256 }) => `${path} (source: ${source}; SHA-256: ${sha256})`).join(", ");
+}
+
+function curatedVersionMigrations(component, curatedLicenseComponents) {
+	return Object.entries(curatedLicenseComponents).flatMap(([purl, curated]) => {
+		const identity = npmPurlIdentity(purl);
+		if (!identity || identity.name !== component.name || purl === component.purl) {
+			return [];
+		}
+		return [{ purl, version: identity.version, evidence: curatedEvidence(curated?.files) }];
+	});
+}
+
+function migrationReviewMessage(component, migrations) {
+	const candidates = migrations.map(
+		({ purl, version, evidence }) => `${version} (${purl}); prior evidence: ${describeCuratedEvidence(evidence)}`,
+	);
+	return [
+		`Installed version ${component.version} (${component.purl}) has curated override candidates for another version: ${candidates.join("; ")}.`,
+		"Installed package terms: absent. Old evidence applicability: unverified; human comparison required.",
+		`Human review required in ${curatedManifestRepositoryPath}: verify or replace the listed license evidence, source, tag, and SHA-256 before adding an exact override for ${component.purl}.`,
+	].join(" ");
 }
 
 function curatedLicenseFiles(component, curatedLicenseComponents, sourceRoot) {
@@ -106,6 +157,7 @@ export function buildFrontendLicenseCorpus({
 	mkdirSync(outputDirectory, { recursive: true });
 	const inventory = [];
 	const usedCuratedEntries = new Set();
+	const installedPackageTerms = new Map();
 
 	for (const component of componentManifest.components) {
 		const entry = licenseEntries.find(
@@ -128,9 +180,14 @@ export function buildFrontendLicenseCorpus({
 			source: undefined,
 			basis: undefined,
 		}));
+		installedPackageTerms.set(component.purl, packageFiles.length > 0);
 		const curatedFiles = curatedLicenseFiles(component, curatedLicenseComponents, sourceRoot);
 		if (packageFiles.length === 0 && !curatedFiles) {
-			throw new Error(`Bundled component has no exact license file in its installed package: ${component.purl}`);
+			const migrations = curatedVersionMigrations(component, curatedLicenseComponents);
+			const migrationDetails = migrations.length > 0 ? ` ${migrationReviewMessage(component, migrations)}` : "";
+			throw new Error(
+				`Bundled component has no exact license file in its installed package: ${component.purl}.${migrationDetails}`,
+			);
 		}
 		if (curatedFiles) {
 			usedCuratedEntries.add(component.purl);
@@ -174,7 +231,35 @@ export function buildFrontendLicenseCorpus({
 
 	const staleCuratedEntries = Object.keys(curatedLicenseComponents).filter((purl) => !usedCuratedEntries.has(purl));
 	if (staleCuratedEntries.length > 0) {
-		throw new Error(`Stale curated frontend license entries: ${staleCuratedEntries.join(", ")}`);
+		const bundledComponents = componentManifest.components;
+		const migrations = staleCuratedEntries.flatMap((purl) => {
+			const staleIdentity = npmPurlIdentity(purl);
+			if (!staleIdentity) {
+				return [];
+			}
+			const installed = bundledComponents.find((component) => component.name === staleIdentity.name && component.purl !== purl);
+			if (!installed) {
+				return [];
+			}
+			return [
+				{
+					oldPurl: purl,
+					oldVersion: staleIdentity.version,
+					installed,
+					evidence: curatedEvidence(curatedLicenseComponents[purl]?.files),
+					installedTermsPresent: installedPackageTerms.get(installed.purl) === true,
+				},
+			];
+		});
+		const migrationDescriptions = migrations.map(
+			({ oldPurl, oldVersion, installed, evidence, installedTermsPresent }) =>
+				`${oldVersion} (${oldPurl}) -> ${installed.version} (${installed.purl}); prior evidence: ${describeCuratedEvidence(evidence)}; installed package terms: ${installedTermsPresent ? "present" : "absent"}; old evidence applicability: unverified; human comparison required`,
+		);
+		const migrationDetails =
+			migrations.length > 0
+				? ` Likely version migrations: ${migrationDescriptions.join("; ")}. Human review required in ${curatedManifestRepositoryPath}; do not retarget license evidence, sources, tags, or hashes without verification.`
+				: "";
+		throw new Error(`Stale curated frontend license entries: ${staleCuratedEntries.join(", ")}.${migrationDetails}`);
 	}
 
 	inventory.sort((left, right) => left.purl.localeCompare(right.purl, "en"));

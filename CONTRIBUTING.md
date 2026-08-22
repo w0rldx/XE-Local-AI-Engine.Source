@@ -55,6 +55,12 @@ pnpm audit --prod --audit-level=high
 after a backend contract change, follow the live-spec regeneration rules in [`AGENTS.md`](AGENTS.md#validation) before
 trusting that drift check.
 
+For frontend dependency-update branches, run `pnpm run dependencies:refresh` from
+`XE-Local-AI-Engine.Client.React/`. It performs the frozen install first, then collects OpenAPI, generated-license,
+validation, and production-build results and reports regenerated tracked files that belong in the same change. A
+failed frozen install skips every generator so stale `node_modules` content cannot produce commit advice. Any
+curated license override still requires human verification of its exact evidence, upstream source/tag, and SHA-256.
+
 Release-script changes must also pass:
 
 ```bash

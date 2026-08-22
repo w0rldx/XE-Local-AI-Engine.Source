@@ -115,7 +115,7 @@ scripts/python-validation.sh --scope full      # deps, then style/types/tests/se
 scripts/python-validation.sh --scope changed   # auto-detect scope from the diff against develop
 ```
 
-Notable React scripts (from `package.json`): `test:coverage` / `test:coverage:check` (the latter sets `VITEST_COVERAGE_CHECK=true` to enforce thresholds), `openapi:check` (regenerate the hey-api client from the committed spec and fail on drift — see below), `validate` (lint + knip + depcruise), `knip`, `depcruise`, `spellCheck`. The lint chain is strict: type-check, a custom `currentTarget`-in-updaters guard, Biome, and Stylelint all run before the build.
+Notable React scripts (from `package.json`): `test:coverage` / `test:coverage:check` (the latter sets `VITEST_COVERAGE_CHECK=true` to enforce thresholds), `openapi:check` (regenerate the hey-api client from the committed spec and fail on drift — see below), `dependencies:refresh` (frozen install followed by aggregated OpenAPI, generated-license, validation, and production-build diagnostics for dependency-update branches), `validate` (lint + knip + depcruise), `knip`, `depcruise`, `spellCheck`. The dependency refresh skips every generator when the frozen install fails and never retargets curated license evidence automatically. The lint chain is strict: type-check, a custom `currentTarget`-in-updaters guard, Biome, and Stylelint all run before the build.
 
 ### Internal RC tooling
 
