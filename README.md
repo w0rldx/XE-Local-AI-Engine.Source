@@ -15,6 +15,28 @@ Velopack AppImage rather than a ZIP. Both formats are self-updating. Release ass
 signing certificate exists; verify `CHECKSUMS.sha256` and review `RELEASE-MANIFEST.json` / `RELEASE.spdx.json` before
 running them. Signing is planned.
 
+> **Installing on behalf of an AI agent?** An external agent (Claude Code, Codex CLI, Cursor, and
+> others) can install, set up, start, and connect to this engine with no human in the browser:
+>
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/w0rldx/XE-Local-AI-Engine.Source/main/install.sh | \
+>   bash -s -- --setup --start --install-skill
+> # PowerShell: set XE_ADMIN_EMAIL/XE_ADMIN_PASSWORD plus XE_SETUP=1, XE_START=1,
+> # and XE_INSTALL_SKILL=1, then:
+> # irm https://raw.githubusercontent.com/w0rldx/XE-Local-AI-Engine.Source/main/install.ps1 | iex
+> # Piped selection flags use XE_PRE=1, XE_VERSION=<tag>, and XE_AUTOSTART=1;
+> # download install.ps1 and invoke it directly to use -Pre/-Version/-Autostart.
+> ```
+>
+> A piped Bash/PowerShell install has no usable prompt input, so set `XE_ADMIN_EMAIL` and
+> `XE_ADMIN_PASSWORD` before requesting setup. For interactive prompts, download the installer and
+> execute it directly in a terminal. On success it prints the
+> node's ready line and a one-time `XE_MCP_KEY=` value — save it, because it is never shown again.
+> Verify with `--status --json`. See the complete
+> [Agentic Support install guide](docs/agentic-support/agent-install.md), the
+> [six-client MCP runbook](docs/runbooks/connect-an-mcp-client-runbook.md), and the shipped
+> [external-agent skill](skills/xe-local-ai-engine/SKILL.md).
+
 ## What ships from this repo
 
 - **Node Web Server** (`XE-Local-AI-Engine.Client`) — serves the React UI, local APIs under `/api/local/v1`, local SignalR hubs, SQLite-backed chat state, and the existing platform `WorkerHub`
@@ -49,15 +71,46 @@ running them. Signing is planned.
   admission gate (`IGpuWorkGate`) makes a run, an evaluation or an export an **exclusive** GPU tenant, so chat, embeddings, benchmarks, dataset generation and image jobs cannot overlap it. The nav group ships
   **on by default** (`XE-Local-AI-Engine.Providers.Training`, `Services/Training`, `Endpoints/Training`, `tools/training`, `src/features/training`). See
   [ADR 0005](docs/adr/0005-training-runtime-python-exclusivity-and-project-placement.md).
-- **MCP tool extensibility** — registered MCP servers whose live tool snapshots are offered to agents through the local tool registry (`Services/Mcp`, `src/features/mcp`).
+- **MCP tool extensibility** — registered MCP servers whose live tool snapshots are offered to agents through the local tool registry (`Services/Mcp`, `src/features/mcp`) — plus an inbound MCP server (`/api/local/v1/mcp/server`) and skill (`skills/xe-local-ai-engine/`) so external agents can drive this node; see [Agentic Support](#agentic-support).
 - **Tests and fixtures** — backend/client persistence tests, integration-style tests, E2E harness, and FakeOllama in-process test server.
+
+## Agentic Support
+
+Agentic Support lets a same-machine external agent install, configure, start, and operate the node
+without browser interaction:
+
+- repo-root `install.sh` and `install.ps1` resolve stable, prerelease, or pinned GitHub releases;
+  verify the mandatory `CHECKSUMS.sha256`; install atomically; and optionally run `--setup`,
+  `--start`, `--autostart`, and `--install-skill`;
+- `--setup`, `--mcp-key <delegate|agentic>`, and `--status --json` are one-shot engine commands;
+  `--mcp-only` serves the normal local UI/API without opening a browser;
+- the exact ready line plus canonical `<data-dir>/ready.json` make the dynamic loopback port and PID
+  discoverable without scraping logs;
+- inbound MCP uses Streamable HTTP at `/api/local/v1/mcp/server`, never stdio. A `delegate` key sees
+  exactly 8 shared agent-run tools; an `agentic` key sees all 23 tools (8 shared plus 15 admin);
+- `agentic` is trusted operator-equivalent only for that enumerated MCP surface. It grants no
+  Operator role/JWT or arbitrary REST access. Approval-required root calls are strictly audited
+  before auto-approval, while spawned children keep their ordinary curated tools;
+- the listener remains loopback-only. Remote use requires an operator-owned encrypted tunnel whose
+  engine-side connection terminates on loopback; a routable bind or same-host reverse proxy is not a
+  supported deployment.
+
+The external-agent skill lives once at `skills/xe-local-ai-engine/`. `--install-skill` installs the
+version-matched files to the user's Claude and common agent skill roots; it does not create a second
+copy inside this repository. Start with the
+[Agentic Support install guide](docs/agentic-support/agent-install.md). The trust decision is recorded
+in [ADR 0006](docs/adr/0006-agentic-trust-mcp-key-scopes-and-auto-approval.md).
+
+Autostart is never enabled by default. It is an explicit `--autostart`/`-Autostart` opt-in that
+registers a current-user systemd service on Linux or limited current-user Scheduled Task on Windows.
 
 ## Architecture rules
 
 - Only the Node Web Server talks to the C0re platform over `WorkerHub`.
 - Worker credentials, cloud-provider credentials, and external endpoint tokens stay local and must not be returned to the browser or written to logs/transcripts.
 - Local admin endpoints must be loopback/local-only, authenticated, strict about `Host`/`Origin`, and secret-redacted.
-- Any future installer or packaging effort must not create background autostart behavior unless a new approved plan changes that contract.
+- Any future installer or packaging effort must not create background autostart behavior unless
+  explicitly opted in via `--autostart` (user-scope only); autostart is never the default.
 
 ## Documentation map
 
@@ -277,6 +330,9 @@ and [the release guide](publish/README.md) for the full sequence.
 
 Standalone OS installers/packages (MSI/DEB/RPM) remain deferred. The official distribution is the Velopack-managed
 Windows Portable ZIP and Linux AppImage.
+A scripted convenience installer (`install.sh`/`install.ps1`, repo root) exists alongside these
+formats for unattended and agent-driven installs; it produces the same portable artifacts above and is
+not a new OS package format — see [Agentic Support](#agentic-support).
 
 ## License
 

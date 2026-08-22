@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools.Implementation;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
@@ -45,6 +46,8 @@ internal static class AddNodeCapacityExtensions
         builder.Services.AddSingleton<ISpawnSerializer, SpawnSerializer>();
         builder.Services.AddScoped<IMcpWorkspaceExecutionSessionFactory, McpWorkspaceExecutionSessionFactory>();
         builder.Services.AddScoped<IMcpExecutionBindingResolver, McpExecutionBindingResolver>();
+        builder.Services.AddScoped<IMcpAgenticApprovalAuditRecorder, McpAgenticApprovalAuditRecorder>();
+        builder.Services.AddScoped<IMcpAgenticToolAdapter, McpAgenticToolAdapter>();
         builder.Services.AddScoped<SubAgentSpawnService>();
         builder.Services.AddScoped<ISubAgentSpawnService>(static services => services.GetRequiredService<SubAgentSpawnService>());
         builder.Services.AddScoped<IMcpAgentExecutionService>(static services => services.GetRequiredService<SubAgentSpawnService>());

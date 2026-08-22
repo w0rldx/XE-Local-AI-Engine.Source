@@ -4,12 +4,13 @@
 
 This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, packaged **desktop mode** (`XE_LAUNCH_MODE=desktop`), the asymmetric Windows/Linux publish profiles, the Windows C# launcher, and the legacy/manual cleanup scripts.
 
-There are **two distinct ways the node runs**:
+There are **three distinct ways the node runs**:
 
 | Mode | Entry point | Used for | HTTP/HTTPS | DB + secrets source |
 |------|-------------|----------|------------|---------------------|
 | **Aspire dev / integration** | `XE-Local-AI-Engine.AppHost/AppHost.cs` orchestrates the `app` project | Local development and integration checks via the worktree-scoped `scripts/dev-*.sh` helpers | HTTPS (Kestrel default URLs) | Aspire parameters + env (`XE_NODE_SQLITE_KEY`, SQLite resource) |
 | **Packaged desktop** | Linux self-contained AppImage or Windows framework-dependent C# launcher + client DLL | Shipped portable app a user double-clicks | Plain HTTP on loopback `127.0.0.1:<auto-port>` | Per-user data dir; connection string + operator key synthesized at startup |
+| **MCP-only local mode** | The same packaged binary with `--mcp-only` or `XE_LAUNCH_MODE=mcp-only` | Unattended external-agent operation without browser launch | Plain HTTP on loopback `127.0.0.1:<remembered-or-requested-port>` | The same per-user data, provisioning, and single-instance lease as desktop |
 
 The two paths are deliberately kept **byte-behaviour-identical when the desktop flag is off** — every desktop branch in `Program.cs` is gated and skipped in Aspire/CI/headless runs.
 
@@ -75,7 +76,12 @@ Only service discovery and the standard resilience/discovery HTTP defaults remai
 
 `XE-Local-AI-Engine.Client/Program.cs` builds a `WebApplication`. Startup order matters:
 
-1. **Resolve desktop mode early** — `var isDesktop = DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged());`. If desktop, it (a) resolves the per-user data directory, (b) acquires the single-instance lease, (c) binds through `DesktopPortStore.ResolveBindUrl(...)` using the remembered loopback port or `127.0.0.1:0`, and (d) synthesizes config via `DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration)` **before** `AddServices` reads configuration.
+1. **Resolve launch mode early** — `DesktopLaunch.ResolveLaunchMode(args, VelopackInstall.IsManaged())`
+   yields Headless, Desktop, or McpOnly. For either local mode, startup (a) resolves the per-user data
+   directory, (b) acquires the single-instance lease, (c) binds through
+   `DesktopPortStore.ResolveBindUrl(...)` or the validated requested port, and (d) synthesizes config
+   via `DesktopBootstrap.EnsureLocalDataConfiguration(builder.Configuration)` **before** `AddServices`
+   reads configuration.
 2. `AddServiceDefaults()` then `AddServices(builder.Configuration)`.
 3. After `Build()`: apply node-chat + node-identity EF migrations, recover interrupted chat messages, reconcile stale scheduled runs, eagerly activate the invocation-resume registry, and register the **worker shutdown drain** on `ApplicationStopping`.
 4. Pipeline: Serilog request logging (with access-token query redaction), `UseExceptionHandler` (RFC7807), **HTTPS redirect + HSTS bypassed in desktop mode**, antiforgery, static files, health checks, `LocalApiSecurityMiddleware`, routing, rate limiter, auth, FastEndpoints (route prefix `LocalApiRoutes.Prefix`), 10 unconditional SignalR hubs plus conditional `DevelopmentAttemptHub` (all `RequireAuthorization(Operator)`), Scalar/Swagger (non-Production), and `MapFallbackToFile("index.html")` for the SPA.
@@ -125,7 +131,8 @@ Configuration resolves through several layers (later wins where noted):
 
 1. **`appsettings.json` + `appsettings.Development.json`** (in `XE-Local-AI-Engine.Client/`) — static defaults shipped with the binary.
 2. **Environment / Aspire parameters** — e.g. `XE_NODE_SQLITE_KEY`, `NodeAuth__Jwt__*`, the node-sqlite connection string. In Aspire these come from `AppHost.cs`; the operator-secret parameter has the tracked shared development default described in §1 unless a developer supplies a confidential override.
-3. **Desktop in-memory overrides** (`DesktopBootstrap`, desktop mode only — added last so they intentionally win over `appsettings`, but only reached behind the desktop flag). See §5.
+3. **Local-mode in-memory overrides** (`DesktopBootstrap`, Desktop/McpOnly only — added last so they
+   intentionally win over `appsettings`, but only reached behind a local launch mode). See §5.
 4. **`node-settings.json`** — a **user-editable, cached** settings file (not env/appsettings). `NodeSettingsStore` (`Client.Application/Services/NodeSettings/Implementation/NodeSettingsStore.cs`) reads/writes `node-settings.json` under the node data directory, with both an async and a sync (startup/DI factory) load path, tolerant JSON deserialize, and a `SemaphoreSlim` write lock. The shape is `StoredNodeSettings`. This is the runtime-editable settings store that supersedes baking values only into `appsettings`.
 5. **`hf-token.enc`** — the optional Hugging Face access token, encrypted at rest. `HfTokenStore` (`Client.Application/Services/HuggingFace/HfTokenStore.cs`) uses an `IDataProtector` (`WorkerNode.HfTokenStore.v1`) to write `hf-token.enc` under the node data dir. The token is exposed **only** to the download client, **never** logged, never put in exceptions, never indexed — the same `IDataProtector` pattern as the cloud credential / worker token stores. See [Security & Privacy](12-security-and-privacy.md).
 
@@ -133,15 +140,19 @@ All per-node runtime artifacts (settings, encrypted credential stores, cert pins
 
 ---
 
-## 5. Packaged desktop mode
+## 5. Packaged local modes: desktop and MCP-only
 
-Desktop mode turns the node host into a double-click app. It is **opt-in** and resolved by `DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged())` from env `XE_LAUNCH_MODE=desktop`, CLI `--desktop`, or a **Velopack-managed portable install**. `FrameworkDependentVelopackBootstrap.Run(args)` establishes the locator. On Windows, it identifies the adjacent `XE-Local-AI-Engine.WindowsLauncher.exe` while the actual host runs through `dotnet.exe`; Linux uses Velopack's default AppImage locator. With none of those signals present, Aspire, CI, and headless behavior is unchanged.
+`DesktopLaunch.ResolveLaunchMode` selects `Headless`, `Desktop`, or `McpOnly`. Desktop is chosen by
+`XE_LAUNCH_MODE=desktop`, `--desktop`, or a managed package's default launch; MCP-only requires
+`XE_LAUNCH_MODE=mcp-only` or `--mcp-only`. An explicit local-mode argument wins over the managed
+desktop default, which prevents one-shot installer commands from opening a browser. With no local
+signal, Aspire/CI headless behavior is unchanged.
 
 ```
- launcher/package selects desktop mode
+ launcher/package selects a local mode
             │
             ▼
- Program.cs: isDesktop = true
+ Program.cs: isLocalMode = true
    ├─ Kestrel binds DesktopPortStore.ResolveBindUrl(dir)   (remembered port, else 127.0.0.1:0)
    ├─ DesktopBootstrap.EnsureLocalDataConfiguration(config)
    │     • NodeData:Directory   → %LOCALAPPDATA%/XE-Local-AI-Engine  (or $XDG_DATA_HOME)
@@ -154,15 +165,28 @@ Desktop mode turns the node host into a double-click app. It is **opt-in** and r
    ├─ HTTPS redirect + HSTS bypassed  (loopback HTTP is safe)
    │
    └─ ActivateDesktopLifecycle(app)  (DesktopLifecycle)
-         ├─ on ApplicationStarted → resolve bound URL → open default browser
+         ├─ on ApplicationStarted → write ready.json + exact XE_READY line
+         ├─ desktop only → open default browser (`--no-browser` suppresses it)
+         ├─ MCP-only → never open a browser
          └─ console-close → graceful StopApplication() (→ llama-server child reaped)
 ```
 
-**Text fallback:** desktop mode selects a per-user data directory, fills only absent local configuration,
+**Text fallback:** both local modes select a per-user data directory, fill only absent local configuration,
 binds Kestrel to a remembered/free loopback port, skips HTTPS redirect/HSTS for that loopback HTTP
-listener, opens the browser after startup, and requests graceful application stop when its console
-closes. Real-desktop behavior still requires observation on the target OS; this flow description is
-not a retained smoke-test transcript.
+listener, write readiness evidence, and request graceful application stop when their console closes.
+Desktop opens the browser unless suppressed; MCP-only never does. Real packaged behavior still
+requires observation on the target OS; this flow description is not a retained smoke-test transcript.
+
+`--port <1-65535>` pins the requested loopback port and exits 6 if unavailable. On
+`ApplicationStarted`, both modes print exactly one unformatted line in stable key order and write
+canonical `ready.json` with `{version,url,mcpUrl,dataDir,pid,startedAtUtc}`. Graceful shutdown removes
+the file; consumers must reject it when the PID is dead and poll `/health/ready` before trusting it.
+`--status --json` is one-shot, never starts the host or creates the data directory, and returns
+`{running,version,url,mcpUrl,dataDir,setupRequired,installKind}`.
+
+The repo-root installers can register user-scoped MCP-only autostart only through explicit
+`--autostart`/`-Autostart`: a systemd user service on Linux or limited current-user Scheduled Task on
+Windows. Installation never enables autostart by default.
 
 ### Loopback auto-port + persisted port + browser open
 

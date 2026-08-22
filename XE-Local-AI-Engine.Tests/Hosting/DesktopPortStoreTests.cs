@@ -100,6 +100,64 @@ public sealed class DesktopPortStoreTests
         AssertEx.True(true);
     }
 
+    [Test]
+    public void ReadyFile_PersistsRoundTripsAndDeletes()
+    {
+        using var directory = new TempDirectory();
+        var info = new ReadyInfo("1.2.3", "http://127.0.0.1:41234",
+            "http://127.0.0.1:41234/api/local/v1/mcp/server", directory.Path, 123, DateTimeOffset.UnixEpoch);
+
+        DesktopPortStore.PersistReady(directory.Path, info, NullLogger.Instance);
+
+        AssertEx.Equal(info, AssertEx.NotNull(DesktopPortStore.ReadReady(directory.Path)));
+        DesktopPortStore.DeleteReady(directory.Path, NullLogger.Instance);
+        AssertEx.Null(DesktopPortStore.ReadReady(directory.Path));
+        DesktopPortStore.DeleteReady(directory.Path, NullLogger.Instance);
+    }
+
+    [Test]
+    public void ReadyEvidence_DistinguishesAbsentFromInvalidAndRejectsUnsafeUris()
+    {
+        using var directory = new TempDirectory();
+        AssertEx.Equal(ReadyEvidenceState.Absent, DesktopPortStore.ReadReadyEvidence(directory.Path).State);
+
+        foreach (var invalidJson in new[]
+                 {
+                     "{not-json",
+                     $$"""{"version":"1.0.0","url":"http://example.com:41234","mcpUrl":"http://example.com:41234/api/local/v1/mcp/server","dataDir":"{{directory.Path}}","pid":123,"startedAtUtc":"1970-01-01T00:00:00Z"}""",
+                     $$"""{"version":"1.0.0","url":"http://127.0.0.1:41234","mcpUrl":"http://127.0.0.1:41234/evil","dataDir":"{{directory.Path}}","pid":123,"startedAtUtc":"1970-01-01T00:00:00Z"}""",
+                     $$"""{"version":"1.0.0","url":"http://127.0.0.1:41234","mcpUrl":"http://127.0.0.1:41234/api/local/v1/mcp/server","dataDir":"{{directory.Path}}","pid":0,"startedAtUtc":"1970-01-01T00:00:00Z"}"""
+                 })
+        {
+            File.WriteAllText(Path.Combine(directory.Path, DesktopPortStore.ReadyFileName), invalidJson);
+            var evidence = DesktopPortStore.ReadReadyEvidence(directory.Path);
+            AssertEx.Equal(ReadyEvidenceState.Invalid, evidence.State);
+            AssertEx.Null(evidence.Info);
+        }
+    }
+
+    [Test]
+    public void ReadyDataDirectoryComparison_UsesOperatingSystemPathSemantics()
+    {
+        const string recorded = "/Users/Agent/XE-Data";
+        const string differentlyCased = "/users/agent/xe-data";
+
+        AssertEx.True(DesktopPortStore.ReadyDataDirectoriesEqual(recorded, differentlyCased, isWindows: true));
+        AssertEx.False(DesktopPortStore.ReadyDataDirectoriesEqual(recorded, differentlyCased, isWindows: false));
+        AssertEx.True(DesktopPortStore.ReadyDataDirectoriesEqual(recorded, recorded, isWindows: false));
+    }
+
+    [Test]
+    public void IsPortAvailable_ReportsHeldAndReleasedPorts()
+    {
+        var port = FindFreeLoopbackPort();
+        using var holder = new TcpListener(IPAddress.Loopback, port);
+        holder.Start();
+        AssertEx.False(DesktopPortStore.IsPortAvailable(port));
+        holder.Stop();
+        AssertEx.True(DesktopPortStore.IsPortAvailable(port));
+    }
+
     private static void WritePortFile(string directory, string content)
     {
         File.WriteAllText(Path.Combine(directory, DesktopPortStore.PortFileName), content);

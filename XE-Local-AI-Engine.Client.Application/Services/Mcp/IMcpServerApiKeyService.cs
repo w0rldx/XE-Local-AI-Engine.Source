@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp;
 
+using System.Runtime.Serialization;
+using System.Text.Json.Serialization;
+
 /// <summary>
 ///     Owns the lifecycle of the single bearer credential that authenticates an EXTERNAL MCP client against this node's
 ///     inbound MCP server endpoint: generation, retrieval for display, revocation, and the constant-time comparison the
@@ -17,7 +20,11 @@ public interface IMcpServerApiKeyService
     ///     from this return value is gone and can only be replaced by generating another. Every other surface —
     ///     <see cref="GetAsync" /> included — sees only the prefix.
     /// </summary>
-    Task<GeneratedMcpServerApiKey> GenerateAsync(CancellationToken cancellationToken = default);
+    Task<GeneratedMcpServerApiKey> GenerateAsync(CancellationToken cancellationToken = default) =>
+        GenerateAsync(McpServerApiKeyScope.Delegate, cancellationToken);
+
+    /// <summary>Mints a replacement key for the requested caller scope.</summary>
+    Task<GeneratedMcpServerApiKey> GenerateAsync(McpServerApiKeyScope scope, CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Returns the current credential's non-secret metadata, or <see langword="null" /> when none has been
@@ -30,18 +37,35 @@ public interface IMcpServerApiKeyService
     Task<bool> RevokeAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Returns <see langword="true" /> when <paramref name="presented" /> matches the stored key. Compares in
-    ///     constant time and stamps last-used on success. A node with no key never authenticates, so an absent key is a
-    ///     closed door rather than an open one.
+    ///     Returns trusted scope metadata when <paramref name="presented" /> matches the stored key, otherwise null.
+    ///     Compares in constant time and stamps last-used on success. A node with no key never authenticates.
     /// </summary>
-    Task<bool> ValidateAsync(string? presented, CancellationToken cancellationToken = default);
+    Task<McpServerApiKeyValidation?> ValidateAsync(string? presented, CancellationToken cancellationToken = default);
+}
+
+/// <summary>The trust level carried by the singleton inbound-MCP credential.</summary>
+public enum McpServerApiKeyScope
+{
+    [EnumMember(Value = "delegate")]
+    [JsonStringEnumMemberName("delegate")]
+    Delegate = 0,
+
+    [EnumMember(Value = "agentic")]
+    [JsonStringEnumMemberName("agentic")]
+    Agentic = 1
 }
 
 /// <summary>
 ///     The credential as shown to the operator. Carries no secret by construction — the key is not recoverable from
 ///     the node — so this shape is safe to return from any Operator-gated surface.
 /// </summary>
-public sealed record McpServerApiKeyView(string Prefix, DateTimeOffset CreatedAt, DateTimeOffset? LastUsedAt);
+public sealed record McpServerApiKeyView(string Prefix,
+    McpServerApiKeyScope Scope,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset? LastUsedAt);
+
+/// <summary>Trusted metadata produced by a successful, single-lookup key validation.</summary>
+public sealed record McpServerApiKeyValidation(McpServerApiKeyScope Scope, string Prefix);
 
 /// <summary>
 ///     A freshly minted credential: the one-time plaintext <see cref="Key" /> plus the metadata that will remain

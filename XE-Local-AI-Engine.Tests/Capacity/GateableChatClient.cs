@@ -41,6 +41,9 @@ internal sealed class GateableChatClient : IChatClient
     /// <summary>The tool names the inner agent passed on the last run (read from <c>ChatOptions.Tools</c>), for tool-set assertions.</summary>
     public IReadOnlyList<string> LastToolNames { get; private set; } = [];
 
+    /// <summary>The executable tools from the last run, retained so integration tests can invoke a resolved adapter.</summary>
+    public IReadOnlyList<AITool> LastTools { get; private set; } = [];
+
     /// <summary>The model id the inner agent passed on the last run (read from <c>ChatOptions.ModelId</c>) — pins that a spawn binds its model so RuntimeChatClient routes to the right provider.</summary>
     public string? LastModelId { get; private set; }
 
@@ -87,6 +90,7 @@ internal sealed class GateableChatClient : IChatClient
         LastModelId = options?.ModelId;
         LastInstructions = options?.Instructions;
         LastAdditionalProperties = options?.AdditionalProperties;
+        LastTools = options?.Tools is { } executableTools ? [.. executableTools] : [];
         LastToolNames = options?.Tools is { } tools
             ? [.. tools.Select(static tool => tool.Name)]
             : [];

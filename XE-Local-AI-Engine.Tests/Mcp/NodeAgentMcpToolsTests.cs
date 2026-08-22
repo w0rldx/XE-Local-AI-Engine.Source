@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Mcp;
 
 using System.Reflection;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
@@ -9,9 +10,12 @@ using ModelContextProtocol.Server;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Client.Services.Mcp.Server;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Workspace;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -44,6 +48,8 @@ public sealed class NodeAgentMcpToolsTests
                                              .ToArray();
 
         AssertEx.Equal(string.Join('|', ExpectedToolNames), string.Join('|', names));
+        var authorization = AssertEx.NotNull(typeof(NodeAgentMcpTools).GetCustomAttribute<AuthorizeAttribute>());
+        AssertEx.Equal(NodeAuthorizationPolicies.McpServer, authorization.Policy!);
     }
 
     [Test]
@@ -62,6 +68,31 @@ public sealed class NodeAgentMcpToolsTests
                                                 || name.Contains("shell", StringComparison.OrdinalIgnoreCase)
                                                 || name.Contains("terminal", StringComparison.OrdinalIgnoreCase)),
             "The inbound MCP surface must not advertise filesystem mutation or process execution tools.");
+    }
+
+    [Test]
+    public async Task ListModelsAsync_ReturnsDetailedOrderedModelsAndMarksTheExactDefault()
+    {
+        var harness = new Harness();
+        harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(
+        [
+            Descriptor("zeta-embed", 20),
+            Descriptor("alpha-chat", 10),
+            Descriptor("unavailable", 30, isAvailable: false)
+        ]);
+        harness.NodeSettingsAdministration.GetAgenticViewAsync(Arg.Any<CancellationToken>()).Returns(
+            new NodeSettingsAgenticView("zeta-embed", null, null, null, null, null, null, null, null, 600, null, null, null, null, null, null));
+
+        var models = await harness.Tools.ListModelsAsync(CancellationToken.None);
+
+        AssertEx.Equal(2, models.Count);
+        AssertEx.Equal("alpha-chat", models[0].Name);
+        AssertEx.Equal(10L, models[0].SizeBytes!.Value);
+        AssertEx.Equal("chat", models[0].Kind);
+        AssertEx.False(models[0].IsDefault);
+        AssertEx.Equal("zeta-embed", models[1].Name);
+        AssertEx.Equal("embedding", models[1].Kind);
+        AssertEx.True(models[1].IsDefault);
     }
 
     [Test]
@@ -850,6 +881,17 @@ public sealed class NodeAgentMcpToolsTests
             CompactedAtUtc: null,
             PayloadExpired: false);
 
+    private static LocalModelDescriptor Descriptor(string name, long sizeBytes, bool isAvailable = true) =>
+        new()
+        {
+            ModelName = name,
+            ProviderName = "llamacpp",
+            IsAvailable = isAvailable,
+            SizeBytes = sizeBytes,
+            ModifiedAt = DateTimeOffset.UnixEpoch,
+            MaxContextTokens = null
+        };
+
     private sealed class Harness
     {
         public Harness(string spawnResult = "unused",
@@ -865,7 +907,8 @@ public sealed class NodeAgentMcpToolsTests
                       .Returns(SpawnOutcome.Success(spawnResult));
             Tools = new NodeAgentMcpTools(McpService,
                 Substitute.For<IAgentDefinitionStore>(),
-                Substitute.For<IGgufModelStore>(),
+                GgufModelStore,
+                NodeSettingsAdministration,
                 Options.Create(new SpawnOptions
                 {
                     MaxConcurrentSpawns = 2,
@@ -883,6 +926,10 @@ public sealed class NodeAgentMcpToolsTests
         }
 
         public IMcpAgentExecutionService McpService { get; } = Substitute.For<IMcpAgentExecutionService>();
+
+        public IGgufModelStore GgufModelStore { get; } = Substitute.For<IGgufModelStore>();
+
+        public INodeSettingsAdministrationService NodeSettingsAdministration { get; } = Substitute.For<INodeSettingsAdministrationService>();
 
         public RecordingProgress Progress { get; } = new();
 

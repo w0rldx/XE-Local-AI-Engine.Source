@@ -17,6 +17,8 @@ internal sealed record class McpAgentRun
     public string? ModelId { get; set; }
     public string? ModelOverrideId { get; set; }
     public Guid? WorkspaceId { get; set; }
+    public bool IsAgenticAutoApprove { get; set; }
+    public string? RequestingKeyPrefix { get; set; }
     public byte[]? BindingFingerprint { get; set; }
     public byte[]? TaskPayload { get; set; }
     public byte[]? InstructionsPayload { get; set; }

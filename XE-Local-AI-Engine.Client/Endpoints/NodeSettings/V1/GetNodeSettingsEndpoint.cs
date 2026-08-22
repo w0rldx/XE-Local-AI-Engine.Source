@@ -6,9 +6,9 @@ using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
-public sealed class GetNodeSettingsEndpoint(INodeSettingsStore nodeSettingsStore) : EndpointWithoutRequest<NodeSettingsResponse>
+public sealed class GetNodeSettingsEndpoint(INodeSettingsAdministrationService administrationService) : EndpointWithoutRequest<NodeSettingsResponse>
 {
-    private readonly INodeSettingsStore _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
+    private readonly INodeSettingsAdministrationService _administrationService = administrationService ?? throw new ArgumentNullException(nameof(administrationService));
 
     public override void Configure()
     {
@@ -18,7 +18,7 @@ public sealed class GetNodeSettingsEndpoint(INodeSettingsStore nodeSettingsStore
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var settings = await _nodeSettingsStore.LoadAsync(ct).ConfigureAwait(false);
+        var settings = await _administrationService.GetTrustedSettingsAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(settings.ToResponse(), ct).ConfigureAwait(false);
     }
 }

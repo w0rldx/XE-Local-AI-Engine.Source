@@ -19,7 +19,7 @@ const revokeMock = vi.fn();
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getMcpServerApiKeyOptions: () => ({ queryKey: ["mcp-server-key"], queryFn: () => getMock() }),
 	getMcpServerApiKeyQueryKey: () => ["mcp-server-key"],
-	generateMcpServerApiKeyMutation: () => ({ mutationFn: () => generateMock() }),
+	generateMcpServerApiKeyMutation: () => ({ mutationFn: (options: unknown) => generateMock(options) }),
 	revokeMcpServerApiKeyMutation: () => ({ mutationFn: () => revokeMock() }),
 }));
 
@@ -45,6 +45,7 @@ vi.mock("react-i18next", () => ({
 }));
 
 function installJsdomEnvironmentMocks(): void {
+	HTMLElement.prototype.scrollIntoView = vi.fn();
 	Object.defineProperty(window, "matchMedia", {
 		writable: true,
 		value: vi.fn().mockImplementation((query: string) => ({
@@ -89,6 +90,7 @@ const configuredResponse = {
 	endpointUrl: "http://127.0.0.1:5000/api/local/v1/mcp/server",
 	apiKey: {
 		prefix: "xemcp_abc123",
+		scope: "delegate",
 		createdAt: "2026-08-03T00:00:00+00:00",
 		lastUsedAt: null,
 	},
@@ -139,12 +141,8 @@ describe("McpServerKeyPanel", () => {
 		expect(screen.queryByTestId("mcp-server-key-value")).toBeNull();
 		expect(screen.queryByTestId("mcp-server-key-reveal")).toBeNull();
 		expect(screen.getByTestId("mcp-server-key-prefix").textContent).toContain("xemcp_abc123");
-		expect(screen.getByTestId("mcp-server-key-card").textContent).not.toContain(
-			"xemcp_abc123-the-rest-of-the-secret",
-		);
-		expect(screen.getByTestId("mcp-server-key-endpoint").textContent).toBe(
-			"http://127.0.0.1:5000/api/local/v1/mcp/server",
-		);
+		expect(screen.getByTestId("mcp-server-key-card").textContent).not.toContain("xemcp_abc123-the-rest-of-the-secret");
+		expect(screen.getByTestId("mcp-server-key-endpoint").textContent).toBe("http://127.0.0.1:5000/api/local/v1/mcp/server");
 	});
 
 	it("tells the operator the configured key cannot be shown again", async () => {
@@ -153,9 +151,7 @@ describe("McpServerKeyPanel", () => {
 		renderPanel();
 
 		await waitFor(() => {
-			expect(screen.getByTestId("mcp-server-key-not-retrievable").textContent).toContain(
-				"cannot be shown again",
-			);
+			expect(screen.getByTestId("mcp-server-key-not-retrievable").textContent).toContain("cannot be shown again");
 		});
 	});
 
@@ -172,9 +168,7 @@ describe("McpServerKeyPanel", () => {
 		fireEvent.click(screen.getByTestId("mcp-server-key-generate"));
 
 		await waitFor(() => {
-			expect(screen.getByTestId("mcp-server-key-value").textContent).toBe(
-				"xemcp_abc123-the-rest-of-the-secret",
-			);
+			expect(screen.getByTestId("mcp-server-key-value").textContent).toBe("xemcp_abc123-the-rest-of-the-secret");
 		});
 		expect(screen.getByTestId("mcp-server-key-reveal").textContent).toContain("cannot be recovered");
 	});
@@ -232,6 +226,23 @@ describe("McpServerKeyPanel", () => {
 
 		await waitFor(() => {
 			expect(generateMock).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	it("defaults to delegate and sends the selected scope when generating", async () => {
+		getMock.mockResolvedValue(emptyResponse);
+		generateMock.mockResolvedValue(generatedResponse);
+
+		renderPanel();
+		await waitFor(() => expect(screen.getByTestId("mcp-server-key-status").textContent).toBe("No key"));
+
+		fireEvent.click(screen.getByTestId("mcp-server-key-scope"));
+		fireEvent.click(screen.getByRole("option", { name: "Agentic", hidden: true }));
+		expect(screen.getByTestId("mcp-server-key-agentic-warning").textContent).toContain("approved automatically");
+		fireEvent.click(screen.getByTestId("mcp-server-key-generate"));
+
+		await waitFor(() => {
+			expect(generateMock).toHaveBeenCalledWith({ body: { scope: "agentic" } });
 		});
 	});
 

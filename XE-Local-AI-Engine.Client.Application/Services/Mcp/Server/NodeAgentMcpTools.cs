@@ -1,12 +1,18 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Server;
 
+using System.Security.Claims;
 using System.ComponentModel;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
+using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
@@ -15,15 +21,13 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 ///     the surface is delegation: an outside agent hands a task to a locally-hosted model instead of doing the work
 ///     itself, so private or bulky work never leaves the machine.
 ///     <para>
-///         <b>Workspace-read-only by construction.</b> Lifecycle tools persist only their bounded run records and
-///         cancellation markers. The delegated model cannot modify operator files. An MCP caller is a strictly lesser
-///         principal than the browser operator and, crucially, has NO human-in-the-loop route to answer a tool-approval
-///         request — the same reason unattended execution strips approval-required tools from its offer. Adding a
-///         source-writing tool here is an operator decision that needs an approval story first, not an implementation
-///         detail.
+///         Delegate execution remains workspace-read-only by construction. An explicitly minted agentic key may run a
+///         saved agent's complete allowed-tool set under strict audit-before-invocation auto-approval, but it still
+///         receives no browser Operator role or JWT authority.
 ///     </para>
 /// </summary>
 [McpServerToolType]
+[Authorize(Policy = NodeAuthorizationPolicies.McpServer)]
 public sealed class NodeAgentMcpTools
 {
     /// <summary>
@@ -40,6 +44,7 @@ public sealed class NodeAgentMcpTools
 
     private readonly IAgentDefinitionStore _agentDefinitionStore;
     private readonly IGgufModelStore _ggufModelStore;
+    private readonly INodeSettingsAdministrationService _nodeSettingsAdministrationService;
     private readonly ILogger<NodeAgentMcpTools> _logger;
     private readonly IMcpAgentRunCoordinator _runCoordinator;
     private readonly McpAgentRunOptions _runOptions;
@@ -50,6 +55,7 @@ public sealed class NodeAgentMcpTools
     public NodeAgentMcpTools(IMcpAgentExecutionService mcpAgentExecutionService,
         IAgentDefinitionStore agentDefinitionStore,
         IGgufModelStore ggufModelStore,
+        INodeSettingsAdministrationService nodeSettingsAdministrationService,
         IOptions<SpawnOptions> spawnOptions,
         IMcpAgentRunCoordinator runCoordinator,
         ISelectedFolderResolver selectedFolderResolver,
@@ -59,6 +65,7 @@ public sealed class NodeAgentMcpTools
         _mcpAgentExecutionService = mcpAgentExecutionService ?? throw new ArgumentNullException(nameof(mcpAgentExecutionService));
         _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
         _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
+        _nodeSettingsAdministrationService = nodeSettingsAdministrationService ?? throw new ArgumentNullException(nameof(nodeSettingsAdministrationService));
         ArgumentNullException.ThrowIfNull(spawnOptions);
         _spawnOptions = spawnOptions.Value;
         _runCoordinator = runCoordinator ?? throw new ArgumentNullException(nameof(runCoordinator));
@@ -78,14 +85,18 @@ public sealed class NodeAgentMcpTools
 
     [McpServerTool(Name = "list_models")]
     [Description("List the locally installed models on this node that run_agent or start_agent_run can bind directly when no saved agent is wanted.")]
-    public async Task<IReadOnlyList<string>> ListModelsAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<LocalModelSummary>> ListModelsAsync(CancellationToken cancellationToken)
     {
         var models = await _ggufModelStore.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        var settings = await _nodeSettingsAdministrationService.GetAgenticViewAsync(cancellationToken).ConfigureAwait(false);
         return
         [
             .. models.Where(static model => model.IsAvailable)
-                     .Select(static model => model.ModelName)
-                     .OrderBy(static name => name, StringComparer.Ordinal)
+                     .OrderBy(static model => model.ModelName, StringComparer.Ordinal)
+                     .Select(model => new LocalModelSummary(model.ModelName,
+                         model.SizeBytes,
+                         ToWireKind(LocalGgufModelKindClassifier.Classify(model.ModelName)),
+                         string.Equals(model.ModelName, settings.DefaultModelName, StringComparison.Ordinal)))
         ];
     }
 
@@ -103,7 +114,7 @@ public sealed class NodeAgentMcpTools
 
     [McpServerTool(Name = "start_agent_run")]
     [Description(
-        "Accept a durable background agent run and return immediately. Supply a globally unique UUID request_id plus exactly one of agent or model. The run continues across MCP disconnects, can be polled from a later connection, and never grants write access: bare/general runs are tool-less and the seeded Coder is limited to operator-authorized read-only workspace tools.")]
+        "Accept a durable background agent run and return immediately. Supply a globally unique UUID request_id plus exactly one of agent or model. The run continues across MCP disconnects and can be polled from a later connection. Delegate callers remain tool-less except for the seeded read-only Coder; agentic callers may use the saved agent's full allowed-tool set with strict audited auto-approval.")]
 #pragma warning disable CA1707, IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<McpAgentRunStartResponse> StartAgentRunAsync(
         [Description(
@@ -112,6 +123,7 @@ public sealed class NodeAgentMcpTools
         [Description("The bounded task for the background local agent to carry out.")]
         string task,
         CancellationToken cancellationToken,
+        ClaimsPrincipal? user = null,
         [Description("A saved agent's id or name. Mutually exclusive with model.")]
         string? agent = null,
         [Description("A locally installed model id. Mutually exclusive with agent.")]
@@ -124,6 +136,7 @@ public sealed class NodeAgentMcpTools
         string? workspace_id = null)
 #pragma warning restore CA1707, IDE1006
     {
+        var inboundContext = McpInboundExecutionContext.FromPrincipal(user);
         if (!TryParseRequestId(request_id, out var requestId) || string.IsNullOrWhiteSpace(task))
         {
             return RejectedStart(InvalidRequestCode, "Cannot start: provide a valid request UUID and non-empty bounded task.");
@@ -147,7 +160,9 @@ public sealed class NodeAgentMcpTools
                     AgentKey = NullIfWhiteSpace(agent),
                     ModelId = NullIfWhiteSpace(model),
                     ModelOverrideId = NullIfWhiteSpace(model_override),
-                    Instructions = instructions
+                    Instructions = instructions,
+                    InboundContext = inboundContext,
+                    ExecutionRequestId = requestId
                 },
                 workspaceId),
             cancellationToken).ConfigureAwait(false);
@@ -256,7 +271,7 @@ public sealed class NodeAgentMcpTools
 
     [McpServerTool(Name = "run_agent")]
     [Description(
-        "Run a task on this node's local model and return the result. Supply either agent (a saved agent's id or name) or model (a local model id) — exactly one. Saved general agents and bare models are tool-less. The seeded read-only Coder may use only its three workspace-read tools, requires modelOverride because it intentionally has no pinned model, and requires an opaque workspace_id from list_workspaces. Runs are admission-gated: a request that would exceed the node's memory or concurrency limits is declined with a reason rather than queued indefinitely.")]
+        "Run a task on this node's local model and return the result. Supply either agent (a saved agent's id or name) or model (a local model id) — exactly one. Delegate saved agents and bare models are tool-less; the seeded read-only Coder may use only its three workspace-read tools. Agentic saved-agent runs may use the definition's full allowed-tool set with strict audited auto-approval. Runs are admission-gated: a request that would exceed the node's memory or concurrency limits is declined with a reason rather than queued indefinitely.")]
     // Parameter order is dictated by C#, not by preference: `progress` and `cancellationToken` are injected by the SDK
     // and excluded from the generated schema, but they carry no default, so they must precede the optional arguments.
     // Those defaults are load-bearing — the SDK derives `required` from the ABSENCE of a default, not from nullability,
@@ -267,6 +282,7 @@ public sealed class NodeAgentMcpTools
     public async Task<string> RunAgentAsync([Description("The task for the local agent to carry out.")] string task,
         IProgress<ProgressNotificationValue> progress,
         CancellationToken cancellationToken,
+        ClaimsPrincipal? user = null,
         [Description("A saved agent's id or name. Mutually exclusive with model.")]
         string? agent = null,
         [Description("A local model id to bind an ad-hoc agent to. Mutually exclusive with agent.")]
@@ -279,6 +295,7 @@ public sealed class NodeAgentMcpTools
         string? workspace_id = null)
 #pragma warning restore CA1707, IDE1006
     {
+        var inboundContext = McpInboundExecutionContext.FromPrincipal(user);
         if (string.IsNullOrWhiteSpace(task))
         {
             return "Cannot run: provide a non-empty task.";
@@ -319,7 +336,9 @@ public sealed class NodeAgentMcpTools
             AgentKey = string.IsNullOrWhiteSpace(agent) ? null : agent,
             ModelId = string.IsNullOrWhiteSpace(model) ? null : model,
             ModelOverrideId = string.IsNullOrWhiteSpace(modelOverride) ? null : modelOverride,
-            Instructions = instructions
+            Instructions = instructions,
+            InboundContext = inboundContext,
+            ExecutionRequestId = Guid.NewGuid()
         };
 
         progress.Report(new ProgressNotificationValue
@@ -414,6 +433,18 @@ public sealed class NodeAgentMcpTools
     private static string? NullIfWhiteSpace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
 
+    private static string ToWireKind(ModelKind kind) => kind switch
+    {
+        ModelKind.Chat => "chat",
+        ModelKind.Embedding => "embedding",
+        ModelKind.Reranker => "reranker",
+        ModelKind.Draft => "draft",
+        _ => "chat"
+    };
+
     /// <summary>One saved agent, as offered to an external MCP client. Ids are stringified for a JSON-schema-friendly shape.</summary>
     public sealed record AgentSummary(string Id, string Name, string? Description);
+
+    /// <summary>One available local model, including the node-default marker used by external agents during setup.</summary>
+    public sealed record LocalModelSummary(string Name, long? SizeBytes, string Kind, bool IsDefault);
 }

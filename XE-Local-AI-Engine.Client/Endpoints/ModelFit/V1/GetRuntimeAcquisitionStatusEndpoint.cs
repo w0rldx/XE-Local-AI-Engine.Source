@@ -4,7 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
 
 /// <summary>
 ///     Read-only first-run llama.cpp runtime acquisition status (GET model-fit/llamacpp/acquisition): the current phase,
@@ -14,15 +14,15 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     the slow-first-run case the channel exists to explain.
 /// </summary>
 /// <remarks>
-///     <b>Zero side effects.</b> This endpoint only reads <see cref="IRuntimeAcquisitionStatusRegistry.Current" />. It must
+///     <b>Zero side effects.</b> This endpoint only reads the administration service's current acquisition snapshot. It must
 ///     never trigger an acquisition the way <see cref="EnsureLlamaCppBinaryEndpoint" /> does — the client polls/hydrates
 ///     this on mount, so starting a multi-hundred-MB download from a GET would kick one off on any fresh node the moment a
 ///     page loads. Before acquisition has ever run the registry serves an <c>Idle</c> snapshot at sequence 0.
 /// </remarks>
-public sealed class GetRuntimeAcquisitionStatusEndpoint(IRuntimeAcquisitionStatusRegistry acquisitionStatus)
+public sealed class GetRuntimeAcquisitionStatusEndpoint(ILlamaCppRuntimeAdministrationService administrationService)
     : EndpointWithoutRequest<RuntimeAcquisitionStatusResponse>
 {
-    private readonly IRuntimeAcquisitionStatusRegistry _acquisitionStatus = acquisitionStatus ?? throw new ArgumentNullException(nameof(acquisitionStatus));
+    private readonly ILlamaCppRuntimeAdministrationService _administrationService = administrationService ?? throw new ArgumentNullException(nameof(administrationService));
 
     public override void Configure()
     {
@@ -32,6 +32,6 @@ public sealed class GetRuntimeAcquisitionStatusEndpoint(IRuntimeAcquisitionStatu
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await Send.OkAsync(_acquisitionStatus.Current.ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(_administrationService.GetAcquisitionStatus().ToResponse(), ct).ConfigureAwait(false);
     }
 }

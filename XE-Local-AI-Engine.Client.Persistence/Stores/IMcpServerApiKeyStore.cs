@@ -23,7 +23,10 @@ public interface IMcpServerApiKeyStore
     ///     appending is what makes an old key stop working the moment a new one is generated; there is deliberately no
     ///     window in which both authenticate.
     /// </summary>
-    Task<McpServerApiKeyRecord> SetAsync(string prefix, ReadOnlyMemory<byte> keyHash, CancellationToken cancellationToken = default);
+    Task<McpServerApiKeyRecord> SetAsync(string prefix,
+        ReadOnlyMemory<byte> keyHash,
+        int scope,
+        CancellationToken cancellationToken = default);
 
     /// <summary>Removes the credential. Returns <see langword="true" /> when a row was deleted.</summary>
     Task<bool> DeleteAsync(CancellationToken cancellationToken = default);
@@ -32,7 +35,7 @@ public interface IMcpServerApiKeyStore
     ///     Records a successful authentication timestamp. Deliberately does NOT touch the hash column, so a last-used
     ///     stamp never rewrites (or re-seals) the credential. A no-op when no key exists.
     /// </summary>
-    Task TouchLastUsedAsync(long timestampUtc, CancellationToken cancellationToken = default);
+    Task<bool> TouchLastUsedAsync(Guid generationId, long timestampUtc, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -40,4 +43,9 @@ public interface IMcpServerApiKeyStore
 ///     this record can be presented to the MCP endpoint, so no field here needs "reveal the key" handling. The
 ///     plaintext key exists only in the return value of the generate call that minted it.
 /// </summary>
-public sealed record McpServerApiKeyRecord(string Prefix, ReadOnlyMemory<byte> KeyHash, long CreatedAtUtc, long? LastUsedAtUtc);
+public sealed record McpServerApiKeyRecord(string Prefix,
+    ReadOnlyMemory<byte> KeyHash,
+    int Scope,
+    Guid GenerationId,
+    long CreatedAtUtc,
+    long? LastUsedAtUtc);

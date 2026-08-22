@@ -120,6 +120,42 @@ public sealed class AgentDefinitionServiceTests
     }
 
     [Test]
+    public async Task GetByKeyAsync_WithId_UsesDirectLookup()
+    {
+        var service = CreateService(out var store);
+        var record = CreateRecord(CreateInput());
+        store.GetByIdAsync(record.Id, Arg.Any<CancellationToken>()).Returns(record);
+
+        var result = await service.GetByKeyAsync(record.Id.ToString()).ConfigureAwait(false);
+
+        AssertEx.Equal(record.Id, AssertEx.NotNull(result).Id);
+        await store.DidNotReceive().ListAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task GetByKeyAsync_WithName_UsesExactOrdinalMatch()
+    {
+        var service = CreateService(out var store);
+        var record = CreateRecord(CreateInput("Exact Name"));
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([record]);
+
+        AssertEx.Equal(record.Id, AssertEx.NotNull(await service.GetByKeyAsync("Exact Name").ConfigureAwait(false)).Id);
+        AssertEx.True(await service.GetByKeyAsync("exact name").ConfigureAwait(false) is null,
+            "agent names must resolve by exact ordinal match.");
+    }
+
+    [Test]
+    public async Task GetByKeyAsync_WithBlankKey_ReturnsNullWithoutStoreRead()
+    {
+        var service = CreateService(out var store);
+
+        AssertEx.True(await service.GetByKeyAsync("   ").ConfigureAwait(false) is null,
+            "blank agent keys must not resolve.");
+        await store.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+        await store.DidNotReceive().ListAsync(Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
     public async Task CreateAsync_WithValidOrchestratorTopology_PersistsThroughStore()
     {
         var service = CreateService(out var store);

@@ -2534,6 +2534,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("BLOB")
                         .HasColumnName("instructions_payload");
 
+                    b.Property<bool>("IsAgenticAutoApprove")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_agentic_auto_approve");
+
                     b.Property<string>("ModelId")
                         .HasMaxLength(1024)
                         .HasColumnType("TEXT")
@@ -2553,6 +2559,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasMaxLength(32)
                         .HasColumnType("BLOB")
                         .HasColumnName("request_fingerprint");
+
+                    b.Property<string>("RequestingKeyPrefix")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("requesting_key_prefix");
 
                     b.Property<long>("ReservedActivePayloadBytes")
                         .HasColumnType("INTEGER")
@@ -2599,6 +2610,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("mcp_agent_runs", null, t =>
                         {
                             t.HasCheckConstraint("CK_mcp_agent_runs_accounting_version", "accounting_version = 1");
+
+                            t.HasCheckConstraint("CK_mcp_agent_runs_agentic_authority", "(is_agentic_auto_approve = 0 AND requesting_key_prefix IS NULL) OR (is_agentic_auto_approve = 1 AND requesting_key_prefix IS NOT NULL AND length(requesting_key_prefix) BETWEEN 1 AND 32 AND requesting_key_prefix NOT GLOB '*[^A-Za-z0-9_-]*')");
 
                             t.HasCheckConstraint("CK_mcp_agent_runs_nonnegative", "version >= 0 AND reserved_active_payload_bytes >= 0 AND active_payload_bytes >= 0 AND tombstone_logical_bytes >= 0");
                         });
@@ -2679,6 +2692,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("created_at_utc");
 
+                    b.Property<Guid>("GenerationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("generation_id");
+
                     b.Property<byte[]>("KeyHash")
                         .IsRequired()
                         .HasColumnType("BLOB")
@@ -2693,9 +2710,18 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("prefix");
 
+                    b.Property<int>("Scope")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("scope");
+
                     b.HasKey("Id");
 
-                    b.ToTable("mcp_server_api_keys", (string)null);
+                    b.ToTable("mcp_server_api_keys", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_mcp_server_api_keys_scope", "scope IN (0, 1)");
+                        });
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.McpServerRegistration", b =>

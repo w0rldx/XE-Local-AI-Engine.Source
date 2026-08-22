@@ -2013,8 +2013,15 @@ export type XeLocalAiEngineClientEndpointsMcpV1GeneratedMcpServerApiKeyResponse 
 
 export type XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse = {
 	prefix: string;
+	scope: XeLocalAiEngineClientServicesMcpMcpServerApiKeyScope;
 	createdAt: string;
 	lastUsedAt?: string | null;
+};
+
+export type XeLocalAiEngineClientServicesMcpMcpServerApiKeyScope = "delegate" | "agentic";
+
+export type XeLocalAiEngineClientEndpointsMcpV1GenerateMcpServerApiKeyRequest = {
+	scope?: XeLocalAiEngineClientServicesMcpMcpServerApiKeyScope;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse = {
@@ -8749,7 +8756,9 @@ export type GetMcpServerApiKeyResponses = {
 export type GetMcpServerApiKeyResponse = GetMcpServerApiKeyResponses[keyof GetMcpServerApiKeyResponses];
 
 export type GenerateMcpServerApiKeyData = {
-	body?: never;
+	body?: {
+		scope?: XeLocalAiEngineClientServicesMcpMcpServerApiKeyScope;
+	};
 	path?: never;
 	query?: never;
 	url: "/api/local/v1/mcp/server-key";

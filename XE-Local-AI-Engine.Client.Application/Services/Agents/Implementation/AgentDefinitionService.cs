@@ -54,6 +54,22 @@ internal sealed class AgentDefinitionService(
         return _store.GetByIdAsync(id, cancellationToken);
     }
 
+    public async Task<AgentDefinitionRecord?> GetByKeyAsync(string key, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return null;
+        }
+
+        if (Guid.TryParse(key, out var id))
+        {
+            return await _store.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
+        }
+
+        var definitions = await _store.ListAsync(cancellationToken).ConfigureAwait(false);
+        return definitions.FirstOrDefault(definition => string.Equals(definition.Name, key, StringComparison.Ordinal));
+    }
+
     public Task<IReadOnlyList<AgentDefinitionRecord>> ListAsync(CancellationToken cancellationToken = default)
     {
         return _store.ListAsync(cancellationToken);

@@ -4,6 +4,7 @@ using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
@@ -74,7 +75,7 @@ internal static class LocalModelsMapper
                .Where(static descriptor => !string.IsNullOrWhiteSpace(descriptor.ModelName))
                .Select(descriptor =>
                {
-                   var kind = ClassifyGgufKindByName(descriptor.ModelName);
+                   var kind = LocalGgufModelKindClassifier.Classify(descriptor.ModelName);
                    return new LocalModelResponse
                    {
                        ModelName = descriptor.ModelName,
@@ -105,21 +106,6 @@ internal static class LocalModelsMapper
     ///     Reranker is then checked before embedding because a reranker name such as <c>bge-reranker-…</c> also matches
     ///     the embedding prefix, and the reranker classification is the correct one. Any other name defaults to Chat.
     /// </summary>
-    private static ModelKind ClassifyGgufKindByName(string modelName)
-    {
-        if (ModelKindDetector.IsDraftName(modelName))
-        {
-            return ModelKind.Draft;
-        }
-
-        if (ModelKindDetector.IsRerankerName(modelName))
-        {
-            return ModelKind.Reranker;
-        }
-
-        return ModelKindDetector.IsEmbeddingName(modelName) ? ModelKind.Embedding : ModelKind.Chat;
-    }
-
     // Appends GGUF entries after the Ollama group, deduping by ModelName (case-insensitive) so a name installed under
     // both runtimes is listed once (the Ollama entry wins). Returns a single ordered array (Ollama first, then GGUF).
     private static LocalModelResponse[] ConcatGgufModels(IReadOnlyList<LocalModelResponse> ollamaItems,

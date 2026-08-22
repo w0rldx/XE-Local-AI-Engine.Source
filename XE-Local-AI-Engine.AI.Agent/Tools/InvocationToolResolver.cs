@@ -48,9 +48,8 @@ internal static class InvocationToolResolver
 
     /// <summary>
     ///     The offer → executable resolution EXTENDED with the node-local custom tool catalog. Used by the single-agent and
-    ///     orchestration invocation factories (the two attended paths); the unattended sub-agent path stays on
-    ///     <see cref="Resolve" /> because it strips every approval-required offer BEFORE resolution, and custom tools are
-    ///     approval-forced, so they can never appear there. The custom names are pre-resolved through
+    ///     orchestration invocation factories and by the explicitly trusted agentic MCP root path. Delegate MCP and
+    ///     spawned-child paths stay on <see cref="Resolve" /> and cannot resolve custom tools. The custom names are pre-resolved through
     ///     <paramref name="customToolCatalog" /> (a DbContext-backed, async store read) BEFORE the synchronous core runs, so
     ///     no <c>.Result</c>/<c>.Wait()</c> ever blocks the thread pool. Each custom executable the catalog returns is ALREADY
     ///     wrapped in <c>ApprovalRequiredAIFunction</c> (its authoritative approval floor), so the core's tighten-only wrap

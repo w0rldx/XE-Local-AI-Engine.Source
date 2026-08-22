@@ -27,6 +27,11 @@ public interface IAgentDefinitionService
     /// <summary>Returns the record for <paramref name="id" />, or <c>null</c> when no definition has that id.</summary>
     Task<AgentDefinitionRecord?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Resolves a definition key as either its id or an exact, ordinal name. Blank keys never match.
+    /// </summary>
+    Task<AgentDefinitionRecord?> GetByKeyAsync(string key, CancellationToken cancellationToken = default);
+
     /// <summary>Returns every registered definition, oldest first.</summary>
     Task<IReadOnlyList<AgentDefinitionRecord>> ListAsync(CancellationToken cancellationToken = default);
 }

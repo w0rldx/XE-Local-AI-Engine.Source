@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
@@ -357,6 +358,173 @@ public sealed class SubAgentSpawnServiceTests
         AssertEx.Empty(harness.ChatClient.LastToolNames);
         AssertEx.Equal("general instructions without skill discovery", harness.ChatClient.LastInstructions);
         AssertEx.Equal(0, harness.WorkspaceSessionFactory.OpenCallCount);
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenAgenticSavedBindingRuns_ResolvesFullOfferAndAdaptsApprovalWrapper()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.AgenticToolAdapter.Adapt(Arg.Any<ApprovalRequiredAIFunction>(),
+                ToolCategory.WriteExecute,
+                Arg.Any<McpInboundExecutionContext>(),
+                Arg.Any<Guid>())
+            .Returns(AIFunctionFactory.Create((string input) => input, "read_file"));
+        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
+            Model,
+            "agentic instructions",
+            AgentDefinitionId: Guid.NewGuid(),
+            AgentDefinitionVersion: 4,
+            AllowedTools:
+            [
+                McpTool("read_file") with
+                {
+                    Category = ToolCategory.WriteExecute,
+                    RequiresApproval = true
+                },
+                McpTool("list_files")
+            ],
+            ReasoningEffort: null,
+            SupportsThinking: false));
+        var requestId = Guid.NewGuid();
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await service.SpawnForMcpAsync(new McpExecutionBindingRequest
+        {
+            AgentKey = "General",
+            InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123"),
+            ExecutionRequestId = requestId
+        }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
+
+        AssertEx.Equal(SpawnOutcomeKind.Success, outcome.Kind);
+        AssertEx.True(harness.ChatClient.LastToolNames.OrderBy(static name => name, StringComparer.Ordinal)
+                             .SequenceEqual(["list_files", "read_file"], StringComparer.Ordinal));
+        _ = harness.AgenticToolAdapter.Received(1).Adapt(Arg.Any<ApprovalRequiredAIFunction>(),
+            ToolCategory.WriteExecute,
+            Arg.Is<McpInboundExecutionContext>(context => context.IsAgentic && context.KeyPrefix == "xemcp_abc123"),
+            requestId);
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenAgenticCustomToolIsEnabled_ResolvesAsyncAndStrictlyAuditsInvocation()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        var events = new List<string>();
+        var audit = Substitute.For<IMcpAgenticApprovalAuditRecorder>();
+        audit.RecordAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<ToolCategory>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+             .Returns(_ =>
+             {
+                 events.Add("audit");
+                 return Task.CompletedTask;
+             });
+        var customInner = AIFunctionFactory.Create(() => events.Add("inner"), "custom__weather");
+        harness.CustomToolCatalog.Set("custom__weather", new ApprovalRequiredAIFunction(customInner));
+        harness.UseAgenticToolAdapter(new McpAgenticToolAdapter(audit, NullLogger<McpAgenticToolAdapter>.Instance));
+        harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
+            Model,
+            "agentic custom tool instructions",
+            AgentDefinitionId: Guid.NewGuid(),
+            AgentDefinitionVersion: 4,
+            AllowedTools:
+            [
+                McpTool("custom__weather") with
+                {
+                    Category = ToolCategory.WriteExecute,
+                    RequiresApproval = true
+                }
+            ],
+            ReasoningEffort: null,
+            SupportsThinking: false));
+        var requestId = Guid.NewGuid();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
+        {
+            AgentKey = "General",
+            InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123"),
+            ExecutionRequestId = requestId
+        }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
+        var executable = (AIFunction)harness.ChatClient.LastTools.Single(static tool => tool.Name == "custom__weather");
+        _ = await executable.InvokeAsync(new AIFunctionArguments(), CancellationToken.None);
+
+        AssertEx.Equal(SpawnOutcomeKind.Success, outcome.Kind);
+        AssertEx.True(events.SequenceEqual(["audit", "inner"], StringComparer.Ordinal));
+        AssertEx.Equal(expected: 1, harness.CustomToolCatalog.ResolveCallCount("custom__weather"));
+        await audit.Received(1).RecordAsync(requestId,
+            "custom__weather",
+            ToolCategory.WriteExecute,
+            "xemcp_abc123",
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenAgenticCustomToolIsDisabledOrUnresolved_FailsClosed()
+    {
+        foreach (var name in new[] { "custom__disabled", "custom__unknown" })
+        {
+            using var harness = new Harness();
+            harness.AllowLocal();
+            harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
+                Model,
+                "agentic custom tool instructions",
+                Guid.NewGuid(),
+                AgentDefinitionVersion: 1,
+                [McpTool(name) with { RequiresApproval = true }],
+                ReasoningEffort: null,
+                SupportsThinking: false));
+            using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+
+            var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
+            {
+                AgentKey = "General",
+                InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123"),
+                ExecutionRequestId = Guid.NewGuid()
+            }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
+
+            AssertEx.Equal(SpawnOutcomeKind.Rejected, outcome.Kind);
+            AssertEx.Equal(0, harness.ChatClient.CallCount);
+            AssertEx.Equal(expected: 1, harness.CustomToolCatalog.ResolveCallCount(name));
+        }
+    }
+
+    [Test]
+    public async Task SpawnForMcp_WhenAgenticOfferIsMissingOrDuplicated_FailsClosed()
+    {
+        foreach (var tools in new[]
+                 {
+                     new[] { McpTool("missing") },
+                     new[] { McpTool("read_file"), McpTool("read_file") },
+                     new[] { McpTool("custom__duplicate"), McpTool("custom__duplicate") }
+                 })
+        {
+            using var harness = new Harness();
+            harness.AllowLocal();
+            harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
+                Model,
+                "agentic instructions",
+                Guid.NewGuid(),
+                AgentDefinitionVersion: 1,
+                tools,
+                ReasoningEffort: null,
+                SupportsThinking: false));
+            using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+
+            var outcome = await harness.Build().SpawnForMcpAsync(new McpExecutionBindingRequest
+            {
+                AgentKey = "General",
+                InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123"),
+                ExecutionRequestId = Guid.NewGuid()
+            }, "inspect", expectedBindingFingerprint: null, CancellationToken.None);
+
+            AssertEx.Equal(SpawnOutcomeKind.Rejected, outcome.Kind);
+            AssertEx.Equal(0, harness.ChatClient.CallCount);
+            if (tools[0].Name == "custom__duplicate")
+            {
+                AssertEx.Equal(0, harness.CustomToolCatalog.ResolveCallCount("custom__duplicate"));
+            }
+        }
     }
 
     [Test]
@@ -982,6 +1150,8 @@ public sealed class SubAgentSpawnServiceTests
         private readonly FakeAgentInstructionProvider _instructionProvider = new();
         private readonly IAgentToolRegistry _toolRegistry;
         private readonly IMcpExecutionBindingResolver _mcpExecutionBindingResolver = Substitute.For<IMcpExecutionBindingResolver>();
+        private readonly FakeCustomToolCatalog _customToolCatalog = new();
+        private IMcpAgenticToolAdapter _mcpAgenticToolAdapter = Substitute.For<IMcpAgenticToolAdapter>();
         private readonly FakeMcpWorkspaceExecutionSessionFactory _mcpWorkspaceSessionFactory = new();
         private readonly CapturingLogger<SubAgentSpawnService> _logger = new();
         private readonly INodeSettingsStore _nodeSettingsStore = Substitute.For<INodeSettingsStore>();
@@ -1023,6 +1193,10 @@ public sealed class SubAgentSpawnServiceTests
         public IAgentDefinitionResolver Resolver => _resolver;
 
         public FakeMcpWorkspaceExecutionSessionFactory WorkspaceSessionFactory => _mcpWorkspaceSessionFactory;
+
+        public IMcpAgenticToolAdapter AgenticToolAdapter => _mcpAgenticToolAdapter;
+
+        public FakeCustomToolCatalog CustomToolCatalog => _customToolCatalog;
 
 
         public bool ReservationDisposed => _reservationDisposed;
@@ -1221,6 +1395,11 @@ public sealed class SubAgentSpawnServiceTests
                                         .Returns(McpExecutionBindingResolution.Success(binding));
         }
 
+        public void UseAgenticToolAdapter(IMcpAgenticToolAdapter adapter)
+        {
+            _mcpAgenticToolAdapter = adapter;
+        }
+
         public SubAgentSpawnService Build()
         {
             return new SubAgentSpawnService(_capacity,
@@ -1230,6 +1409,7 @@ public sealed class SubAgentSpawnServiceTests
                 _toolRegistry,
                 new EmptyClientLocalToolRegistry(),
                 new EmptyMcpToolRegistry(),
+                _customToolCatalog,
                 _chatClient,
                 Options.Create(new SpawnOptions
                 {
@@ -1238,6 +1418,7 @@ public sealed class SubAgentSpawnServiceTests
                 _instructionProvider,
                 _modelCapabilityResolver,
                 _mcpExecutionBindingResolver,
+                _mcpAgenticToolAdapter,
                 _mcpWorkspaceSessionFactory,
                 _nodeSettingsStore,
                 NullLoggerFactory.Instance,
@@ -1308,6 +1489,35 @@ public sealed class SubAgentSpawnServiceTests
         public void ReplaceSnapshot(IReadOnlyList<McpRegisteredTool> tools)
         {
             // Not used by the spawn tests.
+        }
+    }
+
+    internal sealed class FakeCustomToolCatalog : ICustomToolCatalog
+    {
+        private readonly Dictionary<string, int> _calls = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, AITool> _tools = new(StringComparer.Ordinal);
+
+        public Task<IReadOnlyList<LocalChatToolDescriptor>> GetDescriptorsAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult<IReadOnlyList<LocalChatToolDescriptor>>([]);
+        }
+
+        public Task<AITool?> TryResolveAsync(string name, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _calls[name] = ResolveCallCount(name) + 1;
+            return Task.FromResult(_tools.GetValueOrDefault(name));
+        }
+
+        public void Set(string name, AITool tool)
+        {
+            _tools[name] = tool;
+        }
+
+        public int ResolveCallCount(string name)
+        {
+            return _calls.GetValueOrDefault(name);
         }
     }
 

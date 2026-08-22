@@ -241,7 +241,7 @@ internal static class ModelFitMapper
     ///     effective recommended tag (the editable node setting), threaded in from the endpoint — the mapper no longer
     ///     reads the compiled-in <c>LlamaCppReleasePins.PinnedTag</c> constant for the recommended value.
     /// </summary>
-    public static LlamaCppVersionResponse ToResponse(this LlamaBinary binary, string recommendedTag)
+    public static LlamaCppVersionResponse ToResponse(this LlamaCppRuntimeBinaryView binary, string recommendedTag)
     {
         ArgumentNullException.ThrowIfNull(binary);
         ArgumentException.ThrowIfNullOrWhiteSpace(recommendedTag);
@@ -249,7 +249,7 @@ internal static class ModelFitMapper
         return new LlamaCppVersionResponse
         {
             Version = binary.Version,
-            Variant = binary.Variant.ToWireString(),
+            Variant = binary.Variant,
             IsPinnedFallback = binary.IsPinnedFallback,
             PinnedTag = recommendedTag
         };
@@ -287,6 +287,40 @@ internal static class ModelFitMapper
             RebuildAvailable = rebuildAvailable
         };
     }
+
+    public static LlamaCppRuntimeStatusResponse ToRuntimeStatusResponse(this LlamaCppRuntimeStatus status)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        var isSourceBuild = status.Installed?.IsSourceBuild == true;
+        return new LlamaCppRuntimeStatusResponse
+        {
+            Installed = status.Installed?.ToInstalledRuntimeResponse(),
+            RecommendedTag = status.RecommendedTag,
+            UpstreamLatestTag = status.UpstreamLatestTag,
+            UpdateAvailable = !isSourceBuild && status.UpdateAvailable,
+            IsOffline = status.IsOffline,
+            RunningProcessCount = status.RunningProcessCount,
+            IsSourceBuild = isSourceBuild,
+            RebuildAvailable = isSourceBuild
+                               && status.Installed is not null
+                               && !string.Equals(status.Installed.Tag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal)
+        };
+    }
+
+    private static LlamaCppInstalledRuntimeResponse ToInstalledRuntimeResponse(this LlamaCppInstalledRuntimeView state) =>
+        new()
+        {
+            Tag = state.Tag,
+            Variant = state.Variant,
+            Asset = state.Asset,
+            InstalledAtUtc = state.InstalledAtUnixTimeMilliseconds,
+            IsSourceBuild = state.IsSourceBuild,
+            SourceRepository = state.SourceRepository,
+            SourceCommit = state.SourceCommit,
+            SourceSelection = state.SourceSelection is null ? null : (LlamaCppSourceSelectionDto)state.SourceSelection.Value,
+            SourceRevisionMode = state.SourceRevisionMode is null ? null : (LlamaCppSourceRevisionModeDto)state.SourceRevisionMode.Value,
+            SourceRequestedCommit = state.SourceRequestedCommit
+        };
 
     private static LlamaCppInstalledRuntimeResponse ToInstalledRuntimeResponse(this InstalledRuntimeState state)
     {
@@ -383,7 +417,7 @@ internal static class ModelFitMapper
     ///     than a projection: the hydrate response and the hub push must stay the same shape so the client reconciles both
     ///     through one <c>Sequence</c> comparison. The payload is already sanitized by the registry.
     /// </summary>
-    public static RuntimeAcquisitionStatusResponse ToResponse(this RuntimeAcquisitionStatusHubEvent statusEvent)
+    public static RuntimeAcquisitionStatusResponse ToResponse(this LlamaCppRuntimeAcquisitionStatus statusEvent)
     {
         ArgumentNullException.ThrowIfNull(statusEvent);
 

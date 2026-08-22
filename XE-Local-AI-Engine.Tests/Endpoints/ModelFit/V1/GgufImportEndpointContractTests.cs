@@ -18,6 +18,14 @@ public sealed class GgufImportEndpointContractTests
     }
 
     [Test]
+    public void CapabilityGate_IsAvailableInBothDesktopAndMcpOnlyModes()
+    {
+        AssertEx.True(GetGgufImportCapabilityEndpoint.IsAvailable(["--desktop"], isManagedInstall: false));
+        AssertEx.True(GetGgufImportCapabilityEndpoint.IsAvailable(["--mcp-only"], isManagedInstall: false));
+        AssertEx.False(GetGgufImportCapabilityEndpoint.IsAvailable([], isManagedInstall: false));
+    }
+
+    [Test]
     public void ImportRoutesAreAdditiveAndDownloadHubRemainsStable()
     {
         AssertEx.Equal("model-fit/gguf/import/capability", LocalApiRoutes.ModelFit.ImportCapability);

@@ -1,10 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.AppUpdate;
 
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.BackgroundServices;
+using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -12,6 +15,23 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>Covers anonymous public-update orchestration without any GitHub credential dependency.</summary>
 public sealed class AppUpdateServiceTests
 {
+    [Test]
+    public void Registration_RetainsOnlyCallerSuppliedSanitizedRestartArguments()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        var sanitized = DesktopLaunch.BuildRestartArguments(
+            ["--setup", "--admin-password", "secret", "--mcp-only", "--port", "41234"],
+            LaunchMode.McpOnly,
+            port: 41234);
+
+        builder.AddAppUpdate(builder.Configuration, LaunchMode.McpOnly, sanitized);
+
+        var descriptor = builder.Services.Single(static service => service.ServiceType == typeof(AppUpdateHostContext));
+        var context = (AppUpdateHostContext)AssertEx.NotNull(descriptor.ImplementationInstance);
+        AssertEx.True(context.RestartArgs.SequenceEqual(["--mcp-only", "--port", "41234"], StringComparer.Ordinal));
+        AssertEx.False(context.RestartArgs.Any(static value => value.Contains("secret", StringComparison.Ordinal)));
+    }
+
     [Test]
     public void Constructor_ConfiguredDesktop_PrimesImmediateStatusWithoutCheckingTheNetwork()
     {
@@ -211,6 +231,29 @@ public sealed class AppUpdateServiceTests
     }
 
     [Test]
+    public async Task Apply_ForwardsOnlyTheSanitizedStableRestartArguments()
+    {
+        IReadOnlyList<string> captured = [];
+        var manager = Substitute.For<IVelopackUpdateManager>();
+        manager.CurrentVersion.Returns("0.1.0");
+        manager.PrepareUpdateAndRestartAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
+               .Returns(call =>
+               {
+                   captured = call.ArgAt<IReadOnlyList<string>>(0);
+                   return true;
+               });
+        var restartArgs = DesktopLaunch.BuildRestartArguments(
+            ["--setup", "--admin-password", "secret", "--mcp-key", "agentic", "--no-browser", "--port", "41234"],
+            LaunchMode.McpOnly,
+            port: 41234);
+        using var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(), restartArgs: restartArgs);
+
+        AssertEx.True(await service.ApplyAsync(CancellationToken.None));
+        AssertEx.True(captured.SequenceEqual(["--mcp-only", "--no-browser", "--port", "41234"], StringComparer.Ordinal));
+        AssertEx.False(captured.Any(static value => value.Contains("secret", StringComparison.Ordinal)));
+    }
+
+    [Test]
     public async Task Apply_WhenManagerThrows_SurfacesSanitizedError_AndLogsNoSensitiveDetails()
     {
         const string sensitive = "download failed at /home/secret/path with token";
@@ -334,7 +377,8 @@ public sealed class AppUpdateServiceTests
         bool isDesktop,
         string repoUrl = "https://github.com/example/public-repo",
         ILogger<AppUpdateService>? logger = null,
-        AppUpdateState? state = null)
+        AppUpdateState? state = null,
+        IReadOnlyList<string>? restartArgs = null)
     {
         var options = Options.Create(new AppUpdateChannelOptions
         {
@@ -345,7 +389,7 @@ public sealed class AppUpdateServiceTests
         return new AppUpdateService(factory,
             state ?? new AppUpdateState(),
             options,
-            new AppUpdateHostContext(isDesktop, RestartArgs: ["--desktop"]),
+            new AppUpdateHostContext(isDesktop, RestartArgs: restartArgs ?? ["--desktop"]),
             logger ?? NullLogger<AppUpdateService>.Instance);
     }
 }

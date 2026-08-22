@@ -11,11 +11,13 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class McpExecutionBindingResolverTests
 {
+    private const string LegacyDelegateBindingFingerprint = "F38689143E073344FB2CBC8B0F6044AEB1975335A03046B5F079029249531DF7";
     private const string Model = "unsloth/Ornith-1.0-9B-GGUF:Q4_K_M";
 
     [Test]
@@ -31,6 +33,20 @@ public sealed class McpExecutionBindingResolverTests
 
         var binding = AssertEx.NotNull(result.Binding);
         AssertEx.Empty(binding.AllowedTools);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenDelegateBindingMatchesPreMigrationCanonical_RemainsV1Compatible()
+    {
+        var harness = new Harness();
+
+        var result = await harness.Resolver.ResolveAsync(new McpExecutionBindingRequest
+        {
+            ModelId = Model,
+            Instructions = "Answer from the supplied task only."
+        }, CancellationToken.None);
+
+        AssertEx.Equal(LegacyDelegateBindingFingerprint, AssertEx.NotNull(result.Binding).BindingFingerprint);
     }
 
     [Test]
@@ -54,6 +70,56 @@ public sealed class McpExecutionBindingResolverTests
 
         var binding = AssertEx.NotNull(result.Binding);
         AssertEx.Empty(binding.AllowedTools);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenAgenticCallerBindsSavedAgent_RetainsFullResolvedToolSet()
+    {
+        var harness = new Harness();
+        var definition = Definition("Agentic", AgentDefinitionSource.Manual, seedSlug: null);
+        var expected = new[]
+        {
+            Tool("read_file", ToolCategory.ReadLocal),
+            Tool("write_file", ToolCategory.WriteExecute, requiresApproval: true)
+        };
+        harness.Register(definition, expected);
+
+        var result = await harness.Resolver.ResolveAsync(new McpExecutionBindingRequest
+        {
+            AgentKey = definition.Id.ToString(),
+            InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123")
+        }, CancellationToken.None);
+
+        var binding = AssertEx.NotNull(result.Binding);
+        AssertEx.True(binding.AllowedTools.Select(static tool => tool.Name)
+                             .SequenceEqual(expected.Select(static tool => tool.Name), StringComparer.Ordinal));
+        AssertEx.True(binding.AllowedTools.Single(static tool => tool.Name == "write_file").RequiresApproval);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenAuthorityChanges_ChangesBindingFingerprint()
+    {
+        var harness = new Harness();
+        var definition = Definition("Agentic", AgentDefinitionSource.Manual, seedSlug: null);
+        harness.Register(definition, Tool("read_file", ToolCategory.ReadLocal));
+
+        var delegateBinding = AssertEx.NotNull((await harness.Resolver.ResolveAsync(new McpExecutionBindingRequest
+        {
+            AgentKey = definition.Id.ToString()
+        }, CancellationToken.None)).Binding);
+        var agenticBinding = AssertEx.NotNull((await harness.Resolver.ResolveAsync(new McpExecutionBindingRequest
+        {
+            AgentKey = definition.Id.ToString(),
+            InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123")
+        }, CancellationToken.None)).Binding);
+        var otherAgenticBinding = AssertEx.NotNull((await harness.Resolver.ResolveAsync(new McpExecutionBindingRequest
+        {
+            AgentKey = definition.Id.ToString(),
+            InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_def456")
+        }, CancellationToken.None)).Binding);
+
+        AssertEx.NotEqual(delegateBinding.BindingFingerprint, agenticBinding.BindingFingerprint);
+        AssertEx.NotEqual(agenticBinding.BindingFingerprint, otherAgenticBinding.BindingFingerprint);
     }
 
     [Test]
@@ -337,7 +403,7 @@ public sealed class McpExecutionBindingResolverTests
     private sealed class Harness
     {
         private readonly IAgentDefinitionResolver _agentResolver = Substitute.For<IAgentDefinitionResolver>();
-        private readonly IAgentDefinitionStore _definitions = Substitute.For<IAgentDefinitionStore>();
+        private readonly IAgentDefinitionService _definitions = Substitute.For<IAgentDefinitionService>();
         private readonly IGgufModelStore _models = Substitute.For<IGgufModelStore>();
 
         public Harness()
@@ -355,7 +421,10 @@ public sealed class McpExecutionBindingResolverTests
 
         public void Register(AgentDefinitionRecord definition, params AllowedToolDto[] tools)
         {
-            _definitions.GetByIdAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(definition);
+            _definitions.GetByKeyAsync(Arg.Is<string>(key => string.Equals(key, definition.Id.ToString(), StringComparison.Ordinal)
+                                                             || string.Equals(key, definition.Name, StringComparison.Ordinal)),
+                    Arg.Any<CancellationToken>())
+                .Returns(definition);
             var effectiveModel = definition.ModelProfile ?? Model;
             _agentResolver.ResolveAsync(definition.Id,
                               effectiveModel,

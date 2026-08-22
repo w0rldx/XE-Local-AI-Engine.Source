@@ -241,7 +241,9 @@ public sealed class WorkspaceEndpointTests
         capturedPreparation.PrepareAsync(Arg.Any<ResolvedSelectedFolder>(), Arg.Any<CancellationToken>()).Returns(session);
         var apiKeyService = Substitute.For<IMcpServerApiKeyService>();
         apiKeyService.ValidateAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                     .Returns(call => string.Equals(call.Arg<string?>(), McpKey, StringComparison.Ordinal));
+                     .Returns(call => string.Equals(call.Arg<string?>(), McpKey, StringComparison.Ordinal)
+                         ? new McpServerApiKeyValidation(McpServerApiKeyScope.Delegate, "xemcp_workspace")
+                         : null);
 
         return new TestServerWebAppFactory
         {

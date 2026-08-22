@@ -107,8 +107,11 @@ budget wrappers, and approval remains an unconditional outer wrapper. The offer 
 node setting `CustomToolsEnabled` (default `false`), an enabled + acknowledged stored definition, model tool capability,
 and the agent's `AllowedToolNames`. A `Fixed` tool may reuse an explicit conversation-scoped approval, keyed to the
 tool version so any edit re-prompts. A `Parameterized` tool is never memoized: every model-selected argument set prompts
-again. Scheduler, spawned sub-agent, and inbound-MCP unattended paths strip approval-required tools before execution,
-so they cannot run a Custom Tool or reuse a session approval.
+again. Scheduler, spawned-child, and delegate-scope inbound-MCP paths strip approval-required tools
+before execution, so they cannot run a Custom Tool or reuse a session approval. A trusted
+agentic-scope root inbound run is the deliberate exception: it may invoke an approval-required tool
+only through ADR 0006's strict metadata-only audit-before-auto-approval path. Spawned children do not
+inherit that elevation.
 
 The same policy is applied to the seeded Default Assistant, bound agents, orchestration participants,
 and regeneration. Approval decisions are recorded through `IToolApprovalAuditRecorder` as

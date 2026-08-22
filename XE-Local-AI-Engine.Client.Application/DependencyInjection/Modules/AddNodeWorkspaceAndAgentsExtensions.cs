@@ -116,6 +116,8 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
             services.GetRequiredService<LocalModelDeletionCoordinator>());
         builder.Services.AddScoped<ILocalModelDeletionJournalReconciler>(static services =>
             services.GetRequiredService<LocalModelDeletionCoordinator>());
+        builder.Services.AddScoped<ILocalModelAdministrationService, LocalModelAdministrationService>();
+        builder.Services.AddSingleton<DefaultModelSelectionPolicy>();
         builder.Services.AddHostedService<LocalModelDeletionStartupReconciler>();
         builder.Services.AddScoped<IGgufAcquisitionStateProbe, GgufAcquisitionStateProbe>();
         builder.Services.AddSingleton<GgufAcquisitionIdentityResolver>();

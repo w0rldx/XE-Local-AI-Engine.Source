@@ -2462,8 +2462,11 @@ export const zXeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = z.obje
 
 export const zXeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientServicesMcpMcpServerApiKeyScope = z.enum(["delegate", "agentic"]);
+
 export const zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse = z.object({
 	prefix: z.string(),
+	scope: zXeLocalAiEngineClientServicesMcpMcpServerApiKeyScope,
 	createdAt: z.iso.datetime({ offset: true }),
 	lastUsedAt: z.iso.datetime({ offset: true }).nullish(),
 });
@@ -2473,6 +2476,10 @@ export const zXeLocalAiEngineClientEndpointsMcpV1GeneratedMcpServerApiKeyRespons
 	apiKey: zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyResponse.nullish(),
 	endpointUrl: z.string(),
 	key: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsMcpV1GenerateMcpServerApiKeyRequest = z.object({
+	scope: zXeLocalAiEngineClientServicesMcpMcpServerApiKeyScope.optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse = z.object({
@@ -6410,6 +6417,10 @@ export const zRevokeMcpServerApiKeyResponse = z.void();
  * Success
  */
 export const zGetMcpServerApiKeyResponse = zXeLocalAiEngineClientEndpointsMcpV1McpServerApiKeyStatusResponse;
+
+export const zGenerateMcpServerApiKeyBody = z.object({
+	scope: zXeLocalAiEngineClientServicesMcpMcpServerApiKeyScope.optional(),
+});
 
 /**
  * Success

@@ -22,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 export interface McpServerApiKeyView {
 	configured: boolean;
 	prefix: string | null;
+	scope: "delegate" | "agentic" | null;
 	createdAt: string | null;
 	lastUsedAt: string | null;
 	endpointUrl: string;
@@ -33,6 +34,7 @@ export function useMcpServerApiKey() {
 		select: (data): McpServerApiKeyView => ({
 			configured: data.configured ?? false,
 			prefix: data.apiKey?.prefix ?? null,
+			scope: data.apiKey?.scope ?? null,
 			createdAt: data.apiKey?.createdAt ?? null,
 			lastUsedAt: data.apiKey?.lastUsedAt ?? null,
 			endpointUrl: data.endpointUrl ?? "",

@@ -19,6 +19,8 @@ using XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.HuggingFace;
 using XE_Local_AI_Engine.Client.Services.Inference;
+using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence;
@@ -151,6 +153,7 @@ internal static class AddNodeModelRuntimeExtensions
 
         builder.Services.AddSingleton(sp => BuildSeededLlamaServerSupervisorOptions(sp));
         builder.Services.AddLlamaServerLocalModelProvider();
+        builder.Services.AddSingleton<ILlamaCppRuntimeAdministrationService, LlamaCppRuntimeAdministrationService>();
 
         // The process-wide GPU-load admission gate — the REAL, metric-emitting singleton shared by the
         // llama-server and stable-diffusion.cpp supervisors, so no two GPU loads race their --fit / free-VRAM reads. A

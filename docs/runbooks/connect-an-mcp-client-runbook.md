@@ -1,165 +1,106 @@
 # Runbook — connect an external MCP client to this node
 
-> Audience: an operator who wants Codex, Claude Code, or another MCP client to delegate work to a
-> local model running on this node.
+> Audience: an operator connecting Claude Code, Codex CLI, Cursor, VS Code/GitHub Copilot,
+> OpenCode, or Gemini CLI to a local XE Local AI Engine node.
 
-This is the **inbound** direction: the node acts as an MCP *server*. It is independent of the
-`mcp/servers` surface, where the node acts as an MCP *client* for third-party servers.
+This is the **inbound** direction: the node is the MCP server at
+`http://127.0.0.1:<port>/api/local/v1/mcp/server`. It is independent of `mcp/servers`, where the node
+is an MCP client for third-party servers. The transport is Streamable HTTP; no stdio form exists.
 
----
+For unattended installation and lifecycle commands, start at
+[Install with an external agent](../agentic-support/agent-install.md).
 
-## 1. What the node exposes
+## 1. Choose a key scope
 
-The inbound server exposes exactly eight tools:
+The node persists one inbound key. Minting a new key rotates it immediately; there is no dual-valid
+window and the plaintext is returned exactly once.
 
-| Tool | Purpose |
-|---|---|
-| `list_agents` | List saved agents by id, name, and description. |
-| `list_models` | List locally installed models that are currently available. |
-| `run_agent` | Run one task synchronously and return its bounded result. This is the compatibility path for clients that expect one call to hold the connection open. |
-| `list_workspaces` | List operator-authorized read-only workspaces as opaque ids and aliases. Host paths are never returned. |
-| `start_agent_run` | Accept a durable background run and return its lifecycle record immediately. |
-| `get_agent_run` | Poll one background run by `request_id` and return its bounded result when available. |
-| `cancel_agent_run` | Durably request cancellation by `request_id`. |
-| `list_agent_runs` | List bounded, content-free lifecycle metadata, optionally filtered by status. |
+| scope | tools visible | execution boundary |
+|---|---:|---|
+| `delegate` | 8 | Shared discovery and agent-run tools. Ordinary saved agents/bare models remain tool-less; the seeded Coder receives exactly three read-only workspace tools. |
+| `agentic` | 23 | The same 8 tools plus 15 administration tools. Trusted operator-equivalent only for this enumerated MCP surface, not an Operator JWT or arbitrary REST credential. |
 
-### Synchronous compatibility or durable background work
+An agentic root run may resolve its saved agent's complete allowed-tool set. Approval-required calls
+are auto-approved only after a strict metadata-only audit write; failure to persist that audit blocks
+invocation. Arguments, prompts, message content, tokens, passwords, full keys, and host paths are not
+recorded. Spawned children retain ordinary curated tools and do not inherit the root elevation.
 
-- Use `run_agent` for a short, synchronous delegation. The MCP request remains open, and the client
-  can cancel the work by cancelling that request.
-- Prefer `start_agent_run` for long work. It returns `accepted` quickly; poll with `get_agent_run`, or
-  continue other work and poll later. The node keys the run by a caller-supplied UUID in its durable
-  ledger, not by an HTTP connection or MCP client session.
-- A client disconnect does not cancel a background run. A later Codex or Claude Code connection can
-  use the same `request_id` to read or cancel it. After a node restart, queued records remain
-  recoverable; work that was already executing is reported as `interrupted` rather than silently
-  replayed.
+The exact surface and settings whitelist live in the
+[external-agent skill tool reference](../../skills/xe-local-ai-engine/references/mcp-tools.md).
 
-`start_agent_run` requires a canonical hyphenated UUID in `request_id` and exactly one of `agent` or
-`model`. Generate a fresh UUID for each distinct request. Repeating the same UUID with the same
-request is idempotent and returns `existing`; repeating it with different request data returns
-`request_id_conflict`.
+## 2. Start MCP-only mode and capture the endpoint
 
-A typical client workflow is:
+Start the installed application with `--mcp-only`. It suppresses browser launch but still serves the
+React UI and local APIs on loopback. `--port <1-65535>` requests a stable port; failure is exit 6.
 
-1. Call `list_agents` and `list_models`.
-2. If the task needs repository context, call `list_workspaces` and select an opaque workspace id.
-3. Call `start_agent_run` with a fresh `request_id`.
-4. Poll `get_agent_run` until the status is terminal: `succeeded`, `failed`, `cancelled`, or
-   `interrupted`.
-5. Call `cancel_agent_run` only when the work is no longer needed.
-
-The result is limited to 24,000 characters and carries `result_truncated: true` when clipped. Task,
-instruction, and result payloads are encrypted in the node ledger. Result payloads expire 24 hours
-after terminalization; the keyed request identity remains so a reused UUID cannot silently become a
-different request.
-
-Expected lifecycle outcomes are ordinary structured tool results:
-
-| Tool | Stable `status` values |
-|---|---|
-| `start_agent_run` | `accepted`, `existing`, `result_expired`, `conflict`, `capacity`, or `rejected`. Inspect `failure_code`; `conflict` uses `request_id_conflict`, and `capacity` uses `capacity_exceeded`. |
-| `get_agent_run` | `queued`, `running`, `succeeded`, `failed`, `cancelled`, `interrupted`, `result_expired`, `not_found`, or `invalid_request`. |
-| `cancel_agent_run` | `requested`, `already`, `terminal`, `not_found`, or `conflict`. Lifecycle races do not become protocol errors. |
-| `list_agent_runs` | `ok`, or `invalid_status` when the filter is not one of the documented lifecycle states. |
-
-### Read-only execution boundary
-
-The inbound surface does not expose state-changing node tools.
-
-- Bare models and general saved agents run **tool-less**. Their saved skills and ordinary tool
-  configuration do not enter the inbound execution binding.
-- Only the seeded **Coder (read-only)** agent can receive workspace tools. Its binding is restricted
-  to exactly `list_files`, `read_file`, and `search_text`; it cannot edit files or run commands.
-- The Coder requires `model_override` with `start_agent_run` (`modelOverride` with the synchronous
-  `run_agent`) because the seeded agent does not pin a model. It also requires a `workspace_id` from
-  `list_workspaces`.
-- The operator creates or revokes workspace access in Node Settings → **MCP workspace access**. MCP
-  clients receive only the alias and opaque id, never the trusted host path.
-
-## 2. Generate the key
-
-Open Node Settings → **MCP server** → **Generate key**. The key looks like `xemcp_…`.
-
-Copy it immediately. The node stores only a one-way SHA-256 hash, so it cannot show or recover the
-key later. Regenerating replaces the key immediately; revoking it closes the inbound surface.
-
-Load the key into an environment variable named `XE_ENGINE_MCP_TOKEN` through your shell's secret
-manager or credential loader. Do not put the key directly in a command, configuration committed to
-source control, or shell history.
-
-The settings page also shows the current endpoint, for example:
+Wait for this exact, unformatted stdout contract:
 
 ```text
-http://127.0.0.1:<port>/api/local/v1/mcp/server
+XE_READY=1 XE_VERSION=<semver> XE_URL=http://127.0.0.1:<port> XE_MCP_URL=<XE_URL>/api/local/v1/mcp/server XE_DATA_DIR=<path>
 ```
 
-## 3. Configure Codex
+Canonical `<data-dir>/ready.json` contains `version`, `url`, `mcpUrl`, `dataDir`, `pid`, and
+`startedAtUtc`. Require its PID to be live and `<url>/health/ready` to return 200. `--status --json`
+provides a later one-shot check and exits 0 only for a live healthy process.
 
-Codex CLI, the Codex IDE extension, and the ChatGPT desktop app share MCP configuration. Codex reads
-user configuration from `~/.codex/config.toml`, or project configuration from `.codex/config.toml`
-after the project is trusted. The option names below match the current
-[official Codex MCP configuration](https://developers.openai.com/codex/mcp).
+## 3. Mint or rotate the key
+
+With the app stopped:
+
+```bash
+/path/to/XE-Local-AI-Engine.Client --mcp-key delegate
+/path/to/XE-Local-AI-Engine.Client --mcp-key agentic
+```
+
+On Windows invoke `XE-Local-AI-Engine.exe` with the same arguments. The command prints exactly one
+`XE_MCP_KEY=xemcp_...` line. Store the value in a secret manager and never log it.
+
+With the app running, an Operator can instead `POST /api/local/v1/mcp/server-key` with JSON
+`{"scope":"delegate"}` or `{"scope":"agentic"}`. A body-less POST remains the delegate-compatible
+form. The exact route is **`mcp/server-key`**.
+
+Use `XE_MCP_URL` for the endpoint and load the key into the client-specific secret variable below.
+
+## 4. Configure Codex CLI
+
+Codex reads `~/.codex/config.toml` (or trusted-project `.codex/config.toml`). Load the key into
+`XE_MCP_TOKEN`:
 
 ```toml
-[mcp_servers.xe-engine]
+[mcp_servers.xe-local-ai-engine]
 url = "http://127.0.0.1:<port>/api/local/v1/mcp/server"
-bearer_token_env_var = "XE_ENGINE_MCP_TOKEN"
+bearer_token_env_var = "XE_MCP_TOKEN"
 startup_timeout_sec = 30
 tool_timeout_sec = 1800
+```
+
+For a delegate key, an optional fail-closed allowlist is:
+
+```toml
 enabled_tools = [
-  "list_agents",
-  "list_models",
-  "run_agent",
-  "list_workspaces",
-  "start_agent_run",
-  "get_agent_run",
-  "cancel_agent_run",
-  "list_agent_runs",
+  "list_agents", "list_models", "list_workspaces", "run_agent",
+  "start_agent_run", "get_agent_run", "cancel_agent_run", "list_agent_runs",
 ]
 ```
 
-`tool_timeout_sec = 1800` preserves the synchronous `run_agent` compatibility path for slower local
-models. The background lifecycle tools normally return quickly. `enabled_tools` is optional, but
-keeping the explicit allowlist makes unexpected future tools fail closed for this client.
+Do not keep that eight-tool allowlist for an agentic connection unless intentionally hiding admin
+tools. Verify with `codex mcp list`, `codex mcp get xe-local-ai-engine`, and `/mcp`.
 
-The equivalent initial CLI registration is:
+Source: [official Codex MCP configuration](https://developers.openai.com/codex/mcp).
 
-```bash
-codex mcp add xe-engine \
-  --url "http://127.0.0.1:<port>/api/local/v1/mcp/server" \
-  --bearer-token-env-var XE_ENGINE_MCP_TOKEN
-```
+## 5. Configure Claude Code
 
-Then add the timeout and optional tool allowlist to `config.toml`. Verify the registration with:
-
-```bash
-codex mcp list
-codex mcp get xe-engine
-```
-
-In the Codex terminal UI, use `/mcp` to inspect the active connection. OpenAI documents the shared
-configuration, CLI management commands, TUI command, token environment variable, timeouts, and tool
-allowlists on the [Codex MCP page](https://developers.openai.com/codex/mcp).
-
-## 4. Configure Claude Code
-
-Use a project-scoped `.mcp.json` so the endpoint contract can be shared without storing the bearer
-token. Claude Code expands environment variables in both `url` and `headers`; its per-server
-`timeout` is milliseconds. These behaviors are documented in the
-[official Claude Code MCP guide](https://code.claude.com/docs/en/mcp).
-
-Set `XE_ENGINE_MCP_URL` to the endpoint shown in Node Settings and load
-`XE_ENGINE_MCP_TOKEN` through your secret manager. Then add this file at the project root:
+Load `XE_MCP_URL` and `XE_MCP_TOKEN`, then add a project `.mcp.json` (or the corresponding user
+configuration):
 
 ```json
 {
   "mcpServers": {
-    "xe-engine": {
+    "xe-local-ai-engine": {
       "type": "http",
-      "url": "${XE_ENGINE_MCP_URL}",
+      "url": "${XE_MCP_URL}",
       "headers": {
-        "Authorization": "Bearer ${XE_ENGINE_MCP_TOKEN}"
+        "Authorization": "Bearer ${XE_MCP_TOKEN}"
       },
       "timeout": 1800000
     }
@@ -167,96 +108,166 @@ Set `XE_ENGINE_MCP_URL` to the endpoint shown in Node Settings and load
 }
 ```
 
-Claude Code asks you to trust the project and approve project-scoped MCP servers before connecting.
-Run Claude Code interactively, review both prompts, and then verify:
+Claude Code expands environment variables in `url` and `headers`. Project-scoped servers require a
+trust/approval decision. Verify with `claude mcp list`, `claude mcp get xe-local-ai-engine`, and
+`/mcp`. A CLI registration with `--header` is supported but places the replacement value in argv and
+static configuration; prefer the environment-expanded file.
 
-```bash
-claude mcp list
-claude mcp get xe-engine
+Source: [official Claude Code MCP guide](https://code.claude.com/docs/en/mcp).
+
+## 6. Configure Cursor
+
+Cursor reads `.cursor/mcp.json` per project or `~/.cursor/mcp.json` globally. Load the key into
+`XE_MCP_TOKEN`; Cursor expands `${env:NAME}` in server configuration strings:
+
+```json
+{
+  "mcpServers": {
+    "xe-local-ai-engine": {
+      "url": "http://127.0.0.1:<port>/api/local/v1/mcp/server",
+      "headers": {
+        "Authorization": "Bearer ${env:XE_MCP_TOKEN}"
+      }
+    }
+  }
+}
 ```
 
-Use `/mcp` inside Claude Code to inspect the live connection. Anthropic documents project trust,
-approval status, `claude mcp list`, and `claude mcp get` in its
-[MCP server management guidance](https://code.claude.com/docs/en/mcp#managing-your-servers).
+Verify in Cursor's MCP/Available Tools UI.
 
-### Static-header compatibility form
+Source: [official Cursor MCP documentation](https://docs.cursor.com/context/model-context-protocol).
 
-Claude Code also accepts a static header from the CLI:
+## 7. Configure VS Code / GitHub Copilot
 
-```bash
-claude mcp add --transport http --scope local xe-engine "$XE_ENGINE_MCP_URL" \
-  --header "Authorization: Bearer <redacted-token>"
+VS Code uses `.vscode/mcp.json` or a user-profile `mcp.json`. Use an input variable so the token is
+prompted and securely stored instead of committed:
+
+```json
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "xe-mcp-key",
+      "description": "XE Local AI Engine MCP key",
+      "password": true
+    }
+  ],
+  "servers": {
+    "xeLocalAiEngine": {
+      "type": "http",
+      "url": "http://127.0.0.1:<port>/api/local/v1/mcp/server",
+      "headers": {
+        "Authorization": "Bearer ${input:xe-mcp-key}"
+      }
+    }
+  }
+}
 ```
 
-This form is compatibility-only. Replacing the placeholder puts the token in the process arguments
-and stores it as a static header; typing it directly also exposes it to shell history. Prefer the
-environment-expanded `.mcp.json` configuration above. The CLI shape is documented by Anthropic's
-[HTTP MCP configuration reference](https://code.claude.com/docs/en/mcp#add-a-remote-http-server).
+Run **MCP: List Servers** to start, inspect, or refresh it. Reset trust after material configuration
+changes. For Agent Host portability, current VS Code also documents workspace `.mcp.json` and user
+`~/.copilot/mcp-config.json`.
 
-### Claude timeouts and backgrounding
+Source: [official VS Code MCP configuration](https://code.visualstudio.com/docs/agents/reference/mcp-configuration).
 
-Claude Code treats the per-server `timeout` as a hard wall-clock limit. Server progress does not
-extend it. Current Claude Code can move a long main-conversation MCP call into a **client-side**
-background task after two minutes, but the same client timeout still applies. See Anthropic's
-[timeout and automatic-backgrounding behavior](https://code.claude.com/docs/en/mcp#automatic-backgrounding-of-long-tool-calls).
+## 8. Configure OpenCode v2
 
-That client backgrounding is not durable server work. If Claude Code exits, only a run accepted by
-`start_agent_run` remains independently addressable in the node ledger. Use `get_agent_run` from a
-later client session to continue the workflow.
+Load the key into `XE_MCP_TOKEN`. OpenCode v2 nests servers under `mcp.servers`, uses `{env:NAME}`
+interpolation, and needs `oauth: false` for a header-only credential:
 
-## 5. Verify delegation
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "xe-local-ai-engine": {
+        "type": "remote",
+        "url": "http://127.0.0.1:<port>/api/local/v1/mcp/server",
+        "oauth": false,
+        "headers": {
+          "Authorization": "Bearer {env:XE_MCP_TOKEN}"
+        },
+        "timeout": {
+          "execution": 1800000
+        }
+      }
+    }
+  }
+}
+```
 
-In Codex or Claude Code:
+Source: [official OpenCode v2 MCP documentation](https://opencode.ai/v2/docs/mcp-servers).
 
-1. Confirm `/mcp` shows `xe-engine` connected with eight tools.
-2. Ask the client to call `list_models` and `list_agents`.
-3. Start a small background run with a fresh UUID.
-4. Poll it with `get_agent_run` until it reaches a terminal state.
-5. For repository inspection, authorize a folder in Node Settings → **MCP workspace access**, call
-   `list_workspaces`, and delegate to **Coder (read-only)** with a locally installed quantized model
-   as `model_override`.
+## 9. Configure Gemini CLI
 
-Use `list_models` as the authority for the model identifier; do not assume a downloaded repository
-name is the installed model id.
+Gemini CLI reads user `~/.gemini/settings.json` or project `.gemini/settings.json`. Load the key into
+`XE_MCP_TOKEN`; Gemini expands environment variables in settings strings. Its timeout is milliseconds.
 
-## 6. Where it can be reached from
+```json
+{
+  "mcpServers": {
+    "xe-local-ai-engine": {
+      "httpUrl": "http://127.0.0.1:<port>/api/local/v1/mcp/server",
+      "headers": {
+        "Authorization": "Bearer ${XE_MCP_TOKEN}"
+      },
+      "timeout": 1800000
+    }
+  }
+}
+```
 
-**Same machine only.** The endpoint lives under `/api/local/v1`, so `LocalApiSecurityMiddleware`
-rejects requests whose transport peer is not loopback, whose `Host` is not
-`localhost`/`127.0.0.1`/`::1`, or whose `Origin` is not same-origin loopback. `LoopbackBindGuard`
-also stops the process if Kestrel binds a routable address. See
-[Security & Privacy](../wiki/12-security-and-privacy.md) §3.
+Do not set `trust: true` merely because the engine has an agentic key; client-side confirmation
+policy remains an independent decision.
+Verify with `gemini mcp list` or `/mcp`.
 
-**WSL2 note (measured 2026-08-03, NAT mode with `localhostForwarding=true`):** a client running on
-Windows can reach a node running inside WSL through `localhost`. This topology has not been
-re-verified under WSL mirrored networking mode.
+Source: [official Gemini CLI MCP documentation](https://geminicli.com/docs/tools/mcp-server/).
 
-## 7. Troubleshooting
+## 10. Verify the selected scope
 
-| Symptom or outcome | Meaning and action |
+1. Reconnect or refresh the client's MCP catalog after rotation.
+2. With `delegate`, confirm exactly 8 tools and call `list_models` plus `list_agents`.
+3. With `agentic`, confirm exactly 23 tools and call `get_status`.
+4. Walk the core administration path: `get_runtime_status`; if needed
+   `start_runtime_acquisition`/`get_runtime_acquisition`; then
+   `start_model_pull`/`get_model_pull`; `set_default_model`; and finally `run_agent` or the durable
+   lifecycle.
+5. For durable work, generate a canonical UUID, call `start_agent_run`, and poll `get_agent_run`.
+   Reusing the same UUID with different scope or inputs is a conflict, not a second run.
+
+A durable agentic run admitted before key rotation keeps the authority captured in its durable row.
+Cancel it explicitly if it should no longer execute.
+
+## 11. Reachability and tunnels
+
+Supported direct access is same-machine loopback only. `LocalApiSecurityMiddleware` checks the
+socket peer plus loopback `Host` and same-origin `Origin`; `LoopbackBindGuard` rejects routable binds.
+Do not enable `Security:AllowNonLoopbackBind`, add forwarded headers, or put a same-host reverse proxy
+in front of the local API to make it remote.
+
+For a remote client, use an operator-owned encrypted tunnel whose engine-side connection terminates
+on loopback. Example SSH local forwarding from the client machine:
+
+```bash
+ssh -N -L 51234:127.0.0.1:<engine-port> <operator>@<engine-host>
+```
+
+Point the client at `http://127.0.0.1:51234/api/local/v1/mcp/server`. Secure and authorize the SSH
+or Tailscale path separately; the engine still authenticates the MCP bearer key.
+
+## 12. Troubleshooting
+
+| symptom | meaning and action |
 |---|---|
-| `401` | The bearer key is missing, wrong, regenerated, or revoked. Load the current key into the configured environment variable and restart the client. |
-| `403` | The request did not satisfy the loopback gate. Use the exact loopback endpoint shown in Node Settings, not a LAN address or hostname. |
-| Codex aborts `run_agent` after 60 seconds | Set `tool_timeout_sec` high enough for the selected local model, or use the durable lifecycle tools. |
-| Claude reports a hard timeout | Raise the server's `.mcp.json` `timeout`, or use `start_agent_run` so only the short admission call is client-bound. |
-| `request_id_conflict` | The UUID already identifies different request data. Do not overwrite it; generate a fresh UUID for the distinct request. |
-| `result_expired` | The run identity still exists, but its encrypted payload passed the 24-hour retention window and was compacted. The result cannot be recovered; start genuinely new work with a fresh UUID. |
-| `workspace_not_authorized` | The opaque id is invalid, revoked, or was supplied to something other than the seeded Coder. Call `list_workspaces` again and use an active id only with **Coder (read-only)**. |
-| `workspace_busy` | Another operation holds the node's single workspace-execution lease. Wait for it to finish, then start a new run with a fresh UUID. The failed request remains terminal and idempotent. |
-| `cancel_agent_run` returns `terminal` | The run already finished. This is an expected stable outcome, not a protocol error; inspect it with `get_agent_run`. |
-| `cancel_agent_run` returns `already` | A cancellation marker was already recorded. Continue polling until the run becomes terminal. |
-| `run_agent` returns `Cannot run: …` | The synchronous compatibility path rejected an expected condition such as invalid binding, unavailable model, capacity, or workspace access. The message is a normal tool result. |
+| `401` | Missing, malformed, rotated, or revoked key. Load the current key and reconnect. |
+| `403` | Loopback peer/Host/Origin gate failed. Use the exact local or tunnel endpoint; do not widen the listener. |
+| Only 8 tools appear | The key is `delegate`, or the client cached the previous catalog. Mint `agentic`, update the secret, reconnect, and refresh tools. |
+| Agentic approval-required call fails before side effects | Strict metadata-only audit persistence failed. Repair node storage/logging health; the call is intentionally fail-closed. |
+| `run_agent` times out | Raise the client timeout or use `start_agent_run` and poll. |
+| `request_id_conflict` | The UUID already binds different inputs or authority. Use a fresh UUID for distinct work. |
+| `result_expired` | The 24-hour durable result payload expired. Start genuinely new work with a fresh UUID. |
+| `workspace_not_authorized` | Refresh `list_workspaces` and use an active opaque id only with the seeded Coder. Never send a host path. |
+| `--status --json` exits 1 | PID/readiness/auth-status evidence does not describe a live healthy process. Restart MCP-only mode and inspect `ready.json`. |
 
-## 8. Protocol and durability notes
-
-The endpoint uses authenticated Streamable HTTP behind the existing local-API loopback gate. The
-pre-shared bearer key is the authentication mechanism for this local surface.
-
-Background durability is an **application-level node contract** implemented by
-`start_agent_run`/`get_agent_run`/`cancel_agent_run`/`list_agent_runs`. It does not depend on an MCP
-connection staying open, and it does not currently advertise a protocol-level task extension. A
-protocol-task adapter can be considered later; clients should use these lifecycle tools today.
-
-The client commands and configuration fields in this runbook were verified with Codex CLI 0.146.1
-and Claude Code 2.1.223 on 2026-08-06. Recheck the linked official documentation after upgrading
-either client.
+Client syntax was rechecked against the linked official pages on 2026-08-22. Recheck after client
+upgrades because these formats evolve independently of the engine.

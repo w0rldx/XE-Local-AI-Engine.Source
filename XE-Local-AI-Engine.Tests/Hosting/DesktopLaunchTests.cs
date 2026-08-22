@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Hosting;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -20,25 +21,27 @@ public sealed class DesktopLaunchTests
     public void DesktopModeGate_WhenFlagUnset_LeavesPipelineUnchanged()
     {
         // No CLI arg, no env signal → desktop mode is off, so Program.cs keeps the standard HTTPS/HSTS pipeline.
-        var isDesktop = DesktopLaunch.IsDesktopMode([], static _ => null);
+        var launchMode = DesktopLaunch.ResolveLaunchMode([], static _ => null, isManagedInstall: false);
 
-        AssertEx.False(isDesktop);
+        AssertEx.Equal(LaunchMode.Headless, launchMode);
     }
 
     [Test]
     public void DesktopModeGate_WhenEnvOrArgSet_EnablesDesktopPath()
     {
-        var viaEnv = DesktopLaunch.IsDesktopMode([],
-            static name => name == DesktopLaunch.LaunchModeEnvironmentVariable ? "desktop" : null);
+        var viaEnv = DesktopLaunch.ResolveLaunchMode([],
+            static name => name == DesktopLaunch.LaunchModeEnvironmentVariable ? "desktop" : null,
+            isManagedInstall: false);
 
-        var viaEnvCaseInsensitive = DesktopLaunch.IsDesktopMode([],
-            static name => name == DesktopLaunch.LaunchModeEnvironmentVariable ? "DESKTOP" : null);
+        var viaEnvCaseInsensitive = DesktopLaunch.ResolveLaunchMode([],
+            static name => name == DesktopLaunch.LaunchModeEnvironmentVariable ? "DESKTOP" : null,
+            isManagedInstall: false);
 
-        var viaArg = DesktopLaunch.IsDesktopMode(["--desktop"], static _ => null);
+        var viaArg = DesktopLaunch.ResolveLaunchMode(["--desktop"], static _ => null, isManagedInstall: false);
 
-        AssertEx.True(viaEnv, "XE_LAUNCH_MODE=desktop must enable desktop mode.");
-        AssertEx.True(viaEnvCaseInsensitive, "XE_LAUNCH_MODE is matched case-insensitively.");
-        AssertEx.True(viaArg, "--desktop must enable desktop mode.");
+        AssertEx.Equal(LaunchMode.Desktop, viaEnv);
+        AssertEx.Equal(LaunchMode.Desktop, viaEnvCaseInsensitive);
+        AssertEx.Equal(LaunchMode.Desktop, viaArg);
     }
 
     [Test]
@@ -47,19 +50,78 @@ public sealed class DesktopLaunchTests
         // The Velopack stub launches the bare exe with neither the env var nor the --desktop arg, so the managed-install
         // signal alone must enable desktop mode — otherwise the packaged build never derives the node-sqlite connection
         // string and crashes applying migrations at startup.
-        var isDesktop = DesktopLaunch.IsDesktopMode([], static _ => null, isManagedInstall: true);
+        var launchMode = DesktopLaunch.ResolveLaunchMode([], static _ => null, isManagedInstall: true);
 
-        AssertEx.True(isDesktop, "A Velopack-managed install must enter desktop mode without an env/arg.");
+        AssertEx.Equal(LaunchMode.Desktop, launchMode);
     }
 
     [Test]
-    public void DesktopModeGate_WhenNotManagedAndNoEnvOrArg_StaysOff()
+    public void ResolveLaunchMode_ExplicitMcpOnlyBeatsDesktopEnvironmentAndManagedInstall()
     {
-        // A raw-exe / dev / Aspire / CI run is not a Velopack install and sets no env/arg: the pipeline stays byte-
-        // identical (HTTPS/HSTS, no loopback override, no browser launch).
-        var isDesktop = DesktopLaunch.IsDesktopMode([], static _ => null, isManagedInstall: false);
+        var mode = DesktopLaunch.ResolveLaunchMode(["--mcp-only"], static _ => "desktop", isManagedInstall: true);
 
-        AssertEx.False(isDesktop);
+        AssertEx.Equal(LaunchMode.McpOnly, mode);
+        AssertEx.True(mode.IsLocalMode());
+        AssertEx.True(DesktopLaunch.ShouldSuppressBrowser(mode, noBrowserRequested: false));
+        AssertEx.False(DesktopLaunch.ShouldSuppressBrowser(LaunchMode.Desktop, noBrowserRequested: false));
+    }
+
+    [Test]
+    public void CliParsers_ValidatePortSetupAndMcpScope()
+    {
+        AssertEx.True(DesktopLaunch.TryGetPort(["--port=41234"], out var port, out var portError));
+        AssertEx.Equal(41234, port);
+        AssertEx.Null(portError);
+        AssertEx.False(DesktopLaunch.TryGetPort(["--port", "0"], out _, out _));
+        AssertEx.True(DesktopLaunch.HasNoBrowserFlag(["--NO-BROWSER"]));
+
+        var setupRequested = DesktopLaunch.TryGetSetupCommand(
+            ["--setup", "--admin-email=agent@example.test", "--admin-password", "StrongPass123!"],
+            static _ => null,
+            static () => null,
+            out var setup,
+            out var setupError);
+        AssertEx.True(setupRequested);
+        AssertEx.Null(setupError);
+        AssertEx.Equal("agent@example.test", AssertEx.NotNull(setup).Email);
+
+        AssertEx.True(DesktopLaunch.TryGetMcpKeyScope(["--mcp-key=agentic"], out var scope, out var scopeError));
+        AssertEx.Equal(McpServerApiKeyScope.Agentic, scope);
+        AssertEx.Null(scopeError);
+    }
+
+    [Test]
+    public void SetupParser_MalformedExplicitEmailNeverFallsBackToEnvironment()
+    {
+        foreach (var args in new[]
+                 {
+                     new[] { "--setup", "--admin-email=", "--admin-password", "StrongPass123!" },
+                     new[] { "--setup", "--admin-email", "--admin-password", "StrongPass123!" }
+                 })
+        {
+            var requested = DesktopLaunch.TryGetSetupCommand(args,
+                static name => name == DesktopLaunch.AdminEmailEnvironmentVariable ? "fallback@example.test" : null,
+                static () => null,
+                out var command,
+                out var error);
+
+            AssertEx.True(requested);
+            AssertEx.Null(command);
+            AssertEx.Contains(AssertEx.NotNull(error), DesktopLaunch.AdminEmailArgument);
+        }
+    }
+
+    [Test]
+    public void BuildRestartArguments_RetainsOnlyStableValidatedServeOptions()
+    {
+        var restartArgs = DesktopLaunch.BuildRestartArguments(
+            ["--setup", "--admin-email", "admin@example.test", "--admin-password", "secret", "--mcp-key", "agentic", "--no-browser", "--port", "41234"],
+            LaunchMode.McpOnly,
+            port: 41234);
+
+        AssertEx.True(restartArgs.SequenceEqual(["--mcp-only", "--no-browser", "--port", "41234"], StringComparer.Ordinal));
+        AssertEx.False(restartArgs.Any(static value => value.Contains("secret", StringComparison.Ordinal)));
+        AssertEx.False(restartArgs.Any(static value => value is "--setup" or "--mcp-key" or "--admin-email" or "--admin-password"));
     }
 
     [Test]

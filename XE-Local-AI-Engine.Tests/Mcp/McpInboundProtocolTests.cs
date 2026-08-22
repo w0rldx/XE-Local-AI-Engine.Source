@@ -129,15 +129,40 @@ public sealed class McpInboundProtocolTests
         AssertEx.Equal(0, coordinator.CancelCallCount);
     }
 
+    [Test]
+    public async Task StreamableHttpSdk_AgenticCredential_CapturesExplicitAuthorityAtAdmission()
+    {
+        var coordinator = new FakeMcpAgentRunCoordinator();
+        var requestId = Guid.NewGuid();
+        await using var factory = CreateFactory(coordinator,
+            new FakeSelectedFolderResolver(),
+            McpServerApiKeyScope.Agentic);
+        await using var client = await CreateClientAsync(factory);
+
+        _ = await client.CallToolAsync("start_agent_run",
+            new Dictionary<string, object?>
+            {
+                ["request_id"] = requestId.ToString("D"),
+                ["task"] = "inspect",
+                ["model"] = "unsloth/Ornith-1.0-9B-GGUF:Q4_K_M"
+            }).ConfigureAwait(false);
+
+        var admitted = AssertEx.NotNull(coordinator.LastStartRequest);
+        AssertEx.True(admitted.Binding.InboundContext.IsAgentic);
+        AssertEx.Equal("xemcp_protocol", admitted.Binding.InboundContext.KeyPrefix!);
+        AssertEx.Equal(requestId, admitted.Binding.ExecutionRequestId);
+    }
+
     private static TestServerWebAppFactory CreateFactory(FakeMcpAgentRunCoordinator coordinator,
-        FakeSelectedFolderResolver workspaces)
+        FakeSelectedFolderResolver workspaces,
+        McpServerApiKeyScope scope = McpServerApiKeyScope.Delegate)
     {
         return new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>
             {
                 services.RemoveAll<IMcpServerApiKeyService>();
-                services.AddSingleton<IMcpServerApiKeyService>(new FakeMcpServerApiKeyService(ValidKey));
+                services.AddSingleton<IMcpServerApiKeyService>(new FakeMcpServerApiKeyService(ValidKey, scope));
                 services.RemoveAll<IMcpAgentRunCoordinator>();
                 services.AddSingleton<IMcpAgentRunCoordinator>(coordinator);
                 services.RemoveAll<ISelectedFolderResolver>();
@@ -191,6 +216,8 @@ public sealed class McpInboundProtocolTests
 
         public int CancelCallCount => Volatile.Read(ref _cancelCallCount);
 
+        public McpAgentRunStartRequest? LastStartRequest { get; private set; }
+
         public Task<McpAgentRunCancelResult> CancelAsync(Guid requestId, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref _cancelCallCount);
@@ -233,6 +260,7 @@ public sealed class McpInboundProtocolTests
 
         public Task<McpAgentRunStartResult> StartAsync(McpAgentRunStartRequest request, CancellationToken cancellationToken)
         {
+            LastStartRequest = request;
             var run = new McpAgentRunView(request.RequestId,
                 McpAgentRunStatus.Queued,
                 Version: 0,
@@ -279,18 +307,24 @@ public sealed class McpInboundProtocolTests
             throw new NotSupportedException("Protocol tests exercise only the opaque workspace list.");
     }
 
-    private sealed class FakeMcpServerApiKeyService(string validKey) : IMcpServerApiKeyService
+    private sealed class FakeMcpServerApiKeyService(string validKey, McpServerApiKeyScope scope) : IMcpServerApiKeyService
     {
-        public Task<GeneratedMcpServerApiKey> GenerateAsync(CancellationToken cancellationToken = default) =>
+        public Task<GeneratedMcpServerApiKey> GenerateAsync(McpServerApiKeyScope scope,
+            CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Protocol tests do not rotate credentials.");
 
         public Task<McpServerApiKeyView?> GetAsync(CancellationToken cancellationToken = default) =>
-            Task.FromResult<McpServerApiKeyView?>(new McpServerApiKeyView("xemcp_protocol", DateTimeOffset.UnixEpoch, null));
+            Task.FromResult<McpServerApiKeyView?>(new McpServerApiKeyView("xemcp_protocol",
+                scope,
+                DateTimeOffset.UnixEpoch,
+                null));
 
         public Task<bool> RevokeAsync(CancellationToken cancellationToken = default) =>
             throw new NotSupportedException("Protocol tests do not revoke credentials.");
 
-        public Task<bool> ValidateAsync(string? presented, CancellationToken cancellationToken = default) =>
-            Task.FromResult(string.Equals(presented, validKey, StringComparison.Ordinal));
+        public Task<McpServerApiKeyValidation?> ValidateAsync(string? presented, CancellationToken cancellationToken = default) =>
+            Task.FromResult(string.Equals(presented, validKey, StringComparison.Ordinal)
+                ? new McpServerApiKeyValidation(scope, "xemcp_protocol")
+                : null);
     }
 }

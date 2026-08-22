@@ -33,15 +33,20 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
-    public async Task<GeneratedMcpServerApiKey> GenerateAsync(CancellationToken cancellationToken = default)
+    public async Task<GeneratedMcpServerApiKey> GenerateAsync(McpServerApiKeyScope scope, CancellationToken cancellationToken = default)
     {
+        if (!Enum.IsDefined(scope))
+        {
+            throw new ArgumentOutOfRangeException(nameof(scope), scope, "MCP API key scope must be delegate or agentic.");
+        }
+
         // Base64Url: no padding and no '+', '/' or '=' , so the key survives a shell argument, a JSON config file and an
         // HTTP header untouched — all three are on the path between this node and an external MCP client.
         var secret = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(KeyByteLength));
         var key = KeyScheme + secret;
         var prefix = KeyScheme + secret[..PrefixSecretCharacters];
 
-        var record = await _store.SetAsync(prefix, HashKey(key), cancellationToken).ConfigureAwait(false);
+        var record = await _store.SetAsync(prefix, HashKey(key), (int)scope, cancellationToken).ConfigureAwait(false);
 
         // The only moment the plaintext exists outside the caller. Nothing downstream can reproduce it.
         return new GeneratedMcpServerApiKey(key, ToView(record));
@@ -58,11 +63,11 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
         return _store.DeleteAsync(cancellationToken);
     }
 
-    public async Task<bool> ValidateAsync(string? presented, CancellationToken cancellationToken = default)
+    public async Task<McpServerApiKeyValidation?> ValidateAsync(string? presented, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(presented))
         {
-            return false;
+            return null;
         }
 
         var record = await _store.GetAsync(cancellationToken).ConfigureAwait(false);
@@ -70,7 +75,7 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
         {
             // No key generated => the endpoint authenticates nobody. Fail closed: an ungenerated credential must never
             // read as "no authentication required".
-            return false;
+            return null;
         }
 
         // Hash the candidate and compare DIGESTS, never the plaintext — the plaintext is not recoverable here, which is
@@ -85,11 +90,18 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
 
         if (!matches)
         {
-            return false;
+            return null;
         }
 
-        await _store.TouchLastUsedAsync(_timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken).ConfigureAwait(false);
-        return true;
+        if (!await _store.TouchLastUsedAsync(record.GenerationId,
+                _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                cancellationToken).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        return new McpServerApiKeyValidation(ToScope(record.Scope),
+            record.Prefix[..Math.Min(record.Prefix.Length, KeyScheme.Length + PrefixSecretCharacters)]);
     }
 
     /// <summary>
@@ -107,7 +119,15 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
     private static McpServerApiKeyView ToView(McpServerApiKeyRecord record)
     {
         return new McpServerApiKeyView(record.Prefix,
+            ToScope(record.Scope),
             DateTimeOffset.FromUnixTimeMilliseconds(record.CreatedAtUtc),
             record.LastUsedAtUtc is null ? null : DateTimeOffset.FromUnixTimeMilliseconds(record.LastUsedAtUtc.Value));
     }
+
+    private static McpServerApiKeyScope ToScope(int scope) => scope switch
+    {
+        0 => McpServerApiKeyScope.Delegate,
+        1 => McpServerApiKeyScope.Agentic,
+        _ => throw new InvalidDataException($"Stored MCP API key scope '{scope}' is invalid.")
+    };
 }

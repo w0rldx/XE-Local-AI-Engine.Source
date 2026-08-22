@@ -70,6 +70,7 @@ internal static class AddNodeAuthAndConnectionExtensions
         builder.Services.AddSingleton<INodeSettingsStore>(static sp =>
             new CachedNodeSettingsStore(sp.GetRequiredService<NodeSettingsStore>(), sp.GetRequiredService<IMemoryCache>()));
         builder.Services.AddSingleton<INodeRuntimeSettings, NodeRuntimeSettings>();
+        builder.Services.AddSingleton<INodeSettingsAdministrationService, NodeSettingsAdministrationService>();
 
         // Encrypted at-rest store for the Entra ID public-client authentication record (device-code / interactive-
         // browser silent-auth resume), read by AzureFoundryChatClientFactory and written by the sign-in coordinator.

@@ -76,4 +76,13 @@ public sealed class WindowsLauncherApplicationTests
         AssertEx.Equal("1.2.3", arguments[2]);
         AssertEx.Equal("value with spaces", arguments[3]);
     }
+
+    [Test]
+    public void CreateManagedArguments_PreservesAgenticLaunchArguments()
+    {
+        var arguments = WindowsLauncherApplication.CreateManagedArguments("app.dll", ["--mcp-only", "--port", "41234"]);
+
+        AssertEx.True(arguments.SequenceEqual(["app.dll", "--mcp-only", "--port", "41234"]),
+            "The launcher must preserve every agentic launch token in order.");
+    }
 }

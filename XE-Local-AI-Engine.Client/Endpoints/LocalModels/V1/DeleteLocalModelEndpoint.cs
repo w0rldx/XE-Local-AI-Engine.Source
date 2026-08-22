@@ -3,18 +3,14 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Validation;
-using XE_Local_AI_Engine.Providers.LlamaServer;
 
 public sealed class DeleteLocalModelEndpoint(
-    ILocalModelDeletionCoordinator deletionCoordinator,
-    ILocalModelProviderResolver providerResolver,
+    ILocalModelAdministrationService administrationService,
     ModelNameValidator modelNameValidator) : Endpoint<DeleteLocalModelRequest, DeleteLocalModelResponse>
 {
-    private readonly ILocalModelDeletionCoordinator _deletionCoordinator = deletionCoordinator ?? throw new ArgumentNullException(nameof(deletionCoordinator));
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
+    private readonly ILocalModelAdministrationService _administrationService = administrationService ?? throw new ArgumentNullException(nameof(administrationService));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
 
     public override void Configure()
@@ -39,39 +35,13 @@ public sealed class DeleteLocalModelEndpoint(
             return;
         }
 
-        var modelName = decodedModelName!.Trim();
-
-        var providerName = await _providerResolver.ResolveProviderNameForModelAsync(modelName, ct).ConfigureAwait(false);
-        CommittedModelDeletion? committed = null;
-        var deleted = true;
-        if (string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase))
-        {
-            try
-            {
-                committed = await _deletionCoordinator.CommitDeleteAsync(modelName, ct).ConfigureAwait(false);
-            }
-            catch (KeyNotFoundException)
-            {
-                // Delete is idempotent: an already-ejected/uninstalled model answers 200 rather than 500ing. It reports
-                // Deleted=false because this call removed nothing — the caller can tell a real delete from a no-op.
-                deleted = false;
-            }
-        }
-        else
-        {
-            await _providerResolver.ResolveProvider(providerName).DeleteModelAsync(modelName, ct).ConfigureAwait(false);
-            _providerResolver.InvalidateModelProviderMap();
-        }
+        var result = await _administrationService.DeleteAsync(decodedModelName, ct).ConfigureAwait(false);
 
         await Send.OkAsync(new DeleteLocalModelResponse
         {
-            ModelName = modelName,
-            Deleted = deleted
+            ModelName = result.ModelName!,
+            Deleted = result.Deleted
         }, ct).ConfigureAwait(false);
-        if (committed is not null)
-        {
-            await _deletionCoordinator.PurgeAfterSuccessAsync(committed, CancellationToken.None).ConfigureAwait(false);
-        }
     }
 
     private async Task<bool> ValidateModelNameAsync(string? modelName, CancellationToken ct)

@@ -49,6 +49,12 @@ internal sealed record class McpServerApiKey
     /// </summary>
     public byte[] KeyHash { get; set; } = [];
 
+    /// <summary>The authority granted to callers presenting this credential. Existing rows backfill to delegate.</summary>
+    public int Scope { get; set; }
+
+    /// <summary>Changes on every rotation so authentication-side effects can target only the key that was validated.</summary>
+    public Guid GenerationId { get; set; }
+
     public long CreatedAtUtc { get; set; }
 
     /// <summary>

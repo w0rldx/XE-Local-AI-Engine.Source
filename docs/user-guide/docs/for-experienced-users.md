@@ -21,7 +21,7 @@ guessing.
 | **Import existing GGUFs** | **Supported** — one file at a time, copied into the managed directory. Packaged desktop app only. [Details](#using-ggufs-you-already-have) |
 | **Local API** | `/api/local/v1`, loopback-only, OpenAPI at `/openapi/local/v1/…` |
 | **OpenAI-compatible surface** | Opt-in inbound proxy at `/api/local/v1/proxy/v1`, bearer-key gated, loopback-only |
-| **MCP** | Both directions — outbound to servers you register, and an inbound server surface |
+| **MCP** | Both directions — outbound servers plus loopback Streamable HTTP inbound MCP; `delegate` exposes 8 tools, `agentic` exposes 23 |
 | **Fine-tuning** | QLoRA, **Linux + NVIDIA only**, in a pinned uv-managed Python runtime. [Details](#fine-tuning-training) |
 | **Benchmarks** | One frozen task, many models; KV-cache type per run, launch receipts, optional 1–5 judge. [Details](#benchmarks) |
 | **Multi-GPU / tensor split** | Unverified — ask me |
@@ -196,8 +196,12 @@ Everything lives in one directory (`%LOCALAPPDATA%\XE-Local-AI-Engine`), separat
   form initializes new definitions as disabled, and every invocation remains approval-wrapped. A fixed
   tool can reuse an explicit, version-bound session approval; a parameterized tool re-prompts for each
   model-selected argument set. The API persists an acknowledged caller's requested enablement.
-- **MCP runs both directions.** Outbound to servers you register (they execute as you — same trust
-  boundary as Dev Mode), plus an inbound server surface so external clients can drive the app.
+- **MCP runs both directions.** Outbound servers execute within the app's tool policy. The inbound
+  Streamable HTTP endpoint is loopback-only and uses a one-time-display, digest-stored bearer key.
+  `delegate` exposes 8 shared tools. `agentic` exposes all 23 and is operator-equivalent only for
+  that enumerated surface — not a JWT or arbitrary REST access. Approval-required root tools are
+  auto-approved only after a strict metadata-only audit write; children do not inherit elevation.
+  See the [Agentic Support guide](../../agentic-support/agent-install.md).
 
 ---
 
