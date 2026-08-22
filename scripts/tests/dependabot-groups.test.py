@@ -11,6 +11,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEPENDABOT = REPO_ROOT / ".github" / "dependabot.yml"
 PACKAGE_MANIFEST = REPO_ROOT / "XE-Local-AI-Engine.Client.React" / "package.json"
+PNPM_WORKSPACE = REPO_ROOT / "XE-Local-AI-Engine.Client.React" / "pnpm-workspace.yaml"
 
 EXPECTED_GROUPS = {
     "frontend-runtime",
@@ -129,6 +130,7 @@ class DependabotGroupContractTests(unittest.TestCase):
         cls.npm_update = npm_updates[0]
         cls.groups = cls.npm_update.get("groups", {})
         cls.package_manifest = json.loads(PACKAGE_MANIFEST.read_text(encoding="utf-8"))
+        cls.pnpm_workspace = load_yaml(PNPM_WORKSPACE)
 
     def test_frontend_schedule_and_scope_are_preserved(self) -> None:
         self.assertEqual("develop", self.npm_update["target-branch"])
@@ -136,6 +138,17 @@ class DependabotGroupContractTests(unittest.TestCase):
         self.assertEqual(
             {"interval": "weekly", "day": "monday", "time": "06:30", "timezone": "Europe/Berlin"},
             self.npm_update["schedule"],
+        )
+
+    def test_release_age_policy_is_compatible_with_dependabot(self) -> None:
+        self.assertEqual(10080, self.pnpm_workspace["minimumReleaseAge"])
+        self.assertFalse(self.pnpm_workspace["minimumReleaseAgeStrict"])
+        self.assertEqual({"default-days": 7}, self.npm_update["cooldown"])
+
+    def test_typescript_seven_and_newer_are_temporarily_ignored(self) -> None:
+        self.assertEqual(
+            [{"dependency-name": "typescript", "versions": [">=7"]}],
+            self.npm_update["ignore"],
         )
 
     def test_groups_are_deliberate_and_non_overlapping_for_current_dependencies(self) -> None:

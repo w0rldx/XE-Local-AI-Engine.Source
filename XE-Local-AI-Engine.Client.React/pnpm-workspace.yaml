@@ -1,4 +1,5 @@
 minimumReleaseAge: 10080
+minimumReleaseAgeStrict: false
 trustPolicy: no-downgrade
 
 # Force the transitive nanoid (via rrweb > postcss) off the <3.3.18 line that carries

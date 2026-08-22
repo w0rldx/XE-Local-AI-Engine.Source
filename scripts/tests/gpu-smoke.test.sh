@@ -378,12 +378,52 @@ out="$(ledger_finalize 2>&1)"
 check_contains "--no-tools says the feature was NOT verified" "NOT verified" "${out}"
 check_contains "--no-tools names the flag that caused it" "--no-tools" "${out}"
 
+# The smoke owns one build lock for the whole run. Its explicit AppHost build must therefore
+# finish before the assembly snapshot, and Aspire must be told not to build again afterwards.
+echo "== build/guard/start source contract =="
+smoke_source="$(cat "${SMOKE}")"
+# These are literal source fragments; expansion would defeat the contract check.
+# shellcheck disable=SC2016
+check_contains "the exact configured AppHost is selected" \
+  'ASPIRE_APPHOST="${XE_ASPIRE_APPHOST:-${GPU_SMOKE_PROJECT_ROOT}/XE-Local-AI-Engine.AppHost/XE-Local-AI-Engine.AppHost.csproj}"' \
+  "${smoke_source}"
+# shellcheck disable=SC2016
+check_contains "the exact AppHost is built in Debug" \
+  'dotnet build "${ASPIRE_APPHOST}" --configuration Debug' "${smoke_source}"
+# shellcheck disable=SC2016
+check_contains "dev-start cannot rebuild after the guard snapshot" \
+  '"${GPU_SMOKE_SCRIPT_DIR}/dev-start.sh" --no-build' "${smoke_source}"
+
+# shellcheck disable=SC2016
+build_match="$(grep -nF 'dotnet build "${ASPIRE_APPHOST}" --configuration Debug' "${SMOKE}")"
+snapshot_match="$(grep -nF 'assembly-guard.sh" snapshot' "${SMOKE}")"
+start_match="$(grep -nF 'dev-start.sh" --no-build' "${SMOKE}")"
+build_line="${build_match%%:*}"
+snapshot_line="${snapshot_match%%:*}"
+start_line="${start_match%%:*}"
+CHECKS=$((CHECKS + 1))
+if [[ ! "${build_line}" =~ ^[0-9]+$ || ! "${snapshot_line}" =~ ^[0-9]+$ || ! "${start_line}" =~ ^[0-9]+$ \
+  || "${build_line}" -ge "${snapshot_line}" || "${snapshot_line}" -ge "${start_line}" ]]; then
+  echo "  FAIL: expected AppHost build -> assembly snapshot -> dev-start --no-build; got lines ${build_line}, ${snapshot_line}, ${start_line}" >&2
+  FAILED=$((FAILED + 1))
+fi
+
 # ---------------------------------------------------------------------------
 # Layer 2 — end-to-end preflight gates, with fakes on PATH.
 # ---------------------------------------------------------------------------
 echo "== preflight gates (end to end) =="
 
 mkdir -p "${TEMP_ROOT}/bin"
+
+# Runs that get past GPU/instance preflight must never invoke the real SDK from this unit suite.
+cat >"${TEMP_ROOT}/bin/dotnet" <<'FAKE_DOTNET'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "--version" ]]; then
+  printf '10.0.100-test\n'
+fi
+exit 0
+FAKE_DOTNET
+chmod 700 "${TEMP_ROOT}/bin/dotnet"
 
 # A box with no GPU: the central assertion is unmeasurable, so the run must refuse (exit 2)
 # rather than "pass" by never testing anything.
