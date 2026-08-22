@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { get as httpGet } from "node:http";
-import { Agent as HttpsAgent, get as httpsGet } from "node:https";
+import { get as httpsGet } from "node:https";
 import { isIP } from "node:net";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,26 +21,9 @@ export function isLoopbackHostname(hostname) {
 	);
 }
 
-export function createOpenapiHttpsAgent(parsedUrl, insecureHttps) {
-	if (parsedUrl.protocol !== "https:" || !insecureHttps) {
-		return undefined;
-	}
-	if (!isLoopbackHostname(parsedUrl.hostname)) {
-		throw new Error("OPENAPI_INSECURE=1 is restricted to loopback HTTPS hosts.");
-	}
-	return new HttpsAgent({
-		// codeql[js/disabling-certificate-validation] -- Explicit OPENAPI_INSECURE is restricted to loopback .NET development certificates above.
-		rejectUnauthorized: false,
-	});
-}
-
 export function fetchJson(
 	specUrl,
-	{
-		timeoutMs = defaultOpenapiTimeoutMs,
-		maxResponseBytes = defaultOpenapiMaxResponseBytes,
-		insecureHttps = process.env.OPENAPI_INSECURE === "1",
-	} = {},
+	{ timeoutMs = defaultOpenapiTimeoutMs, maxResponseBytes = defaultOpenapiMaxResponseBytes } = {},
 ) {
 	return new Promise((resolveJson, reject) => {
 		let settled = false;
@@ -92,16 +75,9 @@ export function fetchJson(
 			return;
 		}
 		const get = parsedUrl.protocol === "http:" ? httpGet : httpsGet;
-		let agent;
-		try {
-			agent = createOpenapiHttpsAgent(parsedUrl, insecureHttps);
-		} catch (error) {
-			rejectOnce(error);
-			return;
-		}
 
 		try {
-			request = get(parsedUrl, { agent, headers: { accept: "application/json" } }, (response) => {
+			request = get(parsedUrl, { headers: { accept: "application/json" } }, (response) => {
 				activeResponse = response;
 				const contentLength = Number(response.headers["content-length"] ?? 0);
 				if (Number.isFinite(contentLength) && contentLength > maxResponseBytes) {

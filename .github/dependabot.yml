@@ -42,6 +42,10 @@ updates:
       - dependency-name: typescript
         versions:
           - ">=7"
+      # Keep the type surface aligned with the supported Node 22 runtime until that baseline moves.
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
     groups:
       frontend-runtime:
         dependency-type: production
