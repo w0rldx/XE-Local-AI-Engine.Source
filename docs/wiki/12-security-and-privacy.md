@@ -174,6 +174,23 @@ byte-at-a-time oracle over loopback), and a node with no key generated authentic
 implementations, so this node implements no OAuth profile and advertises no Protected Resource
 Metadata — see the [connect runbook](../runbooks/connect-an-mcp-client-runbook.md).
 
+The singleton row also carries exactly one scope. `delegate` is the default and exposes the eight
+shared `NodeAgentMcpTools`; `agentic` exposes those eight plus the 15 `NodeAdminMcpTools`. Minting
+either scope rotates the row atomically. Authentication places `xe:mcp_scope` and a bounded key
+prefix in claims; SDK authorization filters remove unauthorized tools from discovery and reject
+direct calls. Agentic is operator-equivalent only for this enumerated 23-tool MCP surface: it grants
+no Operator role/JWT, REST access, routable listener, or general policy bypass.
+
+For saved-agent execution, authority is explicit rather than ambient and is fingerprinted/persisted
+with durable requests. A run admitted before rotation deliberately retains its captured authority
+across disconnect, restart, and rotation. Agentic root execution may unwrap approval-required tools
+from the saved agent's complete allowed set, but a strict recorder persists a metadata-only
+`ApprovalDecision` with source `mcp-agentic:<bounded-prefix>` before the inner function runs. Audit
+failure blocks invocation. Arguments, prompts, message content, tokens, passwords, full keys, and
+host paths are never recorded. Spawned children retain ordinary curation and do not inherit agentic
+elevation. [ADR 0006](../adr/0006-agentic-trust-mcp-key-scopes-and-auto-approval.md) records the
+decision.
+
 #### 3.2.1 The inbound model-proxy bearer key
 
 The node exposes an **OpenAI-compatible passthrough** (`proxy/v1/{chat/completions,embeddings,models}`)
@@ -215,7 +232,11 @@ Local endpoints are still authenticated and policy-gated; loopback is necessary 
 
 ### 3.3 Desktop / loopback hosting
 
-In desktop mode the node binds plain HTTP on loopback only and the HTTPS-redirect/HSTS branch is bypassed by design (`if (!isDesktop)` guard in `Program.cs`); `LoopbackUrlResolver` / `DesktopLifecycle` (`XE-Local-AI-Engine.Client/Hosting/`) pick an auto-port loopback URL. See [Hosting & Deployment](11-hosting-and-deployment.md). The loopback bind plus the peer + Host/Origin middleware together keep the admin surface off the network.
+In Desktop and McpOnly local modes the node binds plain HTTP on loopback only and bypasses the
+HTTPS-redirect/HSTS branch by design; `LoopbackUrlResolver` / `DesktopLifecycle`
+(`XE-Local-AI-Engine.Client/Hosting/`) resolve the remembered, requested, or free loopback URL. See
+[Hosting & Deployment](11-hosting-and-deployment.md). The loopback bind plus the peer + Host/Origin
+middleware together keep the admin surface off the network.
 
 ### 3.4 Startup bind guard (`LoopbackBindGuard`)
 
@@ -301,8 +322,12 @@ Custom Tools are deliberately more privileged than built-in jailed AgentHome too
 HTTP request or a **host program** definition, so enabling the feature is an acceptance of outbound-network or
 same-user host-execution risk. The `CustomToolsEnabled` node setting is a process-wide kill switch, and a definition is
 not offered unless it is also enabled and carries the server-validated danger acknowledgement. `CustomToolCatalog`
-wraps every resolved definition in `ApprovalRequiredAIFunction` unconditionally; unattended scheduler/sub-agent paths
-therefore see it as approval-gated, and no stored/per-agent flag can lower that floor.
+wraps every resolved definition in `ApprovalRequiredAIFunction` unconditionally. Scheduler and
+spawned-child paths therefore strip or retain it as approval-gated according to their existing
+curation and no stored/per-agent flag lowers that floor. A trusted agentic-scope **root** MCP run is
+the deliberate exception: it may adapt the wrapper only through ADR 0006's strict audit-before-call
+path. `CustomToolsEnabled` remains excluded from the agentic settings whitelist, so the MCP settings
+surface cannot enable host-command authoring unattended.
 
 **Stored and browser-visible secrets.** `custom_tools.config_json` contains HTTP header or command-environment secret
 values and is encrypted at rest by `NodeEncryptionSaveChangesInterceptor` with the
@@ -472,6 +497,6 @@ The file documents its own scope: it is the "safe set" — APIs with zero curren
 - [Agent Mode](04-agent-mode.md) — node-local analysis/eval rule, sandboxed tool execution
 - [Data & Persistence](08-data-and-persistence.md) — at-rest encryption schema & interceptor
 - [API & Hubs](09-api-and-hubs.md) — `/api/local/v1` surface, auth policies, local hubs
-- [Hosting & Deployment](11-hosting-and-deployment.md) — loopback/desktop binding, no-autostart
+- [Hosting & Deployment](11-hosting-and-deployment.md) — loopback local modes and opt-in user autostart
 - [Testing & Validation](13-testing-and-validation.md) — persistence-encryption & loopback tests
 - [Technical/Security Architecture Dossier](../audits/technical-security-architecture/README.md) — baseline auditor narrative, evidence states, and residual-risk limitations

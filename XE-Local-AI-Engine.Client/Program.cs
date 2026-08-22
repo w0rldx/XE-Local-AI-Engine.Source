@@ -52,8 +52,12 @@ return Environment.ExitCode;
 namespace XE_Local_AI_Engine.Client
 {
     using System.Diagnostics;
+    using System.Diagnostics.CodeAnalysis;
+    using System.Security.Claims;
+    using System.Text.Json;
     using FastEndpoints;
     using FastEndpoints.Swagger;
+    using FluentValidation;
     using Microsoft.AspNetCore.Diagnostics.HealthChecks;
     using Microsoft.AspNetCore.Hosting.Server;
     using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -63,7 +67,10 @@ namespace XE_Local_AI_Engine.Client
     using Serilog.Events;
     using XE_Local_AI_Engine.Client.Common.Extensions;
     using XE_Local_AI_Engine.Client.Endpoints.Common;
+    using XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
+    using XE_Local_AI_Engine.Client.Endpoints.Auth.V1.Validators;
     using XE_Local_AI_Engine.Client.Hosting;
+    using XE_Local_AI_Engine.Client.DependencyInjection;
     using XE_Local_AI_Engine.Client.Hubs;
     using XE_Local_AI_Engine.Client.Persistence.Entities;
     using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -75,6 +82,7 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Services.Persistence;
     using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
     using XE_Local_AI_Engine.Client.Services.Proxy;
+    using XE_Local_AI_Engine.Client.Services.Mcp;
     using XE_Local_AI_Engine.Client.Services.Shutdown;
 
     /// <summary>
@@ -87,6 +95,8 @@ namespace XE_Local_AI_Engine.Client
     /// </summary>
     public sealed class Program
     {
+        [SuppressMessage("Major Code Smell", "S1144:Unused private types or members should be removed",
+            Justification = "The entry-point container must not expose a constructible public API.")]
         private Program()
         {
         }
@@ -107,6 +117,86 @@ namespace XE_Local_AI_Engine.Client
         public static async Task<ProgramStartResult> CreateAppAsync(string[] args, ProgramAppCustomization? customization = null)
         {
             ArgumentNullException.ThrowIfNull(args);
+            if (!DesktopLaunch.HasOneShotCommand(args))
+            {
+                return await CreateAppCoreAsync(args, customization, commandContext: null).ConfigureAwait(false);
+            }
+
+            var standardError = customization?.StandardError ?? Console.Error;
+            var commandContext = new OneShotCommandContext();
+            try
+            {
+                customization?.BeforeOneShotCommand?.Invoke();
+                return await CreateAppCoreAsync(args, customization, commandContext).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                await standardError.WriteLineAsync(
+                                       $"The engine command failed unexpectedly (stage={commandContext.StageOutput}, type={exception.GetType().Name}).")
+                                   .ConfigureAwait(false);
+                if (exception is DesktopDataDirectoryException dataDirectoryException)
+                {
+                    await standardError.WriteLineAsync(dataDirectoryException.SafeDiagnostic).ConfigureAwait(false);
+                }
+
+                return new ProgramStartResult(App: null, ExitCode: 1);
+            }
+        }
+
+        private static async Task<ProgramStartResult> CreateAppCoreAsync(string[] args,
+            ProgramAppCustomization? customization,
+            OneShotCommandContext? commandContext)
+        {
+            var standardOutput = customization?.StandardOutput ?? Console.Out;
+            var standardError = customization?.StandardError ?? Console.Error;
+
+            if (DesktopLaunch.HasHelpFlag(args))
+            {
+                await WriteHelpAsync(standardOutput).ConfigureAwait(false);
+                return new ProgramStartResult(App: null, ExitCode: 0);
+            }
+
+            // Status is always a one-shot command, even when a serve flag is also present. It is intentionally handled
+            // before builder creation so inspecting a running instance never acquires its lease or mutates its data dir.
+            if (DesktopLaunch.HasStatusFlag(args))
+            {
+                commandContext?.SetStage(OneShotCommandStage.Status);
+                var isManagedInstall = customization is null && VelopackInstall.IsManaged();
+                return new ProgramStartResult(App: null,
+                    await StatusCommandAsync(args,
+                        isManagedInstall,
+                        standardOutput,
+                        standardError,
+                        customization?.StatusHttpClientFactory).ConfigureAwait(false));
+            }
+
+            if (!DesktopLaunch.TryGetPort(args, out var requestedPort, out var portError))
+            {
+                await standardError.WriteLineAsync(portError).ConfigureAwait(false);
+                return new ProgramStartResult(App: null, ExitCode: 2);
+            }
+
+            var setupRequested = DesktopLaunch.TryGetSetupCommand(args, out var setupCommand, out var setupError);
+            if (setupRequested && setupError is not null)
+            {
+                await standardError.WriteLineAsync(setupError).ConfigureAwait(false);
+                return new ProgramStartResult(App: null, ExitCode: 2);
+            }
+
+            if (setupCommand?.PasswordFromEnvironment == true)
+            {
+                Environment.SetEnvironmentVariable(DesktopLaunch.AdminPasswordEnvironmentVariable, null);
+            }
+
+            var mcpKeyRequested = DesktopLaunch.TryGetMcpKeyScope(args, out var mcpKeyScope, out var mcpKeyError);
+            if (mcpKeyRequested && mcpKeyError is not null)
+            {
+                await standardError.WriteLineAsync(mcpKeyError).ConfigureAwait(false);
+                return new ProgramStartResult(App: null, ExitCode: 3);
+            }
+
+            commandContext?.SetStage(OneShotCommandStage.HostInitialization);
+
             // Held for the process lifetime once acquired in the desktop branch below; disposed after the host is built.
             SingleInstanceLease? instanceLease = null;
 
@@ -119,7 +209,17 @@ namespace XE_Local_AI_Engine.Client
             // Velopack install and sets no env/arg, so every desktop-gated call is skipped and the pipeline is byte-identical.
             // A customized (test-fixture) app is never the packaged desktop app, and VelopackLocator throws unless the
             // entry point's FrameworkDependentVelopackBootstrap.Run established it — so don't consult it on the test path.
-            var isDesktop = customization is null && DesktopLaunch.IsDesktopMode(args, VelopackInstall.IsManaged());
+            var launchMode = customization is null
+                ? DesktopLaunch.ResolveLaunchMode(args, VelopackInstall.IsManaged())
+                : LaunchMode.Headless;
+            var isLocalMode = launchMode.IsLocalMode();
+            var needsLocalData = isLocalMode || setupRequested || mcpKeyRequested;
+            var stableRestartArgs = DesktopLaunch.BuildRestartArguments(args, launchMode, requestedPort);
+            var hostArgs = args;
+            if (setupRequested || mcpKeyRequested)
+            {
+                hostArgs = DesktopLaunch.HasExplicitLocalModeArgument(args) ? [.. stableRestartArgs] : [];
+            }
 
             // In desktop mode the app is launched from an arbitrary working directory (a double-click, or the documented
             // `cd ~/Applications && ./XE-Local-AI-Engine.AppImage`), so pin the content root to the executable's own directory —
@@ -129,8 +229,8 @@ namespace XE_Local_AI_Engine.Client
             // current-directory content root so headless/Aspire/CI/dev behavior is byte-identical.
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions
             {
-                Args = args,
-                ContentRootPath = customization?.ContentRootPath ?? (isDesktop ? AppContext.BaseDirectory : null),
+                Args = hostArgs,
+                ContentRootPath = customization?.ContentRootPath ?? (isLocalMode ? AppContext.BaseDirectory : null),
                 EnvironmentName = customization?.EnvironmentName,
                 WebRootPath = customization?.WebRootPath,
             });
@@ -147,7 +247,7 @@ namespace XE_Local_AI_Engine.Client
                 builder.Configuration.AddInMemoryCollection(configurationOverrides);
             }
 
-            if (isDesktop)
+            if (needsLocalData)
             {
                 // Resolve (and create) the per-user data dir up front so both the bind below and the config layer share it.
                 var desktopDataDirectory = DesktopBootstrap.ResolveDataDirectory();
@@ -166,14 +266,38 @@ namespace XE_Local_AI_Engine.Client
                     StartupLoggerReady = true;
                     Log.Fatal("Another instance of XE Local AI Engine is already running for the data directory '{DataDirectory}'. "
                               + "Close the other instance before starting a new one.", desktopDataDirectory);
+                    if (setupRequested || mcpKeyRequested)
+                    {
+                        Log.Error("The engine is already running for this data directory. Use the HTTP path on the running "
+                                  + "instance, or stop it before running this command.");
+                    }
                     await Log.CloseAndFlushAsync().ConfigureAwait(false);
-                    return new ProgramStartResult(App: null, ExitCode: 1);
+                    return new ProgramStartResult(App: null, ExitCode: setupRequested || mcpKeyRequested ? 4 : 1);
                 }
 
                 // Re-bind the loopback port remembered from the last launch when it is still free, so the browser origin
                 // (scheme+host+port) stays stable and localStorage-backed user prefs survive between runs; otherwise fall back to
                 // a fresh OS-assigned port (:0). The actually-bound port is read post-bind and persisted for next time.
-                builder.WebHost.UseUrls(DesktopPortStore.ResolveBindUrl(desktopDataDirectory));
+                if (requestedPort is { } port)
+                {
+                    if (!DesktopPortStore.IsPortAvailable(port))
+                    {
+                        Log.Logger = builder.Environment.CreateStartupLogger(builder.Configuration);
+                        StartupLoggerReady = true;
+                        Log.Fatal("Port {Port} is already in use; --port does not fall back automatically.", port);
+                        await Log.CloseAndFlushAsync().ConfigureAwait(false);
+                        instanceLease.Dispose();
+                        return new ProgramStartResult(App: null, ExitCode: 6);
+                    }
+
+#pragma warning disable S5332 // Local mode intentionally binds plain HTTP exclusively on 127.0.0.1; it never leaves the machine.
+                    builder.WebHost.UseUrls($"http://{DesktopLaunch.LoopbackHost}:{port}");
+#pragma warning restore S5332
+                }
+                else
+                {
+                    builder.WebHost.UseUrls(DesktopPortStore.ResolveBindUrl(desktopDataDirectory));
+                }
 
                 // Desktop double-click launch supplies neither the node SQLite connection string nor the operator secret via
                 // env/Aspire, so fill them from the per-user data directory here — BEFORE AddServices reads configuration below.
@@ -217,7 +341,9 @@ namespace XE_Local_AI_Engine.Client
             // App self-update (Velopack + anonymous public GitHub releases). Desktop-mode only: off the flag this registers nothing and the
             // desktop-only endpoints are filtered out of FastEndpoints above. The process args are re-passed on relaunch so the
             // new version comes back up in desktop mode and re-binds the persisted loopback port.
-            builder.AddAppUpdate(builder.Configuration, isDesktop, args);
+            builder.AddAppUpdate(builder.Configuration,
+                launchMode,
+                stableRestartArgs);
 
             // W3C trace correlation that works with Aspire/OpenTelemetry OFF (the desktop/RC default). Forcing the W3C
             // Activity id format and registering a listener for the ASP.NET Core hosting source makes ASP.NET create a request
@@ -273,6 +399,7 @@ namespace XE_Local_AI_Engine.Client
 
             try
             {
+                commandContext?.SetStage(OneShotCommandStage.Migrations);
                 await ApplyNodeChatMigrationsAsync(app.Services).ConfigureAwait(false);
                 await ApplyNodeIdentityMigrationsAsync(app.Services).ConfigureAwait(false);
                 Log.Information("Database migrations applied.");
@@ -295,6 +422,35 @@ namespace XE_Local_AI_Engine.Client
                 var resetExitCode = await ResetAdminPasswordAsync(app.Services, resetPassword).ConfigureAwait(false);
                 instanceLease?.Dispose();
                 return new ProgramStartResult(App: null, resetExitCode);
+            }
+
+            if (setupRequested)
+            {
+                commandContext?.SetStage(OneShotCommandStage.Handler);
+                var setupExitCode = await SetupCommandAsync(app.Services, setupCommand!, standardOutput, standardError).ConfigureAwait(false);
+                if (setupExitCode != 0)
+                {
+                    instanceLease?.Dispose();
+                    return new ProgramStartResult(App: null, setupExitCode);
+                }
+            }
+
+            if (mcpKeyRequested)
+            {
+                commandContext?.SetStage(OneShotCommandStage.Handler);
+                var mcpKeyExitCode = await McpKeyCommandAsync(app.Services, mcpKeyScope!.Value, standardOutput, standardError)
+                    .ConfigureAwait(false);
+                if (mcpKeyExitCode != 0)
+                {
+                    instanceLease?.Dispose();
+                    return new ProgramStartResult(App: null, mcpKeyExitCode);
+                }
+            }
+
+            if ((setupRequested || mcpKeyRequested) && !DesktopLaunch.HasExplicitLocalModeArgument(args))
+            {
+                instanceLease?.Dispose();
+                return new ProgramStartResult(App: null, ExitCode: 0);
             }
 
             await RecoverInterruptedNodeChatMessagesAsync(app.Services).ConfigureAwait(false);
@@ -349,7 +505,7 @@ namespace XE_Local_AI_Engine.Client
 
             // Desktop mode serves plain HTTP on loopback only, so the HTTPS-redirect/HSTS pipeline is
             // bypassed entirely. Off-flag both branches are exactly as before. UseAntiforgery is scheme-agnostic and stays.
-            if (!isDesktop)
+            if (!isLocalMode)
             {
                 if (!app.Environment.IsDevelopment())
                 {
@@ -433,7 +589,7 @@ namespace XE_Local_AI_Engine.Client
                 // instantiates every discovered endpoint before evaluating it (which is why the AppUpdate services are
                 // registered in every mode). Development Mode's endpoints are excluded at DISCOVERY instead — see the
                 // EndpointDiscoveryOptions.Filter in ConfigureServices.
-                config.Endpoints.Filter = ep => isDesktop || !typeof(IDesktopOnlyEndpoint).IsAssignableFrom(ep.EndpointType);
+                config.Endpoints.Filter = ep => isLocalMode || !typeof(IDesktopOnlyEndpoint).IsAssignableFrom(ep.EndpointType);
 
                 // Single source of truth for OpenAPI operationIds (consumed by the generated hey-api React SDK):
                 // derive a clean, camelCase name from the endpoint class name, e.g. CreateScheduledJobEndpoint ->
@@ -544,9 +700,9 @@ namespace XE_Local_AI_Engine.Client
             // Desktop mode only: install console-close → graceful-stop triggers and the on-started browser launch. Off-flag this
             // is never reached, so no signal handler / P/Invoke is installed. The lifecycle is rooted for the
             // app's lifetime via the lifetime token registration; it disposes when the host stops.
-            if (isDesktop)
+            if (isLocalMode)
             {
-                ActivateDesktopLifecycle(app);
+                ActivateDesktopLifecycle(app, launchMode, DesktopLaunch.HasNoBrowserFlag(args));
             }
 
 
@@ -620,6 +776,248 @@ namespace XE_Local_AI_Engine.Client
             Log.Information("Admin password reset succeeded. Refresh tokens revoked and existing access tokens invalidated; "
                             + "sign in with the new password.");
             return 0;
+        }
+
+        private static async Task<int> SetupCommandAsync(IServiceProvider services,
+            SetupCommand command,
+            TextWriter standardOutput,
+            TextWriter standardError)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(command);
+            ArgumentNullException.ThrowIfNull(standardOutput);
+            ArgumentNullException.ThrowIfNull(standardError);
+
+            var request = new NodeSetupRequest
+            {
+                Email = command.Email,
+                Password = command.Password
+            };
+            var validation = await new NodeSetupRequestValidator().ValidateAsync(request, CancellationToken.None).ConfigureAwait(false);
+            if (!validation.IsValid)
+            {
+                foreach (var failure in validation.Errors)
+                {
+                    await standardError.WriteLineAsync(failure.ErrorMessage).ConfigureAwait(false);
+                }
+
+                return 3;
+            }
+
+            await using var scope = services.CreateAsyncScope();
+            var authService = scope.ServiceProvider.GetRequiredService<INodeAuthService>();
+            var result = await authService.SetupAsync(command.Email, command.Password, CancellationToken.None).ConfigureAwait(false);
+            if (result.AlreadyInitialized)
+            {
+                await standardOutput.WriteLineAsync("XE_SETUP=already-configured").ConfigureAwait(false);
+                return 0;
+            }
+
+            if (!result.Succeeded)
+            {
+                foreach (var error in result.Errors)
+                {
+                    await standardError.WriteLineAsync(error).ConfigureAwait(false);
+                }
+
+                return 5;
+            }
+
+            await standardOutput.WriteLineAsync("XE_SETUP=created").ConfigureAwait(false);
+            await standardOutput.WriteLineAsync($"XE_ADMIN_EMAIL={command.Email}").ConfigureAwait(false);
+            return 0;
+        }
+
+        private static async Task<int> McpKeyCommandAsync(IServiceProvider services,
+            McpServerApiKeyScope scope,
+            TextWriter standardOutput,
+            TextWriter standardError)
+        {
+            ArgumentNullException.ThrowIfNull(services);
+            ArgumentNullException.ThrowIfNull(standardOutput);
+            ArgumentNullException.ThrowIfNull(standardError);
+
+            await using var serviceScope = services.CreateAsyncScope();
+            var authService = serviceScope.ServiceProvider.GetRequiredService<INodeAuthService>();
+            var status = await authService.GetStatusAsync(new ClaimsPrincipal(), CancellationToken.None).ConfigureAwait(false);
+            if (status.SetupRequired)
+            {
+                await standardError.WriteLineAsync("An administrator account must be configured before an MCP key can be generated.")
+                             .ConfigureAwait(false);
+                return 5;
+            }
+
+            await standardError.WriteLineAsync("warning: this invalidates any previously configured MCP client's key.")
+                         .ConfigureAwait(false);
+            var apiKeyService = serviceScope.ServiceProvider.GetRequiredService<IMcpServerApiKeyService>();
+            var generated = await apiKeyService.GenerateAsync(scope, CancellationToken.None).ConfigureAwait(false);
+            await standardOutput.WriteLineAsync($"XE_MCP_KEY={generated.Key}").ConfigureAwait(false);
+            return 0;
+        }
+
+        private static async Task WriteHelpAsync(TextWriter standardOutput)
+        {
+            ArgumentNullException.ThrowIfNull(standardOutput);
+            await standardOutput.WriteLineAsync("XE Local AI Engine").ConfigureAwait(false);
+            await standardOutput.WriteLineAsync("Serve: --desktop | --mcp-only [--no-browser] [--port <1-65535>]").ConfigureAwait(false);
+            await standardOutput.WriteLineAsync("Commands: --setup [--admin-email <email>] [--admin-password <password> | --admin-password-stdin] | --mcp-key <delegate|agentic> | --status [--json] | --help")
+                                .ConfigureAwait(false);
+            await standardOutput.WriteLineAsync("Maintenance: --reset-admin-password <password> | --knowledge-downgrade-preflight | --knowledge-downgrade-export")
+                                .ConfigureAwait(false);
+            await standardOutput.WriteLineAsync("Credentials: scripts and installers must use XE_ADMIN_PASSWORD or --admin-password-stdin, never --admin-password on argv; argv exposes the password in process listings.")
+                                .ConfigureAwait(false);
+            await standardOutput.WriteLineAsync("Data: XE_DATA_DIR must be an absolute path; status inspection never creates it.").ConfigureAwait(false);
+            await standardOutput.WriteLineAsync("Exit codes: 0 success; 1 stopped/unexpected failure; 2 usage; 3 validation; 4 instance busy; 5 setup/command failure; 6 requested port unavailable.")
+                                .ConfigureAwait(false);
+        }
+
+        private static async Task<int> StatusCommandAsync(string[] args,
+            bool isManagedInstall,
+            TextWriter standardOutput,
+            TextWriter standardError,
+            Func<HttpClient>? httpClientFactory)
+        {
+            ArgumentNullException.ThrowIfNull(standardOutput);
+            ArgumentNullException.ThrowIfNull(standardError);
+            if (!DesktopBootstrap.TryResolveDataDirectoryPath(out var dataDirectory, out var dataDirectoryError))
+            {
+                await standardError.WriteLineAsync(dataDirectoryError).ConfigureAwait(false);
+                return await WriteStatusAsync(args,
+                    new EngineStatus(false, null, null, null, string.Empty, null, ResolveInstallKind(isManagedInstall)),
+                    standardOutput).ConfigureAwait(false);
+            }
+
+            var evidence = DesktopPortStore.ReadReadyEvidence(dataDirectory);
+            if (evidence.State == ReadyEvidenceState.Invalid)
+            {
+                await standardError.WriteLineAsync("The readiness file is invalid or unreadable.").ConfigureAwait(false);
+            }
+
+            var ready = evidence.Info;
+            var running = ready is not null && IsProcessRunning(ready.Pid);
+            bool? setupRequired = null;
+
+            if (running && ready is not null)
+            {
+                try
+                {
+                    using var injectedClient = httpClientFactory?.Invoke();
+                    using var fallbackClient = injectedClient is null ? new HttpClient() : null;
+                    var client = injectedClient ?? fallbackClient!;
+                    client.Timeout = TimeSpan.FromSeconds(2);
+                    using var readyResponse = await client.GetAsync(new Uri(new Uri(ready.Url), "/health/ready")).ConfigureAwait(false);
+                    running = readyResponse.IsSuccessStatusCode;
+                    if (running)
+                    {
+                        using var authResponse = await client.GetAsync(new Uri(new Uri(ready.Url), "/api/local/v1/auth/status")).ConfigureAwait(false);
+                        if (!authResponse.IsSuccessStatusCode)
+                        {
+                            running = false;
+                        }
+                        else
+                        {
+                            var authStatus = await authResponse.Content.ReadFromJsonAsync<NodeAuthStatusResponse>().ConfigureAwait(false);
+                            if (authStatus is null)
+                            {
+                                running = false;
+                            }
+                            else
+                            {
+                                setupRequired = authStatus.SetupRequired;
+                            }
+                        }
+                    }
+                }
+                catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or JsonException)
+                {
+                    running = false;
+                }
+            }
+
+            var status = new EngineStatus(running,
+                ready?.Version,
+                ready?.Url,
+                ready?.McpUrl,
+                dataDirectory,
+                running ? setupRequired : null,
+                ResolveInstallKind(isManagedInstall));
+
+            return await WriteStatusAsync(args, status, standardOutput).ConfigureAwait(false);
+        }
+
+        private static string ResolveInstallKind(bool isManagedInstall) => isManagedInstall ? "velopack-managed" : "unmanaged";
+
+        private static async Task<int> WriteStatusAsync(string[] args, EngineStatus status, TextWriter standardOutput)
+        {
+            if (DesktopLaunch.HasJsonFlag(args))
+            {
+                await standardOutput.WriteLineAsync(JsonSerializer.Serialize(status, JsonSerializerOptions.Web)).ConfigureAwait(false);
+            }
+            else
+            {
+                await standardOutput.WriteLineAsync($"RUNNING={(status.Running ? "true" : "false")}").ConfigureAwait(false);
+                await standardOutput.WriteLineAsync($"VERSION={status.Version ?? string.Empty}").ConfigureAwait(false);
+                await standardOutput.WriteLineAsync($"URL={status.Url ?? string.Empty}").ConfigureAwait(false);
+                await standardOutput.WriteLineAsync($"MCP_URL={status.McpUrl ?? string.Empty}").ConfigureAwait(false);
+                await standardOutput.WriteLineAsync($"DATA_DIR={status.DataDir}").ConfigureAwait(false);
+                var setupRequiredValue = string.Empty;
+                if (status.SetupRequired is { } required)
+                {
+                    setupRequiredValue = required ? "true" : "false";
+                }
+
+                await standardOutput.WriteLineAsync($"SETUP_REQUIRED={setupRequiredValue}").ConfigureAwait(false);
+                await standardOutput.WriteLineAsync($"INSTALL_KIND={status.InstallKind}").ConfigureAwait(false);
+            }
+
+            return status.Running ? 0 : 1;
+        }
+
+        private static bool IsProcessRunning(int pid)
+        {
+            try
+            {
+                using var process = Process.GetProcessById(pid);
+                return !process.HasExited;
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+
+        private sealed record EngineStatus(bool Running,
+            string? Version,
+            string? Url,
+            string? McpUrl,
+            string DataDir,
+            bool? SetupRequired,
+            string InstallKind);
+
+        private enum OneShotCommandStage
+        {
+            Preparation,
+            Status,
+            HostInitialization,
+            Migrations,
+            Handler
+        }
+
+        private sealed class OneShotCommandContext
+        {
+            internal OneShotCommandStage Stage { get; private set; } = OneShotCommandStage.Preparation;
+
+            internal string StageOutput => Stage switch
+            {
+                OneShotCommandStage.Preparation => "preparation",
+                OneShotCommandStage.Status => "status",
+                OneShotCommandStage.HostInitialization => "host-initialization",
+                OneShotCommandStage.Migrations => "migrations",
+                OneShotCommandStage.Handler => "handler",
+                _ => "unknown"
+            };
+
+            internal void SetStage(OneShotCommandStage stage) => Stage = stage;
         }
 
         private static async Task<int> RunKnowledgeDowngradeCommandAsync(IServiceProvider services, KnowledgeDowngradeCommand command)
@@ -705,7 +1103,7 @@ namespace XE_Local_AI_Engine.Client
             }
         }
 
-        private static void ActivateDesktopLifecycle(WebApplication app)
+        private static void ActivateDesktopLifecycle(WebApplication app, LaunchMode launchMode, bool noBrowserRequested)
         {
             ArgumentNullException.ThrowIfNull(app);
 
@@ -721,7 +1119,12 @@ namespace XE_Local_AI_Engine.Client
             // console-ctrl delegate held inside it) and is disposed when the host stops. CA2000 can't see the deferred disposal
             // through the lifetime registration, so it is suppressed with that justification.
 #pragma warning disable CA2000 // Disposal is deferred to and owned by ApplicationStopped below.
-            var desktopLifecycle = new DesktopLifecycle(lifetime, server, logger, desktopDataDirectory);
+            var desktopLifecycle = new DesktopLifecycle(lifetime,
+                server,
+                logger,
+                desktopDataDirectory,
+                suppressBrowser: DesktopLaunch.ShouldSuppressBrowser(launchMode, noBrowserRequested),
+                version: AddNodeMcpServerExtensions.ServerVersion);
 #pragma warning restore CA2000
             desktopLifecycle.Activate();
             lifetime.ApplicationStopped.Register(desktopLifecycle.Dispose);
@@ -796,6 +1199,14 @@ namespace XE_Local_AI_Engine.Client
         public IReadOnlyDictionary<string, string?>? Configuration { get; init; }
 
         public Action<WebApplicationBuilder>? ConfigureBuilder { get; init; }
+
+        public TextWriter? StandardOutput { get; init; }
+
+        public TextWriter? StandardError { get; init; }
+
+        public Action? BeforeOneShotCommand { get; init; }
+
+        public Func<HttpClient>? StatusHttpClientFactory { get; init; }
     }
 
     /// <summary>

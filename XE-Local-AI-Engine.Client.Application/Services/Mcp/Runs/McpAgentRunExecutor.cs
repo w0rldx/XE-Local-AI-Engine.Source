@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 
 /// <summary>
 ///     Seeds the root spawn budget missing from a detached worker before invoking the G001 execution boundary. The
@@ -37,12 +38,16 @@ internal sealed class McpAgentRunExecutor(
             {
                 AgentKey = agentDefinitionId.ToString("D"),
                 ModelOverrideId = run.ModelOverrideId,
-                Instructions = run.Instructions
+                Instructions = run.Instructions,
+                InboundContext = ToInboundContext(run),
+                ExecutionRequestId = run.RequestId
             }
             : new McpExecutionBindingRequest
             {
                 ModelId = run.ModelId,
-                Instructions = run.Instructions
+                Instructions = run.Instructions,
+                InboundContext = ToInboundContext(run),
+                ExecutionRequestId = run.RequestId
             };
 
         using var root = SpawnContext.BeginRoot(_spawnOptions.MaxConcurrentSpawns, _spawnOptions.MaxCloudSpawns);
@@ -51,5 +56,20 @@ internal sealed class McpAgentRunExecutor(
             Convert.ToHexString(run.BindingFingerprint.Value.Span),
             cancellationToken,
             run.WorkspaceId).ConfigureAwait(false);
+    }
+
+    private static McpInboundExecutionContext ToInboundContext(McpAgentRunRecord run)
+    {
+        if (!run.IsAgenticAutoApprove)
+        {
+            return McpInboundExecutionContext.Delegate;
+        }
+
+        if (!McpInboundExecutionContext.IsBoundedPrefix(run.RequestingKeyPrefix))
+        {
+            throw new InvalidDataException("The durable MCP run contains inconsistent captured agentic authority.");
+        }
+
+        return new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, run.RequestingKeyPrefix);
     }
 }

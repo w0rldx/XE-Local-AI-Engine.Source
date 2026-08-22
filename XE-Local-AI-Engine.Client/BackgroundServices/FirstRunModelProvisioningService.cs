@@ -48,7 +48,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
     private readonly IGgufDownloadCoordinator _downloadCoordinator;
     private readonly IGgufModelStore _ggufModelStore;
     private readonly TimeSpan _gpuProbeCeiling;
-    private readonly bool _isDesktopMode;
+    private readonly bool _isLocalMode;
     private readonly ILogger<FirstRunModelProvisioningService> _logger;
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly TimeSpan _pollInterval;
@@ -70,7 +70,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             nodeSettingsStore,
             acquisitionStatus,
             logger,
-            DesktopLaunch.IsDesktopMode(Environment.GetCommandLineArgs(), VelopackInstall.IsManaged()),
+            DesktopLaunch.ResolveLaunchMode(Environment.GetCommandLineArgs(), VelopackInstall.IsManaged()).IsLocalMode(),
             TimeSpan.FromSeconds(2),
             DefaultGpuProbeCeiling)
     {
@@ -88,7 +88,7 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         INodeSettingsStore nodeSettingsStore,
         IRuntimeAcquisitionStatusRegistry acquisitionStatus,
         ILogger<FirstRunModelProvisioningService> logger,
-        bool isDesktopMode,
+        bool isLocalMode,
         TimeSpan pollInterval,
         TimeSpan gpuProbeCeiling)
     {
@@ -100,15 +100,15 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         _acquisitionStatus = acquisitionStatus ?? throw new ArgumentNullException(nameof(acquisitionStatus));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _isDesktopMode = isDesktopMode;
+        _isLocalMode = isLocalMode;
         _pollInterval = pollInterval;
         _gpuProbeCeiling = gpuProbeCeiling;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Desktop-only: headless / Aspire / CI must never auto-download a model (off-flag invariant).
-        if (!_isDesktopMode)
+        // Local-mode-only: headless / Aspire / CI must never auto-download a model (off-mode invariant).
+        if (!_isLocalMode)
         {
             return;
         }

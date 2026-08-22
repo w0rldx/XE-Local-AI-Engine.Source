@@ -4,19 +4,12 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 public sealed class SaveNodeSettingsEndpoint(
-    INodeSettingsStore nodeSettingsStore,
-    INodeRuntimeSettings nodeRuntimeSettings,
-    ICapabilityReporter capabilityReporter,
-    ILogger<SaveNodeSettingsEndpoint> logger) : Endpoint<SaveNodeSettingsRequest, NodeSettingsResponse>
+    INodeSettingsAdministrationService administrationService) : Endpoint<SaveNodeSettingsRequest, NodeSettingsResponse>
 {
-    private readonly ICapabilityReporter _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
-    private readonly ILogger<SaveNodeSettingsEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly INodeRuntimeSettings _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
-    private readonly INodeSettingsStore _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
+    private readonly INodeSettingsAdministrationService _administrationService = administrationService ?? throw new ArgumentNullException(nameof(administrationService));
 
     public override void Configure()
     {
@@ -26,17 +19,17 @@ public sealed class SaveNodeSettingsEndpoint(
 
     public override async Task HandleAsync(SaveNodeSettingsRequest req, CancellationToken ct)
     {
-        var currentSettings = await _nodeSettingsStore.LoadAsync(ct).ConfigureAwait(false) ?? new StoredNodeSettings();
+        var currentSettings = await _administrationService.GetTrustedSettingsAsync(ct).ConfigureAwait(false);
         var settings = req.ToStoredSettings(currentSettings);
 
         // Cross-field guards run on the MERGED result in NodeSettingsPolicy — the boundary validator only sees the
         // request, not the current stored state, and some rules need the EFFECTIVE runtime value (stored > appsettings
         // seed > default) for a knob the request omitted. The policy stops at the first violation, matching the
         // one-error-at-a-time response this endpoint has always sent.
-        var policyErrors = await NodeSettingsPolicy.ValidateMergedAsync(settings, _nodeRuntimeSettings, ct).ConfigureAwait(false);
-        if (policyErrors.Count > 0)
+        var result = await _administrationService.SaveTrustedMergedAsync(settings, ct).ConfigureAwait(false);
+        if (!result.Updated)
         {
-            foreach (var policyError in policyErrors)
+            foreach (var policyError in result.ValidationErrors)
             {
                 AddPolicyError(policyError);
             }
@@ -45,7 +38,7 @@ public sealed class SaveNodeSettingsEndpoint(
             return;
         }
 
-        await SaveAsync(settings, ct).ConfigureAwait(false);
+        await Send.OkAsync(result.Settings.ToResponse(), ct).ConfigureAwait(false);
     }
 
     // Maps a policy violation back onto the request property it belongs to, so the 400 body keeps naming the same
@@ -72,22 +65,4 @@ public sealed class SaveNodeSettingsEndpoint(
         }
     }
 
-    private async Task SaveAsync(StoredNodeSettings settings, CancellationToken ct)
-    {
-        await _nodeSettingsStore.SaveAsync(settings, ct).ConfigureAwait(false);
-        await TryReportCapabilitiesAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(settings.ToResponse(), ct).ConfigureAwait(false);
-    }
-
-    private async Task TryReportCapabilitiesAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await _capabilityReporter.ReportToApiAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(exception, "Failed to report capabilities after node settings were saved.");
-        }
-    }
 }

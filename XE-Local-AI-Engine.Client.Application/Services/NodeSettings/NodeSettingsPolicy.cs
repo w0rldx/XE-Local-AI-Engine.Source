@@ -3,7 +3,15 @@ namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// <summary>The stored-settings field a <see cref="NodeSettingsValidationError" /> is attributed to.</summary>
 public enum NodeSettingsField
 {
+    DefaultModelName,
+    ToolCapableModels,
+    MaxMessageRequestTimeoutSeconds,
     SpeculativeDraftModelName,
+    SpeculativeMode,
+    SpeculativeDraftMaxTokens,
+    SpeculativeDraftGpuLayers,
+    ChatCacheReuse,
+    LlamaIdleTimeToLiveSeconds,
     KeepModelWarmModelName,
     LlamaMaxLoadedProcesses,
     KeepModelWarmIntervalSeconds

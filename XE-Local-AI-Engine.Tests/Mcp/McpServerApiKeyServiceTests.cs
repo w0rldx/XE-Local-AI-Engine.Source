@@ -40,6 +40,29 @@ public sealed class McpServerApiKeyServiceTests
     }
 
     [Test]
+    public async Task GenerateAsync_AgenticScopePersistsAndReturnsAgenticMetadata()
+    {
+        var service = CreateService(out var store);
+
+        var generated = await service.GenerateAsync(McpServerApiKeyScope.Agentic).ConfigureAwait(false);
+
+        AssertEx.Equal(McpServerApiKeyScope.Agentic, generated.View.Scope);
+        AssertEx.Equal(McpServerApiKeyScope.Agentic, AssertEx.NotNull(await service.ValidateAsync(generated.Key).ConfigureAwait(false)).Scope);
+        AssertEx.Equal((int)McpServerApiKeyScope.Agentic, AssertEx.NotNull(await store.GetAsync().ConfigureAwait(false)).Scope);
+    }
+
+    [Test]
+    public async Task GenerateAsync_WithUndefinedScope_IsRejectedBeforePersistence()
+    {
+        var service = CreateService(out var store);
+
+        _ = await AssertEx.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            service.GenerateAsync((McpServerApiKeyScope)42)).ConfigureAwait(false);
+
+        AssertEx.Null(await store.GetAsync().ConfigureAwait(false));
+    }
+
+    [Test]
     public async Task GenerateAsync_PersistsOnlyAOneWayDigest_SoAStoreReadYieldsNothingUsable()
     {
         // The core guarantee of hashed storage: everything the node retains is derivable FROM the key, and nothing
@@ -77,7 +100,7 @@ public sealed class McpServerApiKeyServiceTests
         var fetched = AssertEx.NotNull(await service.GetAsync().ConfigureAwait(false));
 
         AssertEx.Equal(generated.View.Prefix, fetched.Prefix);
-        AssertEx.False(await service.ValidateAsync(fetched.Prefix).ConfigureAwait(false),
+        AssertEx.Null(await service.ValidateAsync(fetched.Prefix).ConfigureAwait(false),
             "Everything still retrievable after generation must be useless as a credential.");
     }
 
@@ -86,7 +109,7 @@ public sealed class McpServerApiKeyServiceTests
     {
         var service = CreateService(out _);
 
-        AssertEx.False(await service.ValidateAsync("xemcp_anything").ConfigureAwait(false),
+        AssertEx.Null(await service.ValidateAsync("xemcp_anything").ConfigureAwait(false),
             "A node with no generated key must authenticate nobody — an absent credential is not an open door.");
     }
 
@@ -96,7 +119,9 @@ public sealed class McpServerApiKeyServiceTests
         var service = CreateService(out _);
         var generated = await service.GenerateAsync().ConfigureAwait(false);
 
-        AssertEx.True(await service.ValidateAsync(generated.Key).ConfigureAwait(false));
+        var validation = AssertEx.NotNull(await service.ValidateAsync(generated.Key).ConfigureAwait(false));
+        AssertEx.Equal(McpServerApiKeyScope.Delegate, validation.Scope);
+        AssertEx.Equal(generated.View.Prefix, validation.Prefix);
     }
 
     [Test]
@@ -105,7 +130,7 @@ public sealed class McpServerApiKeyServiceTests
         var service = CreateService(out _);
         _ = await service.GenerateAsync().ConfigureAwait(false);
 
-        AssertEx.False(await service.ValidateAsync("xemcp_not-the-right-key").ConfigureAwait(false));
+        AssertEx.Null(await service.ValidateAsync("xemcp_not-the-right-key").ConfigureAwait(false));
     }
 
     [Test]
@@ -114,8 +139,8 @@ public sealed class McpServerApiKeyServiceTests
         var service = CreateService(out _);
         _ = await service.GenerateAsync().ConfigureAwait(false);
 
-        AssertEx.False(await service.ValidateAsync(presented: null).ConfigureAwait(false));
-        AssertEx.False(await service.ValidateAsync(string.Empty).ConfigureAwait(false));
+        AssertEx.Null(await service.ValidateAsync(presented: null).ConfigureAwait(false));
+        AssertEx.Null(await service.ValidateAsync(string.Empty).ConfigureAwait(false));
     }
 
     [Test]
@@ -126,8 +151,8 @@ public sealed class McpServerApiKeyServiceTests
         var service = CreateService(out _);
         var generated = await service.GenerateAsync().ConfigureAwait(false);
 
-        AssertEx.False(await service.ValidateAsync(generated.Key[..^1]).ConfigureAwait(false));
-        AssertEx.False(await service.ValidateAsync(generated.View.Prefix).ConfigureAwait(false));
+        AssertEx.Null(await service.ValidateAsync(generated.Key[..^1]).ConfigureAwait(false));
+        AssertEx.Null(await service.ValidateAsync(generated.View.Prefix).ConfigureAwait(false));
     }
 
     [Test]
@@ -138,9 +163,23 @@ public sealed class McpServerApiKeyServiceTests
 
         var replacement = await service.GenerateAsync().ConfigureAwait(false);
 
-        AssertEx.True(await service.ValidateAsync(replacement.Key).ConfigureAwait(false), "The new key must authenticate.");
-        AssertEx.False(await service.ValidateAsync(original.Key).ConfigureAwait(false),
+        AssertEx.NotNull(await service.ValidateAsync(replacement.Key).ConfigureAwait(false));
+        AssertEx.Null(await service.ValidateAsync(original.Key).ConfigureAwait(false),
             "Regenerating must immediately invalidate the replaced key — there is no window in which both work.");
+    }
+
+    [Test]
+    public async Task GenerateAsync_RotatesSecretAndScopeAsOneSingletonReplacement()
+    {
+        var service = CreateService(out _);
+        var original = await service.GenerateAsync(McpServerApiKeyScope.Agentic).ConfigureAwait(false);
+
+        var replacement = await service.GenerateAsync(McpServerApiKeyScope.Delegate).ConfigureAwait(false);
+
+        AssertEx.Null(await service.ValidateAsync(original.Key).ConfigureAwait(false),
+            "Changing scope must invalidate the prior secret with no dual-valid window.");
+        AssertEx.Equal(McpServerApiKeyScope.Delegate,
+            AssertEx.NotNull(await service.ValidateAsync(replacement.Key).ConfigureAwait(false)).Scope);
     }
 
     [Test]
@@ -152,7 +191,7 @@ public sealed class McpServerApiKeyServiceTests
         AssertEx.True(await service.RevokeAsync().ConfigureAwait(false));
 
         AssertEx.Null(await service.GetAsync().ConfigureAwait(false));
-        AssertEx.False(await service.ValidateAsync(generated.Key).ConfigureAwait(false), "A revoked key must no longer authenticate.");
+        AssertEx.Null(await service.ValidateAsync(generated.Key).ConfigureAwait(false), "A revoked key must no longer authenticate.");
     }
 
     [Test]
@@ -188,6 +227,21 @@ public sealed class McpServerApiKeyServiceTests
             "A rejected credential must not stamp last-used.");
     }
 
+    [Test]
+    public async Task ValidateAsync_WhenRotationWinsBetweenReadAndTouch_RejectsOldKeyWithoutStampingReplacement()
+    {
+        var service = CreateService(out var store);
+        var original = await service.GenerateAsync(McpServerApiKeyScope.Agentic).ConfigureAwait(false);
+        store.RotateImmediatelyBeforeNextTouch();
+
+        var validation = await service.ValidateAsync(original.Key).ConfigureAwait(false);
+
+        AssertEx.Null(validation, "A key rotated after validation's read must not authenticate from its stale snapshot.");
+        var replacement = AssertEx.NotNull(await store.GetAsync().ConfigureAwait(false));
+        AssertEx.Equal((int)McpServerApiKeyScope.Delegate, replacement.Scope);
+        AssertEx.Null(replacement.LastUsedAtUtc, "The stale authentication attempt must not stamp the replacement key.");
+    }
+
     private static IMcpServerApiKeyService CreateService(out InMemoryMcpServerApiKeyStore store)
     {
         store = new InMemoryMcpServerApiKeyStore();
@@ -210,15 +264,24 @@ public sealed class McpServerApiKeyServiceTests
     private sealed class InMemoryMcpServerApiKeyStore : IMcpServerApiKeyStore
     {
         private McpServerApiKeyRecord? _record;
+        private bool _rotateBeforeTouch;
+
+        public void RotateImmediatelyBeforeNextTouch()
+        {
+            _rotateBeforeTouch = true;
+        }
 
         public Task<McpServerApiKeyRecord?> GetAsync(CancellationToken cancellationToken = default)
         {
             return Task.FromResult(_record);
         }
 
-        public Task<McpServerApiKeyRecord> SetAsync(string prefix, ReadOnlyMemory<byte> keyHash, CancellationToken cancellationToken = default)
+        public Task<McpServerApiKeyRecord> SetAsync(string prefix,
+            ReadOnlyMemory<byte> keyHash,
+            int scope,
+            CancellationToken cancellationToken = default)
         {
-            _record = new McpServerApiKeyRecord(prefix, keyHash, CreatedAtUtc: 1, LastUsedAtUtc: null);
+            _record = new McpServerApiKeyRecord(prefix, keyHash, scope, Guid.NewGuid(), CreatedAtUtc: 1, LastUsedAtUtc: null);
             return Task.FromResult(_record);
         }
 
@@ -229,17 +292,29 @@ public sealed class McpServerApiKeyServiceTests
             return Task.FromResult(existed);
         }
 
-        public Task TouchLastUsedAsync(long timestampUtc, CancellationToken cancellationToken = default)
+        public Task<bool> TouchLastUsedAsync(Guid generationId, long timestampUtc, CancellationToken cancellationToken = default)
         {
-            if (_record is not null)
+            if (_rotateBeforeTouch)
             {
-                _record = _record with
-                {
-                    LastUsedAtUtc = timestampUtc
-                };
+                _rotateBeforeTouch = false;
+                _record = new McpServerApiKeyRecord("xemcp_replacement",
+                    SHA256.HashData(Encoding.UTF8.GetBytes("xemcp_replacement-key")),
+                    (int)McpServerApiKeyScope.Delegate,
+                    Guid.NewGuid(),
+                    CreatedAtUtc: 2,
+                    LastUsedAtUtc: null);
             }
 
-            return Task.CompletedTask;
+            if (_record is null || _record.GenerationId != generationId)
+            {
+                return Task.FromResult(false);
+            }
+
+            _record = _record with
+            {
+                LastUsedAtUtc = timestampUtc
+            };
+            return Task.FromResult(true);
         }
     }
 }

@@ -22,9 +22,10 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 ///         tighten-only approval policy composes on top of the structural flag above and can never unwrap it.
 ///     </para>
 ///     <para>
-///         The three unattended paths (sub-agent spawn, the scheduler's saved-agent runs, and the inbound MCP server)
-///         already strip every approval-required tool, so <c>ask_user</c> is absent wherever there is no human to
-///         answer — for free, and for exactly the right reason.
+///         Sub-agent spawn, the scheduler's saved-agent runs, and delegate-scope inbound MCP already strip every
+///         approval-required tool. Agentic-scope inbound MCP is the deliberate audited auto-approval exception; if it
+///         reaches <c>ask_user</c>, this handler's explicit no-answer fail-safe returns immediately because no human can
+///         answer an unattended run.
 ///     </para>
 /// </summary>
 internal sealed class AskUserToolHandler : IClientLocalToolHandler

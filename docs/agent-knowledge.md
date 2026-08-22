@@ -998,7 +998,7 @@ The approval **audit** row (`AgentExecutionLogRecordKind.ApprovalDecision=2`) re
 
 ### A tool handler can NEVER block waiting for a human
 
-`StreamIdleWatchdog.WithIdleTimeout` (`Services/Invocation/Resilience/StreamIdleWatchdog.cs`) wraps the whole `RunStreamingAsync` call **including the gaps where `FunctionInvokingChatClient` executes tools**, and `StreamIdleTimeoutSeconds` is **60** (`Models/TimeoutSettings.cs`). A tool that parks inside its handler waiting for an operator answer trips the idle watchdog and the turn fails. That is why `ask_user` ships **`RequiresApproval = true`** — structural, not a risk verdict: the flag makes the framework END the streamed segment and surface a `ToolApprovalRequestContent`, so the human wait happens in the runner's out-of-stream approval round-trip, not inside the stream. Flipping it to `false` does not merely skip a prompt, it breaks the feature. Free correctness side effect: the sub-agent, scheduler, and inbound-MCP paths already strip approval-required tools (see §4), so unattended callers never receive `ask_user`.
+`StreamIdleWatchdog.WithIdleTimeout` (`Services/Invocation/Resilience/StreamIdleWatchdog.cs`) wraps the whole `RunStreamingAsync` call **including the gaps where `FunctionInvokingChatClient` executes tools**, and `StreamIdleTimeoutSeconds` is **60** (`Models/TimeoutSettings.cs`). A tool that parks inside its handler waiting for an operator answer trips the idle watchdog and the turn fails. That is why `ask_user` ships **`RequiresApproval = true`** — structural, not a risk verdict: the flag makes the framework END the streamed segment and surface a `ToolApprovalRequestContent`, so the human wait happens in the runner's out-of-stream approval round-trip, not inside the stream. Flipping it to `false` does not merely skip a prompt, it breaks the feature. Sub-agents, schedulers, and **delegate-scope** inbound MCP still strip approval-required tools. An **agentic-scope root** inbound run is the deliberate exception: it may receive the prompt and answer it through ADR 0006's strict audit-before-auto-approval responder. Spawned children do not inherit that exception.
 
 ### MAF traps
 
@@ -1132,6 +1132,33 @@ Don't assume these exist; don't "restore" them.
 - **No RAG over chat attachments** — v1 is file-tools-only (agent mode) or inline-text injection with a char cap (plain chat). No image/OCR ingestion.
 - **No STT** — voice work is output-only (TTS). English and non-English playback use the browser's Web Speech API and the voices exposed by the browser/OS; Kokoro is no longer shipped.
 - Desktop-only settings (ThemeConfigurator, Open Canvas editor) are deliberately not part of the mobile-responsive sweep.
+
+---
+
+## 7. Agentic support / MCP-only mode
+
+- **`--mcp-only` is a local mode, not a second host.** Treat `LaunchMode.McpOnly` like desktop for
+  `IDesktopOnlyEndpoint`, local data, provisioning, lease, loopback middleware, and shutdown. A new
+  endpoint checking only Desktop silently disappears for the primary external-agent launch.
+- **The ready line is a stable raw stdout contract.** `DesktopLifecycle` emits one line beginning
+  `XE_READY=1` in exact key order and writes canonical `ready.json`. Adding Serilog formatting,
+  wrapping it, or changing key order breaks installers that parse it by prefix/exact fields.
+- **`delegate` and `agentic` share one key row but are different authority.** A mint replaces scope
+  and key atomically; there is no dual-valid window and scope is not negotiable per call. Durable
+  runs persist captured agentic authority and intentionally retain it across restart and key rotation.
+- **Agentic authority is explicit and bounded.** It travels through `McpInboundExecutionContext`,
+  request/binding fingerprints, admission, and durable execution — never `AsyncLocal`. It is
+  operator-equivalent only for the enumerated inbound MCP surface, not an Operator role/JWT or REST
+  access. Root approval-required calls require a strict metadata-only audit write before invocation;
+  audit failure blocks the call and child curation remains unchanged. See ADR 0006.
+- **The external-agent skill has one repository source:** `skills/xe-local-ai-engine/`. Never add a
+  symlink or duplicate under `.claude/` or `.agents/`; Windows/release archives break symlinks and
+  duplicates drift. The installer may copy the version-pinned tree into user-level client roots.
+- **The MCP tool reference is executable documentation.**
+  `McpToolsReferenceDriftTests` reflects `NodeAgentMcpTools` and `NodeAdminMcpTools`, asserts exact
+  8/15 counts and scope cells, and compares them with the first two columns of
+  `skills/xe-local-ai-engine/references/mcp-tools.md`. Renaming or moving a tool between scopes
+  requires updating the table in the same change.
 
 ---
 

@@ -7137,6 +7137,21 @@
           "Mcp"
         ],
         "operationId": "generateMcpServerApiKey",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scope": {
+                    "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesMcpMcpServerApiKeyScope"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Success",
@@ -23295,11 +23310,15 @@
         "additionalProperties": false,
         "required": [
           "prefix",
+          "scope",
           "createdAt"
         ],
         "properties": {
           "prefix": {
             "type": "string"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesMcpMcpServerApiKeyScope"
           },
           "createdAt": {
             "type": "string",
@@ -23309,6 +23328,27 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientServicesMcpMcpServerApiKeyScope": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Delegate",
+          "Agentic"
+        ],
+        "enum": [
+          "delegate",
+          "agentic"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsMcpV1GenerateMcpServerApiKeyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "scope": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientServicesMcpMcpServerApiKeyScope"
           }
         }
       },

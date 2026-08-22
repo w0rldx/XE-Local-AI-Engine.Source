@@ -17,20 +17,52 @@ using XE_Local_AI_Engine.Tests.Testing;
 // suites (the CUDA env-scrub test, the ranker-registration build) set/read it. The shared NotInParallel key serializes
 // this class against them, and the constructor/Dispose save-then-clear-then-restore the var so a serialized-but-leaky
 // sibling can never poison the next test's "neither set" premise.
-[NotInParallel("XE_NODE_SQLITE_KEY")]
+[NotInParallel]
 public sealed class DesktopBootstrapTests : IDisposable
 {
     private readonly string? _originalOperatorSecretEnv = Environment.GetEnvironmentVariable(NodeOperatorSecretProvider.EnvVarName);
+    private readonly string? _originalDataDirectoryEnv = Environment.GetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable);
 
     public DesktopBootstrapTests()
     {
         // Force the "neither env set" precondition regardless of ambient/leaked state; restored in Dispose.
         Environment.SetEnvironmentVariable(NodeOperatorSecretProvider.EnvVarName, null);
+        Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, null);
     }
 
     public void Dispose()
     {
         Environment.SetEnvironmentVariable(NodeOperatorSecretProvider.EnvVarName, _originalOperatorSecretEnv);
+        Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, _originalDataDirectoryEnv);
+    }
+
+    [Test]
+    public void DataDirectoryOverride_IsNormalizedAndUsedByBootstrap()
+    {
+        using var temp = new TempDirectory();
+        var expected = Path.Combine(temp.DataDirectory, "override");
+        var overridden = Path.Combine(expected, "child", "..");
+        Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, overridden);
+        using var configuration = new ConfigurationManager();
+
+        AssertEx.Equal(expected, DesktopBootstrap.ResolveDataDirectoryPath());
+        DesktopBootstrap.EnsureLocalDataConfiguration(configuration, static _ => throw new InvalidOperationException("override must win"));
+
+        AssertEx.Equal(expected, configuration[DesktopBootstrap.NodeDataDirectoryKey]);
+        AssertEx.True(Directory.Exists(expected));
+    }
+
+    [Test]
+    public void DataDirectoryOverride_RejectsRelativeAndControlCharacterPathsBeforeFilesystemUse()
+    {
+        foreach (var invalid in new[] { "relative/path", "/tmp/xe-data\nforged" })
+        {
+            Environment.SetEnvironmentVariable(DesktopBootstrap.DataDirectoryEnvironmentVariable, invalid);
+
+            AssertEx.False(DesktopBootstrap.TryResolveDataDirectoryPath(out var resolved, out var error));
+            AssertEx.Equal(string.Empty, resolved);
+            AssertEx.Contains(AssertEx.NotNull(error), "valid absolute path");
+        }
     }
 
     [Test]

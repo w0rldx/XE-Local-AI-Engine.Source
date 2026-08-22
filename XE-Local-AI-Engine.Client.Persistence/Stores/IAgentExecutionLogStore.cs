@@ -18,6 +18,7 @@ public interface IAgentExecutionLogStore
     ///     assigning <c>Id</c> and <c>CreatedAtUtc</c>. Metadata only — no message content, never encrypted: the
     ///     tool name, the resolved decision (approve / deny / timeout), the decision source (local / hub), and the tool's
     ///     risk category are all non-sensitive category labels, reused across existing columns without a schema change.
+    ///     Agentic MCP decisions use the bounded <c>mcp-agentic:&lt;key-prefix&gt;</c> source convention.
     /// </summary>
     Task AddApprovalDecisionAsync(ApprovalDecisionAuditInput input, CancellationToken cancellationToken = default);
 
@@ -108,7 +109,9 @@ public static class ApprovalDecisions
 
 /// <summary>
 ///     Canonical, lowercase values of the tool-approval SOURCE dimension carried on approval-decision audit rows:
-///     where the decision was resolved. Non-sensitive category labels (stored plaintext) — never message content.
+///     where the decision was resolved. Agentic MCP auto-approval uses the dynamic
+///     <c>mcp-agentic:&lt;prefix&gt;</c> convention, where the bounded prefix contains only ASCII letters, digits,
+///     underscore, or hyphen. Non-sensitive category labels (stored plaintext) — never message content.
 /// </summary>
 public static class ApprovalDecisionSources
 {

@@ -92,6 +92,20 @@ One row per nested class in `LocalApiRoutes.cs`, in file order. The "Owner page"
 
 > **Endpoints are orchestration-only.** They validate input, call a service in `XE-Local-AI-Engine.Client.Application/Services/*`, and map to a DTO. Business logic does not live in the endpoint. When tracing a route, jump straight to the matching service area.
 
+### Inbound MCP scopes and registered tools
+
+`POST mcp/server-key` accepts an optional JSON body whose `scope` is `delegate` or `agentic`; the
+historical body-less form remains `delegate`. One singleton row is replaced atomically, so rotation
+has no dual-valid window. Authentication emits the bounded `xe:mcp_scope` and
+`xe:mcp_key_prefix` claims. SDK authorization filters apply `McpServer` to the eight shared
+`NodeAgentMcpTools` and `McpAgentic` to the 15 `NodeAdminMcpTools`, so `tools/list` returns exactly 8
+tools for delegate and all 23 for agentic. Direct calls to unauthorized admin tools are rejected too.
+
+The admin class calls application services directly — no internal HTTP hop — for node/runtime
+status, runtime acquisition, GGUF pull lifecycle, model delete/default selection, the exact 16-field
+node-settings whitelist, and saved-agent CRUD. The canonical names and inputs are drift-tested
+against [`references/mcp-tools.md`](../../skills/xe-local-ai-engine/references/mcp-tools.md).
+
 ### Design notes on the newer endpoint families
 
 - **Inference optimizer profiles (`model-fit/profiles*`).** The collection `GET model-fit/profiles` lists every persisted node-local profile (machine key omitted). The four actions — `explore`, `benchmark`, `freeze`, `invalidate` — are all **POST with the target carried in the body**, never a route param, so the POST always has a body. The literal action segments follow `profiles`, so none can be parsed as a profile id. `benchmark` is the gate for `freeze` (a profile can only be frozen after a successful benchmark). See `Endpoints/ModelFit/V1/{Explore,Benchmark,Freeze,Invalidate}InferenceProfileEndpoint.cs` + `ListInferenceProfilesEndpoint.cs`; runtime side in [Local Runtime & Providers](03-local-runtime-and-providers.md).

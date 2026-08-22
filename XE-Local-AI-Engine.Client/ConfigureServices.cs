@@ -31,6 +31,7 @@ using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Hubs;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Security.DataProtection;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -39,6 +40,7 @@ using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.Proxy;
@@ -266,6 +268,7 @@ public static class ConfigureServices
                 // serialize "running"/"managed", not "Running"/"Managed"). Without this, generated client
                 // validators reject valid responses.
                 settings.SchemaSettings.SchemaProcessors.Add(new JsonStringEnumMemberNameSchemaProcessor());
+                settings.OperationProcessors.Add(new McpServerApiKeyOpenApiOperationProcessor());
             };
 
             options.ExcludeNonFastEndpoints = true;
@@ -379,6 +382,11 @@ public static class ConfigureServices
             options.AddPolicy(NodeAuthorizationPolicies.McpServer,
                 policy => policy.AddAuthenticationSchemes(McpApiKeyAuthenticationHandler.SchemeName)
                                 .RequireAuthenticatedUser());
+
+            options.AddPolicy(NodeAuthorizationPolicies.McpAgentic,
+                policy => policy.AddAuthenticationSchemes(McpApiKeyAuthenticationHandler.SchemeName)
+                                .RequireAuthenticatedUser()
+                                .RequireClaim(NodeAuthorizationPolicies.McpScopeClaimType, NodeAuthorizationPolicies.McpAgenticScope));
 
             // The inbound model proxy accepts ONLY the model-proxy API key scheme — never the operator's JWT and never
             // the MCP key. One scheme, no role: the key IS the authorization, and a browser session, a stolen operator
@@ -549,6 +557,12 @@ public static class ConfigureServices
         if (!options.Converters.OfType<LocalModelOriginJsonConverter>().Any())
         {
             options.Converters.Insert(index: 0, new LocalModelOriginJsonConverter());
+        }
+
+        if (!options.Converters.Any(static converter => converter is JsonStringEnumConverter<McpServerApiKeyScope>))
+        {
+            options.Converters.Insert(index: 0,
+                new JsonStringEnumConverter<McpServerApiKeyScope>(JsonNamingPolicy.CamelCase, allowIntegerValues: false));
         }
 
         if (!options.Converters.OfType<JsonStringEnumConverter>().Any())

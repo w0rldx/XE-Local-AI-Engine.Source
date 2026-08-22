@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 
 /// <summary>Stable failure codes returned by the inbound MCP execution boundary.</summary>
 public static class McpExecutionFailureCodes
@@ -37,6 +38,10 @@ public sealed record McpExecutionBindingRequest
     public string? ModelOverrideId { get; init; }
 
     public string? Instructions { get; init; }
+
+    public McpInboundExecutionContext InboundContext { get; init; } = McpInboundExecutionContext.Delegate;
+
+    public Guid ExecutionRequestId { get; init; }
 }
 
 /// <summary>

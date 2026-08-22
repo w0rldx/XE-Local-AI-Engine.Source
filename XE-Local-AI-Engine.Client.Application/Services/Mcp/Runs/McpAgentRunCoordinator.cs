@@ -109,7 +109,9 @@ internal sealed class McpAgentRunCoordinator : IMcpAgentRunCoordinator
                     NullIfWhiteSpace(request.Binding.ModelOverrideId),
                     request.WorkspaceId,
                     Convert.FromHexString(binding.BindingFingerprint),
-                    now.ToUnixTimeMilliseconds()),
+                    now.ToUnixTimeMilliseconds(),
+                    request.Binding.InboundContext.IsAgentic,
+                    request.Binding.InboundContext.KeyPrefix),
                 cancellationToken).ConfigureAwait(false);
 
             await _metrics.RefreshAsync(_store, CancellationToken.None).ConfigureAwait(false);

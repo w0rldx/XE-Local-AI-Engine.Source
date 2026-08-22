@@ -39,6 +39,9 @@ internal sealed class DesktopLifecycle : IDisposable
     private static readonly TimeSpan ConsoleCloseDrainBudget = TimeSpan.FromMilliseconds(4000);
 
     private readonly Func<string?> _browserOpener;
+    private readonly bool _suppressBrowser;
+    private readonly TextWriter _standardOutput;
+    private readonly string _version;
 
     /// <summary>
     ///     The per-user data directory the bound loopback port is persisted to (so the next launch can re-bind it for a
@@ -62,12 +65,18 @@ internal sealed class DesktopLifecycle : IDisposable
         IServer server,
         ILogger<DesktopLifecycle> logger,
         string? dataDirectory = null,
-        Func<string?>? browserOpener = null)
+        Func<string?>? browserOpener = null,
+        bool suppressBrowser = false,
+        string? version = null,
+        TextWriter? standardOutput = null)
     {
         _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
         _server = server ?? throw new ArgumentNullException(nameof(server));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _dataDirectory = dataDirectory;
+        _suppressBrowser = suppressBrowser;
+        _version = version ?? "0.0.0";
+        _standardOutput = standardOutput ?? Console.Out;
 
         // Returns the resolved URL it attempted to open, or null when no usable address was found. Overridable for tests.
         _browserOpener = browserOpener ?? OpenDefaultBrowser;
@@ -83,6 +92,11 @@ internal sealed class DesktopLifecycle : IDisposable
         _disposed = true;
         _sigHupRegistration?.Dispose();
         _startedRegistration.Dispose();
+
+        if (_dataDirectory is not null)
+        {
+            DesktopPortStore.DeleteReady(_dataDirectory, _logger);
+        }
 
         if (OperatingSystem.IsWindows() && _consoleCtrlHandlerDelegate is not null)
         {
@@ -198,6 +212,13 @@ internal sealed class DesktopLifecycle : IDisposable
             if (_dataDirectory is not null && Uri.TryCreate(url, UriKind.Absolute, out var boundUri))
             {
                 DesktopPortStore.Persist(_dataDirectory, boundUri.Port, _logger);
+                var canonicalUrl = url.TrimEnd('/');
+                var mcpUrl = $"{canonicalUrl}/api/local/v1/mcp/server";
+                DesktopPortStore.PersistReady(_dataDirectory,
+                    new ReadyInfo(_version, canonicalUrl, mcpUrl, _dataDirectory, Environment.ProcessId, DateTimeOffset.UtcNow),
+                    _logger);
+                _standardOutput.WriteLine(
+                    $"XE_READY=1 XE_VERSION={_version} XE_URL={canonicalUrl} XE_MCP_URL={mcpUrl} XE_DATA_DIR={_dataDirectory}");
             }
         }
         catch (Exception exception)
@@ -221,7 +242,11 @@ internal sealed class DesktopLifecycle : IDisposable
             return null;
         }
 
-        BrowserLauncher.OpenBrowser(url, OperatingSystem.IsWindows(), _logger, BrowserLauncher.StartProcess);
+        if (!_suppressBrowser)
+        {
+            BrowserLauncher.OpenBrowser(url, OperatingSystem.IsWindows(), _logger, BrowserLauncher.StartProcess);
+        }
+
         return url;
     }
 

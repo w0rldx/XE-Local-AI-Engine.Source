@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Common;
 
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Services.Drafting;
 
 /// <summary>
@@ -86,72 +84,13 @@ public sealed class GenerationMetadataResponse
 /// </summary>
 internal static class GenerationProvenance
 {
-    internal const int MaxAssumptionLength = 300;
-    internal const int MaxAssumptions = 10;
-    internal const int MaxDraftContentHashLength = 64;
-    internal const int MaxModelLength = 200;
-    internal const int MaxRationaleLength = 2000;
-    internal const int MaxUserBriefLength = 4000;
-
-    // Mirrors the persisted shape of plan §5.1 exactly: camelCase keys and a lowercase "create"/"improve" mode.
-    private static readonly JsonSerializerOptions PersistedOptions = new(JsonSerializerDefaults.Web)
-    {
-        Converters =
-        {
-            new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
-        }
-    };
-
     /// <summary>
     ///     Returns an operator-facing message when the echoed block breaches a cap, or <c>null</c> when it is absent or
     ///     within bounds.
     /// </summary>
     public static string? Validate(GenerationMetadata? metadata)
     {
-        if (metadata is null)
-        {
-            return null;
-        }
-
-        if (metadata.Model is { Length: > MaxModelLength })
-        {
-            return $"Generation metadata model must be at most {MaxModelLength} characters.";
-        }
-
-        if (metadata.UserBrief is { Length: > MaxUserBriefLength })
-        {
-            return $"Generation metadata brief must be at most {MaxUserBriefLength} characters.";
-        }
-
-        if (metadata.Rationale is { Length: > MaxRationaleLength })
-        {
-            return $"Generation metadata rationale must be at most {MaxRationaleLength} characters.";
-        }
-
-        if (metadata.DraftContentHash is { Length: > MaxDraftContentHashLength })
-        {
-            return $"Generation metadata draft content hash must be at most {MaxDraftContentHashLength} characters.";
-        }
-
-        if (metadata.Assumptions is { } assumptions)
-        {
-            if (assumptions.Count > MaxAssumptions)
-            {
-                return $"Generation metadata must carry at most {MaxAssumptions} assumptions.";
-            }
-
-            if (assumptions.Any(static assumption => assumption?.Length > MaxAssumptionLength))
-            {
-                return $"Each generation metadata assumption must be at most {MaxAssumptionLength} characters.";
-            }
-        }
-
-        if (!double.IsFinite(metadata.Confidence) || metadata.Confidence is < 0d or > 1d)
-        {
-            return "Generation metadata confidence must be a number between 0 and 1.";
-        }
-
-        return null;
+        return XE_Local_AI_Engine.Client.Services.Drafting.GenerationProvenance.Validate(metadata?.ToInput());
     }
 
     /// <summary>
@@ -165,27 +104,11 @@ internal static class GenerationProvenance
         string? savedContent,
         DateTimeOffset acceptedAt)
     {
-        if (metadata is null)
-        {
-            return null;
-        }
-
-        // DraftContentHash.Compute is the ONE canonical hash; recomputing it here over what the operator actually
-        // submitted is what makes wasEdited meaningful. Never reimplement the canonical form.
-        var savedHash = DraftContentHash.Compute(savedName, savedDescription, savedContent);
-        var wasEdited = !string.Equals(savedHash, metadata.DraftContentHash, StringComparison.OrdinalIgnoreCase);
-
-        return JsonSerializer.Serialize(new PersistedGenerationMetadata(metadata.Model,
-                metadata.Mode,
-                metadata.UserBrief,
-                metadata.Rationale,
-                metadata.Assumptions ?? [],
-                metadata.Confidence,
-                metadata.GeneratedAtUtc,
-                metadata.DraftContentHash,
-                acceptedAt.ToUnixTimeMilliseconds(),
-                wasEdited),
-            PersistedOptions);
+        return XE_Local_AI_Engine.Client.Services.Drafting.GenerationProvenance.ToPersistedJson(metadata?.ToInput(),
+            savedName,
+            savedDescription,
+            savedContent,
+            acceptedAt);
     }
 
     /// <summary>
@@ -195,21 +118,7 @@ internal static class GenerationProvenance
     /// </summary>
     public static GenerationMetadataResponse? FromPersistedJson(string? json)
     {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return null;
-        }
-
-        PersistedGenerationMetadata? persisted;
-        try
-        {
-            persisted = JsonSerializer.Deserialize<PersistedGenerationMetadata>(json, PersistedOptions);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-
+        var persisted = XE_Local_AI_Engine.Client.Services.Drafting.GenerationProvenance.FromPersistedJson(json);
         return persisted is null
             ? null
             : new GenerationMetadataResponse
@@ -227,16 +136,13 @@ internal static class GenerationProvenance
             };
     }
 
-    /// <summary>At-rest shape of the <c>generation_metadata_json</c> column (plan §5.1).</summary>
-    private sealed record PersistedGenerationMetadata(
-        string? Model,
-        DraftMode Mode,
-        string? UserBrief,
-        string? Rationale,
-        IReadOnlyList<string> Assumptions,
-        double Confidence,
-        long GeneratedAtUtc,
-        string? DraftContentHash,
-        long AcceptedAtUtc,
-        bool WasEdited);
+    private static GenerationMetadataInput ToInput(this GenerationMetadata metadata) =>
+        new(metadata.Model,
+            metadata.Mode,
+            metadata.UserBrief,
+            metadata.Rationale,
+            metadata.Assumptions,
+            metadata.Confidence,
+            metadata.GeneratedAtUtc,
+            metadata.DraftContentHash);
 }

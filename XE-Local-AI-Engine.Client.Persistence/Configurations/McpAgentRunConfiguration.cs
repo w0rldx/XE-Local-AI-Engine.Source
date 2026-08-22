@@ -13,6 +13,8 @@ internal sealed class McpAgentRunConfiguration : IEntityTypeConfiguration<McpAge
             table.HasCheckConstraint("CK_mcp_agent_runs_accounting_version", "accounting_version = 1");
             table.HasCheckConstraint("CK_mcp_agent_runs_nonnegative",
                 "version >= 0 AND reserved_active_payload_bytes >= 0 AND active_payload_bytes >= 0 AND tombstone_logical_bytes >= 0");
+            table.HasCheckConstraint("CK_mcp_agent_runs_agentic_authority",
+                "(is_agentic_auto_approve = 0 AND requesting_key_prefix IS NULL) OR (is_agentic_auto_approve = 1 AND requesting_key_prefix IS NOT NULL AND length(requesting_key_prefix) BETWEEN 1 AND 32 AND requesting_key_prefix NOT GLOB '*[^A-Za-z0-9_-]*')");
         });
         builder.HasKey(entity => entity.RequestId);
 
@@ -29,6 +31,8 @@ internal sealed class McpAgentRunConfiguration : IEntityTypeConfiguration<McpAge
         builder.Property(entity => entity.ModelId).HasColumnName("model_id").HasMaxLength(1024);
         builder.Property(entity => entity.ModelOverrideId).HasColumnName("model_override_id").HasMaxLength(1024);
         builder.Property(entity => entity.WorkspaceId).HasColumnName("workspace_id");
+        builder.Property(entity => entity.IsAgenticAutoApprove).HasColumnName("is_agentic_auto_approve").HasDefaultValue(false);
+        builder.Property(entity => entity.RequestingKeyPrefix).HasColumnName("requesting_key_prefix").HasMaxLength(32);
         builder.Property(entity => entity.BindingFingerprint).HasColumnName("binding_fingerprint").HasMaxLength(32);
         builder.Property(entity => entity.TaskPayload).HasColumnName("task_payload");
         builder.Property(entity => entity.InstructionsPayload).HasColumnName("instructions_payload");

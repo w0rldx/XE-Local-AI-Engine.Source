@@ -8,7 +8,8 @@ internal sealed class McpServerApiKeyConfiguration : IEntityTypeConfiguration<Mc
 {
     public void Configure(EntityTypeBuilder<McpServerApiKey> builder)
     {
-        builder.ToTable("mcp_server_api_keys");
+        builder.ToTable("mcp_server_api_keys",
+            table => table.HasCheckConstraint("CK_mcp_server_api_keys_scope", "scope IN (0, 1)"));
         builder.HasKey(entity => entity.Id);
 
         builder.Property(entity => entity.Id)
@@ -19,6 +20,13 @@ internal sealed class McpServerApiKeyConfiguration : IEntityTypeConfiguration<Mc
 
         builder.Property(entity => entity.KeyHash)
                .HasColumnName("key_hash");
+
+        builder.Property(entity => entity.Scope)
+               .HasColumnName("scope")
+               .HasDefaultValue(0);
+
+        builder.Property(entity => entity.GenerationId)
+               .HasColumnName("generation_id");
 
         builder.Property(entity => entity.CreatedAtUtc)
                .HasColumnName("created_at_utc");

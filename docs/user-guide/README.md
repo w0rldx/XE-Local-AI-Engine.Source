@@ -25,6 +25,7 @@ under Apache-2.0. This page is the user guide: how to download, install and use 
 | **Download the app (new to GitHub?)** | [Downloading from GitHub](docs/download-from-github.md) |
 | **Install it on Windows** | [Windows installation guide](docs/install-windows.md) |
 | **Install it on Linux** | [Linux installation guide](docs/install-linux.md) |
+| **Install and operate it with an external AI agent** | [Agentic Support guide](../agentic-support/agent-install.md) |
 | **Know what happens on first launch** | [First run](docs/first-run.md) |
 | **Fix a problem** | [FAQ & troubleshooting](docs/faq.md) |
 | **Understand a word I don't know** | [Glossary](docs/glossary.md) |
@@ -181,6 +182,10 @@ Everything below runs **on your own machine** unless you deliberately connect an
   Candidates go through a **best-effort scan for things that look like secrets** first — pattern-based,
   so treat it as a safety net rather than a guarantee
 - **MCP servers** — connect external tool servers to your agents
+- **Agentic Support** — let a trusted same-machine external agent install and operate the node over
+  its loopback-only inbound MCP server. The restricted `delegate` key exposes 8 shared tools; the
+  explicitly trusted `agentic` key exposes all 23 delegation and core administration tools. See the
+  [Agentic Support guide](../agentic-support/agent-install.md) before minting the higher-trust key
 - **Custom tools** — author an HTTP request or direct host-program launch for an agent. The node feature starts off and the built-in form initializes new tools as disabled. Every tool stays approval-wrapped: fixed tools may reuse an explicit session approval until edited, while parameterized tools ask on every call
 - **Skills** — a local library of capabilities agents can load on demand
 - **Benchmarks** — freeze one task of your own and run it against several models, with launch evidence,

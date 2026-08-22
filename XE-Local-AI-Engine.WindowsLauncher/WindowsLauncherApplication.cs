@@ -92,6 +92,7 @@ internal static class WindowsLauncherApplication
             process.StartInfo.ArgumentList.Add(argument);
         }
 
+        // Explicit --mcp-only/--desktop arguments are forwarded above and take precedence over this default.
         process.StartInfo.Environment["XE_LAUNCH_MODE"] = "desktop";
         process.StartInfo.Environment[LauncherProcessIdVariable] = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
         try

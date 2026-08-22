@@ -54,46 +54,10 @@ internal static class LlamaCppPrebuiltRuntimeMutationGuard
         return new RemovalOutcome(Removed: true, runningProcessCount, BuildActive: false);
     }
 
-    internal static async Task<LeaseAcquisition> TryAcquireAsync(IInstalledRuntimeStore installedRuntimeStore,
-        ILlamaCppSourceBuildActivity sourceBuildActivity,
-        ILlamaServerProcessSupervisor processSupervisor,
-        CancellationToken ct)
-    {
-        var lease = await processSupervisor.TryAcquireRuntimeMutationLeaseAsync(ct).ConfigureAwait(false);
-        if (lease is null)
-        {
-            return new LeaseAcquisition(Lease: null, processSupervisor.CountRunningProcesses(),
-                "The llama.cpp runtime is busy with another build or runtime change. Try again after it completes.");
-        }
-
-        var installed = await installedRuntimeStore.ReadAsync(ct).ConfigureAwait(false);
-        if (installed?.SourceBuildPath is { Length: > 0 })
-        {
-            return new LeaseAcquisition(lease, processSupervisor.CountRunningProcesses(),
-                "Remove the installed source-built llama.cpp runtime before installing a prebuilt runtime.");
-        }
-
-        if (IsSourceBuildActive(sourceBuildActivity))
-        {
-            return new LeaseAcquisition(lease, processSupervisor.CountRunningProcesses(),
-                "Wait for the active llama.cpp source build to finish or cancel it before installing a prebuilt runtime.");
-        }
-
-        var runningProcessCount = processSupervisor.CountRunningProcesses();
-        return runningProcessCount > 0
-            ? new LeaseAcquisition(lease, runningProcessCount, "Stop or eject all running llama.cpp models before updating the runtime.")
-            : new LeaseAcquisition(lease, runningProcessCount, BlockedMessage: null);
-    }
-
     /// <summary>
     ///     The result of the shared remove gate: whether the removal ran, how many llama-server processes were still
     ///     running when the gate was evaluated, and whether a source build blocked it.
     /// </summary>
     internal sealed record RemovalOutcome(bool Removed, int RunningProcessCount, bool BuildActive);
 
-    /// <summary>
-    ///     The result of the prebuilt-install gate: the mutation lease (already taken when non-null, so the caller owns
-    ///     disposing it even on a blocked result), the running-process count, and the refusal message when blocked.
-    /// </summary>
-    internal sealed record LeaseAcquisition(ILlamaServerRuntimeMutationLease? Lease, int RunningProcessCount, string? BlockedMessage);
 }

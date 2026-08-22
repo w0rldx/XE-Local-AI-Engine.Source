@@ -44,6 +44,7 @@ internal static class McpServerApiKeyMapper
         return new McpServerApiKeyResponse
         {
             Prefix = view.Prefix,
+            Scope = view.Scope,
             CreatedAt = view.CreatedAt,
             LastUsedAt = view.LastUsedAt
         };

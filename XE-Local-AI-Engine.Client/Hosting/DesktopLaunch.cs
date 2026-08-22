@@ -1,153 +1,248 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
-/// <summary>
-///     Resolves whether the process was started in "desktop" mode — a packaged, double-click launch that binds
-///     loopback HTTP, opens the default browser, and routes a closed console window into a graceful shutdown.
-///     Desktop mode is opt-in via env <c>XE_LAUNCH_MODE=desktop</c> or CLI <c>--desktop</c>, and is also implied by a
-///     Velopack-managed install (the caller passes <c>isManagedInstall</c>): the packaged installer/portable flavor IS
-///     the desktop app — its in-app updater is desktop-only — yet the Velopack stub launches the bare exe without the
-///     env/arg a manual launcher would set. Headless, Aspire, and CI runs are not Velopack installs and set none of
-///     these signals, so they stay byte-behavior-unchanged.
-/// </summary>
+using XE_Local_AI_Engine.Client.Services.Mcp;
+
+/// <summary>Resolves local launch modes and parses the small operator CLI surface.</summary>
 internal static class DesktopLaunch
 {
-    /// <summary>The environment variable a launcher sets to request desktop mode.</summary>
     internal const string LaunchModeEnvironmentVariable = "XE_LAUNCH_MODE";
-
-    /// <summary>The value of <see cref="LaunchModeEnvironmentVariable" /> that selects desktop mode (case-insensitive).</summary>
+    internal const string AdminEmailEnvironmentVariable = "XE_ADMIN_EMAIL";
+    internal const string AdminPasswordEnvironmentVariable = "XE_ADMIN_PASSWORD";
     internal const string DesktopModeValue = "desktop";
-
-    /// <summary>The CLI argument that selects desktop mode.</summary>
+    internal const string McpOnlyModeValue = "mcp-only";
     internal const string DesktopArgument = "--desktop";
-
-    /// <summary>
-    ///     The CLI argument that requests a local, operator-run reset of the administrator password without the current
-    ///     one (the "forgot password" recovery path). The new password follows either as the next token
-    ///     (<c>--reset-admin-password &lt;NEW&gt;</c>) or after an equals sign (<c>--reset-admin-password=&lt;NEW&gt;</c>).
-    /// </summary>
+    internal const string McpOnlyArgument = "--mcp-only";
+    internal const string NoBrowserArgument = "--no-browser";
+    internal const string PortArgument = "--port";
+    internal const string SetupArgument = "--setup";
+    internal const string AdminEmailArgument = "--admin-email";
+    internal const string AdminPasswordArgument = "--admin-password";
+    internal const string AdminPasswordStdinArgument = "--admin-password-stdin";
+    internal const string McpKeyArgument = "--mcp-key";
+    internal const string StatusArgument = "--status";
+    internal const string JsonArgument = "--json";
+    internal const string HelpArgument = "--help";
     internal const string ResetAdminPasswordArgument = "--reset-admin-password";
-
-    /// <summary>Runs the read-only knowledge downgrade compatibility report, then exits.</summary>
     internal const string KnowledgeDowngradePreflightArgument = "--knowledge-downgrade-preflight";
-
-    /// <summary>Runs the compatibility report, exports a database snapshot, then exits.</summary>
     internal const string KnowledgeDowngradeExportArgument = "--knowledge-downgrade-export";
-
-    /// <summary>
-    ///     The loopback URL desktop mode binds (port 0 lets the OS pick a free port). Composed from parts rather than a
-    ///     literal so it reads as a bind specification, not a fixed endpoint.
-    /// </summary>
     internal const string LoopbackBindUrl = "http://" + LoopbackHost + ":0";
-
-    /// <summary>The loopback host desktop mode binds exclusively (never a routable interface).</summary>
     internal const string LoopbackHost = "127.0.0.1";
 
-    /// <summary>
-    ///     Resolves desktop mode from the process arguments and an injected environment reader. The reader indirection
-    ///     keeps this pure and unit-testable without mutating real process environment state.
-    /// </summary>
-    /// <param name="args">The process command-line arguments.</param>
-    /// <param name="environmentReader">Resolves an environment variable by name; returns <c>null</c> when unset.</param>
-    internal static bool IsDesktopMode(string[] args, Func<string, string?> environmentReader)
-    {
-        return IsDesktopMode(args, environmentReader, isManagedInstall: false);
-    }
-
-    /// <summary>
-    ///     Resolves desktop mode from the process arguments, an injected environment reader, and whether the process is
-    ///     running from a Velopack-managed install. The install signal is computed by the caller (it depends on Velopack)
-    ///     and kept out of this type so the gate stays pure and unit-testable.
-    /// </summary>
-    /// <param name="args">The process command-line arguments.</param>
-    /// <param name="environmentReader">Resolves an environment variable by name; returns <c>null</c> when unset.</param>
-    /// <param name="isManagedInstall">
-    ///     <see langword="true" /> when the process is running from a Velopack-managed install (installer or portable),
-    ///     which is inherently the desktop flavor and therefore enters desktop mode without an explicit env/arg.
-    /// </param>
-    internal static bool IsDesktopMode(string[] args, Func<string, string?> environmentReader, bool isManagedInstall)
+    internal static LaunchMode ResolveLaunchMode(string[] args, Func<string, string?> environmentReader, bool isManagedInstall)
     {
         ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(environmentReader);
 
-        // A Velopack-managed install is always the desktop flavor; the stub launches the bare exe with no env/arg, so the
-        // install itself is the opt-in signal. Off this flag the env/arg checks below preserve the original behavior.
-        if (isManagedInstall)
+        if (HasArgument(args, McpOnlyArgument))
         {
-            return true;
+            return LaunchMode.McpOnly;
         }
 
-        var launchMode = environmentReader(LaunchModeEnvironmentVariable);
-        if (string.Equals(launchMode, DesktopModeValue, StringComparison.OrdinalIgnoreCase))
+        if (HasArgument(args, DesktopArgument))
         {
-            return true;
+            return LaunchMode.Desktop;
         }
 
-        return args.Any(static arg => string.Equals(arg, DesktopArgument, StringComparison.OrdinalIgnoreCase));
+        var configured = environmentReader(LaunchModeEnvironmentVariable);
+        if (string.Equals(configured, McpOnlyModeValue, StringComparison.OrdinalIgnoreCase))
+        {
+            return LaunchMode.McpOnly;
+        }
+
+        if (string.Equals(configured, DesktopModeValue, StringComparison.OrdinalIgnoreCase) || isManagedInstall)
+        {
+            return LaunchMode.Desktop;
+        }
+
+        return LaunchMode.Headless;
     }
 
-    /// <summary>
-    ///     Convenience overload that reads from the real process environment and takes the caller-computed Velopack
-    ///     install signal. Used by <c>Program.cs</c>; tests call the injectable overload above.
-    /// </summary>
-    internal static bool IsDesktopMode(string[] args, bool isManagedInstall)
-    {
-        return IsDesktopMode(args, Environment.GetEnvironmentVariable, isManagedInstall);
-    }
+    internal static LaunchMode ResolveLaunchMode(string[] args, bool isManagedInstall) =>
+        ResolveLaunchMode(args, Environment.GetEnvironmentVariable, isManagedInstall);
 
-    /// <summary>
-    ///     Detects the <see cref="ResetAdminPasswordArgument" /> flag and extracts the requested new password. Returns
-    ///     <see langword="true" /> when the flag is present (so the caller runs the reset-then-exit path rather than
-    ///     starting the web host), with <paramref name="newPassword" /> set to the supplied value or <see langword="null" />
-    ///     when the operator forgot to pass one (the caller then prints a usage error). Accepts both the space-separated
-    ///     and <c>=</c> forms so a <c>--reset-admin-password=secret</c> is never mistaken for a normal launch.
-    /// </summary>
-    /// <param name="args">The process command-line arguments.</param>
-    /// <param name="newPassword">The new password to set, or <see langword="null" /> when the flag carried no value.</param>
-    internal static bool TryGetResetAdminPassword(string[] args, out string? newPassword)
+    internal static bool HasExplicitLocalModeArgument(string[] args) =>
+        HasArgument(args, McpOnlyArgument) || HasArgument(args, DesktopArgument);
+
+    internal static bool HasNoBrowserFlag(string[] args) => HasArgument(args, NoBrowserArgument);
+    internal static bool ShouldSuppressBrowser(LaunchMode launchMode, bool noBrowserRequested) =>
+        launchMode == LaunchMode.McpOnly || noBrowserRequested;
+    internal static bool HasStatusFlag(string[] args) => HasArgument(args, StatusArgument);
+    internal static bool HasJsonFlag(string[] args) => HasArgument(args, JsonArgument);
+    internal static bool HasHelpFlag(string[] args) => HasArgument(args, HelpArgument);
+
+    internal static bool HasOneShotCommand(string[] args) =>
+        HasHelpFlag(args) || HasStatusFlag(args) || HasArgument(args, SetupArgument) || HasArgument(args, McpKeyArgument);
+
+    internal static IReadOnlyList<string> BuildRestartArguments(string[] args, LaunchMode launchMode, int? port)
     {
         ArgumentNullException.ThrowIfNull(args);
-
-        newPassword = null;
-        const string equalsPrefix = ResetAdminPasswordArgument + "=";
-
-        for (var index = 0; index < args.Length; index++)
+        var sanitized = new List<string>(capacity: 4)
         {
-            var argument = args[index];
-
-            if (argument.StartsWith(equalsPrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                var value = argument[equalsPrefix.Length..];
-                newPassword = value.Length == 0 ? null : value;
-                return true;
-            }
-
-            if (string.Equals(argument, ResetAdminPasswordArgument, StringComparison.OrdinalIgnoreCase))
-            {
-                newPassword = index + 1 < args.Length ? args[index + 1] : null;
-                return true;
-            }
+            launchMode == LaunchMode.McpOnly ? McpOnlyArgument : DesktopArgument
+        };
+        if (HasNoBrowserFlag(args))
+        {
+            sanitized.Add(NoBrowserArgument);
         }
 
-        return false;
+        if (port is { } validatedPort)
+        {
+            if (validatedPort is < 1 or > 65535)
+            {
+                throw new ArgumentOutOfRangeException(nameof(port), validatedPort, "The restart port must be from 1 through 65535.");
+            }
+
+            sanitized.Add(PortArgument);
+            sanitized.Add(validatedPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        return sanitized;
     }
 
-    /// <summary>
-    ///     Resolves the operator-only knowledge downgrade command. The export command includes the preflight, so passing
-    ///     both flags is rejected instead of silently selecting one action.
-    /// </summary>
+    internal static bool TryGetPort(string[] args, out int? port, out string? error)
+    {
+        if (!TryGetOptionValue(args, PortArgument, out var present, out var value))
+        {
+            port = null;
+            error = $"The {PortArgument} flag requires a value.";
+            return false;
+        }
+
+        if (!present)
+        {
+            port = null;
+            error = null;
+            return true;
+        }
+
+        if (!int.TryParse(value, out var parsed) || parsed is < 1 or > 65535)
+        {
+            port = null;
+            error = $"The {PortArgument} value must be an integer from 1 through 65535.";
+            return false;
+        }
+
+        port = parsed;
+        error = null;
+        return true;
+    }
+
+    internal static bool TryGetSetupCommand(string[] args, out SetupCommand? command, out string? error) =>
+        TryGetSetupCommand(args, Environment.GetEnvironmentVariable, static () => Console.In.ReadLine(), out command, out error);
+
+    internal static bool TryGetSetupCommand(string[] args,
+        Func<string, string?> environmentReader,
+        Func<string?> stdinReader,
+        out SetupCommand? command,
+        out string? error)
+    {
+        ArgumentNullException.ThrowIfNull(environmentReader);
+        ArgumentNullException.ThrowIfNull(stdinReader);
+
+        if (!HasArgument(args, SetupArgument))
+        {
+            command = null;
+            error = null;
+            return false;
+        }
+
+        var emailParsed = TryGetOptionValue(args, AdminEmailArgument, out var emailPresent, out var email);
+        if (!emailParsed)
+        {
+            command = null;
+            error = $"The {AdminEmailArgument} flag requires a value.";
+            return true;
+        }
+
+        var passwordParsed = TryGetOptionValue(args, AdminPasswordArgument, out var passwordPresent, out var password);
+        var stdinRequested = HasArgument(args, AdminPasswordStdinArgument);
+        if (passwordPresent && stdinRequested)
+        {
+            command = null;
+            error = $"Use either {AdminPasswordArgument} or {AdminPasswordStdinArgument}, not both.";
+            return true;
+        }
+
+        if (!passwordParsed)
+        {
+            command = null;
+            error = $"The {AdminPasswordArgument} flag requires a value.";
+            return true;
+        }
+
+        if (!emailPresent)
+        {
+            email = environmentReader(AdminEmailEnvironmentVariable);
+        }
+
+        var passwordFromEnvironment = !passwordPresent && !stdinRequested;
+        password = stdinRequested ? stdinReader()?.Trim() : password ?? environmentReader(AdminPasswordEnvironmentVariable);
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            command = null;
+            error = $"The {SetupArgument} command requires an admin email and password.";
+            return true;
+        }
+
+        command = new SetupCommand(email.Trim(), password, passwordFromEnvironment);
+        error = null;
+        return true;
+    }
+
+    internal static bool TryGetMcpKeyScope(string[] args, out McpServerApiKeyScope? scope, out string? error)
+    {
+        if (!TryGetOptionValue(args, McpKeyArgument, out var present, out var value))
+        {
+            scope = null;
+            error = $"The {McpKeyArgument} flag requires delegate or agentic.";
+            return true;
+        }
+
+        if (!present)
+        {
+            scope = null;
+            error = null;
+            return false;
+        }
+
+        if (string.Equals(value, "delegate", StringComparison.OrdinalIgnoreCase))
+        {
+            scope = McpServerApiKeyScope.Delegate;
+            error = null;
+            return true;
+        }
+
+        if (string.Equals(value, "agentic", StringComparison.OrdinalIgnoreCase))
+        {
+            scope = McpServerApiKeyScope.Agentic;
+            error = null;
+            return true;
+        }
+
+        scope = null;
+        error = $"The {McpKeyArgument} scope must be delegate or agentic.";
+        return true;
+    }
+
+    internal static bool TryGetResetAdminPassword(string[] args, out string? newPassword)
+    {
+        _ = TryGetOptionValue(args, ResetAdminPasswordArgument, out var present, out newPassword);
+        if (string.IsNullOrEmpty(newPassword))
+        {
+            newPassword = null;
+        }
+
+        return present;
+    }
+
     internal static KnowledgeDowngradeCommand GetKnowledgeDowngradeCommand(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
-
-        var preflight = args.Any(static argument =>
-            string.Equals(argument, KnowledgeDowngradePreflightArgument, StringComparison.OrdinalIgnoreCase));
-        var export = args.Any(static argument =>
-            string.Equals(argument, KnowledgeDowngradeExportArgument, StringComparison.OrdinalIgnoreCase));
-
+        var preflight = HasArgument(args, KnowledgeDowngradePreflightArgument);
+        var export = HasArgument(args, KnowledgeDowngradeExportArgument);
         if (preflight && export)
         {
-            throw new ArgumentException($"Use either {KnowledgeDowngradePreflightArgument} or {KnowledgeDowngradeExportArgument}, not both.",
-                nameof(args));
+            throw new ArgumentException($"Use either {KnowledgeDowngradePreflightArgument} or {KnowledgeDowngradeExportArgument}, not both.", nameof(args));
         }
 
         if (export)
@@ -157,7 +252,59 @@ internal static class DesktopLaunch
 
         return preflight ? KnowledgeDowngradeCommand.Preflight : KnowledgeDowngradeCommand.None;
     }
+
+    private static bool HasArgument(string[] args, string expected)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        return args.Any(argument => string.Equals(argument, expected, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool TryGetOptionValue(string[] args, string option, out bool present, out string? value)
+    {
+        ArgumentNullException.ThrowIfNull(args);
+        value = null;
+        present = false;
+        var prefix = option + "=";
+        for (var index = 0; index < args.Length; index++)
+        {
+            var argument = args[index];
+            if (argument.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                present = true;
+                value = argument[prefix.Length..];
+                return value.Length > 0;
+            }
+
+            if (string.Equals(argument, option, StringComparison.OrdinalIgnoreCase))
+            {
+                present = true;
+                if (index + 1 < args.Length && !args[index + 1].StartsWith("--", StringComparison.Ordinal))
+                {
+                    value = args[index + 1];
+                    return true;
+                }
+
+                return false;
+            }
+        }
+
+        return true;
+    }
 }
+
+internal enum LaunchMode
+{
+    Headless,
+    Desktop,
+    McpOnly
+}
+
+internal static class LaunchModeExtensions
+{
+    internal static bool IsLocalMode(this LaunchMode mode) => mode is LaunchMode.Desktop or LaunchMode.McpOnly;
+}
+
+internal sealed record SetupCommand(string Email, string Password, bool PasswordFromEnvironment);
 
 internal enum KnowledgeDowngradeCommand
 {

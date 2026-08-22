@@ -1,12 +1,5 @@
-import { Alert, Badge, Button, Card, Code, CopyButton, Group, Stack, Text, Title } from "@mantine/core";
-import {
-	IconAlertTriangle,
-	IconCheck,
-	IconCopy,
-	IconPlugConnected,
-	IconRefresh,
-	IconTrash,
-} from "@tabler/icons-react";
+import { Alert, Badge, Button, Card, Code, CopyButton, Group, Select, Stack, Text, Title } from "@mantine/core";
+import { IconAlertTriangle, IconCheck, IconCopy, IconPlugConnected, IconRefresh, IconTrash } from "@tabler/icons-react";
 import {
 	useGenerateMcpServerApiKey,
 	useMcpServerApiKey,
@@ -30,6 +23,7 @@ export function McpServerKeyPanel() {
 
 	// Held here and nowhere else. Cleared on revoke so a revoked key never lingers on screen as if it still worked.
 	const [revealedKey, setRevealedKey] = useState<string | null>(null);
+	const [scope, setScope] = useState<"delegate" | "agentic">("delegate");
 
 	const generate = useGenerateMcpServerApiKey();
 
@@ -45,11 +39,7 @@ export function McpServerKeyPanel() {
 						<Title order={4}>{t("pages.nodeSettings.mcpServerKey.title", "MCP server")}</Title>
 					</Group>
 					{!isLoading ? (
-						<Badge
-							color={isConfigured ? "green" : "gray"}
-							variant="light"
-							data-testid="mcp-server-key-status"
-						>
+						<Badge color={isConfigured ? "green" : "gray"} variant="light" data-testid="mcp-server-key-status">
 							{isConfigured
 								? t("pages.nodeSettings.mcpServerKey.configured", "Key configured")
 								: t("pages.nodeSettings.mcpServerKey.none", "No key")}
@@ -66,6 +56,14 @@ export function McpServerKeyPanel() {
 
 				{isConfigured && data ? (
 					<Stack gap="xs">
+						<Group gap="xs">
+							<Text size="sm" fw={500}>
+								{t("pages.nodeSettings.mcpServerKey.scopeLabel", "Scope")}
+							</Text>
+							<Badge color={data.scope === "agentic" ? "orange" : "blue"} variant="light">
+								{data.scope === "agentic" ? "Agentic" : "Delegate"}
+							</Badge>
+						</Group>
 						<Text size="sm" fw={500}>
 							{t("pages.nodeSettings.mcpServerKey.endpointLabel", "Endpoint URL")}
 						</Text>
@@ -82,9 +80,7 @@ export function McpServerKeyPanel() {
 										onClick={copy}
 										data-testid="mcp-server-key-copy-endpoint"
 									>
-										{copied
-											? t("common.copied", "Copied")
-											: t("common.copy", "Copy")}
+										{copied ? t("common.copied", "Copied") : t("common.copy", "Copy")}
 									</Button>
 								)}
 							</CopyButton>
@@ -108,10 +104,7 @@ export function McpServerKeyPanel() {
 								? t("pages.nodeSettings.mcpServerKey.lastUsed", "Last used {{when}}", {
 										when: new Date(data.lastUsedAt).toLocaleString(),
 									})
-								: t(
-										"pages.nodeSettings.mcpServerKey.neverUsed",
-										"Never used yet — no client has connected with this key.",
-									)}
+								: t("pages.nodeSettings.mcpServerKey.neverUsed", "Never used yet — no client has connected with this key.")}
 						</Text>
 					</Stack>
 				) : null}
@@ -144,9 +137,7 @@ export function McpServerKeyPanel() {
 											onClick={copy}
 											data-testid="mcp-server-key-copy-key"
 										>
-											{copied
-												? t("common.copied", "Copied")
-												: t("common.copy", "Copy")}
+											{copied ? t("common.copied", "Copied") : t("common.copy", "Copy")}
 										</Button>
 									)}
 								</CopyButton>
@@ -174,6 +165,32 @@ export function McpServerKeyPanel() {
 					</Alert>
 				) : null}
 
+				<Select
+					label={t("pages.nodeSettings.mcpServerKey.newKeyScopeLabel", "New key scope")}
+					data={[
+						{ value: "delegate", label: t("pages.nodeSettings.mcpServerKey.delegateScope", "Delegate") },
+						{ value: "agentic", label: t("pages.nodeSettings.mcpServerKey.agenticScope", "Agentic") },
+					]}
+					value={scope}
+					onChange={(value) => setScope(value === "agentic" ? "agentic" : "delegate")}
+					disabled={isBusy}
+					data-testid="mcp-server-key-scope"
+				/>
+
+				{scope === "agentic" ? (
+					<Alert
+						color="orange"
+						variant="light"
+						icon={<IconAlertTriangle size={18} />}
+						data-testid="mcp-server-key-agentic-warning"
+					>
+						{t(
+							"pages.nodeSettings.mcpServerKey.agenticWarning",
+							"An agentic key can change node settings, install runtimes, pull and delete models, and manage saved agents without asking you — every action is approved automatically and logged. Only give this to an agent you trust with full node configuration.",
+						)}
+					</Alert>
+				) : null}
+
 				<Group gap="sm">
 					<Button
 						loading={generate.isPending}
@@ -181,7 +198,7 @@ export function McpServerKeyPanel() {
 						leftSection={isConfigured ? <IconRefresh size={16} /> : undefined}
 						onClick={() =>
 							generate.mutate(
-								{},
+								{ body: { scope } },
 								// The ONLY capture point for the plaintext. If this response is not held here it is
 								// gone: the query this invalidates cannot return the key.
 								{ onSuccess: (response) => setRevealedKey(response.key ?? null) },

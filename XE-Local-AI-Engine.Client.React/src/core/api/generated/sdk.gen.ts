@@ -1204,6 +1204,7 @@ import {
 	zFreezeInferenceProfileBody,
 	zFreezeInferenceProfileResponse,
 	zGenerateLocalModelProxyApiKeyResponse,
+	zGenerateMcpServerApiKeyBody,
 	zGenerateMcpServerApiKeyResponse,
 	zGenerateTrainingDatasetBody,
 	zGenerateTrainingDatasetPath,
@@ -4998,7 +4999,7 @@ export const generateMcpServerApiKey = <ThrowOnError extends boolean = false>(
 		requestValidator: async (data) =>
 			await z
 				.object({
-					body: z.never().optional(),
+					body: zGenerateMcpServerApiKeyBody.optional(),
 					path: z.never().optional(),
 					query: z.never().optional(),
 				})
@@ -5011,6 +5012,10 @@ export const generateMcpServerApiKey = <ThrowOnError extends boolean = false>(
 		],
 		url: "/api/local/v1/mcp/server-key",
 		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options?.headers,
+		},
 	});
 
 export const getMcpServerTools = <ThrowOnError extends boolean = false>(options: Options<GetMcpServerToolsData, ThrowOnError>) =>

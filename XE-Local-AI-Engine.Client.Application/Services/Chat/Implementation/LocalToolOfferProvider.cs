@@ -81,8 +81,11 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         //   * RequiresApproval is STRUCTURAL, not a risk judgement: it is what routes the call through the runner's
         //     out-of-stream approval round-trip, where the human wait happens outside the stream-idle watchdog. A tool
         //     handler cannot simply block for a human — it would trip StreamIdleTimeout. It also means the three
-        //     unattended paths (sub-agent, scheduler, inbound MCP), which already strip every approval-required tool,
-        //     strip this one for free — correct, since none of them has a person to answer.
+        //     unattended paths (sub-agent, scheduler, and delegate-scope inbound MCP), which strip every
+        //     approval-required tool, strip this one for free — correct, since none of them has a person to answer.
+        //     Agentic-scope inbound MCP is the deliberate exception: it may invoke approval-required tools through the
+        //     strict audited auto-approval boundary. If ask_user is selected there, its handler's no-answer fail-safe
+        //     returns immediately rather than creating a human wait that an unattended caller cannot satisfy.
         //   * ToolCategory.ReadLocal: it reads an answer from the node-local operator and has no side effect of its own.
         var askUserDescriptor = new LocalChatToolDescriptor(AskUserTool.ToolName,
             AskUserTool.Description,

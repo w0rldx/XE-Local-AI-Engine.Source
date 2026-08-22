@@ -94,11 +94,13 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
                                                                           INSERT INTO mcp_agent_runs (
                                                                               request_id, request_fingerprint, accounting_version, status, version, claim_token, stop_reason,
                                                                               stop_requested_at_utc, agent_definition_id, agent_definition_version, model_id, model_override_id, workspace_id,
-                                                                              binding_fingerprint, task_payload, instructions_payload, result_payload, display_payload, failure_code,
+                                                                              is_agentic_auto_approve, requesting_key_prefix, binding_fingerprint,
+                                                                              task_payload, instructions_payload, result_payload, display_payload, failure_code,
                                                                               reserved_active_payload_bytes, active_payload_bytes, tombstone_logical_bytes, created_at_utc,
                                                                               claimed_at_utc, completed_at_utc, payload_expires_at_utc, compacted_at_utc)
                                                                           VALUES ($requestId, $fingerprint, $accountingVersion, $status, 0, NULL, $stopReason, NULL,
-                                                                              $agentDefinitionId, $agentDefinitionVersion, $modelId, $modelOverrideId, $workspaceId, $bindingFingerprint,
+                                                                              $agentDefinitionId, $agentDefinitionVersion, $modelId, $modelOverrideId, $workspaceId,
+                                                                              $isAgenticAutoApprove, $requestingKeyPrefix, $bindingFingerprint,
                                                                               $taskPayload, $instructionsPayload, NULL, NULL, NULL, $reservation, $reservation, $tombstoneBytes,
                                                                               $createdAtUtc, NULL, NULL, NULL, NULL);
                                                                           """))
@@ -113,6 +115,8 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
             Add(command, "$modelId", request.ModelId);
             Add(command, "$modelOverrideId", ToDb(request.ModelOverrideId));
             Add(command, "$workspaceId", ToDb(request.WorkspaceId));
+            Add(command, "$isAgenticAutoApprove", request.IsAgenticAutoApprove ? 1 : 0);
+            Add(command, "$requestingKeyPrefix", ToDb(request.RequestingKeyPrefix));
             Add(command, "$bindingFingerprint", request.BindingFingerprint);
             Add(command, "$taskPayload", taskPayload);
             Add(command, "$instructionsPayload", ToDb(instructionsPayload));
@@ -160,7 +164,9 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
                 CompletedAtUtc: null,
                 PayloadExpiresAtUtc: null,
                 CompactedAtUtc: null,
-                PayloadExpired: false));
+                PayloadExpired: false,
+                IsAgenticAutoApprove: request.IsAgenticAutoApprove,
+                RequestingKeyPrefix: request.RequestingKeyPrefix));
     }
 
     public async Task<McpAgentRunRecord?> GetAsync(Guid requestId, CancellationToken cancellationToken = default)
@@ -613,7 +619,8 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
     private const string SelectColumns = """
                                          SELECT request_id, request_fingerprint, accounting_version, status, version, claim_token, stop_reason,
                                              stop_requested_at_utc, agent_definition_id, agent_definition_version, model_id, model_override_id, workspace_id,
-                                             binding_fingerprint, task_payload, instructions_payload, result_payload, display_payload, failure_code,
+                                             is_agentic_auto_approve, requesting_key_prefix, binding_fingerprint,
+                                             task_payload, instructions_payload, result_payload, display_payload, failure_code,
                                              reserved_active_payload_bytes, active_payload_bytes, tombstone_logical_bytes, created_at_utc,
                                              claimed_at_utc, completed_at_utc, payload_expires_at_utc, compacted_at_utc
                                          FROM mcp_agent_runs
@@ -622,7 +629,8 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
     internal const string MetadataSelectColumns = """
                                                   SELECT request_id, request_fingerprint, accounting_version, status, version, claim_token, stop_reason,
                                                       stop_requested_at_utc, agent_definition_id, agent_definition_version, model_id, model_override_id, workspace_id,
-                                                      binding_fingerprint, NULL, NULL, NULL, NULL, failure_code,
+                                                      is_agentic_auto_approve, requesting_key_prefix, binding_fingerprint,
+                                                      NULL, NULL, NULL, NULL, failure_code,
                                                       reserved_active_payload_bytes, active_payload_bytes, tombstone_logical_bytes, created_at_utc,
                                                       claimed_at_utc, completed_at_utc, payload_expires_at_utc, compacted_at_utc
                                                   FROM mcp_agent_runs
@@ -670,20 +678,22 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
             reader.IsDBNull(10) ? null : reader.GetString(10),
             reader.IsDBNull(11) ? null : reader.GetString(11),
             GetNullableGuid(reader, 12),
-            GetNullableBytes(reader, 13),
-            includePayload ? GetNullableBytes(reader, 14) : null,
-            includePayload ? GetNullableBytes(reader, 15) : null,
+            reader.GetInt32(13) != 0,
+            reader.IsDBNull(14) ? null : reader.GetString(14),
+            GetNullableBytes(reader, 15),
             includePayload ? GetNullableBytes(reader, 16) : null,
             includePayload ? GetNullableBytes(reader, 17) : null,
-            reader.IsDBNull(18) ? null : reader.GetString(18),
-            reader.GetInt64(19),
-            reader.GetInt64(20),
+            includePayload ? GetNullableBytes(reader, 18) : null,
+            includePayload ? GetNullableBytes(reader, 19) : null,
+            reader.IsDBNull(20) ? null : reader.GetString(20),
             reader.GetInt64(21),
             reader.GetInt64(22),
-            GetNullableInt64(reader, 23),
-            GetNullableInt64(reader, 24),
+            reader.GetInt64(23),
+            reader.GetInt64(24),
             GetNullableInt64(reader, 25),
-            GetNullableInt64(reader, 26));
+            GetNullableInt64(reader, 26),
+            GetNullableInt64(reader, 27),
+            GetNullableInt64(reader, 28));
         if (row.StoredAccountingVersion != AccountingVersion)
         {
             throw new InvalidOperationException($"Unsupported MCP run accounting version {row.StoredAccountingVersion}.");
@@ -717,7 +727,9 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
             row.CompletedAtUtc,
             row.PayloadExpiresAtUtc,
             row.CompactedAtUtc,
-            PayloadExpired: row.ActivePayloadBytes == 0);
+            PayloadExpired: row.ActivePayloadBytes == 0,
+            IsAgenticAutoApprove: row.IsAgenticAutoApprove,
+            RequestingKeyPrefix: row.RequestingKeyPrefix);
     }
 
     private string? UnprotectString(Guid requestId, string fieldName, byte[]? payload)
@@ -947,6 +959,21 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         {
             throw new ArgumentException("The binding fingerprint must be 32 bytes.", nameof(request));
         }
+
+        if ((!request.IsAgenticAutoApprove && request.RequestingKeyPrefix is not null)
+            || (request.IsAgenticAutoApprove && !IsBoundedKeyPrefix(request.RequestingKeyPrefix)))
+        {
+            throw new ArgumentException("Agentic authority and its bounded ASCII requesting key prefix must be present together.", nameof(request));
+        }
+    }
+
+    private static bool IsBoundedKeyPrefix(string? value)
+    {
+        return value is { Length: >= 1 and <= 32 }
+               && value.All(static character => character is >= 'a' and <= 'z'
+                                                  or >= 'A' and <= 'Z'
+                                                  or >= '0' and <= '9'
+                                                  or '_' or '-');
     }
 
     private static void ValidateFinalization(McpAgentRunFinalization finalization)
@@ -1068,6 +1095,8 @@ public sealed class McpAgentRunStore : IMcpAgentRunStore
         string? ModelId,
         string? ModelOverrideId,
         Guid? WorkspaceId,
+        bool IsAgenticAutoApprove,
+        string? RequestingKeyPrefix,
         byte[]? BindingFingerprint,
         byte[]? TaskPayload,
         byte[]? InstructionsPayload,

@@ -12,16 +12,18 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
-///     Produces the repeatable, keyed execution binding used exclusively by inbound MCP delegation. General saved
-///     agents and bare models are model-visible tool-less. Only the forge-proof seeded Coder definition may receive the
-///     three workspace read tools, and only when each resolved descriptor is still categorized <see cref="ToolCategory.ReadLocal" />.
+///     Produces the repeatable, keyed execution binding used exclusively by inbound MCP execution. Delegate saved
+///     agents and bare models are model-visible tool-less; only the forge-proof seeded Coder may receive its exact
+///     three workspace-read tools. Agentic saved-agent bindings retain the complete resolved allowed-tool snapshot.
 /// </summary>
 internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 {
-    private const int FingerprintVersion = 1;
+    private const int AgenticFingerprintVersion = 2;
+    private const int DelegateFingerprintVersion = 1;
 
     private const string DefaultSubAgentPersonaInstructions =
         "You are a focused sub-agent. Complete the delegated task and return a concise result.";
@@ -34,20 +36,20 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
     ];
 
     private readonly IAgentDefinitionResolver _agentDefinitionResolver;
-    private readonly IAgentDefinitionStore _definitionStore;
+    private readonly IAgentDefinitionService _agentDefinitionService;
     private readonly IGgufModelStore _ggufModelStore;
     private readonly IAgentInstructionProvider _instructionProvider;
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
     private readonly INodeSqliteKeyHolder _nodeKey;
 
-    public McpExecutionBindingResolver(IAgentDefinitionStore definitionStore,
+    public McpExecutionBindingResolver(IAgentDefinitionService agentDefinitionService,
         IAgentDefinitionResolver agentDefinitionResolver,
         IGgufModelStore ggufModelStore,
         IAgentInstructionProvider instructionProvider,
         IModelCapabilityResolver modelCapabilityResolver,
         INodeSqliteKeyHolder nodeKey)
     {
-        _definitionStore = definitionStore ?? throw new ArgumentNullException(nameof(definitionStore));
+        _agentDefinitionService = agentDefinitionService ?? throw new ArgumentNullException(nameof(agentDefinitionService));
         _agentDefinitionResolver = agentDefinitionResolver ?? throw new ArgumentNullException(nameof(agentDefinitionResolver));
         _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
         _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
@@ -88,13 +90,14 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
             agentDefinitionVersion: null,
             [],
             reasoningEffort: null,
-            supportsThinking: false);
+            supportsThinking: false,
+            request.InboundContext);
         return McpExecutionBindingResolution.Success(binding);
     }
 
     private async Task<McpExecutionBindingResolution> ResolveSavedAgentAsync(McpExecutionBindingRequest request, CancellationToken cancellationToken)
     {
-        var definition = await ResolveDefinitionAsync(request.AgentKey!, cancellationToken).ConfigureAwait(false);
+        var definition = await _agentDefinitionService.GetByKeyAsync(request.AgentKey!, cancellationToken).ConfigureAwait(false);
         if (definition is null)
         {
             return Reject(McpExecutionFailureCodes.AgentNotFound, "Cannot run: the requested saved agent was not found.");
@@ -124,13 +127,21 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
             return Reject(McpExecutionFailureCodes.AgentConfigChanged, "Cannot run: the saved agent configuration changed while it was being resolved.");
         }
 
-        var isSeededCoder = definition.Source == AgentDefinitionSource.Seeded
-                            && string.Equals(definition.SeedSlug, AgentDefaults.CoderAgentSeedSlug, StringComparison.Ordinal);
-        IReadOnlyList<AllowedToolDto> allowedTools = [];
-        if (isSeededCoder && !TryProjectExactCoderTools(resolved.AllowedTools, out allowedTools))
+        IReadOnlyList<AllowedToolDto> allowedTools;
+        if (request.InboundContext.IsAgentic)
         {
-            return Reject(McpExecutionFailureCodes.AgentConfigChanged,
-                "Cannot run: the saved Coder capability configuration is incomplete or unsafe.");
+            allowedTools = resolved.AllowedTools;
+        }
+        else
+        {
+            var isSeededCoder = definition.Source == AgentDefinitionSource.Seeded
+                                && string.Equals(definition.SeedSlug, AgentDefaults.CoderAgentSeedSlug, StringComparison.Ordinal);
+            allowedTools = [];
+            if (isSeededCoder && !TryProjectExactCoderTools(resolved.AllowedTools, out allowedTools))
+            {
+                return Reject(McpExecutionFailureCodes.AgentConfigChanged,
+                    "Cannot run: the saved Coder capability configuration is incomplete or unsafe.");
+            }
         }
 
         var binding = CreateBinding(modelId,
@@ -139,7 +150,8 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
             definition.Version,
             allowedTools,
             resolved.ReasoningEffort,
-            supportsThinking);
+            supportsThinking,
+            request.InboundContext);
         return McpExecutionBindingResolution.Success(binding);
     }
 
@@ -182,14 +194,15 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
         int? agentDefinitionVersion,
         IReadOnlyList<AllowedToolDto> allowedTools,
         string? reasoningEffort,
-        bool supportsThinking)
+        bool supportsThinking,
+        McpInboundExecutionContext inboundContext)
     {
         IReadOnlyList<AllowedToolDto> immutableAllowedTools = Array.AsReadOnly(allowedTools.ToArray());
         var canonical = new ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(canonical))
         {
             writer.WriteStartObject();
-            writer.WriteNumber("version", FingerprintVersion);
+            writer.WriteNumber("version", inboundContext.IsAgentic ? AgenticFingerprintVersion : DelegateFingerprintVersion);
             writer.WriteString("modelId", modelId);
             writer.WriteString("instructions", instructions);
             if (agentDefinitionId is { } definitionId)
@@ -212,6 +225,11 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
 
             writer.WriteString("reasoningEffort", reasoningEffort);
             writer.WriteBoolean("supportsThinking", supportsThinking);
+            if (inboundContext.IsAgentic)
+            {
+                writer.WriteString("mcpScope", inboundContext.Scope.ToString());
+                writer.WriteString("mcpKeyPrefix", inboundContext.KeyPrefix);
+            }
             writer.WriteStartArray("tools");
             foreach (var tool in immutableAllowedTools.OrderBy(static tool => tool.Name, StringComparer.Ordinal))
             {
@@ -238,17 +256,6 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
             immutableAllowedTools,
             reasoningEffort,
             supportsThinking);
-    }
-
-    private async Task<AgentDefinitionRecord?> ResolveDefinitionAsync(string key, CancellationToken cancellationToken)
-    {
-        if (Guid.TryParse(key, out var id))
-        {
-            return await _definitionStore.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
-        }
-
-        var definitions = await _definitionStore.ListAsync(cancellationToken).ConfigureAwait(false);
-        return definitions.FirstOrDefault(definition => string.Equals(definition.Name, key, StringComparison.Ordinal));
     }
 
     private static McpExecutionBindingResolution Reject(string failureCode, string displayMessage) =>

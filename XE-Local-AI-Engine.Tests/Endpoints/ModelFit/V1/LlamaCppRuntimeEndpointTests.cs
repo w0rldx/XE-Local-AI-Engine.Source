@@ -142,6 +142,32 @@ public sealed class LlamaCppRuntimeEndpointTests
     }
 
     [Test]
+    [Arguments("")]
+    [Arguments("   ")]
+    [Arguments("not-a-variant")]
+    public async Task UpdateRuntime_WhenVariantIsPresentButInvalid_ReturnsBadRequest(string variant)
+    {
+        var binaryManager = Substitute.For<ILlamaCppBinaryManager>();
+        await using var factory = CreateFactory(binaryManager, new LlamaCppUpdateState());
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/model-fit/llamacpp/update")
+        {
+            Content = JsonContent.Create(new
+            {
+                tag = "b9700",
+                variant
+            })
+        };
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await binaryManager.DidNotReceiveWithAnyArgs()
+                           .InstallTagAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<long>(), Arg.Any<GpuVariant>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task RuntimeStatus_WhenModelsRunning_ReportsRunningProcessCount()
     {
         // The runtime-status surface must reflect the supervisor's running-process count so the UI can gate the update.

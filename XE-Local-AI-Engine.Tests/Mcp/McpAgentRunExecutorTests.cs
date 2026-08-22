@@ -6,6 +6,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class McpAgentRunExecutorTests
@@ -86,6 +87,65 @@ public sealed class McpAgentRunExecutorTests
         AssertEx.Equal(run.Instructions!, captured.Instructions);
         AssertEx.Null(captured.ModelId);
         AssertEx.Equal(Convert.ToHexString(run.BindingFingerprint!.Value.Span), fingerprint);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenRunCapturedAgenticAuthority_RestoresItWithoutConsultingCurrentKey()
+    {
+        var execution = Substitute.For<IMcpAgentExecutionService>();
+        McpExecutionBindingRequest? captured = null;
+        execution.SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
+                     Arg.Any<string>(),
+                     Arg.Any<string?>(),
+                     Arg.Any<CancellationToken>())
+                 .Returns(callInfo =>
+                 {
+                     captured = callInfo.Arg<McpExecutionBindingRequest>();
+                     return Task.FromResult(SpawnOutcome.Success("complete"));
+                 });
+        var run = CreateRun() with
+        {
+            IsAgenticAutoApprove = true,
+            RequestingKeyPrefix = "xemcp_abc123"
+        };
+
+        _ = await CreateExecutor(execution).ExecuteAsync(run, CancellationToken.None);
+
+        AssertEx.True(captured!.InboundContext.IsAgentic);
+        AssertEx.Equal("xemcp_abc123", captured.InboundContext.KeyPrefix!);
+        AssertEx.Equal(run.RequestId, captured.ExecutionRequestId);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenMigratedQueuedRunHasDelegateDefaults_RestoresDelegateAuthorityAndAcceptedFingerprint()
+    {
+        var execution = Substitute.For<IMcpAgentExecutionService>();
+        McpExecutionBindingRequest? captured = null;
+        string? capturedFingerprint = null;
+        execution.SpawnForMcpAsync(Arg.Any<McpExecutionBindingRequest>(),
+                     Arg.Any<string>(),
+                     Arg.Any<string?>(),
+                     Arg.Any<CancellationToken>())
+                 .Returns(callInfo =>
+                 {
+                     captured = callInfo.Arg<McpExecutionBindingRequest>();
+                     capturedFingerprint = callInfo.ArgAt<string?>(2);
+                     return Task.FromResult(SpawnOutcome.Success("complete"));
+                 });
+        var run = CreateRun() with
+        {
+            Status = McpAgentRunStatus.Queued,
+            IsAgenticAutoApprove = false,
+            RequestingKeyPrefix = null
+        };
+
+        var outcome = await CreateExecutor(execution).ExecuteAsync(run, CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(SpawnOutcomeKind.Success, outcome.Kind);
+        AssertEx.False(captured!.InboundContext.IsAgentic);
+        AssertEx.Null(captured.InboundContext.KeyPrefix);
+        AssertEx.Equal(run.RequestId, captured.ExecutionRequestId);
+        AssertEx.Equal(Convert.ToHexString(run.BindingFingerprint!.Value.Span), capturedFingerprint!);
     }
 
     [Test]

@@ -98,7 +98,9 @@ public sealed record McpAgentRunAdmissionRequest(
     string? ModelOverrideId,
     Guid? WorkspaceId,
     ReadOnlyMemory<byte> BindingFingerprint,
-    long CreatedAtUtc);
+    long CreatedAtUtc,
+    bool IsAgenticAutoApprove = false,
+    string? RequestingKeyPrefix = null);
 
 public sealed record McpAgentRunAdmissionResult(
     McpAgentRunAdmissionKind Kind,
@@ -144,7 +146,9 @@ public sealed record McpAgentRunRecord(
     long? CompletedAtUtc,
     long? PayloadExpiresAtUtc,
     long? CompactedAtUtc,
-    bool PayloadExpired);
+    bool PayloadExpired,
+    bool IsAgenticAutoApprove = false,
+    string? RequestingKeyPrefix = null);
 
 public sealed record McpAgentRunLedgerCounters(
     int AccountingVersion,

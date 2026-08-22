@@ -1,5 +1,13 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Mcp.V1;
 
+using XE_Local_AI_Engine.Client.Services.Mcp;
+
+/// <summary>Selects the trust scope for a newly generated inbound-MCP key.</summary>
+public sealed record GenerateMcpServerApiKeyRequest
+{
+    public McpServerApiKeyScope Scope { get; init; } = McpServerApiKeyScope.Delegate;
+}
+
 /// <summary>
 ///     The inbound-MCP credential's non-secret metadata. Carries no key: the node stores only a one-way digest, so
 ///     there is nothing to reveal on a retrieval path even to an Operator-gated, loopback-only caller.
@@ -8,6 +16,8 @@ public sealed record McpServerApiKeyResponse
 {
     /// <summary>Non-secret display prefix, safe to show in a list or a log line.</summary>
     public required string Prefix { get; init; }
+
+    public required McpServerApiKeyScope Scope { get; init; }
 
     public required DateTimeOffset CreatedAt { get; init; }
 

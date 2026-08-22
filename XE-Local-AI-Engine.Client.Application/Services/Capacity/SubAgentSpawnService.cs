@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
@@ -71,11 +72,13 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
     private readonly ICapacityService _capacityService;
     private readonly IChatClient _chatClient;
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
+    private readonly ICustomToolCatalog _customToolCatalog;
     private readonly IAgentDefinitionStore _definitionStore;
     private readonly IAgentInstructionProvider _instructionProvider;
     private readonly ILogger<SubAgentSpawnService> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IMcpExecutionBindingResolver _mcpExecutionBindingResolver;
+    private readonly IMcpAgenticToolAdapter _mcpAgenticToolAdapter;
     private readonly IMcpWorkspaceExecutionSessionFactory _mcpWorkspaceSessionFactory;
     private readonly IMcpToolRegistry _mcpToolRegistry;
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
@@ -91,11 +94,13 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
         IAgentToolRegistry toolRegistry,
         IClientLocalToolRegistry clientLocalToolRegistry,
         IMcpToolRegistry mcpToolRegistry,
+        ICustomToolCatalog customToolCatalog,
         IChatClient chatClient,
         IOptions<SpawnOptions> options,
         IAgentInstructionProvider instructionProvider,
         IModelCapabilityResolver modelCapabilityResolver,
         IMcpExecutionBindingResolver mcpExecutionBindingResolver,
+        IMcpAgenticToolAdapter mcpAgenticToolAdapter,
         IMcpWorkspaceExecutionSessionFactory mcpWorkspaceSessionFactory,
         INodeSettingsStore nodeSettingsStore,
         ILoggerFactory loggerFactory,
@@ -108,12 +113,14 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
         _toolRegistry = toolRegistry ?? throw new ArgumentNullException(nameof(toolRegistry));
         _clientLocalToolRegistry = clientLocalToolRegistry ?? throw new ArgumentNullException(nameof(clientLocalToolRegistry));
         _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
+        _customToolCatalog = customToolCatalog ?? throw new ArgumentNullException(nameof(customToolCatalog));
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
         _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
         _mcpExecutionBindingResolver = mcpExecutionBindingResolver ?? throw new ArgumentNullException(nameof(mcpExecutionBindingResolver));
+        _mcpAgenticToolAdapter = mcpAgenticToolAdapter ?? throw new ArgumentNullException(nameof(mcpAgenticToolAdapter));
         _mcpWorkspaceSessionFactory = mcpWorkspaceSessionFactory ?? throw new ArgumentNullException(nameof(mcpWorkspaceSessionFactory));
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
@@ -239,7 +246,8 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
             return SpawnOutcome.Rejected(McpExecutionFailureCodes.CapacityDeclined, ReasonFanOutExceeded);
         }
 
-        if (!TryCreateResolvedMcpBinding(mcpBinding, out var binding))
+        var binding = await TryCreateResolvedMcpBindingAsync(mcpBinding, request, ct).ConfigureAwait(false);
+        if (binding is null)
         {
             return SpawnOutcome.Rejected(McpExecutionFailureCodes.AgentConfigChanged,
                 "Cannot run: the accepted agent capability configuration is not valid.");
@@ -339,22 +347,33 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
                     opened.DisplayMessage));
     }
 
-    private bool TryCreateResolvedMcpBinding(McpExecutionBinding binding, out ResolvedBinding resolvedBinding)
+    private async Task<ResolvedBinding?> TryCreateResolvedMcpBindingAsync(McpExecutionBinding binding,
+        McpExecutionBindingRequest request,
+        CancellationToken cancellationToken)
     {
-        if (!TryResolveMcpTools(binding.AllowedTools, out var tools))
+        IList<AITool>? tools;
+        if (request.InboundContext.IsAgentic)
         {
-            resolvedBinding = null!;
-            return false;
+            var agentic = await ResolveAgenticMcpToolsAsync(binding.AllowedTools, request, cancellationToken).ConfigureAwait(false);
+            if (!agentic.Success)
+            {
+                return null;
+            }
+
+            tools = agentic.Tools;
+        }
+        else if (!TryResolveDelegateMcpTools(binding.AllowedTools, out tools))
+        {
+            return null;
         }
 
         var reasoning = binding.AgentDefinitionId is null
             ? null
             : new ChildReasoning(binding.ReasoningEffort, binding.SupportsThinking);
-        resolvedBinding = new ResolvedBinding(binding.ModelId, binding.Instructions, tools, reasoning, Skills: null);
-        return true;
+        return new ResolvedBinding(binding.ModelId, binding.Instructions, tools, reasoning, Skills: null);
     }
 
-    private bool TryResolveMcpTools(IReadOnlyList<AllowedToolDto> allowedTools, out IList<AITool>? tools)
+    private bool TryResolveDelegateMcpTools(IReadOnlyList<AllowedToolDto> allowedTools, out IList<AITool>? tools)
     {
         if (allowedTools.Count == 0)
         {
@@ -392,6 +411,71 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
 
         tools = executables.ToList();
         return true;
+    }
+
+    private async Task<(bool Success, IList<AITool>? Tools)> ResolveAgenticMcpToolsAsync(IReadOnlyList<AllowedToolDto> allowedTools,
+        McpExecutionBindingRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!request.InboundContext.IsAgentic
+            || !McpInboundExecutionContext.IsBoundedPrefix(request.InboundContext.KeyPrefix)
+            || request.ExecutionRequestId == Guid.Empty)
+        {
+            return (false, null);
+        }
+
+        if (allowedTools.Count == 0)
+        {
+            return (true, null);
+        }
+
+        if (allowedTools.Any(static descriptor => string.IsNullOrWhiteSpace(descriptor.Name))
+            || allowedTools.Select(static descriptor => descriptor.Name).Distinct(StringComparer.Ordinal).Count() != allowedTools.Count)
+        {
+            return (false, null);
+        }
+
+        var executables = await InvocationToolResolver.ResolveAsync(ToOfferPlaceholders(allowedTools),
+            _toolRegistry,
+            _clientLocalToolRegistry,
+            _mcpToolRegistry,
+            _customToolCatalog,
+            _logger,
+            cancellationToken).ConfigureAwait(false);
+        if (executables.Count != allowedTools.Count
+            || executables.Select(static executable => executable.Name).Distinct(StringComparer.Ordinal).Count() != allowedTools.Count)
+        {
+            return (false, null);
+        }
+
+        var descriptors = allowedTools.ToDictionary(static descriptor => descriptor.Name, StringComparer.Ordinal);
+        var adapted = new List<AITool>(executables.Count);
+        foreach (var executable in executables)
+        {
+            if (!descriptors.TryGetValue(executable.Name, out var descriptor))
+            {
+                return (false, null);
+            }
+
+            if (executable is ApprovalRequiredAIFunction approvalRequired)
+            {
+                adapted.Add(_mcpAgenticToolAdapter.Adapt(approvalRequired,
+                    descriptor.Category,
+                    request.InboundContext,
+                    request.ExecutionRequestId));
+            }
+            else
+            {
+                if (descriptor.RequiresApproval)
+                {
+                    return (false, null);
+                }
+
+                adapted.Add(executable);
+            }
+        }
+
+        return (true, adapted);
     }
 
     private static bool HasExactCoderToolNames(IEnumerable<string> names)

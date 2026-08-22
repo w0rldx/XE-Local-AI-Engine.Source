@@ -58,7 +58,8 @@ internal sealed class McpApiKeyAuthenticationHandler : AuthenticationHandler<Aut
         }
 
         var presented = header[BearerPrefix.Length..].Trim();
-        if (!await _apiKeyService.ValidateAsync(presented, Context.RequestAborted).ConfigureAwait(false))
+        var validation = await _apiKeyService.ValidateAsync(presented, Context.RequestAborted).ConfigureAwait(false);
+        if (validation is null)
         {
             // Deliberately uniform: never distinguish "no key generated" from "wrong key" to a caller.
             return AuthenticateResult.Fail("Invalid MCP API key.");
@@ -66,7 +67,15 @@ internal sealed class McpApiKeyAuthenticationHandler : AuthenticationHandler<Aut
 
         // The MCP client is NOT the node operator and must never be mistaken for one: it gets its own identity with no
         // role claim, so the Operator policy (which requires the Admin role) can never be satisfied by this scheme.
-        var identity = new ClaimsIdentity([new Claim(ClaimTypes.Name, "mcp-client")], SchemeName);
+        var identity = new ClaimsIdentity(
+        [
+            new Claim(ClaimTypes.Name, "mcp-client"),
+            new Claim(NodeAuthorizationPolicies.McpScopeClaimType,
+                validation.Scope == McpServerApiKeyScope.Agentic
+                    ? NodeAuthorizationPolicies.McpAgenticScope
+                    : NodeAuthorizationPolicies.McpDelegateScope),
+            new Claim(NodeAuthorizationPolicies.McpKeyPrefixClaimType, validation.Prefix)
+        ], SchemeName);
         var principal = new ClaimsPrincipal(identity);
         return AuthenticateResult.Success(new AuthenticationTicket(principal, SchemeName));
     }

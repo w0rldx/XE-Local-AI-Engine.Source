@@ -13,12 +13,85 @@ using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 [NotInParallel]
 public sealed class McpAgentRunCoordinatorTests
 {
+    private const string LegacyDelegateRequestFingerprint = "22D00EDA7B70A9C1F32B01A3CFAAE6BEFB3DC9137D8C097F70C9469AC27886C8";
+
+    [Test]
+    public void RequestFingerprint_WhenDelegateRequestMatchesPreMigrationCanonical_RemainsV1Compatible()
+    {
+        using var harness = new Harness();
+        var request = new McpAgentRunStartRequest(Guid.Parse("11111111-2222-3333-4444-555555555555"),
+            "inspect",
+            new McpExecutionBindingRequest
+            {
+                ModelId = "model"
+            });
+
+        AssertEx.Equal(LegacyDelegateRequestFingerprint, Convert.ToHexString(harness.ComputeFingerprint(request)));
+    }
+
+    [Test]
+    public void RequestFingerprint_WhenAuthorityDiffers_DoesNotAliasRequestIdentity()
+    {
+        using var harness = new Harness();
+        var requestId = Guid.NewGuid();
+        var delegateRequest = new McpAgentRunStartRequest(requestId,
+            "inspect",
+            new McpExecutionBindingRequest
+            {
+                ModelId = "model"
+            });
+        var agenticRequest = delegateRequest with
+        {
+            Binding = delegateRequest.Binding with
+            {
+                InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_abc123")
+            }
+        };
+        var otherAgenticRequest = agenticRequest with
+        {
+            Binding = agenticRequest.Binding with
+            {
+                InboundContext = new McpInboundExecutionContext(McpServerApiKeyScope.Agentic, "xemcp_def456")
+            }
+        };
+
+        AssertEx.False(harness.ComputeFingerprint(delegateRequest).SequenceEqual(harness.ComputeFingerprint(agenticRequest)));
+        AssertEx.False(harness.ComputeFingerprint(agenticRequest).SequenceEqual(harness.ComputeFingerprint(otherAgenticRequest)));
+    }
+
+    [Test]
+    public async Task StartAsync_WhenMigratedQueuedDelegateRetries_ReusesLegacyIdentityWithoutResolution()
+    {
+        using var harness = new Harness();
+        var request = new McpAgentRunStartRequest(Guid.Parse("11111111-2222-3333-4444-555555555555"),
+            "inspect",
+            new McpExecutionBindingRequest
+            {
+                ModelId = "model"
+            });
+        harness.Store.GetAsync(request.RequestId, Arg.Any<CancellationToken>())
+               .Returns(CreateRun(McpAgentRunStatus.Queued, version: 0, claimToken: null, McpAgentRunStopReason.None) with
+               {
+                   RequestId = request.RequestId,
+                   RequestFingerprint = Convert.FromHexString(LegacyDelegateRequestFingerprint),
+                   IsAgenticAutoApprove = false,
+                   RequestingKeyPrefix = null
+               });
+
+        var result = await harness.Coordinator.StartAsync(request, CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Equal(McpAgentRunStartKind.Existing, result.Kind);
+        await harness.Resolver.DidNotReceiveWithAnyArgs().ResolveAsync(default!, default);
+        await harness.Store.DidNotReceiveWithAnyArgs().AdmitAsync(default!, default);
+    }
+
     [Test]
     public async Task StartAsync_WithExistingWorkspaceRun_ReturnsExistingBeforeWorkspaceAuthorization()
     {

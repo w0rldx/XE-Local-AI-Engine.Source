@@ -14,6 +14,14 @@ public static class NodeAuthorizationPolicies
     /// </summary>
     public const string McpServer = "McpServer";
 
+    /// <summary>Gates MCP tools that may change node configuration without browser-operator involvement.</summary>
+    public const string McpAgentic = "McpAgentic";
+
+    public const string McpScopeClaimType = "xe:mcp_scope";
+    public const string McpKeyPrefixClaimType = "xe:mcp_key_prefix";
+    public const string McpAgenticScope = "agentic";
+    public const string McpDelegateScope = "delegate";
+
     /// <summary>
     ///     Gates the inbound OpenAI-compatible model proxy. Like <see cref="McpServer" /> it is SEPARATE from
     ///     <see cref="Operator" /> and satisfied by its own authentication scheme (the model-proxy API key, not JWT):

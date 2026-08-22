@@ -7,9 +7,9 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 /// <summary>
 ///     Fills the two configuration values a packaged desktop launch needs but that no env/Aspire source supplies:
 ///     the node SQLite connection string (SEC-1) and the operator secret (SEC-2). Everything here is strictly
-///     desktop-mode-only — the caller invokes it solely inside the <c>XE_LAUNCH_MODE=desktop</c> / <c>--desktop</c>
+///     local-mode-only — the caller invokes it solely for desktop or MCP-only serving
 ///     branch — and each key is layered into in-memory configuration ONLY when it is not already supplied. That keeps the
-///     headless / Aspire / CI configuration byte-identical: off the desktop flag this type is never reached, and even on
+///     headless / Aspire / CI configuration byte-identical: outside local mode this type is never reached, and even on
 ///     it, a value that was already provided via env or Aspire is left untouched.
 /// </summary>
 /// <remarks>
@@ -21,6 +21,8 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 /// </remarks>
 internal static class DesktopBootstrap
 {
+    internal const string DataDirectoryEnvironmentVariable = "XE_DATA_DIR";
+
     /// <summary>Configuration key the EF connection-string consumers read via <c>GetConnectionString("node-sqlite")</c>.</summary>
     internal const string NodeSqliteConnectionStringKey = "ConnectionStrings:node-sqlite";
 
@@ -59,7 +61,7 @@ internal static class DesktopBootstrap
     /// <summary>
     ///     Ensures the desktop data directory, connection string, operator secret, and models directory are present in
     ///     configuration. Each value is filled only when absent, so an env/Aspire-supplied value always wins. The folder
-    ///     resolver is injected (mirroring <see cref="DesktopLaunch.IsDesktopMode(string[], Func{string, string?})" />)
+    ///     resolver is injected (mirroring <see cref="DesktopLaunch.ResolveLaunchMode(string[], Func{string, string?}, bool)" />)
     ///     so tests never touch the real <c>%LOCALAPPDATA%</c>.
     /// </summary>
     /// <param name="configuration">
@@ -74,14 +76,14 @@ internal static class DesktopBootstrap
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(folderResolver);
 
-        var dataDirectory = ResolveDataDirectory(folderResolver);
+        var dataDirectory = NormalizeDataDirectoryPath(ResolveDataDirectory(folderResolver));
         EnsureDirectory(dataDirectory);
 
         var overrides = new Dictionary<string, string?>(StringComparer.Ordinal);
 
         // Point the node-data-directory abstraction at the same per-user data dir the DB/key/models already use, so all
-        // per-node runtime state is co-located there instead of the shared install/ContentRoot dir. Desktop-only and
-        // unconditional: this in-memory layer is only reached behind the desktop flag, so headless/Aspire/CI never set it
+        // per-node runtime state is co-located there instead of the shared install/ContentRoot dir. Local-mode-only and
+        // unconditional: this in-memory layer is only reached behind a local serve mode, so headless/Aspire/CI never set it
         // and INodeDataDirectory falls back to ContentRootPath (the off-flag byte-behavior invariant).
         overrides[NodeDataDirectoryKey] = dataDirectory;
 
@@ -107,8 +109,8 @@ internal static class DesktopBootstrap
         // first-run provisioning persists the selected model (only AFTER the multi-hundred-MB download completes), the
         // chat composer falls back to this default — and a first send against the uninstalled Ollama id fails with
         // "the requested model is not installed". The override is derived from FirstRunModel:{RepoId,Quant} so it stays
-        // in lockstep with the exact identity provisioning installs ("repo:quant"). Desktop-only and unconditional: this
-        // in-memory layer (added last) intentionally wins over appsettings, but is only reached behind the desktop flag,
+        // in lockstep with the exact identity provisioning installs ("repo:quant"). Local-mode-only and unconditional: this
+        // in-memory layer (added last) intentionally wins over appsettings, but is only reached for desktop or MCP-only,
         // so headless/Aspire keep the Ollama default untouched.
         var firstRunModel = ResolveFirstRunModelIdentity(configuration);
         if (!string.IsNullOrWhiteSpace(firstRunModel))
@@ -154,20 +156,65 @@ internal static class DesktopBootstrap
     /// <summary>
     ///     Resolves the per-user desktop data directory (creating it when absent) reading from the real process
     ///     environment. Used by <c>Program.cs</c> so the desktop branch can locate co-located runtime artifacts (e.g. the
-    ///     persisted loopback port) before the configuration layer is built. Desktop-only: only ever called behind the
-    ///     desktop flag, so the off-flag path is unaffected.
+    ///     persisted loopback port) before the configuration layer is built. Local-mode-only: only ever called for desktop
+    ///     or MCP-only serving, so the off-mode path is unaffected.
     /// </summary>
     internal static string ResolveDataDirectory()
     {
-        var dataDirectory = ResolveDataDirectory(Environment.GetFolderPath);
+        var dataDirectory = ResolveDataDirectoryPath();
         EnsureDirectory(dataDirectory);
         return dataDirectory;
     }
 
+    /// <summary>Resolves and normalizes the effective absolute data-directory path without creating it.</summary>
+    internal static string ResolveDataDirectoryPath()
+    {
+        if (!TryResolveDataDirectoryPath(out var dataDirectory, out var error))
+        {
+            throw new DesktopDataDirectoryException(error!);
+        }
+
+        return dataDirectory;
+    }
+
+    internal static bool TryResolveDataDirectoryPath(out string dataDirectory, out string? error)
+    {
+        try
+        {
+            dataDirectory = NormalizeDataDirectoryPath(ResolveDataDirectory(Environment.GetFolderPath));
+            error = null;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            dataDirectory = string.Empty;
+            error = $"The {DataDirectoryEnvironmentVariable} value must be a valid absolute path.";
+            return false;
+        }
+    }
+
     private static string ResolveDataDirectory(Func<Environment.SpecialFolder, string> folderResolver)
     {
+        var overridden = Environment.GetEnvironmentVariable(DataDirectoryEnvironmentVariable);
+        if (!string.IsNullOrWhiteSpace(overridden))
+        {
+            return overridden;
+        }
+
         var localApplicationData = folderResolver(Environment.SpecialFolder.LocalApplicationData);
         return Path.Combine(localApplicationData, ApplicationDataFolderName);
+    }
+
+    private static string NormalizeDataDirectoryPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)
+            || path.Any(char.IsControl)
+            || !Path.IsPathFullyQualified(path))
+        {
+            throw new ArgumentException("The data-directory path is invalid.", nameof(path));
+        }
+
+        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
     }
 
     private static void EnsureDirectory(string dataDirectory)
@@ -180,7 +227,8 @@ internal static class DesktopBootstrap
         {
             // Fail loudly: a desktop user whose data directory cannot be created must see a clear startup error rather
             // than silently fall back to a volatile location that would lose their database.
-            throw new InvalidOperationException($"The desktop data directory '{dataDirectory}' could not be created. Check filesystem permissions.",
+            throw new DesktopDataDirectoryException(
+                $"The data directory could not be created. Verify {DataDirectoryEnvironmentVariable} and filesystem permissions.",
                 exception);
         }
     }
@@ -494,4 +542,15 @@ internal static class DesktopBootstrap
     ///     plaintext file reads as not protected and is migrated by the caller).
     /// </summary>
     private sealed record UnwrappedSecret(byte[] Secret, bool WasProtected);
+}
+
+internal sealed class DesktopDataDirectoryException : InvalidOperationException
+{
+    internal DesktopDataDirectoryException(string safeDiagnostic, Exception? innerException = null)
+        : base(safeDiagnostic, innerException)
+    {
+        SafeDiagnostic = safeDiagnostic;
+    }
+
+    internal string SafeDiagnostic { get; }
 }

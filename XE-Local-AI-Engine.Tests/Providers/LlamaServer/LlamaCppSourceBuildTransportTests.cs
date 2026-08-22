@@ -492,34 +492,6 @@ public sealed class LlamaCppSourceBuildTransportTests
     }
 
     [Test]
-    public async Task PrebuiltGuard_RejectsInstalledSourceRuntimeAndActiveBuild()
-    {
-#pragma warning disable CA2000 // Each lease is disposed explicitly below after the guard transfers ownership.
-        var installedLease = new RecordingMutationLease([]);
-        var activeLease = new RecordingMutationLease([]);
-#pragma warning restore CA2000
-        var supervisor = Substitute.For<ILlamaServerProcessSupervisor>();
-        supervisor.TryAcquireRuntimeMutationLeaseAsync(Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult<ILlamaServerRuntimeMutationLease?>(installedLease), Task.FromResult<ILlamaServerRuntimeMutationLease?>(activeLease));
-        supervisor.CountRunningProcesses().Returns(0);
-        var store = Substitute.For<IInstalledRuntimeStore>();
-        store.ReadAsync(Arg.Any<CancellationToken>()).Returns(new InstalledRuntimeState("b1", "source", "sha", GpuVariant.Cpu, DateTimeOffset.UtcNow, "/managed/source"),
-            new InstalledRuntimeState("b1", "prebuilt", "sha", GpuVariant.Cpu, DateTimeOffset.UtcNow));
-        var activity = Substitute.For<ILlamaCppSourceBuildActivity>();
-        activity.ActiveBuildId.Returns(Guid.NewGuid());
-
-        var (installedResultLease, _, installedBlockedMessage) =
-            await LlamaCppPrebuiltRuntimeMutationGuard.TryAcquireAsync(store, activity, supervisor, CancellationToken.None);
-        await (installedResultLease ?? throw new InvalidOperationException("installedResultLease must not be null.")).DisposeAsync();
-        var (activeResultLease, _, activeBlockedMessage) =
-            await LlamaCppPrebuiltRuntimeMutationGuard.TryAcquireAsync(store, activity, supervisor, CancellationToken.None);
-        await (activeResultLease ?? throw new InvalidOperationException("activeResultLease must not be null.")).DisposeAsync();
-
-        AssertEx.True(installedBlockedMessage?.Contains("source-built", StringComparison.Ordinal) == true);
-        AssertEx.True(activeBlockedMessage?.Contains("active", StringComparison.Ordinal) == true);
-    }
-
-    [Test]
     public async Task Publisher_ForwardsOnlyLegacyPinnedCudaToLegacyHub()
     {
         object? genericPayload = null;

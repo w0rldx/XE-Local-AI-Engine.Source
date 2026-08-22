@@ -16,8 +16,8 @@ using Microsoft.Extensions.AI;
 ///         SECURITY: <see cref="TryResolveAsync" /> returns the executable ALREADY wrapped in
 ///         <c>ApprovalRequiredAIFunction</c> — the authoritative approval floor, exactly like the MCP connection
 ///         manager's pre-wrap. Approval is forced on for every custom tool at the wrap, independent of any stored flag or
-///         per-agent override, so an approval-forced custom tool can never ride an unattended (sub-agent / scheduler /
-///         inbound-MCP) run.
+///         per-agent override. Delegate MCP, scheduler, and spawned-child paths never consume this catalog. The trusted
+///         agentic MCP root may consume it only through its strict audit-before-invoke adapter.
 ///     </para>
 /// </summary>
 internal interface ICustomToolCatalog

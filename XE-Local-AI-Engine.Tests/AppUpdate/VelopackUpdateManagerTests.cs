@@ -66,12 +66,11 @@ public sealed class VelopackUpdateManagerTests
         {
             AssertEx.True(updateManager.DownloadCompleted);
             AssertEx.True(ReferenceEquals(asset, scheduledAsset));
-            AssertEx.Equal(expected: 1, restartArgs.Length);
-            AssertEx.Equal("--desktop", restartArgs[0]);
+            AssertEx.True(restartArgs.SequenceEqual(["--mcp-only", "--no-browser", "--port", "41234"], StringComparer.Ordinal));
             scheduled = true;
         });
 
-        var applying = await manager.PrepareUpdateAndRestartAsync(["--desktop"], CancellationToken.None);
+        var applying = await manager.PrepareUpdateAndRestartAsync(["--mcp-only", "--no-browser", "--port", "41234"], CancellationToken.None);
 
         AssertEx.True(applying);
         AssertEx.True(scheduled);

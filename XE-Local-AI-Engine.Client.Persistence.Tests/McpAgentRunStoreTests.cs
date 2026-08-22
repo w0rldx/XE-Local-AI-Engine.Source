@@ -45,6 +45,34 @@ public sealed class McpAgentRunStoreTests : IDisposable
     }
 
     [Test]
+    public async Task AdmitAsync_EnforcesBoundedAsciiAgenticPrefixAlphabet()
+    {
+        var databasePath = GetDatabasePath("invalid-agentic-prefix.sqlite");
+        await InitializeDatabaseAsync(databasePath).ConfigureAwait(false);
+        await using var fixture = CreateFixture(databasePath);
+
+        foreach (var prefix in new[] { "xemcp bad", "xemcp.bad" })
+        {
+            var request = CreateAdmission(fixture.Protector, Guid.NewGuid(), "inspect") with
+            {
+                IsAgenticAutoApprove = true,
+                RequestingKeyPrefix = prefix
+            };
+
+            _ = await AssertEx.ThrowsAsync<ArgumentException>(() => fixture.Store.AdmitAsync(request)).ConfigureAwait(false);
+        }
+
+        var valid = await fixture.Store.AdmitAsync(CreateAdmission(fixture.Protector, Guid.NewGuid(), "inspect valid") with
+        {
+            IsAgenticAutoApprove = true,
+            RequestingKeyPrefix = "xemcp_Abc-123"
+        }).ConfigureAwait(false);
+
+        AssertEx.Equal(McpAgentRunAdmissionKind.Accepted, valid.Kind);
+        AssertEx.Equal(expected: 1L, (await fixture.Store.VerifyLedgerAsync().ConfigureAwait(false)).Persisted.IdentityCount);
+    }
+
+    [Test]
     public async Task AdmitAsync_ConcurrentDuplicate_HasOneIdentityAndNoDoubleReservation()
     {
         var databasePath = GetDatabasePath("concurrent-duplicate.sqlite");

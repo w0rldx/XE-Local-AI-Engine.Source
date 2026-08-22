@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Hosting;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Text.Json;
 
 /// <summary>
 ///     Persists and reuses the loopback port a desktop launch binds. Binding <c>http://127.0.0.1:0</c> lets the OS pick a
@@ -11,8 +12,8 @@ using System.Net.Sockets;
 ///     the origin stable so preferences survive; if the remembered port is gone (taken or invalid), the launch falls back
 ///     to <c>:0</c> and the newly assigned port is persisted instead.
 ///     <para>
-///         Strictly desktop-mode-only: every member is reached solely behind the <c>XE_LAUNCH_MODE=desktop</c> /
-///         <c>--desktop</c> branch, so headless/Aspire/CI runs never touch the port file and keep their byte-identical
+///         Strictly local-mode-only: every member is reached solely for desktop or MCP-only serving, so
+///         headless/Aspire/CI runs never touch the port file and keep their byte-identical
 ///         behavior. Reads are best-effort — any failure resolves to the dynamic <c>:0</c> bind rather than throwing.
 ///     </para>
 /// </summary>
@@ -20,6 +21,7 @@ internal static class DesktopPortStore
 {
     /// <summary>The per-user data-directory file name that records the last bound loopback port (plain text, not a secret).</summary>
     internal const string PortFileName = "desktop-port.txt";
+    internal const string ReadyFileName = "ready.json";
 
     /// <summary>Ports at or below this are well-known/privileged; a desktop loopback bind never legitimately uses one.</summary>
     private const int MinimumDynamicPort = 1025;
@@ -90,6 +92,140 @@ internal static class DesktopPortStore
         }
     }
 
+    internal static void PersistReady(string dataDirectory, ReadyInfo info, ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        ArgumentNullException.ThrowIfNull(info);
+        ArgumentNullException.ThrowIfNull(logger);
+
+        var path = Path.Combine(dataDirectory, ReadyFileName);
+        var tempPath = path + ".tmp";
+        try
+        {
+            File.WriteAllText(tempPath, JsonSerializer.Serialize(info, JsonSerializerOptions.Web));
+            File.Move(tempPath, path, overwrite: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "Could not persist engine readiness to {ReadyFilePath}.", path);
+            TryDelete(tempPath);
+        }
+    }
+
+    internal static ReadyInfo? ReadReady(string dataDirectory) => ReadReadyEvidence(dataDirectory).Info;
+
+    internal static ReadyEvidence ReadReadyEvidence(string dataDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        var path = Path.Combine(dataDirectory, ReadyFileName);
+        try
+        {
+            using var stream = File.OpenRead(path);
+            var parsed = JsonSerializer.Deserialize<ReadyInfo>(stream, JsonSerializerOptions.Web);
+            return TryValidateReadyInfo(parsed, dataDirectory, out var validated)
+                ? new ReadyEvidence(ReadyEvidenceState.Valid, validated)
+                : new ReadyEvidence(ReadyEvidenceState.Invalid, Info: null);
+        }
+        catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return new ReadyEvidence(ReadyEvidenceState.Absent, Info: null);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return new ReadyEvidence(ReadyEvidenceState.Invalid, Info: null);
+        }
+    }
+
+    private static bool TryValidateReadyInfo(ReadyInfo? info, string expectedDataDirectory, out ReadyInfo? validated)
+    {
+        validated = null;
+        if (info is null
+            || info.Pid <= 0
+            || string.IsNullOrWhiteSpace(info.Version)
+            || info.Version.Any(char.IsControl)
+            || !TryNormalizeAbsolutePath(info.DataDir, out var recordedDataDirectory)
+            || !TryNormalizeAbsolutePath(expectedDataDirectory, out var normalizedExpectedDirectory)
+            || !ReadyDataDirectoriesEqual(recordedDataDirectory, normalizedExpectedDirectory, OperatingSystem.IsWindows())
+            || !Uri.TryCreate(info.Url, UriKind.Absolute, out var url)
+            || url.Scheme != Uri.UriSchemeHttp
+            || url.Port is < 1 or > MaximumPort
+            || !string.IsNullOrEmpty(url.UserInfo)
+            || !string.IsNullOrEmpty(url.Query)
+            || !string.IsNullOrEmpty(url.Fragment)
+            || url.AbsolutePath != "/"
+            || !IPAddress.TryParse(url.Host, out var address)
+            || !IPAddress.IsLoopback(address))
+        {
+            return false;
+        }
+
+        var canonicalUrl = url.GetLeftPart(UriPartial.Authority);
+        var canonicalMcpUrl = $"{canonicalUrl}/api/local/v1/mcp/server";
+        if (!string.Equals(info.McpUrl, canonicalMcpUrl, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        validated = info with
+        {
+            Url = canonicalUrl,
+            McpUrl = canonicalMcpUrl,
+            DataDir = normalizedExpectedDirectory
+        };
+        return true;
+    }
+
+    private static bool TryNormalizeAbsolutePath(string path, out string normalized)
+    {
+        normalized = string.Empty;
+        if (string.IsNullOrWhiteSpace(path) || path.Any(char.IsControl) || !Path.IsPathFullyQualified(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    internal static bool ReadyDataDirectoriesEqual(string recorded, string expected, bool isWindows) =>
+        string.Equals(recorded,
+            expected,
+            isWindows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    internal static void DeleteReady(string dataDirectory, ILogger logger)
+    {
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        ArgumentNullException.ThrowIfNull(logger);
+        var path = Path.Combine(dataDirectory, ReadyFileName);
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(exception, "Could not remove stale engine readiness file {ReadyFilePath}.", path);
+        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Best-effort cleanup; temporary files are never read.
+        }
+    }
+
     private static int? TryReadPersistedPort(string dataDirectory)
     {
         var portFilePath = Path.Combine(dataDirectory, PortFileName);
@@ -122,7 +258,7 @@ internal static class DesktopPortStore
         return port;
     }
 
-    private static bool IsPortAvailable(int port)
+    internal static bool IsPortAvailable(int port)
     {
         // Probe by binding a throwaway loopback listener: if the OS rejects it, the port is already taken so we must fall
         // back to a dynamic port. The listener is stopped before Kestrel binds, leaving a tiny TOCTOU window in which
@@ -142,3 +278,14 @@ internal static class DesktopPortStore
         }
     }
 }
+
+internal sealed record ReadyInfo(string Version, string Url, string McpUrl, string DataDir, int Pid, DateTimeOffset StartedAtUtc);
+
+internal enum ReadyEvidenceState
+{
+    Absent,
+    Valid,
+    Invalid
+}
+
+internal sealed record ReadyEvidence(ReadyEvidenceState State, ReadyInfo? Info);

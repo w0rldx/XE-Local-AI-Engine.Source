@@ -51,6 +51,7 @@ PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "${B
 # Release-path shell scripts. Deliberately scoped: .opencode/ has its own validators
 # (validate-opencode.sh / validate-no-legacy.sh) and .tmp/worktrees is scratch.
 SHELL_TARGETS=(
+  "install.sh"
   "publish/package-rc.sh"
   "publish/linux/run-xe-local-ai-engine.sh"
   "publish/linux/uninstall-xe-local-ai-engine.sh"
@@ -88,6 +89,7 @@ RELEASE_CONTRACT_RUNNER="scripts/run-release-contract-tests.sh"
 # guards are not on the release path, but they are the only thing standing between a Windows agent
 # and a contaminated test run — the same reason the .sh originals are shellcheck'd here.
 PS_TARGETS=(
+  "install.ps1"
   "publish/package-tester-win.ps1"
   "publish/windows/uninstall-xe-local-ai-engine.ps1"
   "scripts/tests/windows-framework-launcher-smoke.ps1"

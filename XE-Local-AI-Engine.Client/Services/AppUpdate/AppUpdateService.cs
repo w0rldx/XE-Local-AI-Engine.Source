@@ -64,7 +64,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
 
     private async Task<AppUpdateSnapshot> CheckForUpdatesCoreAsync(CancellationToken ct)
     {
-        if (!_hostContext.IsDesktop)
+        if (!_hostContext.IsLocalMode)
         {
             return StoreSnapshot(Snapshot("0.0.0", isConfigured: _channelOptions.IsConfigured));
         }
@@ -118,7 +118,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
 
     public async Task<bool> ApplyAsync(CancellationToken ct)
     {
-        if (!_hostContext.IsDesktop || !_channelOptions.IsConfigured)
+        if (!_hostContext.IsLocalMode || !_channelOptions.IsConfigured)
         {
             return false;
         }
@@ -172,7 +172,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
 
         var currentVersion = "0.0.0";
         var checkStatus = AppUpdateCheckStatus.NotChecked;
-        if (_hostContext.IsDesktop && _channelOptions.IsConfigured)
+        if (_hostContext.IsLocalMode && _channelOptions.IsConfigured)
         {
             try
             {
@@ -192,7 +192,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             AvailableVersion: null,
             UpdateAvailable: false,
             IsConfigured: _channelOptions.IsConfigured,
-            IsDesktop: _hostContext.IsDesktop,
+            IsDesktop: _hostContext.IsLocalMode,
             CheckStatus: checkStatus,
             LastCheckedUtc: null));
     }
@@ -213,7 +213,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             availableVersion,
             updateAvailable,
             isConfigured,
-            _hostContext.IsDesktop,
+            _hostContext.IsLocalMode,
             checkStatus,
             DateTimeOffset.UtcNow);
 

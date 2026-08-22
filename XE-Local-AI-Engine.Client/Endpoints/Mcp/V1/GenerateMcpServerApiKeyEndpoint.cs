@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Mcp.V1;
 
+using System.Text.Json;
 using FastEndpoints;
+using Microsoft.AspNetCore.Http.Features;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Mcp.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -23,14 +25,47 @@ public sealed class GenerateMcpServerApiKeyEndpoint(IMcpServerApiKeyService apiK
     {
         Post(LocalApiRoutes.Mcp.ServerApiKey);
         Policies(NodeAuthorizationPolicies.Operator);
-        // Route-only POST with no body and therefore no Content-Type; FastEndpoints' default Accepts metadata would
-        // answer that with 415. Same override the scheduler's body-less actions use.
-        Description(x => x.Accepts<EmptyRequest>());
+        // Runtime must accept the historical POST with no body or Content-Type. OpenAPI's optional typed body is
+        // restored by McpServerApiKeyOpenApiOperationProcessor because FastEndpoints exposes only one accepts shape.
+        Description(description => description.Accepts<EmptyRequest>());
     }
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var generated = await _apiKeyService.GenerateAsync(ct).ConfigureAwait(false);
+        var scope = McpServerApiKeyScope.Delegate;
+        var request = HttpContext.Request;
+        var canHaveBody = HttpContext.Features.Get<IHttpRequestBodyDetectionFeature>()?.CanHaveBody
+                          ?? request.ContentLength is > 0;
+        if (canHaveBody)
+        {
+            if (!request.HasJsonContentType())
+            {
+                AddError("The request body must use the application/json media type.");
+                await Send.ErrorsAsync(StatusCodes.Status415UnsupportedMediaType, cancellation: ct).ConfigureAwait(false);
+                return;
+            }
+
+            try
+            {
+                var body = await request.ReadFromJsonAsync<GenerateMcpServerApiKeyRequest>(ct).ConfigureAwait(false);
+                if (body is null)
+                {
+                    AddError("The request body must contain a valid MCP API key scope.");
+                    await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+                    return;
+                }
+
+                scope = body.Scope;
+            }
+            catch (JsonException)
+            {
+                AddError("Scope must be exactly 'delegate' or 'agentic'.");
+                await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+                return;
+            }
+        }
+
+        var generated = await _apiKeyService.GenerateAsync(scope, ct).ConfigureAwait(false);
         await Send.OkAsync(McpServerApiKeyMapper.ToGenerated(generated, HttpContext), ct).ConfigureAwait(false);
     }
 }
