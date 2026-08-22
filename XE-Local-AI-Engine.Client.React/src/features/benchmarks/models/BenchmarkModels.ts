@@ -274,7 +274,7 @@ export const noBenchmarkLaunchFacts: BenchmarkLaunchFacts = {
 
 /**
  * A decoded launch receipt or environment-facts object. Kept opaque on purpose: the UI renders and diffs whatever
- * fields the node recorded (D12 — facts, not verdicts), so a contract addition needs no frontend change.
+ * fields the node recorded as facts, never verdicts, so a contract addition needs no frontend change.
  */
 export type BenchmarkEvidenceObject = Readonly<Record<string, unknown>>;
 

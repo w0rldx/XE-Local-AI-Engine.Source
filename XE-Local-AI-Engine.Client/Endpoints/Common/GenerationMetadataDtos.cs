@@ -94,7 +94,7 @@ internal static class GenerationProvenance
     }
 
     /// <summary>
-    ///     Stamps the two server-computed fields onto the echoed block and renders the plan §5.1 JSON object for the
+    ///     Stamps the two server-computed fields onto the echoed block and renders the persisted JSON object for the
     ///     encrypted <c>GenerationMetadataJson</c> column. Returns <c>null</c> when no block was echoed, which the
     ///     stores read as "leave the stored provenance alone".
     /// </summary>

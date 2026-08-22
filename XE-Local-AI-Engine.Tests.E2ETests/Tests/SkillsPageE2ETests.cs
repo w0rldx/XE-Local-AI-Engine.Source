@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         <item>Import via the <b>Paste</b> source (a literal SKILL.md, no file system, no network).</item>
 ///         <item>Preview writes nothing and returns a report; the candidate is selectable only after the report.</item>
 ///         <item>Commit is gated on the untrusted-content acknowledgement AND a non-empty selection.</item>
-///         <item>The imported skill lands DISABLED and badged <c>Imported</c> — the real gate, per the plan.</item>
+///         <item>The imported skill lands DISABLED and badged <c>Imported</c> — the real execution gate.</item>
 ///         <item>Enabling it is a separate, deliberate edit that persists (list badge flips to Enabled).</item>
 ///         <item>Delete removes it.</item>
 ///     </list>

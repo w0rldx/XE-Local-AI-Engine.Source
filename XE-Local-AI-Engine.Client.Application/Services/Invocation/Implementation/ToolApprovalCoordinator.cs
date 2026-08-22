@@ -30,10 +30,9 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 /// </summary>
 public sealed class ToolApprovalCoordinator
 {
-    // Approval-decision audit labels for the two outcomes this coordinator reaches WITHOUT an operator round-trip. They
-    // extend the ApprovalDecisions vocabulary (approve/deny/timeout) and read the same way in the audit trail; a
-    // memo-suppressed approval is still audited precisely so session scope cannot thin the trail invisibly.
-    // follow-up: fold both into ApprovalDecisions once the concurrent skills-import work on Client.Persistence lands.
+    // These coordinator-local audit labels intentionally extend the canonical ApprovalDecisions operator vocabulary
+    // with outcomes reached WITHOUT an operator round-trip. A memo-suppressed approval is still audited precisely so
+    // session scope cannot thin the trail invisibly.
     private const string SessionScopeApprovalDecision = "session-scope auto-approve";
 
     private const string UnattendedApprovalDecision = "unattended-unavailable";

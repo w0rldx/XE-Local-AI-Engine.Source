@@ -65,8 +65,8 @@ describe("navigationLinks", () => {
 	});
 
 	it("ships the Training group on by default and hides it whole when the capability is compiled off", async () => {
-		// plan section 14: the group was dark-shipped until the epic was live-verified (2026-08-15); it is on by default
-		// now, and the compile-time capability still removes the whole group rather than leaving an empty one.
+		// The group was dark-shipped until the feature was live-verified (2026-08-15); it is on by default now, and the
+		// compile-time capability still removes the whole group rather than leaving an empty one.
 		const { navigationLinks: hiddenLinks } = await mockCapabilities({ training: false });
 		expect(hiddenLinks.some((link) => link.id === "training")).toBe(false);
 

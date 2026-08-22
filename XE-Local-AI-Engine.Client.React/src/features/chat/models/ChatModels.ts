@@ -230,8 +230,7 @@ export interface ChatTimelineEntry {
 	toolArgs?: string;
 	toolResult?: string;
 	state?: ToolCallState;
-	// Carried from the tool-call event so the rendered tool call can surface the approval requirement; beta
-	// ships only auto-execute tools, so this is currently always false.
+	// Carried from the tool-call event so the rendered tool call can surface the approval requirement and state.
 	requiresApproval?: boolean;
 	createdAt: string;
 }
@@ -243,8 +242,8 @@ export interface ChatToolCall {
 	args?: string;
 	result?: string;
 	duration?: string;
-	// Tool-level metadata: whether the tool requires explicit approval before executing. Carried so a future
-	// tools-overview UI can surface/toggle it. Beta ships only auto-execute tools, so no approval dialog yet.
+	// Tool-level metadata indicating whether execution requires explicit approval. Carried through the stream reducer
+	// so the tool card and tools overview can surface the requirement while the approval UI handles pending decisions.
 	requiresApproval?: boolean;
 }
 
@@ -334,8 +333,7 @@ export interface AgentOption {
 
 // Matches the backend AgentDefaults.DefaultAgentName seeded slug. Used to exclude the Default Assistant from
 // the agent picker so the user never selects it explicitly (mode-off reproduces it transparently).
-// Note: a provenance-based filter (slug or source field) is a deferred follow-up; for now the name comparison
-// is the single exclusion site.
+// The name comparison below is the single exclusion site.
 export const DEFAULT_ASSISTANT_NAME = "Default Assistant";
 
 export interface ChatUiCapabilities {

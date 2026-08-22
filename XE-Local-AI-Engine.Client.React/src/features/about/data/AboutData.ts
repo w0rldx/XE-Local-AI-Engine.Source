@@ -30,7 +30,7 @@ interface IGeneratedLicenseFile {
 
 export const applicationInfo: IApplicationInfo = {
 	title: environment.VITE_APP_TITLE,
-	// Injected at build time from Directory.Build.props (the single version source of truth, also used by
+	// Injected at build time from eng/ReleaseVersion.props (the single version source of truth, also used by
 	// `vpk --packVersion`). See vite.config.ts `resolveAppVersion()`.
 	version: environment.VITE_APP_VERSION,
 	description:

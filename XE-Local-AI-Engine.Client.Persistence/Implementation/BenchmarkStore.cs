@@ -1398,8 +1398,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
     /// <summary>
     ///     The project's ranking, computed once per request from flat columns only. Dense rank, descending, ties
-    ///     sharing a rank. The plan's accepted ceiling: recompute per request rather than maintain a rollup — a
-    ///     project is one hard-fixed task and its run count stays small.
+    ///     sharing a rank. Recompute per request rather than maintain a rollup: a project is one hard-fixed task and
+    ///     its run count stays small.
     /// </summary>
     private async Task<BenchmarkProjectRanking> LoadRankingAsync(Guid projectId, CancellationToken cancellationToken)
     {
@@ -1584,7 +1584,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     }
 
     /// <summary>
-    ///     Rank membership, decided at read time (plan §3.5): an operator score always ranks; a judge score ranks only
+    ///     Rank membership is decided at read time: an operator score always ranks; a judge score ranks only
     ///     under the project's current policy revision, in that revision's live cohort generation, with the execution
     ///     key the cohort was claimed with. Anything else is honestly unranked, with a reason the UI can act on.
     /// </summary>

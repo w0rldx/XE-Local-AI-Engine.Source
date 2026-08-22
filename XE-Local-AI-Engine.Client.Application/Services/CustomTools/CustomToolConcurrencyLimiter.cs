@@ -7,10 +7,9 @@ namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 ///     against a fan-out of concurrent runs exhausting the box or its outbound connections. Registered as a singleton
 ///     so the limit is process-wide, not per-request.
 ///     <para>
-///         ponytail: this is the concurrency-only ceiling. A per-process resource ceiling (Linux <c>rlimit</c>
-///         AS/NPROC/CPU, Windows Job Object) is the stronger control the plan names as the upgrade path; it needs a
-///         fork+setrlimit+exec (or Job Object) wrapper like the sandbox launcher and is deferred. Host network stays
-///         reachable from a Command tool — stated honestly, not eliminated.
+///         This is a concurrency-only ceiling. A stronger per-process resource ceiling (Linux <c>rlimit</c>
+///         AS/NPROC/CPU or a Windows Job Object) would require a fork+setrlimit+exec or Job Object wrapper like the
+///         sandbox launcher. Host network stays reachable from a Command tool — stated honestly, not eliminated.
 ///     </para>
 /// </summary>
 internal sealed class CustomToolConcurrencyLimiter : IDisposable

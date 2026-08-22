@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
-/// <summary>How the teacher is asked to produce a structured sample (plan decision #15).</summary>
+/// <summary>How the teacher is asked to produce a structured sample.</summary>
 public enum TeacherOutputMode
 {
     /// <summary>Constrained decoding via <c>response_format</c>. Reasoning-mode teachers are refused — they bypass it.</summary>

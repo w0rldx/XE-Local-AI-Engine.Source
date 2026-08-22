@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Harvest follow-up unit tests for <see cref="GoldenConversationService" />: the harvested create path pins
+///     Harvest-specific unit tests for <see cref="GoldenConversationService" />: the harvested create path pins
 ///     Source=Harvested + Enabled=false and requires provenance, while approve flips a harvested, owned, disabled case
 ///     enabled (and rejects every other shape). The manual create path's caps/ownership/signal rules are reused
 ///     verbatim (covered by <see cref="GoldenConversationServiceTests" />); these tests assert the harvest-specific

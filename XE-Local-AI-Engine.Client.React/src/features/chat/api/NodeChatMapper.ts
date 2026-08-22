@@ -301,7 +301,7 @@ export function mapMessageRevisions(dto: NodeChatMessageRevisionsResponseDto): C
 
 /**
  * Maps a tool-lifecycle stream event into the `ChatToolCall` shape the stream reducer folds into ordered parts.
- * Returns null for non-tool events. `tool-call-requested` → `waiting` when the tool needs approval (beta ships none) else
+ * Returns null for non-tool events. `tool-call-requested` → `waiting` when the tool needs approval, else
  * `requesting`; `tool-call-completed` → `failed` when `isError` else `received`. The tool call id is the stable
  * key so a completed event can later collapse onto its requested entry.
  */

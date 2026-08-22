@@ -6,9 +6,9 @@ import viteReact from "@vitejs/plugin-react";
 import UnoCSS from "unocss/vite";
 import { defineConfig, loadEnv, type ProxyOptions } from "vite";
 
-import signalrProxyPaths from "./config/signalr-proxy-paths.json";
-import aspNetCoreDevelopmentCertificate from "./vite-plugins/aspnetcore-development-certificate";
-import tablerDevelopmentBugfix from "./vite-plugins/tabler-development-bugfix";
+import signalrProxyPaths from "./config/signalr-proxy-paths.json" with { type: "json" };
+import aspNetCoreDevelopmentCertificate from "./vite-plugins/aspnetcore-development-certificate.ts";
+import tablerDevelopmentBugfix from "./vite-plugins/tabler-development-bugfix.ts";
 import { createFrontendComponentManifestPlugin } from "./scripts/FrontendComponentManifest.mjs";
 import fs from "node:fs";
 import path from "node:path";
@@ -17,7 +17,7 @@ import path from "node:path";
 // eng/ReleaseVersion.props is the single source of truth for the .NET assembly version AND `vpk --packVersion`; parse it
 // here and compose `VersionPrefix[-VersionSuffix]` (e.g. "0.1.0-rc.1").
 function resolveAppVersion(): string {
-	const propsPath = path.resolve(__dirname, "../eng/ReleaseVersion.props");
+	const propsPath = path.resolve(import.meta.dirname, "../eng/ReleaseVersion.props");
 	const xml = fs.readFileSync(propsPath, "utf8");
 	const prefix = xml.match(/<VersionPrefix>([^<]+)<\/VersionPrefix>/)?.[1]?.trim();
 	const suffix = xml.match(/<VersionSuffix>([^<]+)<\/VersionSuffix>/)?.[1]?.trim();
@@ -119,7 +119,7 @@ export default defineConfig(({ command, mode }) => {
 			alias: [
 				{
 					find: "@",
-					replacement: path.resolve(__dirname, "./src"),
+					replacement: path.resolve(import.meta.dirname, "./src"),
 				},
 			],
 		},

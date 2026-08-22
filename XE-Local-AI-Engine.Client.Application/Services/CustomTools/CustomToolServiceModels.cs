@@ -75,7 +75,7 @@ public sealed record CommandDefinition
 /// <summary>
 ///     The editable custom-tool payload the create/update endpoints bind. Exactly one of <see cref="Http" /> /
 ///     <see cref="Command" /> is populated for the matching <see cref="Kind" />. <see cref="Acknowledged" /> is the
-///     server-enforced danger acknowledgement (M2): a create/update is rejected unless it is <see langword="true" />.
+///     server-enforced danger acknowledgement: a create/update is rejected unless it is <see langword="true" />.
 /// </summary>
 public sealed record CustomToolDefinition
 {

@@ -132,7 +132,7 @@ internal sealed partial class CustomToolService : ICustomToolService
             throw new CustomToolValidationException($"Description must be at most {MaxDescriptionLength} characters.");
         }
 
-        // M2: the danger acknowledgement is enforced server-side, not just by the client checkbox — a client that skips
+        // The danger acknowledgement is enforced server-side, not just by the client checkbox — a client that skips
         // it cannot author or edit a tool.
         if (!definition.Acknowledged)
         {
@@ -328,7 +328,7 @@ internal sealed partial class CustomToolService : ICustomToolService
             throw new CustomToolValidationException("The command executable is required.");
         }
 
-        // C1/M3: the executable is fixed — never a placeholder — absolute, and not a shell/interpreter/script.
+        // The executable is fixed — never a placeholder — absolute, and not a shell/interpreter/script.
         if (executable.Contains('{', StringComparison.Ordinal))
         {
             throw new CustomToolValidationException("The command executable must be a fixed path, not a parameter.");

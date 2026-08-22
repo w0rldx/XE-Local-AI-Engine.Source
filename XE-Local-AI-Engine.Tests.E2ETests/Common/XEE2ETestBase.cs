@@ -25,7 +25,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 ///     </para>
 /// </summary>
 // S101: "XEE2ETestBase" keeps the "XE" product prefix on "E2ETestBase"; the consecutive
-// capitals are the intentional, plan-mandated harness name, not a casing mistake.
+// capitals are the intentional harness name, not a casing mistake.
 #pragma warning disable S101 // Types should be named in PascalCase
 public abstract class XEE2ETestBase : PageTest
 {

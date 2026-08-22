@@ -7,7 +7,7 @@
 # pre-releases) carries an auto-grouped changelog.
 #
 # Invoked via scripts/generate-release-notes.sh (CI + manual). See that script
-# and Plans/2026-06-25-velopack-operator-setup-runbook.md for usage.
+# and docs/wiki/11-hosting-and-deployment.md for current usage and release flow.
 #
 # Docs: https://git-cliff.org/docs/configuration
 

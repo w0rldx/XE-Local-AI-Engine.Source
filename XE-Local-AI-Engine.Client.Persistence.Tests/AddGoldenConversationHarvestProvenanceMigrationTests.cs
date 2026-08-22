@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Harvest follow-up migration <c>AddGoldenConversationHarvestProvenance</c>: adds the <c>source</c> /
+///     Migration coverage for <c>AddGoldenConversationHarvestProvenance</c>: adds the <c>source</c> /
 ///     <c>source_message_id</c> / <c>source_conversation_id</c> columns to <c>golden_conversations</c>. Existing rows
 ///     default <c>source = 0</c> (Manual) with null provenance ids; rollback drops the three columns. Mirrors
 ///     <see cref="NodeChatOriginMigrationTests" /> (historical-row insert + up/down assertions over raw columns).

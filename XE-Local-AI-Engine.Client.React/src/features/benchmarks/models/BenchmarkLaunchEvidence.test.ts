@@ -10,8 +10,8 @@ import {
 import type { BenchmarkEvidenceObject, BenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
 import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
 
-// The compare surface must make a launch difference visible whatever kind of difference it is — the plan names five
-// that a hash comparison alone would hide behind one opaque "the hashes differ". Each case below is one of them.
+// The compare surface must make every launch difference visible rather than hiding distinct changes behind one opaque
+// "the hashes differ" message. Each case below covers a difference that a hash comparison alone would conceal.
 
 const facts = (overrides: Partial<BenchmarkLaunchFacts> = {}): BenchmarkLaunchFacts => ({
 	...noBenchmarkLaunchFacts,

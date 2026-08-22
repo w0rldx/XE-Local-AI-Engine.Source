@@ -21,7 +21,7 @@ export interface AssistDraftVariables {
  * than through the generated `*Mutation()` factory because the two endpoints answer with differently-named long
  * fields — `instructions` vs `body` — and normalizing them here keeps the surface split out of the dialog.
  *
- * Drafting never persists (plan invariant 2), so nothing is invalidated on success.
+ * Drafting never persists, so nothing is invalidated on success.
  */
 export function useAssistDraft(surface: AssistSurface) {
 	return useMutation<AssistDraft, Error, AssistDraftVariables>({

@@ -23,7 +23,7 @@ export interface GoldenAssertion {
 }
 
 // Provenance of a golden case. `manual` = operator-authored via the add form; `harvested` = built
-// by the on-demand harvester from a thumbs-up assistant turn (harvest follow-up #2). A `source` discriminator is a
+// by the on-demand harvester from a thumbs-up assistant turn. A `source` discriminator is a
 // lowercase literal, matching the wire convention; harvested cases also carry the source message/conversation ids.
 export type GoldenConversationSource = "manual" | "harvested";
 

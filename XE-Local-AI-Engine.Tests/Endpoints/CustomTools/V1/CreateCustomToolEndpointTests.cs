@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     <c>POST custom-tools</c>: operator-gated, 201 + a resolvable Location on success, and 400 when the server-side
-///     danger acknowledgement is missing — the M2 control that must never be enforceable from the client alone.
+///     danger acknowledgement is missing — a control that must never be enforceable from the client alone.
 /// </summary>
 public sealed class CreateCustomToolEndpointTests
 {

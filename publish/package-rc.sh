@@ -14,8 +14,8 @@
 # plus a .sha256 sidecar for each zip.
 #
 # Cross-compiles both RIDs from Linux. The Windows bundle is built here but must be
-# smoke-tested on a real Windows machine before tagging (see TESTER-QUICKSTART.md / the
-# thin-RC plan's operator checklist).
+# smoke-tested on a real Windows machine before tagging (see TESTER-QUICKSTART.md and
+# ../docs/runbooks/windows-rc-verification-runbook.md).
 #
 # Usage:
 #   publish/package-rc.sh                 # both win-x64 and linux-x64
@@ -64,13 +64,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Version is the single source of truth in Directory.Build.props (VersionPrefix[-VersionSuffix]).
+# Keep this reference-only packager aligned with the release workflow's single version authority.
+# The shared reader validates the canonical manifest and composes prerelease suffixes consistently.
 read_version() {
-  local props="${REPO_ROOT}/Directory.Build.props" prefix suffix
-  prefix="$(grep -oP '(?<=<VersionPrefix>)[^<]+' "${props}" | head -1)"
-  suffix="$(grep -oP '(?<=<VersionSuffix>)[^<]+' "${props}" | head -1)"
-  [[ -n "${prefix}" ]] || { echo "Error: no <VersionPrefix> in Directory.Build.props." >&2; exit 1; }
-  if [[ -n "${suffix}" ]]; then echo "${prefix}-${suffix}"; else echo "${prefix}"; fi
+  "${REPO_ROOT}/scripts/read-release-version.py" --props "${REPO_ROOT}/eng/ReleaseVersion.props"
 }
 
 build_web() {
