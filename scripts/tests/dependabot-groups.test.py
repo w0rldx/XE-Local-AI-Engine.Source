@@ -81,7 +81,7 @@ def load_yaml(path: Path) -> dict[str, Any]:
         while index < len(lines) and lines[index][0] == indent and lines[index][1].startswith("- "):
             item = lines[index][1][2:].strip()
             index += 1
-            if ":" not in item:
+            if item.startswith(("'", '"')) or ":" not in item:
                 result.append(parse_scalar(item))
                 continue
 
@@ -145,10 +145,19 @@ class DependabotGroupContractTests(unittest.TestCase):
         self.assertFalse(self.pnpm_workspace["minimumReleaseAgeStrict"])
         self.assertEqual({"default-days": 7}, self.npm_update["cooldown"])
 
-    def test_typescript_seven_and_newer_are_temporarily_ignored(self) -> None:
+    def test_unsupported_typescript_and_node_type_majors_are_temporarily_ignored(self) -> None:
+        ignores = {entry["dependency-name"]: entry for entry in self.npm_update["ignore"]}
+
         self.assertEqual(
-            [{"dependency-name": "typescript", "versions": [">=7"]}],
-            self.npm_update["ignore"],
+            {"dependency-name": "typescript", "versions": [">=7"]},
+            ignores["typescript"],
+        )
+        self.assertEqual(
+            {
+                "dependency-name": "@types/node",
+                "update-types": ["version-update:semver-major"],
+            },
+            ignores["@types/node"],
         )
 
     def test_groups_are_deliberate_and_non_overlapping_for_current_dependencies(self) -> None:

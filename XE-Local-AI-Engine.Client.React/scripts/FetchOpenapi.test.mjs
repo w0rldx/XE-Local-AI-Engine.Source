@@ -1,6 +1,5 @@
 import { checkLiveOpenapi, firstDifference } from "./CheckLiveOpenapi.mjs";
 import {
-	createOpenapiHttpsAgent,
 	fetchJson,
 	isLoopbackHostname,
 	normalizeInt64ToNumber,
@@ -8,7 +7,10 @@ import {
 	serializeOpenapi,
 } from "./FetchOpenapi.mjs";
 import assert from "node:assert/strict";
+import { generateKeyPairSync, sign } from "node:crypto";
+import { readFileSync } from "node:fs";
 import http from "node:http";
+import https from "node:https";
 import test from "node:test";
 
 test("normalizes nested int64 integer schemas without changing other formats", () => {
@@ -58,22 +60,13 @@ test("recognizes only literal loopback hostnames and addresses", () => {
 	}
 });
 
-test("allows insecure TLS only for loopback OpenAPI endpoints", () => {
-	assert.ok(createOpenapiHttpsAgent(new URL("https://localhost:50722/openapi.json"), true));
-	assert.ok(createOpenapiHttpsAgent(new URL("https://127.8.4.2/openapi.json"), true));
-	assert.ok(createOpenapiHttpsAgent(new URL("https://[::1]/openapi.json"), true));
-	assert.equal(createOpenapiHttpsAgent(new URL("https://api.example.test/openapi.json"), false), undefined);
-	assert.throws(
-		() => createOpenapiHttpsAgent(new URL("https://localhost.example.test/openapi.json"), true),
-		/OPENAPI_INSECURE=1 is restricted to loopback HTTPS hosts/,
-	);
-});
-
-test("rejects insecure TLS for non-loopback hosts before initiating a request", async () => {
-	await assert.rejects(
-		fetchJson("https://192.0.2.1/openapi.json", { insecureHttps: true }),
-		/OPENAPI_INSECURE=1 is restricted to loopback HTTPS hosts/,
-	);
+test("uses the standard Node HTTPS client without a certificate-validation bypass", () => {
+	const source = readFileSync(new URL("./FetchOpenapi.mjs", import.meta.url), "utf8");
+	assert.match(source, /import \{ get as httpsGet \} from "node:https"/);
+	assert.match(source, /parsedUrl\.protocol === "http:" \? httpGet : httpsGet/);
+	for (const bypass of ["OPENAPI_INSECURE", "rejectUnauthorized", "NODE_TLS_REJECT_UNAUTHORIZED", "HttpsAgent"]) {
+		assert.equal(source.includes(bypass), false, bypass);
+	}
 });
 
 test("removes dynamic top-level loopback servers while preserving non-loopback servers", () => {
@@ -103,6 +96,108 @@ async function close(server) {
 	server.closeAllConnections();
 	await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
 }
+
+function derLength(length) {
+	if (length < 128) {
+		return Buffer.from([length]);
+	}
+	const bytes = [];
+	for (let remaining = length; remaining > 0; remaining >>= 8) {
+		bytes.unshift(remaining & 0xff);
+	}
+	return Buffer.from([0x80 | bytes.length, ...bytes]);
+}
+
+function der(tag, ...parts) {
+	const content = Buffer.concat(parts);
+	return Buffer.concat([Buffer.from([tag]), derLength(content.length), content]);
+}
+
+function oid(...values) {
+	const bytes = [values[0] * 40 + values[1]];
+	for (const value of values.slice(2)) {
+		const encoded = [value & 0x7f];
+		for (let remaining = value >> 7; remaining > 0; remaining >>= 7) {
+			encoded.unshift(0x80 | (remaining & 0x7f));
+		}
+		bytes.push(...encoded);
+	}
+	return der(0x06, Buffer.from(bytes));
+}
+
+function createUntrustedLocalCertificate() {
+	const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+	const signatureAlgorithm = der(0x30, oid(1, 2, 840, 113549, 1, 1, 11), der(0x05));
+	const commonName = der(0x30, der(0x31, der(0x30, oid(2, 5, 4, 3), der(0x0c, Buffer.from("localhost")))));
+	const validity = der(0x30, der(0x17, Buffer.from("200101000000Z")), der(0x17, Buffer.from("491231235959Z")));
+	const subjectAlternativeName = der(
+		0xa3,
+		der(0x30, der(0x30, oid(2, 5, 29, 17), der(0x04, der(0x30, der(0x87, Buffer.from([127, 0, 0, 1])))))),
+	);
+	const tbsCertificate = der(
+		0x30,
+		der(0xa0, der(0x02, Buffer.from([2]))),
+		der(0x02, Buffer.from([1])),
+		signatureAlgorithm,
+		commonName,
+		validity,
+		commonName,
+		publicKey.export({ type: "spki", format: "der" }),
+		subjectAlternativeName,
+	);
+	const certificate = der(
+		0x30,
+		tbsCertificate,
+		signatureAlgorithm,
+		der(0x03, Buffer.from([0]), sign("sha256", tbsCertificate, privateKey)),
+	);
+	const encodedCertificate = certificate
+		.toString("base64")
+		.match(/.{1,64}/g)
+		?.join("\n");
+	return {
+		key: privateKey.export({ type: "pkcs8", format: "pem" }),
+		cert: `-----BEGIN CERTIFICATE-----\n${encodedCertificate}\n-----END CERTIFICATE-----\n`,
+	};
+}
+
+async function listenHttps(handler) {
+	const server = https.createServer(createUntrustedLocalCertificate(), handler);
+	await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+	const address = server.address();
+	if (!address || typeof address === "string") {
+		throw new Error("Could not allocate test HTTPS server port.");
+	}
+	return { server, url: `https://127.0.0.1:${address.port}/openapi.json` };
+}
+
+test("fetches a live OpenAPI document with the standard Node HTTP client", async () => {
+	const expected = { openapi: "3.1.0", info: { title: "Live" } };
+	const { server, url } = await listen((_request, response) => {
+		response.writeHead(200, { "content-type": "application/json" });
+		response.end(JSON.stringify(expected));
+	});
+	try {
+		assert.deepEqual(await fetchJson(url), expected);
+	} finally {
+		await close(server);
+	}
+});
+
+test("rejects an untrusted local HTTPS certificate through normal Node validation", async () => {
+	const { server, url } = await listenHttps((_request, response) => {
+		response.writeHead(200, { "content-type": "application/json" });
+		response.end('{"openapi":"3.1.0"}');
+	});
+	try {
+		await assert.rejects(fetchJson(url), (error) => {
+			assert.equal(error.code, "DEPTH_ZERO_SELF_SIGNED_CERT");
+			return true;
+		});
+	} finally {
+		await close(server);
+	}
+});
 
 test("rejects an OpenAPI response above the byte limit", async () => {
 	const { server, url } = await listen((_request, response) => {

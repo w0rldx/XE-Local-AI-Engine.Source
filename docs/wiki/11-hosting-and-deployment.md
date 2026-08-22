@@ -18,7 +18,7 @@ The two paths are deliberately kept **byte-behaviour-identical when the desktop 
 
 ## 1. Aspire AppHost (dev/integration)
 
-`XE-Local-AI-Engine.AppHost/AppHost.cs` is a thin Aspire orchestration host (`IsAspireHost=true`). The AppHost SDK is 13.4.6. It references only the `Client` project and four hosting packages: `Aspire.Hosting.AppHost` 13.4.6, `Aspire.Hosting.JavaScript` 13.4.6, `Aspire.Hosting.Browsers` 13.4.6-preview.1.26319.6, and `CommunityToolkit.Aspire.Hosting.Sqlite` 13.4.0.
+`XE-Local-AI-Engine.AppHost/AppHost.cs` is a thin Aspire orchestration host (`IsAspireHost=true`). The AppHost SDK is 13.5.2. It references only the `Client` project and four hosting packages: `Aspire.Hosting.AppHost` 13.5.2, `Aspire.Hosting.JavaScript` 13.5.2, `Aspire.Hosting.Browsers` 13.5.2-preview.1.26421.6, and `CommunityToolkit.Aspire.Hosting.Sqlite` 13.4.0.
 
 From the repository root, use the worktree-scoped lifecycle wrappers:
 

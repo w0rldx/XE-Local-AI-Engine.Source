@@ -29,8 +29,12 @@ React-specific correctness, performance, security, and accessibility heuristics 
 
 ## Compatibility and behavior evidence
 
-- The package and this project both declare Node `^20.19.0 || >=22.13.0`, so every repository-supported Node
-  version is also supported by React Doctor. Evaluation ran on Node 24.18.0 and pnpm 11.2.2.
+- This project requires Node `>=22.13.0`, a supported subset of React Doctor's broader
+  `^20.19.0 || >=22.13.0` range. Evaluation ran on Node 24.18.0 and pnpm 11.2.2.
+- The root compiler surface is intentionally pinned to exact `@types/node` 22.3.0 for Node 22 compatibility and a
+  trust-clean resolution. A separate transitive `@types/node` version used privately by another types package does
+  not define the project's runtime baseline; do not add a pnpm override unless that private copy causes a real
+  compile failure.
 - React Doctor resolves its private TypeScript 5.9.3 dependency while the application retains TypeScript 6.0.3;
   pnpm reported no peer conflict and the scan completed.
 - Two isolated, cache-disabled, serial JSON scans produced the same 147 fingerprints: 31 errors and 116 warnings
