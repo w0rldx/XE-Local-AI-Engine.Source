@@ -70,11 +70,19 @@ Run from `XE-Local-AI-Engine.Client.React`:
 pnpm run openapi
 ```
 
-This fetches the current OpenAPI document and regenerates `src/core/api/generated/**`. For a local HTTPS API with a self-signed certificate, use:
+This fetches the current OpenAPI document and regenerates `src/core/api/generated/**`. HTTPS always uses Node's normal certificate validation. If Node does not already trust the local .NET development certificate, export its public certificate as PEM and extend Node's trust store when starting the command:
 
 ```sh
-OPENAPI_INSECURE=1 OPENAPI_SPEC_URL="https://localhost:50722/openapi/local/v1/v1.json" pnpm run openapi
+mkdir -p "$HOME/.aspnet/https"
+dotnet dev-certs https -ep "$HOME/.aspnet/https/xe-local-ai-engine-dev-cert.pem" --format PEM
+NODE_EXTRA_CA_CERTS="$HOME/.aspnet/https/xe-local-ai-engine-dev-cert.pem" \
+  OPENAPI_SPEC_URL="https://localhost:50722/openapi/local/v1/v1.json" pnpm run openapi
 ```
+
+With no password option, `dotnet dev-certs` writes only the public PEM certificate at that path. Do not add
+`--no-password` or otherwise export an unencrypted private key. `NODE_EXTRA_CA_CERTS` is read only when Node starts;
+point it at the trusted public PEM and do not disable TLS verification. The repository's desktop live contract script
+uses an isolated random loopback HTTP endpoint and does not require this certificate setup.
 
 To regenerate from the committed snapshot only and check for drift:
 
@@ -85,7 +93,8 @@ pnpm run openapi:check
 To compare a running desktop-mode backend with both the committed snapshot and generated client, supply its absolute specification URL:
 
 ```sh
-OPENAPI_SPEC_URL="https://localhost:50722/openapi/local/v1/v1.json" OPENAPI_INSECURE=1 pnpm run openapi:check:live
+NODE_EXTRA_CA_CERTS="$HOME/.aspnet/https/xe-local-ai-engine-dev-cert.pem" \
+  OPENAPI_SPEC_URL="https://localhost:50722/openapi/local/v1/v1.json" pnpm run openapi:check:live
 ```
 
 The live command requires `OPENAPI_SPEC_URL`, normalizes the live document exactly like `openapi:fetch`, compares it byte-for-byte with `openapi/v1.json`, then runs the unchanged snapshot-only generation check. Dynamic top-level loopback `servers` origins are removed during materialization so an isolated backend's allocated port is not contract drift. Fetches time out after 10 seconds and reject documents above 8 MiB. The command does not start or stop the backend.

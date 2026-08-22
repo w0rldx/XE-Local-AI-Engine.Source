@@ -268,7 +268,7 @@ FastEndpoints (NSwag doc)                       React build
 ```
 
 - **Doc source:** NSwag-generated document served at `/openapi/local/v1/{documentName}.json` (the non-Production `MapOpenApi` branch in `Program.cs`). `XE-Local-AI-Engine.Tests/ApiFoundation/OpenApiDocumentTests.cs` guards the document.
-- **Fetch:** `pnpm run openapi:fetch` → `scripts/FetchOpenapi.mjs` pulls `OPENAPI_SPEC_URL` (default `https://localhost:50722/openapi/local/v1/v1.json`) into `openapi/v1.json`. Set `OPENAPI_INSECURE=1` to accept the dev self-signed cert.
+- **Fetch:** `pnpm run openapi:fetch` → `scripts/FetchOpenapi.mjs` pulls `OPENAPI_SPEC_URL` (default `https://localhost:50722/openapi/local/v1/v1.json`) into `openapi/v1.json`. HTTPS uses Node's normal certificate validation. When Node does not already trust the local .NET development certificate, export its public certificate as PEM and set `NODE_EXTRA_CA_CERTS` before starting Node; never disable TLS verification. The sanctioned desktop live contract script uses an isolated random loopback HTTP endpoint instead.
 - **Generate:** `pnpm run openapi:generate` → `openapi-ts --file OpenapiTs.config.ts` writes `src/core/api/generated/`.
 - **Combined:** `pnpm run openapi` runs both; `openapi:check` / `openapi:check:live` fail CI if the generated output drifts from committed code (`git diff --exit-code`).
 
@@ -287,7 +287,7 @@ FastEndpoints (NSwag doc)                       React build
 3. Commit the regenerated artifacts (they are tracked; `openapi:check` enforces this).
 4. For a **hub**, or a route whose response is not request/response JSON, do *not* expect a typed SDK fn — wire it by hand on the shared axios instance / through `SharedHubConnection` (see the hand-wired list above and the chat hub).
 
-> The exact regen recipe for a throwaway Client host: pass the connection string as a CLI arg, set `XE_NODE_SQLITE_KEY`, `ASPNETCORE_URLS=:50722`, and `OPENAPI_INSECURE=1`.
+> The exact regen recipe for a throwaway Client host: pass the connection string as a CLI arg, set `XE_NODE_SQLITE_KEY` and `ASPNETCORE_URLS=:50722`, then set `NODE_EXTRA_CA_CERTS` to the trusted PEM development certificate before starting `pnpm run openapi`. `NODE_EXTRA_CA_CERTS` is read only at Node startup.
 
 The generated SDK is regenerated as endpoint families land; the current artifacts include Custom Tools CRUD/probe, runtime-acquisition status, automation commands, workspaces, the Benchmarks and Training families, `proxy/key`, and the other routes inventoried above. The committed `openapi/v1.json` + `src/core/api/generated/` already include them; `openapi:check` still enforces that they stay in sync. The proxy **passthrough** (`proxy/v1/*`) is deliberately absent from that document — it is hand-mapped precisely so it never reaches the generated SDK.
 
