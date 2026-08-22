@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -60,11 +61,15 @@ public sealed class EvaluationRunExecutor(
     private readonly ITrainingRunEventBuffer _events = events ?? throw new ArgumentNullException(nameof(events));
     private readonly ILogger<EvaluationRunExecutor> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private const int EvaluationContextTokens = 4096;
+
     private readonly ITransientLlamaServerEvaluationHarness _evaluationHarness =
         evaluationHarness ?? throw new ArgumentNullException(nameof(evaluationHarness));
+
     private readonly IInferenceChatClientFactory _chatClientFactory = chatClientFactory ?? throw new ArgumentNullException(nameof(chatClientFactory));
+
     private readonly ITrainingEvaluationInstalledModelLeaseProvider _installedModels =
         installedModels ?? throw new ArgumentNullException(nameof(installedModels));
+
     private readonly ITrainingRunStore _runs = runs ?? throw new ArgumentNullException(nameof(runs));
     private readonly ITrainingEvaluationStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly TrainingRunWorkspace _workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
@@ -134,9 +139,9 @@ public sealed class EvaluationRunExecutor(
             {
                 var validated = ValidateLaunchEvidence(provisional.Model, provisional.Launch, target);
                 await _store.BindExecutionProvenanceAsync(running.Id,
-                        JsonSerializer.SerializeToUtf8Bytes(validated, TrainingJson.Options),
-                        CancellationToken.None)
-                    .ConfigureAwait(false);
+                                JsonSerializer.SerializeToUtf8Bytes(validated, TrainingJson.Options),
+                                CancellationToken.None)
+                            .ConfigureAwait(false);
             },
             async (session, token) =>
             {
@@ -168,11 +173,12 @@ public sealed class EvaluationRunExecutor(
             ? await _runs.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false)
             : null;
         if (artifact is null || artifact.DiscardedAtUtc is not null
-            || !string.Equals(artifact.Sha256, evaluation.ModelContentFingerprint, StringComparison.OrdinalIgnoreCase)
-            || !File.Exists(artifact.Path))
+                             || !string.Equals(artifact.Sha256, evaluation.ModelContentFingerprint, StringComparison.OrdinalIgnoreCase)
+                             || !File.Exists(artifact.Path))
         {
             throw new EvaluationRejectedException("The staged evaluation target no longer matches its recorded artifact identity.");
         }
+
         var artifactSha256 = artifact.Sha256
                              ?? throw new EvaluationRejectedException("The staged evaluation target has no recorded content identity.");
 
@@ -219,8 +225,7 @@ public sealed class EvaluationRunExecutor(
             InstalledLease: null);
     }
 
-    private static TrainingEvaluationExecutionProvenanceV1 ValidateExecutionEvidence(
-        TransientLlamaServerEvaluationResult<TransientLlamaServerEvaluationSession> result,
+    private static TrainingEvaluationExecutionProvenanceV1 ValidateExecutionEvidence(TransientLlamaServerEvaluationResult<TransientLlamaServerEvaluationSession> result,
         EvaluationExecutionTarget target)
     {
         var session = result.Value;
@@ -270,8 +275,7 @@ public sealed class EvaluationRunExecutor(
         return ValidateLaunchEvidence(result.Model, result.Launch, target);
     }
 
-    private static TrainingEvaluationExecutionProvenanceV1 ValidateLaunchEvidence(
-        TransientLlamaServerModelProvenance model,
+    private static TrainingEvaluationExecutionProvenanceV1 ValidateLaunchEvidence(TransientLlamaServerModelProvenance model,
         LlamaServerLaunchReceipt launch,
         EvaluationExecutionTarget target)
     {
@@ -348,7 +352,8 @@ public sealed class EvaluationRunExecutor(
         return lease;
     }
 
-    private sealed record EvaluationExecutionTarget(string ModelPath,
+    private sealed record EvaluationExecutionTarget(
+        string ModelPath,
         string? AdapterPath,
         string? ArtifactSha256,
         long? ArtifactSizeBytes,
@@ -356,7 +361,8 @@ public sealed class EvaluationRunExecutor(
         long ExpectedModelSizeBytes,
         ITrainingEvaluationInstalledModelLease? InstalledLease) : IAsyncDisposable
     {
-        public ValueTask DisposeAsync() => InstalledLease?.DisposeAsync() ?? ValueTask.CompletedTask;
+        public ValueTask DisposeAsync() =>
+            InstalledLease?.DisposeAsync() ?? ValueTask.CompletedTask;
     }
 
     private async Task ScoreWithClientAsync(TrainingEvaluationRecord running,
@@ -366,7 +372,6 @@ public sealed class EvaluationRunExecutor(
         IChatClient chatClient,
         CancellationToken cancellationToken)
     {
-
         foreach (var sampleId in membership.HoldoutSampleIds)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -439,7 +444,7 @@ public sealed class EvaluationRunExecutor(
         try
         {
             response = await chatClient.GetResponseAsync(messages, options, turnCancellation.Token).ConfigureAwait(false);
-            activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Ok);
+            activity?.SetStatus(ActivityStatusCode.Ok);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

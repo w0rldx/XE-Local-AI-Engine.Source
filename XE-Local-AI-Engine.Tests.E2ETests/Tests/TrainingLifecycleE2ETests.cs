@@ -31,18 +31,18 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
         var token = await LoginForApiAsync().ConfigureAwait(false);
 
         using var runDocument = await SendJsonAsync(HttpMethod.Post,
-                                    $"{Api}/runs",
-                                    token,
-                                    new
-                                    {
-                                        datasetId = fixture.DatasetId,
-                                        expectedDatasetVersion = fixture.DatasetVersion,
-                                        baseArtifactId = fixture.BaseArtifactId,
-                                        licenseConfirmed = true,
-                                        linkedModelName = TrainingLifecycleE2ETestDoubles.InstalledBaseModel
-                                    },
-                                    expectedStatus: 200)
-                                .ConfigureAwait(false);
+                $"{Api}/runs",
+                token,
+                new
+                {
+                    datasetId = fixture.DatasetId,
+                    expectedDatasetVersion = fixture.DatasetVersion,
+                    baseArtifactId = fixture.BaseArtifactId,
+                    licenseConfirmed = true,
+                    linkedModelName = TrainingLifecycleE2ETestDoubles.InstalledBaseModel
+                },
+                expectedStatus: 200)
+            .ConfigureAwait(false);
         var runId = runDocument.RootElement.GetProperty("id").GetGuid();
 
         TrainingRunRecord run;
@@ -70,15 +70,15 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
         }
 
         using var exportDocument = await SendJsonAsync(HttpMethod.Post,
-                                       $"{Api}/runs/{runId}/exports",
-                                       token,
-                                       new
-                                       {
-                                           kind = "MergedGguf",
-                                           quantType = "Q4_K_M"
-                                       },
-                                       expectedStatus: 202)
-                                   .ConfigureAwait(false);
+                $"{Api}/runs/{runId}/exports",
+                token,
+                new
+                {
+                    kind = "MergedGguf",
+                    quantType = "Q4_K_M"
+                },
+                expectedStatus: 202)
+            .ConfigureAwait(false);
         Check.Equal("MergedGguf", exportDocument.RootElement.GetProperty("kind").GetString());
 
         var artifact = await WaitForExportAsync(runId).ConfigureAwait(false);
@@ -89,17 +89,17 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
         var (baseEvaluationId, tunedEvaluationId) = await CompleteEvaluationsAsync(token, runId, artifact, verdicts).ConfigureAwait(false);
 
         using var comparisonDocument = await SendJsonAsync(HttpMethod.Post,
-                                           $"{Api}/comparisons",
-                                           token,
-                                           new
-                                           {
-                                               name = $"E2E lifecycle {runId:N}",
-                                               baseEvaluationRunId = baseEvaluationId,
-                                               tunedEvaluationRunId = tunedEvaluationId,
-                                               trainingRunId = runId
-                                           },
-                                           expectedStatus: 200)
-                                       .ConfigureAwait(false);
+                $"{Api}/comparisons",
+                token,
+                new
+                {
+                    name = $"E2E lifecycle {runId:N}",
+                    baseEvaluationRunId = baseEvaluationId,
+                    tunedEvaluationRunId = tunedEvaluationId,
+                    trainingRunId = runId
+                },
+                expectedStatus: 200)
+            .ConfigureAwait(false);
         var comparisonId = comparisonDocument.RootElement.GetProperty("id").GetGuid();
         Check.True(comparisonDocument.RootElement.GetProperty("deltas").GetProperty("accuracyAvailable").GetBoolean(),
             "A comparison with no scored work is not a lifecycle verdict.");
@@ -108,32 +108,32 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
         await using (var scope = Factory.Services.CreateAsyncScope())
         {
             artifact = Check.NotNull(await scope.ServiceProvider.GetRequiredService<ITrainingRunStore>()
-                                             .GetArtifactAsync(artifactId)
-                                             .ConfigureAwait(false), "The staged artifact still exists before quality review.");
+                                                .GetArtifactAsync(artifactId)
+                                                .ConfigureAwait(false), "The staged artifact still exists before quality review.");
         }
 
         using var qualityDocument = await SendJsonAsync(HttpMethod.Put,
-                                        $"{Api}/artifacts/{artifactId}/quality",
-                                        token,
-                                        new
-                                        {
-                                            comparisonId,
-                                            expectedVersion = artifact.Version
-                                        },
-                                        expectedStatus: 200)
-                                    .ConfigureAwait(false);
+                $"{Api}/artifacts/{artifactId}/quality",
+                token,
+                new
+                {
+                    comparisonId,
+                    expectedVersion = artifact.Version
+                },
+                expectedStatus: 200)
+            .ConfigureAwait(false);
         Check.Equal("Passed", qualityDocument.RootElement.GetProperty("outcome").GetString());
         verdicts.Record(TrainingLifecycleE2ETestDoubles.Stage.QualityPassed);
 
         using var promotionDocument = await SendJsonAsync(HttpMethod.Post,
-                                          $"{Api}/artifacts/{artifactId}/promote",
-                                          token,
-                                          new
-                                          {
-                                              modelName = $"e2e-trained-{runId:N}"
-                                          },
-                                          expectedStatus: 200)
-                                      .ConfigureAwait(false);
+                $"{Api}/artifacts/{artifactId}/promote",
+                token,
+                new
+                {
+                    modelName = $"e2e-trained-{runId:N}"
+                },
+                expectedStatus: 200)
+            .ConfigureAwait(false);
         Check.Contains(promotionDocument.RootElement.GetProperty("modelName").GetString()!, ":Q4_K_M", StringComparison.Ordinal);
 
         await Page.GotoAsync($"{NodeAppUrl}/training/comparisons", new PageGotoOptions
@@ -165,13 +165,13 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
                 Parts = [new TrainingSamplePartV1("user", 0, Content: $"question-{index}")]
             }, TrainingJson.Options);
             _ = await datasets.AppendSampleAsync(new TrainingSampleInput(dataset.Id,
-                    "no-tool",
-                    TrainingSampleLabel.Good,
-                    content,
-                    ValidationJson: null,
-                    TrainingSampleProvenance.Generated,
-                    new string((char)('a' + index), count: 64)))
-                .ConfigureAwait(false);
+                                  "no-tool",
+                                  TrainingSampleLabel.Good,
+                                  content,
+                                  ValidationJson: null,
+                                  TrainingSampleProvenance.Generated,
+                                  new string((char)('a' + index), count: 64)))
+                              .ConfigureAwait(false);
         }
 
         var ready = await datasets.CompleteGenerationAsync(dataset.Id, DatasetGenerationWorkStatus.Succeeded, errorMessage: null).ConfigureAwait(false);
@@ -191,14 +191,24 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
         TrainingLifecycleE2ETestDoubles.Verdicts verdicts)
     {
         using var baseDocument = await SendJsonAsync(HttpMethod.Post, $"{Api}/evaluations", token,
-            new { trainingRunId = runId, target = "Base", modelName = TrainingLifecycleE2ETestDoubles.InstalledBaseModel }, 202)
+                new
+                {
+                    trainingRunId = runId,
+                    target = "Base",
+                    modelName = TrainingLifecycleE2ETestDoubles.InstalledBaseModel
+                }, 202)
             .ConfigureAwait(false);
         var baseId = baseDocument.RootElement.GetProperty("id").GetGuid();
         await ExecuteEvaluationAsync(baseId).ConfigureAwait(false);
         verdicts.Record(TrainingLifecycleE2ETestDoubles.Stage.BaseEvaluationSucceeded);
 
         using var tunedDocument = await SendJsonAsync(HttpMethod.Post, $"{Api}/evaluations", token,
-            new { trainingRunId = runId, target = "Tuned", artifactId = artifact.Id }, 202).ConfigureAwait(false);
+            new
+            {
+                trainingRunId = runId,
+                target = "Tuned",
+                artifactId = artifact.Id
+            }, 202).ConfigureAwait(false);
         var tunedId = tunedDocument.RootElement.GetProperty("id").GetGuid();
         await ExecuteEvaluationAsync(tunedId).ConfigureAwait(false);
         verdicts.Record(TrainingLifecycleE2ETestDoubles.Stage.TunedEvaluationSucceeded);
@@ -221,8 +231,7 @@ public sealed class TrainingLifecycleE2ETests : XESerialE2ETestBase
         Check.Equal(TrainingEvaluationStatus.Succeeded, completed.Status);
         Check.Equal(completed.TotalCount, completed.ScoredCount, "An incomplete evaluation must never count as a lifecycle verdict.");
         Check.True(completed.ExecutionProvenanceJson is { IsEmpty: false }, "Evaluation must bind validated launch provenance before scoring.");
-        var provenance = Check.NotNull(JsonSerializer.Deserialize<TrainingEvaluationExecutionProvenanceV1>(
-                completed.ExecutionProvenanceJson!.Value.Span, TrainingJson.Options),
+        var provenance = Check.NotNull(JsonSerializer.Deserialize<TrainingEvaluationExecutionProvenanceV1>(completed.ExecutionProvenanceJson!.Value.Span, TrainingJson.Options),
             "The executor must persist readable launch provenance.");
         Check.Equal(provenance.ExecutableSha256, provenance.ManifestSha256,
             "The runtime executable and manifest identities must be the same verified binary identity.");

@@ -2,10 +2,10 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 
 using System.ClientModel.Primitives;
 using System.Collections;
-using System.Globalization;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Globalization;
 using System.Net;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -16,6 +16,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using OpenAI.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
@@ -53,6 +54,8 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
+using ChatFinishReason = Microsoft.Extensions.AI.ChatFinishReason;
+using ChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
 public sealed class InvocationRunnerTests
 {
@@ -3123,13 +3126,13 @@ public sealed class InvocationRunnerTests
             Arg.Any<long?>(),
             Arg.Any<string?>(),
             Arg.Is<InvocationThroughput?>(throughput => throughput != null
-                                                       && throughput.PromptTokens == 123
-                                                       && IsClose(throughput.PromptMs, 456.5)
-                                                       && throughput.GenerationTokens == 89
-                                                       && IsClose(throughput.GenerationMs, 1011.5)
-                                                       && throughput.CachedPromptTokens == 7
-                                                       && throughput.SegmentCount == 1
-                                                       && throughput.TimeToFirstTokenMs > 0));
+                                                        && throughput.PromptTokens == 123
+                                                        && IsClose(throughput.PromptMs, 456.5)
+                                                        && throughput.GenerationTokens == 89
+                                                        && IsClose(throughput.GenerationMs, 1011.5)
+                                                        && throughput.CachedPromptTokens == 7
+                                                        && throughput.SegmentCount == 1
+                                                        && throughput.TimeToFirstTokenMs > 0));
     }
 
     [Test]
@@ -3155,12 +3158,12 @@ public sealed class InvocationRunnerTests
             Arg.Any<long?>(),
             Arg.Any<string?>(),
             Arg.Is<InvocationThroughput?>(throughput => throughput != null
-                                                       && throughput.PromptTokens == 40 + 283
-                                                       && IsClose(throughput.PromptMs, 12.5 + 456.5)
-                                                       && throughput.GenerationTokens == 89 + 1720
-                                                       && IsClose(throughput.GenerationMs, 200.25 + 1011.5)
-                                                       && throughput.CachedPromptTokens == 2346
-                                                       && throughput.SegmentCount == 2));
+                                                        && throughput.PromptTokens == 40 + 283
+                                                        && IsClose(throughput.PromptMs, 12.5 + 456.5)
+                                                        && throughput.GenerationTokens == 89 + 1720
+                                                        && IsClose(throughput.GenerationMs, 200.25 + 1011.5)
+                                                        && throughput.CachedPromptTokens == 2346
+                                                        && throughput.SegmentCount == 2));
     }
 
     [Test]
@@ -3184,11 +3187,12 @@ public sealed class InvocationRunnerTests
             Arg.Any<long?>(),
             Arg.Any<string?>(),
             Arg.Is<InvocationThroughput?>(throughput => throughput != null
-                                                       && throughput.PromptTokens == null
-                                                       && throughput.GenerationTokens == null));
+                                                        && throughput.PromptTokens == null
+                                                        && throughput.GenerationTokens == null));
     }
 
-    private static bool IsClose(double? actual, double expected) => actual is { } value && Math.Abs(value - expected) < 0.0001;
+    private static bool IsClose(double? actual, double expected) =>
+        actual is { } value && Math.Abs(value - expected) < 0.0001;
 
     /// <summary>
     ///     One stream carrying TWO terminal readings, i.e. what a tool-calling turn looks like on the wire: the second
@@ -3208,7 +3212,7 @@ public sealed class InvocationRunnerTests
             + $"\"choices\":[{{\"index\":0,\"finish_reason\":\"stop\",\"delta\":{{}}}}],"
             + $"\"timings\":{{\"cache_n\":{cacheN},\"prompt_n\":{promptN},\"prompt_ms\":{promptMs},"
             + $"\"predicted_n\":{predictedN},\"predicted_ms\":{predictedMs}}}}}");
-        var chunk = ModelReaderWriter.Read<OpenAI.Chat.StreamingChatCompletionUpdate>(BinaryData.FromString(json))
+        var chunk = ModelReaderWriter.Read<StreamingChatCompletionUpdate>(BinaryData.FromString(json))
                     ?? throw new InvalidOperationException("The chunk fixture did not deserialize.");
         return new AgentResponseUpdate(new ChatResponseUpdate(ChatRole.Assistant, text)
         {
@@ -3232,7 +3236,7 @@ public sealed class InvocationRunnerTests
                                    "choices":[{"index":0,"finish_reason":"stop","delta":{}}],
                                    "timings":{"cache_n":7,"prompt_n":123,"prompt_ms":456.5,"predicted_n":89,"predicted_ms":1011.5}}
                                   """;
-        var chunk = ModelReaderWriter.Read<OpenAI.Chat.StreamingChatCompletionUpdate>(BinaryData.FromString(finalChunk))
+        var chunk = ModelReaderWriter.Read<StreamingChatCompletionUpdate>(BinaryData.FromString(finalChunk))
                     ?? throw new InvalidOperationException("The chunk fixture did not deserialize.");
         yield return new AgentResponseUpdate(new ChatResponseUpdate(ChatRole.Assistant, " part two")
         {

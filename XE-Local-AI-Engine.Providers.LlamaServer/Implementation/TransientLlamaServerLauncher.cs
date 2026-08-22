@@ -95,6 +95,7 @@ internal sealed class TransientLlamaServerLauncher(
         {
             throw new ArgumentOutOfRangeException(nameof(request), "The teardown timeout must be positive.");
         }
+
         if (!File.Exists(request.ModelFilePath)
             || !string.IsNullOrWhiteSpace(request.AdapterFilePath) && !File.Exists(request.AdapterFilePath))
         {
@@ -123,7 +124,10 @@ internal sealed class TransientLlamaServerLauncher(
             plan,
             request.LaunchPolicy.ChatCacheRamMiB,
             adapterFilePath: request.AdapterFilePath);
-        spec = spec with { Arguments = [.. spec.Arguments, "--alias", endpointModelAlias] };
+        spec = spec with
+        {
+            Arguments = [.. spec.Arguments, "--alias", endpointModelAlias]
+        };
         var capabilityDecision = LlamaServerCapabilityGate.Apply(spec, manifest, requireMetrics: false);
         if (!capabilityDecision.IsCompatible)
         {

@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp.Server;
 
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -12,7 +13,6 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Drafting;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
-using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
@@ -36,7 +36,10 @@ public sealed class NodeAdminMcpTools(
     private readonly IAgentDefinitionService _agentDefinitionService = agentDefinitionService ?? throw new ArgumentNullException(nameof(agentDefinitionService));
     private readonly IGgufDownloadCoordinator _ggufDownloadCoordinator = ggufDownloadCoordinator ?? throw new ArgumentNullException(nameof(ggufDownloadCoordinator));
     private readonly ILocalModelAdministrationService _localModelAdministrationService = localModelAdministrationService ?? throw new ArgumentNullException(nameof(localModelAdministrationService));
-    private readonly INodeSettingsAdministrationService _nodeSettingsAdministrationService = nodeSettingsAdministrationService ?? throw new ArgumentNullException(nameof(nodeSettingsAdministrationService));
+
+    private readonly INodeSettingsAdministrationService _nodeSettingsAdministrationService =
+        nodeSettingsAdministrationService ?? throw new ArgumentNullException(nameof(nodeSettingsAdministrationService));
+
     private readonly ILlamaCppRuntimeAdministrationService _runtimeAdministrationService = runtimeAdministrationService ?? throw new ArgumentNullException(nameof(runtimeAdministrationService));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor ?? throw new ArgumentNullException(nameof(httpContextAccessor));
@@ -70,7 +73,8 @@ public sealed class NodeAdminMcpTools(
     [Description("Start acquiring the managed llama.cpp runtime. Omit variant to select the best local backend automatically.")]
 #pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
     public async Task<McpRuntimeAcquisitionStartResponse> StartRuntimeAcquisitionAsync(CancellationToken cancellationToken,
-        [Description("Optional backend: cpu, cuda, or vulkan.")] string? variant = null)
+        [Description("Optional backend: cpu, cuda, or vulkan.")]
+        string? variant = null)
 #pragma warning restore IDE1006
     {
         return await InvokeAuditedAsync("start_runtime_acquisition", AuditArguments(("variant", variant)), async () =>
@@ -97,12 +101,14 @@ public sealed class NodeAdminMcpTools(
     [McpServerTool(Name = "start_model_pull")]
     [Description("Start or rejoin a background GGUF model pull from Hugging Face.")]
 #pragma warning disable IDE1006 // MCP's public JSON contract intentionally uses snake_case.
-    public async Task<McpModelPullStartResponse> StartModelPullAsync(
-        [Description("Hugging Face repository id.")] string repo_id,
+    public async Task<McpModelPullStartResponse> StartModelPullAsync([Description("Hugging Face repository id.")] string repo_id,
         CancellationToken cancellationToken,
-        [Description("Optional exact GGUF file name.")] string? file_name = null,
-        [Description("Optional quant label when file_name is omitted.")] string? quant = null,
-        [Description("Optional branch, tag, or commit revision.")] string? revision = null)
+        [Description("Optional exact GGUF file name.")]
+        string? file_name = null,
+        [Description("Optional quant label when file_name is omitted.")]
+        string? quant = null,
+        [Description("Optional branch, tag, or commit revision.")]
+        string? revision = null)
 #pragma warning restore IDE1006
     {
         return await InvokeAuditedAsync("start_model_pull",
@@ -523,7 +529,8 @@ public sealed class NodeAdminMcpTools(
         bool disableBaseScaffold,
         McpGenerationMetadataInput? generationMetadata,
         params (string Name, object? Value)[] additionalArguments) =>
-        AuditArguments([("name", name),
+        AuditArguments([
+            ("name", name),
             ("instructions", instructions),
             ("description", description),
             ("model_profile", modelProfile),
@@ -538,7 +545,8 @@ public sealed class NodeAdminMcpTools(
             ("memory_extraction_enabled", memoryExtractionEnabled),
             ("disable_base_scaffold", disableBaseScaffold),
             ("generation_metadata", generationMetadata),
-            .. additionalArguments]);
+            .. additionalArguments
+        ]);
 
     private static IReadOnlyList<KeyValuePair<string, object?>> AuditArguments(params (string Name, object? Value)[] arguments) =>
         [.. arguments.Select(static argument => new KeyValuePair<string, object?>(argument.Name, argument.Value))];
@@ -566,7 +574,7 @@ public sealed class NodeAdminMcpTools(
             IReadOnlyDictionary<string, bool> dictionary => $"provided(count:{dictionary.Count})",
             McpGenerationMetadataInput => "provided",
             bool boolean => boolean ? "true" : "false",
-            int number => number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            int number => number.ToString(CultureInfo.InvariantCulture),
             _ => "provided"
         };
     }
@@ -646,14 +654,15 @@ public sealed class NodeAdminMcpTools(
     private static McpAgentResponse AgentNotFound() =>
         new("not_found", null, McpAdminToolFailureCodes.AgentNotFound, "Agent not found.");
 
-    private static string ToWirePhase(GgufDownloadPhase phase) => phase switch
-    {
-        GgufDownloadPhase.Running => "running",
-        GgufDownloadPhase.Completed => "completed",
-        GgufDownloadPhase.Cancelled => "cancelled",
-        GgufDownloadPhase.Failed => "failed",
-        _ => "failed"
-    };
+    private static string ToWirePhase(GgufDownloadPhase phase) =>
+        phase switch
+        {
+            GgufDownloadPhase.Running => "running",
+            GgufDownloadPhase.Completed => "completed",
+            GgufDownloadPhase.Cancelled => "cancelled",
+            GgufDownloadPhase.Failed => "failed",
+            _ => "failed"
+        };
 
     private static string GetVersion() =>
         typeof(NodeAdminMcpTools).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion

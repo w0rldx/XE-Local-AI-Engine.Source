@@ -21,6 +21,7 @@ internal static class DesktopPortStore
 {
     /// <summary>The per-user data-directory file name that records the last bound loopback port (plain text, not a secret).</summary>
     internal const string PortFileName = "desktop-port.txt";
+
     internal const string ReadyFileName = "ready.json";
 
     /// <summary>Ports at or below this are well-known/privileged; a desktop loopback bind never legitimately uses one.</summary>
@@ -112,7 +113,8 @@ internal static class DesktopPortStore
         }
     }
 
-    internal static ReadyInfo? ReadReady(string dataDirectory) => ReadReadyEvidence(dataDirectory).Info;
+    internal static ReadyInfo? ReadReady(string dataDirectory) =>
+        ReadReadyEvidence(dataDirectory).Info;
 
     internal static ReadyEvidence ReadReadyEvidence(string dataDirectory)
     {

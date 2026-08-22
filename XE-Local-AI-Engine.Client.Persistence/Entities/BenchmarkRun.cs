@@ -26,10 +26,12 @@ internal sealed record class BenchmarkRun
     ///     was started under, exactly like <see cref="RequestedContextTokens" />.
     /// </summary>
     public int? InvocationTimeoutSeconds { get; set; }
+
     public BenchmarkPrimaryStatus PrimaryStatus { get; set; }
     public int? EffectiveContextTokens { get; set; }
     public long? DurationMs { get; set; }
     public int? TotalTokens { get; set; }
+
     /// <summary>
     ///     Decode throughput (tg) when the runtime reported <see cref="GenerationTokens" />/<see cref="GenerationMs" />,
     ///     otherwise the legacy blended <c>total_tokens / duration_ms</c>. Kept under its original name and column so

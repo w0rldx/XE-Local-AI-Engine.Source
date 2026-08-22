@@ -24,6 +24,7 @@ internal sealed record class BenchmarkProject
     ///     frozen default (<see cref="Services.Benchmarks.BenchmarkFrozenPolicies" />). Plaintext, not sensitive.
     /// </summary>
     public int? InvocationTimeoutSeconds { get; set; }
+
     public Guid AgentDefinitionId { get; set; }
 
     /// <summary>The judge policy revision this project judges under, or <see langword="null" /> when judging is off.</summary>

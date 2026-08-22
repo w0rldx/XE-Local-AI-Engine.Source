@@ -59,5 +59,4 @@ internal static class LlamaCppPrebuiltRuntimeMutationGuard
     ///     running when the gate was evaluated, and whether a source build blocked it.
     /// </summary>
     internal sealed record RemovalOutcome(bool Removed, int RunningProcessCount, bool BuildActive);
-
 }

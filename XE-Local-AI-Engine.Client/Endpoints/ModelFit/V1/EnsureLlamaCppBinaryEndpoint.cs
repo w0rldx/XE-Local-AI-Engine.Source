@@ -6,8 +6,7 @@ using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
 
-public sealed class EnsureLlamaCppBinaryEndpoint(
-    ILlamaCppRuntimeAdministrationService administrationService)
+public sealed class EnsureLlamaCppBinaryEndpoint(ILlamaCppRuntimeAdministrationService administrationService)
     : Endpoint<EnsureLlamaCppBinaryRequest, LlamaCppVersionResponse>
 {
     private readonly ILlamaCppRuntimeAdministrationService _administrationService =

@@ -19,8 +19,7 @@ public sealed class AppUpdateServiceTests
     public void Registration_RetainsOnlyCallerSuppliedSanitizedRestartArguments()
     {
         var builder = Host.CreateApplicationBuilder();
-        var sanitized = DesktopLaunch.BuildRestartArguments(
-            ["--setup", "--admin-password", "secret", "--mcp-only", "--port", "41234"],
+        var sanitized = DesktopLaunch.BuildRestartArguments(["--setup", "--admin-password", "secret", "--mcp-only", "--port", "41234"],
             LaunchMode.McpOnly,
             port: 41234);
 
@@ -242,8 +241,7 @@ public sealed class AppUpdateServiceTests
                    captured = call.ArgAt<IReadOnlyList<string>>(0);
                    return true;
                });
-        var restartArgs = DesktopLaunch.BuildRestartArguments(
-            ["--setup", "--admin-password", "secret", "--mcp-key", "agentic", "--no-browser", "--port", "41234"],
+        var restartArgs = DesktopLaunch.BuildRestartArguments(["--setup", "--admin-password", "secret", "--mcp-key", "agentic", "--no-browser", "--port", "41234"],
             LaunchMode.McpOnly,
             port: 41234);
         using var service = CreateService(FactoryReturning(manager), isDesktop: true, state: AvailableUpdateState(), restartArgs: restartArgs);

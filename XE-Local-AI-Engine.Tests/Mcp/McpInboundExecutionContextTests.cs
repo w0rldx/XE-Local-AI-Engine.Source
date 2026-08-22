@@ -10,8 +10,7 @@ public sealed class McpInboundExecutionContextTests
     [Test]
     public void FromPrincipal_WhenTrustedClaimsAreExact_CapturesAgenticAuthority()
     {
-        var principal = Principal(
-            new Claim(NodeAuthorizationPolicies.McpScopeClaimType, NodeAuthorizationPolicies.McpAgenticScope),
+        var principal = Principal(new Claim(NodeAuthorizationPolicies.McpScopeClaimType, NodeAuthorizationPolicies.McpAgenticScope),
             new Claim(NodeAuthorizationPolicies.McpKeyPrefixClaimType, "xemcp_abc123"));
 
         var context = McpInboundExecutionContext.FromPrincipal(principal);

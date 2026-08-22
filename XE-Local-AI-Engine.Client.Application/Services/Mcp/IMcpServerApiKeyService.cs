@@ -46,12 +46,10 @@ public interface IMcpServerApiKeyService
 /// <summary>The trust level carried by the singleton inbound-MCP credential.</summary>
 public enum McpServerApiKeyScope
 {
-    [EnumMember(Value = "delegate")]
-    [JsonStringEnumMemberName("delegate")]
+    [EnumMember(Value = "delegate")] [JsonStringEnumMemberName("delegate")]
     Delegate = 0,
 
-    [EnumMember(Value = "agentic")]
-    [JsonStringEnumMemberName("agentic")]
+    [EnumMember(Value = "agentic")] [JsonStringEnumMemberName("agentic")]
     Agentic = 1
 }
 
@@ -59,7 +57,8 @@ public enum McpServerApiKeyScope
 ///     The credential as shown to the operator. Carries no secret by construction — the key is not recoverable from
 ///     the node — so this shape is safe to return from any Operator-gated surface.
 /// </summary>
-public sealed record McpServerApiKeyView(string Prefix,
+public sealed record McpServerApiKeyView(
+    string Prefix,
     McpServerApiKeyScope Scope,
     DateTimeOffset CreatedAt,
     DateTimeOffset? LastUsedAt);

@@ -28,6 +28,7 @@ public interface IBenchmarkStore
         CancellationToken cancellationToken = default);
 
     Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default);
+
     /// <summary>
     ///     Starts ONE run. Shorthand for a single-item <see cref="StartRunsAsync" /> against the command's own
     ///     <see cref="BenchmarkStartRunCommand.ExpectedProjectVersion" />.
@@ -342,12 +343,10 @@ public sealed record BenchmarkRunThroughput(
     int? SegmentCount = null)
 {
     /// <summary>Prompt-processing throughput (pp) in tokens per second, or null when either input is absent.</summary>
-    public double? PromptTokensPerSecond =>
-        PromptTokens is { } tokens && PromptMs is > 0 ? tokens * 1000d / PromptMs.Value : null;
+    public double? PromptTokensPerSecond => PromptTokens is { } tokens && PromptMs is > 0 ? tokens * 1000d / PromptMs.Value : null;
 
     /// <summary>Decode throughput (tg) in tokens per second, or null when either input is absent.</summary>
-    public double? GenerationTokensPerSecond =>
-        GenerationTokens is { } tokens && GenerationMs is > 0 ? tokens * 1000d / GenerationMs.Value : null;
+    public double? GenerationTokensPerSecond => GenerationTokens is { } tokens && GenerationMs is > 0 ? tokens * 1000d / GenerationMs.Value : null;
 }
 
 /// <summary>

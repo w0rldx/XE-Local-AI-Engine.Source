@@ -341,13 +341,14 @@ internal sealed class LlamaCppRuntimeAdministrationService(
             installed.SourceRequestedCommit,
             installed.SourceSelection is null ? null : (int)installed.SourceSelection.Value);
 
-    private static string ToWireString(GpuVariant variant) => variant switch
-    {
-        GpuVariant.Cpu => "cpu",
-        GpuVariant.Cuda => "cuda",
-        GpuVariant.Vulkan => "vulkan",
-        _ => throw new ArgumentOutOfRangeException(nameof(variant), variant, "Unknown runtime variant.")
-    };
+    private static string ToWireString(GpuVariant variant) =>
+        variant switch
+        {
+            GpuVariant.Cpu => "cpu",
+            GpuVariant.Cuda => "cuda",
+            GpuVariant.Vulkan => "vulkan",
+            _ => throw new ArgumentOutOfRangeException(nameof(variant), variant, "Unknown runtime variant.")
+        };
 
     private sealed record PrebuiltMutationAdmission(
         ILlamaServerRuntimeMutationLease? Lease,

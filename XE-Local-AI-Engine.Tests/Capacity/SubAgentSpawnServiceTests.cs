@@ -366,10 +366,10 @@ public sealed class SubAgentSpawnServiceTests
         using var harness = new Harness();
         harness.AllowLocal();
         harness.AgenticToolAdapter.Adapt(Arg.Any<ApprovalRequiredAIFunction>(),
-                ToolCategory.WriteExecute,
-                Arg.Any<McpInboundExecutionContext>(),
-                Arg.Any<Guid>())
-            .Returns(AIFunctionFactory.Create((string input) => input, "read_file"));
+                   ToolCategory.WriteExecute,
+                   Arg.Any<McpInboundExecutionContext>(),
+                   Arg.Any<Guid>())
+               .Returns(AIFunctionFactory.Create((string input) => input, "read_file"));
         harness.ResolveMcpBinding(new McpExecutionBinding("fingerprint",
             Model,
             "agentic instructions",
@@ -462,7 +462,11 @@ public sealed class SubAgentSpawnServiceTests
     [Test]
     public async Task SpawnForMcp_WhenAgenticCustomToolIsDisabledOrUnresolved_FailsClosed()
     {
-        foreach (var name in new[] { "custom__disabled", "custom__unknown" })
+        foreach (var name in new[]
+                 {
+                     "custom__disabled",
+                     "custom__unknown"
+                 })
         {
             using var harness = new Harness();
             harness.AllowLocal();
@@ -471,7 +475,12 @@ public sealed class SubAgentSpawnServiceTests
                 "agentic custom tool instructions",
                 Guid.NewGuid(),
                 AgentDefinitionVersion: 1,
-                [McpTool(name) with { RequiresApproval = true }],
+                [
+                    McpTool(name) with
+                    {
+                        RequiresApproval = true
+                    }
+                ],
                 ReasoningEffort: null,
                 SupportsThinking: false));
             using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
@@ -494,9 +503,20 @@ public sealed class SubAgentSpawnServiceTests
     {
         foreach (var tools in new[]
                  {
-                     new[] { McpTool("missing") },
-                     new[] { McpTool("read_file"), McpTool("read_file") },
-                     new[] { McpTool("custom__duplicate"), McpTool("custom__duplicate") }
+                     new[]
+                     {
+                         McpTool("missing")
+                     },
+                     new[]
+                     {
+                         McpTool("read_file"),
+                         McpTool("read_file")
+                     },
+                     new[]
+                     {
+                         McpTool("custom__duplicate"),
+                         McpTool("custom__duplicate")
+                     }
                  })
         {
             using var harness = new Harness();

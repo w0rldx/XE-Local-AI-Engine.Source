@@ -225,11 +225,13 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
             runtimeSettings.GetKeepModelWarmEnabledAsync(Arg.Any<CancellationToken>()).Returns(false);
             runtimeSettings.GetRecommendedLlamaCppTagAsync(Arg.Any<CancellationToken>()).Returns("b1");
         }
+
         if (installedStore is null)
         {
             installedStore = Substitute.For<IInstalledRuntimeStore>();
             installedStore.ReadAsync(Arg.Any<CancellationToken>()).Returns((InstalledRuntimeState?)null);
         }
+
         var lifetime = Substitute.For<IHostApplicationLifetime>();
         lifetime.ApplicationStopping.Returns(CancellationToken.None);
         var acquisition = Substitute.For<IRuntimeAcquisitionStatusRegistry>();

@@ -1482,8 +1482,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     ///     Whether a score on this run could ever rank it. Returned rather than re-derived by the caller so the
     ///     ranking's denominator cannot drift from the exclusions themselves.
     /// </param>
-    private static (BenchmarkRunJudgeView Judge, int? QualityScore, string Source, bool Rankable) ApplyRunExclusions(
-        BenchmarkRunJudgeView judge,
+    private static (BenchmarkRunJudgeView Judge, int? QualityScore, string Source, bool Rankable) ApplyRunExclusions(BenchmarkRunJudgeView judge,
         int? userScore,
         bool isWarmup,
         string? primaryStopReason)

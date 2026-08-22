@@ -32,8 +32,7 @@ public sealed class DesktopLifecycleReadyTests
                 lifecycle.Activate();
                 lifetime.SignalStarted();
 
-                AssertEx.Equal(
-                    $"XE_READY=1 XE_VERSION=1.2.3 XE_URL=http://127.0.0.1:41234 XE_MCP_URL=http://127.0.0.1:41234/api/local/v1/mcp/server XE_DATA_DIR={dataDirectory}{Environment.NewLine}",
+                AssertEx.Equal($"XE_READY=1 XE_VERSION=1.2.3 XE_URL=http://127.0.0.1:41234 XE_MCP_URL=http://127.0.0.1:41234/api/local/v1/mcp/server XE_DATA_DIR={dataDirectory}{Environment.NewLine}",
                     output.ToString());
                 var ready = AssertEx.NotNull(DesktopPortStore.ReadReady(dataDirectory));
                 AssertEx.Equal("1.2.3", ready.Version);
@@ -58,8 +57,11 @@ public sealed class DesktopLifecycleReadyTests
         public CancellationToken ApplicationStopping => _stopping.Token;
         public CancellationToken ApplicationStopped => _stopped.Token;
 
-        public void SignalStarted() => _started.Cancel();
-        public void StopApplication() => _stopping.Cancel();
+        public void SignalStarted() =>
+            _started.Cancel();
+
+        public void StopApplication() =>
+            _stopping.Cancel();
 
         public void Dispose()
         {
@@ -73,7 +75,11 @@ public sealed class DesktopLifecycleReadyTests
     {
         public IFeatureCollection Features { get; } = new FeatureCollection();
         public void Dispose() { }
-        public Task StartAsync<TContext>(IHttpApplication<TContext> application, CancellationToken cancellationToken) where TContext : notnull => Task.CompletedTask;
-        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task StartAsync<TContext>(IHttpApplication<TContext> application, CancellationToken cancellationToken) where TContext : notnull =>
+            Task.CompletedTask;
+
+        public Task StopAsync(CancellationToken cancellationToken) =>
+            Task.CompletedTask;
     }
 }

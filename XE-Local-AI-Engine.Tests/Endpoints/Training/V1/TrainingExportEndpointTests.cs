@@ -231,7 +231,10 @@ public sealed class TrainingExportEndpointTests
                    .Returns(DecidedArtifact(ArtifactQualityOutcome.Pending, comparisonId, version: 8));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post,
-            $"{Api}/artifacts/{ArtifactId}/quality/revalidation", new { expectedVersion = 7 });
+            $"{Api}/artifacts/{ArtifactId}/quality/revalidation", new
+            {
+                expectedVersion = 7
+            });
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
@@ -249,7 +252,10 @@ public sealed class TrainingExportEndpointTests
                    .Returns<Task<TrainingArtifactRecord>>(_ => throw new TrainingConflictException("VersionConflict"));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post,
-            $"{Api}/artifacts/{ArtifactId}/quality/revalidation", new { expectedVersion = 7 });
+            $"{Api}/artifacts/{ArtifactId}/quality/revalidation", new
+            {
+                expectedVersion = 7
+            });
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
@@ -269,18 +275,26 @@ public sealed class TrainingExportEndpointTests
             includeComparison ? HttpMethod.Put : HttpMethod.Post,
             $"{Api}/artifacts/{ArtifactId}/{suffix}",
             includeComparison
-                ? new { comparisonId = Guid.NewGuid(), reason = "" }
-                : new { comparisonId = Guid.Empty, reason = "audited reason" });
+                ? new
+                {
+                    comparisonId = Guid.NewGuid(),
+                    reason = ""
+                }
+                : new
+                {
+                    comparisonId = Guid.Empty,
+                    reason = "audited reason"
+                });
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         _ = await context.Quality.DidNotReceiveWithAnyArgs()
-                                 .DecideAsync(Guid.Empty, Guid.Empty, 0, CancellationToken.None);
+                         .DecideAsync(Guid.Empty, Guid.Empty, 0, CancellationToken.None);
         _ = await context.Quality.DidNotReceiveWithAnyArgs()
-                                 .OverrideAsync(Guid.Empty, 0, string.Empty, CancellationToken.None);
+                         .OverrideAsync(Guid.Empty, 0, string.Empty, CancellationToken.None);
         _ = await context.Quality.DidNotReceiveWithAnyArgs()
-                                 .BeginRevalidationAsync(Guid.Empty, 0, CancellationToken.None);
+                         .BeginRevalidationAsync(Guid.Empty, 0, CancellationToken.None);
         _ = await context.Exports.DidNotReceiveWithAnyArgs()
                          .DiscardArtifactQualityAsync(Guid.Empty, 0, string.Empty, CancellationToken.None);
     }

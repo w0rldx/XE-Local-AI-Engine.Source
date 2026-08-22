@@ -124,10 +124,11 @@ internal sealed class McpServerApiKeyService : IMcpServerApiKeyService
             record.LastUsedAtUtc is null ? null : DateTimeOffset.FromUnixTimeMilliseconds(record.LastUsedAtUtc.Value));
     }
 
-    private static McpServerApiKeyScope ToScope(int scope) => scope switch
-    {
-        0 => McpServerApiKeyScope.Delegate,
-        1 => McpServerApiKeyScope.Agentic,
-        _ => throw new InvalidDataException($"Stored MCP API key scope '{scope}' is invalid.")
-    };
+    private static McpServerApiKeyScope ToScope(int scope) =>
+        scope switch
+        {
+            0 => McpServerApiKeyScope.Delegate,
+            1 => McpServerApiKeyScope.Agentic,
+            _ => throw new InvalidDataException($"Stored MCP API key scope '{scope}' is invalid.")
+        };
 }

@@ -12,6 +12,7 @@ public sealed class SelectLocalModelEndpoint(
 {
     private readonly ILocalModelAdministrationService _administrationService = administrationService ?? throw new ArgumentNullException(nameof(administrationService));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
+
     public override void Configure()
     {
         Post(LocalApiRoutes.LocalModels.Select);

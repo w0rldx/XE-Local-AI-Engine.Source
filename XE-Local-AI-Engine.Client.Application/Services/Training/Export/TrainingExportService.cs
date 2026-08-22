@@ -356,8 +356,8 @@ public sealed class TrainingExportService(
     {
         var artifacts = await store.ListArtifactsAsync(plan.RunId, CancellationToken.None).ConfigureAwait(false);
         foreach (var stale in artifacts.Where(item => item.Kind == plan.Kind
-                                                       && item.CommittedModelName is null
-                                                       && item.DiscardedAtUtc is null))
+                                                      && item.CommittedModelName is null
+                                                      && item.DiscardedAtUtc is null))
         {
             await store.DeleteArtifactAsync(stale.Id, stale.Version, CancellationToken.None).ConfigureAwait(false);
             DeleteStagedBytes(stale);

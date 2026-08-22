@@ -41,7 +41,7 @@ public sealed class DecideArtifactQualityRequestValidator : Validator<DecideArti
         RuleFor(static request => request.ArtifactId).NotEmpty().WithMessage("An artifact id is required.");
         RuleFor(static request => request.ComparisonId).NotEmpty().WithMessage("A comparison id is required.");
         RuleFor(static request => request.ExpectedVersion).NotNull().WithMessage("An expected version is required.")
-                                               .GreaterThanOrEqualTo(0).WithMessage("An expected version is required.");
+                                                          .GreaterThanOrEqualTo(0).WithMessage("An expected version is required.");
     }
 }
 
@@ -51,7 +51,7 @@ public sealed class OverrideArtifactQualityRequestValidator : Validator<Override
     {
         RuleFor(static request => request.ArtifactId).NotEmpty().WithMessage("An artifact id is required.");
         RuleFor(static request => request.ExpectedVersion).NotNull().WithMessage("An expected version is required.")
-                                               .GreaterThanOrEqualTo(0).WithMessage("An expected version is required.");
+                                                          .GreaterThanOrEqualTo(0).WithMessage("An expected version is required.");
         RuleFor(static request => request.Reason).NotEmpty().WithMessage("An override reason is required.")
                                                  .MaximumLength(1024).WithMessage("An override reason cannot exceed 1024 characters.");
     }
@@ -63,7 +63,7 @@ public sealed class BeginArtifactQualityRevalidationRequestValidator : Validator
     {
         RuleFor(static request => request.ArtifactId).NotEmpty().WithMessage("An artifact id is required.");
         RuleFor(static request => request.ExpectedVersion).NotNull().WithMessage("An expected version is required.")
-                                               .GreaterThanOrEqualTo(0).WithMessage("An expected version is required.");
+                                                          .GreaterThanOrEqualTo(0).WithMessage("An expected version is required.");
     }
 }
 
@@ -73,7 +73,7 @@ public sealed class DiscardArtifactQualityRequestValidator : Validator<DiscardAr
     {
         RuleFor(static request => request.ArtifactId).NotEmpty().WithMessage("An artifact id is required.");
         RuleFor(static request => request.ExpectedVersion).NotNull().WithMessage("An expected version is required.")
-                                               .GreaterThanOrEqualTo(0).WithMessage("An expected version is required.");
+                                                          .GreaterThanOrEqualTo(0).WithMessage("An expected version is required.");
         RuleFor(static request => request.Reason).NotEmpty().WithMessage("A discard reason is required.")
                                                  .MaximumLength(1024).WithMessage("A discard reason cannot exceed 1024 characters.");
     }

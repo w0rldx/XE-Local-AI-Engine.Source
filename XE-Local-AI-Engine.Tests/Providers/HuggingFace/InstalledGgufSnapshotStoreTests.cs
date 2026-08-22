@@ -40,8 +40,7 @@ public sealed class InstalledGgufSnapshotStoreTests
         var store = new InstalledGgufSnapshotStore(registry, options);
         var candidate = AssertEx.NotNull(await store.DiscoverCandidateAsync(entry.ModelName, CancellationToken.None).ConfigureAwait(false));
 
-        var exception = await AssertEx.ThrowsAsync<InstalledGgufSnapshotException>(
-                                          () => store.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None))
+        var exception = await AssertEx.ThrowsAsync<InstalledGgufSnapshotException>(() => store.LoadVerifiedAsync(entry.ModelName, candidate, CancellationToken.None))
                                       .ConfigureAwait(false);
 
         AssertEx.Equal("InstalledModelMemberFingerprintMismatch", exception.Code);

@@ -67,8 +67,7 @@ internal sealed class McpApiKeyAuthenticationHandler : AuthenticationHandler<Aut
 
         // The MCP client is NOT the node operator and must never be mistaken for one: it gets its own identity with no
         // role claim, so the Operator policy (which requires the Admin role) can never be satisfied by this scheme.
-        var identity = new ClaimsIdentity(
-        [
+        var identity = new ClaimsIdentity([
             new Claim(ClaimTypes.Name, "mcp-client"),
             new Claim(NodeAuthorizationPolicies.McpScopeClaimType,
                 validation.Scope == McpServerApiKeyScope.Agentic

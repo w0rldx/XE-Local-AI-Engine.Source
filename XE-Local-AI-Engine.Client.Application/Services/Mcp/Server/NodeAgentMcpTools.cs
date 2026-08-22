@@ -1,15 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Server;
 
-using System.Security.Claims;
 using System.ComponentModel;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -433,14 +433,15 @@ public sealed class NodeAgentMcpTools
     private static string? NullIfWhiteSpace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
 
-    private static string ToWireKind(ModelKind kind) => kind switch
-    {
-        ModelKind.Chat => "chat",
-        ModelKind.Embedding => "embedding",
-        ModelKind.Reranker => "reranker",
-        ModelKind.Draft => "draft",
-        _ => "chat"
-    };
+    private static string ToWireKind(ModelKind kind) =>
+        kind switch
+        {
+            ModelKind.Chat => "chat",
+            ModelKind.Embedding => "embedding",
+            ModelKind.Reranker => "reranker",
+            ModelKind.Draft => "draft",
+            _ => "chat"
+        };
 
     /// <summary>One saved agent, as offered to an external MCP client. Ids are stringified for a JSON-schema-friendly shape.</summary>
     public sealed record AgentSummary(string Id, string Name, string? Description);

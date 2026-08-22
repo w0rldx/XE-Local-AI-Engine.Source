@@ -223,7 +223,7 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
         var receipt = harness.CommitReceipt();
         harness.ThrowPartialCommit(receipt);
         _ = harness.Importer.RollbackCommittedAsync(receipt, CancellationToken.None)
-                           .Returns<Task>(_ => throw new IOException("rollback failed"));
+                   .Returns<Task>(_ => throw new IOException("rollback failed"));
 
         var failure = await AssertEx.ThrowsAsync<AggregateException>(() => harness.PromoteAsync());
 
@@ -236,7 +236,7 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
     {
         var harness = Harness.Create(this, TrainingArtifactKind.MergedGguf, TrainingArtifactSmokeState.Passed);
         _ = harness.Store.SetArtifactCommittedNameAsync(ArtifactId, Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                         .Returns<Task<TrainingArtifactRecord>>(_ => throw new TrainingConflictException("recording failed"));
+                   .Returns<Task<TrainingArtifactRecord>>(_ => throw new TrainingConflictException("recording failed"));
 
         _ = await AssertEx.ThrowsAsync<TrainingConflictException>(() => harness.PromoteAsync());
 
@@ -250,9 +250,9 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
         var receipt = harness.CommitReceipt();
         harness.ReturnCommitReceipt(receipt);
         _ = harness.Store.SetArtifactCommittedNameAsync(ArtifactId, Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
-                         .Returns<Task<TrainingArtifactRecord>>(_ => throw new TrainingConflictException("recording failed"));
+                   .Returns<Task<TrainingArtifactRecord>>(_ => throw new TrainingConflictException("recording failed"));
         _ = harness.Importer.RollbackCommittedAsync(receipt, CancellationToken.None)
-                            .Returns<Task>(_ => throw new IOException("rollback failed"));
+                   .Returns<Task>(_ => throw new IOException("rollback failed"));
 
         var failure = await AssertEx.ThrowsAsync<ArtifactPromotionCompensationException>(() => harness.PromoteAsync());
 
@@ -313,7 +313,11 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
             _ = store.SetArtifactCommittedNameAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
                      .Returns(callInfo =>
                      {
-                         artifact = artifact with { CommittedModelName = callInfo.ArgAt<string?>(2), Version = artifact.Version + 1 };
+                         artifact = artifact with
+                         {
+                             CommittedModelName = callInfo.ArgAt<string?>(2),
+                             Version = artifact.Version + 1
+                         };
                          return artifact;
                      });
 
@@ -323,22 +327,21 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
                                  ReadOnlyMemory<byte>.Empty, TotalBytes: 0, LicenseJson: null, ErrorMessage: null, Version: 1,
                                  CreatedAtUtc: 0, UpdatedAtUtc: 0));
             var models = Substitute.For<IGgufModelStore>();
-            _ = models.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<LocalModelDescriptor>>(
-                installedModelName is null
-                    ? []
-                    :
-                    [
-                        new LocalModelDescriptor
-                        {
-                            ModelName = installedModelName,
-                            ProviderName = "llamacpp",
-                            IsAvailable = installedModelAvailable,
-                            SizeBytes = 4,
-                            ModifiedAt = null,
-                            MaxContextTokens = null,
-                            ModelContentFingerprint = installedModelFingerprint
-                        }
-                    ]);
+            _ = models.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<LocalModelDescriptor>>(installedModelName is null
+                ? []
+                :
+                [
+                    new LocalModelDescriptor
+                    {
+                        ModelName = installedModelName,
+                        ProviderName = "llamacpp",
+                        IsAvailable = installedModelAvailable,
+                        SizeBytes = 4,
+                        ModifiedAt = null,
+                        MaxContextTokens = null,
+                        ModelContentFingerprint = installedModelFingerprint
+                    }
+                ]);
 
             var identity = new ResolvedGgufAcquisitionIdentity("tuned:Q4_K_M",
                 "tuned:q4_k_m",
@@ -360,17 +363,17 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
             };
             _ = store.GetArtifactAsync(ArtifactId, Arg.Any<CancellationToken>()).Returns(_ => harness._artifact);
             _ = store.SetArtifactQualityDecisionAsync(ArtifactId, Arg.Any<long>(), Arg.Any<Guid>(), Arg.Any<ReadOnlyMemory<byte>>(),
-                    Arg.Any<CancellationToken>())
-                .Returns(callInfo =>
-                {
-                    harness._artifact = harness._artifact with
-                    {
-                        Version = harness._artifact.Version + 1,
-                        QualityComparisonId = callInfo.ArgAt<Guid>(2),
-                        QualityDecisionJson = callInfo.ArgAt<ReadOnlyMemory<byte>>(3)
-                    };
-                    return harness._artifact;
-                });
+                         Arg.Any<CancellationToken>())
+                     .Returns(callInfo =>
+                     {
+                         harness._artifact = harness._artifact with
+                         {
+                             Version = harness._artifact.Version + 1,
+                             QualityComparisonId = callInfo.ArgAt<Guid>(2),
+                             QualityDecisionJson = callInfo.ArgAt<ReadOnlyMemory<byte>>(3)
+                         };
+                         return harness._artifact;
+                     });
             _ = importer.PrepareAsync(Arg.Any<GgufImportSource>(), Arg.Any<GgufImportDestination>(), Arg.Any<IProgress<GgufImportProgress>?>(),
                             Arg.Any<CancellationToken>())
                         .Returns(callInfo =>
@@ -432,8 +435,7 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
             var tunedEvaluation = Evaluation("tuned.gguf", ArtifactSha256, membership, tunedProvenance,
                 EvaluationModelTargetKind.StagedTrainingArtifact, ArtifactId);
             var comparison = new TrainingComparisonRecord(Guid.NewGuid(), "quality", baseEvaluation.Id, tunedEvaluation.Id, null, null, RunId,
-                JsonSerializer.SerializeToUtf8Bytes(
-                    ComparisonReportService.ComputeDeltas(baseEvaluation, tunedEvaluation, baseBenchmark: null, tunedBenchmark: null),
+                JsonSerializer.SerializeToUtf8Bytes(ComparisonReportService.ComputeDeltas(baseEvaluation, tunedEvaluation, baseBenchmark: null, tunedBenchmark: null),
                     TrainingJson.Options), 1, 0, 0);
             var evaluations = Substitute.For<ITrainingEvaluationStore>();
             _ = evaluations.GetComparisonAsync(comparison.Id, Arg.Any<CancellationToken>()).Returns(comparison);
@@ -456,7 +458,7 @@ public sealed class ArtifactPromotionServiceTests : IDisposable
 
         public void ReturnPreparedIdentity(string sha256, long sizeBytes) =>
             _ = Importer.PrepareAsync(Arg.Any<GgufImportSource>(), Arg.Any<GgufImportDestination>(), Arg.Any<IProgress<GgufImportProgress>?>(),
-                              Arg.Any<CancellationToken>())
+                            Arg.Any<CancellationToken>())
                         .Returns(callInfo =>
                         {
                             Destination = callInfo.Arg<GgufImportDestination>();

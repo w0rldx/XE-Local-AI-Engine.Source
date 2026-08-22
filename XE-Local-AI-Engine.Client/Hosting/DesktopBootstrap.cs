@@ -227,8 +227,7 @@ internal static class DesktopBootstrap
         {
             // Fail loudly: a desktop user whose data directory cannot be created must see a clear startup error rather
             // than silently fall back to a volatile location that would lose their database.
-            throw new DesktopDataDirectoryException(
-                $"The data directory could not be created. Verify {DataDirectoryEnvironmentVariable} and filesystem permissions.",
+            throw new DesktopDataDirectoryException($"The data directory could not be created. Verify {DataDirectoryEnvironmentVariable} and filesystem permissions.",
                 exception);
         }
     }

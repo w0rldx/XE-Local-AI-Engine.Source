@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using System.Reflection;
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;

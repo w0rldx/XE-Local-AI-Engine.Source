@@ -23,7 +23,8 @@ internal static class BenchmarkModelGroupKey
     /// </summary>
     /// <example><c>unsloth/Qwen3.8-27B-GGUF:Q4_K_M</c> → <c>unsloth/qwen3.8-27b-gguf</c>.</example>
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
-        Justification = "A Hugging Face repo id is canonically lowercase and this key is displayed as the group's model, not compared as a security identifier; upper-casing it would put a name no registry uses in front of the operator.")]
+        Justification =
+            "A Hugging Face repo id is canonically lowercase and this key is displayed as the group's model, not compared as a security identifier; upper-casing it would put a name no registry uses in front of the operator.")]
     public static string From(string modelName, LocalModelOrigin? origin)
     {
         ArgumentNullException.ThrowIfNull(modelName);

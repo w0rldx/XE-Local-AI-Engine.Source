@@ -6,7 +6,6 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -423,8 +422,8 @@ public sealed class McpExecutionBindingResolverTests
         {
             _definitions.GetByKeyAsync(Arg.Is<string>(key => string.Equals(key, definition.Id.ToString(), StringComparison.Ordinal)
                                                              || string.Equals(key, definition.Name, StringComparison.Ordinal)),
-                    Arg.Any<CancellationToken>())
-                .Returns(definition);
+                            Arg.Any<CancellationToken>())
+                        .Returns(definition);
             var effectiveModel = definition.ModelProfile ?? Model;
             _agentResolver.ResolveAsync(definition.Id,
                               effectiveModel,

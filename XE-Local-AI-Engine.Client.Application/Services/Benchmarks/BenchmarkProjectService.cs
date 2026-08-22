@@ -343,9 +343,8 @@ public sealed class BenchmarkProjectService(
         if (invocationTimeoutSeconds is { } seconds
             && (seconds < BenchmarkFrozenPolicies.MinInvocationTimeoutSeconds || seconds > BenchmarkFrozenPolicies.MaxInvocationTimeoutSeconds))
         {
-            throw new BenchmarkValidationException(
-                $"The generation timeout must be between {BenchmarkFrozenPolicies.MinInvocationTimeoutSeconds} and "
-                + $"{BenchmarkFrozenPolicies.MaxInvocationTimeoutSeconds} seconds.");
+            throw new BenchmarkValidationException($"The generation timeout must be between {BenchmarkFrozenPolicies.MinInvocationTimeoutSeconds} and "
+                                                   + $"{BenchmarkFrozenPolicies.MaxInvocationTimeoutSeconds} seconds.");
         }
     }
 

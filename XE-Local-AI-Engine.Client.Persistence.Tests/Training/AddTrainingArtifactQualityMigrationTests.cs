@@ -38,13 +38,13 @@ public sealed class AddTrainingArtifactQualityMigrationTests : IDisposable
             await legacyConnection.OpenAsync();
             await using var insert = legacyConnection.CreateCommand();
             insert.CommandText = """
-                INSERT INTO training_evaluation_runs
-                    (id, model_name, dataset_id, dataset_content_fingerprint, membership_json, status,
-                     total_count, scored_count, passed_count, version, created_at_utc, updated_at_utc)
-                VALUES
-                    ($id, 'legacy', $dataset, 'v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', X'00',
-                     'Succeeded', 1, 1, 1, 1, 0, 0);
-                """;
+                                 INSERT INTO training_evaluation_runs
+                                     (id, model_name, dataset_id, dataset_content_fingerprint, membership_json, status,
+                                      total_count, scored_count, passed_count, version, created_at_utc, updated_at_utc)
+                                 VALUES
+                                     ($id, 'legacy', $dataset, 'v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', X'00',
+                                      'Succeeded', 1, 1, 1, 1, 0, 0);
+                                 """;
             insert.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
             insert.Parameters.AddWithValue("$dataset", Guid.NewGuid().ToString());
             AssertEx.Equal(expected: 1, await insert.ExecuteNonQueryAsync());
@@ -83,12 +83,12 @@ public sealed class AddTrainingArtifactQualityMigrationTests : IDisposable
             await seedConnection.OpenAsync();
             await using var seed = seedConnection.CreateCommand();
             seed.CommandText = """
-                INSERT INTO training_artifacts
-                    (id, run_id, kind, path, sha256, size_bytes, smoke_state, smoke_reason, committed_model_name,
-                     quality_comparison_id, quality_decision_json, version, created_at_utc, updated_at_utc)
-                VALUES
-                    ($id, $run, $kind, $path, $sha, 4, $smoke, NULL, NULL, $comparison, $decision, 3, 0, 0);
-                """;
+                               INSERT INTO training_artifacts
+                                   (id, run_id, kind, path, sha256, size_bytes, smoke_state, smoke_reason, committed_model_name,
+                                    quality_comparison_id, quality_decision_json, version, created_at_utc, updated_at_utc)
+                               VALUES
+                                   ($id, $run, $kind, $path, $sha, 4, $smoke, NULL, NULL, $comparison, $decision, 3, 0, 0);
+                               """;
             seed.Parameters.AddWithValue("$id", artifactId.ToString());
             seed.Parameters.AddWithValue("$run", Guid.NewGuid().ToString());
             seed.Parameters.AddWithValue("$kind", kind);
@@ -135,12 +135,12 @@ public sealed class AddTrainingArtifactQualityMigrationTests : IDisposable
             await seedConnection.OpenAsync();
             await using var seed = seedConnection.CreateCommand();
             seed.CommandText = """
-                INSERT INTO training_artifacts
-                    (id, run_id, kind, path, sha256, size_bytes, smoke_state, smoke_reason, committed_model_name,
-                     version, created_at_utc, updated_at_utc)
-                VALUES
-                    ($id, $run, 'MergedGguf', 'legacy.gguf', $sha, 4, 'Passed', NULL, 'legacy:Q4_K_M', 3, 0, 0);
-                """;
+                               INSERT INTO training_artifacts
+                                   (id, run_id, kind, path, sha256, size_bytes, smoke_state, smoke_reason, committed_model_name,
+                                    version, created_at_utc, updated_at_utc)
+                               VALUES
+                                   ($id, $run, 'MergedGguf', 'legacy.gguf', $sha, 4, 'Passed', NULL, 'legacy:Q4_K_M', 3, 0, 0);
+                               """;
             seed.Parameters.AddWithValue("$id", artifactId.ToString());
             seed.Parameters.AddWithValue("$run", Guid.NewGuid().ToString());
             seed.Parameters.AddWithValue("$sha", new string('b', 64));

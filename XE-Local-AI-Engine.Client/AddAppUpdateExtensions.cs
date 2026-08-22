@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client;
 
-using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.BackgroundServices;
+using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
 
 /// <summary>

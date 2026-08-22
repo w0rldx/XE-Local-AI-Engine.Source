@@ -60,6 +60,7 @@ internal sealed class TrainingEvaluationInstalledModelLeaseProvider(
         public string ModelSha256 { get; } = modelSha256;
         public long ModelSizeBytes { get; } = modelSizeBytes;
 
-        public ValueTask DisposeAsync() => inner.DisposeAsync();
+        public ValueTask DisposeAsync() =>
+            inner.DisposeAsync();
     }
 }

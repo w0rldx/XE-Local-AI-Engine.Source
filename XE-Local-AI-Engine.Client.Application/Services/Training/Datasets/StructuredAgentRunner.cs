@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.Training;
 
 /// <summary>One teacher turn. The seed is carried as a string for the same 2^53 precision reason the sampling DTO uses.</summary>
 public sealed record StructuredAgentRequest(
@@ -131,7 +131,7 @@ public sealed class StructuredAgentRunner(
                                           ChatOptions = chatOptions
                                       }, turnCancellation.Token)
                                       .ConfigureAwait(false);
-            activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Ok);
+            activity?.SetStatus(ActivityStatusCode.Ok);
             var text = response.Text ?? string.Empty;
             return string.IsNullOrWhiteSpace(text)
                 ? new StructuredAgentResult(Success: false, string.Empty, "The teacher returned an empty completion.")

@@ -56,8 +56,10 @@ public interface IArtifactQualityService
 {
     Task<TrainingArtifactRecord> DecideAsync(Guid artifactId, Guid comparisonId, long expectedVersion,
         CancellationToken cancellationToken = default);
+
     Task<TrainingArtifactRecord> BeginRevalidationAsync(Guid artifactId, long expectedVersion,
         CancellationToken cancellationToken = default);
+
     Task<TrainingArtifactRecord> OverrideAsync(Guid artifactId, long expectedVersion, string reason,
         CancellationToken cancellationToken = default);
 }
@@ -112,8 +114,7 @@ public sealed class ArtifactQualityService(ITrainingRunStore runs, ITrainingEval
                                                                    || tunedEvaluation.Id == audit.TunedEvaluationId);
             if (reusesAuditedEvidence)
             {
-                throw new TrainingExportRejectedException(
-                    $"{RevalidationEvidenceReusedCode}: Quality revalidation requires a fresh comparison and fresh base and tuned evaluations.");
+                throw new TrainingExportRejectedException($"{RevalidationEvidenceReusedCode}: Quality revalidation requires a fresh comparison and fresh base and tuned evaluations.");
             }
         }
 
@@ -150,8 +151,8 @@ public sealed class ArtifactQualityService(ITrainingRunStore runs, ITrainingEval
             History = prior?.History ?? []
         };
         return await _runs.SetArtifactQualityDecisionAsync(artifact.Id, expectedVersion, comparison.Id,
-                         JsonSerializer.SerializeToUtf8Bytes(decision, TrainingJson.Options), cancellationToken)
-                     .ConfigureAwait(false);
+                              JsonSerializer.SerializeToUtf8Bytes(decision, TrainingJson.Options), cancellationToken)
+                          .ConfigureAwait(false);
     }
 
     public async Task<TrainingArtifactRecord> BeginRevalidationAsync(Guid artifactId, long expectedVersion,
@@ -192,8 +193,8 @@ public sealed class ArtifactQualityService(ITrainingRunStore runs, ITrainingEval
             History = history
         };
         return await _runs.SetArtifactQualityDecisionAsync(artifact.Id, expectedVersion, current.ComparisonId,
-                         JsonSerializer.SerializeToUtf8Bytes(pending, TrainingJson.Options), cancellationToken)
-                     .ConfigureAwait(false);
+                              JsonSerializer.SerializeToUtf8Bytes(pending, TrainingJson.Options), cancellationToken)
+                          .ConfigureAwait(false);
     }
 
     public async Task<TrainingArtifactRecord> OverrideAsync(Guid artifactId, long expectedVersion, string reason,
@@ -203,6 +204,7 @@ public sealed class ArtifactQualityService(ITrainingRunStore runs, ITrainingEval
         {
             throw new TrainingExportRejectedException("An audited override reason is required.");
         }
+
         if (reason.Trim().Length > 1024)
         {
             throw new TrainingExportRejectedException("An audited override reason cannot exceed 1024 characters.");
@@ -240,8 +242,8 @@ public sealed class ArtifactQualityService(ITrainingRunStore runs, ITrainingEval
             OverriddenAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
         };
         return await _runs.SetArtifactQualityDecisionAsync(artifact.Id, expectedVersion, comparisonId,
-                         JsonSerializer.SerializeToUtf8Bytes(overridden, TrainingJson.Options), cancellationToken)
-                     .ConfigureAwait(false);
+                              JsonSerializer.SerializeToUtf8Bytes(overridden, TrainingJson.Options), cancellationToken)
+                          .ConfigureAwait(false);
     }
 
     public static ArtifactQualityDecisionV1? ReadDecision(TrainingArtifactRecord artifact)

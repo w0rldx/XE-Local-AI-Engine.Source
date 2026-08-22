@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using System.ComponentModel.DataAnnotations;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
@@ -53,10 +54,10 @@ public sealed class ConversationSummarizerBoundaryTests
             MaxSummaryChars = ConversationCompactionOptions.MaximumSummaryChars,
             MaxInputCharsPerSummarizationCall = ConversationCompactionOptions.MinimumInputCharsPerSummarizationCall
         };
-        var validationResults = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
+        var validationResults = new List<ValidationResult>();
 
-        var valid = System.ComponentModel.DataAnnotations.Validator.TryValidateObject(options,
-            new System.ComponentModel.DataAnnotations.ValidationContext(options),
+        var valid = Validator.TryValidateObject(options,
+            new ValidationContext(options),
             validationResults,
             validateAllProperties: true);
 
@@ -144,13 +145,15 @@ public sealed class ConversationSummarizerBoundaryTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
         {
             await Task.CompletedTask.ConfigureAwait(false);
             yield break;
         }
 
-        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            null;
 
         public void Dispose()
         {

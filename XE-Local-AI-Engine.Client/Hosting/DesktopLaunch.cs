@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Hosting;
 
+using System.Globalization;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 
 /// <summary>Resolves local launch modes and parses the small operator CLI surface.</summary>
@@ -63,12 +64,20 @@ internal static class DesktopLaunch
     internal static bool HasExplicitLocalModeArgument(string[] args) =>
         HasArgument(args, McpOnlyArgument) || HasArgument(args, DesktopArgument);
 
-    internal static bool HasNoBrowserFlag(string[] args) => HasArgument(args, NoBrowserArgument);
+    internal static bool HasNoBrowserFlag(string[] args) =>
+        HasArgument(args, NoBrowserArgument);
+
     internal static bool ShouldSuppressBrowser(LaunchMode launchMode, bool noBrowserRequested) =>
         launchMode == LaunchMode.McpOnly || noBrowserRequested;
-    internal static bool HasStatusFlag(string[] args) => HasArgument(args, StatusArgument);
-    internal static bool HasJsonFlag(string[] args) => HasArgument(args, JsonArgument);
-    internal static bool HasHelpFlag(string[] args) => HasArgument(args, HelpArgument);
+
+    internal static bool HasStatusFlag(string[] args) =>
+        HasArgument(args, StatusArgument);
+
+    internal static bool HasJsonFlag(string[] args) =>
+        HasArgument(args, JsonArgument);
+
+    internal static bool HasHelpFlag(string[] args) =>
+        HasArgument(args, HelpArgument);
 
     internal static bool HasOneShotCommand(string[] args) =>
         HasHelpFlag(args) || HasStatusFlag(args) || HasArgument(args, SetupArgument) || HasArgument(args, McpKeyArgument);
@@ -93,7 +102,7 @@ internal static class DesktopLaunch
             }
 
             sanitized.Add(PortArgument);
-            sanitized.Add(validatedPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            sanitized.Add(validatedPort.ToString(CultureInfo.InvariantCulture));
         }
 
         return sanitized;
@@ -301,7 +310,8 @@ internal enum LaunchMode
 
 internal static class LaunchModeExtensions
 {
-    internal static bool IsLocalMode(this LaunchMode mode) => mode is LaunchMode.Desktop or LaunchMode.McpOnly;
+    internal static bool IsLocalMode(this LaunchMode mode) =>
+        mode is LaunchMode.Desktop or LaunchMode.McpOnly;
 }
 
 internal sealed record SetupCommand(string Email, string Password, bool PasswordFromEnvironment);

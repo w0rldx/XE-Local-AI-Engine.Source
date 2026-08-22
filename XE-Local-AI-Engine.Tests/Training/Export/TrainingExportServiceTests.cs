@@ -224,7 +224,11 @@ public sealed class TrainingExportServiceTests : IDisposable
             DiscardReason = "failed quality",
             DiscardCleanupPending = true
         };
-        var cleaned = discarded with { Version = discarded.Version + 1, DiscardCleanupPending = false };
+        var cleaned = discarded with
+        {
+            Version = discarded.Version + 1,
+            DiscardCleanupPending = false
+        };
         _ = harness.Store.DiscardArtifactQualityAsync(artifact.Id, artifact.Version, "failed quality", Arg.Any<CancellationToken>())
                    .Returns(discarded);
         _ = harness.Store.CompleteArtifactDiscardCleanupAsync(discarded.Id, discarded.Version, Arg.Any<CancellationToken>())
@@ -253,7 +257,11 @@ public sealed class TrainingExportServiceTests : IDisposable
             DiscardCleanupPending = true
         };
         _ = harness.Store.GetArtifactAsync(artifact.Id, Arg.Any<CancellationToken>()).Returns(artifact);
-        var cleaned = artifact with { Version = 4, DiscardCleanupPending = false };
+        var cleaned = artifact with
+        {
+            Version = 4,
+            DiscardCleanupPending = false
+        };
         _ = harness.Store.CompleteArtifactDiscardCleanupAsync(artifact.Id, artifact.Version, Arg.Any<CancellationToken>()).Returns(cleaned);
 
         var result = await harness.DiscardQualityAsync(artifact.Id, artifact.Version, "different retry reason");
@@ -295,10 +303,10 @@ public sealed class TrainingExportServiceTests : IDisposable
             DiscardCleanupPending = false
         };
         _ = harness.Store.ListArtifactsAsync(harness.RunId, Arg.Any<CancellationToken>())
-                         .Returns<IReadOnlyList<TrainingArtifactRecord>>([
-                             harness.AdapterArtifact(),
-                             tombstone
-                         ]);
+                   .Returns<IReadOnlyList<TrainingArtifactRecord>>([
+                       harness.AdapterArtifact(),
+                       tombstone
+                   ]);
         harness.ScriptMergedPipeline();
 
         _ = await harness.StartAsync(TrainingArtifactKind.MergedGguf);

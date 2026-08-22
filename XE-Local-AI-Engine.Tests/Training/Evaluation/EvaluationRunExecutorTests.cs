@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Training.Evaluation;
 
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -30,7 +32,8 @@ public sealed class EvaluationRunExecutorTests : IDisposable
 
     /// <summary>What the run froze and the membership carries; later live-dataset changes are irrelevant to replay.</summary>
     private static readonly string FrozenFingerprint = "v1:" + new string('a', count: 64);
-    private readonly FixedNodeSqliteKeyHolder _keyHolder = new(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+
+    private readonly FixedNodeSqliteKeyHolder _keyHolder = new(RandomNumberGenerator.GetBytes(32));
     private readonly string _root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -135,7 +138,7 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         var store = Substitute.For<ITrainingEvaluationStore>();
         _ = store.GetAsync(evaluation.Id, Arg.Any<CancellationToken>()).Returns(evaluation);
         _ = store.AppendResultsAsync(evaluation.Id, Arg.Do<IReadOnlyList<TrainingEvaluationResultEntry>>(items => verdict = items.Single()),
-                Arg.Any<CancellationToken>()).Returns(evaluation);
+            Arg.Any<CancellationToken>()).Returns(evaluation);
         _ = store.CompleteAsync(evaluation.Id, Arg.Any<TrainingWorkStatus>(), Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(evaluation);
         using var client = new ThrowingChatClient(new HttpRequestException(secret));
         var executor = await CreateExecutorAsync(store, datasets, client, evaluation);
@@ -159,7 +162,7 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         var store = Substitute.For<ITrainingEvaluationStore>();
         _ = store.GetAsync(evaluation.Id, Arg.Any<CancellationToken>()).Returns(evaluation);
         _ = store.CompleteAsync(evaluation.Id, TrainingWorkStatus.Failed, Arg.Do<string?>(reason => persistedReason = reason),
-                Arg.Any<CancellationToken>()).Returns(evaluation);
+            Arg.Any<CancellationToken>()).Returns(evaluation);
         using var client = new RecordingChatClient();
         var executor = await CreateExecutorAsync(store, datasets, client, evaluation, mode);
 
@@ -203,7 +206,7 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         var store = Substitute.For<ITrainingEvaluationStore>();
         _ = store.GetAsync(evaluation.Id, Arg.Any<CancellationToken>()).Returns(evaluation);
         _ = store.CompleteAsync(evaluation.Id, TrainingWorkStatus.Failed, Arg.Do<string?>(reason => persistedReason = reason),
-                Arg.Any<CancellationToken>()).Returns(evaluation);
+            Arg.Any<CancellationToken>()).Returns(evaluation);
         var events = Substitute.For<ITrainingRunEventBuffer>();
         _ = events.Append(Arg.Any<Guid>(), TrainingRunEventKind.EvaluationState, Arg.Do<TrainingRunPayload>(payload => published = payload));
         using var client = new RecordingChatClient();
@@ -230,7 +233,7 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         var path = Path.Combine(_root, "tuned.gguf");
         _ = Directory.CreateDirectory(_root);
         await File.WriteAllTextAsync(path, "gguf");
-        var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("gguf")));
+        var sha = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("gguf")));
         var artifactId = Guid.NewGuid();
         var evaluation = Evaluation() with
         {
@@ -258,10 +261,10 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         await executor.ExecuteAsync(Claim(evaluation.Id), CancellationToken.None);
 
         _ = await harness.Received(1).RunAsync(Arg.Is<TransientLlamaServerEvaluationRequest>(request => request.ModelFilePath == path
-                                                                                              && request.AdapterFilePath == null
-                                                                                              && request.ContextTokens == 4096
-                                                                                              && request.LaunchPolicy
-                                                                                              == LlamaServerBenchmarkLaunchPolicy.DeterministicV1),
+                                                                                                        && request.AdapterFilePath == null
+                                                                                                        && request.ContextTokens == 4096
+                                                                                                        && request.LaunchPolicy
+                                                                                                        == LlamaServerBenchmarkLaunchPolicy.DeterministicV1),
             Arg.Any<Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task>>(),
             Arg.Any<Func<TransientLlamaServerEvaluationSession, CancellationToken, Task<TransientLlamaServerEvaluationSession>>>(),
             Arg.Any<CancellationToken>());
@@ -275,7 +278,7 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         var tunedPath = Path.Combine(_root, "tuned-equivalent.gguf");
         _ = Directory.CreateDirectory(_root);
         await File.WriteAllTextAsync(tunedPath, "tuned");
-        var tunedSha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData("tuned"u8));
+        var tunedSha = Convert.ToHexStringLower(SHA256.HashData("tuned"u8));
         var artifactId = Guid.NewGuid();
         var baseEvaluation = Evaluation();
         var tunedEvaluation = Evaluation() with
@@ -335,7 +338,7 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         var path = Path.Combine(_root, "adapter-F16.gguf");
         _ = Directory.CreateDirectory(_root);
         await File.WriteAllTextAsync(path, "adapter");
-        var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData("adapter"u8));
+        var sha = Convert.ToHexStringLower(SHA256.HashData("adapter"u8));
         var artifactId = Guid.NewGuid();
         var evaluation = Evaluation() with
         {
@@ -440,17 +443,24 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         };
         var corpus = mode switch
         {
-            FrozenFixtureMode.LegacyV1 => System.Text.Encoding.UTF8.GetBytes(
-                """{"sequence":0,"kind":"tool-call","label":"Good","reviewState":"Approved","parts":[{"kind":"user","sequence":0,"content":"call the tool"},{"kind":"tool","sequence":1,"toolName":"pinned_tool","arguments":"{}"}]}""" + "\n"),
+            FrozenFixtureMode.LegacyV1 => Encoding.UTF8.GetBytes(
+                """{"sequence":0,"kind":"tool-call","label":"Good","reviewState":"Approved","parts":[{"kind":"user","sequence":0,"content":"call the tool"},{"kind":"tool","sequence":1,"toolName":"pinned_tool","arguments":"{}"}]}""" +
+                "\n"),
             FrozenFixtureMode.MissingHoldout => FrozenTrainingCorpus.Write([Sample(Guid.NewGuid())]),
             _ => FrozenTrainingCorpus.Write([Sample()])
         };
         if (mode == FrozenFixtureMode.LegacyV1)
         {
-            freeze = freeze with { SchemaVersion = 1 };
+            freeze = freeze with
+            {
+                SchemaVersion = 1
+            };
         }
 
-        freeze = freeze with { FrozenCopySha256 = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(corpus.Span)) };
+        freeze = freeze with
+        {
+            FrozenCopySha256 = Convert.ToHexStringLower(SHA256.HashData(corpus.Span))
+        };
         if (mode == FrozenFixtureMode.Corrupt)
         {
             corpus = corpus.ToArray().Concat([(byte)' ']).ToArray();
@@ -458,7 +468,10 @@ public sealed class EvaluationRunExecutorTests : IDisposable
 
         if (mode == FrozenFixtureMode.FreezeMismatch)
         {
-            freeze = freeze with { FreezeId = Guid.NewGuid() };
+            freeze = freeze with
+            {
+                FreezeId = Guid.NewGuid()
+            };
         }
 
         await workspace.WriteFrozenDatasetAsync(DatasetId, freeze.FreezeId, corpus, CancellationToken.None);
@@ -479,7 +492,7 @@ public sealed class EvaluationRunExecutorTests : IDisposable
                 ? "v1:base"
                 : evaluation.ModelContentFingerprint ?? string.Empty),
             installedModelSha256
-            ?? Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(modelBytes)),
+            ?? Convert.ToHexStringLower(SHA256.HashData(modelBytes)),
             modelBytes.LongLength);
         _ = installedModels.AcquireAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
                            .Returns(installedLease);
@@ -597,36 +610,41 @@ public sealed class EvaluationRunExecutorTests : IDisposable
     {
         var harness = Substitute.For<ITransientLlamaServerEvaluationHarness>();
         _ = harness.RunAsync(Arg.Any<TransientLlamaServerEvaluationRequest>(),
-                Arg.Any<Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task>>(),
-                Arg.Any<Func<TransientLlamaServerEvaluationSession, CancellationToken, Task<TransientLlamaServerEvaluationSession>>>(),
-                Arg.Any<CancellationToken>())
-            .Returns(async call =>
-            {
-                if (failure is not null)
-                {
-                    throw failure;
-                }
+                       Arg.Any<Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task>>(),
+                       Arg.Any<Func<TransientLlamaServerEvaluationSession, CancellationToken, Task<TransientLlamaServerEvaluationSession>>>(),
+                       Arg.Any<CancellationToken>())
+                   .Returns(async call =>
+                   {
+                       if (failure is not null)
+                       {
+                           throw failure;
+                       }
 
-                var request = call.ArgAt<TransientLlamaServerEvaluationRequest>(0);
-                requests?.Add(request);
-                var model = await FileIdentityAsync(request.ModelFilePath, request.AdapterFilePath);
-                var launch = LaunchReceipt();
-                var binder = call.ArgAt<Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task>>(1);
-                await binder(new TransientLlamaServerEvaluationProvenance(model, launch), CancellationToken.None);
-                var session = new TransientLlamaServerEvaluationSession(new Uri("http://127.0.0.1:18080/v1"), model.ModelId, model, launch);
-                var body = call.ArgAt<Func<TransientLlamaServerEvaluationSession, CancellationToken,
-                    Task<TransientLlamaServerEvaluationSession>>>(2);
-                var value = await body(session, CancellationToken.None);
-                var returnedLaunch = mismatchedProvenance ? launch with { ExecutableVersion = "different" } : launch;
-                return new TransientLlamaServerEvaluationResult<TransientLlamaServerEvaluationSession>(value,
-                    model,
-                    returnedLaunch,
-                    new TransientLlamaServerTeardownEvidence(42,
-                        TreeKillRequested: true,
-                        ProcessExitObserved: completeTeardown,
-                        ExitObservationTimedOut: !completeTeardown,
-                        HandleDisposed: true));
-            });
+                       var request = call.ArgAt<TransientLlamaServerEvaluationRequest>(0);
+                       requests?.Add(request);
+                       var model = await FileIdentityAsync(request.ModelFilePath, request.AdapterFilePath);
+                       var launch = LaunchReceipt();
+                       var binder = call.ArgAt<Func<TransientLlamaServerEvaluationProvenance, CancellationToken, Task>>(1);
+                       await binder(new TransientLlamaServerEvaluationProvenance(model, launch), CancellationToken.None);
+                       var session = new TransientLlamaServerEvaluationSession(new Uri("http://127.0.0.1:18080/v1"), model.ModelId, model, launch);
+                       var body = call.ArgAt<Func<TransientLlamaServerEvaluationSession, CancellationToken,
+                           Task<TransientLlamaServerEvaluationSession>>>(2);
+                       var value = await body(session, CancellationToken.None);
+                       var returnedLaunch = mismatchedProvenance
+                           ? launch with
+                           {
+                               ExecutableVersion = "different"
+                           }
+                           : launch;
+                       return new TransientLlamaServerEvaluationResult<TransientLlamaServerEvaluationSession>(value,
+                           model,
+                           returnedLaunch,
+                           new TransientLlamaServerTeardownEvidence(42,
+                               TreeKillRequested: true,
+                               ProcessExitObserved: completeTeardown,
+                               ExitObservationTimedOut: !completeTeardown,
+                               HandleDisposed: true));
+                   });
         return harness;
     }
 
@@ -636,10 +654,10 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         var adapterBytes = adapterPath is null ? null : await File.ReadAllBytesAsync(adapterPath);
         return new TransientLlamaServerModelProvenance(Path.GetFileName(modelPath),
             modelBytes.LongLength,
-            Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(modelBytes)),
+            Convert.ToHexStringLower(SHA256.HashData(modelBytes)),
             adapterPath is null ? null : Path.GetFileName(adapterPath),
             adapterBytes?.LongLength,
-            adapterBytes is null ? null : Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(adapterBytes)));
+            adapterBytes is null ? null : Convert.ToHexStringLower(SHA256.HashData(adapterBytes)));
     }
 
     private static LlamaServerLaunchReceipt LaunchReceipt()
@@ -724,14 +742,20 @@ public sealed class EvaluationRunExecutorTests : IDisposable
     private sealed class ThrowingChatClient(Exception exception) : IChatClient
     {
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
-            CancellationToken cancellationToken = default) => Task.FromException<ChatResponse>(exception);
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<ChatResponse>(exception);
+
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
         {
             await Task.CompletedTask.ConfigureAwait(false);
             yield break;
         }
-        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            null;
+
         public void Dispose() { }
     }
 
@@ -746,6 +770,7 @@ public sealed class EvaluationRunExecutorTests : IDisposable
         public string ModelSha256 { get; } = modelSha256;
         public long ModelSizeBytes { get; } = modelSizeBytes;
 
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public ValueTask DisposeAsync() =>
+            ValueTask.CompletedTask;
     }
 }

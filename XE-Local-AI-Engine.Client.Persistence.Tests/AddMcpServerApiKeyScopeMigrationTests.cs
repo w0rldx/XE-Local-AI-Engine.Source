@@ -39,8 +39,7 @@ public sealed class AddMcpServerApiKeyScopeMigrationTests
             (await probe.LongsAsync("SELECT scope FROM mcp_server_api_keys;").ConfigureAwait(false)).Single(),
             "Legacy credentials must remain delegate credentials after migration.");
 
-        var tableSql = Convert.ToString(await probe.ScalarAsync(
-            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'mcp_server_api_keys';").ConfigureAwait(false));
+        var tableSql = Convert.ToString(await probe.ScalarAsync("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'mcp_server_api_keys';").ConfigureAwait(false));
         AssertEx.True(AssertEx.NotNull(tableSql).Contains("CK_mcp_server_api_keys_scope", StringComparison.Ordinal),
             "The database must reject undefined scope values even when persistence is bypassed.");
         _ = await AssertEx.ThrowsAsync<SqliteException>(() =>

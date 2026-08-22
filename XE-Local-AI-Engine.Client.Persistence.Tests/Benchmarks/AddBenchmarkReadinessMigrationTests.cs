@@ -88,9 +88,8 @@ public sealed class AddBenchmarkReadinessMigrationTests
     {
         await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-readiness-index.sqlite").ConfigureAwait(false);
 
-        AssertEx.True(
-            await probe.IndexExistsAsync("benchmark_runs", "ix_benchmark_runs_repeat_group_id", unique: false, "repeat_group_id")
-                       .ConfigureAwait(false),
+        AssertEx.True(await probe.IndexExistsAsync("benchmark_runs", "ix_benchmark_runs_repeat_group_id", unique: false, "repeat_group_id")
+                                 .ConfigureAwait(false),
             "Reading one group's runs back must not scan the project's whole run history.");
     }
 
@@ -141,9 +140,8 @@ public sealed class AddBenchmarkReadinessMigrationTests
             AssertEx.False(projectColumns.Contains(column), $"Down must drop benchmark_projects.{column}.");
         }
 
-        AssertEx.False(
-            await probe.IndexExistsAsync("benchmark_runs", "ix_benchmark_runs_repeat_group_id", unique: false, "repeat_group_id")
-                       .ConfigureAwait(false),
+        AssertEx.False(await probe.IndexExistsAsync("benchmark_runs", "ix_benchmark_runs_repeat_group_id", unique: false, "repeat_group_id")
+                                  .ConfigureAwait(false),
             "Down must drop the repeat-group index with the column it covers.");
 
         // SQLite drops a column by rebuilding the table from the migration's target model, so a row surviving the

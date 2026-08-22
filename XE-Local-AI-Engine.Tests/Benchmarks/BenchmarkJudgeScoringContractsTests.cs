@@ -157,13 +157,11 @@ public sealed class BenchmarkJudgeScoringContractsTests
     {
         var rubric = Rubric(("alpha", 1));
         const string taskJson = "\"Write a haiku.\"";
-        var outputParts = Encoding.UTF8.GetString(
-            BenchmarkExecutionSerialization.SerializeParts(BenchmarkOutputParts.ForJudge(
-                [
-                    new BenchmarkOutputPart("reasoning", Content: "hidden"),
-                    new BenchmarkOutputPart("output", Content: "hello")
-                ],
-                judgeContextTokens: 4096)));
+        var outputParts = Encoding.UTF8.GetString(BenchmarkExecutionSerialization.SerializeParts(BenchmarkOutputParts.ForJudge([
+                new BenchmarkOutputPart("reasoning", Content: "hidden"),
+                new BenchmarkOutputPart("output", Content: "hello")
+            ],
+            judgeContextTokens: 4096)));
 
         var withoutReference = BenchmarkJudgePromptV2.BuildUserPayloadJson(taskJson, null, rubric, outputParts, BenchmarkJudgeOutputSchemaV2.Json);
         var withReference = BenchmarkJudgePromptV2.BuildUserPayloadJson(taskJson, "the reference", rubric, outputParts, BenchmarkJudgeOutputSchemaV2.Json);
@@ -206,8 +204,7 @@ public sealed class BenchmarkJudgeScoringContractsTests
     {
         var rubric = Rubric(("alpha", 1));
         const string taskJson = "\"Write a haiku.\"";
-        var outputParts = Encoding.UTF8.GetString(
-            BenchmarkExecutionSerialization.SerializeParts([new BenchmarkOutputPart("output", Content: "hello")]));
+        var outputParts = Encoding.UTF8.GetString(BenchmarkExecutionSerialization.SerializeParts([new BenchmarkOutputPart("output", Content: "hello")]));
 
         var complete = BenchmarkJudgePromptV2.BuildUserPayloadJson(taskJson, null, rubric, outputParts, BenchmarkJudgeOutputSchemaV2.Json);
         var defaulted = BenchmarkJudgePromptV2.BuildUserPayloadJson(taskJson, null, rubric, outputParts, BenchmarkJudgeOutputSchemaV2.Json,
