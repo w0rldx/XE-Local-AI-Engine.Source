@@ -12,6 +12,7 @@
 		"licenses:generate": "node scripts/GenerateLicenses.mjs",
 		"licenses:check": "pnpm run licenses:generate && git diff --exit-code -- src/features/about/data/third-party-licenses.generated.json",
 		"licenses:bundle": "node scripts/FrontendLicenseCorpus.mjs",
+		"dependencies:refresh": "node scripts/RefreshDependencies.mjs",
 		"build": "tsc --noEmit && node scripts/CheckEventCurrentTargetInUpdaters.mjs && biome lint && stylelint \"src/**/*.css\" && vite build && pnpm run licenses:bundle && pnpm run bundle:check",
 		"build:e2e": "vite build",
 		"serve": "vite preview",

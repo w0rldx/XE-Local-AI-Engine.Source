@@ -40,6 +40,24 @@ pnpm run test:tooling
 pnpm run build
 ```
 
+## Dependency update validation
+
+After changing `package.json` or `pnpm-lock.yaml`, run from `XE-Local-AI-Engine.Client.React`:
+
+```sh
+pnpm run dependencies:refresh
+```
+
+The command requires a successful frozen install before it runs any generator. It then checks OpenAPI drift,
+regenerates and checks the About-dialog license manifest, runs frontend validation, and performs the production build
+that creates the exact bundled-license corpus. Independent post-install failures are collected so one code-generation
+error does not hide a later license or build diagnostic; any failed required stage produces a non-zero exit. The final
+report lists staged and unstaged tracked generated files that must be committed with the dependency update.
+
+The command never downloads or retargets curated license evidence. If an upgraded package lacks embedded terms, review
+the reported old/new package URLs, pinned evidence path, upstream source/tag, and SHA-256 before changing
+`third-party/npm/frontend-license-overrides.json`.
+
 ## OpenAPI client generation
 
 The frontend uses `@hey-api/openapi-ts` to generate a typed Axios client from the committed OpenAPI snapshot at `openapi/v1.json`.

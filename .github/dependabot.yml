@@ -37,9 +37,27 @@ updates:
     target-branch: develop
     open-pull-requests-limit: 3
     groups:
-      npm-weekly:
+      frontend-runtime:
+        dependency-type: production
         patterns:
           - "*"
+      frontend-openapi-codegen:
+        dependency-type: development
+        patterns:
+          - "@hey-api/openapi-ts"
+          - "typescript"
+      frontend-type-definitions:
+        dependency-type: development
+        patterns:
+          - "@types/*"
+      frontend-development-tooling:
+        dependency-type: development
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "@hey-api/openapi-ts"
+          - "typescript"
+          - "@types/*"
 
   - package-ecosystem: github-actions
     directory: /
