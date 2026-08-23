@@ -29,17 +29,32 @@
 #   cannot stand behind. See docs/agent-knowledge.md §1.
 #
 # Coverage instrumentation is in-place — coverage mode needs one output tree PER JOB
-#   `--coverage` (dotnet-coverage) rewrites the assemblies in the test output directory to add
-#   probes and restores them when the process exits. A single process does that invisibly; JOBS
-#   processes over ONE directory race and corrupt each other. Measured 2026-08-22 on this repo:
-#   8 concurrent coverage batches over the shared bin/ produced 124 phantom failures and left 3
-#   assemblies rewritten (assembly-guard exit 75); the SAME 8 batches without coverage were 0
-#   failures with the guard clean. So when COVERAGE_DIR is set and JOBS>1, each concurrent slot
-#   runs from its own copy of the output tree and the real bin/ is never instrumented at all.
-#   The copies sit under <proj>/bin/Release/cov-slots/<n>/ for two reasons: they must stay INSIDE
-#   the repo (a Hosting test walks up from the test binary to find XE-Local-AI-Engine.Client/
+#   Microsoft.Testing.Extensions.CodeCoverage uses STATIC instrumentation on Linux: it rewrites the
+#   assemblies in the test output directory to add probes and restores them when the process exits.
+#   A single process does that invisibly; JOBS processes over ONE directory race and corrupt each
+#   other. Measured 2026-08-22 on this repo: 8 concurrent coverage batches over the shared bin/
+#   produced 124 phantom failures and left 3 assemblies rewritten (assembly-guard exit 75); the SAME
+#   8 batches without coverage were 0 failures with the guard clean.
+#
+#   Dynamic instrumentation would avoid the rewrite entirely and was tried first — it does NOT work
+#   for this test host (measured 2026-08-23, package 18.10.0). A --coverage-settings file with
+#   EnableDynamicManagedInstrumentation=True + EnableStaticManagedInstrumentation=False is ACCEPTED
+#   and then collects nothing: the report is `<coverage line-rate="1"><packages /></coverage>`,
+#   0 packages, versus 247018 valid lines for the identical batch under the static default. Adding
+#   the CLR profiler env vars by hand (CORECLR_ENABLE_PROFILING=1, CORECLR_PROFILER=
+#   {324F817A-7420-4E6D-B3C1-143FBED6D855}, CORECLR_PROFILER_PATH=<bin>/runtimes/linux-x64/native/
+#   libInstrumentationEngine.so) still produced 0 packages. Do not re-try it without new evidence —
+#   note that an empty report reads as line-rate="1", so the failure is silent at the report level
+#   (merge-cobertura.py does catch it: zero source lines is a hard error there).
+#
+#   So COVERAGE_DIR gives each concurrent slot its own copy of the output tree, and the real bin/ is
+#   never instrumented at all — which is also why the assembly guard stays meaningful in coverage
+#   mode: it still watches the un-instrumented bin/ and would still catch a genuine concurrent
+#   build. The copies sit under <proj>/bin/Release/cov-slots/<n>/ for two reasons: they must stay
+#   INSIDE the repo (a Hosting test walks up from the test binary to find XE-Local-AI-Engine.Client/
 #   Program.cs and fails from /tmp), and that path deliberately does not match assembly-guard's
 #   --test-bins glob (*.Tests*/bin/*/net*), so a slot cannot be mistaken for contamination.
+#   Cost: ~240 MB per job (JOBS copies), made with cp -a in well under a second on a warm cache.
 #
 # Batch-level parallelism (JOBS)
 #   The per-process serialization above is deliberate, but nothing requires the *processes* to run one
@@ -192,7 +207,7 @@ fi
 
 # One instrumentable copy of the output tree per concurrent job — see the header. Copies only, so
 # the guarded bin/ itself is never handed to an instrumenting process.
-if [[ -n "${COVERAGE_DIR:-}" && "$JOBS" -gt 1 ]]; then
+if [[ -n "${COVERAGE_DIR:-}" ]]; then
   SLOT_ROOT="$(dirname "$(dirname "$EXE")")/cov-slots"
   SLOT_LOCKS="$(mktemp -d)"
   rm -rf "$SLOT_ROOT"; mkdir -p "$SLOT_ROOT"
