@@ -1882,9 +1882,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Agents.AI.Abstractions@1.17.0",
+			"id": "backend:Microsoft.Agents.AI.Abstractions@1.19.0",
 			"name": "Microsoft.Agents.AI.Abstractions",
-			"version": "1.17.0",
+			"version": "1.19.0",
 			"license": "MIT",
 			"homepageUrl": "https://learn.microsoft.com/agent-framework/",
 			"source": "backend"
