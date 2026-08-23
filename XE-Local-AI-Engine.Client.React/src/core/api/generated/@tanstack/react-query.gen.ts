@@ -1381,8 +1381,8 @@ export const listTrainingRunsInfiniteQueryKey = (
 	options: Options<ListTrainingRunsData>,
 ): QueryKey<Options<ListTrainingRunsData>> => createQueryKey("listTrainingRuns", options, true);
 
-export const listTrainingRunsInfiniteOptions = (options: Options<ListTrainingRunsData>) =>
-	infiniteQueryOptions<
+export const listTrainingRunsInfiniteOptions = (options: Options<ListTrainingRunsData>) => {
+	const opts = infiniteQueryOptions<
 		ListTrainingRunsResponse,
 		AxiosError<DefaultError>,
 		InfiniteData<ListTrainingRunsResponse>,
@@ -1413,6 +1413,8 @@ export const listTrainingRunsInfiniteOptions = (options: Options<ListTrainingRun
 			queryKey: listTrainingRunsInfiniteQueryKey(options),
 		},
 	);
+	return opts as Omit<typeof opts, "initialData">;
+};
 
 export const createTrainingRunMutation = (
 	options?: Partial<Options<CreateTrainingRunData>>,
@@ -2164,8 +2166,8 @@ export const listTrainingSamplesInfiniteQueryKey = (
 	options: Options<ListTrainingSamplesData>,
 ): QueryKey<Options<ListTrainingSamplesData>> => createQueryKey("listTrainingSamples", options, true);
 
-export const listTrainingSamplesInfiniteOptions = (options: Options<ListTrainingSamplesData>) =>
-	infiniteQueryOptions<
+export const listTrainingSamplesInfiniteOptions = (options: Options<ListTrainingSamplesData>) => {
+	const opts = infiniteQueryOptions<
 		ListTrainingSamplesResponse,
 		AxiosError<DefaultError>,
 		InfiniteData<ListTrainingSamplesResponse>,
@@ -2196,6 +2198,8 @@ export const listTrainingSamplesInfiniteOptions = (options: Options<ListTraining
 			queryKey: listTrainingSamplesInfiniteQueryKey(options),
 		},
 	);
+	return opts as Omit<typeof opts, "initialData">;
+};
 
 export const reviewTrainingSampleMutation = (
 	options?: Partial<Options<ReviewTrainingSampleData>>,
@@ -6887,8 +6891,8 @@ export const listBenchmarkRunsInfiniteQueryKey = (
 	options: Options<ListBenchmarkRunsData>,
 ): QueryKey<Options<ListBenchmarkRunsData>> => createQueryKey("listBenchmarkRuns", options, true);
 
-export const listBenchmarkRunsInfiniteOptions = (options: Options<ListBenchmarkRunsData>) =>
-	infiniteQueryOptions<
+export const listBenchmarkRunsInfiniteOptions = (options: Options<ListBenchmarkRunsData>) => {
+	const opts = infiniteQueryOptions<
 		ListBenchmarkRunsResponse,
 		AxiosError<ListBenchmarkRunsError>,
 		InfiniteData<ListBenchmarkRunsResponse>,
@@ -6919,6 +6923,8 @@ export const listBenchmarkRunsInfiniteOptions = (options: Options<ListBenchmarkR
 			queryKey: listBenchmarkRunsInfiniteQueryKey(options),
 		},
 	);
+	return opts as Omit<typeof opts, "initialData">;
+};
 
 export const startBenchmarkRunMutation = (
 	options?: Partial<Options<StartBenchmarkRunData>>,
@@ -7853,8 +7859,8 @@ export const listAgentExecutionLogsInfiniteQueryKey = (
 	options: Options<ListAgentExecutionLogsData>,
 ): QueryKey<Options<ListAgentExecutionLogsData>> => createQueryKey("listAgentExecutionLogs", options, true);
 
-export const listAgentExecutionLogsInfiniteOptions = (options: Options<ListAgentExecutionLogsData>) =>
-	infiniteQueryOptions<
+export const listAgentExecutionLogsInfiniteOptions = (options: Options<ListAgentExecutionLogsData>) => {
+	const opts = infiniteQueryOptions<
 		ListAgentExecutionLogsResponse,
 		AxiosError<DefaultError>,
 		InfiniteData<ListAgentExecutionLogsResponse>,
@@ -7885,6 +7891,8 @@ export const listAgentExecutionLogsInfiniteOptions = (options: Options<ListAgent
 			queryKey: listAgentExecutionLogsInfiniteQueryKey(options),
 		},
 	);
+	return opts as Omit<typeof opts, "initialData">;
+};
 
 export const listAgentTemplatesQueryKey = (options?: Options<ListAgentTemplatesData>) =>
 	createQueryKey("listAgentTemplates", options);
@@ -7933,8 +7941,8 @@ export const listRunEnvelopesInfiniteQueryKey = (
 	options?: Options<ListRunEnvelopesData>,
 ): QueryKey<Options<ListRunEnvelopesData>> => createQueryKey("listRunEnvelopes", options, true);
 
-export const listRunEnvelopesInfiniteOptions = (options?: Options<ListRunEnvelopesData>) =>
-	infiniteQueryOptions<
+export const listRunEnvelopesInfiniteOptions = (options?: Options<ListRunEnvelopesData>) => {
+	const opts = infiniteQueryOptions<
 		ListRunEnvelopesResponse,
 		AxiosError<DefaultError>,
 		InfiniteData<ListRunEnvelopesResponse>,
@@ -7965,6 +7973,8 @@ export const listRunEnvelopesInfiniteOptions = (options?: Options<ListRunEnvelop
 			queryKey: listRunEnvelopesInfiniteQueryKey(options),
 		},
 	);
+	return opts as Omit<typeof opts, "initialData">;
+};
 
 export const promoteSuggestedPlaybookActionMutation = (
 	options?: Partial<Options<PromoteSuggestedPlaybookActionData>>,
