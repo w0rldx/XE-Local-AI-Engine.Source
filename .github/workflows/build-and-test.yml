@@ -161,7 +161,7 @@ jobs:
       # WHY: this module responds to process-level parallelism and barely at all to in-process
       # width, which is contention-bound behind the static HostStartupLock, a multi-GB heap and the
       # per-test web hosts. Measured 2026-08-22 on a 16-core box: one process 8-wide = 11:00,
-      # JOBS=4 batches = 6:02, JOBS=10 batches = 2:56 — and in CI the same module took 22:31 on its
+      # JOBS=4 batches = 6:02, JOBS=10 batches = 2:18 — and in CI the same module took 22:31 on its
       # own at width 2. JOBS is therefore the runner's core count, not an in-process width, and each
       # batch writes its own Cobertura + TRX report under $COVERAGE_ROOT/<module>/<namespace>/.
       #
@@ -171,6 +171,7 @@ jobs:
       # big module no longer competes for in-process width. TZ=Europe/Berlin exposes non-UTC
       # time-zone bugs (e.g. CapabilityReporterTests). global.json pins the
       # Microsoft.Testing.Platform runner.
+
       # Pre-pull the one image DockerSandboxRealDaemonTests uses, pinned by digest. Doing it here
       # means a registry blip fails THIS step as the infrastructure problem it is, instead of
       # surfacing as 22 test failures; the in-test pull then degrades to a local inspect.
