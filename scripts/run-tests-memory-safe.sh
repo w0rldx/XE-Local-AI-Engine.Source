@@ -88,7 +88,8 @@
 #                   the CPU-seconds table lower down. NOT named GROUPS: bash owns that name.
 #                   In grouped mode the zero-enrolled guard is per GROUP, not per namespace, and
 #                   COVERAGE_DIR reports land under <COVERAGE_DIR>/<group>/ rather than
-#                   <COVERAGE_DIR>/<namespace>/.
+#                   <COVERAGE_DIR>/<namespace>/. Either way COVERAGE_DIR/units.txt lists the units
+#                   that ran, and a unit that produced no usable report is reported FAILED.
 #   COVERAGE_DIR    when set, every batch additionally writes
 #                   <COVERAGE_DIR>/<namespace>/coverage.cobertura.xml plus a TRX report. The reports
 #                   are per-batch by construction (MTP resolves --coverage-output relative to
@@ -181,7 +182,7 @@ run_ns() {
     avail="$(free -m | awk '/^Mem:/{print $7}')"
     if [[ "${avail:-9999}" -lt "$AVAIL_FLOOR" ]]; then
       echo "   !! SAFETY-KILL $ns: avail ${avail}MB < ${AVAIL_FLOOR}MB (rss ${rss}KB)"; kill -9 "$pid" 2>/dev/null
-      echo "0 1 $peak oom $((EPOCHSECONDS-t0)) 0" >"$RESULTS_DIR/$ns.result"; rm -f "$out"
+      echo "0 1 $peak oom $((EPOCHSECONDS-t0)) 0 0" >"$RESULTS_DIR/$ns.result"; rm -f "$out"
       release_slot "$slot"; return
     fi
     sleep 1
@@ -199,12 +200,21 @@ run_ns() {
   local sum=0; grep -qE 'Test run summary: (Passed|Failed)!' "$out" && sum=1
   printf "   %-52s pass=%-4s fail=%-3s peakRSS=%sMB exit=%s dur=%ss\n" "$ns" "$p" "$f" "$((peak/1024))" "$rc" "$((EPOCHSECONDS-t0))"
   if [[ "$f" -gt 0 ]]; then grep -E 'failed|error' "$out" | grep -viE 'failed: 0' | head -3 >"$RESULTS_DIR/$ns.fails"; fi
-  echo "$p $f $peak $rc $((EPOCHSECONDS-t0)) $sum" >"$RESULTS_DIR/$ns.result"
   rm -f "$out"
-  # --report-trx copies coverage.cobertura.xml into the TRX attachment tree byte for byte. At ~40 MB
-  # a batch that is ~3.4 GB of pure duplication across the module — and it is the copy that makes a
-  # recursive report search count every report twice (the miscount that kept develop red once).
-  [[ -n "${COVERAGE_DIR:-}" ]] && rm -f "$COVERAGE_DIR/$ns"/_*/In/*/coverage.cobertura.xml
+  # A unit whose collector wrote no report (or an empty one) would otherwise be merged as silently
+  # incomplete coverage: the tests pass, the percentage quietly drops. The marker is `<class`, NOT
+  # `<package`: an empty report is `<packages />`, which contains `<package` as a substring and
+  # would pass (measured — that is exactly what dynamic instrumentation emits, see the header).
+  local cov=1
+  if [[ -n "${COVERAGE_DIR:-}" ]]; then
+    grep -q '<class' "$COVERAGE_DIR/$ns/coverage.cobertura.xml" 2>/dev/null || cov=0
+    # --report-trx copies coverage.cobertura.xml into the TRX attachment tree byte for byte. At
+    # ~40 MB a unit that is GBs of pure duplication across the module — and it is the copy that
+    # makes a recursive report search count every report twice (the miscount that kept develop red
+    # once).
+    rm -f "$COVERAGE_DIR/$ns"/_*/In/*/coverage.cobertura.xml
+  fi
+  echo "$p $f $peak $rc $((EPOCHSECONDS-t0)) $sum $cov" >"$RESULTS_DIR/$ns.result"
   release_slot "$slot"
 }
 
@@ -332,6 +342,13 @@ if [[ ${#UNITS[@]} -eq 0 ]]; then
   exit 1
 fi
 
+# The unit list is the authoritative count for anything downstream that has to check "one report
+# per unit" — the workflow cannot infer it from nproc, since a group can be dropped when empty.
+if [[ -n "${COVERAGE_DIR:-}" ]]; then
+  mkdir -p "$COVERAGE_DIR"
+  printf '%s\n' "${UNITS[@]%%$'\t'*}" >"$COVERAGE_DIR/units.txt"
+fi
+
 running=0
 for unit in "${UNITS[@]}"; do
   run_ns "${unit%%$'\t'*}" "${unit#*$'\t'}" &
@@ -345,7 +362,7 @@ for unit in "${UNITS[@]}"; do
   ns="${unit%%$'\t'*}"
   rfile="$RESULTS_DIR/$ns.result"
   if [[ ! -f "$rfile" ]]; then FAILED+=("$ns(no-result)"); continue; fi
-  read -r p f peak rc _dur sum <"$rfile"
+  read -r p f peak rc _dur sum cov <"$rfile"
   TOTAL_PASS=$((TOTAL_PASS+p)); TOTAL_FAIL=$((TOTAL_FAIL+f))
   [[ "$peak" -gt "$PEAK_ALL" ]] && PEAK_ALL="$peak"
   if [[ "$rc" == "oom" ]]; then
@@ -359,6 +376,8 @@ for unit in "${UNITS[@]}"; do
   elif [[ "$rc" != 0 && "$p" -eq 0 ]]; then
     # The batch process died without reporting a single test — a crash must not read as green.
     FAILED+=("$ns(exit=$rc)")
+  elif [[ "$cov" != 1 ]]; then
+    FAILED+=("$ns(no-coverage-report)")
   fi
 done
 

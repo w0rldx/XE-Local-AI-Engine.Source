@@ -305,9 +305,18 @@ jobs:
             echo "ERROR: expected $expected_siblings sibling Cobertura reports, found ${#sibling_reports[@]}." >&2
             exit 1
           fi
-          if [[ "${#batch_reports[@]}" -eq 0 ]]; then
-            echo "ERROR: $batched_module produced no per-namespace Cobertura report — the batched" \
-                 "run enrolled nothing." >&2
+          # One report per unit the script actually ran — not merely "at least one". A unit whose
+          # collector emitted nothing would otherwise be merged as silently incomplete coverage.
+          # The script asserts this per unit too (it fails the unit); this is the cross-check.
+          batch_units="$COVERAGE_ROOT/$batched_module/units.txt"
+          if [[ ! -s "$batch_units" ]]; then
+            echo "ERROR: $batched_module wrote no units.txt — the batched run enrolled nothing." >&2
+            exit 1
+          fi
+          expected_batches="$(wc -l <"$batch_units")"
+          if [[ "${#batch_reports[@]}" -ne "$expected_batches" ]]; then
+            echo "ERROR: $batched_module ran $expected_batches unit(s) but produced" \
+                 "${#batch_reports[@]} Cobertura report(s)." >&2
             exit 1
           fi
           echo "Merging ${#sibling_reports[@]} whole-module + ${#batch_reports[@]} batch Cobertura report(s)."
