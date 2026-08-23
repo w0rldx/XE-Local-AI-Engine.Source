@@ -33,8 +33,10 @@
 #   after another: every hazard the fresh-process design defends against is process-scoped (env-var
 #   mutation, PATH stubs, meter/ActivityListener capture, the HostStartupLock) or already isolated
 #   per host (GUID-named temp SQLite/data dirs, port-0 binds). So the batches run JOBS at a time,
-#   longest-first, each still single-threaded by default. Measured on the 8-core/32GB dev box:
-#   sequential 649s of batches -> ~1/JOBS wall clock, floored by the largest batch (~41s).
+#   longest-first, each still single-threaded by default. PROCESS-level parallelism is what this
+#   module responds to; in-process width is contention-bound (measured 2026-08-22, 16-core dev box:
+#   one process 8-wide = 11:00 wall / 10.0 GB, JOBS=4 batches = 6:02, JOBS=10 batches = 2:18 with
+#   ~670 MB per batch process). Hence the default of 10 rather than one-per-core.
 #   JOBS=1 reproduces the old strictly-sequential behavior exactly.
 #
 # Usage:
@@ -44,7 +46,7 @@
 #   PAR=4 scripts/run-tests-memory-safe.sh          # allow N parallel tests per batch (faster, may reintroduce flakes)
 #
 # Env knobs:
-#   JOBS            how many namespace batch PROCESSES run concurrently (default 4; 1 = sequential)
+#   JOBS            how many namespace batch PROCESSES run concurrently (default 10; 1 = sequential)
 #   PAR             max parallel tests per batch (default 1 = deterministic + lowest RSS; >1 is faster but can flake)
 #   AVAIL_FLOOR     a batch aborts if available RAM drops below this many MB (default 800; with JOBS>1
 #                   every batch that observes the breach kills itself — safety over completeness)
@@ -57,6 +59,7 @@
 # Exit codes:
 #   0   — every namespace batch green
 #   1   — one or more batches had failures
+#   69  — could not acquire the build lock (from scripts/with-build-lock.sh); nothing was run
 #   75  — CONTAMINATED: the build output changed mid-run; the result is void, re-run it
 set -uo pipefail
 
@@ -71,7 +74,7 @@ fi
 PROJ="$REPO/XE-Local-AI-Engine.Tests"
 EXE="$PROJ/bin/Release/net10.0/XE-Local-AI-Engine.Tests"
 PAR="${PAR:-1}"
-JOBS="${JOBS:-4}"
+JOBS="${JOBS:-10}"
 AVAIL_FLOOR="${AVAIL_FLOOR:-800}"
 
 # The module has a CONFLICTING env premise (docs/agent-knowledge.md §1): some tests require XE_NODE_SQLITE_KEY UNSET,
@@ -128,24 +131,40 @@ if [[ -z "${NO_GUARD:-}" ]]; then
   "$REPO/scripts/assembly-guard.sh" snapshot "$GUARD_STATE" --root "$(dirname "$EXE")"
 fi
 
-# Longest-first (LPT) so the parallel schedule doesn't end on a 40s batch started last. Weights
-# measured 2026-08-15 on the dev box; harmless if stale — unlisted namespaces follow alphabetically.
+# Longest-first (LPT) so the parallel schedule doesn't end on a 90s batch started last. Every
+# namespace that took >= 20s is listed, descending; the trailing comment is that measurement.
+# Weights measured 2026-08-22 on the dev box (JOBS=4 run); harmless if stale — unlisted namespaces
+# follow alphabetically. Re-generate from a run's `dur=` column when the tail stops shrinking.
 HEAVY=(
-  XE_Local_AI_Engine.Tests.Endpoints.Agents
-  XE_Local_AI_Engine.Tests.Chat
-  XE_Local_AI_Engine.Tests.Endpoints.ModelFit.V1
-  XE_Local_AI_Engine.Tests.Providers.LlamaServer
-  XE_Local_AI_Engine.Tests.Development
-  XE_Local_AI_Engine.Tests.Endpoints.Skills
-  XE_Local_AI_Engine.Tests.Endpoints.LocalModels
-  XE_Local_AI_Engine.Tests.ApiFoundation
-  XE_Local_AI_Engine.Tests.Mcp
-  XE_Local_AI_Engine.Tests.Hosting
-  XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp
-  XE_Local_AI_Engine.Tests.Endpoints.Images
-  XE_Local_AI_Engine.Tests.Endpoints.Development.V1
-  XE_Local_AI_Engine.Tests.Endpoints.Benchmarks.V1
-  XE_Local_AI_Engine.Tests.CloudSettings
+  XE_Local_AI_Engine.Tests.Endpoints.Training.V1        # 94s
+  XE_Local_AI_Engine.Tests.Endpoints.Benchmarks.V1      # 90s
+  XE_Local_AI_Engine.Tests.Mcp                          # 64s
+  XE_Local_AI_Engine.Tests.Endpoints.Development.V1     # 56s
+  XE_Local_AI_Engine.Tests.Endpoints.Skills             # 49s
+  XE_Local_AI_Engine.Tests.Endpoints.LocalModels        # 48s
+  XE_Local_AI_Engine.Tests.Endpoints.Agents             # 46s
+  XE_Local_AI_Engine.Tests.Endpoints.ModelFit.V1        # 41s
+  XE_Local_AI_Engine.Tests.Chat                         # 40s
+  XE_Local_AI_Engine.Tests.Providers.LlamaServer        # 39s
+  XE_Local_AI_Engine.Tests.Endpoints.Drafting           # 38s
+  XE_Local_AI_Engine.Tests.Hosting                      # 37s
+  XE_Local_AI_Engine.Tests.Endpoints.Knowledge          # 37s
+  XE_Local_AI_Engine.Tests.Endpoints.Images             # 36s
+  XE_Local_AI_Engine.Tests.CloudSettings                # 36s
+  XE_Local_AI_Engine.Tests.Development                  # 34s
+  XE_Local_AI_Engine.Tests.Endpoints.Development        # 29s
+  XE_Local_AI_Engine.Tests.Auth                         # 29s
+  XE_Local_AI_Engine.Tests.Automation                   # 28s
+  XE_Local_AI_Engine.Tests.Endpoints.LocalChat          # 27s
+  XE_Local_AI_Engine.Tests.NodeSettings                 # 26s
+  XE_Local_AI_Engine.Tests.Endpoints.NodeBinding.V1     # 25s
+  XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp # 23s
+  XE_Local_AI_Engine.Tests.ApiFoundation                # 23s
+  XE_Local_AI_Engine.Tests.PreviewWorkflows             # 22s
+  XE_Local_AI_Engine.Tests.Endpoints.CustomTools.V1     # 22s
+  XE_Local_AI_Engine.Tests.Proxy                        # 21s
+  XE_Local_AI_Engine.Tests.Agents                       # 21s
+  XE_Local_AI_Engine.Tests.Endpoints.Workspaces         # 20s
 )
 declare -A IS_HEAVY=()
 ORDERED=()
