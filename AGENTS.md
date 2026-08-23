@@ -32,11 +32,13 @@ this whole file as its `validate` job before packaging):
   --no-behavior --bootstrap` (shellcheck, PSScriptAnalyzer, Pester, the `P0_SPIKE` compile gate).
   shellcheck is installed pinned (`v0.11.0`, sha256-verified) because `ubuntu-latest` ships 0.9.0,
   whose SC2317/SC2015 false positives fail the `--severity=style` pass; the script refuses < 0.10.0.
-- **build-and-test** — Release build, `scripts/openapi-live-check.sh`, then one `dotnet test` per
-  test project in the solution with Cobertura coverage; `scripts/merge-cobertura.py` enforces
-  `scripts/backend-coverage-baseline.txt`. Coverage XML + TRX are uploaded as `backend-test-results`.
+- **build-and-test** — Release build, `scripts/openapi-live-check.sh`, then the solution's test
+  projects run concurrently with Cobertura coverage: `XE-Local-AI-Engine.Tests` through
+  `scripts/run-tests-memory-safe.sh` (`TEST_GROUPS=$(nproc)` processes, each covering a packed set of
+  namespaces), the rest as a plain `dotnet test --maximum-parallel-tests 2`. `scripts/merge-cobertura.py` merges every report and enforces
+  `scripts/backend-coverage-baseline.txt`. TRX and coverage XML are uploaded as `backend-test-results`.
   `--report-trx` copies each coverage report as a TRX attachment under
-  `<module>/_<machine>_<timestamp>/In/<machine>/`, so the report glob is depth-2 only.
+  `…/_<machine>_<timestamp>/In/<machine>/`, so the report globs stay depth-bounded.
 - **client-react** — `openapi:check`, `licenses:check`, `validate` (= `lint` + `knip` +
   `signalr:check` + `depcruise`), `test:coverage:check`, `test:tooling`, `build`, `pnpm audit`.
 
@@ -51,14 +53,16 @@ Backend:
 
 **The `--configuration Release` in those commands is load-bearing — always finish with it.** Local Debug builds skip analyzer execution (`Directory.Build.targets`; 84s → 10s on the Tests module), so SonarAnalyzer, Meziantou, BannedApiAnalyzers and the `IDExxxx` code-style rules — including the "no bare `TODO`" rule — only fire in Release. Iterate in Debug, but a change is not verified until a Release build passes, or the packaging script will reject what compiled fine for you. `XE_FULL_ANALYSIS=1` forces the full pass in Debug.
 
-This solution-wide command is the canonical local backend gate; `README.md`, `CONTRIBUTING.md`, `XE-Local-AI-Engine.Client/README.md` and `XE-Local-AI-Engine.Client.React/AGENTS.md` all restate it and defer here. **CI runs something different on purpose:** `build-and-test` loops one `dotnet test` per test project auto-enrolled from `XE-Local-AI-Engine.slnx` (E2E excluded), with `--maximum-parallel-tests 8` and no `--max-parallel-test-modules`, because MTP resolves `--coverage-output` relative to `--results-directory` and parallel modules sharing one directory would overwrite each other's Cobertura report. `scripts/run-tests-memory-safe.sh` is the lower-memory local runner for the `XE-Local-AI-Engine.Tests` module specifically — it does not cover the other test projects, so run them too.
+This solution-wide command is the canonical local backend gate; `README.md`, `CONTRIBUTING.md`, `XE-Local-AI-Engine.Client/README.md` and `XE-Local-AI-Engine.Client.React/AGENTS.md` all restate it and defer here. **CI runs something different on purpose:** `build-and-test` auto-enrols the test projects from `XE-Local-AI-Engine.slnx` (E2E excluded) and runs them **concurrently**, each with its **own** `--results-directory` — required, because MTP resolves `--coverage-output` relative to it and modules sharing one directory would overwrite each other's Cobertura report. `XE-Local-AI-Engine.Tests` is the exception: CI runs it through `scripts/run-tests-memory-safe.sh` with `TEST_GROUPS=$(nproc)`, i.e. one process per packed *group* of namespaces. One process barely uses the cores (host builds serialize behind the static `HostStartupLock`), while one process per namespace pays code-coverage static instrumentation ~98 times — measured in CPU-seconds: 1991 per-namespace, 684 for `TEST_GROUPS=4`, 677 for a single process. The other projects run as a plain `dotnet test --maximum-parallel-tests 2`. All the per-batch and per-project Cobertura reports are merged by `scripts/merge-cobertura.py` against `scripts/backend-coverage-baseline.txt`.
+
+`scripts/run-tests-memory-safe.sh` is also the local full-run tool for the `XE-Local-AI-Engine.Tests` module — it does not cover the other test projects, so run them too. It defaults to `JOBS=10` batch processes (measured 2026-08-22 on a 16-core box: one process 8-wide 11:00 / 10.0 GB, `JOBS=4` 6:02, `JOBS=10` 2:18 at ~670 MB per batch). Setting `COVERAGE_DIR=<dir>` adds a per-unit Cobertura + TRX report (pair it with `TEST_GROUPS=N`, as CI does — the knob is not called `GROUPS`, bash owns that name); that mode clones the ~240 MB test output tree once per job, because coverage instrumentation rewrites assemblies **in place** and concurrent batches cannot share one tree.
 
 Backend tests are TUnit on Microsoft.Testing.Platform — the pinned version is in `Directory.Packages.props`. To scope a run, use `--treenode-filter` (not `--filter`). Alternation works: `/*/*/(QuantLadderTests|DesktopPortStoreTests)/*` discovers exactly the union of the two classes' tests. `--list-tests` honors the filter and is authoritative for the current count; don't trust a count written down here.
 
 Never run a build and a test run concurrently — `dotnet test --no-build` reads `bin/`, and a build in another process rewrites those assemblies mid-run and produces phantom failures (or a phantom green). Two guards exist, and both are already wired into `scripts/run-tests-memory-safe.sh` and `scripts/run-e2e-local.sh`:
 
 - `scripts/with-build-lock.sh -- <command>` — cross-process `flock` so cooperating shells serialize. Bounded wait; exit 69 names the holder.
-- `scripts/assembly-guard.sh guard --test-bins -- <test command>` — snapshots the test assemblies around the run and reports **exit 75, CONTAMINATED, re-run required** if they changed, instead of reporting test failures. Wrap any new test runner in it.
+- `scripts/assembly-guard.sh guard --test-bins -- <test command>` — snapshots the test assemblies around the run and reports **exit 75, CONTAMINATED, re-run required** if they changed, instead of reporting test failures. Wrap any new test runner in it — but not one that already self-guards: wrapping `scripts/run-tests-memory-safe.sh` trips exit 75 every time, because the build it performs falls inside the outer window. Pass `NO_BUILD=1` if you must wrap it.
 
 **Exit 75 from any test script means the result is void, not red.** Re-run it. See `docs/agent-knowledge.md` §1 for the evidence and the file-descriptor trap that makes the naive `flock <file> <command>` form leak the lock to MSBuild's daemons.
 
