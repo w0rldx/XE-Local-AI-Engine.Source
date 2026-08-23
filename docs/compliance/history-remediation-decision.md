@@ -63,25 +63,32 @@ performing in spite of them, not because they do not apply.
 
 ## Evidence
 
-**Status: pending — the rewrite has not been executed.** This decision is not
-satisfied by its own existence. When the rewrite runs, each of the following
-must be recorded and retained with the release evidence, and this section
-updated to reference it:
+**Status: executed 2026-08-23/24 by the approver.** The rewrite ran against
+the canonical repository with every verification below recorded in
+remediation record **P7-2026-08-23**, retained as a controlled private record
+outside this repository:
 
-- **Affected refs inventory.** Every ref rewritten and force-updated, captured
-  before and after.
-- **Restricted remediation record.** The itemized inventory of the removed
-  material, retained as a controlled private record and referenced here by a
-  non-sensitive identifier only.
-- **Fresh-clone absence verification.** A clone taken from the canonical
-  remote after the force-push, showing the removed material absent from the
-  full history and the authorship metadata normalized.
-- **Full-history secret scans.** Scanner results over the complete rewritten
-  history, including the targeted rule set from the restricted record —
-  stock scanner defaults are known not to cover everything the rewrite
-  removes, so a default-rules pass alone is not sufficient evidence.
+- **Affected refs inventory.** 26 branches and 11 tags rewritten and
+  force-updated; 3 stale automation branches on the remote, which pinned
+  pre-rewrite ancestry, deleted. Before/after ref inventories are in the
+  record.
+- **Restricted remediation record.** Record identifier **P7-2026-08-23**:
+  itemized inventory, filter configuration, verification logs, and backup
+  locations.
+- **Fresh-clone absence verification.** A fresh clone of the canonical remote
+  taken after the force-push passed the full 16-check verification battery:
+  removed material absent from every commit, the replaced configuration value
+  absent from all reachable blobs, authorship metadata normalized across
+  commits, tags, and message bodies, ref sets and content trees intact, and
+  repository integrity clean.
+- **Full-history secret scans.** The targeted rule set reported one finding on
+  the pre-rewrite history and zero on the rewritten history; default-rule
+  scanner passes were unchanged before and after (known test fixtures only).
+  The targeted rule is part of the restricted record.
 - **Support-ticket reference.** The hosting provider's garbage-collection
-  request identifier and its outcome, recorded when it completes.
+  request is prepared in the record and is filed once the operator accepts
+  this result; its identifier and outcome are appended here when it
+  completes.
 
 If the rewrite is abandoned or materially rescoped, that reversal is recorded
 as its own dated decision rather than by editing this one.
