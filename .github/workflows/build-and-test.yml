@@ -157,16 +157,16 @@ jobs:
       # PID is waited on individually so a failure in any project fails the step.
       #
       # XE-Local-AI-Engine.Tests is the exception: it does not run as one `dotnet test`, it runs
-      # through scripts/run-tests-memory-safe.sh as GROUPS processes, each covering a packed set of
+      # through scripts/run-tests-memory-safe.sh as TEST_GROUPS processes, each covering a packed set of
       # test namespaces. WHY neither obvious shape: one process barely uses the cores (per-test host
       # builds serialize behind the static HostStartupLock), and one process PER NAMESPACE pays the
       # code-coverage static-instrumentation start-up ~98 times. Measured 2026-08-23, coverage on,
       # JOBS=4, in CPU-seconds — which predicts a slow 4-vCPU runner far better than local wall:
       #   98 batches            1991 CPU-s   7:07 wall   868 MB/proc
-      #   GROUPS=8               830 CPU-s   3:12 wall  1557 MB/proc
-      #   GROUPS=4               684 CPU-s   2:43 wall  1532 MB/proc
+      #   TEST_GROUPS=8          830 CPU-s   3:12 wall  1557 MB/proc
+      #   TEST_GROUPS=4          684 CPU-s   2:43 wall  1532 MB/proc
       #   one process, width 4   677 CPU-s   7:44 wall  7719 MB (single process)
-      # GROUPS=nproc costs the CPU of a single process while getting 4.2x parallelism against 1.46x,
+      # TEST_GROUPS=nproc costs the CPU of a single process while getting 4.2x parallelism against 1.46x,
       # and its peak RSS per process leaves room for the sibling projects. The per-namespace shape
       # was tried in CI (run 32609813981): green, but 25.5 min against the 22.5 min it replaced, and
       # the extra load pushed Client.Persistence.Tests past its build timeout. Do not go back to it.
@@ -244,7 +244,7 @@ jobs:
           # which turns DockerSandboxRealDaemonTests' skip into a failure.
           # NO_BUILD: the solution was already built in Release above.
           #
-          # Disk it needs, measured 2026-08-23 for GROUPS=4: ~224 MB of Cobertura + TRX (a report
+          # Disk it needs, measured 2026-08-23 for TEST_GROUPS=4: ~224 MB of Cobertura + TRX (a report
           # is ~40 MB because it lists every source line of every loaded assembly — which is why the
           # 98-batch shape produced 3.9 GB) plus one ~240 MB clone of the test output tree per JOBS
           # slot, because coverage instrumentation rewrites assemblies in place and concurrent
@@ -253,7 +253,7 @@ jobs:
           # the script header); do not swap it in without re-measuring a non-empty report.
           run_batched() {
             local module="$1"
-            NO_BUILD=1 JOBS="$(nproc)" GROUPS="$(nproc)" COVERAGE_DIR="$COVERAGE_ROOT/$module" \
+            NO_BUILD=1 JOBS="$(nproc)" TEST_GROUPS="$(nproc)" COVERAGE_DIR="$COVERAGE_ROOT/$module" \
               scripts/run-tests-memory-safe.sh 2>&1 | sed "s/^/[$module] /"
             # See run_project: `sed` masks the real status unless PIPESTATUS is read explicitly.
             return "${PIPESTATUS[0]}"
