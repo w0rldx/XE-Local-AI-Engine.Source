@@ -7,7 +7,7 @@ using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 
-    /// <summary>
+/// <summary>
 ///     Opt-in profiler for the cost of ONE <see cref="TestServerWebAppFactory" /> host, the unit that 61 test classes
 ///     pay per test and 42 pay per class. It answers the only question that decides whether a per-host optimisation is
 ///     worth building: where do the ~2 s go?
@@ -227,11 +227,12 @@ public sealed class TestServerWebAppFactoryTimingTests
 
     /// <summary>
     ///     Appends raw samples (never medians) so repeated runs accumulate into one file and can be aggregated across
-    ///     runs afterwards — the only way to see through the CPU contention of a shared box.
+    ///     runs afterwards — the only way to see through the CPU contention of a shared box. It therefore grows without
+    ///     bound; the name carries the <c>xe-local-ai-engine-tests-</c> prefix so the documented temp sweep reclaims it.
     /// </summary>
     private static void AppendCsv(List<Sample> samples)
     {
-        var path = Path.Combine(Path.GetTempPath(), "xe-fixture-timing.csv");
+        var path = Path.Combine(Path.GetTempPath(), "xe-local-ai-engine-tests-fixture-timing.csv");
         var builder = new StringBuilder();
         if (!File.Exists(path))
         {
