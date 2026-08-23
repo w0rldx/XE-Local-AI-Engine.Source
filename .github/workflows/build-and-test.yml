@@ -156,10 +156,20 @@ jobs:
       # prefixed with its module name so interleaved logs stay attributable, and every background
       # PID is waited on individually so a failure in any project fails the step.
       #
-      # --maximum-parallel-tests caps the width (TUnit's default is ProcessorCount*4, which times
-      # out on shared runners). It is divided by the project count so the total number of in-flight
-      # tests stays near the old single-project cap of 8 on a shared runner. TZ=Europe/Berlin
-      # exposes non-UTC time-zone bugs (e.g. CapabilityReporterTests). global.json pins the
+      # XE-Local-AI-Engine.Tests is the exception: it does not run as one `dotnet test`, it runs
+      # through scripts/run-tests-memory-safe.sh as one PROCESS per test namespace, JOBS at a time.
+      # WHY: this module responds to process-level parallelism and barely at all to in-process
+      # width, which is contention-bound behind the static HostStartupLock, a multi-GB heap and the
+      # per-test web hosts. Measured 2026-08-22 on a 16-core box: one process 8-wide = 11:00,
+      # JOBS=4 batches = 6:02, JOBS=10 batches = 2:56 — and in CI the same module took 22:31 on its
+      # own at width 2. JOBS is therefore the runner's core count, not an in-process width, and each
+      # batch writes its own Cobertura + TRX report under $COVERAGE_ROOT/<module>/<namespace>/.
+      #
+      # --maximum-parallel-tests caps the width of the remaining projects (TUnit's default is
+      # ProcessorCount*4, which times out on shared runners). It is a flat 4: it used to be divided
+      # by the project count to keep total in-flight tests near 8, which is pointless now that the
+      # big module no longer competes for in-process width. TZ=Europe/Berlin exposes non-UTC
+      # time-zone bugs (e.g. CapabilityReporterTests). global.json pins the
       # Microsoft.Testing.Platform runner.
       - name: Run backend tests with coverage (auto-enrolled)
         env:
@@ -179,10 +189,7 @@ jobs:
           fi
           printf 'Enrolled test project: %s\n' "${test_projects[@]}"
 
-          parallel_tests=$(( 8 / ${#test_projects[@]} ))
-          if (( parallel_tests < 1 )); then
-            parallel_tests=1
-          fi
+          parallel_tests=4
 
           run_project() {
             local project="$1" module="$2"
@@ -202,10 +209,40 @@ jobs:
             fi
           }
 
-          declare -A test_pids=()
+          # The namespace-batched module. The script owns its own hollow-gate guarantee: a batch
+          # that produced no MTP run summary is reported red there, so the per-module `Passed!|
+          # Failed!` grep above is replaced by "the script exited 0 AND it emitted batch reports"
+          # (asserted after the wait). NO_BUILD: the solution was already built in Release above.
+          #
+          # Disk it needs, measured locally 2026-08-22 for ~98 batches: ~3.9 GB of per-batch
+          # Cobertura (the script already deletes the byte-identical TRX-attachment copies, which
+          # would otherwise add ~3.4 GB more) plus one ~240 MB clone of the test output tree per
+          # JOBS slot — coverage instrumentation rewrites assemblies in place, so concurrent batches
+          # cannot share one tree. At nproc=4 that is ~1 GB of clones, ~5 GB in total.
+          run_batched() {
+            local module="$1"
+            NO_BUILD=1 JOBS="$(nproc)" COVERAGE_DIR="$COVERAGE_ROOT/$module" \
+              scripts/run-tests-memory-safe.sh 2>&1 | sed "s/^/[$module] /"
+          }
+
+          batched_module=XE-Local-AI-Engine.Tests
+          declare -A module_projects=()
           for project in "${test_projects[@]}"; do
-            module="$(basename "$project" .csproj)"
-            run_project "$project" "$module" &
+            module_projects["$(basename "$project" .csproj)"]="$project"
+          done
+          if [[ -z "${module_projects[$batched_module]:-}" ]]; then
+            echo "ERROR: $batched_module is not enrolled from the solution, so the namespace-batched" \
+                 "path would silently never run. Rename batched_module here if the project moved." >&2
+            exit 1
+          fi
+
+          declare -A test_pids=()
+          for module in "${!module_projects[@]}"; do
+            if [[ "$module" == "$batched_module" ]]; then
+              run_batched "$module" &
+            else
+              run_project "${module_projects[$module]}" "$module" &
+            fi
             test_pids["$module"]=$!
           done
 
@@ -220,27 +257,45 @@ jobs:
             exit 1
           fi
 
-          # Depth 2 only: each report lives at $COVERAGE_ROOT/<module>/coverage.cobertura.xml.
-          # --report-trx also copies it as a TRX attachment under
-          # <module>/_<machine>_<timestamp>/In/<machine>/, and a recursive find would count that
-          # byte-identical copy a second time.
-          mapfile -t reports < <(find "$COVERAGE_ROOT" -mindepth 2 -maxdepth 2 -type f -name 'coverage.cobertura.xml' | sort)
-          if [[ "${#reports[@]}" -ne "${#test_projects[@]}" ]]; then
-            echo "ERROR: expected ${#test_projects[@]} Cobertura reports, found ${#reports[@]}." >&2
+          # Two depths, both bounded. A plain `dotnet test` project writes one report at
+          # $COVERAGE_ROOT/<module>/coverage.cobertura.xml (depth 2); the batched module writes one
+          # per namespace at $COVERAGE_ROOT/<module>/<namespace>/coverage.cobertura.xml (depth 3).
+          # --report-trx also copies each report as a TRX attachment under
+          # …/_<machine>_<timestamp>/In/<machine>/ (depth 5 for a sibling, 6 for a batch), so the
+          # maxdepth bound is what stops those byte-identical copies being counted a second time.
+          # merge-cobertura.py unions by (filename, line), so N reports merge exactly as two do.
+          mapfile -t sibling_reports < <(find "$COVERAGE_ROOT" -mindepth 2 -maxdepth 2 -type f -name 'coverage.cobertura.xml' | sort)
+          mapfile -t batch_reports < <(find "$COVERAGE_ROOT/$batched_module" -mindepth 2 -maxdepth 2 -type f -name 'coverage.cobertura.xml' | sort)
+          expected_siblings=$(( ${#module_projects[@]} - 1 ))
+          if [[ "${#sibling_reports[@]}" -ne "$expected_siblings" ]]; then
+            echo "ERROR: expected $expected_siblings sibling Cobertura reports, found ${#sibling_reports[@]}." >&2
             exit 1
           fi
+          if [[ "${#batch_reports[@]}" -eq 0 ]]; then
+            echo "ERROR: $batched_module produced no per-namespace Cobertura report — the batched" \
+                 "run enrolled nothing." >&2
+            exit 1
+          fi
+          echo "Merging ${#sibling_reports[@]} whole-module + ${#batch_reports[@]} batch Cobertura report(s)."
           python3 scripts/merge-cobertura.py \
             --minimum-file scripts/backend-coverage-baseline.txt \
-            "${reports[@]}"
+            "${sibling_reports[@]}" "${batch_reports[@]}"
 
       - name: Upload backend coverage and test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: backend-test-results
+          # `**` spans any number of segments, so the TRX files are picked up at both depths: one
+          # per whole-module project, and one per namespace batch a level deeper (~13 MB in total).
+          # The batched module's Cobertura reports are deliberately NOT uploaded: they are ~40 MB
+          # EACH (~3.9 GB for ~98 batches, since every report lists every source line of every
+          # loaded assembly), and nothing downstream consumes them — the gate is the merged
+          # percentage the step already printed. The sibling projects' single reports still are.
           path: |
             ${{ runner.temp }}/backend-coverage/**/*.xml
             ${{ runner.temp }}/backend-coverage/**/*.trx
+            !${{ runner.temp }}/backend-coverage/XE-Local-AI-Engine.Tests/**/*.xml
           # warn, not error: a run that died before the first suite finished has nothing to upload,
           # and the test step already failed — a second red here would only add noise.
           if-no-files-found: warn
