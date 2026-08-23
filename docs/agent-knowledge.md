@@ -284,6 +284,14 @@ With all four fixed, `dotnet-gcdump` shows disposed **TestServer-fixture** hosts
 
 Every `TestServerWebAppFactory` host writes a fresh SQLite DB (`xe-local-ai-engine-tests-*.sqlite` + `-wal`/`-shm`/`-journal`/`.migration.lock` sidecars), a `…-nodedata-*` directory, and a `…-wwwroot-*` fixture root under the temp dir. `DisposeAsync` deletes **all** of them (the SQLite family via a filename-prefix sweep so new sidecars are caught automatically). Do not drop that cleanup: before it existed, a full run left ~3 artifacts per host build behind, which accumulated to **tens of thousands of files (~15 GB) and filled the 16 GB tmpfs `/tmp`** on this box, breaking subsequent runs mid-flight with `ENOSPC`. A **killed** run still leaks (dispose never runs) — after aborting a run, sweep with `find /tmp -maxdepth 1 -name 'xe-local-ai-engine-tests-*' -exec rm -rf {} +` (a bare shell glob hits ARG_MAX at these counts and silently no-ops).
 
+### The one temp artifact that is meant to survive: the migrated SQLite template
+
+`TestServerWebAppFactory` seeds each host's database by copying a **migrated template** instead of letting the product apply the ~75 migrations to an empty file — measured **712 ms vs 1181 ms per host** (interleaved A/B, same run), and a full `JOBS=10` module run of **128–164 s against 197–208 s** on the same box. The product path is untouched: `Program.CreateAppAsync` still runs its migration + identity-seed services, they just find nothing pending. The template is built once per process by one ordinary fixture host with `UsePreMigratedDatabase = false`, so it cannot drift from what a real host writes.
+
+It lives at `/tmp/xe-local-ai-engine-tests-template-<mvid>-<mvid>.sqlite` and is **deliberately not cleaned up** — later test processes on the same build reuse it. The two MVIDs are the module version ids of the migrations/DbContext assembly and the identity-seed assembly, so any rebuild of either yields a new filename and a stale template can never be picked up; the file is published by an atomic same-directory rename, so concurrent test processes cannot see a half-written one. To force a rebuild, delete it — that is the whole cache-invalidation story. It matches the `xe-local-ai-engine-tests-*` prefix, so the sweep above still covers it.
+
+Turn `UsePreMigratedDatabase` off for a test that asserts on the migration path itself (an empty database, the pre-migration backup, the pending-migration set). As of this entry the only user is the A/B control leg in `TestServerWebAppFactoryTimingTests`.
+
 ### Layering is mechanically frozen
 
 `XE-Local-AI-Engine.Tests/Architecture/LayerDependencyTests.cs` uses NetArchTest to freeze dependency direction (providers → Abstractions only; Contracts/Abstractions never reach back up). A structural refactor that breaks layering fails a *test*, not just review.
