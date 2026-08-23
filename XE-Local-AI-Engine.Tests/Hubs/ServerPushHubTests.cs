@@ -81,7 +81,7 @@ public sealed class ServerPushHubTests
         await Factory.Services.GetRequiredService<IKnowledgeIndexingNotifier>()
                      .NotifyDocumentChangedAsync(documentId, KnowledgeDocumentStatus.Embedding);
 
-        var evt = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var evt = await received.Task.WaitAsync(TestBudgets.Contended);
         AssertEx.Equal(KnowledgeBaseHubEvents.DocumentChanged, evt.EventType);
         AssertEx.Equal(documentId, evt.DocumentId);
         AssertEx.Equal(KnowledgeDocumentStatus.Embedding, evt.Status);
@@ -102,7 +102,7 @@ public sealed class ServerPushHubTests
             SanitizedError: null);
         await Factory.Services.GetRequiredService<IGgufDownloadEventPublisher>().PublishStatusAsync(published);
 
-        var evt = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var evt = await received.Task.WaitAsync(TestBudgets.Contended);
         AssertEx.Equal(published.ModelName, evt.ModelName);
         AssertEx.Equal("Running", evt.Phase);
         AssertEx.Equal(expected: 512L, evt.CompletedBytes);
@@ -128,7 +128,7 @@ public sealed class ServerPushHubTests
             SanitizedError: null);
         await Factory.Services.GetRequiredService<IRuntimeAcquisitionEventPublisher>().PublishStatusAsync(published);
 
-        var evt = await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var evt = await received.Task.WaitAsync(TestBudgets.Contended);
         AssertEx.Equal(expected: 7L, evt.Sequence);
         AssertEx.Equal(nameof(RuntimeAcquisitionPhase.Downloading), evt.Phase);
         AssertEx.Equal("Cuda", evt.Variant);
