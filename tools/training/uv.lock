@@ -1237,7 +1237,7 @@ dependencies = [
 requires-dist = [
     { name = "bitsandbytes", specifier = "==0.50.1" },
     { name = "numpy", specifier = ">=1.17" },
-    { name = "protobuf", specifier = ">=4.21.0,<6.0.0" },
+    { name = "protobuf", specifier = ">=5.29.6,<6.0.0" },
     { name = "sentencepiece", specifier = ">=0.1.98,<0.3.0" },
     { name = "torch", specifier = "==2.11.0", index = "https://download.pytorch.org/whl/cu128" },
     { name = "torchvision", specifier = "==0.26.0", index = "https://download.pytorch.org/whl/cu128" },
