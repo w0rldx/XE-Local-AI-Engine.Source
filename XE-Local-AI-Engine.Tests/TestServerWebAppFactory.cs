@@ -16,8 +16,10 @@ using OllamaSharp;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -57,6 +59,19 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
 
     // Process-wide: see the comment in EnsureApp.
     private static readonly SemaphoreSlim HostStartupLock = new(initialCount: 1, maxCount: 1);
+
+    private const string NodeSqliteConnectionStringKey = "ConnectionStrings:node-sqlite";
+
+    /// <summary>
+    ///     The migrated SQLite template every host is seeded from — see <see cref="UsePreMigratedDatabase" />. Built at
+    ///     most once per test process (<see cref="LazyThreadSafetyMode.ExecutionAndPublication" />), and at most once per
+    ///     build across processes: the file is keyed by the module version ids of the two assemblies whose content
+    ///     decides its bytes (the migrations/DbContext assembly and the identity-seed assembly), so a rebuild of either
+    ///     yields a new name and a stale template can never be picked up. It deliberately outlives the process — the next
+    ///     test process reuses it — so it is the one <c>xe-local-ai-engine-tests-*</c> artifact left in the temp dir after
+    ///     a run. Delete it to force a rebuild.
+    /// </summary>
+    private static readonly Lazy<string> MigratedTemplate = new(BuildMigratedTemplate, LazyThreadSafetyMode.ExecutionAndPublication);
 
     private readonly Lock _appGate = new();
     private WebApplication? _app;
@@ -107,6 +122,21 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     // Last-wins overlay on the fixture's own configuration block, replacing the WebApplicationFactory-era
     // WithWebHostBuilder(b => b.ConfigureAppConfiguration(...)) re-configuration.
     public IReadOnlyDictionary<string, string?>? AdditionalConfiguration { get; init; }
+
+    /// <summary>
+    ///     Seed this host's database by copying the process-wide migrated template (0.5 ms) instead of letting the
+    ///     product apply ~75 migrations to an empty file: 712 ms per host against 1181 ms, measured by the interleaved
+    ///     A/B in <c>TestServerWebAppFactoryTimingTests</c> (see docs/agent-knowledge.md §1). The product path is
+    ///     unchanged either way: <c>Program.CreateAppAsync</c> still runs its migration + identity-seed services, they
+    ///     just find nothing pending. The template itself is produced by one host built with this turned OFF, so it
+    ///     cannot drift from what a real host would have written.
+    ///     <para>
+    ///         Turn it off for a test that asserts on the migration path itself — a genuinely empty database, the
+    ///         pre-migration backup, or the pending-migration set. Ignored when <see cref="AdditionalConfiguration" />
+    ///         repoints <c>ConnectionStrings:node-sqlite</c>: that host owns its own file and the fixture leaves it alone.
+    ///     </para>
+    /// </summary>
+    public bool UsePreMigratedDatabase { get; init; } = true;
 
     public IServiceProvider Services => EnsureApp().Services;
 
@@ -246,9 +276,10 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
                 return _app;
             }
 
+            var ownConnectionString = $"Data Source={_nodeSqlitePath}";
             var configuration = new Dictionary<string, string?>
             {
-                ["ConnectionStrings:node-sqlite"] = $"Data Source={_nodeSqlitePath}",
+                [NodeSqliteConnectionStringKey] = ownConnectionString,
                 ["XE_NODE_SQLITE_KEY"] = Convert.ToBase64String(Enumerable.Range(start: 1, count: 32).Select(static value => (byte)value).ToArray()),
                 ["XE_USE_LOCAL_MODEL_PROVIDER"] = "true",
                 ["Ollama:ChatModel"] = "qwen3.5:0.8b",
@@ -269,6 +300,14 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
                 {
                     configuration[entry.Key] = entry.Value;
                 }
+            }
+
+            // Seed the database before the host opens it. Deliberately outside HostStartupLock: building the template
+            // builds a host, which takes that lock itself.
+            if (UsePreMigratedDatabase
+                && string.Equals(configuration[NodeSqliteConnectionStringKey], ownConnectionString, StringComparison.Ordinal))
+            {
+                File.Copy(MigratedTemplate.Value, _nodeSqlitePath, overwrite: true);
             }
 
             // Host bootstrap is not re-entrant (docs/wiki/13-testing-and-validation.md — TUnit runs classes in
@@ -301,6 +340,67 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
                 HostStartupLock.Release();
             }
         }
+    }
+
+    /// <summary>Path of the migrated SQLite template (see <see cref="MigratedTemplate" />), building it on first use.</summary>
+    internal static string EnsureMigratedTemplate() =>
+        MigratedTemplate.Value;
+
+    // Migrates a scratch database through the product's own startup path — one ordinary fixture host with the template
+    // turned off — then publishes the file under its build-keyed name. The host is fully disposed first, which closes
+    // every pooled connection (ClearAllPools) and so folds any WAL content back into the main file: copying that single
+    // file is enough, no -wal/-shm sidecar. The publish is a same-filesystem rename, i.e. atomic, and a losing racer
+    // (another test process on the same build) simply keeps the winner's equivalent template.
+    private static string BuildMigratedTemplate()
+    {
+        var templatePath = Path.Combine(Path.GetTempPath(),
+            $"xe-local-ai-engine-tests-template-{typeof(NodeChatDbContext).Assembly.ManifestModule.ModuleVersionId:N}"
+            + $"-{typeof(NodeIdentityInitializationService).Assembly.ManifestModule.ModuleVersionId:N}.sqlite");
+        if (File.Exists(templatePath))
+        {
+            return templatePath;
+        }
+
+        // A directory, not a bare file: the migration path drops a .migration.lock sidecar next to the database, and one
+        // recursive delete takes the whole family with it.
+        var scratchDirectory = Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-template-build-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(scratchDirectory);
+        try
+        {
+            var scratchDatabase = Path.Combine(scratchDirectory, "node.sqlite");
+            var factory = new TestServerWebAppFactory
+            {
+                UsePreMigratedDatabase = false,
+                AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
+                {
+                    [NodeSqliteConnectionStringKey] = $"Data Source={scratchDatabase}"
+                }
+            };
+
+            try
+            {
+                _ = factory.Services;
+            }
+            finally
+            {
+                factory.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+
+            try
+            {
+                File.Move(scratchDatabase, templatePath);
+            }
+            catch (IOException)
+            {
+                // Another test process published the same-keyed template first; use theirs.
+            }
+        }
+        finally
+        {
+            TryDeleteDirectory(scratchDirectory);
+        }
+
+        return templatePath;
     }
 
     // The same content root WebApplicationFactory resolves: the Client project's source directory, taken from the

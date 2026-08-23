@@ -7,7 +7,7 @@ using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 
-/// <summary>
+    /// <summary>
 ///     Opt-in profiler for the cost of ONE <see cref="TestServerWebAppFactory" /> host, the unit that 61 test classes
 ///     pay per test and 42 pay per class. It answers the only question that decides whether a per-host optimisation is
 ///     worth building: where do the ~2 s go?
@@ -22,8 +22,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         code is touched. <c>ConfigureAdditionalTestServices</c> is invoked from inside
 ///         <c>ProgramAppCustomization.ConfigureBuilder</c>, i.e. immediately before <c>builder.Build()</c>, which splits
 ///         <c>CreateAppAsync</c> into "compose the builder" and "build + migrate + start". The migration share of the
-///         second half is isolated by the A/B in <see cref="ProfileHostBuildPhasesAsync" />: the same host built once on
-///         an empty SQLite file (migrations run) and once on a copy of an already-migrated one (migrations no-op).
+///         second half is isolated by the A/B in <see cref="ProfileHostBuildPhasesAsync" />: the default host (seeded
+///         from the fixture's migrated template, migrations no-op) against one built with
+///         <c>UsePreMigratedDatabase = false</c> on an empty SQLite file (migrations run).
 ///     </para>
 /// </summary>
 [NotInParallel]
@@ -39,7 +40,7 @@ public sealed class TestServerWebAppFactoryTimingTests
     private const string PhaseHostBuild = "EnsureApp: CreateAppAsync + StartAsync";
     private const string PhaseBuilderCompose = "  ...of which: builder + AddServices (pre-Build)";
     private const string PhaseBuildAndStart = "  ...of which: Build + migrate + start (post-Build)";
-    private const string PhaseHostBuildPreMigrated = "EnsureApp on PRE-MIGRATED db (A/B control)";
+    private const string PhaseHostBuildFreshControl = "EnsureApp on FRESH db, no template (A/B control)";
     private const string PhaseTemplateCopy = "File.Copy of migrated template";
     private const string PhaseCreateClient = "CreateClient()";
     private const string PhaseFirstRequest = "first request GET /health/live";
@@ -56,9 +57,8 @@ public sealed class TestServerWebAppFactoryTimingTests
         try
         {
             await MeasureFakeOllamaAloneAsync(samples).ConfigureAwait(false);
-            var template = await MeasureFreshDatabaseHostsAsync(samples, workspace).ConfigureAwait(false);
-            MeasureTemplateCopy(samples, workspace, template);
-            await MeasurePreMigratedHostsAsync(samples, workspace, template).ConfigureAwait(false);
+            MeasureTemplateCopy(samples, workspace);
+            await MeasureHostsAsync(samples).ConfigureAwait(false);
         }
         finally
         {
@@ -73,43 +73,28 @@ public sealed class TestServerWebAppFactoryTimingTests
     }
 
     /// <summary>
-    ///     <see cref="Iterations" /> full host lifecycles on a FRESH SQLite file each time — the shape every endpoint
-    ///     test class pays. Returns the path of a migrated database kept back as the A/B template.
+    ///     <see cref="Iterations" /> full host lifecycles exactly as the suite builds them (<see cref="PhaseHostBuild" />
+    ///     — the fixture's migrated template included, the shape every endpoint test class pays), each paired with one
+    ///     host on a genuinely empty database (<see cref="PhaseHostBuildFreshControl" />). The delta between them IS the
+    ///     migration cost the template avoids.
+    ///     <para>
+    ///         The two are INTERLEAVED, never run as two consecutive blocks: this box is shared with other test runs and
+    ///         the first hosts of a process are still JIT-warming, so a block layout charges whichever leg goes first for
+    ///         both — an earlier version of this profiler did exactly that and overstated the delta.
+    ///     </para>
     /// </summary>
-    private static async Task<string> MeasureFreshDatabaseHostsAsync(List<Sample> samples, string workspace)
-    {
-        string? template = null;
-        for (var iteration = 0; iteration < Iterations; iteration++)
-        {
-            var databasePath = Path.Combine(workspace, $"fresh-{iteration}.sqlite");
-            await MeasureOneHostAsync(samples, iteration, databasePath, PhaseHostBuild, measureEveryPhase: true).ConfigureAwait(false);
-
-            // Keep the first migrated database as the template the pre-migrated leg copies from. Every later
-            // iteration's file is left in the workspace and removed with it.
-            if (template is null)
-            {
-                template = Path.Combine(workspace, "template.sqlite");
-                File.Copy(databasePath, template);
-            }
-        }
-
-        return template!;
-    }
-
-    /// <summary>The same host built on a copy of an already-migrated database: the delta against <see cref="PhaseHostBuild" /> IS the migration cost.</summary>
-    private static async Task MeasurePreMigratedHostsAsync(List<Sample> samples, string workspace, string template)
+    private static async Task MeasureHostsAsync(List<Sample> samples)
     {
         for (var iteration = 0; iteration < Iterations; iteration++)
         {
-            var databasePath = Path.Combine(workspace, $"premigrated-{iteration}.sqlite");
-            File.Copy(template, databasePath);
-            await MeasureOneHostAsync(samples, iteration, databasePath, PhaseHostBuildPreMigrated, measureEveryPhase: false).ConfigureAwait(false);
+            await MeasureOneHostAsync(samples, iteration, usePreMigratedDatabase: true, PhaseHostBuild, measureEveryPhase: true).ConfigureAwait(false);
+            await MeasureOneHostAsync(samples, iteration, usePreMigratedDatabase: false, PhaseHostBuildFreshControl, measureEveryPhase: false).ConfigureAwait(false);
         }
     }
 
     private static async Task MeasureOneHostAsync(List<Sample> samples,
         int iteration,
-        string databasePath,
+        bool usePreMigratedDatabase,
         string hostBuildPhase,
         bool measureEveryPhase)
     {
@@ -119,10 +104,7 @@ public sealed class TestServerWebAppFactoryTimingTests
         var constructor = Stopwatch.StartNew();
         var factory = new TestServerWebAppFactory
         {
-            AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
-            {
-                ["ConnectionStrings:node-sqlite"] = $"Data Source={databasePath}"
-            },
+            UsePreMigratedDatabase = usePreMigratedDatabase,
 
             // Invoked from ConfigureBuilder, immediately before builder.Build(): the split point between composing the
             // builder (configuration + AddServices + the fixture's own overrides) and everything after it.
@@ -200,9 +182,10 @@ public sealed class TestServerWebAppFactoryTimingTests
         }
     }
 
-    /// <summary>What a pre-migrated-template optimisation would pay instead of running migrations.</summary>
-    private static void MeasureTemplateCopy(List<Sample> samples, string workspace, string template)
+    /// <summary>What the fixture pays per host in place of running migrations. Also forces the template to exist before the timed legs.</summary>
+    private static void MeasureTemplateCopy(List<Sample> samples, string workspace)
     {
+        var template = TestServerWebAppFactory.EnsureMigratedTemplate();
         for (var iteration = 0; iteration < Iterations; iteration++)
         {
             var destination = Path.Combine(workspace, $"copy-{iteration}.sqlite");
