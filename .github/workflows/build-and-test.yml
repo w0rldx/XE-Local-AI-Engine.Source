@@ -171,10 +171,21 @@ jobs:
       # big module no longer competes for in-process width. TZ=Europe/Berlin exposes non-UTC
       # time-zone bugs (e.g. CapabilityReporterTests). global.json pins the
       # Microsoft.Testing.Platform runner.
+      # Pre-pull the one image DockerSandboxRealDaemonTests uses, pinned by digest. Doing it here
+      # means a registry blip fails THIS step as the infrastructure problem it is, instead of
+      # surfacing as 22 test failures; the in-test pull then degrades to a local inspect.
+      - name: Pre-pull the pinned sandbox test image
+        run: docker pull alpine@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
+
       - name: Run backend tests with coverage (auto-enrolled)
         env:
           TZ: Europe/Berlin
           COVERAGE_ROOT: ${{ runner.temp }}/backend-coverage
+          # Turns "no daemon / no image" from a silent skip into a failure, so the sandbox
+          # hardening contract is actually verified by this gate. Deliberately no DOCKER_HOST:
+          # ubuntu-latest's default rootful /var/run/docker.sock is the correct endpoint, and
+          # setting it would send DockerDaemonEndpointResolver somewhere else.
+          XE_REQUIRE_DOCKER_TESTS: "1"
         run: |
           set -euo pipefail
           mapfile -t test_projects < <(
@@ -218,7 +229,9 @@ jobs:
           # Cobertura (the script already deletes the byte-identical TRX-attachment copies, which
           # would otherwise add ~3.4 GB more) plus one ~240 MB clone of the test output tree per
           # JOBS slot — coverage instrumentation rewrites assemblies in place, so concurrent batches
-          # cannot share one tree. At nproc=4 that is ~1 GB of clones, ~5 GB in total.
+          # cannot share one tree. At nproc=4 that is ~1 GB of clones, ~5 GB in total. Dynamic
+          # instrumentation would remove the clones but collects nothing for this host (evidence in
+          # the script header); do not swap it in without re-measuring a non-empty report.
           run_batched() {
             local module="$1"
             NO_BUILD=1 JOBS="$(nproc)" COVERAGE_DIR="$COVERAGE_ROOT/$module" \
