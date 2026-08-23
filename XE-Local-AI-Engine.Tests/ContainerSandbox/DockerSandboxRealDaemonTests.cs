@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.ContainerSandbox;
 using System.Net;
 using System.Runtime.InteropServices;
 using Docker.DotNet;
+using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -35,6 +36,22 @@ public sealed class DockerSandboxRealDaemonTests
     private const string TestImage = "alpine@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce";
 
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 7, day: 29, hour: 12, minute: 0, second: 0, TimeSpan.Zero);
+
+    /// <summary>
+    ///     Set this to <c>1</c> where a daemon is promised (CI) and an absent one becomes a FAILURE instead of a skip.
+    ///     "These tests did not run" is an environment fact on a laptop and a broken gate on a machine that has Docker,
+    ///     and only the operator of that machine can tell the two apart — so they say which it is.
+    /// </summary>
+    private const string RequireDockerVariable = "XE_REQUIRE_DOCKER_TESTS";
+
+    private static readonly TimeSpan ImagePullTimeout = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    ///     One probe and one image pull for the whole class. The 22 tests below run in parallel and every one of them
+    ///     needs the same answer; probing (let alone pulling) per test would multiply the round trips by 22 for a
+    ///     result that cannot differ. A skip decided here is rethrown to each awaiting test unchanged.
+    /// </summary>
+    private static readonly Lazy<Task<ContainerSandboxOptions>> DaemonGate = new(ResolveUsableDaemonAsync);
 
     [Test]
     public async Task RealDaemon_Preflight_ReachesTheDaemonAndPinsIt()
@@ -450,7 +467,7 @@ public sealed class DockerSandboxRealDaemonTests
         };
 
         // Manual throw-capture rather than AssertEx.ThrowsAsync: this creates a container directly, so an absent
-        // pinned image surfaces here too and must skip (not fail), the same as ContainerFixture.CreateAsync.
+        // pinned image surfaces here too and is reported the same way ContainerFixture.CreateAsync reports it.
         SandboxCapabilityNotSupportedException? refusal = null;
         try
         {
@@ -462,8 +479,8 @@ public sealed class DockerSandboxRealDaemonTests
         }
         catch (DockerRuntimeException dockerException) when (dockerException.InnerException is DockerApiException { StatusCode: HttpStatusCode.NotFound })
         {
-            throw new SkipTestException($"SKIPPED — the pinned test image '{options.Image}' is not present on this daemon and Development Mode "
-                                        + $"never auto-pulls it. Run `docker pull {options.Image}` to enable these §3.8 hardening tests.");
+            throw Unavailable($"the pinned test image '{options.Image}' is not present on this daemon, although the gate ensured it before this "
+                              + $"test ran — it was removed mid-run, or the daemon changed. Run `docker pull {options.Image}` and re-run.");
         }
 
         var exception = AssertEx.NotNull(refusal);
@@ -566,8 +583,18 @@ public sealed class DockerSandboxRealDaemonTests
     /// <summary>
     ///     Skip-with-reason gate. Never returns a "daemon is fine" default and never lets a test pass without one — the
     ///     reason string is written to be read in CI output by someone wondering why the isolation tests are silent.
+    ///     With <c>XE_REQUIRE_DOCKER_TESTS=1</c> the same conditions fail the test instead of skipping it.
     /// </summary>
-    private static async Task<ContainerSandboxOptions> RequireDaemonAsync()
+    private static Task<ContainerSandboxOptions> RequireDaemonAsync()
+    {
+        return DaemonGate.Value;
+    }
+
+    /// <summary>
+    ///     Find a daemon these tests can actually use and make the pinned image present on it, or decide — once — that
+    ///     there is none.
+    /// </summary>
+    private static async Task<ContainerSandboxOptions> ResolveUsableDaemonAsync()
     {
         var options = DockerSandboxHardeningTests.Options() with
         {
@@ -584,29 +611,144 @@ public sealed class DockerSandboxRealDaemonTests
             DaemonProbeTimeoutSeconds = 10
         };
 
-        var endpoint = DockerDaemonEndpointResolver.Resolve(options);
-        await using var client = new DockerDotNetRuntimeClientFactory(new StaticOptionsMonitor<ContainerSandboxOptions>(options))
-            .Create(endpoint);
+        var attempts = new List<string>();
+        foreach (var candidate in DaemonCandidates(options))
+        {
+            var endpoint = DockerDaemonEndpointResolver.Resolve(candidate);
+            DockerDaemonIdentity identity;
 
-        DockerDaemonIdentity identity;
+            await using (var client = new DockerDotNetRuntimeClientFactory(new StaticOptionsMonitor<ContainerSandboxOptions>(candidate))
+                             .Create(endpoint))
+            {
+                try
+                {
+                    identity = await client.ProbeAsync();
+                }
+                catch (DockerRuntimeException exception)
+                {
+                    attempts.Add($"{exception.Status} at '{endpoint.Display}' (found via {endpoint.Source}): {exception.Message}");
+                    continue;
+                }
+            }
+
+            if (!identity.OperatingSystem.Equals("linux", StringComparison.OrdinalIgnoreCase))
+            {
+                throw Unavailable($"the reachable Docker daemon at '{endpoint.Display}' runs '{identity.OperatingSystem}' containers, not Linux. "
+                                  + "The §3.8 contract's capability, namespace and read-only-rootfs guarantees are Linux semantics and cannot be "
+                                  + "verified here.");
+            }
+
+            await EnsurePinnedImageAsync(endpoint, TestImage);
+            return candidate;
+        }
+
+        throw Unavailable("no usable Docker daemon. Tried " + string.Join(" | ", attempts)
+                          + " Start Docker, or point DOCKER_HOST at a daemon this user can open, and re-run.");
+    }
+
+    /// <summary>
+    ///     The endpoints to try, each named by the PRODUCTION resolver so these tests exercise the discovery the
+    ///     product ships rather than a test-only shortcut.
+    ///     <para>
+    ///         The second candidate exists because the resolver deliberately stops at an <em>existing</em>
+    ///         <c>/var/run/docker.sock</c> and never falls through to the per-user socket: a node must not silently
+    ///         migrate between daemons, because which daemon is in use is precisely what the operator attests to. On a
+    ///         box that has a root-owned system socket this user cannot open <em>and</em> a rootless daemon of their
+    ///         own, that correct product behaviour left every test in this class skipped. Production is right to stop
+    ///         and ask the operator; a test may keep looking — through the same resolver, by naming the socket in
+    ///         <c>DaemonEndpoint</c>, its highest-priority input. The fixtures then reach the same daemon because they
+    ///         re-resolve from the options returned here.
+    ///     </para>
+    /// </summary>
+    private static IEnumerable<ContainerSandboxOptions> DaemonCandidates(ContainerSandboxOptions options)
+    {
+        yield return options;
+
+        if (OperatingSystem.IsWindows())
+        {
+            yield break;
+        }
+
+        // Only when the resolver fell back to the platform default. If DOCKER_HOST or configuration NAMED a daemon,
+        // that daemon is the subject of the run: quietly testing a different one would turn a misconfiguration into a
+        // green suite about the wrong engine.
+        if (DockerDaemonEndpointResolver.Resolve(options).Source != DockerDaemonEndpointSource.DefaultUnixSocket)
+        {
+            yield break;
+        }
+
+        var runtimeDirectory = Environment.GetEnvironmentVariable(DockerDaemonEndpointResolver.UserRuntimeDirectoryVariable);
+        if (string.IsNullOrWhiteSpace(runtimeDirectory))
+        {
+            yield break;
+        }
+
+        var userSocket = Path.Combine(runtimeDirectory, "docker.sock");
+        if (!File.Exists(userSocket))
+        {
+            yield break;
+        }
+
+        yield return options with
+        {
+            DaemonEndpoint = "unix://" + userSocket
+        };
+    }
+
+    /// <summary>
+    ///     Make the pinned image present, pulling it once if it is not. The PRODUCT still never auto-pulls — a
+    ///     Development Mode node assumes a provisioned image and <c>DockerSandboxRuntimeProvider</c> is unchanged — but
+    ///     a suite that skipped itself because a fresh CI runner had no <c>alpine</c> was the other half of this gate
+    ///     being hollow, and a hollow gate is the one thing this class exists not to be.
+    /// </summary>
+    private static async Task EnsurePinnedImageAsync(DockerDaemonEndpoint endpoint, string image)
+    {
+        using var client = new DockerClientBuilder().WithEndpoint(endpoint.Uri).WithTimeout(ImagePullTimeout).Build();
+
         try
         {
-            identity = await client.ProbeAsync();
+            await client.Images.InspectImageAsync(image);
+            return;
         }
-        catch (DockerRuntimeException exception)
+        catch (DockerApiException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
-            throw new SkipTestException($"SKIPPED — no usable Docker daemon: {exception.Status} at '{endpoint.Display}' ({exception.Message}). "
-                                        + "These are the ONLY tests that prove the §3.8 hardening contract holds against a real daemon; a green run "
-                                        + "without them is not evidence of isolation. Start Docker (or set DOCKER_HOST) and re-run.");
+            // Absent, so pull it below. Any other failure is a real fault and belongs to the caller's probe report.
         }
 
-        if (!identity.OperatingSystem.Equals("linux", StringComparison.OrdinalIgnoreCase))
+        // Split at the digest: the engine's own clients send `fromImage=<name>&tag=sha256:<digest>`, and the pin is the
+        // whole point — a bare tag would let a different image answer to the same name.
+        var reference = image.Split('@', count: 2);
+        var parameters = new ImagesCreateParameters
         {
-            throw new SkipTestException($"SKIPPED — the reachable Docker daemon runs '{identity.OperatingSystem}' containers, not Linux. The §3.8 "
-                                        + "contract's capability, namespace and read-only-rootfs guarantees are Linux semantics and cannot be verified here.");
-        }
+            FromImage = reference[0],
+            Tag = reference.Length == 2 ? reference[1] : null
+        };
 
-        return options;
+        using var timeout = new CancellationTokenSource(ImagePullTimeout);
+        try
+        {
+            await client.Images.CreateImageAsync(parameters, authConfig: null, new Progress<JSONMessage>(), timeout.Token);
+        }
+        catch (Exception exception) when (exception is DockerApiException or HttpRequestException or OperationCanceledException)
+        {
+            throw Unavailable($"the pinned test image '{image}' is not on the daemon at '{endpoint.Display}' and pulling it failed "
+                              + $"({exception.Message}). Run `docker pull {image}` and re-run.");
+        }
+    }
+
+    /// <summary>
+    ///     How a missing prerequisite is reported: a skip that names what was missing, or — when
+    ///     <c>XE_REQUIRE_DOCKER_TESTS=1</c> — a failure. Both carry the same reason, so the CI output reads the same
+    ///     either way; only the verdict changes.
+    /// </summary>
+    private static Exception Unavailable(string reason)
+    {
+        var message = reason + " These are the ONLY tests that prove the §3.8 hardening contract holds against a real daemon; "
+                             + "a green run without them is not evidence of isolation.";
+
+        return string.Equals(Environment.GetEnvironmentVariable(RequireDockerVariable), "1", StringComparison.Ordinal)
+            ? new InvalidOperationException($"REQUIRED — {RequireDockerVariable}=1, so this is a failure rather than a skip: {message}")
+            : new SkipTestException($"SKIPPED — {message}");
     }
 
     /// <summary>Whether the reachable daemon reports itself rootless, read through the same probe production uses.</summary>
@@ -762,12 +904,12 @@ public sealed class DockerSandboxRealDaemonTests
             }
             catch (DockerRuntimeException exception) when (exception.InnerException is DockerApiException { StatusCode: HttpStatusCode.NotFound })
             {
-                // Daemon reachable but the pinned image is not present, and Development Mode never auto-pulls it
-                // (production assumes a pre-provisioned image). A hard failure here would mean CI on any daemon
-                // without the image reds instead of skipping — the same class as RequireDaemonAsync's no-daemon skip.
+                // Daemon reachable but the pinned image is not present. The gate pulls it before any test runs, so
+                // reaching this is a mid-run change of image or of daemon rather than an unprovisioned machine; it is
+                // reported through the same Unavailable() path as every other missing prerequisite.
                 workspace.Dispose();
-                throw new SkipTestException($"SKIPPED — the pinned test image '{options.Image}' is not present on this daemon and Development Mode "
-                                            + $"never auto-pulls it. Run `docker pull {options.Image}` to enable these §3.8 hardening tests.");
+                throw Unavailable($"the pinned test image '{options.Image}' is not present on this daemon, although the gate ensured it before this "
+                                  + $"test ran — it was removed mid-run, or the daemon changed. Run `docker pull {options.Image}` and re-run.");
             }
 
             var client = factory.Create(DockerDaemonEndpointResolver.Resolve(options));
