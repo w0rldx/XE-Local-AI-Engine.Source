@@ -14,9 +14,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 // EnsureLocalDataConfiguration resolves the operator secret process-env-first (XE_NODE_SQLITE_KEY) via
 // NodeOperatorSecretProvider, so the "neither env set" cases require that process-global var to be UNSET while other
-// suites (the CUDA env-scrub test, the ranker-registration build) set/read it. The shared NotInParallel key serializes
-// this class against them, and the constructor/Dispose save-then-clear-then-restore the var so a serialized-but-leaky
-// sibling can never poison the next test's "neither set" premise.
+// suites (the CUDA env-scrub test, the ranker-registration build) set/read it. The bare NotInParallel below runs this
+// class exclusively — not merely against a shared key — which serializes it against them, and the constructor/Dispose
+// save-then-clear-then-restore the var so a serialized-but-leaky sibling can never poison the next test's "neither
+// set" premise.
 [NotInParallel]
 public sealed class DesktopBootstrapTests : IDisposable
 {
