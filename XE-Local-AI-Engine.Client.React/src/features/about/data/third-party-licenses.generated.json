@@ -226,9 +226,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/react-router@1.170.21",
+			"id": "frontend:@tanstack/react-router@1.170.29",
 			"name": "@tanstack/react-router",
-			"version": "1.170.21",
+			"version": "1.170.29",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
@@ -250,9 +250,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@tanstack/router-core@1.171.18",
+			"id": "frontend:@tanstack/router-core@1.171.24",
 			"name": "@tanstack/router-core",
-			"version": "1.171.18",
+			"version": "1.171.24",
 			"license": "MIT",
 			"homepageUrl": "https://tanstack.com/router",
 			"source": "frontend"
@@ -506,17 +506,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@xyflow/react@12.11.0",
+			"id": "frontend:@xyflow/react@12.11.3",
 			"name": "@xyflow/react",
-			"version": "12.11.0",
+			"version": "12.11.3",
 			"license": "MIT",
 			"homepageUrl": "https://reactflow.dev",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:@xyflow/system@0.0.77",
+			"id": "frontend:@xyflow/system@0.0.80",
 			"name": "@xyflow/system",
-			"version": "0.0.77",
+			"version": "0.0.80",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/xyflow/xyflow#readme",
 			"source": "frontend"
@@ -1202,9 +1202,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:framer-motion@12.43.0",
+			"id": "frontend:framer-motion@13.1.0",
 			"name": "framer-motion",
-			"version": "12.43.0",
+			"version": "13.1.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
@@ -2738,17 +2738,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "frontend:motion-dom@12.43.0",
+			"id": "frontend:motion-dom@13.0.0",
 			"name": "motion-dom",
-			"version": "12.43.0",
+			"version": "13.0.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:motion-utils@12.39.0",
+			"id": "frontend:motion-utils@13.0.0",
 			"name": "motion-utils",
-			"version": "12.39.0",
+			"version": "13.0.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/motiondivision/motion#readme",
 			"source": "frontend"
@@ -3162,9 +3162,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:react-error-boundary@6.1.2",
+			"id": "frontend:react-error-boundary@6.1.3",
 			"name": "react-error-boundary",
-			"version": "6.1.2",
+			"version": "6.1.3",
 			"license": "MIT",
 			"homepageUrl": "https://react-error-boundary-lib.vercel.app/",
 			"source": "frontend"
@@ -3202,9 +3202,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:react-joyride@3.1.0",
+			"id": "frontend:react-joyride@3.2.0",
 			"name": "react-joyride",
-			"version": "3.1.0",
+			"version": "3.2.0",
 			"license": "MIT",
 			"homepageUrl": "https://react-joyride.com/",
 			"source": "frontend"
@@ -4018,9 +4018,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:zustand@5.0.14",
+			"id": "frontend:zustand@5.0.15",
 			"name": "zustand",
-			"version": "5.0.14",
+			"version": "5.0.15",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/pmndrs/zustand",
 			"source": "frontend"
