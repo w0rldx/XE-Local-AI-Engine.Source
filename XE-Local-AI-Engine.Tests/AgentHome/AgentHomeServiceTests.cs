@@ -878,7 +878,10 @@ public sealed class AgentHomeServiceTests : IDisposable
 
     private static async Task WaitForInFlightCommandCountAsync(FakeSandboxRuntimeProvider provider, int count)
     {
-        for (var attempt = 0; attempt < 200; attempt++)
+        // The old 200 x 10ms gave concurrent commands two seconds to both reach the fake, which a contended
+        // CI runner does not reliably manage; see TestBudgets.
+        var deadline = DateTimeOffset.UtcNow + TestBudgets.Contended;
+        while (DateTimeOffset.UtcNow < deadline)
         {
             if (InFlightExecutionIds(provider).Count >= count)
             {

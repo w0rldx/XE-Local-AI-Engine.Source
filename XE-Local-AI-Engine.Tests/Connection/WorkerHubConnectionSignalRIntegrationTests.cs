@@ -260,7 +260,7 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
 
         await fixture.SendInvocationAssignedAsync(runtimePackage);
 
-        var receivedPackage = await invocationAssigned.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var receivedPackage = await invocationAssigned.Task.WaitAsync(TestBudgets.Contended);
         AssertEncryptedRuntimePackageEqual(runtimePackage, receivedPackage);
 
         var chunkPayload = new EncryptedChunkEnvelopeV1
@@ -495,7 +495,7 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
 
         await fixture.SendInvocationAssignedAsync(runtimePackage);
 
-        var receivedPackage = await invocationAssigned.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var receivedPackage = await invocationAssigned.Task.WaitAsync(TestBudgets.Contended);
         AssertEncryptedRuntimePackageEqual(runtimePackage, receivedPackage);
         await capabilityReporter.Received(1).ReportToApiAsync(Arg.Any<CancellationToken>());
     }
@@ -590,7 +590,7 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
 
         await fixture.FireTransportLevelConnectionDropAsync();
 
-        await reconnected.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await reconnected.Task.WaitAsync(TestBudgets.Contended);
 
         // OnReconnectedAsync re-sends WorkerHello over the hub and re-reports capabilities via the
         // capability reporter. The hub observes the second WorkerHello; the reporter observes the
@@ -662,7 +662,7 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
 
         await fixture.FireTransportLevelConnectionDropAsync();
 
-        await errorReached.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await errorReached.Task.WaitAsync(TestBudgets.Contended);
 
         AssertEx.Equal(WorkerConnectionState.Error, connection.State);
         AssertEx.True(reconnectingObserved, "Expected the connection to attempt at least one reconnect before erroring.");
@@ -723,7 +723,7 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
 
         await fixture.FireTransportLevelConnectionDropAsync();
 
-        await reconnecting.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await reconnecting.Task.WaitAsync(TestBudgets.Contended);
 
         // The transient failure keeps the worker reconnecting; it must not transition to Error. Hold the
         // observation window open briefly to assert the negative (no Error) deterministically.
@@ -775,7 +775,7 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
 
         await fixture.FireTransportLevelConnectionDropAsync();
 
-        await errorReached.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await errorReached.Task.WaitAsync(TestBudgets.Contended);
 
         AssertEx.Equal(WorkerConnectionState.Error, connection.State);
     }
