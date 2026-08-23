@@ -66,7 +66,7 @@
          above. Moving both is a coupled change — a Microsoft.Playwright bump also needs `playwright.ps1 install`
          to refresh ~/.cache/ms-playwright and CI's browser layer — so do it as its own verified pass, not a
          drive-by. 1.62.0 is the last TUnit.Playwright that still targets Microsoft.Playwright 1.61.0. -->
-    <PackageVersion Include="TUnit.Playwright" Version="1.58.0" />
+    <PackageVersion Include="TUnit.Playwright" Version="1.65.51" />
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.8.3" />
     <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.9.0" />
     <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.9.0" />
@@ -110,7 +110,7 @@
     <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="3.19.1" />
     <PackageVersion Include="Quartz.Serialization.SystemTextJson" Version="3.19.1" />
     <PackageVersion Include="Serilog" Version="4.4.0" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.16.10" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.17.1" />
     <PackageVersion Include="Scrutor" Version="7.0.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Enrichers.Environment" Version="3.0.1" />
@@ -131,8 +131,8 @@
          https://github.com/microsoft/EventLogExpert/issues/604 -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.11" />
-    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
-    <PackageVersion Include="TUnit" Version="1.65.38" />
+    <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.11" />
+    <PackageVersion Include="TUnit" Version="1.65.51" />
     <PackageVersion Include="Velopack" Version="1.2.0" />
     <PackageVersion Include="YamlDotNet" Version="18.0.0" />
   </ItemGroup>
