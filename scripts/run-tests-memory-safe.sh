@@ -88,8 +88,8 @@
 #                   the CPU-seconds table lower down. NOT named GROUPS: bash owns that name.
 #                   In grouped mode the zero-enrolled guard is per GROUP, not per namespace, and
 #                   COVERAGE_DIR reports land under <COVERAGE_DIR>/<group>/ rather than
-#                   <COVERAGE_DIR>/<namespace>/. Either way COVERAGE_DIR/units.txt lists the units
-#                   that ran, and a unit that produced no usable report is reported FAILED.
+#                   <COVERAGE_DIR>/<namespace>/. Either way COVERAGE_DIR/units.txt lists the units scheduled (written
+#                   before they run; the per-unit report check + the workflow count cover the rest), and a unit that produced no usable report is reported FAILED.
 #   COVERAGE_DIR    when set, every batch additionally writes
 #                   <COVERAGE_DIR>/<namespace>/coverage.cobertura.xml plus a TRX report. The reports
 #                   are per-batch by construction (MTP resolves --coverage-output relative to
@@ -331,7 +331,7 @@ if [[ -n "${TEST_GROUPS:-}" ]]; then
     UNITS+=("group${g}[${BIN_HEAD[g]}+$(( BIN_COUNT[g] - 1 ))]"$'\t'"/*/(${BIN_NS[g]})/*/*")
     echo "   group$g: weight=${BIN_LOAD[g]}s count=${BIN_COUNT[g]} => ${BIN_NS[g]//|/ }"
   done
-  echo ">> Running ${#UNITS[@]} namespace GROUPS (JOBS=$JOBS${COVERAGE_DIR:+, coverage+TRX -> $COVERAGE_DIR/<group>})…"
+  echo ">> Running ${#UNITS[@]} namespace groups (JOBS=$JOBS${COVERAGE_DIR:+, coverage+TRX -> $COVERAGE_DIR/<group>})…"
 else
   for ns in "${ORDERED[@]}"; do UNITS+=("$ns"$'\t'"/*/${ns}/*/*"); done
   echo ">> Running namespace batches (JOBS=$JOBS${COVERAGE_DIR:+, coverage+TRX -> $COVERAGE_DIR/<namespace>})…"
