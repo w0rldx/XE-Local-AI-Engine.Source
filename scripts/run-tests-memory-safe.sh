@@ -82,6 +82,13 @@
 #   PAR             max parallel tests per batch (default 1 = deterministic + lowest RSS; >1 is faster but can flake)
 #   AVAIL_FLOOR     a batch aborts if available RAM drops below this many MB (default 800; with JOBS>1
 #                   every batch that observes the breach kills itself — safety over completeness)
+#   TEST_GROUPS     when set to N, pack the namespaces into N processes (LPT by measured weight)
+#                   instead of one process per namespace, and filter each with a treenode
+#                   alternation. This is the shape CI uses and the one coverage runs want — see
+#                   the CPU-seconds table lower down. NOT named GROUPS: bash owns that name.
+#                   In grouped mode the zero-enrolled guard is per GROUP, not per namespace, and
+#                   COVERAGE_DIR reports land under <COVERAGE_DIR>/<group>/ rather than
+#                   <COVERAGE_DIR>/<namespace>/.
 #   COVERAGE_DIR    when set, every batch additionally writes
 #                   <COVERAGE_DIR>/<namespace>/coverage.cobertura.xml plus a TRX report. The reports
 #                   are per-batch by construction (MTP resolves --coverage-output relative to
@@ -186,6 +193,9 @@ run_ns() {
   # Hollow-gate guard, same semantics as the CI loop: MTP always prints a "Passed!"/"Failed!" run
   # summary for a batch that actually ran. A batch that enrolled nothing — or died before the
   # summary — prints none, and must never be counted as green just because pass=0 fail=0.
+  # Two limits worth knowing: it fires per UNIT, so under TEST_GROUPS that is per group and not per
+  # namespace; and an all-SKIPPED unit does print "Passed!" and reads green either way (the
+  # compensating control there is XE_REQUIRE_DOCKER_TESTS=1).
   local sum=0; grep -qE 'Test run summary: (Passed|Failed)!' "$out" && sum=1
   printf "   %-52s pass=%-4s fail=%-3s peakRSS=%sMB exit=%s dur=%ss\n" "$ns" "$p" "$f" "$((peak/1024))" "$rc" "$((EPOCHSECONDS-t0))"
   if [[ "$f" -gt 0 ]]; then grep -E 'failed|error' "$out" | grep -viE 'failed: 0' | head -3 >"$RESULTS_DIR/$ns.fails"; fi
@@ -222,7 +232,9 @@ fi
 # Longest-first (LPT) so the parallel schedule doesn't end on a 90s batch started last. Every
 # namespace that took >= 20s is listed, descending; the trailing comment is that measurement.
 # Weights measured 2026-08-22 on the dev box (JOBS=4 run); harmless if stale — unlisted namespaces
-# follow alphabetically. Re-generate from a run's `dur=` column when the tail stops shrinking.
+# follow alphabetically. Re-generate from a run's `dur=` column when the tail stops shrinking —
+# and note only the PER-NAMESPACE shape yields a per-namespace `dur=`, so regenerate from a run
+# with TEST_GROUPS unset. These weights are also what the TEST_GROUPS packer bins on.
 HEAVY=(
   XE_Local_AI_Engine.Tests.Endpoints.Training.V1        # 94s
   XE_Local_AI_Engine.Tests.Endpoints.Benchmarks.V1      # 90s
@@ -261,41 +273,63 @@ for h in "${HEAVY[@]}"; do
 done
 for ns in "${NAMESPACES[@]}"; do [[ -z "${IS_HEAVY[$ns]:-}" ]] && ORDERED+=("$ns"); done
 
-# GROUPS: pack the namespaces into N processes instead of one per namespace. WHY it exists: with
-# coverage on, per-namespace batching pays the static-instrumentation start-up cost ~98 times, and
-# that cost dominates on a slow runner. Measured 2026-08-23 on the 16-core box, coverage on, JOBS=4:
+# TEST_GROUPS: pack the namespaces into N processes instead of one per namespace. WHY it exists:
+# with coverage on, per-namespace batching pays the static-instrumentation start-up cost ~98 times,
+# and that cost dominates on a slow runner. Measured 2026-08-23 on the 16-core box, coverage on,
+# JOBS=4:
 #   98 batches            1991 CPU-s   7:07 wall   868 MB/proc
-#   GROUPS=8               830 CPU-s   3:12 wall  1557 MB/proc
-#   GROUPS=4               684 CPU-s   2:43 wall  1532 MB/proc   <- CI uses this shape
+#   TEST_GROUPS=8          830 CPU-s   3:12 wall  1557 MB/proc
+#   TEST_GROUPS=4          684 CPU-s   2:43 wall  1532 MB/proc   <- CI uses this shape
 #   one process, width 4   677 CPU-s   7:44 wall  7719 MB (one)
-# GROUPS=4 costs the same CPU as a single process (the floor) while actually using the cores: 4.2x
-# parallelism against 1.46x, because per-test host builds serialize behind the static
+# TEST_GROUPS=4 costs the same CPU as a single process (the floor) while actually using the cores:
+# 4.2x parallelism against 1.46x, because per-test host builds serialize behind the static
 # HostStartupLock and width inside one process cannot escape it.
+#
+# The knob is TEST_GROUPS and NOT `GROUPS`: bash pre-populates GROUPS with the caller's group ids,
+# so `${GROUPS:-}` is never empty (it reads 1000 here) and a `-n` test on it is always true. That
+# bug made the per-namespace default unreachable on every machine, and as root — gid 0 — it built
+# ZERO units and still reported "ALL NAMESPACE BATCHES GREEN". Hence the empty-unit guard below.
 UNITS=()
-if [[ -n "${GROUPS:-}" ]]; then
+if [[ -n "${TEST_GROUPS:-}" ]]; then
+  # Validate before the packer: under `set -u` a non-numeric or zero value otherwise dies with an
+  # unbound-variable trace instead of saying what is wrong.
+  if [[ ! "$TEST_GROUPS" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ERROR: TEST_GROUPS must be a positive integer, got '$TEST_GROUPS'." >&2
+    exit 1
+  fi
   # Weights come from the `# NNs` comments on the HEAVY entries above — the same measurements that
   # order the list. Anything unlisted is short by construction, so it weighs 1.
   declare -A WEIGHT=()
   while read -r wns wsec; do WEIGHT[$wns]="$wsec"; done < <(
     sed -nE 's/^  ([A-Za-z0-9_.]+) +# *([0-9]+)s.*/\1 \2/p' "${BASH_SOURCE[0]}")
-  declare -a BIN_NS=() BIN_LOAD=()
-  for ((g = 0; g < GROUPS; g++)); do BIN_NS[g]=""; BIN_LOAD[g]=0; done
+  (( ${#WEIGHT[@]} )) || echo "WARN: no weights parsed from the HEAVY list — packing degenerates to round-robin" >&2
+  declare -a BIN_NS=() BIN_LOAD=() BIN_COUNT=() BIN_HEAD=()
+  for ((g = 0; g < TEST_GROUPS; g++)); do BIN_NS[g]=""; BIN_LOAD[g]=0; BIN_COUNT[g]=0; BIN_HEAD[g]=""; done
   # LPT: ORDERED is already longest-first, so appending each to the lightest bin is the greedy pack.
   for ns in "${ORDERED[@]}"; do
     light=0
-    for ((g = 1; g < GROUPS; g++)); do (( BIN_LOAD[g] < BIN_LOAD[light] )) && light=$g; done
+    for ((g = 1; g < TEST_GROUPS; g++)); do (( BIN_LOAD[g] < BIN_LOAD[light] )) && light=$g; done
     BIN_NS[light]="${BIN_NS[light]:+${BIN_NS[light]}|}$ns"
     BIN_LOAD[light]=$(( BIN_LOAD[light] + ${WEIGHT[$ns]:-1} ))
+    BIN_COUNT[light]=$(( BIN_COUNT[light] + 1 ))
+    # First in wins: ORDERED is longest-first, so the first namespace a bin gets is its heaviest.
+    [[ -z "${BIN_HEAD[light]}" ]] && BIN_HEAD[light]="${ns#XE_Local_AI_Engine.Tests.}"
   done
-  for ((g = 0; g < GROUPS; g++)); do
+  for ((g = 0; g < TEST_GROUPS; g++)); do
     [[ -z "${BIN_NS[g]}" ]] && continue
-    UNITS+=("group$g"$'\t'"/*/(${BIN_NS[g]})/*/*")
-    echo "   group$g: weight=${BIN_LOAD[g]}s"
+    # Name the unit after its heaviest member so a FAILED line says something on its own.
+    UNITS+=("group${g}[${BIN_HEAD[g]}+$(( BIN_COUNT[g] - 1 ))]"$'\t'"/*/(${BIN_NS[g]})/*/*")
+    echo "   group$g: weight=${BIN_LOAD[g]}s count=${BIN_COUNT[g]} => ${BIN_NS[g]//|/ }"
   done
   echo ">> Running ${#UNITS[@]} namespace GROUPS (JOBS=$JOBS${COVERAGE_DIR:+, coverage+TRX -> $COVERAGE_DIR/<group>})…"
 else
   for ns in "${ORDERED[@]}"; do UNITS+=("$ns"$'\t'"/*/${ns}/*/*"); done
   echo ">> Running namespace batches (JOBS=$JOBS${COVERAGE_DIR:+, coverage+TRX -> $COVERAGE_DIR/<namespace>})…"
+fi
+# A run that enrolled nothing must never reach the green summary — see the TEST_GROUPS note above.
+if [[ ${#UNITS[@]} -eq 0 ]]; then
+  echo "ERROR: no test units to run (TEST_GROUPS=${TEST_GROUPS:-unset} produced no groups)." >&2
+  exit 1
 fi
 
 running=0
