@@ -18,6 +18,13 @@ updates:
         patterns:
           - "Microsoft.Agents.*"
           - "Microsoft.Extensions.AI*"
+      # ModelContextProtocol.AspNetCore takes an exact dependency on the matching
+      # ModelContextProtocol build, so a split bump fails restore under transitive
+      # pinning (NU1107/NU1608). They only ever move as a pair.
+      mcp-coupled:
+        patterns:
+          - "ModelContextProtocol"
+          - "ModelContextProtocol.*"
       nuget-remaining:
         patterns:
           - "*"
@@ -26,6 +33,8 @@ updates:
           - "CommunityToolkit.Aspire.*"
           - "Microsoft.Agents.*"
           - "Microsoft.Extensions.AI*"
+          - "ModelContextProtocol"
+          - "ModelContextProtocol.*"
 
   - package-ecosystem: npm
     directory: /XE-Local-AI-Engine.Client.React

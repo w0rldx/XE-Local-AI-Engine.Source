@@ -3,7 +3,7 @@
 XE Local AI Engine is the node-side runtime for running local AI workloads while preserving the existing C0re platform contract. The Node Web Server hosts the React management UI, owns the platform
 `WorkerHub` connection, and supervises node-owned `llama-server` host child processes for local inference.
 
-The current source version is `1.0.0-rc.1`, composed in `eng/ReleaseVersion.props`. Release documentation and
+The current source version is `1.0.0-rc.2`, composed in `eng/ReleaseVersion.props`. Release documentation and
 validation evidence live in this repository and must stay current with runtime behavior.
 
 > **Just want to install and use the app?** Start with the **[User Guide](docs/user-guide/README.md)** — download,
