@@ -1,8 +1,8 @@
 # AI/inference stack performance audit — v2 (verification and extension)
 
 - **Date:** 2026-08-07
-- **Source revision:** `c5a03752` (branch `feature/agent-mode-foundation`)
-- **Relation to v1:** this pass independently verifies the claims of `2026-08-07-ai-inference-stack-performance-audit.md` (v1, source revision `bd3318ed`) against HEAD, corrects three of them, and adds findings v1 missed. The commits between `bd3318ed` and `c5a03752` are auth/password-reset and docs only, so v1's code claims map cleanly onto HEAD. Read v1 first; this document does not restate its architecture trace, its "implemented well" inventory, or its benchmark-plan scaffolding — all of which stand.
+- **Source revision:** `444d0c2e` (branch `feature/agent-mode-foundation`)
+- **Relation to v1:** this pass independently verifies the claims of `2026-08-07-ai-inference-stack-performance-audit.md` (v1, source revision `f0834625`) against HEAD, corrects three of them, and adds findings v1 missed. The commits between `f0834625` and `444d0c2e` are auth/password-reset and docs only, so v1's code claims map cleanly onto HEAD. Read v1 first; this document does not restate its architecture trace, its "implemented well" inventory, or its benchmark-plan scaffolding — all of which stand.
 - **Method:** four parallel specialist passes — llama.cpp integration verification, .NET streaming/invocation hot paths, embedding/rerank/residency, and external research (llama.cpp b10201→master delta, Unsloth Studio source, current papers/issues) — plus direct probes of the pinned `b10201` binary present on this machine (`llama-server --help`). Every Part-1 claim below was verified by quoting current source; external claims carry their upstream reference.
 
 ## Executive summary

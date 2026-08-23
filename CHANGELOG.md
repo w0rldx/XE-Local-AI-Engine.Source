@@ -43,7 +43,7 @@ All nine shipped as GitHub **pre-releases**. All nine local release tags map 1:1
 the **tester publish dates**, not the tag dates — they differ for
 `0.1.0-rc.1.1`, whose commit was tagged at 00:35 local time on 2026-06-27 but published at 22:41 UTC on 2026-06-26.
 
-The `v0.1.0-rc.4.1` source tag now resolves to version-bump commit `b6d5a895`, so the source and historical tester
+The `v0.1.0-rc.4.1` source tag now resolves to version-bump commit `a92a2a09`, so the source and historical tester
 release inventories are fully reconciled. Its section below remains marked as reconstructed because detailed release
 notes were not recorded at publication time. The version string is burned. See
 [`docs/velopack-release-install-guide.md`](docs/velopack-release-install-guide.md) for the historical two-repository
@@ -58,7 +58,7 @@ at `0.1.0-rc.5.1` and does not grow. Verified 2026-08-23 against
 
 | Version | Source tag | Source commit | Published (UTC) |
 |---|---|---|---|
-| 1.0.0-rc.1 | `v1.0.0-rc.1` | `dfff46ce` | 2026-08-09 20:06 |
+| 1.0.0-rc.1 | `v1.0.0-rc.1` | `ecc18fae` | 2026-08-09 20:06 |
 
 Published as a GitHub **pre-release** carrying `XE-Local-AI-Engine-win-Portable.zip`, `XE-Local-AI-Engine.AppImage`,
 both Velopack `.nupkg` feeds, and the detached `CHECKSUMS.sha256`, `RELEASE-MANIFEST.json` and `RELEASE.spdx.json`
@@ -137,7 +137,7 @@ cut. The prior `v1.0.0-rc.1` tag remains bound to its own source commit and is n
 
 ## [1.0.0-rc.1] — 2026-08-09
 
-Tagged `v1.0.0-rc.1` at commit `dfff46ce4e0184b7803ab5106c5d215d12382d6f` and published as a prerelease on
+Tagged `v1.0.0-rc.1` at commit `ecc18fae764dffee7383943e7bae25cc02c7bfa3` and published as a prerelease on
 `w0rldx/XE-Local-AI-Engine.Source` on 2026-08-09. **This is the first release cut from the public repository**, under
 the new `1.0.0-rc.N` version scheme and the new CI Velopack pipeline; every earlier release went through the retired
 tester-repository flow. The project was relicensed to **Apache-2.0** for it.
@@ -199,7 +199,7 @@ tester-repository flow. The project was relicensed to **Apache-2.0** for it.
 
 ## [0.1.0-rc.5.1] — 2026-08-05
 
-Tagged `v0.1.0-rc.5.1` at commit `a29224eb5f3ab07129c02874dd02b44b91a4cc13` and published as a prerelease through
+Tagged `v0.1.0-rc.5.1` at commit `cc37f1a588c31cf2ad088c9d75bae2fb637a3234` and published as a prerelease through
 the historical tester repository on 2026-08-05. No corresponding release exists in the canonical public repository.
 This is a provenance-only entry: the detailed shipped change set was not reconstructed during this documentation pass.
 The version and immutable tag are already used and must not be reassigned to later source.
@@ -208,7 +208,7 @@ The version and immutable tag are already used and must not be reassigned to lat
 
 Tagged `v0.1.0-rc.5.0` and published to the tester repo on 2026-08-04 (pre-release). **`0.1.0-rc.4.2` was never cut** — the target moved straight from the burned
 `0.1.0-rc.4.1` to `0.1.0-rc.5.0`. `0.1.0-rc.4.1` remains burned and its detailed notes are reconstructed; its source
-tag now resolves to version-bump commit `b6d5a895`.
+tag now resolves to version-bump commit `a92a2a09`.
 
 ### Added
 
@@ -449,7 +449,7 @@ tag now resolves to version-bump commit `b6d5a895`.
 
 ## [0.1.0-rc.4.1] — 2026-07-07
 
-> **Reconstructed section.** The source tag `v0.1.0-rc.4.1` resolves to version-bump commit `b6d5a895`, but detailed
+> **Reconstructed section.** The source tag `v0.1.0-rc.4.1` resolves to version-bump commit `a92a2a09`, but detailed
 > release notes were not recorded at publication time. The contents below are inferred from the 15 commits between
 > `v0.1.0-rc.4.0` and that version-bump commit and may not match the artifact exactly. The version string is burned —
 > do not reuse it.

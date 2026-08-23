@@ -15,7 +15,7 @@ The highest-value target is therefore an **incremental, resource-aware runtime a
 ---
 
 **Audit date:** 2026-08-13<br>
-**Audited repository revision:** `320d427b`<br>
+**Audited repository revision:** `37b28937`<br>
 **Scope:** research and proposal only; no product implementation<br>
 **Target environment:** local-first Linux/Windows, 16–64 GB RAM, CPU-only through one consumer GPU with roughly 8–24 GB VRAM<br>
 **Evidence boundary:** source and tests at the audited revision plus current upstream primary sources. No local-model performance number is claimed because no running AppHost/model server was present and this task did not authorize a product mutation or a new runtime/model installation.

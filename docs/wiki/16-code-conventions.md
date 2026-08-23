@@ -1,6 +1,6 @@
 # Code Organization Conventions
 
-> Baseline: `50cae1410b23fa1e7258d343c1f2d926c6eb41fb` · Reviewed: 2026-08-08 · Code-grounded.
+> Baseline: `9405df91e426c26b1942843dbd16a5edce1f466e` · Reviewed: 2026-08-08 · Code-grounded.
 > Updated 2026-08-07: endpoint areas now fold DTOs/mappers/validators into `V1/{Dtos,Mappers,Validators}/`
 > subfolders (only endpoints stay at the top level); `Dtos/` keeps a flat namespace by design.
 

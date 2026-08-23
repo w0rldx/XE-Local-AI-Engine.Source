@@ -1,7 +1,7 @@
 # Final local-inference optimization audit
 
 **Date:** 2026-08-12
-**Repository revision:** `597c62f46a5e653cd88f12b92d8e79f576f75aa6`
+**Repository revision:** `5040e65f5b917ec75361d75f5bea4780b52f1e0d`
 **Scope:** research and proposal at the audited revision; the post-approval implementation status is recorded below.
 **Upstream research anchor:** llama.cpp `9558fa44c92746a58dd07ad1bf0c889715b938a6`; latest release at retrieval was `b10375`. XE is pinned to `b10201` / `8f4646a63`.
 
@@ -73,7 +73,7 @@ The architecture does **not** need to embed llama.cpp into .NET, replace llama.c
 | Continuous batching | Inherited llama-server behavior; intentionally one application slot. |
 | Speculation classes | External draft, main-model MTP, and draftless n-gram modes are distinguished correctly. |
 | MTP launch | `draft-mtp` uses the main GGUF heads and does not require a second model (`XE-Local-AI-Engine.Providers.LlamaServer/Options/SpeculativeDecodingSettings.cs:14-33,71-83,124-166`). |
-| Streaming | Delta-only transport/persistence and bounded channels were implemented in `606dba14`. |
+| Streaming | Delta-only transport/persistence and bounded channels were implemented in `f75482b8`. |
 | Benchmark/freeze | Golden prompt/agent/cache/tool/embedding/rerank metrics and profile fingerprinting exist. |
 | Model quant discovery | K/IQ/Dynamic/native FP4 parsing, quality tiers, and a conservative automatic quality floor exist. |
 
@@ -736,8 +736,8 @@ At publication, no recommendation in this report had been implemented. The user 
 
 ### Implemented
 
-- **Binary capability manifest and launch gate** (`5b1aaee2`). Each resolved llama-server binary is probed through a bounded command runner, and the cached manifest is keyed by requested/runtime version plus path, length, modification time, and verified SHA-256. Mandatory option spellings and option-scoped values fail closed. Optional optimizations are omitted only on ordinary serving candidates; exact profiling/replay vectors are rejected rather than silently changed. KV/FA incompatibility selects the existing explicit safe candidate, preserving the paid-for one-shot readiness fallback.
-- **Report-only load and benchmark correlation** (`d9f29c9c`). The supervisor records monotonic spawn-through-readiness duration, outcome, measured CPU/full/partial/unknown placement, explicit primary/safe-retry candidate kind, runtime identity, and bounded speculation class. Application metrics exclude model/path/argv/hash labels. Encrypted benchmark diagnostics correlate runtime identity and a semantic launch-vector hash with terminal request gauges, context/busy-slot observations, and speculative draft/acceptance counters. Global-free and process-budget VRAM remain separate fields and no second memory ledger or admission authority was introduced.
+- **Binary capability manifest and launch gate** (`add76130`). Each resolved llama-server binary is probed through a bounded command runner, and the cached manifest is keyed by requested/runtime version plus path, length, modification time, and verified SHA-256. Mandatory option spellings and option-scoped values fail closed. Optional optimizations are omitted only on ordinary serving candidates; exact profiling/replay vectors are rejected rather than silently changed. KV/FA incompatibility selects the existing explicit safe candidate, preserving the paid-for one-shot readiness fallback.
+- **Report-only load and benchmark correlation** (`9454b57f`). The supervisor records monotonic spawn-through-readiness duration, outcome, measured CPU/full/partial/unknown placement, explicit primary/safe-retry candidate kind, runtime identity, and bounded speculation class. Application metrics exclude model/path/argv/hash labels. Encrypted benchmark diagnostics correlate runtime identity and a semantic launch-vector hash with terminal request gauges, context/busy-slot observations, and speculative draft/acceptance counters. Global-free and process-budget VRAM remain separate fields and no second memory ledger or admission authority was introduced.
 
 ### Intentionally not enabled
 

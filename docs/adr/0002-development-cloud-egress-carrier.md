@@ -50,7 +50,7 @@ The dedicated-client fallback is not implemented in this change. Until it is, up
 
 ## Re-verification 2026-08-17
 
-The pin moved off 10.7.0 without an ADR update, which is precisely what the upgrade gate above was written to prevent. `Directory.Packages.props` now carries `Microsoft.Extensions.AI` 10.8.3 and `Microsoft.Extensions.AI.Abstractions` 10.9.0. The moves were routine dependency servicing: `0f57645b` and `027ddd95` (2026-07-26 / 2026-07-31, in-repo servicing commits, not dependabot) took `Microsoft.Extensions.AI` 10.7.0 -> 10.8.1 -> 10.8.3, and dependabot's `90165471` (2026-08-14, "Bump the agent-ai-coupled group") took `Microsoft.Extensions.AI.Abstractions` and `.OpenAI` to 10.9.0. This ADR was last edited on 2026-07-22 (`36d8566d`).
+The pin moved off 10.7.0 without an ADR update, which is precisely what the upgrade gate above was written to prevent. `Directory.Packages.props` now carries `Microsoft.Extensions.AI` 10.8.3 and `Microsoft.Extensions.AI.Abstractions` 10.9.0. The moves were routine dependency servicing: `5650bcf4` and `f3932d7f` (2026-07-26 / 2026-07-31, in-repo servicing commits, not dependabot) took `Microsoft.Extensions.AI` 10.7.0 -> 10.8.1 -> 10.8.3, and dependabot's `52b23f92` (2026-08-14, "Bump the agent-ai-coupled group") took `Microsoft.Extensions.AI.Abstractions` and `.OpenAI` to 10.9.0. This ADR was last edited on 2026-07-22 (`73729320`).
 
 What was checked on 2026-08-17, and what was not:
 

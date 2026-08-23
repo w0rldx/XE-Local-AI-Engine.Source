@@ -1,6 +1,6 @@
 # Local Runtime & Model Providers
 
-> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
+> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
 
 This page is the heart of the 2026-06-17 runtime re-architecture. It explains how XE Local AI Engine runs models through node-owned host child processes: the provider-neutral seams in `Providers.Abstractions`, the host **llama.cpp** process supervisor that spawns and tree-kills `llama-server` children, runtime-binary acquisition (prebuilt download, operator bring-your-own override, and the in-app **source build**), and the satellite providers (Ollama, HuggingFace GGUF store, capability detection, Codex OAuth cloud chat). Model *recommendation* (box-aware GGUF fit) is owned by [07-model-fit.md](07-model-fit.md); this page covers only how a model gets selected, loaded, and served.
 

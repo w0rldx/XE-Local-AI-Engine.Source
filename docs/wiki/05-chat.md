@@ -1,6 +1,6 @@
 # Chat Subsystem
 
-> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
+> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
 
 The chat subsystem is the node's interactive conversation surface: a React feature (`src/features/chat`) that streams turns over a local SignalR hub into a backend pipeline (`Client.Application/Services/Chat`) which resolves a model + agent per turn, runs the Microsoft Agent Framework loop through a single re-selecting `IChatClient`, and persists every turn to SQLite with titles and content protected by per-column AEAD. This page traces a turn end-to-end: model resolution (including the "local default → installed GGUF chat model" rule), the streaming/persistence pump, ordered reasoning↔tool↔answer parts, opt-in knowledge-base grounding and source attribution, per-send sampling, per-message agent attribution, reasoning-effort clamping for cloud models, file attachments (encrypted upload → pure-.NET extraction → plain-chat inlining or agent-mode sandbox staging), browser-side voice / text-to-speech output, the client stream watchdog + provider self-heal, and the at-rest encryption of titles and content. Provider plumbing lives in [Local runtime & providers](03-local-runtime-and-providers.md); agent resolution in [Agent Mode](04-agent-mode.md); persistence/migrations in [Data & persistence](08-data-and-persistence.md); hubs/endpoints in [API & hubs](09-api-and-hubs.md).
 

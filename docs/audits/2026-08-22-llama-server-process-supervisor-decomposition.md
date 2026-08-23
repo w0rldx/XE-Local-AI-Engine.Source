@@ -1,7 +1,7 @@
 # Llama server process supervisor decomposition report
 
 **Date:** 2026-08-22
-**Base:** `1df86b9bbf4a81b5660d35f916fab3d7e2bcf79c`
+**Base:** `be342034bdeea92b5bd0976486b30cd4a7b97797`
 **Scope:** read-only analysis of `LlamaServerProcessSupervisor`; no production refactor is authorized by this report.
 
 ## Verdict

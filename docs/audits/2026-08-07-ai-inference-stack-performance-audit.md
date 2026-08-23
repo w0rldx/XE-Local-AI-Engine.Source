@@ -1,7 +1,7 @@
 # AI/inference stack performance and efficiency audit
 
 - **Date:** 2026-08-07
-- **Source revision:** `bd3318ed`
+- **Source revision:** `f0834625`
 - **Scope:** local chat/agent inference, embedding, reranking, llama.cpp lifecycle, hardware admission, Microsoft Agent Framework (MAF), Microsoft.Extensions.AI (MEAI), streaming, scheduling, caching, and performance evidence
 - **Target machines:** 16–64 GB system RAM, usually 16 or 32 GB, with 0–16 GB VRAM
 - **Change decision:** assessment and experiment plan only; no production tuning is justified by this audit alone

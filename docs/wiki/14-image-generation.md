@@ -1,6 +1,6 @@
 # Image Generation (stable-diffusion.cpp)
 
-> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
+> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
 
 The node generates images **locally** with [stable-diffusion.cpp](https://github.com/leejet/stable-diffusion.cpp). It mirrors the llama.cpp text runtime: the app resolves either a pinned prebuilt or a managed source-built `sd-server`, supervises **one resident daemon per model** on a private loopback port range, and drives generation through a coordinator that serializes work to one job at a time and persists every produced image **encrypted-at-rest**. Nothing about a prompt, an image, or the daemon's HTTP shape ever leaves the node. The feature **ships enabled by default** — there is no off switch in `StableDiffusionRuntimeOptions`; the runtime is always wired.
 

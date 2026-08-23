@@ -1,7 +1,7 @@
 # Linux CUDA bring-your-own llama-server — operator runbook
 
 **Date:** 2026-06-29
-**Last validated against the repository:** 2026-08-08 (`50cae141`)
+**Last validated against the repository:** 2026-08-08 (`9405df91`)
 **Audience:** operator running the engine on a Linux + NVIDIA host who wants the **CUDA** inference path (not the default Vulkan fallback).
 **Feature:** `[[linux-cuda-byo-override]]` — see plan `2026-06-29-linux-cuda-byo-override-plan.md`. Code committed `e59cbc43`.
 

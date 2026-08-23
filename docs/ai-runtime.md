@@ -1,6 +1,6 @@
 # AI runtime developer notes
 
-Last reviewed: 2026-08-08 against repository base `50cae141`
+Last reviewed: 2026-08-08 against repository base `9405df91`
 
 > For the full, current runtime architecture (host llama.cpp supervisor, provider seams, agent mode),
 > see the [Developer Wiki](wiki/Home.md) — especially

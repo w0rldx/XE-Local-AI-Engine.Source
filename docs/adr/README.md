@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17
+> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17
 
 These records capture repository design decisions and their implementation context. An **Accepted**
 status means the repository adopted the stated design; it is not evidence of operational

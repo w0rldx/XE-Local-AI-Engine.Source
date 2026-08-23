@@ -1,6 +1,6 @@
 # Hosting, AppHost & Deployment
 
-> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
+> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
 
 This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, packaged **desktop mode** (`XE_LAUNCH_MODE=desktop`), the asymmetric Windows/Linux publish profiles, the Windows C# launcher, and the legacy/manual cleanup scripts.
 

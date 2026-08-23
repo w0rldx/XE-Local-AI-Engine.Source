@@ -1,7 +1,7 @@
 # Open-source release readiness and compatibility review
 
 - **Date:** 2026-08-07
-- **Source revision:** `c5a037528bc0f8375acb2750f114f2351ed3248a`
+- **Source revision:** `444d0c2ec770a18f3f6cb929e13f876be92d33b7`
 - **Intended project license:** Apache License 2.0 (`LICENSE`)
 - **Scope:** source publication, Git history, dependency and asset licensing, binary redistribution, secrets/privacy, repository hygiene, contributor onboarding, clean build/test/run, CI, packaging, updates, and public-project governance
 - **Decision:** **NO-GO for public source publication or public binary release today**

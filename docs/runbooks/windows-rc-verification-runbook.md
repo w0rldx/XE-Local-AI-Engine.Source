@@ -2,7 +2,7 @@
 
 **Status:** Living Windows procedure with dated verification evidence retained in place.
 
-**Last audited:** 2026-08-08 against code baseline `50cae141`.
+**Last audited:** 2026-08-08 against code baseline `9405df91`.
 
 Target: a tester RC portable build (Velopack, `--noInst`) on real Windows 11 with x64 ASP.NET Core Runtime
 10.0.10 or a newer .NET 10 servicing patch installed. Nine checks, risk-ordered.

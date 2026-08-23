@@ -1,6 +1,6 @@
 # Architecture Overview
 
-> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
+> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
 
 XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform: a single ASP.NET Core process
 (`XE-Local-AI-Engine.Client`) that hosts the React management UI, owns the one outbound platform

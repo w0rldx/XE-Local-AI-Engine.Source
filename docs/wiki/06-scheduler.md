@@ -1,6 +1,6 @@
 # Scheduler
 
-> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
+> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
 
 The node runs a **Quartz.NET-backed job scheduler** entirely in-process inside the Node Web Server (`XE-Local-AI-Engine.Client`). It lets an operator define recurring/one-shot/manual jobs from a registered set of *templates*, fires them through a thin dispatch job, records every fire as a run-history row, supports best-effort cancellation (operator interrupt + auto-interrupt timeout), and pushes live lifecycle events to the React management UI over a SignalR hub. The data layer is node-local SQLite with selected sensitive fields protected by per-column AEAD. Two templates ship today: the model-fit recommendation refresh and unattended execution of a saved node-local agent.
 

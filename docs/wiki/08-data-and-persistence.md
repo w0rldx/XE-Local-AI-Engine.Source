@@ -1,6 +1,6 @@
 # Data Model & Persistence
 
-> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
+> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
 
 The node persists chat, agent, scheduler, model-fit and identity state in local **SQLite** through Entity Framework Core, living in the `XE-Local-AI-Engine.Client.Persistence` project. There are **two** DbContexts (`NodeChatDbContext` and `NodeIdentityDbContext`), a forward-only migration history, and a **per-column AES-256-GCM AEAD** scheme that encrypts privacy-sensitive payloads (conversation titles, message content, agent instructions, golden conversations, …) before they hit disk. This page is the maintainer reference for the schema, the encryption seams, and the migration timeline.
 

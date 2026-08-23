@@ -1,6 +1,6 @@
 # Testing & Validation
 
-> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
+> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
 
 This page is the contributor map of how XE Local AI Engine is tested and what counts as "validated". For *how to write a new test* — which project it belongs in, the fixture patterns, the parallelism keys, the per-kind recipes — see [Writing Tests](17-writing-tests.md). It covers the test-project topology (backend integration, AI/agent, persistence + migration, Playwright E2E, plus the FakeOllama and Client.Testing support libraries), validation commands and standalone runners, the tracked GitHub Actions gate design, and the RC evidence bar a maintainer must clear before claiming release/doc work is done. For *what each suite asserts about a subsystem*, follow the per-subsystem links — this page owns the harness, not the features.
 

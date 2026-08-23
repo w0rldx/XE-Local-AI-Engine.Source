@@ -1,6 +1,6 @@
 # Solution & Project Layout
 
-> Baseline: `ebffe10ee4d9343d39be0b24bedb479c5a848dfd` · Reviewed: 2026-08-17 · Code-grounded.
+> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
 
 This page is the inventory and dependency map of the .NET side of XE Local AI Engine. It lists every `.csproj` registered in `XE-Local-AI-Engine.slnx`, explains each project's role, draws the project reference graph (who references whom), and states the layering rule that keeps the runtime, applications, and providers decoupled. The React client (`XE-Local-AI-Engine.Client.React`) is a separate Vite/pnpm tree wired in by Aspire and is documented on [10-react-client.md](10-react-client.md).
 

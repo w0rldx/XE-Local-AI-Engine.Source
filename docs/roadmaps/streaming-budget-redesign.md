@@ -1,6 +1,6 @@
 # Streaming budget redesign — delta-only protocol, O(delta) persistence, bounded streams, disconnect grace
 
-> **Status: implemented — historical design record.** This plan shipped on 2026-08-07 in commit `606dba14`
+> **Status: implemented — historical design record.** This plan shipped on 2026-08-07 in commit `f75482b8`
 > ("feat(chat): streaming budget — delta-only protocol, O(delta) persistence, bounded channels, disconnect grace").
 > D1/D2 are `ChatStreamEventTypes.AssistantDelta` and `ChatStreamEventTypes.AssistantSnapshot` in
 > `NodeChatStreamDtos.cs`; D3's growth-triggered flush is `PartialFlushPolicy`; the budget knobs are
@@ -8,9 +8,9 @@
 > with `DetachedInvocationReaper`. The body below is kept unchanged as the design record — read it for the
 > rationale, not as outstanding work.
 
-- **Status:** Implemented (2026-08-07, `606dba14`) — see the banner above. Originally recorded as "Design, ready to implement. No code in this document has been written."
+- **Status:** Implemented (2026-08-07, `f75482b8`) — see the banner above. Originally recorded as "Design, ready to implement. No code in this document has been written."
 - **Date:** 2026-08-07
-- **Source revision:** `c5a03752` (worktree branch `fix/inference-open-findings-2`)
+- **Source revision:** `444d0c2e` (worktree branch `fix/inference-open-findings-2`)
 - **Closes:** [v2 audit](../audits/2026-08-07-ai-inference-stack-performance-audit-v2.md) §3.3 (quadratic persistence), §3.4 (full-snapshot deltas), §2 correction 1 (watchdog re-arm with nobody attached); [v1 audit](../audits/2026-08-07-ai-inference-stack-performance-audit.md) P0 (bounded channels, subscriber-aware disconnect policy). Also folds in the v2 side-find: `NodeChatRegenerationService` never subscribes `ApprovalRequestedChanged`.
 - **Not in scope:** §3.1 (residency cap), §3.2 (`--cache-ram`), §3.5, §3.6. Those are llama.cpp-side and share no files with this work.
 
