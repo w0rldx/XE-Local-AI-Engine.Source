@@ -4,8 +4,10 @@ All notable changes to XE-Local-AI-Engine are recorded here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-**Tag convention.** Source tags carry a `v` prefix: `vX.Y.Z-rc.N.M` for release candidates, `vX.Y.Z` for validated
-stable releases. The section headings below use the bare version, matching the tag without its `v`.
+**Tag convention.** Source tags carry a `v` prefix and `vX.Y.Z` marks a validated stable release. Release candidates
+are `vX.Y.Z-rc.N` from `1.0.0` onward; the historical tester-repository line through `0.1.0-rc.5.1` used the older
+two-part `vX.Y.Z-rc.N.M` form, which is not reused. The section headings below use the bare version, matching the tag
+without its `v`.
 
 **Repository & release home.** Source, `v<version>` tags, official binaries, and public update feeds live in
 `w0rldx/XE-Local-AI-Engine.Source`. The `main` flavor follows stable releases and the `tester` flavor also sees release
@@ -47,35 +49,153 @@ notes were not recorded at publication time. The version string is burned. See
 [`docs/velopack-release-install-guide.md`](docs/velopack-release-install-guide.md) for the historical two-repository
 release model and the gates that replaced it. No local release tag lacks a tester release.
 
+### Public-repository releases
+
+From `1.0.0-rc.1` onward, releases are cut by the CI release workflow and published on
+`w0rldx/XE-Local-AI-Engine.Source` itself. The tester repository plays no part in this line, so the table above stops
+at `0.1.0-rc.5.1` and does not grow. Verified 2026-08-23 against
+`gh release view --repo w0rldx/XE-Local-AI-Engine.Source`:
+
+| Version | Source tag | Source commit | Published (UTC) |
+|---|---|---|---|
+| 1.0.0-rc.1 | `v1.0.0-rc.1` | `dfff46ce` | 2026-08-09 20:06 |
+
+Published as a GitHub **pre-release** carrying `XE-Local-AI-Engine-win-Portable.zip`, `XE-Local-AI-Engine.AppImage`,
+both Velopack `.nupkg` feeds, and the detached `CHECKSUMS.sha256`, `RELEASE-MANIFEST.json` and `RELEASE.spdx.json`
+evidence.
+
 ## [Unreleased]
 
-The source release identity is currently `1.0.0-rc.1`, composed in `eng/ReleaseVersion.props`. This is the current
-candidate for the canonical public repository's portable Windows and Linux release flow. The prior
-`v0.1.0-rc.5.1` tag remains bound to its historical source commit and is not reused.
+**Pending release: `1.0.0-rc.2`.** The source release identity is already `1.0.0-rc.2`, composed in
+`eng/ReleaseVersion.props`; everything in this section is what that candidate will carry. Nothing is tagged or
+published yet, so this section is still a draft — it becomes `## [1.0.0-rc.2] — <publish date>` when the release is
+cut. The prior `v1.0.0-rc.1` tag remains bound to its own source commit and is not reused.
 
 ### Added
 
-- Official portable Linux distribution as a Velopack AppImage with in-place self-update.
+- **Benchmark module** — benchmark projects that run a prompt suite across models, with a model × KV-cache-type run
+  matrix started in one batch, cancellation, LLM-as-judge scoring against a rubric (with reusable rubric presets), and
+  re-judging a whole project after a judge-policy change. A project exports as JSON at full detail — transcripts and
+  judge verdicts included — or as flat CSV rows. Live progress arrives over a SignalR hub.
+- **KV-cache type is chosen per benchmark run**, not fixed for the node, so `f16` and the quantized cache types can be
+  compared head to head within one project. The chosen type is recorded on the run and carried into the export.
+- **Local GGUF import** — bring a model file you already have, or find one in Hugging Face's GGUF repositories from
+  inside the app and download it. Acquisition is transactional: an interrupted download resumes or fails cleanly
+  rather than leaving a half-written model in the catalog.
+- Large GGUF downloads run as **parallel ranged transfers** pinned to a single commit revision, with every range
+  verified — noticeably faster on a fast connection, and no longer able to silently stitch bytes from two different
+  revisions of a repository.
+- **Training module** — fine-tune a local model on this machine. Build datasets by hand or generate them from a
+  definition, run training and evaluation jobs through a single-consumer GPU queue, compare two evaluation runs in a
+  comparison report, and export the result as an artifact with a smoke test, a quality gate, and promotion into the
+  local model catalog. Trained models and LoRA adapters are committed through the same local importer. The Python side
+  runs in a machine-global, **uv-managed** virtual environment the app installs, inspects, and removes for you, with
+  install phase and logs streamed to the UI.
+- **OpenAI-compatible local model proxy** — point any tool that speaks the OpenAI API at this node.
+  `/api/local/v1/proxy/v1` serves `chat/completions` and `embeddings` as verbatim passthroughs to the resolved
+  `llama-server` child and synthesizes `models` from the local GGUF catalog. Access is a single operator-managed bearer
+  key that can be generated, inspected and revoked; the loopback-only security gate still covers the routes.
+- **Image input in chat** for local GGUF models that ship an `mmproj` projector, so a vision-capable model can be given
+  a picture rather than only text.
+- **Per-model llama.cpp launch arguments** — extra flags saved against an individual model instead of node-wide.
+- **AI-assisted drafting** for agent skills: `skills/draft` proposes a SKILL.md the operator then edits. It writes
+  nothing on its own; the existing create/update routes stay the only persistence path.
+- **Monaco-based code viewer** for code shown in the UI, replacing the previous plain rendering.
+- A configurable **local chat invocation timeout**, so a slow local model on a large prompt is no longer cut off by a
+  fixed limit.
+
+### Changed
+
+- **Agent-chat wiring overhaul.** Timeouts are wired end to end (the embedding HTTP timeout is now its own setting
+  rather than sharing the chat one), regenerate takes the same path as a normal send instead of a divergent one,
+  llama.cpp sampling options set in the UI are actually passed through to the runtime, the watchdog derives its
+  deadline from the same wiring and leaves a breadcrumb when it fires, and several controls that claimed authority they
+  did not have — session approval, the tools overview, restart-required copy — now say what the enforcing layer really
+  does. Dead settings that no code read were removed.
+- Every page uses one shared `PageShell`/`PageHeader` layout, so headers, spacing and page-level actions are
+  consistent across the app instead of per-feature.
+- Per-model llama.cpp launch arguments reserve `--lora` and `--lora-scaled`: a model whose extra arguments carry
+  either flag is refused with an explicit message. Adapters are attached by the training module, which owns their
+  lifecycle, and a hand-written launch flag would silently bypass it.
+- The launch-policy fingerprint moved from 4 to 5, so every already-fitted model is re-fitted once on the first start
+  after the update. No action is required; the re-fit is automatic and happens only once.
+
+### Fixed
+
+- A nine-item endpoint audit: HTTP status and error-shape corrections across the local API, so a rejected request
+  reports the reason it was actually rejected for instead of a generic failure.
+- Chat and UI fixes carried over from the audit passes, including the approval card on an unpaired node and the
+  invocation lifecycle tracking behind a running turn.
+
+### Internal
+
+- The test suite was made substantially faster (CI job ~28 → ~17 min, local run ~6:02 → ~1:48) and the coverage
+  pipeline now requires a Cobertura report per unit rather than accepting a missing one.
+- A code-hygiene program: private tuples replaced by records, duplicated helpers consolidated, `NodeChatStreamService`
+  and the `llama-server` supervisor decomposed, and endpoint de-duplication helpers introduced. No behaviour change.
+- Python quality tooling and a documentation-freshness pass over `docs/`.
+
+## [1.0.0-rc.1] — 2026-08-09
+
+Tagged `v1.0.0-rc.1` at commit `dfff46ce4e0184b7803ab5106c5d215d12382d6f` and published as a prerelease on
+`w0rldx/XE-Local-AI-Engine.Source` on 2026-08-09. **This is the first release cut from the public repository**, under
+the new `1.0.0-rc.N` version scheme and the new CI Velopack pipeline; every earlier release went through the retired
+tester-repository flow. The project was relicensed to **Apache-2.0** for it.
+
+### Added
+
+- Official **portable Linux distribution** as a Velopack AppImage with in-place self-update.
 - Detached `CHECKSUMS.sha256`, `RELEASE-MANIFEST.json`, and `RELEASE.spdx.json` generated from remotely verified draft
   bytes.
 - Payload SPDX generation/validation and bundled dependency-license disclosure checks.
+- **Custom tools** — operator-defined tools an agent can call, either an HTTP endpoint reached through a proxy or a
+  local executable. Persisted with AEAD-encrypted secrets, managed from a React UI with explicit danger warnings,
+  gated by a node-settings toggle, and carried through the tool-approval policy with a per-agent approval lock.
+- **Custom slash commands** for chat.
+- **Durable read-only agent delegation over MCP**, so an external MCP client can hand work to a saved agent and follow
+  the run.
+- A **local admin password reset CLI** (`--reset-admin-password`) for the case where nobody can sign in.
+- **Optional progressive onboarding tutorials**, skippable and resumable.
+- A framework-dependent **Windows launcher** alongside the self-contained one.
+- Codex provider: the `gpt-5.6` sol/terra/luna models, defaulting to terra.
+- Open-source project documentation — `SECURITY.md`, `CONTRIBUTING.md`, `CODEOWNERS`, a PR template, a user guide, and
+  a translation contributor guide with locale parity tests that auto-cover every locale.
 
 ### Changed
 
 - Official Windows distribution remains portable-only and is now enforced as exactly one Velopack `Portable.zip`
   produced with `--noInst`; no `Setup.exe` is published.
 - Public update checks are anonymous. The `main` flavor follows stable releases, the `tester` flavor includes release
-  candidates, and Velopack's independent OS channel selects Windows or Linux packages.
+  candidates, and Velopack's independent OS channel selects Windows or Linux packages. Both channels now point at this
+  repository.
 - The release workflow binds the version, tag, and source commit. Matrix jobs build only; a protected serialized job
   merges both Velopack channels, verifies remote bytes, and attaches detached evidence. A second protected job
   re-verifies and publishes the unchanged draft after a separate approval.
 - Release artifacts remain unsigned because no signing certificate exists. Signing is planned; the publication gate
   requires an approved, current unsigned-risk decision in the interim.
-- Per-model llama.cpp launch arguments now reserve `--lora` and `--lora-scaled`: a model whose extra arguments carry
-  either flag is refused with an explicit message. Adapters are attached by the training module, which owns their
-  lifecycle, and a hand-written launch flag would silently bypass it.
-- The launch-policy fingerprint moved from 4 to 5, so every already-fitted model is re-fitted once on the first start
-  after the update. No action is required; the re-fit is automatic and happens only once.
+- Chat streaming moved to a **delta-only protocol** with O(delta) persistence, bounded channels, and a disconnect
+  grace period, replacing the full-content-per-frame path.
+- The chat composer pre-checks message size, and the inbound message cap is a legible 256 KB rejection rather than a
+  dropped connection.
+
+### Fixed
+
+- **Access tokens survived a password change.** Changing or resetting a password now invalidates every outstanding
+  access token through the security stamp, and a token that carries no stamp fails closed.
+- A cloud-routed model no longer triggers a pointless local warm-up of a local model.
+- Windows portable startup: the packaged launcher calls `VelopackApp.Build().Run()` from a synchronous entry point,
+  persists startup diagnostics, and vendors its apphost license files instead of sourcing them from the SDK pack. A
+  missing .NET 10 runtime, which failed silently, is now documented.
+- The packaged Linux AppImage launches from any working directory.
+- Host shutdown no longer crashes when the MCP shutdown token cancels.
+- The effective runtime context window can **raise** the context budget, not only shrink it.
+- Custom tools security review: an SSRF bypass in the HTTP proxy, `--` argument corruption, and header substitution.
+- `nanoid` GHSA-2v37-7h3g-55p8 patched and the frontend license manifest regenerated.
+
+### Performance
+
+- Inference-stack audit (v2) remediation: a speculation contract, supervisor admission gates, read-side caps, and a
+  streaming redesign. Pooled roles yield their capacity slots to chat, and `--cache-ram` is passed explicitly.
 
 ## [0.1.0-rc.5.1] — 2026-08-05
 
