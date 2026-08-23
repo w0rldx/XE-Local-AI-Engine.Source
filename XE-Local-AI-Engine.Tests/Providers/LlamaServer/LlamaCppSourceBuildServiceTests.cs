@@ -560,7 +560,13 @@ public sealed class LlamaCppSourceBuildServiceTests
             AssertEx.False(environment.Contains("must-not-leak", StringComparison.Ordinal));
             AssertEx.True(environment.Contains("GIT_CONFIG_NOSYSTEM=1", StringComparison.Ordinal));
             AssertEx.True(environment.Contains($"HOME={Path.Combine(temp.Path, "llama.cpp", "source-build", ".work", ".home")}", StringComparison.Ordinal));
-            AssertEx.Null(activity.ActiveBuildId);
+
+            // The reservation is released in the build task's finally, AFTER the phase goes terminal, so the
+            // Terminal wait above does not imply it has happened yet. Asserting it directly races that release
+            // and loses whenever the build task is descheduled between the two.
+            await AssertEx.EventuallyAsync(() => activity.ActiveBuildId is null,
+                TestBudgets.Contended,
+                "The source build stayed reserved after reaching a terminal phase.");
         }
         finally
         {
