@@ -487,7 +487,10 @@ public sealed class PersistenceEncryptionTests : IDisposable
         var standardErrorTask = process.StandardError.ReadToEndAsync();
         // Hang guard, not a perf budget: this is a cold build that restores NuGet and compiles two
         // dependency projects with build-server reuse disabled, so a loaded CI runner needs real headroom.
-        using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(180));
+        // 180 s was not enough: CI run 32609813981 timed out here purely from co-tenancy, while the
+        // rest of the suite was green (docs/agent-knowledge.md §1 — a duration next to a failure is
+        // a load signature, not a behaviour signal). This budget only has to be shorter than a hang.
+        using var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(600));
         var timedOut = false;
         try
         {
@@ -509,7 +512,7 @@ public sealed class PersistenceEncryptionTests : IDisposable
 
         var combinedOutput = standardOutput + Environment.NewLine + standardError;
 
-        AssertEx.False(timedOut, $"Negative fence probe exceeded its 180-second build timeout.{Environment.NewLine}{combinedOutput}");
+        AssertEx.False(timedOut, $"Negative fence probe exceeded its 600-second build timeout.{Environment.NewLine}{combinedOutput}");
         AssertEx.False(process.ExitCode == 0, "Negative fence probe must fail to compile.");
         AssertEx.True(combinedOutput.Contains("CS0122", StringComparison.Ordinal)
                       || combinedOutput.Contains("inaccessible due to its protection level", StringComparison.OrdinalIgnoreCase),

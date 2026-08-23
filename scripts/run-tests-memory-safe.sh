@@ -27,6 +27,9 @@
 #   (scripts/with-build-lock.sh), and it snapshots the test output tree before the first batch and
 #   re-checks it after the last, reporting exit 75 CONTAMINATED rather than a fail/pass verdict it
 #   cannot stand behind. See docs/agent-knowledge.md §1.
+#   It SELF-GUARDS, so do not wrap it in an outer `assembly-guard.sh guard --test-bins -- …`: the
+#   build this script performs falls inside that outer window and trips exit 75 every time. If you
+#   must wrap it, pass NO_BUILD=1.
 #
 # Coverage instrumentation is in-place — coverage mode needs one output tree PER JOB
 #   Microsoft.Testing.Extensions.CodeCoverage uses STATIC instrumentation on Linux: it rewrites the
@@ -150,7 +153,7 @@ acquire_slot() {
 release_slot() { [[ -n "${1:-}" ]] && rmdir "$SLOT_LOCKS/$1" 2>/dev/null; return 0; }
 
 run_ns() {
-  local ns="$1" out; out="$(mktemp)"; local t0=$EPOCHSECONDS
+  local ns="$1" filter="$2" out; out="$(mktemp)"; local t0=$EPOCHSECONDS
   # Coverage/TRX is opt-in: one results directory per batch, because MTP resolves --coverage-output
   # relative to --results-directory and batches sharing one would overwrite each other's report.
   local exe="$EXE" slot=""
@@ -162,7 +165,7 @@ run_ns() {
       slot="$(acquire_slot)"; exe="$SLOT_ROOT/$slot/$(basename "$EXE")"
     fi
   fi
-  "$exe" --treenode-filter "/*/${ns}/*/*" --maximum-parallel-tests "$PAR" "${report_args[@]}" >"$out" 2>&1 &
+  "$exe" --treenode-filter "$filter" --maximum-parallel-tests "$PAR" "${report_args[@]}" >"$out" 2>&1 &
   local pid=$! peak=0
   while kill -0 "$pid" 2>/dev/null; do
     local rss avail
@@ -258,17 +261,54 @@ for h in "${HEAVY[@]}"; do
 done
 for ns in "${NAMESPACES[@]}"; do [[ -z "${IS_HEAVY[$ns]:-}" ]] && ORDERED+=("$ns"); done
 
-echo ">> Running namespace batches (JOBS=$JOBS${COVERAGE_DIR:+, coverage+TRX -> $COVERAGE_DIR/<namespace>})…"
+# GROUPS: pack the namespaces into N processes instead of one per namespace. WHY it exists: with
+# coverage on, per-namespace batching pays the static-instrumentation start-up cost ~98 times, and
+# that cost dominates on a slow runner. Measured 2026-08-23 on the 16-core box, coverage on, JOBS=4:
+#   98 batches            1991 CPU-s   7:07 wall   868 MB/proc
+#   GROUPS=8               830 CPU-s   3:12 wall  1557 MB/proc
+#   GROUPS=4               684 CPU-s   2:43 wall  1532 MB/proc   <- CI uses this shape
+#   one process, width 4   677 CPU-s   7:44 wall  7719 MB (one)
+# GROUPS=4 costs the same CPU as a single process (the floor) while actually using the cores: 4.2x
+# parallelism against 1.46x, because per-test host builds serialize behind the static
+# HostStartupLock and width inside one process cannot escape it.
+UNITS=()
+if [[ -n "${GROUPS:-}" ]]; then
+  # Weights come from the `# NNs` comments on the HEAVY entries above — the same measurements that
+  # order the list. Anything unlisted is short by construction, so it weighs 1.
+  declare -A WEIGHT=()
+  while read -r wns wsec; do WEIGHT[$wns]="$wsec"; done < <(
+    sed -nE 's/^  ([A-Za-z0-9_.]+) +# *([0-9]+)s.*/\1 \2/p' "${BASH_SOURCE[0]}")
+  declare -a BIN_NS=() BIN_LOAD=()
+  for ((g = 0; g < GROUPS; g++)); do BIN_NS[g]=""; BIN_LOAD[g]=0; done
+  # LPT: ORDERED is already longest-first, so appending each to the lightest bin is the greedy pack.
+  for ns in "${ORDERED[@]}"; do
+    light=0
+    for ((g = 1; g < GROUPS; g++)); do (( BIN_LOAD[g] < BIN_LOAD[light] )) && light=$g; done
+    BIN_NS[light]="${BIN_NS[light]:+${BIN_NS[light]}|}$ns"
+    BIN_LOAD[light]=$(( BIN_LOAD[light] + ${WEIGHT[$ns]:-1} ))
+  done
+  for ((g = 0; g < GROUPS; g++)); do
+    [[ -z "${BIN_NS[g]}" ]] && continue
+    UNITS+=("group$g"$'\t'"/*/(${BIN_NS[g]})/*/*")
+    echo "   group$g: weight=${BIN_LOAD[g]}s"
+  done
+  echo ">> Running ${#UNITS[@]} namespace GROUPS (JOBS=$JOBS${COVERAGE_DIR:+, coverage+TRX -> $COVERAGE_DIR/<group>})…"
+else
+  for ns in "${ORDERED[@]}"; do UNITS+=("$ns"$'\t'"/*/${ns}/*/*"); done
+  echo ">> Running namespace batches (JOBS=$JOBS${COVERAGE_DIR:+, coverage+TRX -> $COVERAGE_DIR/<namespace>})…"
+fi
+
 running=0
-for ns in "${ORDERED[@]}"; do
-  run_ns "$ns" &
+for unit in "${UNITS[@]}"; do
+  run_ns "${unit%%$'\t'*}" "${unit#*$'\t'}" &
   running=$((running+1))
   if (( running >= JOBS )); then wait -n; running=$((running-1)); fi
 done
 wait
 
 TOTAL_PASS=0; TOTAL_FAIL=0; FAILED=(); PEAK_ALL=0
-for ns in "${ORDERED[@]}"; do
+for unit in "${UNITS[@]}"; do
+  ns="${unit%%$'\t'*}"
   rfile="$RESULTS_DIR/$ns.result"
   if [[ ! -f "$rfile" ]]; then FAILED+=("$ns(no-result)"); continue; fi
   read -r p f peak rc _dur sum <"$rfile"
