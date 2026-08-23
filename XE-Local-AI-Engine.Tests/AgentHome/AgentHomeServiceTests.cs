@@ -353,7 +353,7 @@ public sealed class AgentHomeServiceTests : IDisposable
         identity.NodeId = "node-2";
         using var secondCancellation = new CancellationTokenSource();
         var second = harness.Service.RunLifecycleAsync(NewLifecycle(folderId), secondCancellation.Token);
-        await WaitForInFlightCommandCountAsync(provider, count: 2);
+        await WaitForInFlightCommandCountAsync(provider, count: 2, first, second);
 
         // The real assertion: the second run got PAST the guard (two in-flight commands exist) instead of being
         // rejected with AgentHomeBusy. Both runs are still blocking, so neither has faulted.
@@ -876,19 +876,38 @@ public sealed class AgentHomeServiceTests : IDisposable
         }
     }
 
-    private static async Task WaitForInFlightCommandCountAsync(FakeSandboxRuntimeProvider provider, int count)
+    private static async Task WaitForInFlightCommandCountAsync(FakeSandboxRuntimeProvider provider,
+        int count,
+        params Task[] runs)
     {
-        for (var attempt = 0; attempt < 200; attempt++)
+        // Deliberately NOT TestBudgets.Contended. The commands this waits on are registered blocking, so they stay
+        // in flight until the test cancels them: if the count has not been reached, waiting longer does not reach it.
+        // A 120s budget here bought nothing and made the same failure take two minutes to surface on CI.
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(30);
+        while (DateTimeOffset.UtcNow < deadline)
         {
             if (InFlightExecutionIds(provider).Count >= count)
             {
                 return;
             }
 
+            // A run that faulted will never produce its command, so report why instead of polling out with a
+            // count that hides the real exception.
+            foreach (var run in runs)
+            {
+                if (run.IsFaulted)
+                {
+                    throw new InvalidOperationException(
+                        $"A run faulted before {count} command(s) were in flight.",
+                        run.Exception);
+                }
+            }
+
             await Task.Delay(10);
         }
 
-        throw new InvalidOperationException($"Expected {count} in-flight command(s) but the fake never reached it.");
+        throw new InvalidOperationException($"Expected {count} in-flight command(s) but the fake never reached it; "
+                                            + $"observed {InFlightExecutionIds(provider).Count}.");
     }
 
     private static IReadOnlyList<string> InFlightExecutionIds(FakeSandboxRuntimeProvider provider)

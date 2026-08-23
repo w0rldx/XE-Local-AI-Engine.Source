@@ -2,7 +2,14 @@
 
 import * as z from "zod";
 
-import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape } from "./client";
+import {
+	type Client,
+	type ClientMeta,
+	formDataBodySerializer,
+	type Options as Options2,
+	type RequestResult,
+	type TDataShape,
+} from "./client";
 import { client } from "./client.gen";
 import type {
 	AnalyzePlaybookData,
@@ -1617,10 +1624,12 @@ export type Options<
 	 * You can pass arbitrary values through the `meta` object. This can be
 	 * used to access values that aren't defined as part of the SDK function.
 	 */
-	meta?: Record<string, unknown>;
+	meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
 };
 
-export const listWorkspaces = <ThrowOnError extends boolean = false>(options?: Options<ListWorkspacesData, ThrowOnError>) =>
+export const listWorkspaces = <ThrowOnError extends boolean = false>(
+	options?: Options<ListWorkspacesData, ThrowOnError>,
+): RequestResult<ListWorkspacesResponses, ListWorkspacesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListWorkspacesResponses, ListWorkspacesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1633,14 +1642,24 @@ export const listWorkspaces = <ThrowOnError extends boolean = false>(options?: O
 		responseType: "json",
 		responseValidator: async (data) => await zListWorkspacesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/workspaces",
 		...options,
 	});
 
-export const createWorkspace = <ThrowOnError extends boolean = false>(options: Options<CreateWorkspaceData, ThrowOnError>) =>
+export const createWorkspace = <ThrowOnError extends boolean = false>(
+	options: Options<CreateWorkspaceData, ThrowOnError>,
+): RequestResult<CreateWorkspaceResponses, CreateWorkspaceErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateWorkspaceResponses, CreateWorkspaceErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1653,8 +1672,16 @@ export const createWorkspace = <ThrowOnError extends boolean = false>(options: O
 		responseType: "json",
 		responseValidator: async (data) => await zCreateWorkspaceResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/workspaces",
 		...options,
@@ -1664,7 +1691,9 @@ export const createWorkspace = <ThrowOnError extends boolean = false>(options: O
 		},
 	});
 
-export const deleteWorkspace = <ThrowOnError extends boolean = false>(options: Options<DeleteWorkspaceData, ThrowOnError>) =>
+export const deleteWorkspace = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteWorkspaceData, ThrowOnError>,
+): RequestResult<DeleteWorkspaceResponses, DeleteWorkspaceErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteWorkspaceResponses, DeleteWorkspaceErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1676,14 +1705,24 @@ export const deleteWorkspace = <ThrowOnError extends boolean = false>(options: O
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteWorkspaceResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/workspaces/{workspaceId}",
 		...options,
 	});
 
-export const getTutorialState = <ThrowOnError extends boolean = false>(options?: Options<GetTutorialStateData, ThrowOnError>) =>
+export const getTutorialState = <ThrowOnError extends boolean = false>(
+	options?: Options<GetTutorialStateData, ThrowOnError>,
+): RequestResult<GetTutorialStateResponses, GetTutorialStateErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetTutorialStateResponses, GetTutorialStateErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1696,14 +1735,24 @@ export const getTutorialState = <ThrowOnError extends boolean = false>(options?:
 		responseType: "json",
 		responseValidator: async (data) => await zGetTutorialStateResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/tutorial-state",
 		...options,
 	});
 
-export const saveTutorialState = <ThrowOnError extends boolean = false>(options: Options<SaveTutorialStateData, ThrowOnError>) =>
+export const saveTutorialState = <ThrowOnError extends boolean = false>(
+	options: Options<SaveTutorialStateData, ThrowOnError>,
+): RequestResult<SaveTutorialStateResponses, SaveTutorialStateErrors, ThrowOnError> =>
 	(options.client ?? client).put<SaveTutorialStateResponses, SaveTutorialStateErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1715,8 +1764,16 @@ export const saveTutorialState = <ThrowOnError extends boolean = false>(options:
 				.parseAsync(data),
 		responseValidator: async (data) => await zSaveTutorialStateResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/tutorial-state",
 		...options,
@@ -1728,7 +1785,7 @@ export const saveTutorialState = <ThrowOnError extends boolean = false>(options:
 
 export const getTrainingRuntimePrerequisites = <ThrowOnError extends boolean = false>(
 	options?: Options<GetTrainingRuntimePrerequisitesData, ThrowOnError>,
-) =>
+): RequestResult<GetTrainingRuntimePrerequisitesResponses, GetTrainingRuntimePrerequisitesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetTrainingRuntimePrerequisitesResponses, GetTrainingRuntimePrerequisitesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1741,8 +1798,16 @@ export const getTrainingRuntimePrerequisites = <ThrowOnError extends boolean = f
 		responseType: "json",
 		responseValidator: async (data) => await zGetTrainingRuntimePrerequisitesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/runtime/prerequisites",
 		...options,
@@ -1750,7 +1815,7 @@ export const getTrainingRuntimePrerequisites = <ThrowOnError extends boolean = f
 
 export const getTrainingRuntimeStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetTrainingRuntimeStatusData, ThrowOnError>,
-) =>
+): RequestResult<GetTrainingRuntimeStatusResponses, GetTrainingRuntimeStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetTrainingRuntimeStatusResponses, GetTrainingRuntimeStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1763,8 +1828,16 @@ export const getTrainingRuntimeStatus = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetTrainingRuntimeStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/runtime/status",
 		...options,
@@ -1772,7 +1845,7 @@ export const getTrainingRuntimeStatus = <ThrowOnError extends boolean = false>(
 
 export const removeTrainingRuntime = <ThrowOnError extends boolean = false>(
 	options?: Options<RemoveTrainingRuntimeData, ThrowOnError>,
-) =>
+): RequestResult<RemoveTrainingRuntimeResponses, RemoveTrainingRuntimeErrors, ThrowOnError> =>
 	(options?.client ?? client).post<RemoveTrainingRuntimeResponses, RemoveTrainingRuntimeErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1785,8 +1858,16 @@ export const removeTrainingRuntime = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zRemoveTrainingRuntimeResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/runtime/remove",
 		...options,
@@ -1794,7 +1875,7 @@ export const removeTrainingRuntime = <ThrowOnError extends boolean = false>(
 
 export const startTrainingRuntimeInstall = <ThrowOnError extends boolean = false>(
 	options?: Options<StartTrainingRuntimeInstallData, ThrowOnError>,
-) =>
+): RequestResult<StartTrainingRuntimeInstallResponses, StartTrainingRuntimeInstallErrors, ThrowOnError> =>
 	(options?.client ?? client).post<StartTrainingRuntimeInstallResponses, StartTrainingRuntimeInstallErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1807,14 +1888,24 @@ export const startTrainingRuntimeInstall = <ThrowOnError extends boolean = false
 		responseType: "json",
 		responseValidator: async (data) => await zStartTrainingRuntimeInstallResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/runtime/install",
 		...options,
 	});
 
-export const listTrainingRuns = <ThrowOnError extends boolean = false>(options: Options<ListTrainingRunsData, ThrowOnError>) =>
+export const listTrainingRuns = <ThrowOnError extends boolean = false>(
+	options: Options<ListTrainingRunsData, ThrowOnError>,
+): RequestResult<ListTrainingRunsResponses, ListTrainingRunsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListTrainingRunsResponses, ListTrainingRunsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1827,14 +1918,24 @@ export const listTrainingRuns = <ThrowOnError extends boolean = false>(options: 
 		responseType: "json",
 		responseValidator: async (data) => await zListTrainingRunsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/runs",
 		...options,
 	});
 
-export const createTrainingRun = <ThrowOnError extends boolean = false>(options: Options<CreateTrainingRunData, ThrowOnError>) =>
+export const createTrainingRun = <ThrowOnError extends boolean = false>(
+	options: Options<CreateTrainingRunData, ThrowOnError>,
+): RequestResult<CreateTrainingRunResponses, CreateTrainingRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateTrainingRunResponses, CreateTrainingRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1847,8 +1948,16 @@ export const createTrainingRun = <ThrowOnError extends boolean = false>(options:
 		responseType: "json",
 		responseValidator: async (data) => await zCreateTrainingRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/runs",
 		...options,
@@ -1858,7 +1967,9 @@ export const createTrainingRun = <ThrowOnError extends boolean = false>(options:
 		},
 	});
 
-export const getTrainingRun = <ThrowOnError extends boolean = false>(options: Options<GetTrainingRunData, ThrowOnError>) =>
+export const getTrainingRun = <ThrowOnError extends boolean = false>(
+	options: Options<GetTrainingRunData, ThrowOnError>,
+): RequestResult<GetTrainingRunResponses, GetTrainingRunErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetTrainingRunResponses, GetTrainingRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1871,14 +1982,24 @@ export const getTrainingRun = <ThrowOnError extends boolean = false>(options: Op
 		responseType: "json",
 		responseValidator: async (data) => await zGetTrainingRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/runs/{runId}",
 		...options,
 	});
 
-export const cancelTrainingRun = <ThrowOnError extends boolean = false>(options: Options<CancelTrainingRunData, ThrowOnError>) =>
+export const cancelTrainingRun = <ThrowOnError extends boolean = false>(
+	options: Options<CancelTrainingRunData, ThrowOnError>,
+): RequestResult<CancelTrainingRunResponses, CancelTrainingRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelTrainingRunResponses, CancelTrainingRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1890,8 +2011,16 @@ export const cancelTrainingRun = <ThrowOnError extends boolean = false>(options:
 				.parseAsync(data),
 		responseValidator: async (data) => await zCancelTrainingRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/runs/{runId}/cancel",
 		...options,
@@ -1899,7 +2028,7 @@ export const cancelTrainingRun = <ThrowOnError extends boolean = false>(options:
 
 export const getTrainingRunDefaults = <ThrowOnError extends boolean = false>(
 	options: Options<GetTrainingRunDefaultsData, ThrowOnError>,
-) =>
+): RequestResult<GetTrainingRunDefaultsResponses, GetTrainingRunDefaultsErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetTrainingRunDefaultsResponses, GetTrainingRunDefaultsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1912,14 +2041,24 @@ export const getTrainingRunDefaults = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetTrainingRunDefaultsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/runs/defaults",
 		...options,
 	});
 
-export const listToolMocks = <ThrowOnError extends boolean = false>(options?: Options<ListToolMocksData, ThrowOnError>) =>
+export const listToolMocks = <ThrowOnError extends boolean = false>(
+	options?: Options<ListToolMocksData, ThrowOnError>,
+): RequestResult<ListToolMocksResponses, ListToolMocksErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListToolMocksResponses, ListToolMocksErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1932,14 +2071,24 @@ export const listToolMocks = <ThrowOnError extends boolean = false>(options?: Op
 		responseType: "json",
 		responseValidator: async (data) => await zListToolMocksResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/mocks",
 		...options,
 	});
 
-export const createToolMock = <ThrowOnError extends boolean = false>(options: Options<CreateToolMockData, ThrowOnError>) =>
+export const createToolMock = <ThrowOnError extends boolean = false>(
+	options: Options<CreateToolMockData, ThrowOnError>,
+): RequestResult<CreateToolMockResponses, CreateToolMockErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateToolMockResponses, CreateToolMockErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1952,8 +2101,16 @@ export const createToolMock = <ThrowOnError extends boolean = false>(options: Op
 		responseType: "json",
 		responseValidator: async (data) => await zCreateToolMockResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/mocks",
 		...options,
@@ -1963,7 +2120,9 @@ export const createToolMock = <ThrowOnError extends boolean = false>(options: Op
 		},
 	});
 
-export const deleteToolMock = <ThrowOnError extends boolean = false>(options: Options<DeleteToolMockData, ThrowOnError>) =>
+export const deleteToolMock = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteToolMockData, ThrowOnError>,
+): RequestResult<DeleteToolMockResponses, DeleteToolMockErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteToolMockResponses, DeleteToolMockErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1975,8 +2134,16 @@ export const deleteToolMock = <ThrowOnError extends boolean = false>(options: Op
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteToolMockResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/mocks/{mockId}",
 		...options,
@@ -1986,7 +2153,9 @@ export const deleteToolMock = <ThrowOnError extends boolean = false>(options: Op
 		},
 	});
 
-export const getToolMock = <ThrowOnError extends boolean = false>(options: Options<GetToolMockData, ThrowOnError>) =>
+export const getToolMock = <ThrowOnError extends boolean = false>(
+	options: Options<GetToolMockData, ThrowOnError>,
+): RequestResult<GetToolMockResponses, GetToolMockErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetToolMockResponses, GetToolMockErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -1999,14 +2168,24 @@ export const getToolMock = <ThrowOnError extends boolean = false>(options: Optio
 		responseType: "json",
 		responseValidator: async (data) => await zGetToolMockResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/mocks/{mockId}",
 		...options,
 	});
 
-export const updateToolMock = <ThrowOnError extends boolean = false>(options: Options<UpdateToolMockData, ThrowOnError>) =>
+export const updateToolMock = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateToolMockData, ThrowOnError>,
+): RequestResult<UpdateToolMockResponses, UpdateToolMockErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateToolMockResponses, UpdateToolMockErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2019,8 +2198,16 @@ export const updateToolMock = <ThrowOnError extends boolean = false>(options: Op
 		responseType: "json",
 		responseValidator: async (data) => await zUpdateToolMockResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/mocks/{mockId}",
 		...options,
@@ -2030,7 +2217,9 @@ export const updateToolMock = <ThrowOnError extends boolean = false>(options: Op
 		},
 	});
 
-export const verifyToolMock = <ThrowOnError extends boolean = false>(options: Options<VerifyToolMockData, ThrowOnError>) =>
+export const verifyToolMock = <ThrowOnError extends boolean = false>(
+	options: Options<VerifyToolMockData, ThrowOnError>,
+): RequestResult<VerifyToolMockResponses, VerifyToolMockErrors, ThrowOnError> =>
 	(options.client ?? client).post<VerifyToolMockResponses, VerifyToolMockErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2043,8 +2232,16 @@ export const verifyToolMock = <ThrowOnError extends boolean = false>(options: Op
 		responseType: "json",
 		responseValidator: async (data) => await zVerifyToolMockResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/mocks/{mockId}/verify",
 		...options,
@@ -2056,7 +2253,7 @@ export const verifyToolMock = <ThrowOnError extends boolean = false>(options: Op
 
 export const startTrainingExport = <ThrowOnError extends boolean = false>(
 	options: Options<StartTrainingExportData, ThrowOnError>,
-) =>
+): RequestResult<StartTrainingExportResponses, StartTrainingExportErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartTrainingExportResponses, StartTrainingExportErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2069,8 +2266,16 @@ export const startTrainingExport = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zStartTrainingExportResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/runs/{runId}/exports",
 		...options,
@@ -2082,7 +2287,7 @@ export const startTrainingExport = <ThrowOnError extends boolean = false>(
 
 export const listTrainingArtifacts = <ThrowOnError extends boolean = false>(
 	options: Options<ListTrainingArtifactsData, ThrowOnError>,
-) =>
+): RequestResult<ListTrainingArtifactsResponses, ListTrainingArtifactsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListTrainingArtifactsResponses, ListTrainingArtifactsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2095,8 +2300,16 @@ export const listTrainingArtifacts = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListTrainingArtifactsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/runs/{runId}/artifacts",
 		...options,
@@ -2104,7 +2317,7 @@ export const listTrainingArtifacts = <ThrowOnError extends boolean = false>(
 
 export const deleteTrainingArtifact = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteTrainingArtifactData, ThrowOnError>,
-) =>
+): RequestResult<DeleteTrainingArtifactResponses, DeleteTrainingArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteTrainingArtifactResponses, DeleteTrainingArtifactErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2116,8 +2329,16 @@ export const deleteTrainingArtifact = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteTrainingArtifactResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/artifacts/{artifactId}",
 		...options,
@@ -2129,7 +2350,7 @@ export const deleteTrainingArtifact = <ThrowOnError extends boolean = false>(
 
 export const getTrainingArtifact = <ThrowOnError extends boolean = false>(
 	options: Options<GetTrainingArtifactData, ThrowOnError>,
-) =>
+): RequestResult<GetTrainingArtifactResponses, GetTrainingArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetTrainingArtifactResponses, GetTrainingArtifactErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2142,8 +2363,16 @@ export const getTrainingArtifact = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetTrainingArtifactResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/artifacts/{artifactId}",
 		...options,
@@ -2151,7 +2380,7 @@ export const getTrainingArtifact = <ThrowOnError extends boolean = false>(
 
 export const runTrainingArtifactSmoke = <ThrowOnError extends boolean = false>(
 	options: Options<RunTrainingArtifactSmokeData, ThrowOnError>,
-) =>
+): RequestResult<RunTrainingArtifactSmokeResponses, RunTrainingArtifactSmokeErrors, ThrowOnError> =>
 	(options.client ?? client).post<RunTrainingArtifactSmokeResponses, RunTrainingArtifactSmokeErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2164,8 +2393,16 @@ export const runTrainingArtifactSmoke = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zRunTrainingArtifactSmokeResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/artifacts/{artifactId}/smoke",
 		...options,
@@ -2173,7 +2410,7 @@ export const runTrainingArtifactSmoke = <ThrowOnError extends boolean = false>(
 
 export const promoteTrainingArtifact = <ThrowOnError extends boolean = false>(
 	options: Options<PromoteTrainingArtifactData, ThrowOnError>,
-) =>
+): RequestResult<PromoteTrainingArtifactResponses, PromoteTrainingArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).post<PromoteTrainingArtifactResponses, PromoteTrainingArtifactErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2186,8 +2423,16 @@ export const promoteTrainingArtifact = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zPromoteTrainingArtifactResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/artifacts/{artifactId}/promote",
 		...options,
@@ -2199,7 +2444,7 @@ export const promoteTrainingArtifact = <ThrowOnError extends boolean = false>(
 
 export const decideTrainingArtifactQuality = <ThrowOnError extends boolean = false>(
 	options: Options<DecideTrainingArtifactQualityData, ThrowOnError>,
-) =>
+): RequestResult<DecideTrainingArtifactQualityResponses, DecideTrainingArtifactQualityErrors, ThrowOnError> =>
 	(options.client ?? client).put<DecideTrainingArtifactQualityResponses, DecideTrainingArtifactQualityErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2212,8 +2457,16 @@ export const decideTrainingArtifactQuality = <ThrowOnError extends boolean = fal
 		responseType: "json",
 		responseValidator: async (data) => await zDecideTrainingArtifactQualityResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/artifacts/{artifactId}/quality",
 		...options,
@@ -2225,7 +2478,7 @@ export const decideTrainingArtifactQuality = <ThrowOnError extends boolean = fal
 
 export const overrideTrainingArtifactQuality = <ThrowOnError extends boolean = false>(
 	options: Options<OverrideTrainingArtifactQualityData, ThrowOnError>,
-) =>
+): RequestResult<OverrideTrainingArtifactQualityResponses, OverrideTrainingArtifactQualityErrors, ThrowOnError> =>
 	(options.client ?? client).post<OverrideTrainingArtifactQualityResponses, OverrideTrainingArtifactQualityErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2238,8 +2491,16 @@ export const overrideTrainingArtifactQuality = <ThrowOnError extends boolean = f
 		responseType: "json",
 		responseValidator: async (data) => await zOverrideTrainingArtifactQualityResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/artifacts/{artifactId}/quality/override",
 		...options,
@@ -2251,7 +2512,11 @@ export const overrideTrainingArtifactQuality = <ThrowOnError extends boolean = f
 
 export const beginTrainingArtifactQualityRevalidation = <ThrowOnError extends boolean = false>(
 	options: Options<BeginTrainingArtifactQualityRevalidationData, ThrowOnError>,
-) =>
+): RequestResult<
+	BeginTrainingArtifactQualityRevalidationResponses,
+	BeginTrainingArtifactQualityRevalidationErrors,
+	ThrowOnError
+> =>
 	(options.client ?? client).post<
 		BeginTrainingArtifactQualityRevalidationResponses,
 		BeginTrainingArtifactQualityRevalidationErrors,
@@ -2268,8 +2533,16 @@ export const beginTrainingArtifactQualityRevalidation = <ThrowOnError extends bo
 		responseType: "json",
 		responseValidator: async (data) => await zBeginTrainingArtifactQualityRevalidationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/artifacts/{artifactId}/quality/revalidation",
 		...options,
@@ -2281,7 +2554,7 @@ export const beginTrainingArtifactQualityRevalidation = <ThrowOnError extends bo
 
 export const discardTrainingArtifactQuality = <ThrowOnError extends boolean = false>(
 	options: Options<DiscardTrainingArtifactQualityData, ThrowOnError>,
-) =>
+): RequestResult<DiscardTrainingArtifactQualityResponses, DiscardTrainingArtifactQualityErrors, ThrowOnError> =>
 	(options.client ?? client).post<DiscardTrainingArtifactQualityResponses, DiscardTrainingArtifactQualityErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2294,8 +2567,16 @@ export const discardTrainingArtifactQuality = <ThrowOnError extends boolean = fa
 		responseType: "json",
 		responseValidator: async (data) => await zDiscardTrainingArtifactQualityResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/artifacts/{artifactId}/quality/discard",
 		...options,
@@ -2305,7 +2586,9 @@ export const discardTrainingArtifactQuality = <ThrowOnError extends boolean = fa
 		},
 	});
 
-export const listEvaluations = <ThrowOnError extends boolean = false>(options?: Options<ListEvaluationsData, ThrowOnError>) =>
+export const listEvaluations = <ThrowOnError extends boolean = false>(
+	options?: Options<ListEvaluationsData, ThrowOnError>,
+): RequestResult<ListEvaluationsResponses, ListEvaluationsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListEvaluationsResponses, ListEvaluationsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2318,14 +2601,24 @@ export const listEvaluations = <ThrowOnError extends boolean = false>(options?: 
 		responseType: "json",
 		responseValidator: async (data) => await zListEvaluationsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/evaluations",
 		...options,
 	});
 
-export const createEvaluation = <ThrowOnError extends boolean = false>(options: Options<CreateEvaluationData, ThrowOnError>) =>
+export const createEvaluation = <ThrowOnError extends boolean = false>(
+	options: Options<CreateEvaluationData, ThrowOnError>,
+): RequestResult<CreateEvaluationResponses, CreateEvaluationErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateEvaluationResponses, CreateEvaluationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2338,8 +2631,16 @@ export const createEvaluation = <ThrowOnError extends boolean = false>(options: 
 		responseType: "json",
 		responseValidator: async (data) => await zCreateEvaluationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/evaluations",
 		...options,
@@ -2349,7 +2650,9 @@ export const createEvaluation = <ThrowOnError extends boolean = false>(options: 
 		},
 	});
 
-export const deleteEvaluation = <ThrowOnError extends boolean = false>(options: Options<DeleteEvaluationData, ThrowOnError>) =>
+export const deleteEvaluation = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteEvaluationData, ThrowOnError>,
+): RequestResult<DeleteEvaluationResponses, DeleteEvaluationErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteEvaluationResponses, DeleteEvaluationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2361,8 +2664,16 @@ export const deleteEvaluation = <ThrowOnError extends boolean = false>(options: 
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteEvaluationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/evaluations/{evaluationId}",
 		...options,
@@ -2372,7 +2683,9 @@ export const deleteEvaluation = <ThrowOnError extends boolean = false>(options: 
 		},
 	});
 
-export const getEvaluation = <ThrowOnError extends boolean = false>(options: Options<GetEvaluationData, ThrowOnError>) =>
+export const getEvaluation = <ThrowOnError extends boolean = false>(
+	options: Options<GetEvaluationData, ThrowOnError>,
+): RequestResult<GetEvaluationResponses, GetEvaluationErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetEvaluationResponses, GetEvaluationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2385,14 +2698,24 @@ export const getEvaluation = <ThrowOnError extends boolean = false>(options: Opt
 		responseType: "json",
 		responseValidator: async (data) => await zGetEvaluationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/evaluations/{evaluationId}",
 		...options,
 	});
 
-export const resumeEvaluation = <ThrowOnError extends boolean = false>(options: Options<ResumeEvaluationData, ThrowOnError>) =>
+export const resumeEvaluation = <ThrowOnError extends boolean = false>(
+	options: Options<ResumeEvaluationData, ThrowOnError>,
+): RequestResult<ResumeEvaluationResponses, ResumeEvaluationErrors, ThrowOnError> =>
 	(options.client ?? client).post<ResumeEvaluationResponses, ResumeEvaluationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2405,14 +2728,24 @@ export const resumeEvaluation = <ThrowOnError extends boolean = false>(options: 
 		responseType: "json",
 		responseValidator: async (data) => await zResumeEvaluationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/evaluations/{evaluationId}/resume",
 		...options,
 	});
 
-export const cancelEvaluation = <ThrowOnError extends boolean = false>(options: Options<CancelEvaluationData, ThrowOnError>) =>
+export const cancelEvaluation = <ThrowOnError extends boolean = false>(
+	options: Options<CancelEvaluationData, ThrowOnError>,
+): RequestResult<CancelEvaluationResponses, CancelEvaluationErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelEvaluationResponses, CancelEvaluationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2424,8 +2757,16 @@ export const cancelEvaluation = <ThrowOnError extends boolean = false>(options: 
 				.parseAsync(data),
 		responseValidator: async (data) => await zCancelEvaluationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/evaluations/{evaluationId}/cancel",
 		...options,
@@ -2433,7 +2774,7 @@ export const cancelEvaluation = <ThrowOnError extends boolean = false>(options: 
 
 export const listTrainingDefinitions = <ThrowOnError extends boolean = false>(
 	options?: Options<ListTrainingDefinitionsData, ThrowOnError>,
-) =>
+): RequestResult<ListTrainingDefinitionsResponses, ListTrainingDefinitionsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListTrainingDefinitionsResponses, ListTrainingDefinitionsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2446,8 +2787,16 @@ export const listTrainingDefinitions = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListTrainingDefinitionsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/definitions",
 		...options,
@@ -2455,7 +2804,7 @@ export const listTrainingDefinitions = <ThrowOnError extends boolean = false>(
 
 export const createTrainingDefinition = <ThrowOnError extends boolean = false>(
 	options: Options<CreateTrainingDefinitionData, ThrowOnError>,
-) =>
+): RequestResult<CreateTrainingDefinitionResponses, CreateTrainingDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateTrainingDefinitionResponses, CreateTrainingDefinitionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2468,8 +2817,16 @@ export const createTrainingDefinition = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCreateTrainingDefinitionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/definitions",
 		...options,
@@ -2481,7 +2838,7 @@ export const createTrainingDefinition = <ThrowOnError extends boolean = false>(
 
 export const deleteTrainingDefinition = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteTrainingDefinitionData, ThrowOnError>,
-) =>
+): RequestResult<DeleteTrainingDefinitionResponses, DeleteTrainingDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteTrainingDefinitionResponses, DeleteTrainingDefinitionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2493,8 +2850,16 @@ export const deleteTrainingDefinition = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteTrainingDefinitionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/definitions/{definitionId}",
 		...options,
@@ -2506,7 +2871,7 @@ export const deleteTrainingDefinition = <ThrowOnError extends boolean = false>(
 
 export const getTrainingDefinition = <ThrowOnError extends boolean = false>(
 	options: Options<GetTrainingDefinitionData, ThrowOnError>,
-) =>
+): RequestResult<GetTrainingDefinitionResponses, GetTrainingDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetTrainingDefinitionResponses, GetTrainingDefinitionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2519,8 +2884,16 @@ export const getTrainingDefinition = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetTrainingDefinitionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/definitions/{definitionId}",
 		...options,
@@ -2528,7 +2901,7 @@ export const getTrainingDefinition = <ThrowOnError extends boolean = false>(
 
 export const updateTrainingDefinition = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateTrainingDefinitionData, ThrowOnError>,
-) =>
+): RequestResult<UpdateTrainingDefinitionResponses, UpdateTrainingDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateTrainingDefinitionResponses, UpdateTrainingDefinitionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2541,8 +2914,16 @@ export const updateTrainingDefinition = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zUpdateTrainingDefinitionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/definitions/{definitionId}",
 		...options,
@@ -2554,7 +2935,7 @@ export const updateTrainingDefinition = <ThrowOnError extends boolean = false>(
 
 export const generateTrainingDataset = <ThrowOnError extends boolean = false>(
 	options: Options<GenerateTrainingDatasetData, ThrowOnError>,
-) =>
+): RequestResult<GenerateTrainingDatasetResponses, GenerateTrainingDatasetErrors, ThrowOnError> =>
 	(options.client ?? client).post<GenerateTrainingDatasetResponses, GenerateTrainingDatasetErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2567,8 +2948,16 @@ export const generateTrainingDataset = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGenerateTrainingDatasetResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/definitions/{definitionId}/generate",
 		...options,
@@ -2580,7 +2969,7 @@ export const generateTrainingDataset = <ThrowOnError extends boolean = false>(
 
 export const listTrainingDatasets = <ThrowOnError extends boolean = false>(
 	options?: Options<ListTrainingDatasetsData, ThrowOnError>,
-) =>
+): RequestResult<ListTrainingDatasetsResponses, ListTrainingDatasetsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListTrainingDatasetsResponses, ListTrainingDatasetsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2593,8 +2982,16 @@ export const listTrainingDatasets = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListTrainingDatasetsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/datasets",
 		...options,
@@ -2602,7 +2999,7 @@ export const listTrainingDatasets = <ThrowOnError extends boolean = false>(
 
 export const deleteTrainingDataset = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteTrainingDatasetData, ThrowOnError>,
-) =>
+): RequestResult<DeleteTrainingDatasetResponses, DeleteTrainingDatasetErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteTrainingDatasetResponses, DeleteTrainingDatasetErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2614,8 +3011,16 @@ export const deleteTrainingDataset = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteTrainingDatasetResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/datasets/{datasetId}",
 		...options,
@@ -2627,7 +3032,7 @@ export const deleteTrainingDataset = <ThrowOnError extends boolean = false>(
 
 export const getTrainingDataset = <ThrowOnError extends boolean = false>(
 	options: Options<GetTrainingDatasetData, ThrowOnError>,
-) =>
+): RequestResult<GetTrainingDatasetResponses, GetTrainingDatasetErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetTrainingDatasetResponses, GetTrainingDatasetErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2640,8 +3045,16 @@ export const getTrainingDataset = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetTrainingDatasetResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/datasets/{datasetId}",
 		...options,
@@ -2649,7 +3062,7 @@ export const getTrainingDataset = <ThrowOnError extends boolean = false>(
 
 export const cancelTrainingDataset = <ThrowOnError extends boolean = false>(
 	options: Options<CancelTrainingDatasetData, ThrowOnError>,
-) =>
+): RequestResult<CancelTrainingDatasetResponses, CancelTrainingDatasetErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelTrainingDatasetResponses, CancelTrainingDatasetErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2661,8 +3074,16 @@ export const cancelTrainingDataset = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zCancelTrainingDatasetResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/datasets/{datasetId}/cancel",
 		...options,
@@ -2670,7 +3091,7 @@ export const cancelTrainingDataset = <ThrowOnError extends boolean = false>(
 
 export const listTrainingSamples = <ThrowOnError extends boolean = false>(
 	options: Options<ListTrainingSamplesData, ThrowOnError>,
-) =>
+): RequestResult<ListTrainingSamplesResponses, ListTrainingSamplesErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListTrainingSamplesResponses, ListTrainingSamplesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2683,8 +3104,16 @@ export const listTrainingSamples = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListTrainingSamplesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/datasets/{datasetId}/samples",
 		...options,
@@ -2692,7 +3121,7 @@ export const listTrainingSamples = <ThrowOnError extends boolean = false>(
 
 export const reviewTrainingSample = <ThrowOnError extends boolean = false>(
 	options: Options<ReviewTrainingSampleData, ThrowOnError>,
-) =>
+): RequestResult<ReviewTrainingSampleResponses, ReviewTrainingSampleErrors, ThrowOnError> =>
 	(options.client ?? client).patch<ReviewTrainingSampleResponses, ReviewTrainingSampleErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2705,8 +3134,16 @@ export const reviewTrainingSample = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zReviewTrainingSampleResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/datasets/{datasetId}/samples/{sampleId}",
 		...options,
@@ -2718,7 +3155,7 @@ export const reviewTrainingSample = <ThrowOnError extends boolean = false>(
 
 export const exportTrainingDataset = <ThrowOnError extends boolean = false>(
 	options: Options<ExportTrainingDatasetData, ThrowOnError>,
-) =>
+): RequestResult<ExportTrainingDatasetResponses, ExportTrainingDatasetErrors, ThrowOnError> =>
 	(options.client ?? client).get<ExportTrainingDatasetResponses, ExportTrainingDatasetErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2731,14 +3168,24 @@ export const exportTrainingDataset = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zExportTrainingDatasetResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/datasets/{datasetId}/export",
 		...options,
 	});
 
-export const listComparisons = <ThrowOnError extends boolean = false>(options?: Options<ListComparisonsData, ThrowOnError>) =>
+export const listComparisons = <ThrowOnError extends boolean = false>(
+	options?: Options<ListComparisonsData, ThrowOnError>,
+): RequestResult<ListComparisonsResponses, ListComparisonsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListComparisonsResponses, ListComparisonsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2751,14 +3198,24 @@ export const listComparisons = <ThrowOnError extends boolean = false>(options?: 
 		responseType: "json",
 		responseValidator: async (data) => await zListComparisonsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/comparisons",
 		...options,
 	});
 
-export const createComparison = <ThrowOnError extends boolean = false>(options: Options<CreateComparisonData, ThrowOnError>) =>
+export const createComparison = <ThrowOnError extends boolean = false>(
+	options: Options<CreateComparisonData, ThrowOnError>,
+): RequestResult<CreateComparisonResponses, CreateComparisonErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateComparisonResponses, CreateComparisonErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2771,8 +3228,16 @@ export const createComparison = <ThrowOnError extends boolean = false>(options: 
 		responseType: "json",
 		responseValidator: async (data) => await zCreateComparisonResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/comparisons",
 		...options,
@@ -2782,7 +3247,9 @@ export const createComparison = <ThrowOnError extends boolean = false>(options: 
 		},
 	});
 
-export const deleteComparison = <ThrowOnError extends boolean = false>(options: Options<DeleteComparisonData, ThrowOnError>) =>
+export const deleteComparison = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteComparisonData, ThrowOnError>,
+): RequestResult<DeleteComparisonResponses, DeleteComparisonErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteComparisonResponses, DeleteComparisonErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2794,8 +3261,16 @@ export const deleteComparison = <ThrowOnError extends boolean = false>(options: 
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteComparisonResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/comparisons/{comparisonId}",
 		...options,
@@ -2805,7 +3280,9 @@ export const deleteComparison = <ThrowOnError extends boolean = false>(options: 
 		},
 	});
 
-export const getComparison = <ThrowOnError extends boolean = false>(options: Options<GetComparisonData, ThrowOnError>) =>
+export const getComparison = <ThrowOnError extends boolean = false>(
+	options: Options<GetComparisonData, ThrowOnError>,
+): RequestResult<GetComparisonResponses, GetComparisonErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetComparisonResponses, GetComparisonErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2818,14 +3295,24 @@ export const getComparison = <ThrowOnError extends boolean = false>(options: Opt
 		responseType: "json",
 		responseValidator: async (data) => await zGetComparisonResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/comparisons/{comparisonId}",
 		...options,
 	});
 
-export const suggestComparison = <ThrowOnError extends boolean = false>(options: Options<SuggestComparisonData, ThrowOnError>) =>
+export const suggestComparison = <ThrowOnError extends boolean = false>(
+	options: Options<SuggestComparisonData, ThrowOnError>,
+): RequestResult<SuggestComparisonResponses, SuggestComparisonErrors, ThrowOnError> =>
 	(options.client ?? client).get<SuggestComparisonResponses, SuggestComparisonErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2838,8 +3325,16 @@ export const suggestComparison = <ThrowOnError extends boolean = false>(options:
 		responseType: "json",
 		responseValidator: async (data) => await zSuggestComparisonResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/comparisons/suggest",
 		...options,
@@ -2847,7 +3342,7 @@ export const suggestComparison = <ThrowOnError extends boolean = false>(options:
 
 export const cancelBaseArtifact = <ThrowOnError extends boolean = false>(
 	options: Options<CancelBaseArtifactData, ThrowOnError>,
-) =>
+): RequestResult<CancelBaseArtifactResponses, CancelBaseArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelBaseArtifactResponses, CancelBaseArtifactErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2860,14 +3355,24 @@ export const cancelBaseArtifact = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCancelBaseArtifactResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/base-artifacts/{artifactId}/cancel",
 		...options,
 	});
 
-export const listBaseArtifacts = <ThrowOnError extends boolean = false>(options?: Options<ListBaseArtifactsData, ThrowOnError>) =>
+export const listBaseArtifacts = <ThrowOnError extends boolean = false>(
+	options?: Options<ListBaseArtifactsData, ThrowOnError>,
+): RequestResult<ListBaseArtifactsResponses, ListBaseArtifactsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListBaseArtifactsResponses, ListBaseArtifactsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2880,8 +3385,16 @@ export const listBaseArtifacts = <ThrowOnError extends boolean = false>(options?
 		responseType: "json",
 		responseValidator: async (data) => await zListBaseArtifactsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/base-artifacts",
 		...options,
@@ -2889,7 +3402,7 @@ export const listBaseArtifacts = <ThrowOnError extends boolean = false>(options?
 
 export const createBaseArtifact = <ThrowOnError extends boolean = false>(
 	options: Options<CreateBaseArtifactData, ThrowOnError>,
-) =>
+): RequestResult<CreateBaseArtifactResponses, CreateBaseArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateBaseArtifactResponses, CreateBaseArtifactErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2902,8 +3415,16 @@ export const createBaseArtifact = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCreateBaseArtifactResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/base-artifacts",
 		...options,
@@ -2915,7 +3436,7 @@ export const createBaseArtifact = <ThrowOnError extends boolean = false>(
 
 export const deleteBaseArtifact = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteBaseArtifactData, ThrowOnError>,
-) =>
+): RequestResult<DeleteBaseArtifactResponses, DeleteBaseArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteBaseArtifactResponses, DeleteBaseArtifactErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2927,14 +3448,24 @@ export const deleteBaseArtifact = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteBaseArtifactResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/base-artifacts/{artifactId}",
 		...options,
 	});
 
-export const getBaseArtifact = <ThrowOnError extends boolean = false>(options: Options<GetBaseArtifactData, ThrowOnError>) =>
+export const getBaseArtifact = <ThrowOnError extends boolean = false>(
+	options: Options<GetBaseArtifactData, ThrowOnError>,
+): RequestResult<GetBaseArtifactResponses, GetBaseArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetBaseArtifactResponses, GetBaseArtifactErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2947,8 +3478,16 @@ export const getBaseArtifact = <ThrowOnError extends boolean = false>(options: O
 		responseType: "json",
 		responseValidator: async (data) => await zGetBaseArtifactResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/base-artifacts/{artifactId}",
 		...options,
@@ -2956,7 +3495,7 @@ export const getBaseArtifact = <ThrowOnError extends boolean = false>(options: O
 
 export const getBaseArtifactLicense = <ThrowOnError extends boolean = false>(
 	options: Options<GetBaseArtifactLicenseData, ThrowOnError>,
-) =>
+): RequestResult<GetBaseArtifactLicenseResponses, GetBaseArtifactLicenseErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetBaseArtifactLicenseResponses, GetBaseArtifactLicenseErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2969,14 +3508,24 @@ export const getBaseArtifactLicense = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetBaseArtifactLicenseResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/training/base-artifacts/{artifactId}/license",
 		...options,
 	});
 
-export const commitSkillImport = <ThrowOnError extends boolean = false>(options: Options<CommitSkillImportData, ThrowOnError>) =>
+export const commitSkillImport = <ThrowOnError extends boolean = false>(
+	options: Options<CommitSkillImportData, ThrowOnError>,
+): RequestResult<CommitSkillImportResponses, CommitSkillImportErrors, ThrowOnError> =>
 	(options.client ?? client).post<CommitSkillImportResponses, CommitSkillImportErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -2989,8 +3538,16 @@ export const commitSkillImport = <ThrowOnError extends boolean = false>(options:
 		responseType: "json",
 		responseValidator: async (data) => await zCommitSkillImportResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/skills/import",
 		...options,
@@ -3000,7 +3557,9 @@ export const commitSkillImport = <ThrowOnError extends boolean = false>(options:
 		},
 	});
 
-export const listSkills = <ThrowOnError extends boolean = false>(options?: Options<ListSkillsData, ThrowOnError>) =>
+export const listSkills = <ThrowOnError extends boolean = false>(
+	options?: Options<ListSkillsData, ThrowOnError>,
+): RequestResult<ListSkillsResponses, ListSkillsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListSkillsResponses, ListSkillsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3013,14 +3572,24 @@ export const listSkills = <ThrowOnError extends boolean = false>(options?: Optio
 		responseType: "json",
 		responseValidator: async (data) => await zListSkillsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/skills",
 		...options,
 	});
 
-export const createSkill = <ThrowOnError extends boolean = false>(options: Options<CreateSkillData, ThrowOnError>) =>
+export const createSkill = <ThrowOnError extends boolean = false>(
+	options: Options<CreateSkillData, ThrowOnError>,
+): RequestResult<CreateSkillResponses, CreateSkillErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateSkillResponses, CreateSkillErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3033,8 +3602,16 @@ export const createSkill = <ThrowOnError extends boolean = false>(options: Optio
 		responseType: "json",
 		responseValidator: async (data) => await zCreateSkillResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/skills",
 		...options,
@@ -3044,7 +3621,9 @@ export const createSkill = <ThrowOnError extends boolean = false>(options: Optio
 		},
 	});
 
-export const deleteSkill = <ThrowOnError extends boolean = false>(options: Options<DeleteSkillData, ThrowOnError>) =>
+export const deleteSkill = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteSkillData, ThrowOnError>,
+): RequestResult<DeleteSkillResponses, DeleteSkillErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteSkillResponses, DeleteSkillErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3056,14 +3635,24 @@ export const deleteSkill = <ThrowOnError extends boolean = false>(options: Optio
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteSkillResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/skills/{skillId}",
 		...options,
 	});
 
-export const getSkill = <ThrowOnError extends boolean = false>(options: Options<GetSkillData, ThrowOnError>) =>
+export const getSkill = <ThrowOnError extends boolean = false>(
+	options: Options<GetSkillData, ThrowOnError>,
+): RequestResult<GetSkillResponses, GetSkillErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetSkillResponses, GetSkillErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3076,14 +3665,24 @@ export const getSkill = <ThrowOnError extends boolean = false>(options: Options<
 		responseType: "json",
 		responseValidator: async (data) => await zGetSkillResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/skills/{skillId}",
 		...options,
 	});
 
-export const updateSkill = <ThrowOnError extends boolean = false>(options: Options<UpdateSkillData, ThrowOnError>) =>
+export const updateSkill = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateSkillData, ThrowOnError>,
+): RequestResult<UpdateSkillResponses, UpdateSkillErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateSkillResponses, UpdateSkillErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3096,8 +3695,16 @@ export const updateSkill = <ThrowOnError extends boolean = false>(options: Optio
 		responseType: "json",
 		responseValidator: async (data) => await zUpdateSkillResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/skills/{skillId}",
 		...options,
@@ -3107,7 +3714,9 @@ export const updateSkill = <ThrowOnError extends boolean = false>(options: Optio
 		},
 	});
 
-export const draftSkill = <ThrowOnError extends boolean = false>(options: Options<DraftSkillData, ThrowOnError>) =>
+export const draftSkill = <ThrowOnError extends boolean = false>(
+	options: Options<DraftSkillData, ThrowOnError>,
+): RequestResult<DraftSkillResponses, DraftSkillErrors, ThrowOnError> =>
 	(options.client ?? client).post<DraftSkillResponses, DraftSkillErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3120,8 +3729,16 @@ export const draftSkill = <ThrowOnError extends boolean = false>(options: Option
 		responseType: "json",
 		responseValidator: async (data) => await zDraftSkillResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/skills/draft",
 		...options,
@@ -3131,7 +3748,9 @@ export const draftSkill = <ThrowOnError extends boolean = false>(options: Option
 		},
 	});
 
-export const getSkillResource = <ThrowOnError extends boolean = false>(options: Options<GetSkillResourceData, ThrowOnError>) =>
+export const getSkillResource = <ThrowOnError extends boolean = false>(
+	options: Options<GetSkillResourceData, ThrowOnError>,
+): RequestResult<GetSkillResourceResponses, GetSkillResourceErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetSkillResourceResponses, GetSkillResourceErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3144,8 +3763,16 @@ export const getSkillResource = <ThrowOnError extends boolean = false>(options: 
 		responseType: "json",
 		responseValidator: async (data) => await zGetSkillResourceResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/skills/{skillId}/resources/{resourceName}",
 		...options,
@@ -3153,7 +3780,7 @@ export const getSkillResource = <ThrowOnError extends boolean = false>(options: 
 
 export const listSkillResources = <ThrowOnError extends boolean = false>(
 	options: Options<ListSkillResourcesData, ThrowOnError>,
-) =>
+): RequestResult<ListSkillResourcesResponses, ListSkillResourcesErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListSkillResourcesResponses, ListSkillResourcesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3166,8 +3793,16 @@ export const listSkillResources = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListSkillResourcesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/skills/{skillId}/resources",
 		...options,
@@ -3175,7 +3810,7 @@ export const listSkillResources = <ThrowOnError extends boolean = false>(
 
 export const previewSkillImport = <ThrowOnError extends boolean = false>(
 	options: Options<PreviewSkillImportData, ThrowOnError>,
-) =>
+): RequestResult<PreviewSkillImportResponses, PreviewSkillImportErrors, ThrowOnError> =>
 	(options.client ?? client).post<PreviewSkillImportResponses, PreviewSkillImportErrors, ThrowOnError>({
 		...formDataBodySerializer,
 		requestValidator: async (data) =>
@@ -3189,8 +3824,16 @@ export const previewSkillImport = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zPreviewSkillImportResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/skills/import/preview",
 		...options,
@@ -3202,7 +3845,7 @@ export const previewSkillImport = <ThrowOnError extends boolean = false>(
 
 export const cancelScheduledJobRun = <ThrowOnError extends boolean = false>(
 	options: Options<CancelScheduledJobRunData, ThrowOnError>,
-) =>
+): RequestResult<CancelScheduledJobRunResponses, CancelScheduledJobRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelScheduledJobRunResponses, CancelScheduledJobRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3215,14 +3858,24 @@ export const cancelScheduledJobRun = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCancelScheduledJobRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/scheduler/runs/{runId}/cancel",
 		...options,
 	});
 
-export const listScheduledJobs = <ThrowOnError extends boolean = false>(options: Options<ListScheduledJobsData, ThrowOnError>) =>
+export const listScheduledJobs = <ThrowOnError extends boolean = false>(
+	options: Options<ListScheduledJobsData, ThrowOnError>,
+): RequestResult<ListScheduledJobsResponses, ListScheduledJobsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListScheduledJobsResponses, ListScheduledJobsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3235,8 +3888,16 @@ export const listScheduledJobs = <ThrowOnError extends boolean = false>(options:
 		responseType: "json",
 		responseValidator: async (data) => await zListScheduledJobsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/scheduler/jobs",
 		...options,
@@ -3244,7 +3905,7 @@ export const listScheduledJobs = <ThrowOnError extends boolean = false>(options:
 
 export const createScheduledJob = <ThrowOnError extends boolean = false>(
 	options: Options<CreateScheduledJobData, ThrowOnError>,
-) =>
+): RequestResult<CreateScheduledJobResponses, CreateScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateScheduledJobResponses, CreateScheduledJobErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3257,8 +3918,16 @@ export const createScheduledJob = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCreateScheduledJobResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/scheduler/jobs",
 		...options,
@@ -3270,7 +3939,7 @@ export const createScheduledJob = <ThrowOnError extends boolean = false>(
 
 export const deleteScheduledJob = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteScheduledJobData, ThrowOnError>,
-) =>
+): RequestResult<DeleteScheduledJobResponses, DeleteScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteScheduledJobResponses, DeleteScheduledJobErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3282,14 +3951,24 @@ export const deleteScheduledJob = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteScheduledJobResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}",
 		...options,
 	});
 
-export const getScheduledJob = <ThrowOnError extends boolean = false>(options: Options<GetScheduledJobData, ThrowOnError>) =>
+export const getScheduledJob = <ThrowOnError extends boolean = false>(
+	options: Options<GetScheduledJobData, ThrowOnError>,
+): RequestResult<GetScheduledJobResponses, GetScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetScheduledJobResponses, GetScheduledJobErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3302,8 +3981,16 @@ export const getScheduledJob = <ThrowOnError extends boolean = false>(options: O
 		responseType: "json",
 		responseValidator: async (data) => await zGetScheduledJobResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}",
 		...options,
@@ -3311,7 +3998,7 @@ export const getScheduledJob = <ThrowOnError extends boolean = false>(options: O
 
 export const updateScheduledJob = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateScheduledJobData, ThrowOnError>,
-) =>
+): RequestResult<UpdateScheduledJobResponses, UpdateScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateScheduledJobResponses, UpdateScheduledJobErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3324,8 +4011,16 @@ export const updateScheduledJob = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zUpdateScheduledJobResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}",
 		...options,
@@ -3337,7 +4032,7 @@ export const updateScheduledJob = <ThrowOnError extends boolean = false>(
 
 export const disableScheduledJob = <ThrowOnError extends boolean = false>(
 	options: Options<DisableScheduledJobData, ThrowOnError>,
-) =>
+): RequestResult<DisableScheduledJobResponses, DisableScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).post<DisableScheduledJobResponses, DisableScheduledJobErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3350,8 +4045,16 @@ export const disableScheduledJob = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zDisableScheduledJobResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/disable",
 		...options,
@@ -3359,7 +4062,7 @@ export const disableScheduledJob = <ThrowOnError extends boolean = false>(
 
 export const enableScheduledJob = <ThrowOnError extends boolean = false>(
 	options: Options<EnableScheduledJobData, ThrowOnError>,
-) =>
+): RequestResult<EnableScheduledJobResponses, EnableScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).post<EnableScheduledJobResponses, EnableScheduledJobErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3372,8 +4075,16 @@ export const enableScheduledJob = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zEnableScheduledJobResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/enable",
 		...options,
@@ -3381,7 +4092,7 @@ export const enableScheduledJob = <ThrowOnError extends boolean = false>(
 
 export const getScheduledJobRun = <ThrowOnError extends boolean = false>(
 	options: Options<GetScheduledJobRunData, ThrowOnError>,
-) =>
+): RequestResult<GetScheduledJobRunResponses, GetScheduledJobRunErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetScheduledJobRunResponses, GetScheduledJobRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3394,8 +4105,16 @@ export const getScheduledJobRun = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetScheduledJobRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/scheduler/runs/{runId}",
 		...options,
@@ -3403,7 +4122,7 @@ export const getScheduledJobRun = <ThrowOnError extends boolean = false>(
 
 export const listScheduledJobRuns = <ThrowOnError extends boolean = false>(
 	options?: Options<ListScheduledJobRunsData, ThrowOnError>,
-) =>
+): RequestResult<ListScheduledJobRunsResponses, ListScheduledJobRunsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListScheduledJobRunsResponses, ListScheduledJobRunsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3416,8 +4135,16 @@ export const listScheduledJobRuns = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListScheduledJobRunsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/scheduler/runs",
 		...options,
@@ -3425,7 +4152,7 @@ export const listScheduledJobRuns = <ThrowOnError extends boolean = false>(
 
 export const listScheduledJobTemplates = <ThrowOnError extends boolean = false>(
 	options?: Options<ListScheduledJobTemplatesData, ThrowOnError>,
-) =>
+): RequestResult<ListScheduledJobTemplatesResponses, ListScheduledJobTemplatesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListScheduledJobTemplatesResponses, ListScheduledJobTemplatesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3438,8 +4165,16 @@ export const listScheduledJobTemplates = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListScheduledJobTemplatesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/scheduler/templates",
 		...options,
@@ -3447,7 +4182,7 @@ export const listScheduledJobTemplates = <ThrowOnError extends boolean = false>(
 
 export const triggerScheduledJob = <ThrowOnError extends boolean = false>(
 	options: Options<TriggerScheduledJobData, ThrowOnError>,
-) =>
+): RequestResult<TriggerScheduledJobResponses, TriggerScheduledJobErrors, ThrowOnError> =>
 	(options.client ?? client).post<TriggerScheduledJobResponses, TriggerScheduledJobErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3459,8 +4194,16 @@ export const triggerScheduledJob = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zTriggerScheduledJobResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/scheduler/jobs/{scheduledJobId}/trigger",
 		...options,
@@ -3468,7 +4211,7 @@ export const triggerScheduledJob = <ThrowOnError extends boolean = false>(
 
 export const revokeLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
 	options?: Options<RevokeLocalModelProxyApiKeyData, ThrowOnError>,
-) =>
+): RequestResult<RevokeLocalModelProxyApiKeyResponses, RevokeLocalModelProxyApiKeyErrors, ThrowOnError> =>
 	(options?.client ?? client).delete<RevokeLocalModelProxyApiKeyResponses, RevokeLocalModelProxyApiKeyErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3480,8 +4223,16 @@ export const revokeLocalModelProxyApiKey = <ThrowOnError extends boolean = false
 				.parseAsync(data),
 		responseValidator: async (data) => await zRevokeLocalModelProxyApiKeyResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/proxy/key",
 		...options,
@@ -3489,7 +4240,7 @@ export const revokeLocalModelProxyApiKey = <ThrowOnError extends boolean = false
 
 export const getLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
 	options?: Options<GetLocalModelProxyApiKeyData, ThrowOnError>,
-) =>
+): RequestResult<GetLocalModelProxyApiKeyResponses, GetLocalModelProxyApiKeyErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetLocalModelProxyApiKeyResponses, GetLocalModelProxyApiKeyErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3502,8 +4253,16 @@ export const getLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetLocalModelProxyApiKeyResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/proxy/key",
 		...options,
@@ -3511,7 +4270,7 @@ export const getLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
 
 export const generateLocalModelProxyApiKey = <ThrowOnError extends boolean = false>(
 	options?: Options<GenerateLocalModelProxyApiKeyData, ThrowOnError>,
-) =>
+): RequestResult<GenerateLocalModelProxyApiKeyResponses, GenerateLocalModelProxyApiKeyErrors, ThrowOnError> =>
 	(options?.client ?? client).post<GenerateLocalModelProxyApiKeyResponses, GenerateLocalModelProxyApiKeyErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3524,8 +4283,16 @@ export const generateLocalModelProxyApiKey = <ThrowOnError extends boolean = fal
 		responseType: "json",
 		responseValidator: async (data) => await zGenerateLocalModelProxyApiKeyResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/proxy/key",
 		...options,
@@ -3533,7 +4300,7 @@ export const generateLocalModelProxyApiKey = <ThrowOnError extends boolean = fal
 
 export const cancelAllPreviewRuns = <ThrowOnError extends boolean = false>(
 	options?: Options<CancelAllPreviewRunsData, ThrowOnError>,
-) =>
+): RequestResult<CancelAllPreviewRunsResponses, CancelAllPreviewRunsErrors, ThrowOnError> =>
 	(options?.client ?? client).post<CancelAllPreviewRunsResponses, CancelAllPreviewRunsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3546,14 +4313,24 @@ export const cancelAllPreviewRuns = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCancelAllPreviewRunsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/preview/runs/cancel-all",
 		...options,
 	});
 
-export const cancelPreviewRun = <ThrowOnError extends boolean = false>(options: Options<CancelPreviewRunData, ThrowOnError>) =>
+export const cancelPreviewRun = <ThrowOnError extends boolean = false>(
+	options: Options<CancelPreviewRunData, ThrowOnError>,
+): RequestResult<CancelPreviewRunResponses, CancelPreviewRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelPreviewRunResponses, CancelPreviewRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3565,8 +4342,16 @@ export const cancelPreviewRun = <ThrowOnError extends boolean = false>(options: 
 				.parseAsync(data),
 		responseValidator: async (data) => await zCancelPreviewRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/preview/runs/{runId}/cancel",
 		...options,
@@ -3574,7 +4359,7 @@ export const cancelPreviewRun = <ThrowOnError extends boolean = false>(options: 
 
 export const continuePreviewRun = <ThrowOnError extends boolean = false>(
 	options: Options<ContinuePreviewRunData, ThrowOnError>,
-) =>
+): RequestResult<ContinuePreviewRunResponses, ContinuePreviewRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<ContinuePreviewRunResponses, ContinuePreviewRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3586,8 +4371,16 @@ export const continuePreviewRun = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zContinuePreviewRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/preview/runs/{runId}/continue",
 		...options,
@@ -3595,7 +4388,7 @@ export const continuePreviewRun = <ThrowOnError extends boolean = false>(
 
 export const listPreviewWorkflows = <ThrowOnError extends boolean = false>(
 	options?: Options<ListPreviewWorkflowsData, ThrowOnError>,
-) =>
+): RequestResult<ListPreviewWorkflowsResponses, ListPreviewWorkflowsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListPreviewWorkflowsResponses, ListPreviewWorkflowsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3608,8 +4401,16 @@ export const listPreviewWorkflows = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListPreviewWorkflowsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/preview/workflows",
 		...options,
@@ -3617,7 +4418,7 @@ export const listPreviewWorkflows = <ThrowOnError extends boolean = false>(
 
 export const createPreviewWorkflow = <ThrowOnError extends boolean = false>(
 	options: Options<CreatePreviewWorkflowData, ThrowOnError>,
-) =>
+): RequestResult<CreatePreviewWorkflowResponses, CreatePreviewWorkflowErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreatePreviewWorkflowResponses, CreatePreviewWorkflowErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3630,8 +4431,16 @@ export const createPreviewWorkflow = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCreatePreviewWorkflowResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/preview/workflows",
 		...options,
@@ -3643,7 +4452,7 @@ export const createPreviewWorkflow = <ThrowOnError extends boolean = false>(
 
 export const deletePreviewWorkflow = <ThrowOnError extends boolean = false>(
 	options: Options<DeletePreviewWorkflowData, ThrowOnError>,
-) =>
+): RequestResult<DeletePreviewWorkflowResponses, DeletePreviewWorkflowErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeletePreviewWorkflowResponses, DeletePreviewWorkflowErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3655,8 +4464,16 @@ export const deletePreviewWorkflow = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeletePreviewWorkflowResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/preview/workflows/{workflowId}",
 		...options,
@@ -3664,7 +4481,7 @@ export const deletePreviewWorkflow = <ThrowOnError extends boolean = false>(
 
 export const getPreviewWorkflow = <ThrowOnError extends boolean = false>(
 	options: Options<GetPreviewWorkflowData, ThrowOnError>,
-) =>
+): RequestResult<GetPreviewWorkflowResponses, GetPreviewWorkflowErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetPreviewWorkflowResponses, GetPreviewWorkflowErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3677,8 +4494,16 @@ export const getPreviewWorkflow = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetPreviewWorkflowResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/preview/workflows/{workflowId}",
 		...options,
@@ -3686,7 +4511,7 @@ export const getPreviewWorkflow = <ThrowOnError extends boolean = false>(
 
 export const updatePreviewWorkflow = <ThrowOnError extends boolean = false>(
 	options: Options<UpdatePreviewWorkflowData, ThrowOnError>,
-) =>
+): RequestResult<UpdatePreviewWorkflowResponses, UpdatePreviewWorkflowErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdatePreviewWorkflowResponses, UpdatePreviewWorkflowErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3699,8 +4524,16 @@ export const updatePreviewWorkflow = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zUpdatePreviewWorkflowResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/preview/workflows/{workflowId}",
 		...options,
@@ -3712,7 +4545,7 @@ export const updatePreviewWorkflow = <ThrowOnError extends boolean = false>(
 
 export const executeSavedPreviewWorkflow = <ThrowOnError extends boolean = false>(
 	options: Options<ExecuteSavedPreviewWorkflowData, ThrowOnError>,
-) =>
+): RequestResult<ExecuteSavedPreviewWorkflowResponses, ExecuteSavedPreviewWorkflowErrors, ThrowOnError> =>
 	(options.client ?? client).post<ExecuteSavedPreviewWorkflowResponses, ExecuteSavedPreviewWorkflowErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3725,8 +4558,16 @@ export const executeSavedPreviewWorkflow = <ThrowOnError extends boolean = false
 		responseType: "json",
 		responseValidator: async (data) => await zExecuteSavedPreviewWorkflowResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/preview/workflows/{workflowId}/execute",
 		...options,
@@ -3734,7 +4575,7 @@ export const executeSavedPreviewWorkflow = <ThrowOnError extends boolean = false
 
 export const executeUnsavedPreviewWorkflow = <ThrowOnError extends boolean = false>(
 	options: Options<ExecuteUnsavedPreviewWorkflowData, ThrowOnError>,
-) =>
+): RequestResult<ExecuteUnsavedPreviewWorkflowResponses, ExecuteUnsavedPreviewWorkflowErrors, ThrowOnError> =>
 	(options.client ?? client).post<ExecuteUnsavedPreviewWorkflowResponses, ExecuteUnsavedPreviewWorkflowErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3747,8 +4588,16 @@ export const executeUnsavedPreviewWorkflow = <ThrowOnError extends boolean = fal
 		responseType: "json",
 		responseValidator: async (data) => await zExecuteUnsavedPreviewWorkflowResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/preview/runs/execute",
 		...options,
@@ -3758,7 +4607,9 @@ export const executeUnsavedPreviewWorkflow = <ThrowOnError extends boolean = fal
 		},
 	});
 
-export const getPreviewRun = <ThrowOnError extends boolean = false>(options: Options<GetPreviewRunData, ThrowOnError>) =>
+export const getPreviewRun = <ThrowOnError extends boolean = false>(
+	options: Options<GetPreviewRunData, ThrowOnError>,
+): RequestResult<GetPreviewRunResponses, GetPreviewRunErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetPreviewRunResponses, GetPreviewRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3771,14 +4622,24 @@ export const getPreviewRun = <ThrowOnError extends boolean = false>(options: Opt
 		responseType: "json",
 		responseValidator: async (data) => await zGetPreviewRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/preview/runs/{runId}",
 		...options,
 	});
 
-export const listPreviewRuns = <ThrowOnError extends boolean = false>(options?: Options<ListPreviewRunsData, ThrowOnError>) =>
+export const listPreviewRuns = <ThrowOnError extends boolean = false>(
+	options?: Options<ListPreviewRunsData, ThrowOnError>,
+): RequestResult<ListPreviewRunsResponses, ListPreviewRunsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListPreviewRunsResponses, ListPreviewRunsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3791,14 +4652,24 @@ export const listPreviewRuns = <ThrowOnError extends boolean = false>(options?: 
 		responseType: "json",
 		responseValidator: async (data) => await zListPreviewRunsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/preview/runs",
 		...options,
 	});
 
-export const getNodeSettings = <ThrowOnError extends boolean = false>(options?: Options<GetNodeSettingsData, ThrowOnError>) =>
+export const getNodeSettings = <ThrowOnError extends boolean = false>(
+	options?: Options<GetNodeSettingsData, ThrowOnError>,
+): RequestResult<GetNodeSettingsResponses, GetNodeSettingsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetNodeSettingsResponses, GetNodeSettingsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3811,14 +4682,24 @@ export const getNodeSettings = <ThrowOnError extends boolean = false>(options?: 
 		responseType: "json",
 		responseValidator: async (data) => await zGetNodeSettingsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/node-settings",
 		...options,
 	});
 
-export const saveNodeSettings = <ThrowOnError extends boolean = false>(options: Options<SaveNodeSettingsData, ThrowOnError>) =>
+export const saveNodeSettings = <ThrowOnError extends boolean = false>(
+	options: Options<SaveNodeSettingsData, ThrowOnError>,
+): RequestResult<SaveNodeSettingsResponses, SaveNodeSettingsErrors, ThrowOnError> =>
 	(options.client ?? client).put<SaveNodeSettingsResponses, SaveNodeSettingsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3831,8 +4712,16 @@ export const saveNodeSettings = <ThrowOnError extends boolean = false>(options: 
 		responseType: "json",
 		responseValidator: async (data) => await zSaveNodeSettingsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/node-settings",
 		...options,
@@ -3842,7 +4731,9 @@ export const saveNodeSettings = <ThrowOnError extends boolean = false>(options: 
 		},
 	});
 
-export const cancelNodeBinding = <ThrowOnError extends boolean = false>(options?: Options<CancelNodeBindingData, ThrowOnError>) =>
+export const cancelNodeBinding = <ThrowOnError extends boolean = false>(
+	options?: Options<CancelNodeBindingData, ThrowOnError>,
+): RequestResult<CancelNodeBindingResponses, CancelNodeBindingErrors, ThrowOnError> =>
 	(options?.client ?? client).post<CancelNodeBindingResponses, CancelNodeBindingErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3855,14 +4746,24 @@ export const cancelNodeBinding = <ThrowOnError extends boolean = false>(options?
 		responseType: "json",
 		responseValidator: async (data) => await zCancelNodeBindingResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/binding/cancel",
 		...options,
 	});
 
-export const pollNodeBinding = <ThrowOnError extends boolean = false>(options: Options<PollNodeBindingData, ThrowOnError>) =>
+export const pollNodeBinding = <ThrowOnError extends boolean = false>(
+	options: Options<PollNodeBindingData, ThrowOnError>,
+): RequestResult<PollNodeBindingResponses, PollNodeBindingErrors, ThrowOnError> =>
 	(options.client ?? client).post<PollNodeBindingResponses, PollNodeBindingErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3875,8 +4776,16 @@ export const pollNodeBinding = <ThrowOnError extends boolean = false>(options: O
 		responseType: "json",
 		responseValidator: async (data) => await zPollNodeBindingResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/binding/poll",
 		...options,
@@ -3886,7 +4795,9 @@ export const pollNodeBinding = <ThrowOnError extends boolean = false>(options: O
 		},
 	});
 
-export const startNodeBinding = <ThrowOnError extends boolean = false>(options?: Options<StartNodeBindingData, ThrowOnError>) =>
+export const startNodeBinding = <ThrowOnError extends boolean = false>(
+	options?: Options<StartNodeBindingData, ThrowOnError>,
+): RequestResult<StartNodeBindingResponses, StartNodeBindingErrors, ThrowOnError> =>
 	(options?.client ?? client).post<StartNodeBindingResponses, StartNodeBindingErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3899,8 +4810,16 @@ export const startNodeBinding = <ThrowOnError extends boolean = false>(options?:
 		responseType: "json",
 		responseValidator: async (data) => await zStartNodeBindingResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/binding/start",
 		...options,
@@ -3908,7 +4827,7 @@ export const startNodeBinding = <ThrowOnError extends boolean = false>(options?:
 
 export const benchmarkInferenceProfile = <ThrowOnError extends boolean = false>(
 	options: Options<BenchmarkInferenceProfileData, ThrowOnError>,
-) =>
+): RequestResult<BenchmarkInferenceProfileResponses, BenchmarkInferenceProfileErrors, ThrowOnError> =>
 	(options.client ?? client).post<BenchmarkInferenceProfileResponses, BenchmarkInferenceProfileErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3921,8 +4840,16 @@ export const benchmarkInferenceProfile = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zBenchmarkInferenceProfileResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/profiles/benchmark",
 		...options,
@@ -3934,7 +4861,7 @@ export const benchmarkInferenceProfile = <ThrowOnError extends boolean = false>(
 
 export const browseGgufRepositories = <ThrowOnError extends boolean = false>(
 	options?: Options<BrowseGgufRepositoriesData, ThrowOnError>,
-) =>
+): RequestResult<BrowseGgufRepositoriesResponses, BrowseGgufRepositoriesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<BrowseGgufRepositoriesResponses, BrowseGgufRepositoriesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3947,14 +4874,24 @@ export const browseGgufRepositories = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zBrowseGgufRepositoriesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/gguf/browse",
 		...options,
 	});
 
-export const cancelCudaBuild = <ThrowOnError extends boolean = false>(options?: Options<CancelCudaBuildData, ThrowOnError>) =>
+export const cancelCudaBuild = <ThrowOnError extends boolean = false>(
+	options?: Options<CancelCudaBuildData, ThrowOnError>,
+): RequestResult<CancelCudaBuildResponses, CancelCudaBuildErrors, ThrowOnError> =>
 	(options?.client ?? client).post<CancelCudaBuildResponses, CancelCudaBuildErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3967,8 +4904,16 @@ export const cancelCudaBuild = <ThrowOnError extends boolean = false>(options?: 
 		responseType: "json",
 		responseValidator: async (data) => await zCancelCudaBuildResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/cuda-build/cancel",
 		...options,
@@ -3976,7 +4921,7 @@ export const cancelCudaBuild = <ThrowOnError extends boolean = false>(options?: 
 
 export const cancelGgufDownload = <ThrowOnError extends boolean = false>(
 	options: Options<CancelGgufDownloadData, ThrowOnError>,
-) =>
+): RequestResult<CancelGgufDownloadResponses, CancelGgufDownloadErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelGgufDownloadResponses, CancelGgufDownloadErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -3989,8 +4934,16 @@ export const cancelGgufDownload = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCancelGgufDownloadResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/download/cancel",
 		...options,
@@ -4000,7 +4953,9 @@ export const cancelGgufDownload = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const cancelGgufImport = <ThrowOnError extends boolean = false>(options: Options<CancelGgufImportData, ThrowOnError>) =>
+export const cancelGgufImport = <ThrowOnError extends boolean = false>(
+	options: Options<CancelGgufImportData, ThrowOnError>,
+): RequestResult<CancelGgufImportResponses, CancelGgufImportErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelGgufImportResponses, CancelGgufImportErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4013,8 +4968,16 @@ export const cancelGgufImport = <ThrowOnError extends boolean = false>(options: 
 		responseType: "json",
 		responseValidator: async (data) => await zCancelGgufImportResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/gguf/imports/{operationId}/cancel",
 		...options,
@@ -4022,7 +4985,7 @@ export const cancelGgufImport = <ThrowOnError extends boolean = false>(options: 
 
 export const cancelLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 	options?: Options<CancelLlamaCppSourceBuildData, ThrowOnError>,
-) =>
+): RequestResult<CancelLlamaCppSourceBuildResponses, CancelLlamaCppSourceBuildErrors, ThrowOnError> =>
 	(options?.client ?? client).post<CancelLlamaCppSourceBuildResponses, CancelLlamaCppSourceBuildErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4035,14 +4998,24 @@ export const cancelLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCancelLlamaCppSourceBuildResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/source-build/cancel",
 		...options,
 	});
 
-export const ejectRunningModel = <ThrowOnError extends boolean = false>(options: Options<EjectRunningModelData, ThrowOnError>) =>
+export const ejectRunningModel = <ThrowOnError extends boolean = false>(
+	options: Options<EjectRunningModelData, ThrowOnError>,
+): RequestResult<EjectRunningModelResponses, EjectRunningModelErrors, ThrowOnError> =>
 	(options.client ?? client).post<EjectRunningModelResponses, EjectRunningModelErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4055,8 +5028,16 @@ export const ejectRunningModel = <ThrowOnError extends boolean = false>(options:
 		responseType: "json",
 		responseValidator: async (data) => await zEjectRunningModelResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/running/eject",
 		...options,
@@ -4068,7 +5049,7 @@ export const ejectRunningModel = <ThrowOnError extends boolean = false>(options:
 
 export const ensureLlamaCppBinary = <ThrowOnError extends boolean = false>(
 	options: Options<EnsureLlamaCppBinaryData, ThrowOnError>,
-) =>
+): RequestResult<EnsureLlamaCppBinaryResponses, EnsureLlamaCppBinaryErrors, ThrowOnError> =>
 	(options.client ?? client).post<EnsureLlamaCppBinaryResponses, EnsureLlamaCppBinaryErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4081,8 +5062,16 @@ export const ensureLlamaCppBinary = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zEnsureLlamaCppBinaryResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/version",
 		...options,
@@ -4094,7 +5083,7 @@ export const ensureLlamaCppBinary = <ThrowOnError extends boolean = false>(
 
 export const exploreInferenceProfile = <ThrowOnError extends boolean = false>(
 	options: Options<ExploreInferenceProfileData, ThrowOnError>,
-) =>
+): RequestResult<ExploreInferenceProfileResponses, ExploreInferenceProfileErrors, ThrowOnError> =>
 	(options.client ?? client).post<ExploreInferenceProfileResponses, ExploreInferenceProfileErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4107,8 +5096,16 @@ export const exploreInferenceProfile = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zExploreInferenceProfileResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/profiles/explore",
 		...options,
@@ -4120,7 +5117,7 @@ export const exploreInferenceProfile = <ThrowOnError extends boolean = false>(
 
 export const freezeInferenceProfile = <ThrowOnError extends boolean = false>(
 	options: Options<FreezeInferenceProfileData, ThrowOnError>,
-) =>
+): RequestResult<FreezeInferenceProfileResponses, FreezeInferenceProfileErrors, ThrowOnError> =>
 	(options.client ?? client).post<FreezeInferenceProfileResponses, FreezeInferenceProfileErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4133,8 +5130,16 @@ export const freezeInferenceProfile = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zFreezeInferenceProfileResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/profiles/freeze",
 		...options,
@@ -4146,7 +5151,7 @@ export const freezeInferenceProfile = <ThrowOnError extends boolean = false>(
 
 export const getCudaBuildPrerequisites = <ThrowOnError extends boolean = false>(
 	options?: Options<GetCudaBuildPrerequisitesData, ThrowOnError>,
-) =>
+): RequestResult<GetCudaBuildPrerequisitesResponses, GetCudaBuildPrerequisitesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetCudaBuildPrerequisitesResponses, GetCudaBuildPrerequisitesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4159,8 +5164,16 @@ export const getCudaBuildPrerequisites = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetCudaBuildPrerequisitesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/cuda-build/prerequisites",
 		...options,
@@ -4168,7 +5181,7 @@ export const getCudaBuildPrerequisites = <ThrowOnError extends boolean = false>(
 
 export const getCudaBuildStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetCudaBuildStatusData, ThrowOnError>,
-) =>
+): RequestResult<GetCudaBuildStatusResponses, GetCudaBuildStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetCudaBuildStatusResponses, GetCudaBuildStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4181,8 +5194,16 @@ export const getCudaBuildStatus = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetCudaBuildStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/cuda-build/status",
 		...options,
@@ -4190,7 +5211,7 @@ export const getCudaBuildStatus = <ThrowOnError extends boolean = false>(
 
 export const getGgufDownloadOperationStatus = <ThrowOnError extends boolean = false>(
 	options: Options<GetGgufDownloadOperationStatusData, ThrowOnError>,
-) =>
+): RequestResult<GetGgufDownloadOperationStatusResponses, GetGgufDownloadOperationStatusErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetGgufDownloadOperationStatusResponses, GetGgufDownloadOperationStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4203,14 +5224,24 @@ export const getGgufDownloadOperationStatus = <ThrowOnError extends boolean = fa
 		responseType: "json",
 		responseValidator: async (data) => await zGetGgufDownloadOperationStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/gguf/downloads/operations/{operationId}",
 		...options,
 	});
 
-export const getGgufDownloads = <ThrowOnError extends boolean = false>(options?: Options<GetGgufDownloadsData, ThrowOnError>) =>
+export const getGgufDownloads = <ThrowOnError extends boolean = false>(
+	options?: Options<GetGgufDownloadsData, ThrowOnError>,
+): RequestResult<GetGgufDownloadsResponses, GetGgufDownloadsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetGgufDownloadsResponses, GetGgufDownloadsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4223,8 +5254,16 @@ export const getGgufDownloads = <ThrowOnError extends boolean = false>(options?:
 		responseType: "json",
 		responseValidator: async (data) => await zGetGgufDownloadsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/gguf/downloads",
 		...options,
@@ -4232,7 +5271,7 @@ export const getGgufDownloads = <ThrowOnError extends boolean = false>(options?:
 
 export const getGgufDownloadStatus = <ThrowOnError extends boolean = false>(
 	options: Options<GetGgufDownloadStatusData, ThrowOnError>,
-) =>
+): RequestResult<GetGgufDownloadStatusResponses, GetGgufDownloadStatusErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetGgufDownloadStatusResponses, GetGgufDownloadStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4245,8 +5284,16 @@ export const getGgufDownloadStatus = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetGgufDownloadStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/gguf/downloads/{modelName}",
 		...options,
@@ -4254,7 +5301,7 @@ export const getGgufDownloadStatus = <ThrowOnError extends boolean = false>(
 
 export const getGgufImportCapability = <ThrowOnError extends boolean = false>(
 	options?: Options<GetGgufImportCapabilityData, ThrowOnError>,
-) =>
+): RequestResult<GetGgufImportCapabilityResponses, GetGgufImportCapabilityErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetGgufImportCapabilityResponses, GetGgufImportCapabilityErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4267,14 +5314,24 @@ export const getGgufImportCapability = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetGgufImportCapabilityResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/gguf/import/capability",
 		...options,
 	});
 
-export const getGgufImports = <ThrowOnError extends boolean = false>(options?: Options<GetGgufImportsData, ThrowOnError>) =>
+export const getGgufImports = <ThrowOnError extends boolean = false>(
+	options?: Options<GetGgufImportsData, ThrowOnError>,
+): RequestResult<GetGgufImportsResponses, GetGgufImportsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetGgufImportsResponses, GetGgufImportsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4287,8 +5344,16 @@ export const getGgufImports = <ThrowOnError extends boolean = false>(options?: O
 		responseType: "json",
 		responseValidator: async (data) => await zGetGgufImportsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/gguf/imports",
 		...options,
@@ -4296,7 +5361,7 @@ export const getGgufImports = <ThrowOnError extends boolean = false>(options?: O
 
 export const getGgufImportStatus = <ThrowOnError extends boolean = false>(
 	options: Options<GetGgufImportStatusData, ThrowOnError>,
-) =>
+): RequestResult<GetGgufImportStatusResponses, GetGgufImportStatusErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetGgufImportStatusResponses, GetGgufImportStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4309,8 +5374,16 @@ export const getGgufImportStatus = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetGgufImportStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/gguf/imports/{operationId}",
 		...options,
@@ -4318,7 +5391,7 @@ export const getGgufImportStatus = <ThrowOnError extends boolean = false>(
 
 export const getHardwareProfile = <ThrowOnError extends boolean = false>(
 	options: Options<GetHardwareProfileData, ThrowOnError>,
-) =>
+): RequestResult<GetHardwareProfileResponses, GetHardwareProfileErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetHardwareProfileResponses, GetHardwareProfileErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4331,14 +5404,24 @@ export const getHardwareProfile = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetHardwareProfileResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/hardware-profile",
 		...options,
 	});
 
-export const getHfTokenStatus = <ThrowOnError extends boolean = false>(options?: Options<GetHfTokenStatusData, ThrowOnError>) =>
+export const getHfTokenStatus = <ThrowOnError extends boolean = false>(
+	options?: Options<GetHfTokenStatusData, ThrowOnError>,
+): RequestResult<GetHfTokenStatusResponses, GetHfTokenStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetHfTokenStatusResponses, GetHfTokenStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4351,14 +5434,24 @@ export const getHfTokenStatus = <ThrowOnError extends boolean = false>(options?:
 		responseType: "json",
 		responseValidator: async (data) => await zGetHfTokenStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/hf-token",
 		...options,
 	});
 
-export const setHfToken = <ThrowOnError extends boolean = false>(options: Options<SetHfTokenData, ThrowOnError>) =>
+export const setHfToken = <ThrowOnError extends boolean = false>(
+	options: Options<SetHfTokenData, ThrowOnError>,
+): RequestResult<SetHfTokenResponses, SetHfTokenErrors, ThrowOnError> =>
 	(options.client ?? client).post<SetHfTokenResponses, SetHfTokenErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4371,8 +5464,16 @@ export const setHfToken = <ThrowOnError extends boolean = false>(options: Option
 		responseType: "json",
 		responseValidator: async (data) => await zSetHfTokenResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/hf-token",
 		...options,
@@ -4384,7 +5485,7 @@ export const setHfToken = <ThrowOnError extends boolean = false>(options: Option
 
 export const getLatestRecommendations = <ThrowOnError extends boolean = false>(
 	options?: Options<GetLatestRecommendationsData, ThrowOnError>,
-) =>
+): RequestResult<GetLatestRecommendationsResponses, GetLatestRecommendationsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetLatestRecommendationsResponses, GetLatestRecommendationsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4397,8 +5498,16 @@ export const getLatestRecommendations = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetLatestRecommendationsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/recommendations/latest",
 		...options,
@@ -4406,7 +5515,7 @@ export const getLatestRecommendations = <ThrowOnError extends boolean = false>(
 
 export const getLlamaCppRuntime = <ThrowOnError extends boolean = false>(
 	options?: Options<GetLlamaCppRuntimeData, ThrowOnError>,
-) =>
+): RequestResult<GetLlamaCppRuntimeResponses, GetLlamaCppRuntimeErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetLlamaCppRuntimeResponses, GetLlamaCppRuntimeErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4419,8 +5528,16 @@ export const getLlamaCppRuntime = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetLlamaCppRuntimeResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/runtime",
 		...options,
@@ -4428,7 +5545,7 @@ export const getLlamaCppRuntime = <ThrowOnError extends boolean = false>(
 
 export const getLlamaCppSourceBuildPrerequisites = <ThrowOnError extends boolean = false>(
 	options: Options<GetLlamaCppSourceBuildPrerequisitesData, ThrowOnError>,
-) =>
+): RequestResult<GetLlamaCppSourceBuildPrerequisitesResponses, GetLlamaCppSourceBuildPrerequisitesErrors, ThrowOnError> =>
 	(options.client ?? client).get<
 		GetLlamaCppSourceBuildPrerequisitesResponses,
 		GetLlamaCppSourceBuildPrerequisitesErrors,
@@ -4445,8 +5562,16 @@ export const getLlamaCppSourceBuildPrerequisites = <ThrowOnError extends boolean
 		responseType: "json",
 		responseValidator: async (data) => await zGetLlamaCppSourceBuildPrerequisitesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/source-build/prerequisites",
 		...options,
@@ -4454,7 +5579,7 @@ export const getLlamaCppSourceBuildPrerequisites = <ThrowOnError extends boolean
 
 export const getLlamaCppSourceBuildStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetLlamaCppSourceBuildStatusData, ThrowOnError>,
-) =>
+): RequestResult<GetLlamaCppSourceBuildStatusResponses, GetLlamaCppSourceBuildStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetLlamaCppSourceBuildStatusResponses, GetLlamaCppSourceBuildStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4467,8 +5592,16 @@ export const getLlamaCppSourceBuildStatus = <ThrowOnError extends boolean = fals
 		responseType: "json",
 		responseValidator: async (data) => await zGetLlamaCppSourceBuildStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/source-build/status",
 		...options,
@@ -4476,7 +5609,7 @@ export const getLlamaCppSourceBuildStatus = <ThrowOnError extends boolean = fals
 
 export const getModelCatalogInfo = <ThrowOnError extends boolean = false>(
 	options?: Options<GetModelCatalogInfoData, ThrowOnError>,
-) =>
+): RequestResult<GetModelCatalogInfoResponses, GetModelCatalogInfoErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetModelCatalogInfoResponses, GetModelCatalogInfoErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4489,8 +5622,16 @@ export const getModelCatalogInfo = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetModelCatalogInfoResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/catalog",
 		...options,
@@ -4498,7 +5639,7 @@ export const getModelCatalogInfo = <ThrowOnError extends boolean = false>(
 
 export const getRuntimeAcquisitionStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetRuntimeAcquisitionStatusData, ThrowOnError>,
-) =>
+): RequestResult<GetRuntimeAcquisitionStatusResponses, GetRuntimeAcquisitionStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetRuntimeAcquisitionStatusResponses, GetRuntimeAcquisitionStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4511,8 +5652,16 @@ export const getRuntimeAcquisitionStatus = <ThrowOnError extends boolean = false
 		responseType: "json",
 		responseValidator: async (data) => await zGetRuntimeAcquisitionStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/acquisition",
 		...options,
@@ -4520,7 +5669,7 @@ export const getRuntimeAcquisitionStatus = <ThrowOnError extends boolean = false
 
 export const inspectGgufRepository = <ThrowOnError extends boolean = false>(
 	options?: Options<InspectGgufRepositoryData, ThrowOnError>,
-) =>
+): RequestResult<InspectGgufRepositoryResponses, InspectGgufRepositoryErrors, ThrowOnError> =>
 	(options?.client ?? client).get<InspectGgufRepositoryResponses, InspectGgufRepositoryErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4533,8 +5682,16 @@ export const inspectGgufRepository = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zInspectGgufRepositoryResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/gguf/inspect",
 		...options,
@@ -4542,7 +5699,7 @@ export const inspectGgufRepository = <ThrowOnError extends boolean = false>(
 
 export const invalidateInferenceProfile = <ThrowOnError extends boolean = false>(
 	options: Options<InvalidateInferenceProfileData, ThrowOnError>,
-) =>
+): RequestResult<InvalidateInferenceProfileResponses, InvalidateInferenceProfileErrors, ThrowOnError> =>
 	(options.client ?? client).post<InvalidateInferenceProfileResponses, InvalidateInferenceProfileErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4555,8 +5712,16 @@ export const invalidateInferenceProfile = <ThrowOnError extends boolean = false>
 		responseType: "json",
 		responseValidator: async (data) => await zInvalidateInferenceProfileResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/profiles/invalidate",
 		...options,
@@ -4568,7 +5733,7 @@ export const invalidateInferenceProfile = <ThrowOnError extends boolean = false>
 
 export const listInferenceProfiles = <ThrowOnError extends boolean = false>(
 	options?: Options<ListInferenceProfilesData, ThrowOnError>,
-) =>
+): RequestResult<ListInferenceProfilesResponses, ListInferenceProfilesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListInferenceProfilesResponses, ListInferenceProfilesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4581,14 +5746,24 @@ export const listInferenceProfiles = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListInferenceProfilesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/profiles",
 		...options,
 	});
 
-export const listRunningModels = <ThrowOnError extends boolean = false>(options?: Options<ListRunningModelsData, ThrowOnError>) =>
+export const listRunningModels = <ThrowOnError extends boolean = false>(
+	options?: Options<ListRunningModelsData, ThrowOnError>,
+): RequestResult<ListRunningModelsResponses, ListRunningModelsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListRunningModelsResponses, ListRunningModelsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4601,14 +5776,24 @@ export const listRunningModels = <ThrowOnError extends boolean = false>(options?
 		responseType: "json",
 		responseValidator: async (data) => await zListRunningModelsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/running",
 		...options,
 	});
 
-export const previewGgufImport = <ThrowOnError extends boolean = false>(options: Options<PreviewGgufImportData, ThrowOnError>) =>
+export const previewGgufImport = <ThrowOnError extends boolean = false>(
+	options: Options<PreviewGgufImportData, ThrowOnError>,
+): RequestResult<PreviewGgufImportResponses, PreviewGgufImportErrors, ThrowOnError> =>
 	(options.client ?? client).post<PreviewGgufImportResponses, PreviewGgufImportErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4621,8 +5806,16 @@ export const previewGgufImport = <ThrowOnError extends boolean = false>(options:
 		responseType: "json",
 		responseValidator: async (data) => await zPreviewGgufImportResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/gguf/import/preview",
 		...options,
@@ -4634,7 +5827,7 @@ export const previewGgufImport = <ThrowOnError extends boolean = false>(options:
 
 export const refreshModelCatalog = <ThrowOnError extends boolean = false>(
 	options?: Options<RefreshModelCatalogData, ThrowOnError>,
-) =>
+): RequestResult<RefreshModelCatalogResponses, RefreshModelCatalogErrors, ThrowOnError> =>
 	(options?.client ?? client).post<RefreshModelCatalogResponses, RefreshModelCatalogErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4647,8 +5840,16 @@ export const refreshModelCatalog = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zRefreshModelCatalogResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/catalog/refresh",
 		...options,
@@ -4656,7 +5857,7 @@ export const refreshModelCatalog = <ThrowOnError extends boolean = false>(
 
 export const refreshRecommendations = <ThrowOnError extends boolean = false>(
 	options: Options<RefreshRecommendationsData, ThrowOnError>,
-) =>
+): RequestResult<RefreshRecommendationsResponses, RefreshRecommendationsErrors, ThrowOnError> =>
 	(options.client ?? client).post<RefreshRecommendationsResponses, RefreshRecommendationsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4669,8 +5870,16 @@ export const refreshRecommendations = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zRefreshRecommendationsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/recommendations/refresh",
 		...options,
@@ -4680,7 +5889,9 @@ export const refreshRecommendations = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const removeCudaBuild = <ThrowOnError extends boolean = false>(options?: Options<RemoveCudaBuildData, ThrowOnError>) =>
+export const removeCudaBuild = <ThrowOnError extends boolean = false>(
+	options?: Options<RemoveCudaBuildData, ThrowOnError>,
+): RequestResult<RemoveCudaBuildResponses, RemoveCudaBuildErrors, ThrowOnError> =>
 	(options?.client ?? client).post<RemoveCudaBuildResponses, RemoveCudaBuildErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4693,8 +5904,16 @@ export const removeCudaBuild = <ThrowOnError extends boolean = false>(options?: 
 		responseType: "json",
 		responseValidator: async (data) => await zRemoveCudaBuildResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/cuda-build/remove",
 		...options,
@@ -4702,7 +5921,7 @@ export const removeCudaBuild = <ThrowOnError extends boolean = false>(options?: 
 
 export const removeLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 	options?: Options<RemoveLlamaCppSourceBuildData, ThrowOnError>,
-) =>
+): RequestResult<RemoveLlamaCppSourceBuildResponses, RemoveLlamaCppSourceBuildErrors, ThrowOnError> =>
 	(options?.client ?? client).post<RemoveLlamaCppSourceBuildResponses, RemoveLlamaCppSourceBuildErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4715,14 +5934,24 @@ export const removeLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zRemoveLlamaCppSourceBuildResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/source-build/remove",
 		...options,
 	});
 
-export const startCudaBuild = <ThrowOnError extends boolean = false>(options?: Options<StartCudaBuildData, ThrowOnError>) =>
+export const startCudaBuild = <ThrowOnError extends boolean = false>(
+	options?: Options<StartCudaBuildData, ThrowOnError>,
+): RequestResult<StartCudaBuildResponses, StartCudaBuildErrors, ThrowOnError> =>
 	(options?.client ?? client).post<StartCudaBuildResponses, StartCudaBuildErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4735,14 +5964,24 @@ export const startCudaBuild = <ThrowOnError extends boolean = false>(options?: O
 		responseType: "json",
 		responseValidator: async (data) => await zStartCudaBuildResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/cuda-build",
 		...options,
 	});
 
-export const startGgufDownload = <ThrowOnError extends boolean = false>(options: Options<StartGgufDownloadData, ThrowOnError>) =>
+export const startGgufDownload = <ThrowOnError extends boolean = false>(
+	options: Options<StartGgufDownloadData, ThrowOnError>,
+): RequestResult<StartGgufDownloadResponses, StartGgufDownloadErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartGgufDownloadResponses, StartGgufDownloadErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4755,8 +5994,16 @@ export const startGgufDownload = <ThrowOnError extends boolean = false>(options:
 		responseType: "json",
 		responseValidator: async (data) => await zStartGgufDownloadResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/download",
 		...options,
@@ -4766,7 +6013,9 @@ export const startGgufDownload = <ThrowOnError extends boolean = false>(options:
 		},
 	});
 
-export const startGgufImport = <ThrowOnError extends boolean = false>(options: Options<StartGgufImportData, ThrowOnError>) =>
+export const startGgufImport = <ThrowOnError extends boolean = false>(
+	options: Options<StartGgufImportData, ThrowOnError>,
+): RequestResult<StartGgufImportResponses, StartGgufImportErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartGgufImportResponses, StartGgufImportErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4779,8 +6028,16 @@ export const startGgufImport = <ThrowOnError extends boolean = false>(options: O
 		responseType: "json",
 		responseValidator: async (data) => await zStartGgufImportResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/gguf/import",
 		...options,
@@ -4792,7 +6049,7 @@ export const startGgufImport = <ThrowOnError extends boolean = false>(options: O
 
 export const startLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 	options: Options<StartLlamaCppSourceBuildData, ThrowOnError>,
-) =>
+): RequestResult<StartLlamaCppSourceBuildResponses, StartLlamaCppSourceBuildErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartLlamaCppSourceBuildResponses, StartLlamaCppSourceBuildErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4805,8 +6062,16 @@ export const startLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zStartLlamaCppSourceBuildResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/source-build",
 		...options,
@@ -4818,7 +6083,7 @@ export const startLlamaCppSourceBuild = <ThrowOnError extends boolean = false>(
 
 export const updateLlamaCppRuntime = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateLlamaCppRuntimeData, ThrowOnError>,
-) =>
+): RequestResult<UpdateLlamaCppRuntimeResponses, UpdateLlamaCppRuntimeErrors, ThrowOnError> =>
 	(options.client ?? client).post<UpdateLlamaCppRuntimeResponses, UpdateLlamaCppRuntimeErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4831,8 +6096,16 @@ export const updateLlamaCppRuntime = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zUpdateLlamaCppRuntimeResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/model-fit/llamacpp/update",
 		...options,
@@ -4842,7 +6115,9 @@ export const updateLlamaCppRuntime = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listMcpServers = <ThrowOnError extends boolean = false>(options?: Options<ListMcpServersData, ThrowOnError>) =>
+export const listMcpServers = <ThrowOnError extends boolean = false>(
+	options?: Options<ListMcpServersData, ThrowOnError>,
+): RequestResult<ListMcpServersResponses, ListMcpServersErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListMcpServersResponses, ListMcpServersErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4855,14 +6130,24 @@ export const listMcpServers = <ThrowOnError extends boolean = false>(options?: O
 		responseType: "json",
 		responseValidator: async (data) => await zListMcpServersResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/mcp/servers",
 		...options,
 	});
 
-export const createMcpServer = <ThrowOnError extends boolean = false>(options: Options<CreateMcpServerData, ThrowOnError>) =>
+export const createMcpServer = <ThrowOnError extends boolean = false>(
+	options: Options<CreateMcpServerData, ThrowOnError>,
+): RequestResult<CreateMcpServerResponses, CreateMcpServerErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateMcpServerResponses, CreateMcpServerErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4875,8 +6160,16 @@ export const createMcpServer = <ThrowOnError extends boolean = false>(options: O
 		responseType: "json",
 		responseValidator: async (data) => await zCreateMcpServerResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/mcp/servers",
 		...options,
@@ -4886,7 +6179,9 @@ export const createMcpServer = <ThrowOnError extends boolean = false>(options: O
 		},
 	});
 
-export const deleteMcpServer = <ThrowOnError extends boolean = false>(options: Options<DeleteMcpServerData, ThrowOnError>) =>
+export const deleteMcpServer = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteMcpServerData, ThrowOnError>,
+): RequestResult<DeleteMcpServerResponses, DeleteMcpServerErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteMcpServerResponses, DeleteMcpServerErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4898,14 +6193,24 @@ export const deleteMcpServer = <ThrowOnError extends boolean = false>(options: O
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteMcpServerResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/mcp/servers/{mcpServerId}",
 		...options,
 	});
 
-export const getMcpServer = <ThrowOnError extends boolean = false>(options: Options<GetMcpServerData, ThrowOnError>) =>
+export const getMcpServer = <ThrowOnError extends boolean = false>(
+	options: Options<GetMcpServerData, ThrowOnError>,
+): RequestResult<GetMcpServerResponses, GetMcpServerErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetMcpServerResponses, GetMcpServerErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4918,14 +6223,24 @@ export const getMcpServer = <ThrowOnError extends boolean = false>(options: Opti
 		responseType: "json",
 		responseValidator: async (data) => await zGetMcpServerResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/mcp/servers/{mcpServerId}",
 		...options,
 	});
 
-export const updateMcpServer = <ThrowOnError extends boolean = false>(options: Options<UpdateMcpServerData, ThrowOnError>) =>
+export const updateMcpServer = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateMcpServerData, ThrowOnError>,
+): RequestResult<UpdateMcpServerResponses, UpdateMcpServerErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateMcpServerResponses, UpdateMcpServerErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4938,8 +6253,16 @@ export const updateMcpServer = <ThrowOnError extends boolean = false>(options: O
 		responseType: "json",
 		responseValidator: async (data) => await zUpdateMcpServerResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/mcp/servers/{mcpServerId}",
 		...options,
@@ -4951,7 +6274,7 @@ export const updateMcpServer = <ThrowOnError extends boolean = false>(options: O
 
 export const revokeMcpServerApiKey = <ThrowOnError extends boolean = false>(
 	options?: Options<RevokeMcpServerApiKeyData, ThrowOnError>,
-) =>
+): RequestResult<RevokeMcpServerApiKeyResponses, RevokeMcpServerApiKeyErrors, ThrowOnError> =>
 	(options?.client ?? client).delete<RevokeMcpServerApiKeyResponses, RevokeMcpServerApiKeyErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4963,8 +6286,16 @@ export const revokeMcpServerApiKey = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zRevokeMcpServerApiKeyResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/mcp/server-key",
 		...options,
@@ -4972,7 +6303,7 @@ export const revokeMcpServerApiKey = <ThrowOnError extends boolean = false>(
 
 export const getMcpServerApiKey = <ThrowOnError extends boolean = false>(
 	options?: Options<GetMcpServerApiKeyData, ThrowOnError>,
-) =>
+): RequestResult<GetMcpServerApiKeyResponses, GetMcpServerApiKeyErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetMcpServerApiKeyResponses, GetMcpServerApiKeyErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -4985,8 +6316,16 @@ export const getMcpServerApiKey = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetMcpServerApiKeyResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/mcp/server-key",
 		...options,
@@ -4994,7 +6333,7 @@ export const getMcpServerApiKey = <ThrowOnError extends boolean = false>(
 
 export const generateMcpServerApiKey = <ThrowOnError extends boolean = false>(
 	options?: Options<GenerateMcpServerApiKeyData, ThrowOnError>,
-) =>
+): RequestResult<GenerateMcpServerApiKeyResponses, GenerateMcpServerApiKeyErrors, ThrowOnError> =>
 	(options?.client ?? client).post<GenerateMcpServerApiKeyResponses, GenerateMcpServerApiKeyErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5007,8 +6346,16 @@ export const generateMcpServerApiKey = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGenerateMcpServerApiKeyResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/mcp/server-key",
 		...options,
@@ -5018,7 +6365,9 @@ export const generateMcpServerApiKey = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getMcpServerTools = <ThrowOnError extends boolean = false>(options: Options<GetMcpServerToolsData, ThrowOnError>) =>
+export const getMcpServerTools = <ThrowOnError extends boolean = false>(
+	options: Options<GetMcpServerToolsData, ThrowOnError>,
+): RequestResult<GetMcpServerToolsResponses, GetMcpServerToolsErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetMcpServerToolsResponses, GetMcpServerToolsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5031,14 +6380,24 @@ export const getMcpServerTools = <ThrowOnError extends boolean = false>(options:
 		responseType: "json",
 		responseValidator: async (data) => await zGetMcpServerToolsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/mcp/servers/{mcpServerId}/tools",
 		...options,
 	});
 
-export const getToolCatalog = <ThrowOnError extends boolean = false>(options?: Options<GetToolCatalogData, ThrowOnError>) =>
+export const getToolCatalog = <ThrowOnError extends boolean = false>(
+	options?: Options<GetToolCatalogData, ThrowOnError>,
+): RequestResult<GetToolCatalogResponses, GetToolCatalogErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetToolCatalogResponses, GetToolCatalogErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5051,8 +6410,16 @@ export const getToolCatalog = <ThrowOnError extends boolean = false>(options?: O
 		responseType: "json",
 		responseValidator: async (data) => await zGetToolCatalogResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/tool-catalog",
 		...options,
@@ -5060,7 +6427,7 @@ export const getToolCatalog = <ThrowOnError extends boolean = false>(options?: O
 
 export const setMcpServerEnabled = <ThrowOnError extends boolean = false>(
 	options: Options<SetMcpServerEnabledData, ThrowOnError>,
-) =>
+): RequestResult<SetMcpServerEnabledResponses, SetMcpServerEnabledErrors, ThrowOnError> =>
 	(options.client ?? client).patch<SetMcpServerEnabledResponses, SetMcpServerEnabledErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5073,8 +6440,16 @@ export const setMcpServerEnabled = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zSetMcpServerEnabledResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/mcp/servers/{mcpServerId}/enabled",
 		...options,
@@ -5084,7 +6459,9 @@ export const setMcpServerEnabled = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const deleteLocalModel = <ThrowOnError extends boolean = false>(options: Options<DeleteLocalModelData, ThrowOnError>) =>
+export const deleteLocalModel = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteLocalModelData, ThrowOnError>,
+): RequestResult<DeleteLocalModelResponses, DeleteLocalModelErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteLocalModelResponses, DeleteLocalModelErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5097,14 +6474,24 @@ export const deleteLocalModel = <ThrowOnError extends boolean = false>(options: 
 		responseType: "json",
 		responseValidator: async (data) => await zDeleteLocalModelResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/models/{modelName}",
 		...options,
 	});
 
-export const deleteModelKind = <ThrowOnError extends boolean = false>(options: Options<DeleteModelKindData, ThrowOnError>) =>
+export const deleteModelKind = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteModelKindData, ThrowOnError>,
+): RequestResult<DeleteModelKindResponses, DeleteModelKindErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteModelKindResponses, DeleteModelKindErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5117,14 +6504,24 @@ export const deleteModelKind = <ThrowOnError extends boolean = false>(options: O
 		responseType: "json",
 		responseValidator: async (data) => await zDeleteModelKindResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/models/{modelName}/kind",
 		...options,
 	});
 
-export const putModelKind = <ThrowOnError extends boolean = false>(options: Options<PutModelKindData, ThrowOnError>) =>
+export const putModelKind = <ThrowOnError extends boolean = false>(
+	options: Options<PutModelKindData, ThrowOnError>,
+): RequestResult<PutModelKindResponses, PutModelKindErrors, ThrowOnError> =>
 	(options.client ?? client).put<PutModelKindResponses, PutModelKindErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5137,8 +6534,16 @@ export const putModelKind = <ThrowOnError extends boolean = false>(options: Opti
 		responseType: "json",
 		responseValidator: async (data) => await zPutModelKindResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/models/{modelName}/kind",
 		...options,
@@ -5150,7 +6555,7 @@ export const putModelKind = <ThrowOnError extends boolean = false>(options: Opti
 
 export const deleteModelLaunchArguments = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteModelLaunchArgumentsData, ThrowOnError>,
-) =>
+): RequestResult<DeleteModelLaunchArgumentsResponses, DeleteModelLaunchArgumentsErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteModelLaunchArgumentsResponses, DeleteModelLaunchArgumentsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5163,8 +6568,16 @@ export const deleteModelLaunchArguments = <ThrowOnError extends boolean = false>
 		responseType: "json",
 		responseValidator: async (data) => await zDeleteModelLaunchArgumentsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/models/{modelName}/launch-args",
 		...options,
@@ -5172,7 +6585,7 @@ export const deleteModelLaunchArguments = <ThrowOnError extends boolean = false>
 
 export const getModelLaunchArguments = <ThrowOnError extends boolean = false>(
 	options: Options<GetModelLaunchArgumentsData, ThrowOnError>,
-) =>
+): RequestResult<GetModelLaunchArgumentsResponses, GetModelLaunchArgumentsErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetModelLaunchArgumentsResponses, GetModelLaunchArgumentsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5185,8 +6598,16 @@ export const getModelLaunchArguments = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetModelLaunchArgumentsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/models/{modelName}/launch-args",
 		...options,
@@ -5194,7 +6615,7 @@ export const getModelLaunchArguments = <ThrowOnError extends boolean = false>(
 
 export const putModelLaunchArguments = <ThrowOnError extends boolean = false>(
 	options: Options<PutModelLaunchArgumentsData, ThrowOnError>,
-) =>
+): RequestResult<PutModelLaunchArgumentsResponses, PutModelLaunchArgumentsErrors, ThrowOnError> =>
 	(options.client ?? client).put<PutModelLaunchArgumentsResponses, PutModelLaunchArgumentsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5207,8 +6628,16 @@ export const putModelLaunchArguments = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zPutModelLaunchArgumentsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/models/{modelName}/launch-args",
 		...options,
@@ -5220,7 +6649,7 @@ export const putModelLaunchArguments = <ThrowOnError extends boolean = false>(
 
 export const getLocalModelDetails = <ThrowOnError extends boolean = false>(
 	options: Options<GetLocalModelDetailsData, ThrowOnError>,
-) =>
+): RequestResult<GetLocalModelDetailsResponses, GetLocalModelDetailsErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetLocalModelDetailsResponses, GetLocalModelDetailsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5233,8 +6662,16 @@ export const getLocalModelDetails = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetLocalModelDetailsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/models/{modelName}/details",
 		...options,
@@ -5242,7 +6679,7 @@ export const getLocalModelDetails = <ThrowOnError extends boolean = false>(
 
 export const getRunningLocalModels = <ThrowOnError extends boolean = false>(
 	options?: Options<GetRunningLocalModelsData, ThrowOnError>,
-) =>
+): RequestResult<GetRunningLocalModelsResponses, GetRunningLocalModelsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetRunningLocalModelsResponses, GetRunningLocalModelsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5255,14 +6692,24 @@ export const getRunningLocalModels = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetRunningLocalModelsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/models/running",
 		...options,
 	});
 
-export const listLocalModels = <ThrowOnError extends boolean = false>(options?: Options<ListLocalModelsData, ThrowOnError>) =>
+export const listLocalModels = <ThrowOnError extends boolean = false>(
+	options?: Options<ListLocalModelsData, ThrowOnError>,
+): RequestResult<ListLocalModelsResponses, ListLocalModelsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListLocalModelsResponses, ListLocalModelsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5275,14 +6722,24 @@ export const listLocalModels = <ThrowOnError extends boolean = false>(options?: 
 		responseType: "json",
 		responseValidator: async (data) => await zListLocalModelsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/models",
 		...options,
 	});
 
-export const selectLocalModel = <ThrowOnError extends boolean = false>(options: Options<SelectLocalModelData, ThrowOnError>) =>
+export const selectLocalModel = <ThrowOnError extends boolean = false>(
+	options: Options<SelectLocalModelData, ThrowOnError>,
+): RequestResult<SelectLocalModelResponses, SelectLocalModelErrors, ThrowOnError> =>
 	(options.client ?? client).post<SelectLocalModelResponses, SelectLocalModelErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5295,8 +6752,16 @@ export const selectLocalModel = <ThrowOnError extends boolean = false>(options: 
 		responseType: "json",
 		responseValidator: async (data) => await zSelectLocalModelResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/models/select",
 		...options,
@@ -5306,7 +6771,9 @@ export const selectLocalModel = <ThrowOnError extends boolean = false>(options: 
 		},
 	});
 
-export const unloadLocalModel = <ThrowOnError extends boolean = false>(options: Options<UnloadLocalModelData, ThrowOnError>) =>
+export const unloadLocalModel = <ThrowOnError extends boolean = false>(
+	options: Options<UnloadLocalModelData, ThrowOnError>,
+): RequestResult<UnloadLocalModelResponses, UnloadLocalModelErrors, ThrowOnError> =>
 	(options.client ?? client).post<UnloadLocalModelResponses, UnloadLocalModelErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5319,8 +6786,16 @@ export const unloadLocalModel = <ThrowOnError extends boolean = false>(options: 
 		responseType: "json",
 		responseValidator: async (data) => await zUnloadLocalModelResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/models/{modelName}/unload",
 		...options,
@@ -5328,7 +6803,7 @@ export const unloadLocalModel = <ThrowOnError extends boolean = false>(options: 
 
 export const cancelNodeChatMessage = <ThrowOnError extends boolean = false>(
 	options: Options<CancelNodeChatMessageData, ThrowOnError>,
-) =>
+): RequestResult<CancelNodeChatMessageResponses, CancelNodeChatMessageErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelNodeChatMessageResponses, CancelNodeChatMessageErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5341,8 +6816,16 @@ export const cancelNodeChatMessage = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCancelNodeChatMessageResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/cancel",
 		...options,
@@ -5354,7 +6837,7 @@ export const cancelNodeChatMessage = <ThrowOnError extends boolean = false>(
 
 export const compactNodeChatConversation = <ThrowOnError extends boolean = false>(
 	options: Options<CompactNodeChatConversationData, ThrowOnError>,
-) =>
+): RequestResult<CompactNodeChatConversationResponses, CompactNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).post<CompactNodeChatConversationResponses, CompactNodeChatConversationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5367,8 +6850,16 @@ export const compactNodeChatConversation = <ThrowOnError extends boolean = false
 		responseType: "json",
 		responseValidator: async (data) => await zCompactNodeChatConversationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/compact",
 		...options,
@@ -5380,7 +6871,7 @@ export const compactNodeChatConversation = <ThrowOnError extends boolean = false
 
 export const listNodeChatConversations = <ThrowOnError extends boolean = false>(
 	options: Options<ListNodeChatConversationsData, ThrowOnError>,
-) =>
+): RequestResult<ListNodeChatConversationsResponses, ListNodeChatConversationsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListNodeChatConversationsResponses, ListNodeChatConversationsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5393,8 +6884,16 @@ export const listNodeChatConversations = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListNodeChatConversationsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations",
 		...options,
@@ -5402,7 +6901,7 @@ export const listNodeChatConversations = <ThrowOnError extends boolean = false>(
 
 export const createNodeChatConversation = <ThrowOnError extends boolean = false>(
 	options: Options<CreateNodeChatConversationData, ThrowOnError>,
-) =>
+): RequestResult<CreateNodeChatConversationResponses, CreateNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateNodeChatConversationResponses, CreateNodeChatConversationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5415,8 +6914,16 @@ export const createNodeChatConversation = <ThrowOnError extends boolean = false>
 		responseType: "json",
 		responseValidator: async (data) => await zCreateNodeChatConversationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations",
 		...options,
@@ -5428,7 +6935,7 @@ export const createNodeChatConversation = <ThrowOnError extends boolean = false>
 
 export const deleteConversationFile = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteConversationFileData, ThrowOnError>,
-) =>
+): RequestResult<DeleteConversationFileResponses, DeleteConversationFileErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteConversationFileResponses, DeleteConversationFileErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5440,8 +6947,16 @@ export const deleteConversationFile = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteConversationFileResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/uploads/{fileId}",
 		...options,
@@ -5449,7 +6964,7 @@ export const deleteConversationFile = <ThrowOnError extends boolean = false>(
 
 export const deleteNodeChatConversation = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteNodeChatConversationData, ThrowOnError>,
-) =>
+): RequestResult<DeleteNodeChatConversationResponses, DeleteNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteNodeChatConversationResponses, DeleteNodeChatConversationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5462,8 +6977,16 @@ export const deleteNodeChatConversation = <ThrowOnError extends boolean = false>
 		responseType: "json",
 		responseValidator: async (data) => await zDeleteNodeChatConversationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}",
 		...options,
@@ -5475,7 +6998,7 @@ export const deleteNodeChatConversation = <ThrowOnError extends boolean = false>
 
 export const getNodeChatConversation = <ThrowOnError extends boolean = false>(
 	options: Options<GetNodeChatConversationData, ThrowOnError>,
-) =>
+): RequestResult<GetNodeChatConversationResponses, GetNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetNodeChatConversationResponses, GetNodeChatConversationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5488,8 +7011,16 @@ export const getNodeChatConversation = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetNodeChatConversationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}",
 		...options,
@@ -5497,7 +7028,7 @@ export const getNodeChatConversation = <ThrowOnError extends boolean = false>(
 
 export const listConversationFiles = <ThrowOnError extends boolean = false>(
 	options: Options<ListConversationFilesData, ThrowOnError>,
-) =>
+): RequestResult<ListConversationFilesResponses, ListConversationFilesErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListConversationFilesResponses, ListConversationFilesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5510,8 +7041,16 @@ export const listConversationFiles = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListConversationFilesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/uploads",
 		...options,
@@ -5519,7 +7058,7 @@ export const listConversationFiles = <ThrowOnError extends boolean = false>(
 
 export const uploadConversationFile = <ThrowOnError extends boolean = false>(
 	options: Options<UploadConversationFileData, ThrowOnError>,
-) =>
+): RequestResult<UploadConversationFileResponses, UploadConversationFileErrors, ThrowOnError> =>
 	(options.client ?? client).post<UploadConversationFileResponses, UploadConversationFileErrors, ThrowOnError>({
 		...formDataBodySerializer,
 		requestValidator: async (data) =>
@@ -5533,8 +7072,16 @@ export const uploadConversationFile = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zUploadConversationFileResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/uploads",
 		...options,
@@ -5546,7 +7093,7 @@ export const uploadConversationFile = <ThrowOnError extends boolean = false>(
 
 export const renameNodeChatConversation = <ThrowOnError extends boolean = false>(
 	options: Options<RenameNodeChatConversationData, ThrowOnError>,
-) =>
+): RequestResult<RenameNodeChatConversationResponses, RenameNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).patch<RenameNodeChatConversationResponses, RenameNodeChatConversationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5559,8 +7106,16 @@ export const renameNodeChatConversation = <ThrowOnError extends boolean = false>
 		responseType: "json",
 		responseValidator: async (data) => await zRenameNodeChatConversationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/rename",
 		...options,
@@ -5572,7 +7127,7 @@ export const renameNodeChatConversation = <ThrowOnError extends boolean = false>
 
 export const pinNodeChatConversation = <ThrowOnError extends boolean = false>(
 	options: Options<PinNodeChatConversationData, ThrowOnError>,
-) =>
+): RequestResult<PinNodeChatConversationResponses, PinNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).patch<PinNodeChatConversationResponses, PinNodeChatConversationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5585,8 +7140,16 @@ export const pinNodeChatConversation = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zPinNodeChatConversationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/pin",
 		...options,
@@ -5598,7 +7161,7 @@ export const pinNodeChatConversation = <ThrowOnError extends boolean = false>(
 
 export const archiveNodeChatConversation = <ThrowOnError extends boolean = false>(
 	options: Options<ArchiveNodeChatConversationData, ThrowOnError>,
-) =>
+): RequestResult<ArchiveNodeChatConversationResponses, ArchiveNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).patch<ArchiveNodeChatConversationResponses, ArchiveNodeChatConversationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5611,8 +7174,16 @@ export const archiveNodeChatConversation = <ThrowOnError extends boolean = false
 		responseType: "json",
 		responseValidator: async (data) => await zArchiveNodeChatConversationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/archive",
 		...options,
@@ -5624,7 +7195,7 @@ export const archiveNodeChatConversation = <ThrowOnError extends boolean = false
 
 export const setNodeChatConversationMemoryExcluded = <ThrowOnError extends boolean = false>(
 	options: Options<SetNodeChatConversationMemoryExcludedData, ThrowOnError>,
-) =>
+): RequestResult<SetNodeChatConversationMemoryExcludedResponses, SetNodeChatConversationMemoryExcludedErrors, ThrowOnError> =>
 	(options.client ?? client).patch<
 		SetNodeChatConversationMemoryExcludedResponses,
 		SetNodeChatConversationMemoryExcludedErrors,
@@ -5641,8 +7212,16 @@ export const setNodeChatConversationMemoryExcluded = <ThrowOnError extends boole
 		responseType: "json",
 		responseValidator: async (data) => await zSetNodeChatConversationMemoryExcludedResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/memory-excluded",
 		...options,
@@ -5654,7 +7233,7 @@ export const setNodeChatConversationMemoryExcluded = <ThrowOnError extends boole
 
 export const branchNodeChatConversation = <ThrowOnError extends boolean = false>(
 	options: Options<BranchNodeChatConversationData, ThrowOnError>,
-) =>
+): RequestResult<BranchNodeChatConversationResponses, BranchNodeChatConversationErrors, ThrowOnError> =>
 	(options.client ?? client).post<BranchNodeChatConversationResponses, BranchNodeChatConversationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5667,8 +7246,16 @@ export const branchNodeChatConversation = <ThrowOnError extends boolean = false>
 		responseType: "json",
 		responseValidator: async (data) => await zBranchNodeChatConversationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/branch/{messageId}",
 		...options,
@@ -5680,7 +7267,7 @@ export const branchNodeChatConversation = <ThrowOnError extends boolean = false>
 
 export const listNodeChatMessageRevisions = <ThrowOnError extends boolean = false>(
 	options: Options<ListNodeChatMessageRevisionsData, ThrowOnError>,
-) =>
+): RequestResult<ListNodeChatMessageRevisionsResponses, ListNodeChatMessageRevisionsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListNodeChatMessageRevisionsResponses, ListNodeChatMessageRevisionsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5693,8 +7280,16 @@ export const listNodeChatMessageRevisions = <ThrowOnError extends boolean = fals
 		responseType: "json",
 		responseValidator: async (data) => await zListNodeChatMessageRevisionsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/revisions",
 		...options,
@@ -5702,7 +7297,7 @@ export const listNodeChatMessageRevisions = <ThrowOnError extends boolean = fals
 
 export const createNodeChatMessageRevision = <ThrowOnError extends boolean = false>(
 	options: Options<CreateNodeChatMessageRevisionData, ThrowOnError>,
-) =>
+): RequestResult<CreateNodeChatMessageRevisionResponses, CreateNodeChatMessageRevisionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateNodeChatMessageRevisionResponses, CreateNodeChatMessageRevisionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5715,8 +7310,16 @@ export const createNodeChatMessageRevision = <ThrowOnError extends boolean = fal
 		responseType: "json",
 		responseValidator: async (data) => await zCreateNodeChatMessageRevisionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/revisions",
 		...options,
@@ -5724,7 +7327,7 @@ export const createNodeChatMessageRevision = <ThrowOnError extends boolean = fal
 
 export const getNodeChatMessageFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<GetNodeChatMessageFeedbackData, ThrowOnError>,
-) =>
+): RequestResult<GetNodeChatMessageFeedbackResponses, GetNodeChatMessageFeedbackErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetNodeChatMessageFeedbackResponses, GetNodeChatMessageFeedbackErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5737,8 +7340,16 @@ export const getNodeChatMessageFeedback = <ThrowOnError extends boolean = false>
 		responseType: "json",
 		responseValidator: async (data) => await zGetNodeChatMessageFeedbackResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/feedback",
 		...options,
@@ -5746,7 +7357,7 @@ export const getNodeChatMessageFeedback = <ThrowOnError extends boolean = false>
 
 export const setNodeChatMessageFeedback = <ThrowOnError extends boolean = false>(
 	options: Options<SetNodeChatMessageFeedbackData, ThrowOnError>,
-) =>
+): RequestResult<SetNodeChatMessageFeedbackResponses, SetNodeChatMessageFeedbackErrors, ThrowOnError> =>
 	(options.client ?? client).put<SetNodeChatMessageFeedbackResponses, SetNodeChatMessageFeedbackErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5759,8 +7370,16 @@ export const setNodeChatMessageFeedback = <ThrowOnError extends boolean = false>
 		responseType: "json",
 		responseValidator: async (data) => await zSetNodeChatMessageFeedbackResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/messages/{messageId}/feedback",
 		...options,
@@ -5772,7 +7391,7 @@ export const setNodeChatMessageFeedback = <ThrowOnError extends boolean = false>
 
 export const setNodeChatSelectedPath = <ThrowOnError extends boolean = false>(
 	options: Options<SetNodeChatSelectedPathData, ThrowOnError>,
-) =>
+): RequestResult<SetNodeChatSelectedPathResponses, SetNodeChatSelectedPathErrors, ThrowOnError> =>
 	(options.client ?? client).put<SetNodeChatSelectedPathResponses, SetNodeChatSelectedPathErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5785,8 +7404,16 @@ export const setNodeChatSelectedPath = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zSetNodeChatSelectedPathResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/conversations/{conversationId}/selected-path",
 		...options,
@@ -5798,7 +7425,7 @@ export const setNodeChatSelectedPath = <ThrowOnError extends boolean = false>(
 
 export const resolveToolApproval = <ThrowOnError extends boolean = false>(
 	options: Options<ResolveToolApprovalData, ThrowOnError>,
-) =>
+): RequestResult<ResolveToolApprovalResponses, ResolveToolApprovalErrors, ThrowOnError> =>
 	(options.client ?? client).post<ResolveToolApprovalResponses, ResolveToolApprovalErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5811,8 +7438,16 @@ export const resolveToolApproval = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zResolveToolApprovalResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/approvals/resolve",
 		...options,
@@ -5824,7 +7459,7 @@ export const resolveToolApproval = <ThrowOnError extends boolean = false>(
 
 export const resolveUserQuestion = <ThrowOnError extends boolean = false>(
 	options: Options<ResolveUserQuestionData, ThrowOnError>,
-) =>
+): RequestResult<ResolveUserQuestionResponses, ResolveUserQuestionErrors, ThrowOnError> =>
 	(options.client ?? client).post<ResolveUserQuestionResponses, ResolveUserQuestionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5837,8 +7472,16 @@ export const resolveUserQuestion = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zResolveUserQuestionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/chat/questions/resolve",
 		...options,
@@ -5850,7 +7493,7 @@ export const resolveUserQuestion = <ThrowOnError extends boolean = false>(
 
 export const deleteKnowledgeDocument = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteKnowledgeDocumentData, ThrowOnError>,
-) =>
+): RequestResult<DeleteKnowledgeDocumentResponses, DeleteKnowledgeDocumentErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteKnowledgeDocumentResponses, DeleteKnowledgeDocumentErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5862,8 +7505,16 @@ export const deleteKnowledgeDocument = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteKnowledgeDocumentResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/knowledge-base/documents/{documentId}",
 		...options,
@@ -5871,7 +7522,7 @@ export const deleteKnowledgeDocument = <ThrowOnError extends boolean = false>(
 
 export const getKnowledgeDocument = <ThrowOnError extends boolean = false>(
 	options: Options<GetKnowledgeDocumentData, ThrowOnError>,
-) =>
+): RequestResult<GetKnowledgeDocumentResponses, GetKnowledgeDocumentErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetKnowledgeDocumentResponses, GetKnowledgeDocumentErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5884,8 +7535,16 @@ export const getKnowledgeDocument = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetKnowledgeDocumentResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/knowledge-base/documents/{documentId}",
 		...options,
@@ -5893,7 +7552,7 @@ export const getKnowledgeDocument = <ThrowOnError extends boolean = false>(
 
 export const downloadRecommendedEmbedding = <ThrowOnError extends boolean = false>(
 	options?: Options<DownloadRecommendedEmbeddingData, ThrowOnError>,
-) =>
+): RequestResult<DownloadRecommendedEmbeddingResponses, DownloadRecommendedEmbeddingErrors, ThrowOnError> =>
 	(options?.client ?? client).post<DownloadRecommendedEmbeddingResponses, DownloadRecommendedEmbeddingErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5906,8 +7565,16 @@ export const downloadRecommendedEmbedding = <ThrowOnError extends boolean = fals
 		responseType: "json",
 		responseValidator: async (data) => await zDownloadRecommendedEmbeddingResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/knowledge-base/embedding/download-recommended",
 		...options,
@@ -5915,7 +7582,7 @@ export const downloadRecommendedEmbedding = <ThrowOnError extends boolean = fals
 
 export const downloadRecommendedReranker = <ThrowOnError extends boolean = false>(
 	options?: Options<DownloadRecommendedRerankerData, ThrowOnError>,
-) =>
+): RequestResult<DownloadRecommendedRerankerResponses, DownloadRecommendedRerankerErrors, ThrowOnError> =>
 	(options?.client ?? client).post<DownloadRecommendedRerankerResponses, DownloadRecommendedRerankerErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5928,8 +7595,16 @@ export const downloadRecommendedReranker = <ThrowOnError extends boolean = false
 		responseType: "json",
 		responseValidator: async (data) => await zDownloadRecommendedRerankerResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/knowledge-base/reranker/download-recommended",
 		...options,
@@ -5937,7 +7612,7 @@ export const downloadRecommendedReranker = <ThrowOnError extends boolean = false
 
 export const importKnowledgeRepository = <ThrowOnError extends boolean = false>(
 	options: Options<ImportKnowledgeRepositoryData, ThrowOnError>,
-) =>
+): RequestResult<ImportKnowledgeRepositoryResponses, ImportKnowledgeRepositoryErrors, ThrowOnError> =>
 	(options.client ?? client).post<ImportKnowledgeRepositoryResponses, ImportKnowledgeRepositoryErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5950,8 +7625,16 @@ export const importKnowledgeRepository = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zImportKnowledgeRepositoryResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/knowledge-base/repositories/import",
 		...options,
@@ -5963,7 +7646,7 @@ export const importKnowledgeRepository = <ThrowOnError extends boolean = false>(
 
 export const listKnowledgeDocuments = <ThrowOnError extends boolean = false>(
 	options?: Options<ListKnowledgeDocumentsData, ThrowOnError>,
-) =>
+): RequestResult<ListKnowledgeDocumentsResponses, ListKnowledgeDocumentsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListKnowledgeDocumentsResponses, ListKnowledgeDocumentsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -5976,8 +7659,16 @@ export const listKnowledgeDocuments = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListKnowledgeDocumentsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/knowledge-base/documents",
 		...options,
@@ -5985,7 +7676,7 @@ export const listKnowledgeDocuments = <ThrowOnError extends boolean = false>(
 
 export const uploadKnowledgeDocument = <ThrowOnError extends boolean = false>(
 	options: Options<UploadKnowledgeDocumentData, ThrowOnError>,
-) =>
+): RequestResult<UploadKnowledgeDocumentResponses, UploadKnowledgeDocumentErrors, ThrowOnError> =>
 	(options.client ?? client).post<UploadKnowledgeDocumentResponses, UploadKnowledgeDocumentErrors, ThrowOnError>({
 		...formDataBodySerializer,
 		requestValidator: async (data) =>
@@ -5999,8 +7690,16 @@ export const uploadKnowledgeDocument = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zUploadKnowledgeDocumentResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/knowledge-base/documents",
 		...options,
@@ -6010,7 +7709,9 @@ export const uploadKnowledgeDocument = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const reindexCorpus = <ThrowOnError extends boolean = false>(options?: Options<ReindexCorpusData, ThrowOnError>) =>
+export const reindexCorpus = <ThrowOnError extends boolean = false>(
+	options?: Options<ReindexCorpusData, ThrowOnError>,
+): RequestResult<ReindexCorpusResponses, ReindexCorpusErrors, ThrowOnError> =>
 	(options?.client ?? client).post<ReindexCorpusResponses, ReindexCorpusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6023,8 +7724,16 @@ export const reindexCorpus = <ThrowOnError extends boolean = false>(options?: Op
 		responseType: "json",
 		responseValidator: async (data) => await zReindexCorpusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/knowledge-base/reindex",
 		...options,
@@ -6032,7 +7741,7 @@ export const reindexCorpus = <ThrowOnError extends boolean = false>(options?: Op
 
 export const reindexKnowledgeDocument = <ThrowOnError extends boolean = false>(
 	options: Options<ReindexKnowledgeDocumentData, ThrowOnError>,
-) =>
+): RequestResult<ReindexKnowledgeDocumentResponses, ReindexKnowledgeDocumentErrors, ThrowOnError> =>
 	(options.client ?? client).post<ReindexKnowledgeDocumentResponses, ReindexKnowledgeDocumentErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6044,14 +7753,24 @@ export const reindexKnowledgeDocument = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zReindexKnowledgeDocumentResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/knowledge-base/documents/{documentId}/reindex",
 		...options,
 	});
 
-export const searchKnowledge = <ThrowOnError extends boolean = false>(options: Options<SearchKnowledgeData, ThrowOnError>) =>
+export const searchKnowledge = <ThrowOnError extends boolean = false>(
+	options: Options<SearchKnowledgeData, ThrowOnError>,
+): RequestResult<SearchKnowledgeResponses, SearchKnowledgeErrors, ThrowOnError> =>
 	(options.client ?? client).post<SearchKnowledgeResponses, SearchKnowledgeErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6064,8 +7783,16 @@ export const searchKnowledge = <ThrowOnError extends boolean = false>(options: O
 		responseType: "json",
 		responseValidator: async (data) => await zSearchKnowledgeResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/knowledge-base/search",
 		...options,
@@ -6077,7 +7804,7 @@ export const searchKnowledge = <ThrowOnError extends boolean = false>(options: O
 
 export const getInvocationMonitor = <ThrowOnError extends boolean = false>(
 	options?: Options<GetInvocationMonitorData, ThrowOnError>,
-) =>
+): RequestResult<GetInvocationMonitorResponses, GetInvocationMonitorErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetInvocationMonitorResponses, GetInvocationMonitorErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6090,8 +7817,16 @@ export const getInvocationMonitor = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetInvocationMonitorResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/invocations",
 		...options,
@@ -6099,7 +7834,7 @@ export const getInvocationMonitor = <ThrowOnError extends boolean = false>(
 
 export const browseImageRepositories = <ThrowOnError extends boolean = false>(
 	options?: Options<BrowseImageRepositoriesData, ThrowOnError>,
-) =>
+): RequestResult<BrowseImageRepositoriesResponses, BrowseImageRepositoriesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<BrowseImageRepositoriesResponses, BrowseImageRepositoriesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6112,14 +7847,24 @@ export const browseImageRepositories = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zBrowseImageRepositoriesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/models/browse",
 		...options,
 	});
 
-export const cancelImageJob = <ThrowOnError extends boolean = false>(options: Options<CancelImageJobData, ThrowOnError>) =>
+export const cancelImageJob = <ThrowOnError extends boolean = false>(
+	options: Options<CancelImageJobData, ThrowOnError>,
+): RequestResult<CancelImageJobResponses, CancelImageJobErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelImageJobResponses, CancelImageJobErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6131,8 +7876,16 @@ export const cancelImageJob = <ThrowOnError extends boolean = false>(options: Op
 				.parseAsync(data),
 		responseValidator: async (data) => await zCancelImageJobResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/jobs/{jobId}/cancel",
 		...options,
@@ -6140,7 +7893,7 @@ export const cancelImageJob = <ThrowOnError extends boolean = false>(options: Op
 
 export const cancelImageModelDownload = <ThrowOnError extends boolean = false>(
 	options: Options<CancelImageModelDownloadData, ThrowOnError>,
-) =>
+): RequestResult<CancelImageModelDownloadResponses, CancelImageModelDownloadErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelImageModelDownloadResponses, CancelImageModelDownloadErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6153,8 +7906,16 @@ export const cancelImageModelDownload = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCancelImageModelDownloadResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/models/downloads/cancel",
 		...options,
@@ -6166,7 +7927,7 @@ export const cancelImageModelDownload = <ThrowOnError extends boolean = false>(
 
 export const cancelStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = false>(
 	options: Options<CancelStableDiffusionCppSourceBuildData, ThrowOnError>,
-) =>
+): RequestResult<CancelStableDiffusionCppSourceBuildResponses, CancelStableDiffusionCppSourceBuildErrors, ThrowOnError> =>
 	(options.client ?? client).post<
 		CancelStableDiffusionCppSourceBuildResponses,
 		CancelStableDiffusionCppSourceBuildErrors,
@@ -6183,8 +7944,16 @@ export const cancelStableDiffusionCppSourceBuild = <ThrowOnError extends boolean
 		responseType: "json",
 		responseValidator: async (data) => await zCancelStableDiffusionCppSourceBuildResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/runtime/source-build/cancel",
 		...options,
@@ -6194,7 +7963,9 @@ export const cancelStableDiffusionCppSourceBuild = <ThrowOnError extends boolean
 		},
 	});
 
-export const listImageJobs = <ThrowOnError extends boolean = false>(options?: Options<ListImageJobsData, ThrowOnError>) =>
+export const listImageJobs = <ThrowOnError extends boolean = false>(
+	options?: Options<ListImageJobsData, ThrowOnError>,
+): RequestResult<ListImageJobsResponses, ListImageJobsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListImageJobsResponses, ListImageJobsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6207,14 +7978,24 @@ export const listImageJobs = <ThrowOnError extends boolean = false>(options?: Op
 		responseType: "json",
 		responseValidator: async (data) => await zListImageJobsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/jobs",
 		...options,
 	});
 
-export const createImageJob = <ThrowOnError extends boolean = false>(options: Options<CreateImageJobData, ThrowOnError>) =>
+export const createImageJob = <ThrowOnError extends boolean = false>(
+	options: Options<CreateImageJobData, ThrowOnError>,
+): RequestResult<CreateImageJobResponses, CreateImageJobErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateImageJobResponses, CreateImageJobErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6227,8 +8008,16 @@ export const createImageJob = <ThrowOnError extends boolean = false>(options: Op
 		responseType: "json",
 		responseValidator: async (data) => await zCreateImageJobResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/jobs",
 		...options,
@@ -6238,7 +8027,9 @@ export const createImageJob = <ThrowOnError extends boolean = false>(options: Op
 		},
 	});
 
-export const deleteImageModel = <ThrowOnError extends boolean = false>(options: Options<DeleteImageModelData, ThrowOnError>) =>
+export const deleteImageModel = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteImageModelData, ThrowOnError>,
+): RequestResult<DeleteImageModelResponses, DeleteImageModelErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteImageModelResponses, DeleteImageModelErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6250,14 +8041,24 @@ export const deleteImageModel = <ThrowOnError extends boolean = false>(options: 
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteImageModelResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/models/{modelName}",
 		...options,
 	});
 
-export const ejectImageRuntime = <ThrowOnError extends boolean = false>(options: Options<EjectImageRuntimeData, ThrowOnError>) =>
+export const ejectImageRuntime = <ThrowOnError extends boolean = false>(
+	options: Options<EjectImageRuntimeData, ThrowOnError>,
+): RequestResult<EjectImageRuntimeResponses, EjectImageRuntimeErrors, ThrowOnError> =>
 	(options.client ?? client).post<EjectImageRuntimeResponses, EjectImageRuntimeErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6270,8 +8071,16 @@ export const ejectImageRuntime = <ThrowOnError extends boolean = false>(options:
 		responseType: "json",
 		responseValidator: async (data) => await zEjectImageRuntimeResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/runtime/eject",
 		...options,
@@ -6281,7 +8090,9 @@ export const ejectImageRuntime = <ThrowOnError extends boolean = false>(options:
 		},
 	});
 
-export const getImageJob = <ThrowOnError extends boolean = false>(options: Options<GetImageJobData, ThrowOnError>) =>
+export const getImageJob = <ThrowOnError extends boolean = false>(
+	options: Options<GetImageJobData, ThrowOnError>,
+): RequestResult<GetImageJobResponses, GetImageJobErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetImageJobResponses, GetImageJobErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6294,8 +8105,16 @@ export const getImageJob = <ThrowOnError extends boolean = false>(options: Optio
 		responseType: "json",
 		responseValidator: async (data) => await zGetImageJobResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/jobs/{jobId}",
 		...options,
@@ -6303,7 +8122,7 @@ export const getImageJob = <ThrowOnError extends boolean = false>(options: Optio
 
 export const getImageModelCatalog = <ThrowOnError extends boolean = false>(
 	options?: Options<GetImageModelCatalogData, ThrowOnError>,
-) =>
+): RequestResult<GetImageModelCatalogResponses, GetImageModelCatalogErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetImageModelCatalogResponses, GetImageModelCatalogErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6316,8 +8135,16 @@ export const getImageModelCatalog = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetImageModelCatalogResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/models/catalog",
 		...options,
@@ -6325,7 +8152,7 @@ export const getImageModelCatalog = <ThrowOnError extends boolean = false>(
 
 export const getImageRuntimeStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetImageRuntimeStatusData, ThrowOnError>,
-) =>
+): RequestResult<GetImageRuntimeStatusResponses, GetImageRuntimeStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetImageRuntimeStatusResponses, GetImageRuntimeStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6338,8 +8165,16 @@ export const getImageRuntimeStatus = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetImageRuntimeStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/runtime",
 		...options,
@@ -6347,7 +8182,11 @@ export const getImageRuntimeStatus = <ThrowOnError extends boolean = false>(
 
 export const getStableDiffusionCppSourceBuildPrerequisites = <ThrowOnError extends boolean = false>(
 	options: Options<GetStableDiffusionCppSourceBuildPrerequisitesData, ThrowOnError>,
-) =>
+): RequestResult<
+	GetStableDiffusionCppSourceBuildPrerequisitesResponses,
+	GetStableDiffusionCppSourceBuildPrerequisitesErrors,
+	ThrowOnError
+> =>
 	(options.client ?? client).get<
 		GetStableDiffusionCppSourceBuildPrerequisitesResponses,
 		GetStableDiffusionCppSourceBuildPrerequisitesErrors,
@@ -6364,8 +8203,16 @@ export const getStableDiffusionCppSourceBuildPrerequisites = <ThrowOnError exten
 		responseType: "json",
 		responseValidator: async (data) => await zGetStableDiffusionCppSourceBuildPrerequisitesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/runtime/source-build/prerequisites",
 		...options,
@@ -6373,7 +8220,7 @@ export const getStableDiffusionCppSourceBuildPrerequisites = <ThrowOnError exten
 
 export const getStableDiffusionCppSourceBuildStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetStableDiffusionCppSourceBuildStatusData, ThrowOnError>,
-) =>
+): RequestResult<GetStableDiffusionCppSourceBuildStatusResponses, GetStableDiffusionCppSourceBuildStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<
 		GetStableDiffusionCppSourceBuildStatusResponses,
 		GetStableDiffusionCppSourceBuildStatusErrors,
@@ -6390,8 +8237,16 @@ export const getStableDiffusionCppSourceBuildStatus = <ThrowOnError extends bool
 		responseType: "json",
 		responseValidator: async (data) => await zGetStableDiffusionCppSourceBuildStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/runtime/source-build/status",
 		...options,
@@ -6399,7 +8254,7 @@ export const getStableDiffusionCppSourceBuildStatus = <ThrowOnError extends bool
 
 export const inspectImageRepository = <ThrowOnError extends boolean = false>(
 	options?: Options<InspectImageRepositoryData, ThrowOnError>,
-) =>
+): RequestResult<InspectImageRepositoryResponses, InspectImageRepositoryErrors, ThrowOnError> =>
 	(options?.client ?? client).get<InspectImageRepositoryResponses, InspectImageRepositoryErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6412,8 +8267,16 @@ export const inspectImageRepository = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zInspectImageRepositoryResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/models/inspect",
 		...options,
@@ -6421,7 +8284,7 @@ export const inspectImageRepository = <ThrowOnError extends boolean = false>(
 
 export const listImageModelDownloads = <ThrowOnError extends boolean = false>(
 	options?: Options<ListImageModelDownloadsData, ThrowOnError>,
-) =>
+): RequestResult<ListImageModelDownloadsResponses, ListImageModelDownloadsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListImageModelDownloadsResponses, ListImageModelDownloadsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6434,8 +8297,16 @@ export const listImageModelDownloads = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListImageModelDownloadsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/models/downloads",
 		...options,
@@ -6443,7 +8314,7 @@ export const listImageModelDownloads = <ThrowOnError extends boolean = false>(
 
 export const startImageModelDownload = <ThrowOnError extends boolean = false>(
 	options: Options<StartImageModelDownloadData, ThrowOnError>,
-) =>
+): RequestResult<StartImageModelDownloadResponses, StartImageModelDownloadErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartImageModelDownloadResponses, StartImageModelDownloadErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6456,8 +8327,16 @@ export const startImageModelDownload = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zStartImageModelDownloadResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/models/downloads",
 		...options,
@@ -6467,7 +8346,9 @@ export const startImageModelDownload = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listImageModels = <ThrowOnError extends boolean = false>(options?: Options<ListImageModelsData, ThrowOnError>) =>
+export const listImageModels = <ThrowOnError extends boolean = false>(
+	options?: Options<ListImageModelsData, ThrowOnError>,
+): RequestResult<ListImageModelsResponses, ListImageModelsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListImageModelsResponses, ListImageModelsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6480,8 +8361,16 @@ export const listImageModels = <ThrowOnError extends boolean = false>(options?: 
 		responseType: "json",
 		responseValidator: async (data) => await zListImageModelsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/models",
 		...options,
@@ -6489,7 +8378,7 @@ export const listImageModels = <ThrowOnError extends boolean = false>(options?: 
 
 export const removeStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = false>(
 	options: Options<RemoveStableDiffusionCppSourceBuildData, ThrowOnError>,
-) =>
+): RequestResult<RemoveStableDiffusionCppSourceBuildResponses, RemoveStableDiffusionCppSourceBuildErrors, ThrowOnError> =>
 	(options.client ?? client).post<
 		RemoveStableDiffusionCppSourceBuildResponses,
 		RemoveStableDiffusionCppSourceBuildErrors,
@@ -6506,8 +8395,16 @@ export const removeStableDiffusionCppSourceBuild = <ThrowOnError extends boolean
 		responseType: "json",
 		responseValidator: async (data) => await zRemoveStableDiffusionCppSourceBuildResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/runtime/source-build/remove",
 		...options,
@@ -6517,7 +8414,9 @@ export const removeStableDiffusionCppSourceBuild = <ThrowOnError extends boolean
 		},
 	});
 
-export const retrieveImage = <ThrowOnError extends boolean = false>(options: Options<RetrieveImageData, ThrowOnError>) =>
+export const retrieveImage = <ThrowOnError extends boolean = false>(
+	options: Options<RetrieveImageData, ThrowOnError>,
+): RequestResult<RetrieveImageResponses, RetrieveImageErrors, ThrowOnError> =>
 	(options.client ?? client).get<RetrieveImageResponses, RetrieveImageErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6529,8 +8428,16 @@ export const retrieveImage = <ThrowOnError extends boolean = false>(options: Opt
 				.parseAsync(data),
 		responseValidator: async (data) => await zRetrieveImageResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/{imageId}",
 		...options,
@@ -6538,7 +8445,7 @@ export const retrieveImage = <ThrowOnError extends boolean = false>(options: Opt
 
 export const startStableDiffusionCppSourceBuild = <ThrowOnError extends boolean = false>(
 	options: Options<StartStableDiffusionCppSourceBuildData, ThrowOnError>,
-) =>
+): RequestResult<StartStableDiffusionCppSourceBuildResponses, StartStableDiffusionCppSourceBuildErrors, ThrowOnError> =>
 	(options.client ?? client).post<
 		StartStableDiffusionCppSourceBuildResponses,
 		StartStableDiffusionCppSourceBuildErrors,
@@ -6555,8 +8462,16 @@ export const startStableDiffusionCppSourceBuild = <ThrowOnError extends boolean 
 		responseType: "json",
 		responseValidator: async (data) => await zStartStableDiffusionCppSourceBuildResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/images/runtime/source-build",
 		...options,
@@ -6568,7 +8483,7 @@ export const startStableDiffusionCppSourceBuild = <ThrowOnError extends boolean 
 
 export const getDevelopmentCapability = <ThrowOnError extends boolean = false>(
 	options?: Options<GetDevelopmentCapabilityData, ThrowOnError>,
-) =>
+): RequestResult<GetDevelopmentCapabilityResponses, GetDevelopmentCapabilityErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetDevelopmentCapabilityResponses, GetDevelopmentCapabilityErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6581,8 +8496,16 @@ export const getDevelopmentCapability = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetDevelopmentCapabilityResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/capability",
 		...options,
@@ -6590,7 +8513,7 @@ export const getDevelopmentCapability = <ThrowOnError extends boolean = false>(
 
 export const confirmDevelopmentContainerRuntime = <ThrowOnError extends boolean = false>(
 	options: Options<ConfirmDevelopmentContainerRuntimeData, ThrowOnError>,
-) =>
+): RequestResult<ConfirmDevelopmentContainerRuntimeResponses, ConfirmDevelopmentContainerRuntimeErrors, ThrowOnError> =>
 	(options.client ?? client).post<
 		ConfirmDevelopmentContainerRuntimeResponses,
 		ConfirmDevelopmentContainerRuntimeErrors,
@@ -6607,8 +8530,16 @@ export const confirmDevelopmentContainerRuntime = <ThrowOnError extends boolean 
 		responseType: "json",
 		responseValidator: async (data) => await zConfirmDevelopmentContainerRuntimeResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/container-runtime/confirmation",
 		...options,
@@ -6620,7 +8551,7 @@ export const confirmDevelopmentContainerRuntime = <ThrowOnError extends boolean 
 
 export const listDevelopmentRepositories = <ThrowOnError extends boolean = false>(
 	options?: Options<ListDevelopmentRepositoriesData, ThrowOnError>,
-) =>
+): RequestResult<ListDevelopmentRepositoriesResponses, ListDevelopmentRepositoriesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListDevelopmentRepositoriesResponses, ListDevelopmentRepositoriesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6633,8 +8564,16 @@ export const listDevelopmentRepositories = <ThrowOnError extends boolean = false
 		responseType: "json",
 		responseValidator: async (data) => await zListDevelopmentRepositoriesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/repositories",
 		...options,
@@ -6642,7 +8581,7 @@ export const listDevelopmentRepositories = <ThrowOnError extends boolean = false
 
 export const registerDevelopmentRepository = <ThrowOnError extends boolean = false>(
 	options: Options<RegisterDevelopmentRepositoryData, ThrowOnError>,
-) =>
+): RequestResult<RegisterDevelopmentRepositoryResponses, RegisterDevelopmentRepositoryErrors, ThrowOnError> =>
 	(options.client ?? client).post<RegisterDevelopmentRepositoryResponses, RegisterDevelopmentRepositoryErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6655,8 +8594,16 @@ export const registerDevelopmentRepository = <ThrowOnError extends boolean = fal
 		responseType: "json",
 		responseValidator: async (data) => await zRegisterDevelopmentRepositoryResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/repositories",
 		...options,
@@ -6668,7 +8615,7 @@ export const registerDevelopmentRepository = <ThrowOnError extends boolean = fal
 
 export const listDevelopmentTemplates = <ThrowOnError extends boolean = false>(
 	options?: Options<ListDevelopmentTemplatesData, ThrowOnError>,
-) =>
+): RequestResult<ListDevelopmentTemplatesResponses, ListDevelopmentTemplatesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListDevelopmentTemplatesResponses, ListDevelopmentTemplatesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6681,8 +8628,16 @@ export const listDevelopmentTemplates = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListDevelopmentTemplatesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/templates",
 		...options,
@@ -6690,7 +8645,7 @@ export const listDevelopmentTemplates = <ThrowOnError extends boolean = false>(
 
 export const registerDevelopmentTemplate = <ThrowOnError extends boolean = false>(
 	options: Options<RegisterDevelopmentTemplateData, ThrowOnError>,
-) =>
+): RequestResult<RegisterDevelopmentTemplateResponses, RegisterDevelopmentTemplateErrors, ThrowOnError> =>
 	(options.client ?? client).post<RegisterDevelopmentTemplateResponses, RegisterDevelopmentTemplateErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6703,8 +8658,16 @@ export const registerDevelopmentTemplate = <ThrowOnError extends boolean = false
 		responseType: "json",
 		responseValidator: async (data) => await zRegisterDevelopmentTemplateResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/templates",
 		...options,
@@ -6716,7 +8679,7 @@ export const registerDevelopmentTemplate = <ThrowOnError extends boolean = false
 
 export const removeDevelopmentTemplate = <ThrowOnError extends boolean = false>(
 	options: Options<RemoveDevelopmentTemplateData, ThrowOnError>,
-) =>
+): RequestResult<RemoveDevelopmentTemplateResponses, RemoveDevelopmentTemplateErrors, ThrowOnError> =>
 	(options.client ?? client).delete<RemoveDevelopmentTemplateResponses, RemoveDevelopmentTemplateErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6728,8 +8691,16 @@ export const removeDevelopmentTemplate = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zRemoveDevelopmentTemplateResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/templates/{templateId}",
 		...options,
@@ -6737,7 +8708,7 @@ export const removeDevelopmentTemplate = <ThrowOnError extends boolean = false>(
 
 export const createDevelopmentRepositoryFromTemplate = <ThrowOnError extends boolean = false>(
 	options: Options<CreateDevelopmentRepositoryFromTemplateData, ThrowOnError>,
-) =>
+): RequestResult<CreateDevelopmentRepositoryFromTemplateResponses, CreateDevelopmentRepositoryFromTemplateErrors, ThrowOnError> =>
 	(options.client ?? client).post<
 		CreateDevelopmentRepositoryFromTemplateResponses,
 		CreateDevelopmentRepositoryFromTemplateErrors,
@@ -6754,8 +8725,16 @@ export const createDevelopmentRepositoryFromTemplate = <ThrowOnError extends boo
 		responseType: "json",
 		responseValidator: async (data) => await zCreateDevelopmentRepositoryFromTemplateResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/repositories/from-template",
 		...options,
@@ -6767,7 +8746,7 @@ export const createDevelopmentRepositoryFromTemplate = <ThrowOnError extends boo
 
 export const detectDevelopmentRepositoryProfile = <ThrowOnError extends boolean = false>(
 	options: Options<DetectDevelopmentRepositoryProfileData, ThrowOnError>,
-) =>
+): RequestResult<DetectDevelopmentRepositoryProfileResponses, DetectDevelopmentRepositoryProfileErrors, ThrowOnError> =>
 	(options.client ?? client).get<
 		DetectDevelopmentRepositoryProfileResponses,
 		DetectDevelopmentRepositoryProfileErrors,
@@ -6784,8 +8763,16 @@ export const detectDevelopmentRepositoryProfile = <ThrowOnError extends boolean 
 		responseType: "json",
 		responseValidator: async (data) => await zDetectDevelopmentRepositoryProfileResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/repositories/{selectedFolderId}/profile-detection",
 		...options,
@@ -6793,7 +8780,7 @@ export const detectDevelopmentRepositoryProfile = <ThrowOnError extends boolean 
 
 export const listDevelopmentProjects = <ThrowOnError extends boolean = false>(
 	options?: Options<ListDevelopmentProjectsData, ThrowOnError>,
-) =>
+): RequestResult<ListDevelopmentProjectsResponses, ListDevelopmentProjectsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListDevelopmentProjectsResponses, ListDevelopmentProjectsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6806,8 +8793,16 @@ export const listDevelopmentProjects = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListDevelopmentProjectsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/projects",
 		...options,
@@ -6815,7 +8810,7 @@ export const listDevelopmentProjects = <ThrowOnError extends boolean = false>(
 
 export const createDevelopmentProject = <ThrowOnError extends boolean = false>(
 	options: Options<CreateDevelopmentProjectData, ThrowOnError>,
-) =>
+): RequestResult<CreateDevelopmentProjectResponses, CreateDevelopmentProjectErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateDevelopmentProjectResponses, CreateDevelopmentProjectErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6828,8 +8823,16 @@ export const createDevelopmentProject = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCreateDevelopmentProjectResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/projects",
 		...options,
@@ -6841,7 +8844,7 @@ export const createDevelopmentProject = <ThrowOnError extends boolean = false>(
 
 export const getDevelopmentProject = <ThrowOnError extends boolean = false>(
 	options: Options<GetDevelopmentProjectData, ThrowOnError>,
-) =>
+): RequestResult<GetDevelopmentProjectResponses, GetDevelopmentProjectErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetDevelopmentProjectResponses, GetDevelopmentProjectErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6854,8 +8857,16 @@ export const getDevelopmentProject = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetDevelopmentProjectResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/projects/{projectId}",
 		...options,
@@ -6863,7 +8874,7 @@ export const getDevelopmentProject = <ThrowOnError extends boolean = false>(
 
 export const getDevelopmentTask = <ThrowOnError extends boolean = false>(
 	options: Options<GetDevelopmentTaskData, ThrowOnError>,
-) =>
+): RequestResult<GetDevelopmentTaskResponses, GetDevelopmentTaskErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetDevelopmentTaskResponses, GetDevelopmentTaskErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6876,8 +8887,16 @@ export const getDevelopmentTask = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetDevelopmentTaskResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}",
 		...options,
@@ -6885,7 +8904,7 @@ export const getDevelopmentTask = <ThrowOnError extends boolean = false>(
 
 export const startDevelopmentNextAction = <ThrowOnError extends boolean = false>(
 	options: Options<StartDevelopmentNextActionData, ThrowOnError>,
-) =>
+): RequestResult<StartDevelopmentNextActionResponses, StartDevelopmentNextActionErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartDevelopmentNextActionResponses, StartDevelopmentNextActionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6898,8 +8917,16 @@ export const startDevelopmentNextAction = <ThrowOnError extends boolean = false>
 		responseType: "json",
 		responseValidator: async (data) => await zStartDevelopmentNextActionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/next-action",
 		...options,
@@ -6911,7 +8938,7 @@ export const startDevelopmentNextAction = <ThrowOnError extends boolean = false>
 
 export const cancelDevelopmentAttempt = <ThrowOnError extends boolean = false>(
 	options: Options<CancelDevelopmentAttemptData, ThrowOnError>,
-) =>
+): RequestResult<CancelDevelopmentAttemptResponses, CancelDevelopmentAttemptErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelDevelopmentAttemptResponses, CancelDevelopmentAttemptErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6923,8 +8950,16 @@ export const cancelDevelopmentAttempt = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zCancelDevelopmentAttemptResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/attempts/{attemptId}/cancel",
 		...options,
@@ -6932,7 +8967,7 @@ export const cancelDevelopmentAttempt = <ThrowOnError extends boolean = false>(
 
 export const listDevelopmentEvents = <ThrowOnError extends boolean = false>(
 	options: Options<ListDevelopmentEventsData, ThrowOnError>,
-) =>
+): RequestResult<ListDevelopmentEventsResponses, ListDevelopmentEventsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListDevelopmentEventsResponses, ListDevelopmentEventsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6945,8 +8980,16 @@ export const listDevelopmentEvents = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListDevelopmentEventsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/projects/{projectId}/events",
 		...options,
@@ -6954,7 +8997,7 @@ export const listDevelopmentEvents = <ThrowOnError extends boolean = false>(
 
 export const listDevelopmentArtifacts = <ThrowOnError extends boolean = false>(
 	options: Options<ListDevelopmentArtifactsData, ThrowOnError>,
-) =>
+): RequestResult<ListDevelopmentArtifactsResponses, ListDevelopmentArtifactsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListDevelopmentArtifactsResponses, ListDevelopmentArtifactsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6967,8 +9010,16 @@ export const listDevelopmentArtifacts = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListDevelopmentArtifactsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/artifacts",
 		...options,
@@ -6976,7 +9027,7 @@ export const listDevelopmentArtifacts = <ThrowOnError extends boolean = false>(
 
 export const getDevelopmentArtifact = <ThrowOnError extends boolean = false>(
 	options: Options<GetDevelopmentArtifactData, ThrowOnError>,
-) =>
+): RequestResult<GetDevelopmentArtifactResponses, GetDevelopmentArtifactErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetDevelopmentArtifactResponses, GetDevelopmentArtifactErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -6989,8 +9040,16 @@ export const getDevelopmentArtifact = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetDevelopmentArtifactResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/artifacts/{artifactId}",
 		...options,
@@ -6998,7 +9057,7 @@ export const getDevelopmentArtifact = <ThrowOnError extends boolean = false>(
 
 export const previewDevelopmentPatch = <ThrowOnError extends boolean = false>(
 	options: Options<PreviewDevelopmentPatchData, ThrowOnError>,
-) =>
+): RequestResult<PreviewDevelopmentPatchResponses, PreviewDevelopmentPatchErrors, ThrowOnError> =>
 	(options.client ?? client).post<PreviewDevelopmentPatchResponses, PreviewDevelopmentPatchErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7011,8 +9070,16 @@ export const previewDevelopmentPatch = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zPreviewDevelopmentPatchResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/preview",
 		...options,
@@ -7024,7 +9091,7 @@ export const previewDevelopmentPatch = <ThrowOnError extends boolean = false>(
 
 export const applyDevelopmentPatch = <ThrowOnError extends boolean = false>(
 	options: Options<ApplyDevelopmentPatchData, ThrowOnError>,
-) =>
+): RequestResult<ApplyDevelopmentPatchResponses, ApplyDevelopmentPatchErrors, ThrowOnError> =>
 	(options.client ?? client).post<ApplyDevelopmentPatchResponses, ApplyDevelopmentPatchErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7037,8 +9104,16 @@ export const applyDevelopmentPatch = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zApplyDevelopmentPatchResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/projects/{projectId}/tasks/{taskId}/apply",
 		...options,
@@ -7050,7 +9125,7 @@ export const applyDevelopmentPatch = <ThrowOnError extends boolean = false>(
 
 export const reconnectDevelopmentRepository = <ThrowOnError extends boolean = false>(
 	options: Options<ReconnectDevelopmentRepositoryData, ThrowOnError>,
-) =>
+): RequestResult<ReconnectDevelopmentRepositoryResponses, ReconnectDevelopmentRepositoryErrors, ThrowOnError> =>
 	(options.client ?? client).post<ReconnectDevelopmentRepositoryResponses, ReconnectDevelopmentRepositoryErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7063,8 +9138,16 @@ export const reconnectDevelopmentRepository = <ThrowOnError extends boolean = fa
 		responseType: "json",
 		responseValidator: async (data) => await zReconnectDevelopmentRepositoryResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/development/projects/{projectId}/repository-connection",
 		...options,
@@ -7074,7 +9157,9 @@ export const reconnectDevelopmentRepository = <ThrowOnError extends boolean = fa
 		},
 	});
 
-export const listCustomTools = <ThrowOnError extends boolean = false>(options?: Options<ListCustomToolsData, ThrowOnError>) =>
+export const listCustomTools = <ThrowOnError extends boolean = false>(
+	options?: Options<ListCustomToolsData, ThrowOnError>,
+): RequestResult<ListCustomToolsResponses, ListCustomToolsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListCustomToolsResponses, ListCustomToolsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7087,14 +9172,24 @@ export const listCustomTools = <ThrowOnError extends boolean = false>(options?: 
 		responseType: "json",
 		responseValidator: async (data) => await zListCustomToolsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/custom-tools",
 		...options,
 	});
 
-export const createCustomTool = <ThrowOnError extends boolean = false>(options: Options<CreateCustomToolData, ThrowOnError>) =>
+export const createCustomTool = <ThrowOnError extends boolean = false>(
+	options: Options<CreateCustomToolData, ThrowOnError>,
+): RequestResult<CreateCustomToolResponses, CreateCustomToolErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateCustomToolResponses, CreateCustomToolErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7107,8 +9202,16 @@ export const createCustomTool = <ThrowOnError extends boolean = false>(options: 
 		responseType: "json",
 		responseValidator: async (data) => await zCreateCustomToolResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/custom-tools",
 		...options,
@@ -7118,7 +9221,9 @@ export const createCustomTool = <ThrowOnError extends boolean = false>(options: 
 		},
 	});
 
-export const deleteCustomTool = <ThrowOnError extends boolean = false>(options: Options<DeleteCustomToolData, ThrowOnError>) =>
+export const deleteCustomTool = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteCustomToolData, ThrowOnError>,
+): RequestResult<DeleteCustomToolResponses, DeleteCustomToolErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteCustomToolResponses, DeleteCustomToolErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7130,14 +9235,24 @@ export const deleteCustomTool = <ThrowOnError extends boolean = false>(options: 
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteCustomToolResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/custom-tools/{customToolId}",
 		...options,
 	});
 
-export const getCustomTool = <ThrowOnError extends boolean = false>(options: Options<GetCustomToolData, ThrowOnError>) =>
+export const getCustomTool = <ThrowOnError extends boolean = false>(
+	options: Options<GetCustomToolData, ThrowOnError>,
+): RequestResult<GetCustomToolResponses, GetCustomToolErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetCustomToolResponses, GetCustomToolErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7150,14 +9265,24 @@ export const getCustomTool = <ThrowOnError extends boolean = false>(options: Opt
 		responseType: "json",
 		responseValidator: async (data) => await zGetCustomToolResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/custom-tools/{customToolId}",
 		...options,
 	});
 
-export const updateCustomTool = <ThrowOnError extends boolean = false>(options: Options<UpdateCustomToolData, ThrowOnError>) =>
+export const updateCustomTool = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateCustomToolData, ThrowOnError>,
+): RequestResult<UpdateCustomToolResponses, UpdateCustomToolErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateCustomToolResponses, UpdateCustomToolErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7170,8 +9295,16 @@ export const updateCustomTool = <ThrowOnError extends boolean = false>(options: 
 		responseType: "json",
 		responseValidator: async (data) => await zUpdateCustomToolResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/custom-tools/{customToolId}",
 		...options,
@@ -7183,7 +9316,7 @@ export const updateCustomTool = <ThrowOnError extends boolean = false>(options: 
 
 export const validateExecutable = <ThrowOnError extends boolean = false>(
 	options: Options<ValidateExecutableData, ThrowOnError>,
-) =>
+): RequestResult<ValidateExecutableResponses, ValidateExecutableErrors, ThrowOnError> =>
 	(options.client ?? client).post<ValidateExecutableResponses, ValidateExecutableErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7196,8 +9329,16 @@ export const validateExecutable = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zValidateExecutableResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/custom-tools/executable-probe",
 		...options,
@@ -7207,7 +9348,9 @@ export const validateExecutable = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const connectConnection = <ThrowOnError extends boolean = false>(options?: Options<ConnectConnectionData, ThrowOnError>) =>
+export const connectConnection = <ThrowOnError extends boolean = false>(
+	options?: Options<ConnectConnectionData, ThrowOnError>,
+): RequestResult<ConnectConnectionResponses, ConnectConnectionErrors, ThrowOnError> =>
 	(options?.client ?? client).post<ConnectConnectionResponses, ConnectConnectionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7220,8 +9363,16 @@ export const connectConnection = <ThrowOnError extends boolean = false>(options?
 		responseType: "json",
 		responseValidator: async (data) => await zConnectConnectionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/connection/connect",
 		...options,
@@ -7229,7 +9380,7 @@ export const connectConnection = <ThrowOnError extends boolean = false>(options?
 
 export const disableAutoConnect = <ThrowOnError extends boolean = false>(
 	options?: Options<DisableAutoConnectData, ThrowOnError>,
-) =>
+): RequestResult<DisableAutoConnectResponses, DisableAutoConnectErrors, ThrowOnError> =>
 	(options?.client ?? client).post<DisableAutoConnectResponses, DisableAutoConnectErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7242,8 +9393,16 @@ export const disableAutoConnect = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zDisableAutoConnectResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/connection/auto-connect/disable",
 		...options,
@@ -7251,7 +9410,7 @@ export const disableAutoConnect = <ThrowOnError extends boolean = false>(
 
 export const disconnectConnection = <ThrowOnError extends boolean = false>(
 	options?: Options<DisconnectConnectionData, ThrowOnError>,
-) =>
+): RequestResult<DisconnectConnectionResponses, DisconnectConnectionErrors, ThrowOnError> =>
 	(options?.client ?? client).post<DisconnectConnectionResponses, DisconnectConnectionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7264,14 +9423,24 @@ export const disconnectConnection = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zDisconnectConnectionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/connection/disconnect",
 		...options,
 	});
 
-export const enableAutoConnect = <ThrowOnError extends boolean = false>(options?: Options<EnableAutoConnectData, ThrowOnError>) =>
+export const enableAutoConnect = <ThrowOnError extends boolean = false>(
+	options?: Options<EnableAutoConnectData, ThrowOnError>,
+): RequestResult<EnableAutoConnectResponses, EnableAutoConnectErrors, ThrowOnError> =>
 	(options?.client ?? client).post<EnableAutoConnectResponses, EnableAutoConnectErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7284,8 +9453,16 @@ export const enableAutoConnect = <ThrowOnError extends boolean = false>(options?
 		responseType: "json",
 		responseValidator: async (data) => await zEnableAutoConnectResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/connection/auto-connect/enable",
 		...options,
@@ -7293,7 +9470,7 @@ export const enableAutoConnect = <ThrowOnError extends boolean = false>(options?
 
 export const getConnectionStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetConnectionStatusData, ThrowOnError>,
-) =>
+): RequestResult<GetConnectionStatusResponses, GetConnectionStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetConnectionStatusResponses, GetConnectionStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7306,8 +9483,16 @@ export const getConnectionStatus = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetConnectionStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/connection",
 		...options,
@@ -7315,7 +9500,7 @@ export const getConnectionStatus = <ThrowOnError extends boolean = false>(
 
 export const clearCloudSettings = <ThrowOnError extends boolean = false>(
 	options?: Options<ClearCloudSettingsData, ThrowOnError>,
-) =>
+): RequestResult<ClearCloudSettingsResponses, ClearCloudSettingsErrors, ThrowOnError> =>
 	(options?.client ?? client).delete<ClearCloudSettingsResponses, ClearCloudSettingsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7328,14 +9513,24 @@ export const clearCloudSettings = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zClearCloudSettingsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/cloud-settings",
 		...options,
 	});
 
-export const getCloudSettings = <ThrowOnError extends boolean = false>(options?: Options<GetCloudSettingsData, ThrowOnError>) =>
+export const getCloudSettings = <ThrowOnError extends boolean = false>(
+	options?: Options<GetCloudSettingsData, ThrowOnError>,
+): RequestResult<GetCloudSettingsResponses, GetCloudSettingsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetCloudSettingsResponses, GetCloudSettingsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7348,14 +9543,24 @@ export const getCloudSettings = <ThrowOnError extends boolean = false>(options?:
 		responseType: "json",
 		responseValidator: async (data) => await zGetCloudSettingsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/cloud-settings",
 		...options,
 	});
 
-export const saveCloudSettings = <ThrowOnError extends boolean = false>(options: Options<SaveCloudSettingsData, ThrowOnError>) =>
+export const saveCloudSettings = <ThrowOnError extends boolean = false>(
+	options: Options<SaveCloudSettingsData, ThrowOnError>,
+): RequestResult<SaveCloudSettingsResponses, SaveCloudSettingsErrors, ThrowOnError> =>
 	(options.client ?? client).put<SaveCloudSettingsResponses, SaveCloudSettingsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7368,8 +9573,16 @@ export const saveCloudSettings = <ThrowOnError extends boolean = false>(options:
 		responseType: "json",
 		responseValidator: async (data) => await zSaveCloudSettingsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/cloud-settings",
 		...options,
@@ -7381,7 +9594,7 @@ export const saveCloudSettings = <ThrowOnError extends boolean = false>(options:
 
 export const entraAuthCodeSignIn = <ThrowOnError extends boolean = false>(
 	options?: Options<EntraAuthCodeSignInData, ThrowOnError>,
-) =>
+): RequestResult<EntraAuthCodeSignInResponses, EntraAuthCodeSignInErrors, ThrowOnError> =>
 	(options?.client ?? client).post<EntraAuthCodeSignInResponses, EntraAuthCodeSignInErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7394,8 +9607,16 @@ export const entraAuthCodeSignIn = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zEntraAuthCodeSignInResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/cloud-settings/entra/auth-code/start",
 		...options,
@@ -7403,7 +9624,7 @@ export const entraAuthCodeSignIn = <ThrowOnError extends boolean = false>(
 
 export const entraAuthCodeStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<EntraAuthCodeStatusData, ThrowOnError>,
-) =>
+): RequestResult<EntraAuthCodeStatusResponses, EntraAuthCodeStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<EntraAuthCodeStatusResponses, EntraAuthCodeStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7416,8 +9637,16 @@ export const entraAuthCodeStatus = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zEntraAuthCodeStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/cloud-settings/entra/auth-code/status",
 		...options,
@@ -7425,7 +9654,7 @@ export const entraAuthCodeStatus = <ThrowOnError extends boolean = false>(
 
 export const entraDeviceCodeSignIn = <ThrowOnError extends boolean = false>(
 	options?: Options<EntraDeviceCodeSignInData, ThrowOnError>,
-) =>
+): RequestResult<EntraDeviceCodeSignInResponses, EntraDeviceCodeSignInErrors, ThrowOnError> =>
 	(options?.client ?? client).post<EntraDeviceCodeSignInResponses, EntraDeviceCodeSignInErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7438,8 +9667,16 @@ export const entraDeviceCodeSignIn = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zEntraDeviceCodeSignInResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/cloud-settings/entra/device-code/start",
 		...options,
@@ -7447,7 +9684,7 @@ export const entraDeviceCodeSignIn = <ThrowOnError extends boolean = false>(
 
 export const entraDeviceCodeStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<EntraDeviceCodeStatusData, ThrowOnError>,
-) =>
+): RequestResult<EntraDeviceCodeStatusResponses, EntraDeviceCodeStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<EntraDeviceCodeStatusResponses, EntraDeviceCodeStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7460,14 +9697,24 @@ export const entraDeviceCodeStatus = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zEntraDeviceCodeStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/cloud-settings/entra/device-code/status",
 		...options,
 	});
 
-export const codexLogin = <ThrowOnError extends boolean = false>(options?: Options<CodexLoginData, ThrowOnError>) =>
+export const codexLogin = <ThrowOnError extends boolean = false>(
+	options?: Options<CodexLoginData, ThrowOnError>,
+): RequestResult<CodexLoginResponses, CodexLoginErrors, ThrowOnError> =>
 	(options?.client ?? client).post<CodexLoginResponses, CodexLoginErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7480,14 +9727,24 @@ export const codexLogin = <ThrowOnError extends boolean = false>(options?: Optio
 		responseType: "json",
 		responseValidator: async (data) => await zCodexLoginResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/cloud/codex/login",
 		...options,
 	});
 
-export const codexLogout = <ThrowOnError extends boolean = false>(options?: Options<CodexLogoutData, ThrowOnError>) =>
+export const codexLogout = <ThrowOnError extends boolean = false>(
+	options?: Options<CodexLogoutData, ThrowOnError>,
+): RequestResult<CodexLogoutResponses, CodexLogoutErrors, ThrowOnError> =>
 	(options?.client ?? client).post<CodexLogoutResponses, CodexLogoutErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7500,14 +9757,24 @@ export const codexLogout = <ThrowOnError extends boolean = false>(options?: Opti
 		responseType: "json",
 		responseValidator: async (data) => await zCodexLogoutResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/cloud/codex/logout",
 		...options,
 	});
 
-export const codexStatus = <ThrowOnError extends boolean = false>(options?: Options<CodexStatusData, ThrowOnError>) =>
+export const codexStatus = <ThrowOnError extends boolean = false>(
+	options?: Options<CodexStatusData, ThrowOnError>,
+): RequestResult<CodexStatusResponses, CodexStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<CodexStatusResponses, CodexStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7520,8 +9787,16 @@ export const codexStatus = <ThrowOnError extends boolean = false>(options?: Opti
 		responseType: "json",
 		responseValidator: async (data) => await zCodexStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/cloud/codex/status",
 		...options,
@@ -7529,7 +9804,7 @@ export const codexStatus = <ThrowOnError extends boolean = false>(options?: Opti
 
 export const listEligibleBenchmarkAgents = <ThrowOnError extends boolean = false>(
 	options: Options<ListEligibleBenchmarkAgentsData, ThrowOnError>,
-) =>
+): RequestResult<ListEligibleBenchmarkAgentsResponses, ListEligibleBenchmarkAgentsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListEligibleBenchmarkAgentsResponses, ListEligibleBenchmarkAgentsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7542,8 +9817,16 @@ export const listEligibleBenchmarkAgents = <ThrowOnError extends boolean = false
 		responseType: "json",
 		responseValidator: async (data) => await zListEligibleBenchmarkAgentsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/eligible-agents",
 		...options,
@@ -7551,7 +9834,7 @@ export const listEligibleBenchmarkAgents = <ThrowOnError extends boolean = false
 
 export const listEligibleBenchmarkModels = <ThrowOnError extends boolean = false>(
 	options?: Options<ListEligibleBenchmarkModelsData, ThrowOnError>,
-) =>
+): RequestResult<ListEligibleBenchmarkModelsResponses, ListEligibleBenchmarkModelsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListEligibleBenchmarkModelsResponses, ListEligibleBenchmarkModelsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7564,8 +9847,16 @@ export const listEligibleBenchmarkModels = <ThrowOnError extends boolean = false
 		responseType: "json",
 		responseValidator: async (data) => await zListEligibleBenchmarkModelsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/eligible-models",
 		...options,
@@ -7573,7 +9864,7 @@ export const listEligibleBenchmarkModels = <ThrowOnError extends boolean = false
 
 export const exportBenchmarkProject = <ThrowOnError extends boolean = false>(
 	options: Options<ExportBenchmarkProjectData, ThrowOnError>,
-) =>
+): RequestResult<ExportBenchmarkProjectResponses, ExportBenchmarkProjectErrors, ThrowOnError> =>
 	(options.client ?? client).get<ExportBenchmarkProjectResponses, ExportBenchmarkProjectErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7586,8 +9877,16 @@ export const exportBenchmarkProject = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zExportBenchmarkProjectResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/export",
 		...options,
@@ -7595,7 +9894,7 @@ export const exportBenchmarkProject = <ThrowOnError extends boolean = false>(
 
 export const exportBenchmarkProjectCsv = <ThrowOnError extends boolean = false>(
 	options: Options<ExportBenchmarkProjectCsvData, ThrowOnError>,
-) =>
+): RequestResult<ExportBenchmarkProjectCsvResponses, ExportBenchmarkProjectCsvErrors, ThrowOnError> =>
 	(options.client ?? client).get<ExportBenchmarkProjectCsvResponses, ExportBenchmarkProjectCsvErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7608,8 +9907,16 @@ export const exportBenchmarkProjectCsv = <ThrowOnError extends boolean = false>(
 		responseType: "text",
 		responseValidator: async (data) => await zExportBenchmarkProjectCsvResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/export.csv",
 		...options,
@@ -7617,7 +9924,7 @@ export const exportBenchmarkProjectCsv = <ThrowOnError extends boolean = false>(
 
 export const listBenchmarkProjects = <ThrowOnError extends boolean = false>(
 	options?: Options<ListBenchmarkProjectsData, ThrowOnError>,
-) =>
+): RequestResult<ListBenchmarkProjectsResponses, ListBenchmarkProjectsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListBenchmarkProjectsResponses, ListBenchmarkProjectsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7630,8 +9937,16 @@ export const listBenchmarkProjects = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListBenchmarkProjectsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/projects",
 		...options,
@@ -7639,7 +9954,7 @@ export const listBenchmarkProjects = <ThrowOnError extends boolean = false>(
 
 export const createBenchmarkProject = <ThrowOnError extends boolean = false>(
 	options: Options<CreateBenchmarkProjectData, ThrowOnError>,
-) =>
+): RequestResult<CreateBenchmarkProjectResponses, CreateBenchmarkProjectErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateBenchmarkProjectResponses, CreateBenchmarkProjectErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7652,8 +9967,16 @@ export const createBenchmarkProject = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCreateBenchmarkProjectResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/projects",
 		...options,
@@ -7665,7 +9988,7 @@ export const createBenchmarkProject = <ThrowOnError extends boolean = false>(
 
 export const deleteBenchmarkProject = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteBenchmarkProjectData, ThrowOnError>,
-) =>
+): RequestResult<DeleteBenchmarkProjectResponses, DeleteBenchmarkProjectErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteBenchmarkProjectResponses, DeleteBenchmarkProjectErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7677,8 +10000,16 @@ export const deleteBenchmarkProject = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteBenchmarkProjectResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}",
 		...options,
@@ -7690,7 +10021,7 @@ export const deleteBenchmarkProject = <ThrowOnError extends boolean = false>(
 
 export const getBenchmarkProject = <ThrowOnError extends boolean = false>(
 	options: Options<GetBenchmarkProjectData, ThrowOnError>,
-) =>
+): RequestResult<GetBenchmarkProjectResponses, GetBenchmarkProjectErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetBenchmarkProjectResponses, GetBenchmarkProjectErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7703,8 +10034,16 @@ export const getBenchmarkProject = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetBenchmarkProjectResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}",
 		...options,
@@ -7712,7 +10051,7 @@ export const getBenchmarkProject = <ThrowOnError extends boolean = false>(
 
 export const updateBenchmarkProject = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateBenchmarkProjectData, ThrowOnError>,
-) =>
+): RequestResult<UpdateBenchmarkProjectResponses, UpdateBenchmarkProjectErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateBenchmarkProjectResponses, UpdateBenchmarkProjectErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7725,8 +10064,16 @@ export const updateBenchmarkProject = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zUpdateBenchmarkProjectResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}",
 		...options,
@@ -7738,7 +10085,7 @@ export const updateBenchmarkProject = <ThrowOnError extends boolean = false>(
 
 export const updateBenchmarkJudgePolicy = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateBenchmarkJudgePolicyData, ThrowOnError>,
-) =>
+): RequestResult<UpdateBenchmarkJudgePolicyResponses, UpdateBenchmarkJudgePolicyErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateBenchmarkJudgePolicyResponses, UpdateBenchmarkJudgePolicyErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7751,8 +10098,16 @@ export const updateBenchmarkJudgePolicy = <ThrowOnError extends boolean = false>
 		responseType: "json",
 		responseValidator: async (data) => await zUpdateBenchmarkJudgePolicyResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/judge",
 		...options,
@@ -7764,7 +10119,7 @@ export const updateBenchmarkJudgePolicy = <ThrowOnError extends boolean = false>
 
 export const rejudgeBenchmarkProject = <ThrowOnError extends boolean = false>(
 	options: Options<RejudgeBenchmarkProjectData, ThrowOnError>,
-) =>
+): RequestResult<RejudgeBenchmarkProjectResponses, RejudgeBenchmarkProjectErrors, ThrowOnError> =>
 	(options.client ?? client).post<RejudgeBenchmarkProjectResponses, RejudgeBenchmarkProjectErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7777,8 +10132,16 @@ export const rejudgeBenchmarkProject = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zRejudgeBenchmarkProjectResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/rejudge",
 		...options,
@@ -7790,7 +10153,7 @@ export const rejudgeBenchmarkProject = <ThrowOnError extends boolean = false>(
 
 export const getBenchmarkRubricPresets = <ThrowOnError extends boolean = false>(
 	options?: Options<GetBenchmarkRubricPresetsData, ThrowOnError>,
-) =>
+): RequestResult<GetBenchmarkRubricPresetsResponses, GetBenchmarkRubricPresetsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetBenchmarkRubricPresetsResponses, GetBenchmarkRubricPresetsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7803,14 +10166,24 @@ export const getBenchmarkRubricPresets = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetBenchmarkRubricPresetsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/rubric-presets",
 		...options,
 	});
 
-export const listBenchmarkRuns = <ThrowOnError extends boolean = false>(options: Options<ListBenchmarkRunsData, ThrowOnError>) =>
+export const listBenchmarkRuns = <ThrowOnError extends boolean = false>(
+	options: Options<ListBenchmarkRunsData, ThrowOnError>,
+): RequestResult<ListBenchmarkRunsResponses, ListBenchmarkRunsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListBenchmarkRunsResponses, ListBenchmarkRunsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7823,14 +10196,24 @@ export const listBenchmarkRuns = <ThrowOnError extends boolean = false>(options:
 		responseType: "json",
 		responseValidator: async (data) => await zListBenchmarkRunsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/runs",
 		...options,
 	});
 
-export const startBenchmarkRun = <ThrowOnError extends boolean = false>(options: Options<StartBenchmarkRunData, ThrowOnError>) =>
+export const startBenchmarkRun = <ThrowOnError extends boolean = false>(
+	options: Options<StartBenchmarkRunData, ThrowOnError>,
+): RequestResult<StartBenchmarkRunResponses, StartBenchmarkRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartBenchmarkRunResponses, StartBenchmarkRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7843,8 +10226,16 @@ export const startBenchmarkRun = <ThrowOnError extends boolean = false>(options:
 		responseType: "json",
 		responseValidator: async (data) => await zStartBenchmarkRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/runs",
 		...options,
@@ -7856,7 +10247,7 @@ export const startBenchmarkRun = <ThrowOnError extends boolean = false>(options:
 
 export const startBenchmarkRunBatch = <ThrowOnError extends boolean = false>(
 	options: Options<StartBenchmarkRunBatchData, ThrowOnError>,
-) =>
+): RequestResult<StartBenchmarkRunBatchResponses, StartBenchmarkRunBatchErrors, ThrowOnError> =>
 	(options.client ?? client).post<StartBenchmarkRunBatchResponses, StartBenchmarkRunBatchErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7869,8 +10260,16 @@ export const startBenchmarkRunBatch = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zStartBenchmarkRunBatchResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/runs/batch",
 		...options,
@@ -7882,7 +10281,7 @@ export const startBenchmarkRunBatch = <ThrowOnError extends boolean = false>(
 
 export const deleteBenchmarkRun = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteBenchmarkRunData, ThrowOnError>,
-) =>
+): RequestResult<DeleteBenchmarkRunResponses, DeleteBenchmarkRunErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteBenchmarkRunResponses, DeleteBenchmarkRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7894,8 +10293,16 @@ export const deleteBenchmarkRun = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteBenchmarkRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/runs/{runId}",
 		...options,
@@ -7905,7 +10312,9 @@ export const deleteBenchmarkRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const getBenchmarkRun = <ThrowOnError extends boolean = false>(options: Options<GetBenchmarkRunData, ThrowOnError>) =>
+export const getBenchmarkRun = <ThrowOnError extends boolean = false>(
+	options: Options<GetBenchmarkRunData, ThrowOnError>,
+): RequestResult<GetBenchmarkRunResponses, GetBenchmarkRunErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetBenchmarkRunResponses, GetBenchmarkRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7918,8 +10327,16 @@ export const getBenchmarkRun = <ThrowOnError extends boolean = false>(options: O
 		responseType: "json",
 		responseValidator: async (data) => await zGetBenchmarkRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/runs/{runId}",
 		...options,
@@ -7927,7 +10344,7 @@ export const getBenchmarkRun = <ThrowOnError extends boolean = false>(options: O
 
 export const cancelBenchmarkRun = <ThrowOnError extends boolean = false>(
 	options: Options<CancelBenchmarkRunData, ThrowOnError>,
-) =>
+): RequestResult<CancelBenchmarkRunResponses, CancelBenchmarkRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<CancelBenchmarkRunResponses, CancelBenchmarkRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7940,8 +10357,16 @@ export const cancelBenchmarkRun = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCancelBenchmarkRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/runs/{runId}/cancel",
 		...options,
@@ -7953,7 +10378,7 @@ export const cancelBenchmarkRun = <ThrowOnError extends boolean = false>(
 
 export const clearBenchmarkRunScore = <ThrowOnError extends boolean = false>(
 	options: Options<ClearBenchmarkRunScoreData, ThrowOnError>,
-) =>
+): RequestResult<ClearBenchmarkRunScoreResponses, ClearBenchmarkRunScoreErrors, ThrowOnError> =>
 	(options.client ?? client).delete<ClearBenchmarkRunScoreResponses, ClearBenchmarkRunScoreErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7966,8 +10391,16 @@ export const clearBenchmarkRunScore = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zClearBenchmarkRunScoreResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/runs/{runId}/score",
 		...options,
@@ -7977,7 +10410,9 @@ export const clearBenchmarkRunScore = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const scoreBenchmarkRun = <ThrowOnError extends boolean = false>(options: Options<ScoreBenchmarkRunData, ThrowOnError>) =>
+export const scoreBenchmarkRun = <ThrowOnError extends boolean = false>(
+	options: Options<ScoreBenchmarkRunData, ThrowOnError>,
+): RequestResult<ScoreBenchmarkRunResponses, ScoreBenchmarkRunErrors, ThrowOnError> =>
 	(options.client ?? client).put<ScoreBenchmarkRunResponses, ScoreBenchmarkRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -7990,8 +10425,16 @@ export const scoreBenchmarkRun = <ThrowOnError extends boolean = false>(options:
 		responseType: "json",
 		responseValidator: async (data) => await zScoreBenchmarkRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/runs/{runId}/score",
 		...options,
@@ -8003,7 +10446,7 @@ export const scoreBenchmarkRun = <ThrowOnError extends boolean = false>(options:
 
 export const rejudgeBenchmarkRun = <ThrowOnError extends boolean = false>(
 	options: Options<RejudgeBenchmarkRunData, ThrowOnError>,
-) =>
+): RequestResult<RejudgeBenchmarkRunResponses, RejudgeBenchmarkRunErrors, ThrowOnError> =>
 	(options.client ?? client).post<RejudgeBenchmarkRunResponses, RejudgeBenchmarkRunErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8016,8 +10459,16 @@ export const rejudgeBenchmarkRun = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zRejudgeBenchmarkRunResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/benchmarks/runs/{runId}/rejudge",
 		...options,
@@ -8027,7 +10478,9 @@ export const rejudgeBenchmarkRun = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const listSlashCommands = <ThrowOnError extends boolean = false>(options?: Options<ListSlashCommandsData, ThrowOnError>) =>
+export const listSlashCommands = <ThrowOnError extends boolean = false>(
+	options?: Options<ListSlashCommandsData, ThrowOnError>,
+): RequestResult<ListSlashCommandsResponses, ListSlashCommandsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListSlashCommandsResponses, ListSlashCommandsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8040,8 +10493,16 @@ export const listSlashCommands = <ThrowOnError extends boolean = false>(options?
 		responseType: "json",
 		responseValidator: async (data) => await zListSlashCommandsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/automation/commands",
 		...options,
@@ -8049,7 +10510,7 @@ export const listSlashCommands = <ThrowOnError extends boolean = false>(options?
 
 export const createSlashCommand = <ThrowOnError extends boolean = false>(
 	options: Options<CreateSlashCommandData, ThrowOnError>,
-) =>
+): RequestResult<CreateSlashCommandResponses, CreateSlashCommandErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateSlashCommandResponses, CreateSlashCommandErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8062,8 +10523,16 @@ export const createSlashCommand = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCreateSlashCommandResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/automation/commands",
 		...options,
@@ -8075,7 +10544,7 @@ export const createSlashCommand = <ThrowOnError extends boolean = false>(
 
 export const deleteSlashCommand = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteSlashCommandData, ThrowOnError>,
-) =>
+): RequestResult<DeleteSlashCommandResponses, DeleteSlashCommandErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteSlashCommandResponses, DeleteSlashCommandErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8087,14 +10556,24 @@ export const deleteSlashCommand = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteSlashCommandResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/automation/commands/{commandId}",
 		...options,
 	});
 
-export const getSlashCommand = <ThrowOnError extends boolean = false>(options: Options<GetSlashCommandData, ThrowOnError>) =>
+export const getSlashCommand = <ThrowOnError extends boolean = false>(
+	options: Options<GetSlashCommandData, ThrowOnError>,
+): RequestResult<GetSlashCommandResponses, GetSlashCommandErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetSlashCommandResponses, GetSlashCommandErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8107,8 +10586,16 @@ export const getSlashCommand = <ThrowOnError extends boolean = false>(options: O
 		responseType: "json",
 		responseValidator: async (data) => await zGetSlashCommandResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/automation/commands/{commandId}",
 		...options,
@@ -8116,7 +10603,7 @@ export const getSlashCommand = <ThrowOnError extends boolean = false>(options: O
 
 export const updateSlashCommand = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateSlashCommandData, ThrowOnError>,
-) =>
+): RequestResult<UpdateSlashCommandResponses, UpdateSlashCommandErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateSlashCommandResponses, UpdateSlashCommandErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8129,8 +10616,16 @@ export const updateSlashCommand = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zUpdateSlashCommandResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/automation/commands/{commandId}",
 		...options,
@@ -8140,7 +10635,9 @@ export const updateSlashCommand = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const nodeAuthStatus = <ThrowOnError extends boolean = false>(options?: Options<NodeAuthStatusData, ThrowOnError>) =>
+export const nodeAuthStatus = <ThrowOnError extends boolean = false>(
+	options?: Options<NodeAuthStatusData, ThrowOnError>,
+): RequestResult<NodeAuthStatusResponses, unknown, ThrowOnError> =>
 	(options?.client ?? client).get<NodeAuthStatusResponses, unknown, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8156,7 +10653,9 @@ export const nodeAuthStatus = <ThrowOnError extends boolean = false>(options?: O
 		...options,
 	});
 
-export const nodeSetup = <ThrowOnError extends boolean = false>(options: Options<NodeSetupData, ThrowOnError>) =>
+export const nodeSetup = <ThrowOnError extends boolean = false>(
+	options: Options<NodeSetupData, ThrowOnError>,
+): RequestResult<NodeSetupResponses, NodeSetupErrors, ThrowOnError> =>
 	(options.client ?? client).post<NodeSetupResponses, NodeSetupErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8175,7 +10674,9 @@ export const nodeSetup = <ThrowOnError extends boolean = false>(options: Options
 		},
 	});
 
-export const nodeLogin = <ThrowOnError extends boolean = false>(options: Options<NodeLoginData, ThrowOnError>) =>
+export const nodeLogin = <ThrowOnError extends boolean = false>(
+	options: Options<NodeLoginData, ThrowOnError>,
+): RequestResult<NodeLoginResponses, NodeLoginErrors, ThrowOnError> =>
 	(options.client ?? client).post<NodeLoginResponses, NodeLoginErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8195,7 +10696,9 @@ export const nodeLogin = <ThrowOnError extends boolean = false>(options: Options
 		},
 	});
 
-export const nodeRefresh = <ThrowOnError extends boolean = false>(options?: Options<NodeRefreshData, ThrowOnError>) =>
+export const nodeRefresh = <ThrowOnError extends boolean = false>(
+	options?: Options<NodeRefreshData, ThrowOnError>,
+): RequestResult<NodeRefreshResponses, unknown, ThrowOnError> =>
 	(options?.client ?? client).post<NodeRefreshResponses, unknown, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8211,7 +10714,9 @@ export const nodeRefresh = <ThrowOnError extends boolean = false>(options?: Opti
 		...options,
 	});
 
-export const nodeLogout = <ThrowOnError extends boolean = false>(options?: Options<NodeLogoutData, ThrowOnError>) =>
+export const nodeLogout = <ThrowOnError extends boolean = false>(
+	options?: Options<NodeLogoutData, ThrowOnError>,
+): RequestResult<NodeLogoutResponses, NodeLogoutErrors, ThrowOnError> =>
 	(options?.client ?? client).post<NodeLogoutResponses, NodeLogoutErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8223,8 +10728,16 @@ export const nodeLogout = <ThrowOnError extends boolean = false>(options?: Optio
 				.parseAsync(data),
 		responseValidator: async (data) => await zNodeLogoutResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/auth/logout",
 		...options,
@@ -8232,7 +10745,7 @@ export const nodeLogout = <ThrowOnError extends boolean = false>(options?: Optio
 
 export const nodeChangePassword = <ThrowOnError extends boolean = false>(
 	options: Options<NodeChangePasswordData, ThrowOnError>,
-) =>
+): RequestResult<NodeChangePasswordResponses, NodeChangePasswordErrors, ThrowOnError> =>
 	(options.client ?? client).post<NodeChangePasswordResponses, NodeChangePasswordErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8244,8 +10757,16 @@ export const nodeChangePassword = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zNodeChangePasswordResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/auth/change-password",
 		...options,
@@ -8255,7 +10776,9 @@ export const nodeChangePassword = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const nodeMe = <ThrowOnError extends boolean = false>(options?: Options<NodeMeData, ThrowOnError>) =>
+export const nodeMe = <ThrowOnError extends boolean = false>(
+	options?: Options<NodeMeData, ThrowOnError>,
+): RequestResult<NodeMeResponses, NodeMeErrors, ThrowOnError> =>
 	(options?.client ?? client).get<NodeMeResponses, NodeMeErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8268,14 +10791,24 @@ export const nodeMe = <ThrowOnError extends boolean = false>(options?: Options<N
 		responseType: "json",
 		responseValidator: async (data) => await zNodeMeResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/auth/me",
 		...options,
 	});
 
-export const applyAppUpdate = <ThrowOnError extends boolean = false>(options?: Options<ApplyAppUpdateData, ThrowOnError>) =>
+export const applyAppUpdate = <ThrowOnError extends boolean = false>(
+	options?: Options<ApplyAppUpdateData, ThrowOnError>,
+): RequestResult<ApplyAppUpdateResponses, ApplyAppUpdateErrors, ThrowOnError> =>
 	(options?.client ?? client).post<ApplyAppUpdateResponses, ApplyAppUpdateErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8288,8 +10821,16 @@ export const applyAppUpdate = <ThrowOnError extends boolean = false>(options?: O
 		responseType: "json",
 		responseValidator: async (data) => await zApplyAppUpdateResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/app-update/apply",
 		...options,
@@ -8297,7 +10838,7 @@ export const applyAppUpdate = <ThrowOnError extends boolean = false>(options?: O
 
 export const getAppUpdateStatus = <ThrowOnError extends boolean = false>(
 	options?: Options<GetAppUpdateStatusData, ThrowOnError>,
-) =>
+): RequestResult<GetAppUpdateStatusResponses, GetAppUpdateStatusErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetAppUpdateStatusResponses, GetAppUpdateStatusErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8310,8 +10851,16 @@ export const getAppUpdateStatus = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetAppUpdateStatusResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/app-update/status",
 		...options,
@@ -8319,7 +10868,7 @@ export const getAppUpdateStatus = <ThrowOnError extends boolean = false>(
 
 export const unhandledExceptionProbe = <ThrowOnError extends boolean = false>(
 	options?: Options<UnhandledExceptionProbeData, ThrowOnError>,
-) =>
+): RequestResult<UnhandledExceptionProbeResponses, UnhandledExceptionProbeErrors, ThrowOnError> =>
 	(options?.client ?? client).post<UnhandledExceptionProbeResponses, UnhandledExceptionProbeErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8331,8 +10880,16 @@ export const unhandledExceptionProbe = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zUnhandledExceptionProbeResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/diagnostics/exception-probe",
 		...options,
@@ -8340,7 +10897,7 @@ export const unhandledExceptionProbe = <ThrowOnError extends boolean = false>(
 
 export const validationProblemProbe = <ThrowOnError extends boolean = false>(
 	options: Options<ValidationProblemProbeData, ThrowOnError>,
-) =>
+): RequestResult<ValidationProblemProbeResponses, ValidationProblemProbeErrors, ThrowOnError> =>
 	(options.client ?? client).post<ValidationProblemProbeResponses, ValidationProblemProbeErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8353,8 +10910,16 @@ export const validationProblemProbe = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zValidationProblemProbeResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/diagnostics/validation-probe",
 		...options,
@@ -8364,7 +10929,9 @@ export const validationProblemProbe = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const analyzePlaybook = <ThrowOnError extends boolean = false>(options: Options<AnalyzePlaybookData, ThrowOnError>) =>
+export const analyzePlaybook = <ThrowOnError extends boolean = false>(
+	options: Options<AnalyzePlaybookData, ThrowOnError>,
+): RequestResult<AnalyzePlaybookResponses, AnalyzePlaybookErrors, ThrowOnError> =>
 	(options.client ?? client).post<AnalyzePlaybookResponses, AnalyzePlaybookErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8377,8 +10944,16 @@ export const analyzePlaybook = <ThrowOnError extends boolean = false>(options: O
 		responseType: "json",
 		responseValidator: async (data) => await zAnalyzePlaybookResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/analyze",
 		...options,
@@ -8386,7 +10961,7 @@ export const analyzePlaybook = <ThrowOnError extends boolean = false>(options: O
 
 export const approveGoldenConversation = <ThrowOnError extends boolean = false>(
 	options: Options<ApproveGoldenConversationData, ThrowOnError>,
-) =>
+): RequestResult<ApproveGoldenConversationResponses, ApproveGoldenConversationErrors, ThrowOnError> =>
 	(options.client ?? client).post<ApproveGoldenConversationResponses, ApproveGoldenConversationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8399,8 +10974,16 @@ export const approveGoldenConversation = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zApproveGoldenConversationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}/approve",
 		...options,
@@ -8408,7 +10991,7 @@ export const approveGoldenConversation = <ThrowOnError extends boolean = false>(
 
 export const listAgentDefinitions = <ThrowOnError extends boolean = false>(
 	options?: Options<ListAgentDefinitionsData, ThrowOnError>,
-) =>
+): RequestResult<ListAgentDefinitionsResponses, ListAgentDefinitionsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListAgentDefinitionsResponses, ListAgentDefinitionsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8421,8 +11004,16 @@ export const listAgentDefinitions = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListAgentDefinitionsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents",
 		...options,
@@ -8430,7 +11021,7 @@ export const listAgentDefinitions = <ThrowOnError extends boolean = false>(
 
 export const createAgentDefinition = <ThrowOnError extends boolean = false>(
 	options: Options<CreateAgentDefinitionData, ThrowOnError>,
-) =>
+): RequestResult<CreateAgentDefinitionResponses, CreateAgentDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateAgentDefinitionResponses, CreateAgentDefinitionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8443,8 +11034,16 @@ export const createAgentDefinition = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCreateAgentDefinitionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents",
 		...options,
@@ -8456,7 +11055,7 @@ export const createAgentDefinition = <ThrowOnError extends boolean = false>(
 
 export const listGoldenConversations = <ThrowOnError extends boolean = false>(
 	options: Options<ListGoldenConversationsData, ThrowOnError>,
-) =>
+): RequestResult<ListGoldenConversationsResponses, ListGoldenConversationsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListGoldenConversationsResponses, ListGoldenConversationsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8469,8 +11068,16 @@ export const listGoldenConversations = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListGoldenConversationsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations",
 		...options,
@@ -8478,7 +11085,7 @@ export const listGoldenConversations = <ThrowOnError extends boolean = false>(
 
 export const createGoldenConversation = <ThrowOnError extends boolean = false>(
 	options: Options<CreateGoldenConversationData, ThrowOnError>,
-) =>
+): RequestResult<CreateGoldenConversationResponses, CreateGoldenConversationErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreateGoldenConversationResponses, CreateGoldenConversationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8491,8 +11098,16 @@ export const createGoldenConversation = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCreateGoldenConversationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations",
 		...options,
@@ -8504,7 +11119,7 @@ export const createGoldenConversation = <ThrowOnError extends boolean = false>(
 
 export const listAgentPlaybookActions = <ThrowOnError extends boolean = false>(
 	options: Options<ListAgentPlaybookActionsData, ThrowOnError>,
-) =>
+): RequestResult<ListAgentPlaybookActionsResponses, ListAgentPlaybookActionsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListAgentPlaybookActionsResponses, ListAgentPlaybookActionsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8517,8 +11132,16 @@ export const listAgentPlaybookActions = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListAgentPlaybookActionsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/playbook",
 		...options,
@@ -8526,7 +11149,7 @@ export const listAgentPlaybookActions = <ThrowOnError extends boolean = false>(
 
 export const createPlaybookAction = <ThrowOnError extends boolean = false>(
 	options: Options<CreatePlaybookActionData, ThrowOnError>,
-) =>
+): RequestResult<CreatePlaybookActionResponses, CreatePlaybookActionErrors, ThrowOnError> =>
 	(options.client ?? client).post<CreatePlaybookActionResponses, CreatePlaybookActionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8539,8 +11162,16 @@ export const createPlaybookAction = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zCreatePlaybookActionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/playbook",
 		...options,
@@ -8552,7 +11183,7 @@ export const createPlaybookAction = <ThrowOnError extends boolean = false>(
 
 export const deleteAgentDefinition = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteAgentDefinitionData, ThrowOnError>,
-) =>
+): RequestResult<DeleteAgentDefinitionResponses, DeleteAgentDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteAgentDefinitionResponses, DeleteAgentDefinitionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8564,8 +11195,16 @@ export const deleteAgentDefinition = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteAgentDefinitionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}",
 		...options,
@@ -8573,7 +11212,7 @@ export const deleteAgentDefinition = <ThrowOnError extends boolean = false>(
 
 export const getAgentDefinition = <ThrowOnError extends boolean = false>(
 	options: Options<GetAgentDefinitionData, ThrowOnError>,
-) =>
+): RequestResult<GetAgentDefinitionResponses, GetAgentDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetAgentDefinitionResponses, GetAgentDefinitionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8586,8 +11225,16 @@ export const getAgentDefinition = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetAgentDefinitionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}",
 		...options,
@@ -8595,7 +11242,7 @@ export const getAgentDefinition = <ThrowOnError extends boolean = false>(
 
 export const updateAgentDefinition = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateAgentDefinitionData, ThrowOnError>,
-) =>
+): RequestResult<UpdateAgentDefinitionResponses, UpdateAgentDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateAgentDefinitionResponses, UpdateAgentDefinitionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8608,8 +11255,16 @@ export const updateAgentDefinition = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zUpdateAgentDefinitionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}",
 		...options,
@@ -8621,7 +11276,7 @@ export const updateAgentDefinition = <ThrowOnError extends boolean = false>(
 
 export const deleteGoldenConversation = <ThrowOnError extends boolean = false>(
 	options: Options<DeleteGoldenConversationData, ThrowOnError>,
-) =>
+): RequestResult<DeleteGoldenConversationResponses, DeleteGoldenConversationErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeleteGoldenConversationResponses, DeleteGoldenConversationErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8633,8 +11288,16 @@ export const deleteGoldenConversation = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeleteGoldenConversationResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/{goldenConversationId}",
 		...options,
@@ -8642,7 +11305,7 @@ export const deleteGoldenConversation = <ThrowOnError extends boolean = false>(
 
 export const deletePlaybookAction = <ThrowOnError extends boolean = false>(
 	options: Options<DeletePlaybookActionData, ThrowOnError>,
-) =>
+): RequestResult<DeletePlaybookActionResponses, DeletePlaybookActionErrors, ThrowOnError> =>
 	(options.client ?? client).delete<DeletePlaybookActionResponses, DeletePlaybookActionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8654,8 +11317,16 @@ export const deletePlaybookAction = <ThrowOnError extends boolean = false>(
 				.parseAsync(data),
 		responseValidator: async (data) => await zDeletePlaybookActionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}",
 		...options,
@@ -8663,7 +11334,7 @@ export const deletePlaybookAction = <ThrowOnError extends boolean = false>(
 
 export const updatePlaybookAction = <ThrowOnError extends boolean = false>(
 	options: Options<UpdatePlaybookActionData, ThrowOnError>,
-) =>
+): RequestResult<UpdatePlaybookActionResponses, UpdatePlaybookActionErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdatePlaybookActionResponses, UpdatePlaybookActionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8676,8 +11347,16 @@ export const updatePlaybookAction = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zUpdatePlaybookActionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}",
 		...options,
@@ -8689,7 +11368,7 @@ export const updatePlaybookAction = <ThrowOnError extends boolean = false>(
 
 export const draftAgentDefinition = <ThrowOnError extends boolean = false>(
 	options: Options<DraftAgentDefinitionData, ThrowOnError>,
-) =>
+): RequestResult<DraftAgentDefinitionResponses, DraftAgentDefinitionErrors, ThrowOnError> =>
 	(options.client ?? client).post<DraftAgentDefinitionResponses, DraftAgentDefinitionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8702,8 +11381,16 @@ export const draftAgentDefinition = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zDraftAgentDefinitionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/draft",
 		...options,
@@ -8715,7 +11402,7 @@ export const draftAgentDefinition = <ThrowOnError extends boolean = false>(
 
 export const getAgentFeedbackInsights = <ThrowOnError extends boolean = false>(
 	options: Options<GetAgentFeedbackInsightsData, ThrowOnError>,
-) =>
+): RequestResult<GetAgentFeedbackInsightsResponses, GetAgentFeedbackInsightsErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetAgentFeedbackInsightsResponses, GetAgentFeedbackInsightsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8728,8 +11415,16 @@ export const getAgentFeedbackInsights = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetAgentFeedbackInsightsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/feedback-insights",
 		...options,
@@ -8737,7 +11432,7 @@ export const getAgentFeedbackInsights = <ThrowOnError extends boolean = false>(
 
 export const getAgentPlaybookMonitor = <ThrowOnError extends boolean = false>(
 	options: Options<GetAgentPlaybookMonitorData, ThrowOnError>,
-) =>
+): RequestResult<GetAgentPlaybookMonitorResponses, GetAgentPlaybookMonitorErrors, ThrowOnError> =>
 	(options.client ?? client).get<GetAgentPlaybookMonitorResponses, GetAgentPlaybookMonitorErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8750,8 +11445,16 @@ export const getAgentPlaybookMonitor = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetAgentPlaybookMonitorResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/monitor",
 		...options,
@@ -8759,7 +11462,7 @@ export const getAgentPlaybookMonitor = <ThrowOnError extends boolean = false>(
 
 export const getAgentUsageSummary = <ThrowOnError extends boolean = false>(
 	options?: Options<GetAgentUsageSummaryData, ThrowOnError>,
-) =>
+): RequestResult<GetAgentUsageSummaryResponses, GetAgentUsageSummaryErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetAgentUsageSummaryResponses, GetAgentUsageSummaryErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8772,8 +11475,16 @@ export const getAgentUsageSummary = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetAgentUsageSummaryResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/usage-summary",
 		...options,
@@ -8781,7 +11492,7 @@ export const getAgentUsageSummary = <ThrowOnError extends boolean = false>(
 
 export const getToolCapableModels = <ThrowOnError extends boolean = false>(
 	options?: Options<GetToolCapableModelsData, ThrowOnError>,
-) =>
+): RequestResult<GetToolCapableModelsResponses, GetToolCapableModelsErrors, ThrowOnError> =>
 	(options?.client ?? client).get<GetToolCapableModelsResponses, GetToolCapableModelsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8794,8 +11505,16 @@ export const getToolCapableModels = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zGetToolCapableModelsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/tool-capable-models",
 		...options,
@@ -8803,7 +11522,7 @@ export const getToolCapableModels = <ThrowOnError extends boolean = false>(
 
 export const harvestGoldenConversations = <ThrowOnError extends boolean = false>(
 	options: Options<HarvestGoldenConversationsData, ThrowOnError>,
-) =>
+): RequestResult<HarvestGoldenConversationsResponses, HarvestGoldenConversationsErrors, ThrowOnError> =>
 	(options.client ?? client).post<HarvestGoldenConversationsResponses, HarvestGoldenConversationsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8816,8 +11535,16 @@ export const harvestGoldenConversations = <ThrowOnError extends boolean = false>
 		responseType: "json",
 		responseValidator: async (data) => await zHarvestGoldenConversationsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/golden-conversations/harvest",
 		...options,
@@ -8825,7 +11552,7 @@ export const harvestGoldenConversations = <ThrowOnError extends boolean = false>
 
 export const importAgentTemplates = <ThrowOnError extends boolean = false>(
 	options: Options<ImportAgentTemplatesData, ThrowOnError>,
-) =>
+): RequestResult<ImportAgentTemplatesResponses, ImportAgentTemplatesErrors, ThrowOnError> =>
 	(options.client ?? client).post<ImportAgentTemplatesResponses, ImportAgentTemplatesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8838,8 +11565,16 @@ export const importAgentTemplates = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zImportAgentTemplatesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/templates/import",
 		...options,
@@ -8851,7 +11586,7 @@ export const importAgentTemplates = <ThrowOnError extends boolean = false>(
 
 export const listAgentExecutionLogs = <ThrowOnError extends boolean = false>(
 	options: Options<ListAgentExecutionLogsData, ThrowOnError>,
-) =>
+): RequestResult<ListAgentExecutionLogsResponses, ListAgentExecutionLogsErrors, ThrowOnError> =>
 	(options.client ?? client).get<ListAgentExecutionLogsResponses, ListAgentExecutionLogsErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8864,8 +11599,16 @@ export const listAgentExecutionLogs = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListAgentExecutionLogsResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/execution-logs",
 		...options,
@@ -8873,7 +11616,7 @@ export const listAgentExecutionLogs = <ThrowOnError extends boolean = false>(
 
 export const listAgentTemplates = <ThrowOnError extends boolean = false>(
 	options?: Options<ListAgentTemplatesData, ThrowOnError>,
-) =>
+): RequestResult<ListAgentTemplatesResponses, ListAgentTemplatesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListAgentTemplatesResponses, ListAgentTemplatesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8886,14 +11629,24 @@ export const listAgentTemplates = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zListAgentTemplatesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/templates",
 		...options,
 	});
 
-export const listRunEnvelopes = <ThrowOnError extends boolean = false>(options?: Options<ListRunEnvelopesData, ThrowOnError>) =>
+export const listRunEnvelopes = <ThrowOnError extends boolean = false>(
+	options?: Options<ListRunEnvelopesData, ThrowOnError>,
+): RequestResult<ListRunEnvelopesResponses, ListRunEnvelopesErrors, ThrowOnError> =>
 	(options?.client ?? client).get<ListRunEnvelopesResponses, ListRunEnvelopesErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8906,8 +11659,16 @@ export const listRunEnvelopes = <ThrowOnError extends boolean = false>(options?:
 		responseType: "json",
 		responseValidator: async (data) => await zListRunEnvelopesResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/run-envelopes",
 		...options,
@@ -8915,7 +11676,7 @@ export const listRunEnvelopes = <ThrowOnError extends boolean = false>(options?:
 
 export const promoteSuggestedPlaybookAction = <ThrowOnError extends boolean = false>(
 	options: Options<PromoteSuggestedPlaybookActionData, ThrowOnError>,
-) =>
+): RequestResult<PromoteSuggestedPlaybookActionResponses, PromoteSuggestedPlaybookActionErrors, ThrowOnError> =>
 	(options.client ?? client).post<PromoteSuggestedPlaybookActionResponses, PromoteSuggestedPlaybookActionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8928,8 +11689,16 @@ export const promoteSuggestedPlaybookAction = <ThrowOnError extends boolean = fa
 		responseType: "json",
 		responseValidator: async (data) => await zPromoteSuggestedPlaybookActionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/promote",
 		...options,
@@ -8937,7 +11706,7 @@ export const promoteSuggestedPlaybookAction = <ThrowOnError extends boolean = fa
 
 export const rejectSuggestedPlaybookAction = <ThrowOnError extends boolean = false>(
 	options: Options<RejectSuggestedPlaybookActionData, ThrowOnError>,
-) =>
+): RequestResult<RejectSuggestedPlaybookActionResponses, RejectSuggestedPlaybookActionErrors, ThrowOnError> =>
 	(options.client ?? client).post<RejectSuggestedPlaybookActionResponses, RejectSuggestedPlaybookActionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8950,8 +11719,16 @@ export const rejectSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 		responseType: "json",
 		responseValidator: async (data) => await zRejectSuggestedPlaybookActionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/reject",
 		...options,
@@ -8959,7 +11736,7 @@ export const rejectSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 
 export const runPlaybookActionEval = <ThrowOnError extends boolean = false>(
 	options: Options<RunPlaybookActionEvalData, ThrowOnError>,
-) =>
+): RequestResult<RunPlaybookActionEvalResponses, RunPlaybookActionEvalErrors, ThrowOnError> =>
 	(options.client ?? client).post<RunPlaybookActionEvalResponses, RunPlaybookActionEvalErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8972,8 +11749,16 @@ export const runPlaybookActionEval = <ThrowOnError extends boolean = false>(
 		responseType: "json",
 		responseValidator: async (data) => await zRunPlaybookActionEvalResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/eval",
 		...options,
@@ -8981,7 +11766,7 @@ export const runPlaybookActionEval = <ThrowOnError extends boolean = false>(
 
 export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = false>(
 	options: Options<UpdateSuggestedPlaybookActionData, ThrowOnError>,
-) =>
+): RequestResult<UpdateSuggestedPlaybookActionResponses, UpdateSuggestedPlaybookActionErrors, ThrowOnError> =>
 	(options.client ?? client).put<UpdateSuggestedPlaybookActionResponses, UpdateSuggestedPlaybookActionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
@@ -8994,8 +11779,16 @@ export const updateSuggestedPlaybookAction = <ThrowOnError extends boolean = fal
 		responseType: "json",
 		responseValidator: async (data) => await zUpdateSuggestedPlaybookActionResponse.parseAsync(data),
 		security: [
-			{ scheme: "bearer", type: "http" },
-			{ scheme: "bearer", type: "http" },
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
 		],
 		url: "/api/local/v1/agents/{agentDefinitionId}/playbook/{actionId}/suggested",
 		...options,
