@@ -8,7 +8,7 @@
 #
 # Prerequisites on this machine:
 #   - .NET 10 SDK (matching global.json), pnpm, Node 22
-#   - To actually RUN the packaged app: ASP.NET Core Runtime 10.0.10+ (x64). The build is
+#   - To actually RUN the packaged app: ASP.NET Core Runtime 10.0.11+ (x64). The build is
 #     framework-dependent and does NOT bundle the runtime — that is by design.
 #   - vpk (Velopack CLI) 1.2.0 — this script installs it if missing.
 

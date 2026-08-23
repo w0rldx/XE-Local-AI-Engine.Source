@@ -711,7 +711,7 @@ jobs:
             echo "## Portable release published"
             echo "- Tag: v${{ needs.version.outputs.pack-version }}"
             echo "- Source: $GITHUB_SHA"
-            echo "- Windows: framework-dependent Velopack Portable.zip (ASP.NET Core Runtime 10.0.10+ x64 required; no Setup.exe)"
+            echo "- Windows: framework-dependent Velopack Portable.zip (ASP.NET Core Runtime 10.0.11+ x64 required; no Setup.exe)"
             echo "- Linux: Velopack AppImage"
             echo "- Signing: unsigned; approved risk record required by publication gate"
           } >> "$GITHUB_STEP_SUMMARY"

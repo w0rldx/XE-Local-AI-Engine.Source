@@ -219,7 +219,7 @@ Publishing is deliberately platform-specific:
 |---|---:|---:|---:|---|
 | Linux client | `true` | `true` | default | Self-contained AppImage payload; runtime/native libraries are bundled; no system .NET prerequisite |
 | Windows client | `false` | `false` | `false` | Managed DLL/deps/runtimeconfig and application dependencies only |
-| Windows C# launcher | `false` | `false` | `true` | MIT Microsoft apphost plus launcher DLL/deps/runtimeconfig; validates ASP.NET Core 10.0.10+ and starts the client DLL |
+| Windows C# launcher | `false` | `false` | `true` | MIT Microsoft apphost plus launcher DLL/deps/runtimeconfig; validates ASP.NET Core 10.0.11+ and starts the client DLL |
 
 The two Windows projects publish into the same payload directory before Velopack packs it. No Windows runtime pack,
 `coreclr.dll`, `hostfxr.dll`, or .NET Library License may appear. Trimming remains off for the reflection-heavy client.
@@ -292,7 +292,7 @@ alternatives. See [`docs/velopack-release-install-guide.md`](../velopack-release
 
 **OS-native installers (MSI / DEB / RPM) are deferred.** Official binaries are Velopack-managed portable applications:
 Windows `Portable.zip` produced with `--noInst` (no `Setup.exe`) and a Linux AppImage. Both self-update. Windows requires
-the separately installed x64 ASP.NET Core Runtime 10.0.10+; Linux bundles .NET. The application still self-provisions
+the separately installed x64 ASP.NET Core Runtime 10.0.11+; Linux bundles .NET. The application still self-provisions
 its llama.cpp binary and GGUF models into the per-user data directory.
 
 ### Legacy manual-bundle cleanup scripts

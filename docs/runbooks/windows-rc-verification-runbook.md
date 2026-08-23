@@ -5,7 +5,7 @@
 **Last audited:** 2026-08-08 against code baseline `9405df91`.
 
 Target: a tester RC portable build (Velopack, `--noInst`) on real Windows 11 with x64 ASP.NET Core Runtime
-10.0.10 or a newer .NET 10 servicing patch installed. Nine checks, risk-ordered.
+10.0.11 or a newer .NET 10 servicing patch installed. Nine checks, risk-ordered.
 Budget ~1 hour. Everything below covers a code path that **cannot be exercised on the Linux/WSL dev box**, which
 is why it is here at all.
 

@@ -10,7 +10,7 @@ from the in-app skills assigned to saved agents.
 - Windows x64 or Linux x64. macOS and ARM release assets are not shipped.
 - Linux: `curl`, `jq`, `sha256sum`, and Python 3 when `--install-skill` is used. FUSE is preferred;
   a real AppImage launch failure is retried with `APPIMAGE_EXTRACT_AND_RUN=1`.
-- Windows: x64 ASP.NET Core Runtime 10.0.10 or a newer .NET 10 servicing patch. The installer checks
+- Windows: x64 ASP.NET Core Runtime 10.0.11 or a newer .NET 10 servicing patch. The installer checks
   it and prints the official download URL plus a non-authoritative `winget` hint; it never elevates.
 - A secret store for the administrator password and one-time `xemcp_...` key.
 

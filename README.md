@@ -220,7 +220,7 @@ data cannot be decrypted and the node will otherwise crash on the first read.
 
 The desktop package is deliberately asymmetric. Linux remains a **self-contained single-file AppImage**. Windows is a
 **framework-dependent Velopack Portable ZIP**: it contains a small C# launcher apphost plus the managed application DLL,
-but no .NET runtime. Windows users install the x64 **ASP.NET Core Runtime 10.0.10 or a newer .NET 10 servicing patch**.
+but no .NET runtime. Windows users install the x64 **ASP.NET Core Runtime 10.0.11 or a newer .NET 10 servicing patch**.
 If the base .NET runtime is absent, Microsoft's apphost reports the missing framework; if ASP.NET Core is absent or too
 old, the launcher prints the exact requirement and opens the official .NET 10 download page.
 

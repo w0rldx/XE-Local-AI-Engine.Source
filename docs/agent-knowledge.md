@@ -606,7 +606,7 @@ Diagnosing it: confirm `OTEL_EXPORTER_OTLP_ENDPOINT` is on the process (`tr '\0'
 - Desktop shutdown needs explicit **SIGHUP** (Linux) and **CTRL_CLOSE_EVENT** (Windows, via `SetConsoleCtrlHandler`, blocking ~4s for graceful `ApplicationStopped`) handlers — .NET's default ConsoleLifetime covers neither, and without them console-close orphans `llama-server` again.
 - Desktop publishing is asymmetric: Linux remains self-contained single-file; Windows publishes the client as
   framework-dependent DLL/deps/runtimeconfig files and overlays the framework-dependent
-  `XE-Local-AI-Engine.WindowsLauncher` C# apphost. Windows requires x64 ASP.NET Core Runtime 10.0.10+ and must not ship
+  `XE-Local-AI-Engine.WindowsLauncher` C# apphost. Windows requires x64 ASP.NET Core Runtime 10.0.11+ and must not ship
   `coreclr.dll`, `hostfxr.dll`, `hostpolicy.dll`, or the .NET Library License. The client stays explicitly untrimmed —
   trimming breaks EF Core / Serilog / FastEndpoints / MEAI reflection wiring.
 - Desktop mode is opt-in via `XE_LAUNCH_MODE=desktop`; off-flag behaviour (headless/Aspire/CI) must stay byte-identical.

@@ -13,7 +13,7 @@
 | `workspace_not_authorized` | The opaque workspace id is missing, invalid, or was revoked by the operator. | Call `list_workspaces` again and use a currently authorized id. Never send a host path. |
 | `workspace_busy` | Another read-only Coder operation owns the workspace lease. | Wait and retry after the active operation finishes. |
 | AppImage will not mount on Linux | FUSE is unavailable. | Use the installer's extraction fallback or set `APPIMAGE_EXTRACT_AND_RUN=1`. |
-| Windows reports a missing framework | ASP.NET Core Runtime 10.0.10 (or a newer .NET 10 servicing patch) is absent. | Install the x64 ASP.NET Core Runtime from Microsoft, then retry. The installer does not elevate silently. |
+| Windows reports a missing framework | ASP.NET Core Runtime 10.0.11 (or a newer .NET 10 servicing patch) is absent. | Install the x64 ASP.NET Core Runtime from Microsoft, then retry. The installer does not elevate silently. |
 | Windows SmartScreen blocks launch | The current portable release is unsigned. | Verify `CHECKSUMS.sha256` and `RELEASE-MANIFEST.json`, then use the normal Windows trust prompt only if the verified publisher/source is acceptable. The installer never dismisses SmartScreen automatically. |
 
 For deeper lifecycle details and client diagnostics, see the repository's

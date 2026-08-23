@@ -9,14 +9,14 @@ remove it later you delete that folder.
 ## Before you start — install .NET 10
 
 The Windows ZIP is framework-dependent and deliberately does **not** bundle .NET. Install the **x64 ASP.NET Core
-Runtime 10.0.10** or a newer .NET 10 servicing patch from Microsoft's [.NET 10 download page](https://dotnet.microsoft.com/en-us/download/dotnet/10.0).
+Runtime 10.0.11** or a newer .NET 10 servicing patch from Microsoft's [.NET 10 download page](https://dotnet.microsoft.com/en-us/download/dotnet/10.0).
 The ASP.NET Core Runtime is the requirement; the SDK and Hosting Bundle are not required just to run the app.
 
 This step is not optional. If .NET 10 is missing **entirely** (for example, you only have .NET 8), the app can close
 **silently — no message, no log** — because the launcher is itself a .NET 10 program that cannot start. If the base
-.NET runtime is present but ASP.NET Core is missing or older than 10.0.10, the C# launcher runs and prints the exact
+.NET runtime is present but ASP.NET Core is missing or older than 10.0.11, the C# launcher runs and prints the exact
 requirement while opening that download page. Either way, installing the runtime above is the fix. To check what you
-have, run `dotnet --list-runtimes` and look for `Microsoft.AspNetCore.App 10.0.10` or newer.
+have, run `dotnet --list-runtimes` and look for `Microsoft.AspNetCore.App 10.0.11` or newer.
 → [FAQ: the window flashes and disappears](faq.md#nothing-happens-when-i-run-it--the-window-flashes-and-disappears)
 
 ---
@@ -25,7 +25,7 @@ have, run `dotnet --list-runtimes` and look for `Microsoft.AspNetCore.App 10.0.1
 
 For people who have done this kind of thing before:
 
-1. Install the x64 ASP.NET Core Runtime 10.0.10+ from Microsoft.
+1. Install the x64 ASP.NET Core Runtime 10.0.11+ from Microsoft.
 2. Download `XE-Local-AI-Engine-win-Portable.zip` and `CHECKSUMS.sha256` from [Releases](https://github.com/w0rldx/XE-Local-AI-Engine.Source/releases).
 3. **Right-click the ZIP → Properties → tick "Unblock" → OK.** *(Do this before extracting — it saves
    you the SmartScreen warning.)*

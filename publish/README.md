@@ -11,7 +11,7 @@ require a maintainer PAT.
 
 | Platform | User-facing artifact | Install model | Self-update |
 |---|---|---|---|
-| Windows x64 | Velopack `Portable.zip` | Install ASP.NET Core Runtime 10.0.10+ (x64), extract to a writable directory, and run the top-level launcher | Yes |
+| Windows x64 | Velopack `Portable.zip` | Install ASP.NET Core Runtime 10.0.11+ (x64), extract to a writable directory, and run the top-level launcher | Yes |
 | Linux x64 | Velopack `.AppImage` | Mark executable and run the AppImage | Yes; Velopack replaces the AppImage in place |
 
 Windows packing passes `--noInst` to Velopack 1.2.0, so the release must contain exactly one Windows

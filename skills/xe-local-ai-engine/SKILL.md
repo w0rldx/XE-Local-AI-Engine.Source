@@ -37,7 +37,7 @@ boundary.
 |---|---|
 | Platform | Windows x64 or Linux x64. macOS and ARM builds are not shipped. |
 | Disk | Allow roughly 5–30 GB for the application, runtime, and local models. |
-| Windows | Install the ASP.NET Core Runtime 10.0.10 or a newer .NET 10 servicing patch. |
+| Windows | Install the ASP.NET Core Runtime 10.0.11 or a newer .NET 10 servicing patch. |
 | Linux | FUSE is preferred for AppImage mounting; extraction mode is available when FUSE is unavailable. |
 
 ## Install

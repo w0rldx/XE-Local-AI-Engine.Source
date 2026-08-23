@@ -6,18 +6,18 @@ using XE_Local_AI_Engine.WindowsLauncher;
 public sealed class WindowsLauncherApplicationTests
 {
     [Test]
-    [Arguments("10.0.10", true)]
     [Arguments("10.0.11", true)]
+    [Arguments("10.0.12", true)]
     [Arguments("10.1.0", false)]
     [Arguments("11.0.0", false)]
-    [Arguments("10.0.9", false)]
+    [Arguments("10.0.10", false)]
     public void HasCompatibleAspNetCoreRuntime_RequiresThePinnedMajorMinorAndServicingFloor(string installed,
         bool expected)
     {
-        var inventory = $"Microsoft.NETCore.App 10.0.10 [C:\\dotnet\\shared]{Environment.NewLine}"
+        var inventory = $"Microsoft.NETCore.App 10.0.11 [C:\\dotnet\\shared]{Environment.NewLine}"
                         + $"Microsoft.AspNetCore.App {installed} [C:\\dotnet\\shared]{Environment.NewLine}";
 
-        AssertEx.Equal(expected, WindowsLauncherApplication.HasCompatibleAspNetCoreRuntime(inventory, new Version(10, 0, 10)));
+        AssertEx.Equal(expected, WindowsLauncherApplication.HasCompatibleAspNetCoreRuntime(inventory, new Version(10, 0, 11)));
     }
 
     [Test]
@@ -27,14 +27,14 @@ public sealed class WindowsLauncherApplicationTests
                                      {
                                        "runtimeOptions": {
                                          "frameworks": [
-                                           { "name": "Microsoft.NETCore.App", "version": "10.0.10" },
-                                           { "name": "Microsoft.AspNetCore.App", "version": "10.0.10" }
+                                           { "name": "Microsoft.NETCore.App", "version": "10.0.11" },
+                                           { "name": "Microsoft.AspNetCore.App", "version": "10.0.11" }
                                          ]
                                        }
                                      }
                                      """;
 
-        AssertEx.Equal(new Version(10, 0, 10), WindowsLauncherApplication.ResolveRequiredAspNetCoreRuntime(runtimeConfig));
+        AssertEx.Equal(new Version(10, 0, 11), WindowsLauncherApplication.ResolveRequiredAspNetCoreRuntime(runtimeConfig));
     }
 
     [Test]

@@ -35,7 +35,7 @@ top-level entry selects the current version and preserves the portable update co
 ### Nothing happens when I run it — the window flashes and disappears
 On the **Windows portable build, this is almost always a missing .NET runtime.** The Windows ZIP is
 framework-dependent — it deliberately does **not** bundle .NET — so it needs the **x64 ASP.NET Core Runtime
-10.0.10** (or a newer .NET 10 servicing patch) installed on your machine.
+10.0.11** (or a newer .NET 10 servicing patch) installed on your machine.
 
 > **This can fail _silently_ on the portable build — no message, no log.** If .NET 10 is missing
 > **entirely** (for example, you only have .NET 8), the small launcher is itself a .NET 10 program, so it
@@ -54,7 +54,7 @@ are not required.
 dotnet --list-runtimes
 ```
 
-You need a line beginning `Microsoft.AspNetCore.App 10.0.10` (or higher). If you only see `8.0.x`, or the
+You need a line beginning `Microsoft.AspNetCore.App 10.0.11` (or higher). If you only see `8.0.x`, or the
 command is not found, that is the cause. → [Windows install prerequisites](install-windows.md#before-you-start--install-net-10)
 
 Once .NET 10 is installed, if it still won't start:
@@ -65,7 +65,7 @@ Once .NET 10 is installed, if it still won't start:
 - **Look for a startup log.** Recent builds record why the launcher stopped to
   `%LOCALAPPDATA%\XE-Local-AI-Engine\logs\launcher.log` (and `startup-crash.log`). An empty or missing
   `logs` folder points back at the missing-.NET-10 case above.
-- If .NET 10 **is** present but ASP.NET Core is missing or older than 10.0.10, the launcher can run: it
+- If .NET 10 **is** present but ASP.NET Core is missing or older than 10.0.11, the launcher can run: it
   prints the exact requirement in the console and opens the download page — but that console closes fast
   on a double-click, so check the log above too.
 - Wait a minute — the first launch is slow and quiet.
