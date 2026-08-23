@@ -28,6 +28,19 @@
 #   re-checks it after the last, reporting exit 75 CONTAMINATED rather than a fail/pass verdict it
 #   cannot stand behind. See docs/agent-knowledge.md §1.
 #
+# Coverage instrumentation is in-place — coverage mode needs one output tree PER JOB
+#   `--coverage` (dotnet-coverage) rewrites the assemblies in the test output directory to add
+#   probes and restores them when the process exits. A single process does that invisibly; JOBS
+#   processes over ONE directory race and corrupt each other. Measured 2026-08-22 on this repo:
+#   8 concurrent coverage batches over the shared bin/ produced 124 phantom failures and left 3
+#   assemblies rewritten (assembly-guard exit 75); the SAME 8 batches without coverage were 0
+#   failures with the guard clean. So when COVERAGE_DIR is set and JOBS>1, each concurrent slot
+#   runs from its own copy of the output tree and the real bin/ is never instrumented at all.
+#   The copies sit under <proj>/bin/Release/cov-slots/<n>/ for two reasons: they must stay INSIDE
+#   the repo (a Hosting test walks up from the test binary to find XE-Local-AI-Engine.Client/
+#   Program.cs and fails from /tmp), and that path deliberately does not match assembly-guard's
+#   --test-bins glob (*.Tests*/bin/*/net*), so a slot cannot be mistaken for contamination.
+#
 # Batch-level parallelism (JOBS)
 #   The per-process serialization above is deliberate, but nothing requires the *processes* to run one
 #   after another: every hazard the fresh-process design defends against is process-scoped (env-var
@@ -44,12 +57,21 @@
 #   NO_BUILD=1 scripts/run-tests-memory-safe.sh     # skip the build (bin must be current)
 #   JOBS=1 scripts/run-tests-memory-safe.sh         # old behavior: batches strictly sequential
 #   PAR=4 scripts/run-tests-memory-safe.sh          # allow N parallel tests per batch (faster, may reintroduce flakes)
+#   COVERAGE_DIR=/tmp/cov scripts/run-tests-memory-safe.sh   # also emit per-batch Cobertura + TRX
 #
 # Env knobs:
 #   JOBS            how many namespace batch PROCESSES run concurrently (default 10; 1 = sequential)
 #   PAR             max parallel tests per batch (default 1 = deterministic + lowest RSS; >1 is faster but can flake)
 #   AVAIL_FLOOR     a batch aborts if available RAM drops below this many MB (default 800; with JOBS>1
 #                   every batch that observes the breach kills itself — safety over completeness)
+#   COVERAGE_DIR    when set, every batch additionally writes
+#                   <COVERAGE_DIR>/<namespace>/coverage.cobertura.xml plus a TRX report. The reports
+#                   are per-batch by construction (MTP resolves --coverage-output relative to
+#                   --results-directory, so batches sharing one directory would overwrite each
+#                   other); merge them with scripts/merge-cobertura.py, which unions by
+#                   (filename, line) and so takes any number of reports.
+#                   COSTS DISK: see "Coverage instrumentation is in-place" below — coverage mode
+#                   clones the ~240 MB test output tree once per concurrent job.
 #   NO_BUILD        when set, skip the Release build
 #   NO_BUILD_LOCK   when set, do NOT take the cross-process build lock (escape hatch; you are then
 #                   relying on the contamination DETECTION alone)
@@ -96,9 +118,36 @@ echo "   ${#NAMESPACES[@]} namespaces; PAR=$PAR"
 # Batches run as background subshells, so results go through files, not shell globals.
 RESULTS_DIR="$(mktemp -d)"
 
+# Slot pool for coverage mode (see "Coverage instrumentation is in-place" above). A slot is claimed
+# with mkdir, which is atomic across the batch subshells; at most JOBS batches run at once, so a
+# free slot always exists and the wait loop never actually spins.
+SLOT_ROOT=""
+SLOT_LOCKS=""
+acquire_slot() {
+  local i
+  while :; do
+    for ((i = 0; i < JOBS; i++)); do
+      if mkdir "$SLOT_LOCKS/$i" 2>/dev/null; then printf '%s' "$i"; return; fi
+    done
+    sleep 0.2
+  done
+}
+release_slot() { [[ -n "${1:-}" ]] && rmdir "$SLOT_LOCKS/$1" 2>/dev/null; return 0; }
+
 run_ns() {
   local ns="$1" out; out="$(mktemp)"; local t0=$EPOCHSECONDS
-  "$EXE" --treenode-filter "/*/${ns}/*/*" --maximum-parallel-tests "$PAR" >"$out" 2>&1 &
+  # Coverage/TRX is opt-in: one results directory per batch, because MTP resolves --coverage-output
+  # relative to --results-directory and batches sharing one would overwrite each other's report.
+  local exe="$EXE" slot=""
+  local -a report_args=()
+  if [[ -n "${COVERAGE_DIR:-}" ]]; then
+    report_args=(--coverage --coverage-output coverage.cobertura.xml --coverage-output-format cobertura
+                 --report-trx --results-directory "$COVERAGE_DIR/$ns")
+    if [[ -n "$SLOT_ROOT" ]]; then
+      slot="$(acquire_slot)"; exe="$SLOT_ROOT/$slot/$(basename "$EXE")"
+    fi
+  fi
+  "$exe" --treenode-filter "/*/${ns}/*/*" --maximum-parallel-tests "$PAR" "${report_args[@]}" >"$out" 2>&1 &
   local pid=$! peak=0
   while kill -0 "$pid" 2>/dev/null; do
     local rss avail
@@ -107,7 +156,8 @@ run_ns() {
     avail="$(free -m | awk '/^Mem:/{print $7}')"
     if [[ "${avail:-9999}" -lt "$AVAIL_FLOOR" ]]; then
       echo "   !! SAFETY-KILL $ns: avail ${avail}MB < ${AVAIL_FLOOR}MB (rss ${rss}KB)"; kill -9 "$pid" 2>/dev/null
-      echo "0 1 $peak oom $((EPOCHSECONDS-t0))" >"$RESULTS_DIR/$ns.result"; rm -f "$out"; return
+      echo "0 1 $peak oom $((EPOCHSECONDS-t0)) 0" >"$RESULTS_DIR/$ns.result"; rm -f "$out"
+      release_slot "$slot"; return
     fi
     sleep 1
   done
@@ -115,20 +165,40 @@ run_ns() {
   local p f
   p="$(grep -oE 'succeeded: *[0-9]+' "$out" | grep -oE '[0-9]+' | tail -1)"; p="${p:-0}"
   f="$(grep -oE 'failed: *[0-9]+' "$out" | grep -oE '[0-9]+' | tail -1)"; f="${f:-0}"
+  # Hollow-gate guard, same semantics as the CI loop: MTP always prints a "Passed!"/"Failed!" run
+  # summary for a batch that actually ran. A batch that enrolled nothing — or died before the
+  # summary — prints none, and must never be counted as green just because pass=0 fail=0.
+  local sum=0; grep -qE 'Test run summary: (Passed|Failed)!' "$out" && sum=1
   printf "   %-52s pass=%-4s fail=%-3s peakRSS=%sMB exit=%s dur=%ss\n" "$ns" "$p" "$f" "$((peak/1024))" "$rc" "$((EPOCHSECONDS-t0))"
   if [[ "$f" -gt 0 ]]; then grep -E 'failed|error' "$out" | grep -viE 'failed: 0' | head -3 >"$RESULTS_DIR/$ns.fails"; fi
-  echo "$p $f $peak $rc $((EPOCHSECONDS-t0))" >"$RESULTS_DIR/$ns.result"
+  echo "$p $f $peak $rc $((EPOCHSECONDS-t0)) $sum" >"$RESULTS_DIR/$ns.result"
   rm -f "$out"
+  # --report-trx copies coverage.cobertura.xml into the TRX attachment tree byte for byte. At ~40 MB
+  # a batch that is ~3.4 GB of pure duplication across the module — and it is the copy that makes a
+  # recursive report search count every report twice (the miscount that kept develop red once).
+  [[ -n "${COVERAGE_DIR:-}" ]] && rm -f "$COVERAGE_DIR/$ns"/_*/In/*/coverage.cobertura.xml
+  release_slot "$slot"
 }
 
 # Contamination snapshot goes HERE — after our own build, before the first batch — so the build
 # this script just performed is outside the window and cannot be mistaken for interference.
 GUARD_STATE=""
-trap 'rm -rf "$RESULTS_DIR" ${GUARD_STATE:+"$GUARD_STATE"}' EXIT
+trap 'rm -rf "$RESULTS_DIR" ${GUARD_STATE:+"$GUARD_STATE"} ${SLOT_ROOT:+"$SLOT_ROOT"} ${SLOT_LOCKS:+"$SLOT_LOCKS"}' EXIT
 if [[ -z "${NO_GUARD:-}" ]]; then
   mkdir -p "$REPO/.tmp"
   GUARD_STATE="$(mktemp "$REPO/.tmp/assembly-guard-memsafe-XXXXXX.state")"
   "$REPO/scripts/assembly-guard.sh" snapshot "$GUARD_STATE" --root "$(dirname "$EXE")"
+fi
+
+# One instrumentable copy of the output tree per concurrent job — see the header. Copies only, so
+# the guarded bin/ itself is never handed to an instrumenting process.
+if [[ -n "${COVERAGE_DIR:-}" && "$JOBS" -gt 1 ]]; then
+  SLOT_ROOT="$(dirname "$(dirname "$EXE")")/cov-slots"
+  SLOT_LOCKS="$(mktemp -d)"
+  rm -rf "$SLOT_ROOT"; mkdir -p "$SLOT_ROOT"
+  echo ">> Coverage mode: cloning the test output tree into $JOBS slot(s) under $SLOT_ROOT…"
+  for ((i = 0; i < JOBS; i++)); do cp -a "$(dirname "$EXE")" "$SLOT_ROOT/$i" & done
+  wait
 fi
 
 # Longest-first (LPT) so the parallel schedule doesn't end on a 90s batch started last. Every
@@ -173,7 +243,7 @@ for h in "${HEAVY[@]}"; do
 done
 for ns in "${NAMESPACES[@]}"; do [[ -z "${IS_HEAVY[$ns]:-}" ]] && ORDERED+=("$ns"); done
 
-echo ">> Running namespace batches (JOBS=$JOBS)…"
+echo ">> Running namespace batches (JOBS=$JOBS${COVERAGE_DIR:+, coverage+TRX -> $COVERAGE_DIR/<namespace>})…"
 running=0
 for ns in "${ORDERED[@]}"; do
   run_ns "$ns" &
@@ -186,7 +256,7 @@ TOTAL_PASS=0; TOTAL_FAIL=0; FAILED=(); PEAK_ALL=0
 for ns in "${ORDERED[@]}"; do
   rfile="$RESULTS_DIR/$ns.result"
   if [[ ! -f "$rfile" ]]; then FAILED+=("$ns(no-result)"); continue; fi
-  read -r p f peak rc _dur <"$rfile"
+  read -r p f peak rc _dur sum <"$rfile"
   TOTAL_PASS=$((TOTAL_PASS+p)); TOTAL_FAIL=$((TOTAL_FAIL+f))
   [[ "$peak" -gt "$PEAK_ALL" ]] && PEAK_ALL="$peak"
   if [[ "$rc" == "oom" ]]; then
@@ -194,6 +264,9 @@ for ns in "${ORDERED[@]}"; do
   elif [[ "$f" -gt 0 ]]; then
     FAILED+=("$ns")
     [[ -f "$RESULTS_DIR/$ns.fails" ]] && sed "s/^/   [$ns] /" "$RESULTS_DIR/$ns.fails"
+  elif [[ "$sum" != 1 ]]; then
+    # No MTP run summary: the batch enrolled nothing or died before reporting. Never green.
+    FAILED+=("$ns(no-summary,exit=$rc)")
   elif [[ "$rc" != 0 && "$p" -eq 0 ]]; then
     # The batch process died without reporting a single test — a crash must not read as green.
     FAILED+=("$ns(exit=$rc)")
