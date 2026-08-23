@@ -1,11 +1,9 @@
 # Live evaluation lane merge — 2026-07-31
 
-This note preserves the report that lived only in the message of a 2026-07-31
-commit whose tree consisted solely of runtime-generated images. That commit is
-pruned by the git-history remediation decided in
-`docs/compliance/history-remediation-decision.md`, so the report text moves
-here verbatim; it is a point-in-time record, not a statement about current
-behavior.
+This note preserves a report that previously existed only in a 2026-07-31
+commit message and was moved into the documentation record during repository
+history maintenance. It is a point-in-time record, not a statement about
+current behavior.
 
 ---
 
