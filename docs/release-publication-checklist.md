@@ -21,6 +21,12 @@ installer, signing certificate, or signed stable artifact exists.
 - [ ] Name who is authorized to create the canonical tag and publish the corresponding portable binaries.
 - [ ] Record the unsigned-build risk decision. A future certificate does not retroactively validate an earlier
       artifact; update the decision and evidence when signing is introduced.
+- [ ] Execute the `git-filter-repo` rewrite decided in `docs/compliance/history-remediation-decision.md` before
+      tagging, and record its execution evidence in that document's Evidence section: the affected-refs inventory, the
+      restricted remediation manifest's record identifier, the fresh-clone absence verification, the full-history
+      `gitleaks`/`trufflehog` results, and the GitHub Support garbage-collection ticket reference. A pending Evidence
+      section blocks the tag. This decision is checklist-bound rather than register-bound because
+      `verify-release-authority.py` fails closed on any category outside its fixed required set.
 - [ ] Run `python3 scripts/release/verify-release-authority.py` and require a pass.
 
 ## Repository protection prerequisite
