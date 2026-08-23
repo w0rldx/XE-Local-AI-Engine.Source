@@ -35,30 +35,30 @@ SPECIAL_LICENSE_TEXTS = {
         Path("nuget/SQLite-3.50.3-public-domain.html"),
         Path("nuget/SQLite-3.50.3-public-domain.html.source.txt"),
     ),
-    ("utf.unknown", "2.6.0", "MPL-1.1"): (
-        Path("nuget/UTF.Unknown-2.6.0-MPL-1.1.txt"),
-        Path("nuget/UTF.Unknown-2.6.0-MPL-1.1.txt.source.txt"),
+    ("utf.unknown", "2.7.0", "MPL-1.1"): (
+        Path("nuget/UTF.Unknown-2.7.0-MPL-1.1.txt"),
+        Path("nuget/UTF.Unknown-2.7.0-MPL-1.1.txt.source.txt"),
     ),
 }
-UTF_UNKNOWN_SOURCE_COMMIT = "7e69ebbdd6ef96a3625fcaf39df42429b8eb0463"
+UTF_UNKNOWN_SOURCE_COMMIT = "404ca51e057ff299934cabc485ae80122410f56b"
 SPECIAL_SOURCE_AVAILABILITY: dict[tuple[str, str, str], dict[str, Any]] = {
-    ("utf.unknown", "2.6.0", "MPL-1.1"): {
+    ("utf.unknown", "2.7.0", "MPL-1.1"): {
         "licenseBasis": "MPL-1.1",
         "notice": (
-            Path("nuget/UTF.Unknown-2.6.0-SOURCE-AVAILABILITY.txt"),
-            Path("nuget/UTF.Unknown-2.6.0-SOURCE-AVAILABILITY.txt.source.txt"),
+            Path("nuget/UTF.Unknown-2.7.0-SOURCE-AVAILABILITY.txt"),
+            Path("nuget/UTF.Unknown-2.7.0-SOURCE-AVAILABILITY.txt.source.txt"),
         ),
         "sourceArchive": (f"https://github.com/CharsetDetector/UTF-unknown/archive/{UTF_UNKNOWN_SOURCE_COMMIT}.tar.gz"),
         "sourceCommit": UTF_UNKNOWN_SOURCE_COMMIT,
         "sourceRepository": "https://github.com/CharsetDetector/UTF-unknown",
-        "upstreamTag": "v2.6",
+        "upstreamTag": "v2.7",
     }
 }
 UPSTREAM_PACKAGE_LICENSE_TEXTS = {
     **{
-        (name.casefold(), "8.2.0", "MIT"): (
-            Path("nuget/upstream/FastEndpoints-8.2.0-LICENSE.md"),
-            Path("nuget/upstream/FastEndpoints-8.2.0-LICENSE.md.source.txt"),
+        (name.casefold(), "8.3.0", "MIT"): (
+            Path("nuget/upstream/FastEndpoints-8.3.0-LICENSE.md"),
+            Path("nuget/upstream/FastEndpoints-8.3.0-LICENSE.md.source.txt"),
         )
         for name in (
             "FastEndpoints",
@@ -78,9 +78,9 @@ UPSTREAM_PACKAGE_LICENSE_TEXTS = {
         Path("nuget/upstream/Scrutor-7.0.0-LICENSE"),
         Path("nuget/upstream/Scrutor-7.0.0-LICENSE.source.txt"),
     ),
-    ("timezoneconverter", "7.0.0", "MIT"): (
-        Path("nuget/upstream/TimeZoneConverter-7.0.0-LICENSE.txt"),
-        Path("nuget/upstream/TimeZoneConverter-7.0.0-LICENSE.txt.source.txt"),
+    ("timezoneconverter", "7.2.0", "MIT"): (
+        Path("nuget/upstream/TimeZoneConverter-7.2.0-LICENSE.txt"),
+        Path("nuget/upstream/TimeZoneConverter-7.2.0-LICENSE.txt.source.txt"),
     ),
 }
 

@@ -70,10 +70,10 @@ class BackendLicenseCorpusTests(unittest.TestCase):
         nuget = self.license_root / "nuget"
         for filename, contents in (
             ("SQLite-3.50.3-public-domain.html", "SQLite blessing\n"),
-            ("UTF.Unknown-2.6.0-MPL-1.1.txt", "MPL 1.1\n"),
+            ("UTF.Unknown-2.7.0-MPL-1.1.txt", "MPL 1.1\n"),
             (
-                "UTF.Unknown-2.6.0-SOURCE-AVAILABILITY.txt",
-                "UTF.Unknown 2.6.0 covered source is available at immutable commit 7e69ebb.\n",
+                "UTF.Unknown-2.7.0-SOURCE-AVAILABILITY.txt",
+                "UTF.Unknown 2.7.0 covered source is available at immutable commit 404ca51.\n",
             ),
         ):
             text_path = nuget / filename
@@ -82,10 +82,10 @@ class BackendLicenseCorpusTests(unittest.TestCase):
         upstream = nuget / "upstream"
         upstream.mkdir()
         for filename, contents in (
-            ("FastEndpoints-8.2.0-LICENSE.md", "Copyright (c) 2021 FastEndpoints upstream\nMIT terms\n"),
+            ("FastEndpoints-8.3.0-LICENSE.md", "Copyright (c) 2021 FastEndpoints upstream\nMIT terms\n"),
             ("Scalar.AspNetCore-2.16.10-LICENSE", "Copyright (c) 2023-present Scalar\nMIT terms\n"),
             ("Scrutor-7.0.0-LICENSE", "Copyright (c) 2015 Kristian Hellang\nMIT terms\n"),
-            ("TimeZoneConverter-7.0.0-LICENSE.txt", "Copyright (c) 2017 Matt Johnson-Pint\nMIT terms\n"),
+            ("TimeZoneConverter-7.2.0-LICENSE.txt", "Copyright (c) 2017 Matt Johnson-Pint\nMIT terms\n"),
         ):
             text_path = upstream / filename
             text_path.write_text(contents, encoding="utf-8")
@@ -305,28 +305,28 @@ class BackendLicenseCorpusTests(unittest.TestCase):
             "linux-x64",
             {
                 "SQLitePCLRaw.lib.e_sqlite3/3.50.3": {"native": {"libe_sqlite3.so": {}}},
-                "UTF.Unknown/2.6.0": {"runtime": {"UtfUnknown.dll": {}}},
+                "UTF.Unknown/2.7.0": {"runtime": {"UtfUnknown.dll": {}}},
             },
         )
         output = self.generate(
             [
                 package("SQLitePCLRaw.lib.e_sqlite3", "3.50.3", "blessing"),
-                package("UTF.Unknown", "2.6.0", "MPL-1.1"),
+                package("UTF.Unknown", "2.7.0", "MPL-1.1"),
             ],
             document,
         )
         packages = json.loads((output / "backend-components.json").read_text())["packages"]
         paths = {entry["name"]: entry["licenseTextPath"] for entry in packages}
         self.assertIn("SQLite-3.50.3-public-domain.html", paths["SQLitePCLRaw.lib.e_sqlite3"])
-        self.assertIn("UTF.Unknown-2.6.0-MPL-1.1.txt", paths["UTF.Unknown"])
+        self.assertIn("UTF.Unknown-2.7.0-MPL-1.1.txt", paths["UTF.Unknown"])
         utf_unknown = next(entry for entry in packages if entry["name"] == "UTF.Unknown")
         self.assertEqual(
             {
                 "licenseBasis": "MPL-1.1",
-                "sourceArchive": "https://github.com/CharsetDetector/UTF-unknown/archive/7e69ebbdd6ef96a3625fcaf39df42429b8eb0463.tar.gz",
-                "sourceCommit": "7e69ebbdd6ef96a3625fcaf39df42429b8eb0463",
+                "sourceArchive": "https://github.com/CharsetDetector/UTF-unknown/archive/404ca51e057ff299934cabc485ae80122410f56b.tar.gz",
+                "sourceCommit": "404ca51e057ff299934cabc485ae80122410f56b",
                 "sourceRepository": "https://github.com/CharsetDetector/UTF-unknown",
-                "upstreamTag": "v2.6",
+                "upstreamTag": "v2.7",
             },
             utf_unknown["sourceAvailability"],
         )
@@ -336,7 +336,7 @@ class BackendLicenseCorpusTests(unittest.TestCase):
         self.assertEqual("notice", source_notice["role"])
         notices = (output / "THIRD-PARTY-NOTICES.md").read_text()
         self.assertIn("Covered source availability", notices)
-        self.assertIn("7e69ebbdd6ef96a3625fcaf39df42429b8eb0463", notices)
+        self.assertIn("404ca51e057ff299934cabc485ae80122410f56b", notices)
 
         wrong = deps("linux-x64", {"Not.UTF.Unknown/1.0.0": {"runtime": {"Other.dll": {}}}})
         with self.assertRaisesRegex(ValueError, "unsupported special license mapping"):

@@ -1,3 +1,0 @@
-Source: https://raw.githubusercontent.com/CharsetDetector/UTF-unknown/master/license/MPL-1.1.txt
-Retrieved: 2026-08-07
-SHA-256: 53692a2ed6c6a2c6ec9b32dd0b820dfae91e0a1fcdf625ca9ed0bdf8705fcc4f

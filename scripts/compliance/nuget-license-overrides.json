@@ -10,7 +10,7 @@
   },
   {
     "Id": "UTF.Unknown",
-    "Version": "2.6.0",
+    "Version": "2.7.0",
     "License": "MPL-1.1",
     "Authors": "UTF.Unknown contributors",
     "ProjectUrl": "https://github.com/CharsetDetector/UTF-unknown",

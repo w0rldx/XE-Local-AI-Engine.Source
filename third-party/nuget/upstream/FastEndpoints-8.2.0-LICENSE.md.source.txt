@@ -1,3 +1,0 @@
-Source: https://raw.githubusercontent.com/FastEndpoints/FastEndpoints/1914e154db136798418b642dc065282856825b7a/LICENSE.md
-Retrieved: 2026-08-07
-SHA-256: 4efd291deab66207861d197c5bb7da2d86c0449738ff8586fd3c44cac950d656

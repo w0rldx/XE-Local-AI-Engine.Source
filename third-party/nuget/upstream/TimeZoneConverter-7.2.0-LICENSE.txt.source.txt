@@ -1,0 +1,3 @@
+Source: https://raw.githubusercontent.com/mattjohnsonpint/TimeZoneConverter/f96c7a7d167d9ab93bb8c924fc7413b84f52010c/LICENSE.txt
+Retrieved: 2026-08-24
+SHA-256: 38183336fbc98bd5d6a3eb391eca942a25a639c188e7a6efc6647bc9b0abc0a2

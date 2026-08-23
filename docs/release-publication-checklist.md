@@ -14,8 +14,8 @@ installer, signing certificate, or signed stable artifact exists.
       agency-agents.
 - [ ] Bind the third-party/native/WASM/.NET/Velopack redistribution decision to the release's license inventory and
       artifact evidence.
-- [ ] For `UTF.Unknown 2.6.0`, verify the bundled MPL-1.1 source-availability notice, retain evidence that upstream
-      tag `v2.6` resolves to commit `7e69ebbdd6ef96a3625fcaf39df42429b8eb0463`, retain the corresponding source
+- [ ] For `UTF.Unknown 2.7.0`, verify the bundled MPL-1.1 source-availability notice, retain evidence that upstream
+      tag `v2.7` resolves to commit `404ca51e057ff299934cabc485ae80122410f56b`, retain the corresponding source
       archive with the release evidence, and record the selected-license/source-availability approval under
       `third-party-redistribution-terms`.
 - [ ] Name who is authorized to create the canonical tag and publish the corresponding portable binaries.

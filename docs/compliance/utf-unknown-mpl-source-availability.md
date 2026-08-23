@@ -10,7 +10,7 @@ whose redistribution obligations are satisfied here as follows.
 | Field | Value |
 |-------|-------|
 | Package | `UTF.Unknown` |
-| Version | `2.6.0` (pinned in `Directory.Packages.props`) |
+| Version | `2.7.0` (pinned in `Directory.Packages.props`) |
 | Selected license | MPL-1.1 |
 | Upstream repository | https://github.com/CharsetDetector/UTF-unknown |
 | License text | https://github.com/CharsetDetector/UTF-unknown/blob/master/license/MPL-1.1.txt |
@@ -18,12 +18,12 @@ whose redistribution obligations are satisfied here as follows.
 
 ## Tag-to-commit verification
 
-Upstream tag `v2.6` resolves to commit
-`7e69ebbdd6ef96a3625fcaf39df42429b8eb0463`, verified via:
+Upstream tag `v2.7` resolves to commit
+`404ca51e057ff299934cabc485ae80122410f56b`, verified via:
 
 ```bash
-git ls-remote --tags https://github.com/CharsetDetector/UTF-unknown.git v2.6
-# 7e69ebbdd6ef96a3625fcaf39df42429b8eb0463  refs/tags/v2.6
+git ls-remote --tags https://github.com/CharsetDetector/UTF-unknown.git v2.7
+# 404ca51e057ff299934cabc485ae80122410f56b  refs/tags/v2.7
 ```
 
 ## Source availability
@@ -32,7 +32,7 @@ The library is redistributed **unmodified**. MPL-1.1's source-availability
 obligation is met by making the exact corresponding source available at the
 immutable upstream commit above:
 
-    https://github.com/CharsetDetector/UTF-unknown/tree/7e69ebbdd6ef96a3625fcaf39df42429b8eb0463
+    https://github.com/CharsetDetector/UTF-unknown/tree/404ca51e057ff299934cabc485ae80122410f56b
 
 A source archive of that commit is to be retained with the release evidence
 bundle for the tagged release. No modifications are made downstream, so no

@@ -1,16 +1,16 @@
-UTF.Unknown 2.6.0 source availability notice
+UTF.Unknown 2.7.0 source availability notice
 
-XE Local AI Engine consumes the unmodified UTF.Unknown 2.6.0 NuGet package and
+XE Local AI Engine consumes the unmodified UTF.Unknown 2.7.0 NuGet package and
 selects Mozilla Public License 1.1 as its redistribution basis from the
 alternatives stated by upstream.
 
 The corresponding upstream source is available at:
 
 Repository: https://github.com/CharsetDetector/UTF-unknown
-Release tag: v2.6
-Immutable commit: 7e69ebbdd6ef96a3625fcaf39df42429b8eb0463
-Source tree: https://github.com/CharsetDetector/UTF-unknown/tree/7e69ebbdd6ef96a3625fcaf39df42429b8eb0463
-Source archive: https://github.com/CharsetDetector/UTF-unknown/archive/7e69ebbdd6ef96a3625fcaf39df42429b8eb0463.tar.gz
+Release tag: v2.7
+Immutable commit: 404ca51e057ff299934cabc485ae80122410f56b
+Source tree: https://github.com/CharsetDetector/UTF-unknown/tree/404ca51e057ff299934cabc485ae80122410f56b
+Source archive: https://github.com/CharsetDetector/UTF-unknown/archive/404ca51e057ff299934cabc485ae80122410f56b.tar.gz
 
 The release operator must retain this source reference with the release
 evidence and provide the corresponding source location if the upstream link
