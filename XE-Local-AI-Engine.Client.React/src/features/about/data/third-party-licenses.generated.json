@@ -1090,57 +1090,57 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:FastEndpoints@8.2.0",
+			"id": "backend:FastEndpoints@8.3.0",
 			"name": "FastEndpoints",
-			"version": "8.2.0",
+			"version": "8.3.0",
 			"license": "MIT",
 			"homepageUrl": "https://fast-endpoints.com/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:FastEndpoints.Attributes@8.2.0",
+			"id": "backend:FastEndpoints.Attributes@8.3.0",
 			"name": "FastEndpoints.Attributes",
-			"version": "8.2.0",
+			"version": "8.3.0",
 			"license": "MIT",
 			"homepageUrl": "https://fast-endpoints.com/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:FastEndpoints.Core@8.2.0",
+			"id": "backend:FastEndpoints.Core@8.3.0",
 			"name": "FastEndpoints.Core",
-			"version": "8.2.0",
+			"version": "8.3.0",
 			"license": "MIT",
 			"homepageUrl": "https://fast-endpoints.com/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:FastEndpoints.JobQueues@8.2.0",
+			"id": "backend:FastEndpoints.JobQueues@8.3.0",
 			"name": "FastEndpoints.JobQueues",
-			"version": "8.2.0",
+			"version": "8.3.0",
 			"license": "MIT",
 			"homepageUrl": "https://fast-endpoints.com/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:FastEndpoints.Messaging@8.2.0",
+			"id": "backend:FastEndpoints.Messaging@8.3.0",
 			"name": "FastEndpoints.Messaging",
-			"version": "8.2.0",
+			"version": "8.3.0",
 			"license": "MIT",
 			"homepageUrl": "https://fast-endpoints.com/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:FastEndpoints.Messaging.Core@8.2.0",
+			"id": "backend:FastEndpoints.Messaging.Core@8.3.0",
 			"name": "FastEndpoints.Messaging.Core",
-			"version": "8.2.0",
+			"version": "8.3.0",
 			"license": "MIT",
 			"homepageUrl": "https://fast-endpoints.com/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:FastEndpoints.Swagger@8.2.0",
+			"id": "backend:FastEndpoints.Swagger@8.3.0",
 			"name": "FastEndpoints.Swagger",
-			"version": "8.2.0",
+			"version": "8.3.0",
 			"license": "MIT",
 			"homepageUrl": "https://fast-endpoints.com/",
 			"source": "backend"
@@ -1906,81 +1906,81 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Connections.Abstractions@10.0.9",
+			"id": "backend:Microsoft.AspNetCore.Connections.Abstractions@10.0.11",
 			"name": "Microsoft.AspNetCore.Connections.Abstractions",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Cryptography.Internal@10.0.9",
+			"id": "backend:Microsoft.AspNetCore.Cryptography.Internal@10.0.11",
 			"name": "Microsoft.AspNetCore.Cryptography.Internal",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Cryptography.KeyDerivation@10.0.9",
+			"id": "backend:Microsoft.AspNetCore.Cryptography.KeyDerivation@10.0.11",
 			"name": "Microsoft.AspNetCore.Cryptography.KeyDerivation",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Http.Connections.Client@10.0.9",
+			"id": "backend:Microsoft.AspNetCore.Http.Connections.Client@10.0.11",
 			"name": "Microsoft.AspNetCore.Http.Connections.Client",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Http.Connections.Common@10.0.9",
+			"id": "backend:Microsoft.AspNetCore.Http.Connections.Common@10.0.11",
 			"name": "Microsoft.AspNetCore.Http.Connections.Common",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.Identity.EntityFrameworkCore@10.0.9",
+			"id": "backend:Microsoft.AspNetCore.Identity.EntityFrameworkCore@10.0.11",
 			"name": "Microsoft.AspNetCore.Identity.EntityFrameworkCore",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.SignalR.Client@10.0.9",
+			"id": "backend:Microsoft.AspNetCore.SignalR.Client@10.0.11",
 			"name": "Microsoft.AspNetCore.SignalR.Client",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.SignalR.Client.Core@10.0.9",
+			"id": "backend:Microsoft.AspNetCore.SignalR.Client.Core@10.0.11",
 			"name": "Microsoft.AspNetCore.SignalR.Client.Core",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.SignalR.Common@10.0.9",
+			"id": "backend:Microsoft.AspNetCore.SignalR.Common@10.0.11",
 			"name": "Microsoft.AspNetCore.SignalR.Common",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.AspNetCore.SignalR.Protocols.Json@10.0.9",
+			"id": "backend:Microsoft.AspNetCore.SignalR.Protocols.Json@10.0.11",
 			"name": "Microsoft.AspNetCore.SignalR.Protocols.Json",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
@@ -2066,73 +2066,73 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Data.Sqlite.Core@10.0.9",
+			"id": "backend:Microsoft.Data.Sqlite.Core@10.0.11",
 			"name": "Microsoft.Data.Sqlite.Core",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/dotnet/standard/data/sqlite/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore@10.0.9",
+			"id": "backend:Microsoft.EntityFrameworkCore@10.0.11",
 			"name": "Microsoft.EntityFrameworkCore",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Abstractions@10.0.9",
+			"id": "backend:Microsoft.EntityFrameworkCore.Abstractions@10.0.11",
 			"name": "Microsoft.EntityFrameworkCore.Abstractions",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Analyzers@10.0.9",
+			"id": "backend:Microsoft.EntityFrameworkCore.Analyzers@10.0.11",
 			"name": "Microsoft.EntityFrameworkCore.Analyzers",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Design@10.0.9",
+			"id": "backend:Microsoft.EntityFrameworkCore.Design@10.0.11",
 			"name": "Microsoft.EntityFrameworkCore.Design",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Relational@10.0.9",
+			"id": "backend:Microsoft.EntityFrameworkCore.Relational@10.0.11",
 			"name": "Microsoft.EntityFrameworkCore.Relational",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Sqlite@10.0.9",
+			"id": "backend:Microsoft.EntityFrameworkCore.Sqlite@10.0.11",
 			"name": "Microsoft.EntityFrameworkCore.Sqlite",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Sqlite.Core@10.0.9",
+			"id": "backend:Microsoft.EntityFrameworkCore.Sqlite.Core@10.0.11",
 			"name": "Microsoft.EntityFrameworkCore.Sqlite.Core",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.EntityFrameworkCore.Tools@10.0.9",
+			"id": "backend:Microsoft.EntityFrameworkCore.Tools@10.0.11",
 			"name": "Microsoft.EntityFrameworkCore.Tools",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://docs.microsoft.com/ef/core/",
 			"source": "backend"
@@ -2178,14 +2178,6 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Caching.Abstractions@10.0.9",
-			"name": "Microsoft.Extensions.Caching.Abstractions",
-			"version": "10.0.9",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
 			"id": "backend:Microsoft.Extensions.Caching.Abstractions@10.0.10",
 			"name": "Microsoft.Extensions.Caching.Abstractions",
 			"version": "10.0.10",
@@ -2194,9 +2186,17 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Caching.Memory@10.0.9",
+			"id": "backend:Microsoft.Extensions.Caching.Abstractions@10.0.11",
+			"name": "Microsoft.Extensions.Caching.Abstractions",
+			"version": "10.0.11",
+			"license": "MIT",
+			"homepageUrl": "https://dot.net/",
+			"source": "backend"
+		},
+		{
+			"id": "backend:Microsoft.Extensions.Caching.Memory@10.0.11",
 			"name": "Microsoft.Extensions.Caching.Memory",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2290,17 +2290,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.DependencyModel@10.0.9",
+			"id": "backend:Microsoft.Extensions.DependencyModel@10.0.11",
 			"name": "Microsoft.Extensions.DependencyModel",
-			"version": "10.0.9",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.Extensions.Diagnostics@10.0.9",
-			"name": "Microsoft.Extensions.Diagnostics",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2317,14 +2309,6 @@
 			"id": "backend:Microsoft.Extensions.Diagnostics.Abstractions@10.0.3",
 			"name": "Microsoft.Extensions.Diagnostics.Abstractions",
 			"version": "10.0.3",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.Extensions.Diagnostics.Abstractions@10.0.9",
-			"name": "Microsoft.Extensions.Diagnostics.Abstractions",
-			"version": "10.0.9",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -2434,27 +2418,19 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Identity.Core@10.0.9",
+			"id": "backend:Microsoft.Extensions.Identity.Core@10.0.11",
 			"name": "Microsoft.Extensions.Identity.Core",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Extensions.Identity.Stores@10.0.9",
+			"id": "backend:Microsoft.Extensions.Identity.Stores@10.0.11",
 			"name": "Microsoft.Extensions.Identity.Stores",
-			"version": "10.0.9",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://asp.net/",
-			"source": "backend"
-		},
-		{
-			"id": "backend:Microsoft.Extensions.Logging@10.0.9",
-			"name": "Microsoft.Extensions.Logging",
-			"version": "10.0.9",
-			"license": "MIT",
-			"homepageUrl": "https://dot.net/",
 			"source": "backend"
 		},
 		{
@@ -2594,41 +2570,41 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Identity.Client@4.85.2",
+			"id": "backend:Microsoft.Identity.Client@4.88.0",
 			"name": "Microsoft.Identity.Client",
-			"version": "4.85.2",
+			"version": "4.88.0",
 			"license": "MIT",
 			"homepageUrl": "https://go.microsoft.com/fwlink/?linkid=844761",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.Identity.Client.Extensions.Msal@4.85.2",
+			"id": "backend:Microsoft.Identity.Client.Extensions.Msal@4.88.0",
 			"name": "Microsoft.Identity.Client.Extensions.Msal",
-			"version": "4.85.2",
+			"version": "4.88.0",
 			"license": "MIT",
 			"homepageUrl": "https://go.microsoft.com/fwlink/?linkid=844761",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.Abstractions@8.19.2",
+			"id": "backend:Microsoft.IdentityModel.Abstractions@8.22.0",
 			"name": "Microsoft.IdentityModel.Abstractions",
-			"version": "8.19.2",
+			"version": "8.22.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.JsonWebTokens@8.19.2",
+			"id": "backend:Microsoft.IdentityModel.JsonWebTokens@8.22.0",
 			"name": "Microsoft.IdentityModel.JsonWebTokens",
-			"version": "8.19.2",
+			"version": "8.22.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.Logging@8.19.2",
+			"id": "backend:Microsoft.IdentityModel.Logging@8.22.0",
 			"name": "Microsoft.IdentityModel.Logging",
-			"version": "8.19.2",
+			"version": "8.22.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
@@ -2650,9 +2626,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Microsoft.IdentityModel.Tokens@8.19.2",
+			"id": "backend:Microsoft.IdentityModel.Tokens@8.22.0",
 			"name": "Microsoft.IdentityModel.Tokens",
-			"version": "8.19.2",
+			"version": "8.22.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet",
 			"source": "backend"
@@ -2698,25 +2674,25 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:ModelContextProtocol@2.0.0",
+			"id": "backend:ModelContextProtocol@2.2.0",
 			"name": "ModelContextProtocol",
-			"version": "2.0.0",
+			"version": "2.2.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://csharp.sdk.modelcontextprotocol.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:ModelContextProtocol.AspNetCore@2.0.0",
+			"id": "backend:ModelContextProtocol.AspNetCore@2.2.0",
 			"name": "ModelContextProtocol.AspNetCore",
-			"version": "2.0.0",
+			"version": "2.2.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://csharp.sdk.modelcontextprotocol.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:ModelContextProtocol.Core@2.0.0",
+			"id": "backend:ModelContextProtocol.Core@2.2.0",
 			"name": "ModelContextProtocol.Core",
-			"version": "2.0.0",
+			"version": "2.2.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://csharp.sdk.modelcontextprotocol.io/",
 			"source": "backend"
@@ -2781,6 +2757,14 @@
 			"id": "backend:Newtonsoft.Json@13.0.3",
 			"name": "Newtonsoft.Json",
 			"version": "13.0.3",
+			"license": "MIT",
+			"homepageUrl": "https://www.newtonsoft.com/json",
+			"source": "backend"
+		},
+		{
+			"id": "backend:Newtonsoft.Json@13.0.4",
+			"name": "Newtonsoft.Json",
+			"version": "13.0.4",
 			"license": "MIT",
 			"homepageUrl": "https://www.newtonsoft.com/json",
 			"source": "backend"
@@ -2906,9 +2890,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry@1.17.0",
+			"id": "backend:OpenTelemetry@1.18.0",
 			"name": "OpenTelemetry",
-			"version": "1.17.0",
+			"version": "1.18.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
@@ -2922,57 +2906,57 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Api@1.17.0",
+			"id": "backend:OpenTelemetry.Api@1.18.0",
 			"name": "OpenTelemetry.Api",
-			"version": "1.17.0",
+			"version": "1.18.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Api.ProviderBuilderExtensions@1.17.0",
+			"id": "backend:OpenTelemetry.Api.ProviderBuilderExtensions@1.18.0",
 			"name": "OpenTelemetry.Api.ProviderBuilderExtensions",
-			"version": "1.17.0",
+			"version": "1.18.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Exporter.OpenTelemetryProtocol@1.17.0",
+			"id": "backend:OpenTelemetry.Exporter.OpenTelemetryProtocol@1.18.0",
 			"name": "OpenTelemetry.Exporter.OpenTelemetryProtocol",
-			"version": "1.17.0",
+			"version": "1.18.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Extensions.Hosting@1.17.0",
+			"id": "backend:OpenTelemetry.Extensions.Hosting@1.18.0",
 			"name": "OpenTelemetry.Extensions.Hosting",
-			"version": "1.17.0",
+			"version": "1.18.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.AspNetCore@1.17.0",
+			"id": "backend:OpenTelemetry.Instrumentation.AspNetCore@1.18.0",
 			"name": "OpenTelemetry.Instrumentation.AspNetCore",
-			"version": "1.17.0",
+			"version": "1.18.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.Http@1.17.0",
+			"id": "backend:OpenTelemetry.Instrumentation.Http@1.18.0",
 			"name": "OpenTelemetry.Instrumentation.Http",
-			"version": "1.17.0",
+			"version": "1.18.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:OpenTelemetry.Instrumentation.Runtime@1.17.0",
+			"id": "backend:OpenTelemetry.Instrumentation.Runtime@1.18.0",
 			"name": "OpenTelemetry.Instrumentation.Runtime",
-			"version": "1.17.0",
+			"version": "1.18.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://opentelemetry.io/",
 			"source": "backend"
@@ -2986,9 +2970,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:PdfPig@0.1.15",
+			"id": "backend:PdfPig@0.1.16",
 			"name": "PdfPig",
-			"version": "0.1.15",
+			"version": "0.1.16",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://github.com/UglyToad/PdfPig",
 			"source": "backend"
@@ -3082,57 +3066,57 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:Quartz@3.18.2",
+			"id": "backend:Quartz@3.19.1",
 			"name": "Quartz",
-			"version": "3.18.2",
+			"version": "3.19.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Extensions.DependencyInjection@3.18.2",
+			"id": "backend:Quartz.Extensions.DependencyInjection@3.19.1",
 			"name": "Quartz.Extensions.DependencyInjection",
-			"version": "3.18.2",
+			"version": "3.19.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Extensions.Hosting@3.18.2",
+			"id": "backend:Quartz.Extensions.Hosting@3.19.1",
 			"name": "Quartz.Extensions.Hosting",
-			"version": "3.18.2",
+			"version": "3.19.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Jobs@3.18.2",
+			"id": "backend:Quartz.Jobs@3.19.1",
 			"name": "Quartz.Jobs",
-			"version": "3.18.2",
+			"version": "3.19.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Plugins@3.18.2",
+			"id": "backend:Quartz.Plugins@3.19.1",
 			"name": "Quartz.Plugins",
-			"version": "3.18.2",
+			"version": "3.19.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Plugins.TimeZoneConverter@3.18.2",
+			"id": "backend:Quartz.Plugins.TimeZoneConverter@3.19.1",
 			"name": "Quartz.Plugins.TimeZoneConverter",
-			"version": "3.18.2",
+			"version": "3.19.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
 		},
 		{
-			"id": "backend:Quartz.Serialization.SystemTextJson@3.18.2",
+			"id": "backend:Quartz.Serialization.SystemTextJson@3.19.1",
 			"name": "Quartz.Serialization.SystemTextJson",
-			"version": "3.18.2",
+			"version": "3.19.1",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://www.quartz-scheduler.net/",
 			"source": "backend"
@@ -3426,9 +3410,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:Serilog@4.3.1",
+			"id": "backend:Serilog@4.4.0",
 			"name": "Serilog",
-			"version": "4.3.1",
+			"version": "4.4.0",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://serilog.net/",
 			"source": "backend"
@@ -3570,17 +3554,17 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:SQLitePCLRaw.bundle_e_sqlite3@2.1.11",
+			"id": "backend:SQLitePCLRaw.bundle_e_sqlite3@2.1.12",
 			"name": "SQLitePCLRaw.bundle_e_sqlite3",
-			"version": "2.1.11",
+			"version": "2.1.12",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://licenses.nuget.org/Apache-2.0",
 			"source": "backend"
 		},
 		{
-			"id": "backend:SQLitePCLRaw.core@2.1.11",
+			"id": "backend:SQLitePCLRaw.core@2.1.12",
 			"name": "SQLitePCLRaw.core",
-			"version": "2.1.11",
+			"version": "2.1.12",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://licenses.nuget.org/Apache-2.0",
 			"source": "backend"
@@ -3594,9 +3578,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:SQLitePCLRaw.provider.e_sqlite3@2.1.11",
+			"id": "backend:SQLitePCLRaw.provider.e_sqlite3@2.1.12",
 			"name": "SQLitePCLRaw.provider.e_sqlite3",
-			"version": "2.1.11",
+			"version": "2.1.12",
 			"license": "Apache-2.0",
 			"homepageUrl": "https://licenses.nuget.org/Apache-2.0",
 			"source": "backend"
@@ -3722,9 +3706,9 @@
 			"source": "backend"
 		},
 		{
-			"id": "backend:System.Numerics.Tensors@10.0.10",
+			"id": "backend:System.Numerics.Tensors@10.0.11",
 			"name": "System.Numerics.Tensors",
-			"version": "10.0.10",
+			"version": "10.0.11",
 			"license": "MIT",
 			"homepageUrl": "https://dot.net/",
 			"source": "backend"
@@ -3762,9 +3746,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:TimeZoneConverter@7.0.0",
+			"id": "backend:TimeZoneConverter@7.2.0",
 			"name": "TimeZoneConverter",
-			"version": "7.0.0",
+			"version": "7.2.0",
 			"license": "MIT",
 			"homepageUrl": "https://github.com/mattjohnsonpint/TimeZoneConverter",
 			"source": "backend"
@@ -3930,9 +3914,9 @@
 			"source": "frontend"
 		},
 		{
-			"id": "backend:UTF.Unknown@2.6.0",
+			"id": "backend:UTF.Unknown@2.7.0",
 			"name": "UTF.Unknown",
-			"version": "2.6.0",
+			"version": "2.7.0",
 			"license": "MPL-1.1",
 			"homepageUrl": "https://github.com/CharsetDetector/UTF-unknown",
 			"source": "backend"

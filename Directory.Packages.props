@@ -14,17 +14,17 @@
     <!-- MSAL ConfidentialClientApplication for the Entra ID authorization-code sign-in flow (Postman-parity delegated
          token via a confidential client + PKCE). Not pulled in transitively by Azure.Identity 1.21.0 (which depends
          only on Azure.Core), so both packages are direct references, version-locked to the same MSAL release. -->
-    <PackageVersion Include="Microsoft.Identity.Client" Version="4.85.2" />
+    <PackageVersion Include="Microsoft.Identity.Client" Version="4.88.0" />
     <!-- OS-native encrypted MSAL token-cache persistence (DPAPI/Keychain/libsecret), mirroring the
          TokenCachePersistenceOptions Azure.Identity provides for its own credential types. -->
-    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.85.2" />
+    <PackageVersion Include="Microsoft.Identity.Client.Extensions.Msal" Version="4.88.0" />
     <!-- Pure-.NET document text extraction for chat file-upload attachments (single-file-publish safe; no Python/Docker/native deps). -->
     <PackageVersion Include="Microsoft.Extensions.DataIngestion.Abstractions" Version="10.7.0-preview.1.26309.5" />
     <!-- Genuine PdfPig (Apache-2.0, github.com/UglyToad/PdfPig). NOTE: the package id is `PdfPig`, NOT `UglyToad.PdfPig`
          (the latter is an unofficial, unlicensed republish on nuget.org with a commit absent from the real repo). -->
-    <PackageVersion Include="PdfPig" Version="0.1.15" />
+    <PackageVersion Include="PdfPig" Version="0.1.16" />
     <PackageVersion Include="DocumentFormat.OpenXml" Version="3.5.1" />
-    <PackageVersion Include="UTF.Unknown" Version="2.6.0" />
+    <PackageVersion Include="UTF.Unknown" Version="2.7.0" />
     <!-- Docker Engine API client for the Development Mode container sandbox, permitted by ADR 0004 for Development
          Mode build/test/lint execution ONLY. It is not on the inference path and does not reintroduce HostAgent.
 
@@ -39,27 +39,27 @@
     <PackageVersion Include="Docker.DotNet.Enhanced" Version="4.3.3" />
     <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.4.0" />
     <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.4.0" />
-    <PackageVersion Include="FastEndpoints" Version="8.2.0" />
-    <PackageVersion Include="FastEndpoints.Swagger" Version="8.2.0" />
+    <PackageVersion Include="FastEndpoints" Version="8.3.0" />
+    <PackageVersion Include="FastEndpoints.Swagger" Version="8.3.0" />
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
-    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.151" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.177" />
     <!-- Architecture conformance tests (layer-dependency direction). Test-project only. -->
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <!-- Newest intended prerelease; banned-API hard wall (RS0030) over BannedSymbols.txt. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.9" />
-    <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.19.2" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.22.0" />
     <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.10.0" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.3.3" />
     <PackageVersion Include="Microsoft.Testing.Platform" Version="2.3.3" />
-    <PackageVersion Include="Microsoft.Playwright" Version="1.61.0" />
+    <PackageVersion Include="Microsoft.Playwright" Version="1.62.0" />
     <PackageVersion Include="OllamaSharp" Version="5.4.30" />
     <!-- Deliberately behind TUnit (1.65.0) and NOT a lockstep pair here: TUnit.Playwright 1.64.x+ compiles against
          Microsoft.Playwright 1.62.0, so bumping it alone fails the E2E project with CS1705 against the 1.61.0 pin
@@ -77,7 +77,7 @@
          future Microsoft.Extensions.AI.OpenAI bump becomes a conscious version change here rather than a silent
          transitive drift. -->
     <PackageVersion Include="OpenAI" Version="2.12.0" />
-    <!-- 10.0.10 (not 10.0.9): ModelContextProtocol 2.0.0 pulls Microsoft.Extensions.Hosting.Abstractions 10.0.10,
+    <!-- 10.0.10 (not 10.0.9): ModelContextProtocol 2.2.0 pulls Microsoft.Extensions.Hosting.Abstractions 10.0.10,
          which requires Configuration.Abstractions >= 10.0.10, and central transitive pinning turns the mismatch into
          an NU1109 downgrade error across five projects. Same servicing band as the DependencyInjection.Abstractions
          and Logging.Abstractions pins directly below. -->
@@ -93,21 +93,23 @@
     <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.19.0" />
     <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.17.0" />
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.9.0" />
-    <PackageVersion Include="ModelContextProtocol" Version="2.0.0" />
-    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.0.0" />
+    <!-- ModelContextProtocol.AspNetCore takes an exact dependency on the matching ModelContextProtocol
+         build, so these two only ever move together; a split bump fails restore with NU1107/NU1608. -->
+    <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
     <PackageVersion Include="NSec.Cryptography" Version="26.4.0" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.17.0" />
-    <PackageVersion Include="Quartz" Version="3.18.2" />
-    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.18.2" />
-    <PackageVersion Include="Quartz.Plugins" Version="3.18.2" />
-    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="3.18.2" />
-    <PackageVersion Include="Quartz.Serialization.SystemTextJson" Version="3.18.2" />
-    <PackageVersion Include="Serilog" Version="4.3.1" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.18.0" />
+    <PackageVersion Include="Quartz" Version="3.19.1" />
+    <PackageVersion Include="Quartz.Extensions.Hosting" Version="3.19.1" />
+    <PackageVersion Include="Quartz.Plugins" Version="3.19.1" />
+    <PackageVersion Include="Quartz.Plugins.TimeZoneConverter" Version="3.19.1" />
+    <PackageVersion Include="Quartz.Serialization.SystemTextJson" Version="3.19.1" />
+    <PackageVersion Include="Serilog" Version="4.4.0" />
     <PackageVersion Include="Scalar.AspNetCore" Version="2.16.10" />
     <PackageVersion Include="Scrutor" Version="7.0.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
@@ -118,7 +120,7 @@
     <PackageVersion Include="Serilog.Settings.Configuration" Version="10.0.1" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
-    <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.32.0.713" />
+    <PackageVersion Include="SonarAnalyzer.CSharp" Version="10.33.0.1635" />
     <!-- TEMPORARY security override for CVE-2025-6965 (GHSA-2m69-gcr7-jv3q, High).
          Microsoft.Data.Sqlite / Microsoft.EntityFrameworkCore.Sqlite 10.0.9 transitively pull
          SQLitePCLRaw.bundle_e_sqlite3 2.1.11 -> SQLitePCLRaw.lib.e_sqlite3 2.1.11 (SQLite < 3.50.2).
@@ -128,9 +130,9 @@
          (dotnet/efcore PR 38402, milestone 11.0-preview6). Tracked by:
          https://github.com/microsoft/EventLogExpert/issues/604 -->
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
-    <PackageVersion Include="System.Numerics.Tensors" Version="10.0.10" />
+    <PackageVersion Include="System.Numerics.Tensors" Version="10.0.11" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
-    <PackageVersion Include="TUnit" Version="1.65.0" />
+    <PackageVersion Include="TUnit" Version="1.65.38" />
     <PackageVersion Include="Velopack" Version="1.2.0" />
     <PackageVersion Include="YamlDotNet" Version="18.0.0" />
   </ItemGroup>
