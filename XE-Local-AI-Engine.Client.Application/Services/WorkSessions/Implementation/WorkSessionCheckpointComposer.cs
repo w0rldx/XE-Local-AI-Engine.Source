@@ -82,7 +82,13 @@ internal sealed class WorkSessionCheckpointComposer(IAgentWorkSessionStore store
         // A blank requested model means "the node default", which is right here: a work-session agent pins no model, and
         // compaction stays on-node regardless of what the session itself runs on.
         var result = await _compaction.CompactAsync(conversationId, requestedModel: null, cancellationToken).ConfigureAwait(false);
-        if (result.Outcome == ConversationCompactionOutcome.Compacted && !string.IsNullOrWhiteSpace(result.Summary))
+
+        // Any non-blank synopsis wins, not only a freshly folded one. The step boundary
+        // (WorkSessionStepContextBound) folds this conversation with a keep window of 2 whenever it grows past the
+        // budget, so by the time a checkpoint runs there is often nothing left for the configured window to fold — and
+        // the "already covered" no-op returns the SYNOPSIS THAT FOLD PRODUCED. Taking only the Compacted outcome would
+        // pin the checkpoint to a stale summary, or to none at all, on exactly the sessions the bound is protecting.
+        if (!string.IsNullOrWhiteSpace(result.Summary))
         {
             return result.Summary;
         }

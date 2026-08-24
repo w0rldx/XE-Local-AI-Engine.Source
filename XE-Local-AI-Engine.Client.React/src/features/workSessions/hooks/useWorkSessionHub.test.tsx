@@ -68,7 +68,9 @@ function emit(change: { sessionId: string; seq: number; kind: string }): void {
 	act(() => hubMock.handlers.get("workSessionChanged")?.(change));
 }
 
-function invalidatedKeys(spy: ReturnType<typeof vi.spyOn>): unknown[] {
+type InvalidateSpy = { mock: { calls: unknown[][] } };
+
+function invalidatedKeys(spy: InvalidateSpy): unknown[] {
 	return spy.mock.calls.map((call) => (call[0] as { queryKey: unknown }).queryKey);
 }
 

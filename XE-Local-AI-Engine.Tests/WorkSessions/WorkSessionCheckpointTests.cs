@@ -163,7 +163,10 @@ public sealed class WorkSessionCheckpointTests
     {
         public ConversationCompactionResult Result { get; set; } = result;
 
-        public Task<ConversationCompactionResult> CompactAsync(Guid conversationId, string? requestedModel = null, CancellationToken cancellationToken = default) =>
+        public Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
+            string? requestedModel,
+            int? recentMessagesToKeepVerbatim,
+            CancellationToken cancellationToken = default) =>
             Task.FromResult(Result);
     }
 }

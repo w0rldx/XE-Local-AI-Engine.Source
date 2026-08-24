@@ -324,6 +324,70 @@ public sealed class ConversationCompactionServiceTests
         AssertEx.Equal("message-3", foldedContents[3]);
     }
 
+    [Test]
+    public async Task CompactAsync_WhenAKeepWindowIsPassed_FoldsDownToItInsteadOfTheConfiguredWindow()
+    {
+        // The work-session step boundary passes 2: a session's state block is rebuilt from the database every step, so
+        // only the previous exchange is worth keeping verbatim. The configured 8 would leave four whole steps unfolded.
+        var messages = CompletedMessages(count: 12);
+        var conversation = Conversation(messages);
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns("SYNOPSIS");
+        var service = CreateService(persistence, summarizer, resolver);
+
+        var result = await service.CompactAsync(ConversationId, requestedModel: null, recentMessagesToKeepVerbatim: 2);
+
+        AssertEx.Equal(ConversationCompactionOutcome.Compacted, result.Outcome);
+        AssertEx.Equal(expected: 10, result.MessagesFolded, "A keep window of 2 leaves only the last exchange verbatim.");
+        AssertEx.Equal(expected: 9, result.CoversToSequence);
+    }
+
+    [Test]
+    public async Task CompactAsync_WhenAKeepWindowBelowTheFloorIsPassed_StillKeepsTheLastExchange()
+    {
+        var messages = CompletedMessages(count: 12);
+        var conversation = Conversation(messages);
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns("SYNOPSIS");
+        var service = CreateService(persistence, summarizer, resolver);
+
+        var result = await service.CompactAsync(ConversationId, requestedModel: null, recentMessagesToKeepVerbatim: 0);
+
+        AssertEx.Equal(expected: 10, result.MessagesFolded, "The floor of 2 applies to the override exactly as it does to the configured value.");
+    }
+
+    [Test]
+    public async Task CompactAsync_WhenNoKeepWindowIsPassed_LeavesTheOrdinaryChatPathOnTheConfiguredWindow()
+    {
+        // The three-argument member the chat compaction endpoint calls must keep behaving as it did: the default
+        // interface implementation forwards a null override, and null means "the configured window".
+        var messages = CompletedMessages(count: 12);
+        var conversation = Conversation(messages);
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        persistence.GetConversationAsync(ConversationId, Arg.Any<CancellationToken>()).Returns(conversation);
+        persistence.SetCompactionSummaryAsync(Arg.Any<NodeChatSetCompactionSummaryRequest>(), Arg.Any<CancellationToken>()).Returns(conversation);
+        var resolver = Substitute.For<ILocalDefaultChatModelResolver>();
+        resolver.ResolveAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns("local-model");
+        var summarizer = Substitute.For<IConversationSummarizer>();
+        summarizer.SummarizeAsync(Arg.Any<ConversationSummarizerInput>(), Arg.Any<CancellationToken>()).Returns("SYNOPSIS");
+        IConversationCompactionService service = CreateService(persistence, summarizer, resolver);
+
+        var result = await service.CompactAsync(ConversationId, "local-model", CancellationToken.None);
+
+        AssertEx.Equal(expected: 4, result.MessagesFolded, "The configured keep window of 8 is unchanged for an ordinary chat.");
+        AssertEx.Equal(expected: 3, result.CoversToSequence);
+    }
+
     private static ConversationCompactionService CreateService(INodeChatPersistenceService persistence, IConversationSummarizer summarizer, ILocalDefaultChatModelResolver? resolver = null)
     {
         resolver ??= Substitute.For<ILocalDefaultChatModelResolver>();

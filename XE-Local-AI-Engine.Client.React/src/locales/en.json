@@ -131,7 +131,8 @@
 		"trainingGroup": "Training",
 		"training": "Training",
 		"trainingDatasets": "Datasets",
-		"trainingComparisons": "Comparisons"
+		"trainingComparisons": "Comparisons",
+		"workSessions": "Work Sessions"
 	},
 	"chat": {
 		"thoughts": "Thoughts",
@@ -4291,6 +4292,129 @@
 			"comparisons": {
 				"title": "Comparisons",
 				"subtitle": "Score a base model and its tuned counterpart on the same frozen hold-out samples, then read the difference."
+			}
+		},
+		"workSessions": {
+			"title": "Work Sessions",
+			"subtitle": "Long-running agent work with its own plan, findings and artifacts.",
+			"empty": "No work sessions yet. Give an agent an objective and it will plan and run the work.",
+			"loadFailed": "Could not load work sessions.",
+			"retry": "Retry",
+			"kind": {
+				"General": "General",
+				"Research": "Research"
+			},
+			"status": {
+				"Draft": "Draft",
+				"Running": "Running",
+				"Paused": "Paused",
+				"WaitingForInput": "Waiting for you",
+				"WaitingForApproval": "Waiting for approval",
+				"Completed": "Completed",
+				"Failed": "Failed",
+				"Cancelled": "Cancelled",
+				"Interrupted": "Interrupted"
+			},
+			"taskStatus": {
+				"Planned": "Planned",
+				"Active": "Active",
+				"Blocked": "Blocked",
+				"Done": "Done",
+				"Dropped": "Dropped"
+			},
+			"findingKind": {
+				"Finding": "Findings",
+				"Evidence": "Evidence",
+				"Decision": "Decisions",
+				"OpenQuestion": "Open questions"
+			},
+			"artifactKind": {
+				"Report": "Report",
+				"Note": "Note",
+				"File": "File",
+				"Patch": "Patch"
+			},
+			"card": {
+				"meta": "{{steps}} steps · updated {{updated}}"
+			},
+			"create": {
+				"open": "New work session",
+				"first": "Create your first work session",
+				"title": "New work session",
+				"submit": "Create",
+				"titleLabel": "Title",
+				"objectiveLabel": "Objective",
+				"objectiveHint": "What should the agent achieve? It plans its own tasks from this.",
+				"kindLabel": "Kind",
+				"agentLabel": "Agent",
+				"failed": "Could not create the work session."
+			},
+			"detail": {
+				"notFound": "This work session could not be loaded.",
+				"back": "Back to work sessions",
+				"showPlan": "Show plan",
+				"showDetails": "Show findings and artifacts",
+				"details": "Details"
+			},
+			"plan": {
+				"title": "Plan",
+				"start": "Start",
+				"pause": "Pause",
+				"resume": "Resume",
+				"cancel": "Cancel",
+				"stepOf": "Step {{step}} of {{max}}",
+				"blocked": "Blocked: {{reason}}",
+				"empty": "No tasks yet.",
+				"emptyDraft": "The agent will draft the plan on its first step.",
+				"interrupted": "The engine restarted mid-run. Resume to continue from the last checkpoint.",
+				"waitingForApproval": "Waiting for your approval in the conversation — the session is holding this node's model while it waits.",
+				"waitingForInput": "The agent asked you a question in the conversation — the session is holding this node's model while it waits.",
+				"pausedAtCheckpoint": "Paused at checkpoint {{step}}",
+				"liveUnavailable": "Polling",
+				"liveUnavailableHint": "Live updates are unavailable; this page is polling instead."
+			},
+			"tabs": {
+				"findings": "Findings",
+				"artifacts": "Artifacts",
+				"checkpoints": "Checkpoints",
+				"events": "Events"
+			},
+			"findings": {
+				"count": "{{count}} findings",
+				"showSuperseded": "Show superseded",
+				"empty": "The agent has not recorded anything yet.",
+				"step": "Step {{step}}"
+			},
+			"artifacts": {
+				"empty": "The agent has not saved any artifacts yet.",
+				"invalid": "Unreadable",
+				"invalidBody": "This artifact's stored content could not be read and cannot be shown.",
+				"meta": "{{mediaType}} · {{bytes}} bytes · step {{step}}",
+				"binary": "This artifact is binary and has no text preview.",
+				"loadFailed": "Could not load this artifact."
+			},
+			"checkpoints": {
+				"empty": "No checkpoint has been written yet.",
+				"step": "Checkpoint at step {{step}}",
+				"noSummary": "No prose summary was produced.",
+				"showState": "Show state",
+				"hideState": "Hide state",
+				"stateLabel": "Checkpoint state"
+			},
+			"events": {
+				"empty": "Nothing has happened in this session yet.",
+				"meta": "step {{step}} · #{{sequence}}",
+				"showDetail": "Show detail",
+				"hideDetail": "Hide detail",
+				"loadMore": "Load more",
+				"truncated": "Only the first events are shown."
+			},
+			"followUp": {
+				"draft": "Saved — it will be used when you start this session.",
+				"resuming": "Sent — resuming.",
+				"queued": "Queued for the next step.",
+				"closed": "This session is finished and takes no further messages.",
+				"failed": "Could not send that message."
 			}
 		}
 	},

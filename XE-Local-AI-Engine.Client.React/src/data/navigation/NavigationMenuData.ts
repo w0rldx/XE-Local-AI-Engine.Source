@@ -34,7 +34,8 @@ type NavigationCapabilityKey =
 	| "dashboard"
 	| "binding"
 	| "benchmarks"
-	| "training";
+	| "training"
+	| "workSessions";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -122,6 +123,7 @@ const allNavigationLinks: INavigationLink[] = [
 		links: [
 			{ translationKey: "navigation.commands", to: nodeRoutePaths.commands },
 			{ translationKey: "navigation.agents", to: nodeRoutePaths.agents, capability: "agentManagement" },
+			{ translationKey: "navigation.workSessions", to: nodeRoutePaths.workSessions, capability: "workSessions" },
 			{ translationKey: "navigation.skills", to: nodeRoutePaths.skills, capability: "agentManagement" },
 			{ translationKey: "navigation.customTools", to: nodeRoutePaths.customTools, capability: "agentManagement" },
 			{ translationKey: "navigation.mcp", to: nodeRoutePaths.mcp, capability: "mcpServers" },

@@ -699,6 +699,31 @@ and details, finding text and `sourceRef`, artifact names, the synopsis. All of 
 provenance and may be verbatim knowledge-base or MCP output. The objective stays outside the fence — it
 is the operator's own text and the one instruction in the block meant to be followed.
 
+#### The transcript bound at the step boundary
+
+Rebuilding the state block bounds what the model *needs*; it does not bound what the send path *sends*.
+A step is an ordinary chat turn, so `BuildConversationContext` replays every earlier step's state block,
+answer and **reasoning** verbatim (tool calls and results are not replayed — they live in ordered parts,
+never in `Content`), and the transcript grows for the life of the session. Meanwhile the step's own tool
+loop is the expensive half: one `read_document` result is capped at 50,000 characters — some 16k tokens —
+and `Agent:ToolPipeline:MaxToolResultCharacters` (65,536) is larger than that cap, so nothing clips it.
+
+`WorkSessionStepContextBound` therefore runs **before every send**: it projects what the next step will
+replay using the same `ITokenEstimator` the context budgeters use, and over
+`WorkSessions:StepContextBudgetTokens` it forces a compaction of the owned conversation through
+`IConversationCompactionService` with a keep window of **2** — one step verbatim, the rest folded into
+the synopsis `CompactionContextResolver` already splices. That is safe precisely because the state block
+is rebuilt from the database; folding costs the model nothing it still needs.
+
+The checkpoint's own compaction is not that bound. It lands every `CheckpointEveryNSteps` steps and keeps
+the configured `Agent:ConversationCompaction:RecentMessagesToKeepVerbatim` (8) — four whole steps for a
+session — so it folds nothing until a session is long, and it runs *after* a step, never before one.
+Without the step-boundary bound a 27B model at a 65,536-token window overflowed at step 5
+(2026-08-24, live research session): the transcript had eaten the headroom the step's knowledge-base
+reads needed, and because both context budgeters are estimate-gated at `chars/4` — some 12 % optimistic
+for Qwen3 on markdown — the round was passed through as fitting and llama.cpp rejected it with
+`HTTP 400 exceed_context_size_error` instead of being trimmed.
+
 ### 5.4 The four state tools
 
 `update_work_plan`, `record_finding`, `save_artifact` and `complete_work_session` are
@@ -749,6 +774,7 @@ the state block would otherwise carry off the node on the next step.
 | `WorkSessions:MaxParkedSeconds` | `300` | Must stay under the node's `MaxPendingToolCallAge` |
 | `WorkSessions:MaxArtifactBytes` | `1048576` | 1 MiB |
 | `WorkSessions:StepTimeoutSeconds` | `0` | 0 inherits the node's maximum message request timeout |
+| `WorkSessions:StepContextBudgetTokens` | `12000` | Replayed-transcript budget per step; over it the boundary force-compacts (§5.3). 0 disables |
 
 `IWorkSessionSandboxRuntimeProvider` exists as a role marker with **no consumer in v1**: nothing a
 session tool does needs a jail yet, and the role is there so the first one that does gets a per-feature

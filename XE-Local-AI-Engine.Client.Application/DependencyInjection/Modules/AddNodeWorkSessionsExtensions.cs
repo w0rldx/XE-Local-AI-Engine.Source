@@ -37,6 +37,9 @@ internal static class AddNodeWorkSessionsExtensions
         builder.Services.AddScoped<IWorkSessionService, WorkSessionService>();
         builder.Services.AddScoped<WorkSessionCheckpointComposer>();
 
+        // Scoped: it reads the conversation through the scoped chat persistence, from the supervisor's per-turn scope.
+        builder.Services.AddScoped<WorkSessionStepContextBound>();
+
         // One instance serving three roles: the supervisor holds the in-flight runs, so a second instance would answer
         // "not running" to every stop and drive a session twice.
         builder.Services.AddSingleton<WorkSessionExecutionSupervisor>();

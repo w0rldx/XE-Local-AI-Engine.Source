@@ -29,6 +29,9 @@ internal sealed class ConversationCompactionService(
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     private readonly ILogger<ConversationCompactionService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
+    public Task<ConversationCompactionResult> CompactAsync(Guid conversationId, string? requestedModel = null, CancellationToken cancellationToken = default) =>
+        CompactAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim: null, cancellationToken);
+
     public async Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
         string? requestedModel,
         int? recentMessagesToKeepVerbatim,
