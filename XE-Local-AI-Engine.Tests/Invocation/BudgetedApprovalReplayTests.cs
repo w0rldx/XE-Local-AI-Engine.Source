@@ -70,6 +70,15 @@ public sealed class BudgetedApprovalReplayTests
     private const int OuterExcerptChars = 200;
     private const int InnerExcerptChars = 80;
 
+    // Both budgeters measure against TokenEstimatorCalibrationStore.EstimateSafetyFactor of their window, so the OUTER
+    // capacity is stated as the value whose margined budget is 2048 — the number this scenario was built on. Stating a
+    // bare 2048 here instead makes the outer budget 1740, i.e. TIGHTER than the inner window below, and the outer hop
+    // then hands the inner one a round that already fits: the double excerpt silently stops happening and
+    // BudgetedReplay_DoubleExcerptedStructuredResult_KeepsItsCallIdAndItsMarkers degenerates into a re-assertion of the
+    // outer excerpt. The inner window stays a bare 2048 on purpose, so its margined 1740 sits strictly below the outer
+    // budget and the inner hop must act on every round the outer one already reduced.
+    private const int OuterContextTokens = 2410;
+
     [Test]
     public async Task BudgetedReplay_WithBothLastResortPassesOn_CompletesWithoutTrippingTheApprovalValidator()
     {
@@ -294,7 +303,7 @@ public sealed class BudgetedApprovalReplayTests
         for (var round = 0; round < 6; round++)
         {
             var budgeted = budgeter.Budget(messages,
-                contextTokenCapacity: 2048,
+                contextTokenCapacity: OuterContextTokens,
                 reservedOutputTokens: 0,
                 SystemPrompt,
                 [$"{QueryToolName}: runs a structured query", $"{ArchiveToolName}: archives a batch"],
