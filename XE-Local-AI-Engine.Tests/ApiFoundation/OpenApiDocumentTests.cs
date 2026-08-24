@@ -12,6 +12,25 @@ public sealed class OpenApiDocumentTests
 
     private static readonly string[] HttpVerbs = ["get", "post", "put", "delete", "patch", "options", "head"];
 
+    // The whole work-session REST surface, asserted twice: once on the shared fixture and once on a node with the
+    // feature switched off. Kept in one place so the two runs cannot drift apart.
+    private static readonly (string Path, string[] Verbs)[] WorkSessionPaths =
+    [
+        ("/api/local/v1/work-sessions", ["get", "post"]),
+        ("/api/local/v1/work-sessions/{sessionId}", ["get", "patch", "delete"]),
+        ("/api/local/v1/work-sessions/{sessionId}/start", ["post"]),
+        ("/api/local/v1/work-sessions/{sessionId}/pause", ["post"]),
+        ("/api/local/v1/work-sessions/{sessionId}/resume", ["post"]),
+        ("/api/local/v1/work-sessions/{sessionId}/cancel", ["post"]),
+        ("/api/local/v1/work-sessions/{sessionId}/tasks", ["get"]),
+        ("/api/local/v1/work-sessions/{sessionId}/findings", ["get"]),
+        ("/api/local/v1/work-sessions/{sessionId}/artifacts", ["get"]),
+        ("/api/local/v1/work-sessions/{sessionId}/checkpoints", ["get"]),
+        ("/api/local/v1/work-sessions/{sessionId}/events", ["get"]),
+        ("/api/local/v1/work-sessions/{sessionId}/artifacts/{artifactId}/content", ["get"]),
+        ("/api/local/v1/work-sessions/{sessionId}/messages", ["post"])
+    ];
+
     // operationIds drive the generated hey-api React SDK function names. They must be clean, lower-camelCase,
     // and namespace-free — never the FastEndpoints default (e.g. "xeLocalAiEngineClientEndpoints...Endpoint").
     private static readonly Regex CleanCamelCase = new("^[a-z][A-Za-z0-9]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -281,9 +300,10 @@ public sealed class OpenApiDocumentTests
     ///     The only drift gate that can see a NEW path: <c>openapi:check</c> regenerates the client from the committed
     ///     spec, so it passes happily while an endpoint is missing from it.
     ///     <para>
-    ///         This fixture runs with the work-session feature at its default, which proves the second half of the
-    ///         design: the routes stay DISCOVERED when the node has the feature off — only their behaviour is gated —
-    ///         so the generated client describes the surface on every node rather than on some of them.
+    ///         The shared fixture runs with the shipped <c>WorkSessions:Enabled: true</c>, so this test asserts the
+    ///         surface an ENABLED node publishes. That the same surface survives the feature being switched off — the
+    ///         second half of the design, since registration is unconditional and only behaviour is gated — is
+    ///         <see cref="LocalOpenApiDocument_DescribesWorkSessionSurface_WhenTheFeatureIsDisabled" />'s job.
     ///     </para>
     /// </summary>
     [Test]
@@ -298,29 +318,7 @@ public sealed class OpenApiDocumentTests
         using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
         var paths = document.RootElement.GetProperty("paths");
 
-        foreach (var (path, verbs) in new[]
-                 {
-                     ("/api/local/v1/work-sessions", new[] { "get", "post" }),
-                     ("/api/local/v1/work-sessions/{sessionId}", ["get", "patch", "delete"]),
-                     ("/api/local/v1/work-sessions/{sessionId}/start", ["post"]),
-                     ("/api/local/v1/work-sessions/{sessionId}/pause", ["post"]),
-                     ("/api/local/v1/work-sessions/{sessionId}/resume", ["post"]),
-                     ("/api/local/v1/work-sessions/{sessionId}/cancel", ["post"]),
-                     ("/api/local/v1/work-sessions/{sessionId}/tasks", ["get"]),
-                     ("/api/local/v1/work-sessions/{sessionId}/findings", ["get"]),
-                     ("/api/local/v1/work-sessions/{sessionId}/artifacts", ["get"]),
-                     ("/api/local/v1/work-sessions/{sessionId}/checkpoints", ["get"]),
-                     ("/api/local/v1/work-sessions/{sessionId}/events", ["get"]),
-                     ("/api/local/v1/work-sessions/{sessionId}/artifacts/{artifactId}/content", ["get"]),
-                     ("/api/local/v1/work-sessions/{sessionId}/messages", ["post"])
-                 })
-        {
-            AssertEx.True(paths.TryGetProperty(path, out var pathItem), $"Expected work-session path '{path}'.");
-            foreach (var verb in verbs)
-            {
-                AssertEx.True(pathItem.TryGetProperty(verb, out _), $"Expected {verb.ToUpperInvariant()} {path}.");
-            }
-        }
+        AssertWorkSessionPaths(paths);
 
         AssertResponses(paths, "/api/local/v1/work-sessions/{sessionId}/start", "post", ["202", "404", "409"]);
         AssertResponses(paths, "/api/local/v1/work-sessions/{sessionId}/artifacts/{artifactId}/content", "get", ["404", "413"]);
@@ -330,6 +328,45 @@ public sealed class OpenApiDocumentTests
         AssertSchemaProperties(schemas,
             "WorkSessionArtifactResponse",
             ["id", "sequence", "kind", "name", "mediaType", "contentSha256", "sizeBytes", "isValid", "createdStep"]);
+    }
+
+    /// <summary>
+    ///     The half the shared fixture cannot prove: the work-session routes are mapped unconditionally, so a node with
+    ///     <c>WorkSessions:Enabled: false</c> publishes exactly the same OpenAPI surface — the generated hey-api client
+    ///     describes every node, not only the ones with the feature on. Behaviour is gated in request-path middleware,
+    ///     which the document never sees.
+    /// </summary>
+    [Test]
+    public async Task LocalOpenApiDocument_DescribesWorkSessionSurface_WhenTheFeatureIsDisabled()
+    {
+        await using var disabledFactory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["WorkSessions:Enabled"] = "false"
+            }
+        };
+
+        using var client = disabledFactory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+
+        AssertWorkSessionPaths(document.RootElement.GetProperty("paths"));
+    }
+
+    private static void AssertWorkSessionPaths(JsonElement paths)
+    {
+        foreach (var (path, verbs) in WorkSessionPaths)
+        {
+            AssertEx.True(paths.TryGetProperty(path, out var pathItem), $"Expected work-session path '{path}'.");
+            foreach (var verb in verbs)
+            {
+                AssertEx.True(pathItem.TryGetProperty(verb, out _), $"Expected {verb.ToUpperInvariant()} {path}.");
+            }
+        }
     }
 
     private static void AssertResponses(JsonElement paths, string path, string verb, IReadOnlyList<string> expected)
