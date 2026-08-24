@@ -45,10 +45,15 @@ internal sealed class WorkSessionCheckpointComposer(IAgentWorkSessionStore store
 
         var summary = await SummarizeAsync(session.ConversationId, previous?.Summary, cancellationToken).ConfigureAwait(false);
 
+        // The operation id is the checkpoint's own id, i.e. unique per call rather than derived from the step. A step
+        // takes more than one checkpoint — the park-timeout one and the pause one land at the same step count — and a
+        // step-derived key would make the store's idempotency swallow the second, which is the one that records where
+        // the work actually stopped.
+        var checkpointId = Guid.NewGuid();
         return await _store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand(sessionId,
-                    Guid.NewGuid(),
+                    checkpointId,
                     WorkSessionVersions.Any,
-                    WorkSessionOperationId.For(sessionId, session.StepCount, WorkSessionStepPhases.Checkpoint),
+                    checkpointId,
                     session.StepCount,
                     summary,
                     JsonSerializer.Serialize(state)),

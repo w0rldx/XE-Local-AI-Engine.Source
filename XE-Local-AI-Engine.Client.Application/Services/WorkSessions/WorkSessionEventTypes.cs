@@ -29,5 +29,4 @@ internal static class WorkSessionStepPhases
     public const string Started = "started";
     public const string Failed = "failed";
     public const string ParkExpired = "park-expired";
-    public const string Checkpoint = "checkpoint";
 }

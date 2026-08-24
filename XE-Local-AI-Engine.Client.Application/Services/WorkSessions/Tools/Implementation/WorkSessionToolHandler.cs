@@ -112,11 +112,6 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
             return $"{ToolName} arguments were empty.";
         }
 
-        if (Validate(request) is { } validationError)
-        {
-            return validationError;
-        }
-
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
 
@@ -136,6 +131,14 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
             if (session.Status is AgentWorkSessionStatus.Completed or AgentWorkSessionStatus.Cancelled or AgentWorkSessionStatus.Failed)
             {
                 return SessionClosed;
+            }
+
+            // Argument bounds are checked AFTER the session guards, not before: "this tool only works inside a work
+            // session" is the more useful answer to a call that is both out of scope and malformed, and it is the answer
+            // that does not leak the shape of a tool the caller cannot use anyway.
+            if (Validate(request) is { } validationError)
+            {
+                return validationError;
             }
 
             WorkSessionToolOutcome outcome;
