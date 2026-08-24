@@ -119,14 +119,12 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
     }
 
     /// <summary>
-    ///     Stops at the first step rather than at <c>Completed</c>, because this fixture cannot run a server-initiated
-    ///     local turn to completion. <c>NodeChatStreamService</c> resolves a send with no explicit request model
-    ///     through the local-default path, which is installed-GGUF-only by design ("never Ollama") — and the supervisor
-    ///     never sets a request model, so an agent's pinned <c>ModelProfile</c> is not consulted before the
-    ///     <c>NoChatModelInstalledException</c> guard fires. The E2E node has FakeOllama and no GGUF, so every step
-    ///     terminates as <c>StepFailed</c>. Everything this test asserts is the frontend contract and is unaffected;
-    ///     the <c>update_work_plan</c> / <c>complete_work_session</c> leg needs either an installed GGUF in the fixture
-    ///     or the guard to consider the agent's pin, and is tracked separately.
+    ///     Stops at the first step rather than at <c>Completed</c>. Since <c>ChatTurnResolver</c> clears the
+    ///     "no chat model installed" guard whenever the agent's pinned <c>ModelProfile</c> resolves a model, a step on
+    ///     this GGUF-less FakeOllama node can now run through the pin (hence <see cref="PinChatModelOnSeededAgentAsync" />
+    ///     + <see cref="MapChatModelToOllamaAsync" />). What this test asserts is the frontend contract up to
+    ///     <c>StepStarted</c>; the <c>update_work_plan</c> / <c>complete_work_session</c> leg still needs a scripted
+    ///     FakeOllama tool-call reply for the step and is tracked separately.
     /// </summary>
     [Test]
     [Category("Page")]

@@ -48,7 +48,7 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
 
     private const string ConcurrencyRefusalSuffix = " could not be recorded because the work session changed underneath it. Try the same call once more.";
 
-    private readonly ILogger _logger;
+    protected ILogger Logger { get; }
     private readonly IWorkSessionEventPublisher _publisher;
     private readonly IServiceScopeFactory _scopeFactory;
 
@@ -60,7 +60,7 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
         ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         Options = options.Value;
     }
 
@@ -118,7 +118,7 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
             // The parser's own message is for an operator, not for the model: it names the CLR request type and, for an
             // unknown property, never mentions the property the model should have used instead. It goes to the log; the
             // model gets a shape it can copy.
-            _logger.LogDebug(exception, "{ToolName} could not read its arguments.", ToolName);
+            Logger.LogDebug(exception, "{ToolName} could not read its arguments.", ToolName);
             return InvalidArguments;
         }
 

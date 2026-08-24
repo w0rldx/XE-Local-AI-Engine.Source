@@ -85,7 +85,9 @@ internal sealed class WorkSessionCheckpointComposer(IAgentWorkSessionStore store
         // default of eight: at eight, a session that checkpoints before its fourth step has nothing OUTSIDE the window
         // to fold, compaction answers NothingToCompact, and the checkpoint's prose half stays null — precisely on the
         // short sessions whose checkpoint is the only record of what happened. Two is safe for the same reason it is
-        // safe there: everything durable is in the state block, rebuilt from the database on every step.
+        // safe there: everything durable is in the state block, rebuilt from the database on every step. Deliberate
+        // side effect: the fold persists the synopsis and advances the send path's compaction cover, so the step after
+        // a checkpoint resumes on the synopsis plus the last exchange — one on-node summarizer call per checkpoint.
         var result = await _compaction.CompactAsync(conversationId,
                                           requestedModel: null,
                                           WorkSessionStepContextBound.SessionKeepVerbatim,

@@ -24,7 +24,6 @@ internal sealed class SaveArtifactToolHandler(IServiceScopeFactory scopeFactory,
     ILogger<SaveArtifactToolHandler> logger) : WorkSessionToolHandler<SaveArtifactRequest>(scopeFactory, options, publisher, logger)
 {
     private readonly IWorkSessionArtifactBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
-    private readonly ILogger<SaveArtifactToolHandler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
     public override string ToolName => WorkSessionToolDefinitions.SaveArtifact.ToolName;
 
@@ -121,11 +120,11 @@ internal sealed class SaveArtifactToolHandler(IServiceScopeFactory scopeFactory,
             }
             catch (IOException exception)
             {
-                _logger.LogWarning(exception, "Could not remove the replaced work session artifact blob {ArtifactId}.", supersededId);
+                Logger.LogWarning(exception, "Could not remove the replaced work session artifact blob {ArtifactId}.", supersededId);
             }
             catch (UnauthorizedAccessException exception)
             {
-                _logger.LogWarning(exception, "Could not remove the replaced work session artifact blob {ArtifactId}.", supersededId);
+                Logger.LogWarning(exception, "Could not remove the replaced work session artifact blob {ArtifactId}.", supersededId);
             }
         }
 
