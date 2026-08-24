@@ -92,6 +92,39 @@ public sealed class ModelCapabilityResolverTests
         AssertEx.False(cloud.SupportsVision, "a cloud-routed deployment must stay non-vision");
     }
 
+    /// <summary>
+    ///     The GGUF descriptor is the ONE source that can report a thinking budget as unenforceable — llama.cpp is the
+    ///     only runtime that reads the budget, and the chat template is the only place its enforceability is decided.
+    ///     A cloud route must never inherit that false: the budget marker never reaches a cloud wire, so reporting it
+    ///     unenforceable there would be a meaningless (and, if anything ever read it, misleading) claim.
+    /// </summary>
+    [Test]
+    public async Task ResolveAsync_CarriesReasoningBudgetEnforceabilityFromTheGgufDescriptorOnly()
+    {
+        const string unenforceableModel = "unclosed-think.gguf";
+        var factory = Substitute.For<IActiveCloudChatClientFactory>();
+        factory.IsCloudProviderSelected(Arg.Any<string>()).Returns(false);
+        var resolver = CreateResolver(factory, out var providerResolver, out var ggufResolver);
+        providerResolver.ResolveProviderNameForModelAsync(unenforceableModel, Arg.Any<CancellationToken>()).Returns("llama.cpp");
+        ggufResolver.TryResolveAsync(unenforceableModel, Arg.Any<CancellationToken>())
+                    .Returns(new GgufModelCapabilities(SupportsThinking: true,
+                        SupportsTools: false,
+                        SupportsVision: false,
+                        ReasoningBudgetEnforceable: false));
+
+        var local = await resolver.ResolveAsync(unenforceableModel, CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.True(local.SupportsThinking, "enforceability never changes whether the model reasons");
+        AssertEx.False(local.ReasoningBudgetEnforceable);
+
+        // A Codex id short-circuits to the provider's declared matrix (thinking-capable), the only OTHER route whose
+        // models read this flag.
+        var cloud = await resolver.ResolveAsync("gpt-5.6-terra", CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.True(cloud.SupportsThinking);
+        AssertEx.True(cloud.ReasoningBudgetEnforceable, "the budget marker never reaches a cloud wire, so a cloud route reports the inert true");
+    }
+
     private static ModelCapabilityResolver CreateResolver(IActiveCloudChatClientFactory factory, out ILocalModelProviderResolver providerResolver)
     {
         return CreateResolver(factory, out providerResolver, out _);

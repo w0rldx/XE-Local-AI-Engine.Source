@@ -2328,6 +2328,7 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
 	capabilities: Array<string>;
 	isReasoningCapable: boolean;
 	isNativeReasoningCapable?: boolean;
+	reasoningBudgetEnforceable?: boolean;
 	isToolCapable: boolean;
 	isMultimodalCapable?: boolean;
 	isOverridden: boolean;

@@ -42,6 +42,16 @@ public sealed record RuntimePackage
     public bool SupportsThinking { get; init; } = true;
 
     /// <summary>
+    ///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for the active model — its chat
+    ///     template renders a literal reasoning end marker, which is what llama.cpp turns into the non-empty
+    ///     think-end-tag set its budget gate requires. When <c>false</c> the invocation factory omits the budget marker
+    ///     entirely rather than sending a cap the server accepts and then ignores. Defaults to <c>true</c> so the
+    ///     cloud/Ollama paths and pre-existing callers stay byte-identical; deliberately excluded from the config hash
+    ///     (mirrors <see cref="SupportsThinking" />) because it is derived from the model, not the agent configuration.
+    /// </summary>
+    public bool ReasoningBudgetEnforceable { get; init; } = true;
+
+    /// <summary>
     ///     Whether this turn runs UNATTENDED — a scheduled/headless run with no operator on the other end of an approval
     ///     round-trip. Set only by the scheduler's run-saved-agent path; the interactive chat and regeneration paths
     ///     leave it <c>false</c>. Read by the runner's single approval choke point, which fails an unattended approval

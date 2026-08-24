@@ -34,6 +34,14 @@ using Microsoft.Extensions.AI;
 ///     <see cref="InvocationSamplingOptions.NumCtx" /> is not, the factory writes it as the <c>num_ctx</c> chat option so
 ///     the inner provider-round budgeter sizes against the real window; a per-send <c>num_ctx</c> still wins.
 /// </param>
+/// <param name="ReasoningBudgetEnforceable">
+///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for <paramref name="ModelId" /> —
+///     that is, whether its chat template renders a literal reasoning end marker. When <c>false</c> the factory omits
+///     the budget marker: llama.cpp would accept the field and silently ignore it, so sending it would only claim a cap
+///     that does not exist. Read only when <paramref name="SupportsThinking" /> is <c>true</c> (a budget is emitted
+///     exclusively on the graded branch). Defaults to <c>true</c> so cloud providers and pre-existing callers keep the
+///     byte-identical request they had before this flag existed.
+/// </param>
 /// <param name="ResponseJsonSchema">
 ///     Optional JSON schema this turn's output is CONSTRAINED to. Null (the default) keeps the unconstrained path
 ///     byte-identical: the factory sets no <see cref="ChatOptions.ResponseFormat" />, so no <c>response_format</c>
@@ -52,4 +60,5 @@ public sealed record InvocationAgentDefinition(
     InvocationSamplingOptions? Sampling = null,
     IReadOnlyList<InvocationSkill>? Skills = null,
     int? EffectiveContextTokens = null,
-    JsonElement? ResponseJsonSchema = null);
+    JsonElement? ResponseJsonSchema = null,
+    bool ReasoningBudgetEnforceable = true);

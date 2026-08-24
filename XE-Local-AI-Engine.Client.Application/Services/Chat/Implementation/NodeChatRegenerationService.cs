@@ -249,7 +249,8 @@ public sealed class NodeChatRegenerationService(
                 // reruns under the same knobs the original send used. Null keeps the package byte-identical to today.
                 SamplingOptions: samplingOptions,
                 Skills: resolved?.Skills,
-                CustomTools: resolved?.CustomTools));
+                CustomTools: resolved?.CustomTools,
+                ReasoningBudgetEnforceable: resolution.ReasoningBudgetEnforceable));
 
             // Post-run adaptive-memory hook (symmetric with the send path): fired once when the pump persists a
             // Completed/Failed terminal, ONLY when the resolved agent has the playbook enabled AND opts into extraction. A

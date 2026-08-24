@@ -19,4 +19,13 @@ public interface IGgufModelCapabilityResolver
 }
 
 /// <summary>The thinking / tools / vision capabilities advertised by an installed GGUF model.</summary>
-public readonly record struct GgufModelCapabilities(bool SupportsThinking, bool SupportsTools, bool SupportsVision);
+/// <param name="ReasoningBudgetEnforceable">
+///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for this model (its chat template
+///     renders a literal reasoning end marker). Read only alongside <paramref name="SupportsThinking" /> — a budget is
+///     sent exclusively on the graded branch. Defaults to <see langword="true" />, the inert safe default: only a
+///     positively-detected closing-tag-less template turns the cap off, so no unknown can silently remove it.
+/// </param>
+public readonly record struct GgufModelCapabilities(bool SupportsThinking,
+    bool SupportsTools,
+    bool SupportsVision,
+    bool ReasoningBudgetEnforceable = true);

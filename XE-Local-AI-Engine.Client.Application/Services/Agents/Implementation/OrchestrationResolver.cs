@@ -217,8 +217,13 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             // think wire, and a participant pinned to a CLOUD model has the knowledge tools gated off its offer even when
             // the turn's active model is local. Tools' tool-capability is gated separately by the ToolCapableModels
             // allow-list above; this call supplies the thinking bit and the cloud-locality bit from one lookup.
-            var (supportsThinking, _, participantIsCloud) = await _modelCapabilityResolver.ResolveAsync(participantEffectiveModel, cancellationToken).ConfigureAwait(false);
-            capable[participant.Id] = new ResolvedParticipant(participant, resolvedInstructions, supportsThinking, participantIsCloud);
+            var participantCapabilities = await _modelCapabilityResolver.ResolveAsync(participantEffectiveModel, cancellationToken).ConfigureAwait(false);
+            var (supportsThinking, _, participantIsCloud) = participantCapabilities;
+            capable[participant.Id] = new ResolvedParticipant(participant,
+                resolvedInstructions,
+                supportsThinking,
+                participantIsCloud,
+                participantCapabilities.ReasoningBudgetEnforceable);
         }
 
         return capable;
@@ -309,6 +314,9 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
             ModelId = definition.ModelProfile,
             ReasoningEffort = definition.ReasoningEffort,
             SupportsThinking = participant.SupportsThinking,
+            // Resolved from the same per-participant lookup as SupportsThinking: a participant pinned to a model whose
+            // template renders no reasoning end marker must not carry a budget llama.cpp would silently ignore.
+            ReasoningBudgetEnforceable = participant.ReasoningBudgetEnforceable,
             // Gate on the participant's OWN effective-model locality (resolved during the async load), not the turn's
             // active model — so a cloud-pinned participant is withheld the knowledge tools even on a local-active turn.
             Tools = await ProjectAllowedToolsAsync(definition, activeModelId, participant.IsCloud, cancellationToken).ConfigureAwait(false)
@@ -381,5 +389,9 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     ///     effective model's provider locality (<see cref="IsCloud" />). All are resolved during the async participant
     ///     load so the synchronous <see cref="ToSpecParticipant" /> stays query-free.
     /// </summary>
-    private sealed record ResolvedParticipant(AgentDefinitionRecord Definition, string ResolvedInstructions, bool SupportsThinking, bool IsCloud);
+    private sealed record ResolvedParticipant(AgentDefinitionRecord Definition,
+        string ResolvedInstructions,
+        bool SupportsThinking,
+        bool IsCloud,
+        bool ReasoningBudgetEnforceable);
 }

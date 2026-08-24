@@ -37,7 +37,12 @@ public sealed class ModelCapabilityResolver(
         // tool loop). Cloud providers ignore the unknown think property, so the reasoning gate stays inert on the wire.
         if (CodexModelCatalog.IsCodexModel(model))
         {
-            return new ModelCapabilitySnapshot(SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling, IsCloud: true);
+            return new ModelCapabilitySnapshot(SupportsThinking: true, CodexProviderCapabilities.V0.SupportsToolCalling, IsCloud: true)
+            {
+                // The reasoning-budget marker is consumed only by the llama.cpp chat client, so it never reaches the
+                // Codex wire; report the budget enforceable so the cloud path stays byte-identical.
+                ReasoningBudgetEnforceable = true
+            };
         }
 
         // Azure/cloud LOCALITY is resolved from the SAME short-TTL routing snapshot the cloud factory routes from — the
@@ -75,7 +80,10 @@ public sealed class ModelCapabilityResolver(
             return ggufCapabilities is { } caps
                 ? new ModelCapabilitySnapshot(caps.SupportsThinking, caps.SupportsTools, IsCloud: false)
                 {
-                    SupportsVision = caps.SupportsVision
+                    SupportsVision = caps.SupportsVision,
+                    // The ONE path that can report a budget as unenforceable: llama.cpp is the only runtime that reads
+                    // the budget, and the GGUF descriptor is the only place its chat template was classified.
+                    ReasoningBudgetEnforceable = caps.ReasoningBudgetEnforceable
                 }
                 : NotCapableLocal;
         }
@@ -92,6 +100,11 @@ public sealed class ModelCapabilityResolver(
         // default runtime and the mmproj-gated GGUF path owns vision); it stays the safe non-vision default here.
         return new ModelCapabilitySnapshot(ModelKindDetector.SupportsThinking(classification.Capabilities),
             ModelKindDetector.SupportsTools(classification.Capabilities),
-            IsCloud: false);
+            IsCloud: false)
+        {
+            // Ollama ignores the in-process budget marker (its mapper reads a fixed option allowlist), so there is
+            // nothing to suppress on this wire — report enforceable and keep the Ollama path byte-identical.
+            ReasoningBudgetEnforceable = true
+        };
     }
 }

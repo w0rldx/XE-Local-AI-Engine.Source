@@ -48,6 +48,14 @@ public sealed record McpExecutionBindingRequest
 ///     A complete, in-memory snapshot of the model-visible configuration for one inbound run. The keyed fingerprint is
 ///     safe to persist and compare; the remaining fields are execution inputs and must not be persisted as plaintext.
 /// </summary>
+/// <param name="ReasoningBudgetEnforceable">
+///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for <paramref name="ModelId" />
+///     (its chat template renders a literal reasoning end marker). Gates the budget marker on the child agent's
+///     construction-time options exactly as <paramref name="SupportsThinking" /> gates the <c>think</c> field.
+///     Deliberately NOT part of the keyed binding fingerprint: it is derived from <paramref name="ModelId" />, which
+///     already participates, so folding it in would only invalidate every previously recorded fingerprint. Defaults to
+///     <see langword="true" />, the value that never removes a working cap.
+/// </param>
 public sealed record McpExecutionBinding(
     string BindingFingerprint,
     string ModelId,
@@ -56,7 +64,8 @@ public sealed record McpExecutionBinding(
     int? AgentDefinitionVersion,
     IReadOnlyList<AllowedToolDto> AllowedTools,
     string? ReasoningEffort,
-    bool SupportsThinking);
+    bool SupportsThinking,
+    bool ReasoningBudgetEnforceable = true);
 
 /// <summary>Shared fail-closed policy for the only binding allowed to receive an opaque workspace.</summary>
 internal static class McpExecutionBindingPolicy

@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
@@ -16,6 +17,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class InvocationAgentFactoryTests
 {
+    // The stable half of ReasoningBudgetSkipLog's message: the factory logs other lines per call, so assertions on
+    // the skip notice select it by this fragment rather than by the whole entry count.
+    private const string BudgetSkipMessageFragment = "cannot enforce a per-request thinking budget";
+
     [Test]
     public async Task CreateAsync_ReturnsContextWithSeedMessages()
     {
@@ -1088,6 +1093,97 @@ public sealed class InvocationAgentFactoryTests
         AssertEx.NotEqual(instructions, agent.Name);
     }
 
+    /// <summary>
+    ///     The budget is only real for a model llama.cpp can ENFORCE it on. llama-server writes
+    ///     <c>reasoning_budget_tokens</c> onto the sampler only when its chat-template classification produced a
+    ///     non-empty think-end-tag set; with an empty set it accepts the field and then ignores it, and the reasoning
+    ///     free-runs exactly as if nothing had been sent. Emitting the marker there would leave every layer above
+    ///     believing in a cap that never fires, so it is omitted instead — while the graded <c>think</c> option, which
+    ///     governs whether the model reasons at all, is untouched.
+    /// </summary>
+    [Test]
+    public async Task CreateAsync_ThinkingCapableButBudgetNotEnforceable_OmitsTheReasoningBudget()
+    {
+        var definition = new InvocationAgentDefinition("factory-unenforceable-budget-model-a",
+            "Be helpful.",
+            [],
+            [],
+            "high",
+            ReasoningBudgetEnforceable: false);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
+        AssertEx.False(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey),
+            "an unenforceable budget must be omitted, not sent and silently ignored");
+        AssertEx.True(additionalProperties.TryGetValue<string>("think", out var think),
+            "enforceability governs the cap, never whether the model reasons");
+        AssertEx.Equal("high", think);
+    }
+
+    /// <summary>
+    ///     Every turn on such a model would otherwise repeat the notice on the hot send path, so the skip is reported
+    ///     once per MODEL. The model id here is unique to this test because the de-duplication memory is process-wide
+    ///     (see <c>ReasoningBudgetSkipLog</c>), and the message must name the model so an operator can act on it.
+    /// </summary>
+    [Test]
+    public async Task CreateAsync_UnenforceableBudget_ReportsTheSkipOncePerModel()
+    {
+        const string modelId = "factory-unenforceable-budget-model-b";
+        var logger = new RecordingLogger<InvocationAgentFactory>();
+        var definition = new InvocationAgentDefinition(modelId,
+            "Be helpful.",
+            [],
+            [],
+            "medium",
+            ReasoningBudgetEnforceable: false);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient, logger: logger);
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            await using var context = await sut.CreateAsync(definition);
+        }
+
+        // The factory logs other things per call, so count only the skip notice itself.
+        var skipNotices = logger.Entries
+                                .Where(entry => entry.Level == LogLevel.Information
+                                                && entry.Message.Contains(BudgetSkipMessageFragment, StringComparison.Ordinal))
+                                .ToArray();
+        AssertEx.Equal(expected: 1, skipNotices.Length);
+        AssertEx.Contains(skipNotices[0].Message, modelId);
+    }
+
+    /// <summary>
+    ///     The default is the enforceable one, so every pre-existing caller — and every cloud provider, whose wire never
+    ///     sees the marker at all — keeps the request it had before the flag existed, with nothing logged.
+    /// </summary>
+    [Test]
+    public async Task CreateAsync_EnforceableBudgetIsTheDefault_CarriesTheBudgetAndLogsNothing()
+    {
+        var logger = new RecordingLogger<InvocationAgentFactory>();
+        var definition = new InvocationAgentDefinition("factory-enforceable-budget-model",
+            "Be helpful.",
+            [],
+            [],
+            "low");
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient, logger: logger);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<int>(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey, out var budget));
+        AssertEx.Equal(expected: 2048, budget);
+        AssertEx.False(logger.Entries.Any(entry => entry.Message.Contains(BudgetSkipMessageFragment, StringComparison.Ordinal)),
+            "an enforceable budget is the status quo and must report nothing");
+    }
+
     private static ChatOptions ResolveChatOptions(InvocationAgentContext context)
     {
         var runOptions = context.RunOptions as ChatClientAgentRunOptions
@@ -1100,11 +1196,12 @@ public sealed class InvocationAgentFactoryTests
         IAgentToolRegistry? toolRegistry = null,
         IClientLocalToolRegistry? clientLocalToolRegistry = null,
         IMcpToolRegistry? mcpToolRegistry = null,
-        ICustomToolCatalog? customToolCatalog = null)
+        ICustomToolCatalog? customToolCatalog = null,
+        ILogger<InvocationAgentFactory>? logger = null)
     {
         return new InvocationAgentFactory(chatClient,
             Options.Create(new InvocationAgentOptions()),
-            NullLogger<InvocationAgentFactory>.Instance,
+            logger ?? NullLogger<InvocationAgentFactory>.Instance,
             NullLoggerFactory.Instance,
             FakeServiceProvider.Instance,
             toolRegistry ?? new FakeToolRegistry(),

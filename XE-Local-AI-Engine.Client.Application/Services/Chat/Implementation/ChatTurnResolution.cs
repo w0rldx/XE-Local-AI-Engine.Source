@@ -13,7 +13,8 @@ internal sealed record ChatTurnResolution(
     bool SupportsVision,
     bool RequiresInstalledChatModel,
     bool ActiveModelIsCloud,
-    bool EffectiveModelIsCloud)
+    bool EffectiveModelIsCloud,
+    bool ReasoningBudgetEnforceable = true)
 {
     /// <summary>
     ///     The compiled orchestration spec, or <see langword="null" /> when the turn runs single-agent (the definition is

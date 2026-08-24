@@ -124,7 +124,11 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
         // thinking capability. Instructions + the agent's own tools ride ChatOptions exactly as the positional ctor
         // moves them under the hood, so ChatClientAgent still detects the pre-decorated FICC and treats the agent tools
         // as AdditionalTools while handoff_to_* flows through (proven by the approval-across-handoff tests).
-        var additionalProperties = ParticipantReasoningOptions.Build(participant.ReasoningEffort, participant.SupportsThinking);
+        var additionalProperties = ParticipantReasoningOptions.Build(participant.ReasoningEffort,
+            participant.SupportsThinking,
+            participant.ReasoningBudgetEnforceable,
+            _logger,
+            participant.ModelId);
 
         // ORC-07: carry this participant's launched effective context window as num_ctx so the innermost provider-round
         // budgeter (ProviderCallBudgetChatClient) sizes THIS participant against the window ITS model was launched with,

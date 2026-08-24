@@ -104,6 +104,17 @@ public sealed class LocalModelResponse
     public bool IsNativeReasoningCapable { get; init; }
 
     /// <summary>
+    ///     True when llama.cpp can ENFORCE a per-request thinking budget for this model — its chat template renders a
+    ///     literal reasoning end marker (<c>&lt;/think&gt;</c>, gemma-4's <c>&lt;channel|&gt;</c>, …), which is what
+    ///     llama-server turns into the non-empty think-end-tag set its <c>reasoning_budget_tokens</c> gate requires.
+    ///     When <see langword="false" /> alongside <see cref="IsReasoningCapable" />, the graded effort still applies
+    ///     but its token cap does NOT: the server would accept the field and silently ignore it, so the node omits it.
+    ///     Meaningful only together with <see cref="IsReasoningCapable" />; defaults to <see langword="true" /> so an
+    ///     older client that omits the field, and every non-llama.cpp entry, behave exactly as before.
+    /// </summary>
+    public bool ReasoningBudgetEnforceable { get; init; } = true;
+
+    /// <summary>
     ///     True when the model advertises the Ollama <c>tools</c> capability. The composer uses this to gate the local-tool
     ///     controls so a non-tool model is never offered tools.
     /// </summary>

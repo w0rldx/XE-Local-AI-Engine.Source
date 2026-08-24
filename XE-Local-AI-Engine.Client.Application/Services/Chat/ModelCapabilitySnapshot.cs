@@ -21,4 +21,19 @@ public readonly record struct ModelCapabilitySnapshot(bool SupportsThinking, boo
     ///     thinking/tools/locality triple, and an unset value is the safe non-vision default.
     /// </summary>
     public bool SupportsVision { get; init; }
+
+    /// <summary>
+    ///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for this model — its chat
+    ///     template renders a literal reasoning end marker, which is what llama.cpp turns into the non-empty
+    ///     think-end-tag set its budget gate requires. Only a node-local llama.cpp GGUF can report
+    ///     <see langword="false" /> (from the descriptor's template detection). Every other route reports the value the
+    ///     budget marker's absence from its wire makes correct: Codex and Ollama, whose thinking-capable models would
+    ///     read it, resolve <see langword="true" />; the Azure arms resolve a non-thinking model, where it is never read.
+    ///     <para>
+    ///         Read ONLY together with <see cref="SupportsThinking" /> — the budget is emitted exclusively on the graded
+    ///         branch — which is why <c>default</c> (a not-capable, node-local model) leaving this
+    ///         <see langword="false" /> is unobservable.
+    ///     </para>
+    /// </summary>
+    public bool ReasoningBudgetEnforceable { get; init; }
 }

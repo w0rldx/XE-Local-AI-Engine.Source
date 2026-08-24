@@ -22,4 +22,5 @@ public sealed record LocalChatRuntimePackageRequest(
     IReadOnlyList<ResolvedSkill>? Skills = null,
     bool IsUnattended = false,
     IReadOnlyList<ResolvedCustomTool>? CustomTools = null,
-    JsonElement? ResponseJsonSchema = null);
+    JsonElement? ResponseJsonSchema = null,
+    bool ReasoningBudgetEnforceable = true);

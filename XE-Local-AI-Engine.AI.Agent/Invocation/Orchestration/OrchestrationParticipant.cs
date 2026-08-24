@@ -43,6 +43,15 @@ public sealed record OrchestrationParticipant
     public bool SupportsThinking { get; init; } = true;
 
     /// <summary>
+    ///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for this participant's resolved
+    ///     <see cref="ModelId" /> — its chat template renders a literal reasoning end marker. When
+    ///     <see langword="false" /> the participant's construction-time options carry NO budget marker (see
+    ///     <see cref="ParticipantReasoningOptions" />), because llama.cpp would accept the field and then ignore it.
+    ///     Defaults to <see langword="true" /> — the safe default that never removes a working cap.
+    /// </summary>
+    public bool ReasoningBudgetEnforceable { get; init; } = true;
+
+    /// <summary>
     ///     The participant's projected, approval-flagged offer list as bridged tools (see the type remarks). Empty
     ///     when the participant offers no tools.
     /// </summary>

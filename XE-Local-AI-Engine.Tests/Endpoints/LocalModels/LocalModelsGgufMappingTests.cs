@@ -22,7 +22,8 @@ public sealed class LocalModelsGgufMappingTests
         bool isReasoningCapable = false,
         IReadOnlyList<string>? capabilities = null,
         LocalModelOrigin? origin = null,
-        string? modelContentFingerprint = null)
+        string? modelContentFingerprint = null,
+        bool reasoningBudgetEnforceable = true)
     {
         return new LocalModelDescriptor
         {
@@ -36,8 +37,44 @@ public sealed class LocalModelsGgufMappingTests
             ModelContentFingerprint = modelContentFingerprint,
             IsToolCapable = isToolCapable,
             IsReasoningCapable = isReasoningCapable,
+            ReasoningBudgetEnforceable = reasoningBudgetEnforceable,
             Capabilities = capabilities ?? []
         };
+    }
+
+    /// <summary>
+    ///     The model list is where a client learns that a reasoning model's THINKING BUDGET does not apply. The flag is
+    ///     detected from the same chat template as <c>IsReasoningCapable</c> and must survive the mapping unchanged in
+    ///     both directions: a graded model whose template renders no reasoning end marker reports it false while
+    ///     staying reasoning-capable, and one that does render an end marker keeps the enforceable default.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public void ToLlamaCppModelResponses_CarriesReasoningBudgetEnforceabilityFromTheDescriptor(bool enforceable)
+    {
+        var response = LocalModelsMapper.ToLlamaCppModelResponses([
+                Gguf("unsloth/qwen3.8-27b-GGUF:Q4_K_M", isReasoningCapable: true, reasoningBudgetEnforceable: enforceable)
+            ],
+            selectedModelName: null);
+
+        AssertEx.True(response[0].IsReasoningCapable, "enforceability never changes whether the model reasons");
+        AssertEx.Equal(enforceable, response[0].ReasoningBudgetEnforceable);
+    }
+
+    /// <summary>
+    ///     A descriptor whose template could not be read reports no reasoning at all, and the budget flag keeps its
+    ///     inert TRUE default — a header that failed to parse is not evidence that a cap would fail to apply, and a
+    ///     false here would read downstream as an instruction to drop one.
+    /// </summary>
+    [Test]
+    public void ToLlamaCppModelResponses_UndetectedTemplate_KeepsTheInertEnforceableDefault()
+    {
+        var response = LocalModelsMapper.ToLlamaCppModelResponses([Gguf("bartowski/Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M")],
+            selectedModelName: null);
+
+        AssertEx.False(response[0].IsReasoningCapable);
+        AssertEx.True(response[0].ReasoningBudgetEnforceable);
     }
 
     [Test]

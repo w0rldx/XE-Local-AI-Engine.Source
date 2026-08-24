@@ -492,6 +492,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             IsToolCapable = facts.IsToolCapable,
             IsReasoningCapable = facts.IsReasoningCapable,
             IsNativeReasoningCapable = facts.IsNativeReasoningCapable,
+            ReasoningBudgetEnforceable = facts.ReasoningBudgetEnforceable,
             IsMultimodalCapable = isMultimodalCapable,
             Capabilities = capabilities
         };
@@ -522,7 +523,8 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
                 capabilities.IsToolCapable,
                 capabilities.IsReasoningCapable,
                 capabilities.IsNativeReasoningCapable,
-                capabilities.Capabilities);
+                capabilities.Capabilities,
+                capabilities.ReasoningBudgetEnforceable);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -625,13 +627,17 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         bool IsToolCapable,
         bool IsReasoningCapable,
         bool IsNativeReasoningCapable,
-        IReadOnlyList<string> Capabilities)
+        IReadOnlyList<string> Capabilities,
+        bool ReasoningBudgetEnforceable = true)
     {
+        // An unreadable header keeps the reasoning-budget flag at its inert TRUE default: the model is also reported
+        // non-reasoning here, so nothing reads it, and a false would be a silent instruction to drop the cap.
         public static GgufHeaderFacts Empty { get; } = new(MaxContextTokens: null,
             IsToolCapable: false,
             IsReasoningCapable: false,
             IsNativeReasoningCapable: false,
-            []);
+            [],
+            ReasoningBudgetEnforceable: true);
     }
 
     // The per-file GGUF header inputs the memory-fit estimator consumes (weights param count + KV-cache dimensions),

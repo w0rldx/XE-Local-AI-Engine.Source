@@ -112,9 +112,23 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             // context window reasoning and return no answer. The budget rides its own marker for the llama.cpp client to
             // patch onto the body as reasoning_budget_tokens; an unspecified effort resolves to null and sends nothing,
             // keeping the no-effort request byte-identical.
+            //
+            // The cap is only real for a model llama.cpp can ENFORCE it on. llama-server writes the budget onto the
+            // sampler only when its chat-template classification produced a non-empty think-end-tag set; with an empty
+            // set it accepts the field and then ignores it, so the reasoning free-runs exactly as if nothing had been
+            // sent. For such a model the marker is omitted rather than sent — a field that does nothing is worse than
+            // no field, because everything upstream would read it as a cap that holds — and the skip is reported once
+            // per model so an operator learns why this model's thinking is uncapped.
             if (ReasoningOptionsResolver.ResolveReasoningBudgetTokens(definition.ReasoningEffort) is { } budgetTokens)
             {
-                additionalProperties[LlamaReasoningBudgetMarkerKey] = budgetTokens;
+                if (definition.ReasoningBudgetEnforceable)
+                {
+                    additionalProperties[LlamaReasoningBudgetMarkerKey] = budgetTokens;
+                }
+                else
+                {
+                    ReasoningBudgetSkipLog.ReportBudgetSkipped(_logger, definition.ModelId);
+                }
             }
 
             // Codex-only side channel: when a graded/explicit effort is present, also carry the RAW normalized effort

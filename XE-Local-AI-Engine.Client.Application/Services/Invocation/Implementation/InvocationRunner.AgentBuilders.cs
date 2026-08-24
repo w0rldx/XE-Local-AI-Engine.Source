@@ -59,6 +59,10 @@ public sealed partial class InvocationRunner
                 // so a participant pinned to a non-thinking model can never have a graded effort reach the think wire,
                 // and one pinned to a thinking model keeps its reasoning even when the turn model cannot think.
                 SupportsThinking = participant.SupportsThinking,
+                // Resolved per participant alongside SupportsThinking, for the same reason: a participant pinned to a
+                // model whose template renders no reasoning end marker must not be handed a budget llama.cpp will
+                // silently ignore, while one pinned to an enforcing model keeps its cap.
+                ReasoningBudgetEnforceable = participant.ReasoningBudgetEnforceable,
                 EffectiveContextTokens = participantContextTokens,
                 Tools = BuildParticipantTools(package, participant.Tools)
             });
@@ -259,7 +263,8 @@ public sealed partial class InvocationRunner
             MapSamplingOptions(package.SamplingOptions),
             MapSkills(package.Skills),
             effectiveContextTokens,
-            package.ResponseJsonSchema);
+            package.ResponseJsonSchema,
+            package.ReasoningBudgetEnforceable);
     }
 
     /// <summary>

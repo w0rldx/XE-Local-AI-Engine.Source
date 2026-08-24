@@ -72,6 +72,10 @@ public sealed class ChatTurnResolver(
         }
 
         var supportsThinking = capabilities.SupportsThinking;
+        // Whether llama.cpp could enforce a per-request thinking budget for THIS model. Resolved from the same single
+        // capability lookup as the think gate above, so the budget can never be judged against a different model than
+        // the one the effort is graded for.
+        var reasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable;
         var supportsTools = capabilities.SupportsTools;
         var supportsVision = capabilities.SupportsVision;
         var activeModelIsCloud = capabilities.IsCloud;
@@ -137,7 +141,7 @@ public sealed class ChatTurnResolver(
         // node with a pinning agent (every server-initiated work-session step) resolves an effective model here and must
         // not be failed as "no chat model installed".
         return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, supportsVision,
-            requiresInstalledChatModel && effectiveModel is null, activeModelIsCloud, effectiveModelIsCloud);
+            requiresInstalledChatModel && effectiveModel is null, activeModelIsCloud, effectiveModelIsCloud, reasoningBudgetEnforceable);
     }
 
     /// <summary>

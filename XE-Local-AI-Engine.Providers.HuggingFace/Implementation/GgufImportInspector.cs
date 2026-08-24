@@ -124,6 +124,21 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
         var workloadRejected = rejections.Any(static rejection => rejection is not GgufImportRejectionCode.QuantizationRequired
             and not GgufImportRejectionCode.UnsupportedQuantization);
         var workload = isAdapter ? GgufImportWorkload.LoraAdapter : GgufImportWorkload.CausalChat;
+
+        // Reasoning-budget enforceability, computed HERE — on the strict header the classification already read — so the
+        // answer exists before the file is copied, not only once the model shows up in lazy discovery. It is deliberately
+        // NOT persisted onto the registry entry or the sidecar: the installed-model descriptor recomputes it from the
+        // very same header key (HuggingFaceGgufStore.ResolveHeaderFactsAsync), so a second stored copy could only ever
+        // drift away from the template it describes. What import adds is the OPERATOR-facing half — a warning that this
+        // model's graded thinking cap will not stick — which no later list refresh would surface.
+        var capabilities = GgufCapabilityDetector.Detect(header.GetString("tokenizer.chat_template"));
+        string[] warnings = capabilities.ReasoningBudgetEnforceable
+            ? []
+            :
+            [
+                "This model's chat template exposes a thinking channel but renders no reasoning end marker, so llama.cpp cannot enforce a per-request thinking budget for it. Reasoning effort still applies; the token cap does not."
+            ];
+
         return new GgufImportInspection(size,
             header.Version,
             architecture,
@@ -131,7 +146,10 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
             quant,
             displayName,
             rejections.Distinct().ToArray(),
-            []);
+            warnings)
+        {
+            ReasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable
+        };
     }
 
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
@@ -164,6 +182,8 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
                || displayName.Contains("rerank", StringComparison.OrdinalIgnoreCase);
     }
 
+    // A source that could not be opened/read at all: there is no header to classify, so the reasoning-budget flag keeps
+    // its inert TRUE default (the rejection is what the caller acts on).
     private static GgufImportInspection Rejected(string displayName, long size, GgufImportRejectionCode code)
     {
         return new GgufImportInspection(size, null, null, null, null, displayName, [code], []);

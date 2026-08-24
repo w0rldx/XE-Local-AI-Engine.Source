@@ -369,7 +369,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
 
         var reasoning = binding.AgentDefinitionId is null
             ? null
-            : new ChildReasoning(binding.ReasoningEffort, binding.SupportsThinking);
+            : new ChildReasoning(binding.ReasoningEffort, binding.SupportsThinking, binding.ReasoningBudgetEnforceable);
         return new ResolvedBinding(binding.ModelId, binding.Instructions, tools, reasoning, Skills: null);
     }
 
@@ -548,7 +548,11 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
         // Null for a model-id-only spawn, which stays as-is (no reasoning field on the wire).
         if (binding.Reasoning is { } reasoning)
         {
-            chatOptions.AdditionalProperties = ParticipantReasoningOptions.Build(reasoning.ReasoningEffort, reasoning.SupportsThinking);
+            chatOptions.AdditionalProperties = ParticipantReasoningOptions.Build(reasoning.ReasoningEffort,
+                reasoning.SupportsThinking,
+                reasoning.ReasoningBudgetEnforceable,
+                _logger,
+                binding.ModelName);
         }
 
         var agentOptions = new ChatClientAgentOptions
@@ -625,14 +629,17 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
         // The child's knowledge-tool locality gate is applied inside AgentDefinitionResolver above (it classifies the
         // pinned effective model, which for a spawned child IS definition.ModelProfile), so only the thinking bit is
         // taken here; the locality element is ignored.
-        var (supportsThinking, _, _) = await _modelCapabilityResolver
-                                             .ResolveAsync(definition.ModelProfile, ct)
-                                             .ConfigureAwait(false);
+        var childCapabilities = await _modelCapabilityResolver
+                                      .ResolveAsync(definition.ModelProfile, ct)
+                                      .ConfigureAwait(false);
+        var (supportsThinking, _, _) = childCapabilities;
 
         return new ResolvedBinding(definition.ModelProfile,
             resolved.ResolvedSystemPrompt,
             tools,
-            new ChildReasoning(resolved.ReasoningEffort, supportsThinking),
+            // The child model's own reasoning-budget enforceability rides alongside its thinking capability, so a child
+            // pinned to a template that renders no reasoning end marker is not handed a cap llama.cpp would ignore.
+            new ChildReasoning(resolved.ReasoningEffort, supportsThinking, childCapabilities.ReasoningBudgetEnforceable),
             resolved.Skills);
     }
 
@@ -819,7 +826,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
 
     // The child's reasoning inputs: the resolved effort plus the child model's OWN thinking capability, which together
     // drive ParticipantReasoningOptions.Build exactly as the orchestration-participant path does.
-    private sealed record ChildReasoning(string? ReasoningEffort, bool SupportsThinking);
+    private sealed record ChildReasoning(string? ReasoningEffort, bool SupportsThinking, bool ReasoningBudgetEnforceable = true);
 
     private sealed record WorkspaceOpenOutcome(IMcpWorkspaceExecutionSession? Session, SpawnOutcome? Failure);
 }

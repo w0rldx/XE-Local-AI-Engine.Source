@@ -152,8 +152,8 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         // 3. LOCALITY GATE (security invariant): classify the effective model and reject a cloud/remote model UP FRONT —
         //    before capacity or any invocation — so unattended scheduled work stays node-local-only. This is the SAME
         //    effective-model classification the chat locality gate uses (IModelCapabilityResolver).
-        var (supportsThinking, supportsTools, effectiveModelIsCloud) =
-            await modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken).ConfigureAwait(false);
+        var capabilities = await modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken).ConfigureAwait(false);
+        var (supportsThinking, supportsTools, effectiveModelIsCloud) = capabilities;
         if (effectiveModelIsCloud)
         {
             _logger.LogInformation("Scheduled agent run for definition {AgentDefinitionId} was rejected: its effective model is cloud-hosted and unattended runs are node-local only.",
@@ -192,7 +192,13 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
                 throw new ScheduledJobExecutionException("The scheduled agent could not be found. It may have been deleted.");
             }
 
-            var package = BuildPackage(packageBuilder, resolved, effectiveModel, parameters, supportsThinking, nodeSettings.MaxMessageRequestTimeoutSeconds);
+            var package = BuildPackage(packageBuilder,
+                resolved,
+                effectiveModel,
+                parameters,
+                supportsThinking,
+                capabilities.ReasoningBudgetEnforceable,
+                nodeSettings.MaxMessageRequestTimeoutSeconds);
 
             // 6. Run headless through the shared invocation runner, serialized against in-flight chat/platform turns via
             //    the shared invocation slot, capturing a content-safe terminal summary.
@@ -222,6 +228,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
         string effectiveModel,
         RunSavedAgentParameters parameters,
         bool supportsThinking,
+        bool reasoningBudgetEnforceable,
         int maxMessageRequestTimeoutSeconds)
     {
         var offeredTools = resolved.AllowedTools.Where(static tool => !tool.RequiresApproval).ToArray();
@@ -269,6 +276,7 @@ public sealed class RunSavedAgentHandler : IScheduledJobHandler
             },
             ReasoningEffort: reasoningEffort,
             SupportsThinking: supportsThinking,
+            ReasoningBudgetEnforceable: reasoningBudgetEnforceable,
             Skills: resolved.Skills,
             // The one place this flag is set. Stripping approval-required tools from the OFFER above cannot cover the
             // skill tools: they arrive through MAF's AIContextProviders (progressive disclosure), never through the

@@ -84,6 +84,47 @@ public sealed class GgufImportFoundationTests
         AssertEx.False(JsonSerializer.Serialize(result).Contains(paths.Root, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    ///     Reasoning-budget enforceability is decided at IMPORT, from the same strict header the acceptance decision
+    ///     reads, so an operator learns BEFORE the multi-gigabyte copy that this model's thinking cap will not stick.
+    ///     A template that opens a thinking channel and never closes it is still a perfectly usable reasoning model —
+    ///     the import is ACCEPTED — but llama.cpp would accept its <c>reasoning_budget_tokens</c> and then ignore it,
+    ///     which is what the warning says.
+    /// </summary>
+    [Test]
+    public async Task Inspector_ReasoningTemplateWithoutEndMarker_IsAcceptedAndWarnsThatTheBudgetCannotBeEnforced()
+    {
+        using var paths = new ImportPaths();
+        var source = paths.WriteSource(BuildReasoningGguf("{%- if enable_thinking %}<think>\n{%- endif %}"), "unclosed-think-Q4_K_M.gguf");
+        var inspector = new GgufImportInspector(Infra.Options(paths.ModelsDirectory));
+
+        var result = await inspector.InspectAsync(new GgufImportSource(source), CancellationToken.None);
+
+        AssertEx.True(result.IsAccepted, "an unenforceable thinking budget is an advisory, never a rejection");
+        AssertEx.False(result.ReasoningBudgetEnforceable);
+        AssertEx.ContainsSingle(result.Warnings, static warning => warning.Contains("thinking budget", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///     The counterpart: the real Qwen3.x shape renders <c>&lt;/think&gt;</c> after the reasoning, which llama.cpp's
+    ///     differential autoparser recovers as a think-end tag, so the budget IS enforceable and the import carries no
+    ///     advisory at all.
+    /// </summary>
+    [Test]
+    public async Task Inspector_ReasoningTemplateWithEndMarker_IsEnforceableAndWarnsNothing()
+    {
+        using var paths = new ImportPaths();
+        var source = paths.WriteSource(BuildReasoningGguf("{{- '<think>\n' + reasoning_content + '\n</think>\n\n' + content }}"),
+            "closed-think-Q4_K_M.gguf");
+        var inspector = new GgufImportInspector(Infra.Options(paths.ModelsDirectory));
+
+        var result = await inspector.InspectAsync(new GgufImportSource(source), CancellationToken.None);
+
+        AssertEx.True(result.IsAccepted);
+        AssertEx.True(result.ReasoningBudgetEnforceable);
+        AssertEx.Empty(result.Warnings);
+    }
+
     [Test]
     public async Task Inspector_AdapterWorkload_InProcessOnly()
     {
@@ -854,6 +895,18 @@ public sealed class GgufImportFoundationTests
             "local-demo-q4_k_m-0123456789abcdef01234567.gguf",
             "local-demo-q4_k_m-0123456789abcdef01234567.gguf.xe-model.json",
             LocalModelOrigin.Imported);
+    }
+
+    // A supported causal model that additionally carries a chat template, so the import-time reasoning-budget
+    // classification has something to read.
+    private static byte[] BuildReasoningGguf(string chatTemplate)
+    {
+        return new GgufHeaderBytesBuilder()
+               .WithString("general.architecture", "qwen3")
+               .WithString("general.type", "model")
+               .WithString("tokenizer.chat_template", chatTemplate)
+               .WithUint32("general.file_type", value: 15)
+               .Build();
     }
 
     private static byte[] BuildCausalGguf(string architecture = "llama", bool includeFileType = true)

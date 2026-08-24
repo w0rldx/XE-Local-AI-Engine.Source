@@ -57,6 +57,22 @@ public sealed record LocalModelDescriptor
     public bool IsNativeReasoningCapable { get; init; }
 
     /// <summary>
+    ///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for this model — that is,
+    ///     whether its chat template renders a literal reasoning END marker (<c>&lt;/think&gt;</c>, gemma-4's
+    ///     <c>&lt;channel|&gt;</c>, …). llama.cpp writes the budget onto the sampler only when its chat-template
+    ///     classification produced a non-empty think-end-tag set; with an empty set the field is accepted and then
+    ///     silently ignored, so the model still free-runs its reasoning until the context window is gone.
+    ///     <para>
+    ///         Read ONLY alongside <see cref="IsReasoningCapable" /> — the budget is sent exclusively on the graded
+    ///         branch. Defaults to <see langword="true" />, the inert safe default: a descriptor whose template could
+    ///         not be read (or that comes from a runtime with no template detection at all) still gets the budget sent,
+    ///         which llama.cpp ignores harmlessly, rather than silently losing the cap that stops a reasoning model
+    ///         consuming its whole window and answering nothing.
+    ///     </para>
+    /// </summary>
+    public bool ReasoningBudgetEnforceable { get; init; } = true;
+
+    /// <summary>
     ///     Whether the model can accept image input (vision / multimodal). True only when a multimodal projector
     ///     (<c>mmproj</c>) companion is present locally for this model — the same file that gates the llama-server
     ///     <c>--mmproj</c> launch argument, so this flag never claims a vision capability the runtime cannot serve.

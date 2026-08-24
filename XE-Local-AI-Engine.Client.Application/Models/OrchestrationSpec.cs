@@ -54,6 +54,16 @@ public sealed record OrchestrationSpecParticipant
     /// </summary>
     public bool SupportsThinking { get; init; }
 
+    /// <summary>
+    ///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for this participant's EFFECTIVE
+    ///     model (its chat template renders a literal reasoning end marker). Resolved per participant from the same
+    ///     lookup as <see cref="SupportsThinking" />, so a participant pinned to a non-enforcing model does not carry a
+    ///     cap the server ignores. Not folded into the config hash: it is derived from <see cref="ModelId" />, which
+    ///     already participates. Init-only with no initializer like its neighbours — every producer sets it explicitly,
+    ///     and it is read only when <see cref="SupportsThinking" /> is true.
+    /// </summary>
+    public bool ReasoningBudgetEnforceable { get; init; }
+
     /// <summary>The participant's projected tool offer (capability-gated ∩ AllowedToolNames, approval-overridden).</summary>
     public required IReadOnlyList<AllowedToolDto> Tools { get; init; }
 }

@@ -90,6 +90,9 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
             [],
             reasoningEffort: null,
             supportsThinking: false,
+            // A bare-model binding carries no reasoning at all (ChildReasoning is null for it), so the flag is never
+            // read; keep it at the value that would be correct if it ever were.
+            reasoningBudgetEnforceable: true,
             request.InboundContext);
         return McpExecutionBindingResolution.Success(binding);
     }
@@ -114,7 +117,8 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
             return Reject(McpExecutionFailureCodes.ModelNotAvailable, "Cannot run: the agent's local model is not available.");
         }
 
-        var (supportsThinking, supportsTools, _) = await _modelCapabilityResolver.ResolveAsync(modelId, cancellationToken).ConfigureAwait(false);
+        var capabilities = await _modelCapabilityResolver.ResolveAsync(modelId, cancellationToken).ConfigureAwait(false);
+        var (supportsThinking, supportsTools, _) = capabilities;
         var resolved = await _agentDefinitionResolver.ResolveAsync(definition.Id,
                                                          modelId,
                                                          supportsTools: supportsTools,
@@ -150,6 +154,7 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
             allowedTools,
             resolved.ReasoningEffort,
             supportsThinking,
+            capabilities.ReasoningBudgetEnforceable,
             request.InboundContext);
         return McpExecutionBindingResolution.Success(binding);
     }
@@ -194,6 +199,7 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
         IReadOnlyList<AllowedToolDto> allowedTools,
         string? reasoningEffort,
         bool supportsThinking,
+        bool reasoningBudgetEnforceable,
         McpInboundExecutionContext inboundContext)
     {
         IReadOnlyList<AllowedToolDto> immutableAllowedTools = Array.AsReadOnly(allowedTools.ToArray());
@@ -255,7 +261,10 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
             agentDefinitionVersion,
             immutableAllowedTools,
             reasoningEffort,
-            supportsThinking);
+            supportsThinking,
+            // NOT written into the canonical fingerprint payload above: it is derived from modelId, which is already
+            // hashed, so folding it in would invalidate every recorded binding fingerprint for no added identity.
+            reasoningBudgetEnforceable);
     }
 
     private static McpExecutionBindingResolution Reject(string failureCode, string displayMessage) =>

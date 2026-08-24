@@ -830,7 +830,8 @@ public sealed class NodeChatStreamService(
             SupportsThinking: resolution.SupportsThinking,
             SamplingOptions: request.SamplingOptions,
             Skills: resolved?.Skills,
-            CustomTools: resolved?.CustomTools));
+            CustomTools: resolved?.CustomTools,
+            ReasoningBudgetEnforceable: resolution.ReasoningBudgetEnforceable));
     }
 
     /// <summary>

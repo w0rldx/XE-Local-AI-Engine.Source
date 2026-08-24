@@ -90,6 +90,10 @@ internal static class LocalModelsMapper
                        Capabilities = descriptor.Capabilities,
                        IsReasoningCapable = descriptor.IsReasoningCapable,
                        IsNativeReasoningCapable = descriptor.IsNativeReasoningCapable,
+                       // Detected from the SAME chat template as the reasoning flags: a graded model whose template
+                       // renders no reasoning end marker keeps its effort but loses its token cap, and the node says so
+                       // rather than letting the UI imply a budget that llama.cpp silently ignores.
+                       ReasoningBudgetEnforceable = descriptor.ReasoningBudgetEnforceable,
                        IsToolCapable = descriptor.IsToolCapable,
                        IsMultimodalCapable = descriptor.IsMultimodalCapable,
                        IsOverridden = false

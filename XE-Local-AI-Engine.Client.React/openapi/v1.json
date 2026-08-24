@@ -25334,6 +25334,9 @@
           "isNativeReasoningCapable": {
             "type": "boolean"
           },
+          "reasoningBudgetEnforceable": {
+            "type": "boolean"
+          },
           "isToolCapable": {
             "type": "boolean"
           },

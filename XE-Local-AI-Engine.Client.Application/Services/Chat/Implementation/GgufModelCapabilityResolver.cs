@@ -33,6 +33,12 @@ internal sealed class GgufModelCapabilityResolver(IGgufModelStore ggufModelStore
         // Vision is sourced from the descriptor's IsMultimodalCapable, which is true only when a local mmproj projector
         // companion is present — the same file that gates the llama-server --mmproj launch — so it never claims a vision
         // capability the runtime cannot serve.
-        return new GgufModelCapabilities(descriptor.IsReasoningCapable, descriptor.IsToolCapable, descriptor.IsMultimodalCapable);
+        // The reasoning-budget flag rides the same descriptor: it was detected from THIS model's chat template, so a
+        // graded model whose template renders no reasoning end marker is carried through as unenforceable and the
+        // marker emitters drop its (silently ignored) budget instead of pretending it caps anything.
+        return new GgufModelCapabilities(descriptor.IsReasoningCapable,
+            descriptor.IsToolCapable,
+            descriptor.IsMultimodalCapable,
+            descriptor.ReasoningBudgetEnforceable);
     }
 }

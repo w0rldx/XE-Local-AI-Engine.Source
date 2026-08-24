@@ -76,10 +76,35 @@ internal static class GgufCapabilityDetector
         "reasoning_effort"
     ];
 
+    // The closing-tag shapes that decide whether llama.cpp can ENFORCE a per-request `reasoning_budget_tokens` at all.
+    // The server gate (tools/server/server-common.cpp at the pinned b10201) writes the budget onto the sampler ONLY when
+    // `chat_params.thinking_end_tags` is non-empty; with an empty set the field is accepted and then silently ignored,
+    // so the model free-runs its reasoning exactly as if no budget had been sent. `thinking_end_tags` is filled either
+    // by a specialised per-family parser (which hardcodes the tags) or, for everything else, by the generic differential
+    // autoparser, which renders the template twice — with and without a `reasoning_content` — and diffs the output to
+    // discover the marker the template writes AFTER the reasoning text. Both routes therefore require the template to
+    // render a literal end marker, which is what these markers look for.
+    //
+    // Both entries are verified verbatim against the installed GGUF headers (read 2026-08-24):
+    //   * `</think>`   — unsloth-qwen3.8-27b Q4_K_M ×2, unsloth-qwen3.6-27b Q4_K_M ×5, rendered as
+    //                    `'<think>\n' + reasoning_content + '\n</think>\n\n' + content` (the generic autoparser's diff
+    //                    target).
+    //   * `<channel|>` — unsloth-gemma-4-12b-it Q4_K_M ×3, rendered as `'<|channel>thought\n' + thinking_text +
+    //                    '\n<channel|>'`; gemma-4 additionally takes the specialised path, which hardcodes the same tag.
+    // `</thinking>` is the same closing-tag shape under an alternate spelling and is accepted for the families that use
+    // it. Keep these literal for the same reason the marker lists above are literal: a loose word would match prose.
+    private static readonly string[] ReasoningBudgetEndTagMarkers =
+    [
+        "</think>",
+        "</thinking>",
+        "<channel|>"
+    ];
+
     /// <summary>
-    ///     Classifies the supplied chat template into <c>(IsToolCapable, IsReasoningCapable, IsNativeReasoningCapable)</c>
-    ///     plus the matching Ollama-style capability tokens. A null/blank template (a raw base model, or a header read
-    ///     that did not reach the template) yields the safe default — chat-only, no tools, no reasoning.
+    ///     Classifies the supplied chat template into
+    ///     <c>(IsToolCapable, IsReasoningCapable, IsNativeReasoningCapable, ReasoningBudgetEnforceable)</c> plus the
+    ///     matching Ollama-style capability tokens. A null/blank template (a raw base model, or a header read that did
+    ///     not reach the template) yields the safe default — chat-only, no tools, no reasoning.
     /// </summary>
     /// <remarks>
     ///     The two reasoning flags are MUTUALLY EXCLUSIVE and graded wins. A graded template already advertises a
@@ -98,7 +123,13 @@ internal static class GgufCapabilityDetector
 
         if (string.IsNullOrWhiteSpace(chatTemplate))
         {
-            return new GgufCapabilities(IsToolCapable: false, IsReasoningCapable: false, IsNativeReasoningCapable: false, capabilities);
+            // No template to inspect: nothing observed says llama.cpp could not enforce a reasoning budget, and the
+            // flag is unread anyway without graded reasoning — so it keeps its inert safe default (see the record docs).
+            return new GgufCapabilities(IsToolCapable: false,
+                IsReasoningCapable: false,
+                IsNativeReasoningCapable: false,
+                capabilities,
+                ReasoningBudgetEnforceable: true);
         }
 
         var isToolCapable = ContainsAny(chatTemplate, ToolTemplateMarkers);
@@ -122,7 +153,13 @@ internal static class GgufCapabilityDetector
             capabilities.Add(NativeReasoningCapability);
         }
 
-        return new GgufCapabilities(isToolCapable, isReasoningCapable, isNativeReasoningCapable, capabilities);
+        // Whether llama.cpp can ENFORCE a per-request reasoning budget on this template. Asked only of a GRADED
+        // template, because that is the only kind the budget is ever sent for (see the marker emitters); every other
+        // template keeps the inert TRUE default rather than a stray false that downstream code would read as an
+        // instruction to drop a cap.
+        var reasoningBudgetEnforceable = !isReasoningCapable || ContainsAny(chatTemplate, ReasoningBudgetEndTagMarkers);
+
+        return new GgufCapabilities(isToolCapable, isReasoningCapable, isNativeReasoningCapable, capabilities, reasoningBudgetEnforceable);
     }
 
     private static bool ContainsAny(string text, string[] markers)
@@ -145,8 +182,21 @@ internal static class GgufCapabilityDetector
 ///     NATIVE reasoning: the model reasons on a channel baked into its template with no graded switch (harmony/gpt-oss).
 ///     It must stay OUT of the graded path — the enforcing layer keeps such a model on the omit-<c>think</c> branch.
 /// </param>
+/// <param name="ReasoningBudgetEnforceable">
+///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for this template — i.e. whether
+///     the template renders a literal reasoning END marker, the thing llama.cpp's chat-template classification turns
+///     into a non-empty <c>thinking_end_tags</c> set. With an empty set the server accepts the budget field and then
+///     ignores it, so the cap silently does nothing and a reasoning model can still spend its whole window thinking.
+///     <para>
+///         Only meaningful together with <paramref name="IsReasoningCapable" />: a budget is sent exclusively on the
+///         graded branch. For every other template — native-reasoning, plain, or no template at all — this stays
+///         <see langword="true" />, the inert default, so an unrelated classification can never be read downstream as
+///         "drop the cap". Defaults to <see langword="true" /> for the same reason.
+/// </para>
+/// </param>
 internal readonly record struct GgufCapabilities(
     bool IsToolCapable,
     bool IsReasoningCapable,
     bool IsNativeReasoningCapable,
-    IReadOnlyList<string> Capabilities);
+    IReadOnlyList<string> Capabilities,
+    bool ReasoningBudgetEnforceable = true);

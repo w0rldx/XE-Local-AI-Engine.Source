@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
 
 /// <summary>
 ///     Builds the per-participant reasoning <see cref="AdditionalPropertiesDictionary" /> (the Ollama <c>think</c>
@@ -34,7 +35,19 @@ internal static class ParticipantReasoningOptions
     ///     Always returns a dictionary (never null) — mirroring the single-agent path, which always assigns the built
     ///     dictionary to <see cref="ChatOptions.AdditionalProperties" /> even when it is empty.
     /// </summary>
-    internal static AdditionalPropertiesDictionary Build(string? reasoningEffort, bool supportsThinking)
+    /// <param name="reasoningBudgetEnforceable">
+    ///     Whether llama-server can ENFORCE a per-request <c>reasoning_budget_tokens</c> for this participant's model
+    ///     (its chat template renders a literal reasoning end marker). <see langword="false" /> omits the budget marker
+    ///     — llama.cpp would accept the field and silently ignore it — and reports the skip once per model through
+    ///     <paramref name="logger" />. Defaults to <see langword="true" />, which never removes a working cap.
+    /// </param>
+    /// <param name="logger">Receives the one-per-model skip notice; omit it to skip silently (no other logging).</param>
+    /// <param name="modelId">The participant's resolved model id, the de-duplication key for that notice.</param>
+    internal static AdditionalPropertiesDictionary Build(string? reasoningEffort,
+        bool supportsThinking,
+        bool reasoningBudgetEnforceable = true,
+        ILogger? logger = null,
+        string? modelId = null)
     {
         var properties = new AdditionalPropertiesDictionary();
 
@@ -53,9 +66,21 @@ internal static class ParticipantReasoningOptions
             // Per-request thinking budget for the llama.cpp path, mirroring the single-agent factory: an explicit graded
             // effort caps the reasoning so a participant cannot burn its whole window thinking and answer nothing. An
             // unspecified effort resolves to null and adds no entry.
+            //
+            // Skipped entirely for a model llama.cpp cannot enforce the budget on: the server writes the budget onto
+            // the sampler only when its chat-template classification yielded a non-empty think-end-tag set, and with an
+            // empty set it accepts the field and ignores it. Sending it there would advertise a cap that does not
+            // exist, so the marker is omitted and the skip reported once per model instead.
             if (ReasoningOptionsResolver.ResolveReasoningBudgetTokens(reasoningEffort) is { } budgetTokens)
             {
-                properties[LlamaReasoningBudgetMarkerKey] = budgetTokens;
+                if (reasoningBudgetEnforceable)
+                {
+                    properties[LlamaReasoningBudgetMarkerKey] = budgetTokens;
+                }
+                else if (logger is not null)
+                {
+                    ReasoningBudgetSkipLog.ReportBudgetSkipped(logger, modelId);
+                }
             }
         }
         else if (ReasoningOptionsResolver.IsReasoningRequested(reasoningEffort))

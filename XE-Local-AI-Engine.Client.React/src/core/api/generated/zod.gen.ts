@@ -2800,6 +2800,7 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.
 	capabilities: z.array(z.string()),
 	isReasoningCapable: z.boolean(),
 	isNativeReasoningCapable: z.boolean().optional(),
+	reasoningBudgetEnforceable: z.boolean().optional(),
 	isToolCapable: z.boolean(),
 	isMultimodalCapable: z.boolean().optional(),
 	isOverridden: z.boolean(),
