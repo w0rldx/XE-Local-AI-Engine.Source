@@ -65,6 +65,51 @@ public sealed class ChatTurnResolverTests
         await store.Received(1).GetByIdAsync(agentId, Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task ResolveAsync_WhenNoInstalledChatModelButAgentPinsAModel_ClearsTheRequiresInstalledFlag()
+    {
+        var agentId = Guid.NewGuid();
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("persona", [], ModelProfile: "llama3.1:8b", ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Agent",
+                    Kind: AgentDefinitionKind.Single));
+
+        var sut = CreateSut(resolver, Substitute.For<IAgentDefinitionStore>(), out _);
+
+        var resolution = await sut.ResolveAsync(activeModel: null,
+            requiresInstalledChatModel: true,
+            effectiveAgentId: agentId,
+            retrievalQuery: null,
+            userPickedConcreteModel: false,
+            CancellationToken.None);
+
+        // The node has no installed GGUF chat model, but the agent's pin gives the turn a model to run — the runner's
+        // "no chat model installed" guard must stand down instead of failing a perfectly runnable turn.
+        AssertEx.Equal("llama3.1:8b", resolution.EffectiveModel);
+        AssertEx.False(resolution.RequiresInstalledChatModel);
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenNoInstalledChatModelAndNoAgentPin_KeepsTheRequiresInstalledFlag()
+    {
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns((ResolvedAgentRuntime?)null);
+
+        var sut = CreateSut(resolver, Substitute.For<IAgentDefinitionStore>(), out _);
+
+        var resolution = await sut.ResolveAsync(activeModel: null,
+            requiresInstalledChatModel: true,
+            effectiveAgentId: null,
+            retrievalQuery: null,
+            userPickedConcreteModel: false,
+            CancellationToken.None);
+
+        // Nothing produced a model: the guard must survive so the UI still terminalizes as "model not installed".
+        AssertEx.Null(resolution.EffectiveModel);
+        AssertEx.True(resolution.RequiresInstalledChatModel);
+    }
+
     private static ChatTurnResolver CreateSut(IAgentDefinitionResolver resolver, IAgentDefinitionStore store, out IOrchestrationResolver orchestrationResolver)
     {
         orchestrationResolver = Substitute.For<IOrchestrationResolver>();

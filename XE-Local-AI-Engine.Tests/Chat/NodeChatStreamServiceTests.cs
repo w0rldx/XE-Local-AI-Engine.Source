@@ -3161,6 +3161,68 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessage_WhenNoInstalledGgufButAgentPinsModel_RoutesThePin()
+    {
+        // The server-initiated companion to the case above: the node has NO installed GGUF chat model, but the bound
+        // agent pins a (non-GGUF, e.g. Ollama) model. The turn has a model to run, so it must route the pin instead of
+        // failing with FailureCategory.ModelNotInstalled — the work-session step path, which never sets request.Model.
+        const string pinnedModel = "llama3.1:8b";
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { }, agentDefinitionId);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new PackageCapturingInvocationRunner(dispatcher);
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
+                {
+                    var honorModelProfile = callInfo.ArgAt<bool>(4);
+                    return new ResolvedAgentRuntime("Pinned persona.", [], honorModelProfile ? pinnedModel : null, ReasoningEffort: null, AgentDefinitionVersion: 9, agentDefinitionId,
+                        "Pinned Agent");
+                });
+
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            new ChatTurnResolver(resolver, CreateAgentDefinitionStore(), CreateOrchestrationResolver(), CreateModelCapabilityResolver(), NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            // Resolver reports no installed GGUF chat model (null) — the pin is the only model this turn has.
+            CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
+            CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Equal(pinnedModel, runner.LastModelProfile);
+        AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.NotEqual(FailureCategory.ModelNotInstalled, dispatcher.CurrentInvocation!.FailureCategory);
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenLocalDefaultResolvesInstalledGgufModel_RoutesThatModel()
     {
         // A "Local runtime default" send where the resolver returns an installed GGUF chat model routes the turn on

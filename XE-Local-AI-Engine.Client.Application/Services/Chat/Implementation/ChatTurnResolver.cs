@@ -113,8 +113,13 @@ public sealed class ChatTurnResolver(
                 orchestration.Orchestration is not null);
         }
 
-        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, supportsVision, requiresInstalledChatModel, activeModelIsCloud,
-            effectiveModelIsCloud);
+        // The caller's flag is raised from the LOCAL-default head alone (no installed GGUF chat model), before the agent
+        // pin is known. The runner turns it into NoChatModelInstalledException, so it must only survive when the turn
+        // truly has no model to run: neither the local GGUF default NOR the agent's pin produced one. An Ollama-only
+        // node with a pinning agent (every server-initiated work-session step) resolves an effective model here and must
+        // not be failed as "no chat model installed".
+        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, supportsVision,
+            requiresInstalledChatModel && effectiveModel is null, activeModelIsCloud, effectiveModelIsCloud);
     }
 
     /// <summary>
