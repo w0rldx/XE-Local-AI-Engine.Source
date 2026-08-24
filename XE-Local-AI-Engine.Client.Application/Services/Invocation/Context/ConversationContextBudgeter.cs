@@ -96,7 +96,8 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         // ChatRole.User message, so a turn using many approved tools puts each resolved round in its own turn, far
         // outside the keep window the floor below protects; whole-turn dropping would then split pairs that must stay
         // together. Pinning is per message, not per turn, so the surrounding history still trims.
-        var pinned = BuildApprovalPins(messages);
+        var approvals = BuildApprovalGroups(messages);
+        var pinned = approvals.Pinned;
 
         // Floor of 2, even against a mis-set config: the approval-replay path splits one in-flight round across two
         // turns — the assistant tool-call (and its approval request) land in turn M, and the User approval-decision
@@ -150,6 +151,30 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             }
         }
 
+        // Pass 3: the approval pins are a correlation guarantee, not a reservation. Left permanent they accumulate
+        // without bound, and an approval-heavy conversation eventually has a pinned set that alone exceeds the budget —
+        // at which point ExceedsBudget is stuck true and the runner's hard stop rejects EVERY later turn, permanently.
+        // So once the ordinary passes are spent, evict whole historical approval groups oldest first. A group is the
+        // request, its replayed decision, and the results that decision produced, all correlated by call id; taking it
+        // atomically is what keeps the validator satisfied, which fails a response whose request is missing and a
+        // resolved response whose FunctionResultContent is missing. An incomplete group (a surfaced request with no
+        // decision yet — the in-flight round) is never a candidate: there is nothing historical about it.
+        for (var g = 0; g < approvals.Groups.Count && currentEstimate > effectiveBudget; g++)
+        {
+            var group = approvals.Groups[g];
+            if (!group.Complete || !IsEvictable(group, turnOf, working, dropped, protectedFrom))
+            {
+                continue;
+            }
+
+            foreach (var i in group.MessageIndices)
+            {
+                dropped[i] = true;
+                currentEstimate -= perMessageTokens[i];
+                messagesDropped++;
+            }
+        }
+
         var survivors = new List<ChatMessage>(count - messagesDropped);
         for (var i = 0; i < count; i++)
         {
@@ -173,11 +198,17 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     }
 
     /// <summary>
-    ///     Flags the messages Pass 2 must never drop because doing so would break a tool-approval correlation: the
+    ///     Flags the messages Pass 2 must never drop because doing so would break a tool-approval correlation — the
     ///     messages carrying a <see cref="ToolApprovalRequestContent" /> or <see cref="ToolApprovalResponseContent" />,
     ///     plus every message holding a <see cref="FunctionResultContent" /> for one of their tool calls (a resolved
-    ///     round's response is only replayable while its result is still in the batch). Returns null when the history
-    ///     holds no approval content at all, which is the common case and costs one scan.
+    ///     round's response is only replayable while its result is still in the batch) — and partitions those same
+    ///     messages into the correlated GROUPS Pass 3 may then evict whole. Both come from one scan; the pin array is
+    ///     null when the history holds no approval content at all, which is the common case.
+    ///     <para>
+    ///         A group is a connected component over "shares a call id", so a message carrying several rounds' content
+    ///         merges them rather than splitting a correlation across two evictions. Groups are ordered by their oldest
+    ///         message, which is the order Pass 3 evicts in.
+    ///     </para>
     ///     <para>
     ///         Deliberately NOT applied to Pass 1: the approval records themselves hold neither a tool result nor
     ///         tool-role text, so excerpting cannot touch them, while the paired results must stay excerptable or a
@@ -185,10 +216,14 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     ///         validator matches on, so it never breaks the correlation.
     ///     </para>
     /// </summary>
-    private static bool[]? BuildApprovalPins(IReadOnlyList<ChatMessage> messages)
+    private static ApprovalCorrelation BuildApprovalGroups(IReadOnlyList<ChatMessage> messages)
     {
+        // Everything here stays null until the first approval content is seen, so the common approval-free history
+        // still costs exactly one scan and no allocation.
         bool[]? pinned = null;
-        HashSet<string>? approvedCallIds = null;
+        MessageUnion? union = null;
+        Dictionary<string, int>? messageOfCallId = null;
+        HashSet<int>? decided = null;
 
         for (var i = 0; i < messages.Count; i++)
         {
@@ -207,39 +242,136 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
                 }
 
                 pinned ??= new bool[messages.Count];
+                union ??= new MessageUnion(messages.Count);
                 pinned[i] = true;
 
                 if (!string.IsNullOrEmpty(toolCall.CallId))
                 {
-                    approvedCallIds ??= new HashSet<string>(StringComparer.Ordinal);
-                    _ = approvedCallIds.Add(toolCall.CallId);
+                    messageOfCallId ??= new Dictionary<string, int>(StringComparer.Ordinal);
+                    if (messageOfCallId.TryGetValue(toolCall.CallId, out var earlier))
+                    {
+                        union.Merge(i, earlier);
+                    }
+                    else
+                    {
+                        messageOfCallId[toolCall.CallId] = i;
+                    }
                 }
-            }
-        }
 
-        if (pinned is null || approvedCallIds is null)
-        {
-            return pinned;
-        }
-
-        for (var i = 0; i < messages.Count; i++)
-        {
-            if (pinned[i])
-            {
-                continue;
-            }
-
-            foreach (var content in messages[i].Contents)
-            {
-                if (content is FunctionResultContent result && approvedCallIds.Contains(result.CallId))
+                // Only a replayed decision makes a round historical. A request still awaiting one is the in-flight
+                // round, and evicting it would delete an approval the user has not answered yet.
+                if (content is ToolApprovalResponseContent)
                 {
-                    pinned[i] = true;
-                    break;
+                    decided ??= [];
+                    _ = decided.Add(i);
                 }
             }
         }
 
-        return pinned;
+        if (pinned is null || union is null)
+        {
+            return new ApprovalCorrelation(null, []);
+        }
+
+        if (messageOfCallId is not null)
+        {
+            for (var i = 0; i < messages.Count; i++)
+            {
+                foreach (var content in messages[i].Contents)
+                {
+                    if (content is FunctionResultContent result && messageOfCallId.TryGetValue(result.CallId, out var owner))
+                    {
+                        pinned[i] = true;
+                        union.Merge(i, owner);
+                    }
+                }
+            }
+        }
+
+        return new ApprovalCorrelation(pinned, union.CollectGroups(pinned, decided));
+    }
+
+    /// <summary>
+    ///     True when every message of an approval group may be dropped: none is a system message, none is still inside
+    ///     the protected recent window, and none was already dropped by an earlier pass. Whole group or nothing — a
+    ///     partial eviction is precisely the orphan the pins exist to prevent.
+    /// </summary>
+    private static bool IsEvictable(ApprovalGroup group, int[] turnOf, ChatMessage[] working, bool[] dropped, int protectedFrom)
+    {
+        foreach (var i in group.MessageIndices)
+        {
+            if (dropped[i] || turnOf[i] >= protectedFrom || working[i].Role == ChatRole.System)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private sealed record ApprovalCorrelation(bool[]? Pinned, IReadOnlyList<ApprovalGroup> Groups);
+
+    /// <summary>One tool-approval round as the budgeter must treat it: an all-or-nothing set of message indices.</summary>
+    private sealed record ApprovalGroup(IReadOnlyList<int> MessageIndices, bool Complete);
+
+    /// <summary>
+    ///     Disjoint-set over message indices, merged whenever two messages share a tool-call id. A message carrying
+    ///     several rounds' content pulls all of them into one group, which is what stops an eviction from taking half
+    ///     of a message's correlations.
+    /// </summary>
+    private sealed class MessageUnion(int count)
+    {
+        private readonly int[] _parent = [.. Enumerable.Range(0, count)];
+
+        public void Merge(int left, int right)
+        {
+            var leftRoot = Find(left);
+            var rightRoot = Find(right);
+            if (leftRoot != rightRoot)
+            {
+                // Lowest index wins the root, so the group's oldest message is also its identity.
+                _parent[Math.Max(leftRoot, rightRoot)] = Math.Min(leftRoot, rightRoot);
+            }
+        }
+
+        /// <summary>Buckets the approval-correlated messages into groups, oldest group first (Pass 3's eviction order).</summary>
+        public IReadOnlyList<ApprovalGroup> CollectGroups(bool[] pinned, HashSet<int>? decided)
+        {
+            var members = new SortedDictionary<int, List<int>>();
+            var complete = new HashSet<int>();
+            for (var i = 0; i < pinned.Length; i++)
+            {
+                if (!pinned[i])
+                {
+                    continue;
+                }
+
+                var root = Find(i);
+                if (!members.TryGetValue(root, out var bucket))
+                {
+                    members[root] = bucket = [];
+                }
+
+                bucket.Add(i);
+                if (decided?.Contains(i) == true)
+                {
+                    _ = complete.Add(root);
+                }
+            }
+
+            return [.. members.Select(entry => new ApprovalGroup(entry.Value, complete.Contains(entry.Key)))];
+        }
+
+        private int Find(int index)
+        {
+            while (_parent[index] != index)
+            {
+                _parent[index] = _parent[_parent[index]];
+                index = _parent[index];
+            }
+
+            return index;
+        }
     }
 
     /// <summary>

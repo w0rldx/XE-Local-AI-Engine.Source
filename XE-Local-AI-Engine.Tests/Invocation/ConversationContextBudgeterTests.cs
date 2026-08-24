@@ -212,6 +212,80 @@ public sealed class ConversationContextBudgeterTests
     }
 
     [Test]
+    public void Budget_WhenPinnedApprovalsAloneExceedBudget_EvictsTheOldestGroupsWhole()
+    {
+        // Pinning is a correlation guarantee, not a reservation. Left permanent, an approval-heavy conversation ends up
+        // with a pinned set that alone exceeds the budget, ExceedsBudget stays true, and the runner's hard stop rejects
+        // every later turn forever. The oldest COMPLETE rounds must therefore go — atomically, so no response is left
+        // without its request and no resolved response without the result it produced.
+        var (request1, response1) = ApprovalRound("call-1", "search");
+        var (request2, response2) = ApprovalRound("call-2", "search");
+        var (request3, response3) = ApprovalRound("call-3", "search");
+        var (request4, _) = ApprovalRound("call-4", "search");
+        var messages = new List<ChatMessage>
+        {
+            User("run the tools"),
+            request1,
+            response1,
+            ToolResult("call-1", "r1"),
+            request2,
+            response2,
+            ToolResult("call-2", "r2"),
+            request3,
+            response3,
+            ToolResult("call-3", "r3"),
+            // The in-flight round: surfaced, no decision replayed yet, so it is not historical and must survive.
+            request4
+        };
+        var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 2);
+
+        // 110 tokens, of which 100 are pinned approval content. A budget of 75 is unreachable by dropping ordinary
+        // history alone — only evicting whole approval groups can clear it.
+        var result = sut.Budget(messages, contextTokenCapacity: 75, reservedOutputTokens: 0);
+
+        AssertEx.True(result.Trimmed);
+        AssertEx.False(result.ExceedsBudget, "an approval-heavy history must not be permanently over budget");
+        AssertNoOrphanedApprovals(result.Messages);
+
+        // Oldest first: round 1 goes whole (request + decision + result), round 3 and the in-flight request 4 stay.
+        var survivingRequests = ApprovalRequestIds(result.Messages);
+        AssertEx.False(survivingRequests.Contains("call-1"), "the oldest complete round is evicted");
+        AssertEx.False(ApprovalResponseIds(result.Messages).Contains("call-1"), "its decision goes with it, never separately");
+        AssertEx.False(ResultCallIds(result.Messages).Contains("call-1"), "and so does the result that decision produced");
+        AssertEx.Contains(survivingRequests, "call-3", "a newer round is kept while an older one can pay the bill");
+        AssertEx.Contains(survivingRequests, "call-4", "an undecided round is not historical and is never evicted");
+    }
+
+    [Test]
+    public void Budget_WhenTheOnlyEvictableApprovalsAreUndecided_KeepsThemAndFlagsOverflow()
+    {
+        // Eviction is bounded by correlation, not by the budget. These two rounds sit squarely in the droppable region
+        // and the budget cannot be met without them — but neither has a replayed decision, so evicting one would delete
+        // an approval the user has not answered yet. Overflow is the correct answer here.
+        var (request1, _) = ApprovalRound("call-1", "search");
+        var (request2, _) = ApprovalRound("call-2", "search");
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            request1,
+            User("u1"),
+            request2,
+            User("u2"),
+            User("u3")
+        };
+        var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 2);
+
+        // 60 tokens; turns 2 and 3 are protected, so the budget of 25 is unreachable once the two ordinary droppable
+        // messages (20) are gone and only the undecided approval requests are left to take.
+        var result = sut.Budget(messages, contextTokenCapacity: 25, reservedOutputTokens: 0);
+
+        AssertEx.True(result.Trimmed);
+        AssertEx.True(result.ExceedsBudget, "an irreducible pinned set must still be flagged rather than broken up");
+        AssertEx.Contains(ApprovalRequestIds(result.Messages), "call-1");
+        AssertEx.Contains(ApprovalRequestIds(result.Messages), "call-2");
+    }
+
+    [Test]
     public void Budget_ExcerptsAnApprovedToolResult_RatherThanPinningItWholesale()
     {
         // Pinning approval rounds must not cost the budget its only lever over a long approved-tool turn: the paired
@@ -450,6 +524,16 @@ public sealed class ConversationContextBudgeterTests
     private static IReadOnlyList<string> ResultCallIds(IReadOnlyList<ChatMessage> messages)
     {
         return [.. messages.SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Select(r => r.CallId)];
+    }
+
+    private static IReadOnlyList<string> ApprovalRequestIds(IReadOnlyList<ChatMessage> messages)
+    {
+        return [.. messages.SelectMany(m => m.Contents.OfType<ToolApprovalRequestContent>()).Select(r => r.RequestId)];
+    }
+
+    private static IReadOnlyList<string> ApprovalResponseIds(IReadOnlyList<ChatMessage> messages)
+    {
+        return [.. messages.SelectMany(m => m.Contents.OfType<ToolApprovalResponseContent>()).Select(r => r.RequestId)];
     }
 
     private static IReadOnlyList<string> CallCallIds(IReadOnlyList<ChatMessage> messages)
