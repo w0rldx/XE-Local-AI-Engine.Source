@@ -5,8 +5,17 @@ using System.ComponentModel.DataAnnotations;
 /// <summary>
 ///     Configuration for agent work sessions.
 ///     <para>
+///         The shipped posture, stated here once so nothing else has to restate it: <c>XE-Local-AI-Engine.Client/appsettings.json</c>
+///         ships <c>WorkSessions:Enabled: true</c>, and the feature is on for every node that does not override the key.
+///         The compiled-in default of <see cref="Enabled" /> is <see langword="false" />, which is what a host binding
+///         a configuration source WITHOUT the key gets — most test hosts, and nothing that ships.
+///     </para>
+///     <para>
 ///         <see cref="Enabled" /> gates <em>behaviour</em>, never registration: the endpoints and the hub are mapped
-///         unconditionally, so an empty container would answer 500 where a disabled node has to answer legibly.
+///         unconditionally (see <c>WorkSessionEndpoints</c>), so an empty container would answer 500 where a disabled
+///         node has to answer legibly. A disabled node answers <c>404</c> from request-path middleware that runs ahead
+///         of authentication, never <c>500</c> — pinned by
+///         <c>WorkSessionEndpointTests.WorkSessionRoute_WhenTheFeatureIsDisabled_ReturnsNotFoundWithoutReachingTheService</c>.
 ///     </para>
 /// </summary>
 public sealed class WorkSessionOptions

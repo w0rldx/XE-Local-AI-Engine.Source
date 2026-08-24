@@ -644,9 +644,11 @@ message persistence, ordered parts, approvals or `ask_user` is re-implemented �
 durable structure around turns the chat path already knows how to run.
 
 Two kinds ship: **General** and **Research** (which adds the read-only knowledge-base tools).
-`Development` is reserved and the store refuses it. `WorkSessions:Enabled` is `false` by default and
-gates *behaviour* in the supervisor and in every tool handler — never registration, so a disabled node
-answers legibly instead of 500-ing out of an empty container.
+`Development` is reserved and the store refuses it. `WorkSessions:Enabled` ships `true` in
+`XE-Local-AI-Engine.Client/appsettings.json` (the compiled-in property default is `false`, which only a
+host binding a configuration source without the key ever sees) and gates *behaviour* in the supervisor
+and in every tool handler — never registration, so a disabled node answers `404` from request-path
+middleware ahead of authentication instead of 500-ing out of an empty container.
 
 ### 5.1 One step
 
@@ -797,7 +799,7 @@ the state block would otherwise carry off the node on the next step.
 
 | Key | Default | Note |
 |---|---|---|
-| `WorkSessions:Enabled` | `false` | Gates behaviour, never registration |
+| `WorkSessions:Enabled` | `true` | Shipped in `appsettings.json`; gates behaviour, never registration |
 | `WorkSessions:MaxStepsPerRun` | `25` | Per start/resume, not per lifetime |
 | `WorkSessions:CheckpointEveryNSteps` | `5` | |
 | `WorkSessions:MaxConcurrentSessions` | `1` | Admission cap — see §5.2 |
