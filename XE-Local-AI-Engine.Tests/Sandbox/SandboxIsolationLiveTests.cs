@@ -35,9 +35,9 @@ public sealed class SandboxIsolationLiveTests
         RequireOptIn();
         var containment = new HostSandboxContainmentProbe().Containment;
 
-        if (!containment.SupportsFilesystemIsolation)
+        if (TrustedBinaryResolver.Resolve("bwrap") is null)
         {
-            Skip($"this host cannot isolate the filesystem: {containment.FilesystemIsolationUnavailableReason}");
+            Skip("this host has no root-owned bwrap under /usr/bin, /bin or /usr/local/bin.");
         }
 
         // The probe RUNS the production chain and checks fifteen positive and negative controls before it says yes,
@@ -111,6 +111,48 @@ public sealed class SandboxIsolationLiveTests
         AssertEx.Contains(result.StandardOutput, "payload");
         AssertEx.Contains(result.StandardOutput, "TREE=READONLY");
         AssertEx.False(File.Exists(Path.Combine(tree.Path, "planted.txt")), "a read-only tree must not gain files");
+
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task IsolatedCommand_FindsEveryReadOnlySurfaceReadOnly_AndEveryDeviceStillUsable()
+    {
+        // Asserted here as well as inside the capability probe, and deliberately so: the probe's version of these
+        // controls decides whether the capability is advertised, so a regression in the chain would withdraw the
+        // capability and this suite would skip. Asserting them again from outside means a broken --remount-ro shows
+        // up as a failing test rather than as a quiet absence of tests.
+        RequireIsolationCapableHost();
+        using var provider = CreateProvider();
+        var handle = await CreateIsolatedSandboxAsync(provider);
+
+        var result = await RunShellAsync(provider,
+            handle,
+            """
+            if touch / 2>/dev/null && touch /xe 2>/dev/null; then echo ROOT=WRITABLE; else echo ROOT=READONLY; fi
+            DEVERR=$(touch /dev/xe 2>&1); if [ -e /dev/xe ]; then echo DEV=WRITABLE; else case "$DEVERR" in *"Read-only"*) echo DEV=EROFS;; *) echo DEV=REFUSED;; esac; fi
+            if touch /proc/xe 2>/dev/null; then echo PROC=WRITABLE; else echo PROC=REFUSED; fi
+            if touch /etc/xe 2>/dev/null; then echo ETC=WRITABLE; else echo ETC=READONLY; fi
+            if echo x > /dev/null 2>/dev/null; then echo DEVNULL=OK; else echo DEVNULL=BROKEN; fi
+            echo URANDOM=$(head -c 4 /dev/urandom | wc -c)
+            echo PID=$$
+            echo PASSWD=$(grep -c . /etc/passwd)
+            echo RUNENTRIES=$(ls -A /run | wc -l)
+            """);
+
+        AssertEx.Equal(expected: 0, result.ExitCode, result.StandardError);
+        AssertEx.Contains(result.StandardOutput, "ROOT=READONLY");
+        // EROFS specifically: that is what a remounted-read-only mount answers, and it distinguishes "the remount
+        // worked" from "the path happened not to exist".
+        AssertEx.Contains(result.StandardOutput, "DEV=EROFS");
+        AssertEx.Contains(result.StandardOutput, "PROC=REFUSED");
+        AssertEx.Contains(result.StandardOutput, "ETC=READONLY");
+        // The positive half: a read-only /dev that broke /dev/null would be a worse bug than the one being prevented.
+        AssertEx.Contains(result.StandardOutput, "DEVNULL=OK");
+        AssertEx.Contains(result.StandardOutput, "URANDOM=4");
+        AssertEx.Contains(result.StandardOutput, "PID=2");
+        AssertEx.Contains(result.StandardOutput, "PASSWD=2");
+        AssertEx.Contains(result.StandardOutput, "RUNENTRIES=0");
 
         await Task.CompletedTask;
     }
@@ -270,13 +312,31 @@ public sealed class SandboxIsolationLiveTests
             TimeProvider.System);
     }
 
+    /// <summary>
+    ///     Skips only when the host genuinely lacks the mechanism, and FAILS when it has it but the boundary does not
+    ///     hold.
+    ///     <para>
+    ///         The distinction is load-bearing. A gate that skips on any probe failure would turn every regression in
+    ///         the chain into a silent green run: break <c>--remount-ro /dev</c>, the probe's control fails, the
+    ///         capability goes false, and the whole suite politely skips the tests that would have caught it. Once a
+    ///         root-owned <c>bwrap</c> and a user bus are present, this host is expected to isolate, and anything else
+    ///         is a failure.
+    ///     </para>
+    /// </summary>
     private static void RequireIsolationCapableHost()
     {
         RequireOptIn();
+
+        if (TrustedBinaryResolver.Resolve("bwrap") is null)
+        {
+            Skip("this host has no root-owned bwrap under /usr/bin, /bin or /usr/local/bin.");
+        }
+
         var containment = new HostSandboxContainmentProbe().Containment;
         if (!containment.SupportsFilesystemIsolation)
         {
-            Skip($"this host cannot isolate the filesystem: {containment.FilesystemIsolationUnavailableReason}");
+            AssertEx.True(condition: false,
+                $"this host has a trusted bwrap, so the filesystem boundary must hold; the probe reported: {containment.FilesystemIsolationUnavailableReason}");
         }
     }
 

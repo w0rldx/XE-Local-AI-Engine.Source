@@ -159,9 +159,14 @@ public sealed class TrustedBinaryResolverTests
     /// <summary>A temporary directory owned by the test user, holding an executable that pretends to be a helper.</summary>
     private sealed class FakeBinaryDirectory : IDisposable
     {
+        // Under the user's HOME rather than the temp directory, and deliberately. /tmp is world-writable, so a
+        // candidate under it is rejected by the writable-component rule before ownership is ever consulted — every
+        // assertion here would then pass for a reason that has nothing to do with what it claims to test. A 0755
+        // directory the test user owns isolates the ownership rule, which is the one that decides whether a binary
+        // the engine's own user could have written can build the sandbox.
         public FakeBinaryDirectory(string? binaryName = null)
         {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"xe-trusted-{Guid.NewGuid():N}");
+            Path = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), $".xe-trusted-{Guid.NewGuid():N}");
             Directory.CreateDirectory(Path);
             if (binaryName is not null)
             {
