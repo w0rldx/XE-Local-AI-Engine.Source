@@ -17,7 +17,7 @@ export const WORK_SESSION_POLL_INTERVAL_MS = 3_000;
  * `kind.ToString().ToLowerInvariant()`, so a casing slip here makes every invalidation a silent no-op rather than an
  * error. The literals are asserted in `useWorkSessionHub.test.tsx` for exactly that reason.
  */
-export const workSessionChangeKinds = ["status", "step", "task", "finding", "artifact", "checkpoint"] as const;
+const workSessionChangeKinds = ["status", "step", "task", "finding", "artifact", "checkpoint"] as const;
 export type WorkSessionChangeKind = (typeof workSessionChangeKinds)[number];
 
 export interface WorkSessionChanged {

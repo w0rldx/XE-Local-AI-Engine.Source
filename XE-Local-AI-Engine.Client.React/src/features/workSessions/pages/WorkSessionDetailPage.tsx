@@ -1,22 +1,26 @@
-import { ActionIcon, Alert, Anchor, Badge, Drawer, Group, Loader, Stack, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Alert, Anchor, Badge, Drawer, Group, Loader, Menu, Stack, Text, Tooltip } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlertTriangle, IconLayoutSidebar, IconLayoutSidebarRight } from "@tabler/icons-react";
-import { Link } from "@tanstack/react-router";
+import { IconAlertTriangle, IconDotsVertical, IconLayoutSidebar, IconLayoutSidebarRight, IconPencil, IconTrash } from "@tabler/icons-react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
+import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import type { ChatScope } from "@/features/chat/models/ChatModels";
 import { Chat } from "@/features/chat/pages/Chat";
+import { EditWorkSessionDialog } from "@/features/workSessions/components/EditWorkSessionDialog";
 import { WorkSessionFollowUpNotice } from "@/features/workSessions/components/WorkSessionFollowUpNotice";
 import { WorkSessionPlanPanel } from "@/features/workSessions/components/WorkSessionPlanPanel";
 import { WorkSessionSidePanel } from "@/features/workSessions/components/WorkSessionSidePanel";
 import { useWorkSessionHub } from "@/features/workSessions/hooks/useWorkSessionHub";
 import { isTerminalWorkSessionStatus, toWorkSessionKind, toWorkSessionStatus } from "@/features/workSessions/models/WorkSessionModels";
 import {
+	useDeleteWorkSession,
 	usePostWorkSessionMessage,
+	useUpdateWorkSession,
 	useWorkSession,
 	useWorkSessionArtifacts,
 	useWorkSessionCheckpoints,
@@ -35,12 +39,16 @@ const DESKTOP_MIN_WIDTH = 1024;
 
 export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 	const { t } = useTranslation();
+	const { confirm } = useConfirm();
+	const navigate = useNavigate();
 	const { width } = useWindowDimensions();
 	const isMobile = width < DESKTOP_MIN_WIDTH;
 	const [planDrawerOpened, planDrawer] = useDisclosure(false);
 	const [sideDrawerOpened, sideDrawer] = useDisclosure(false);
 	const [eventsLimit, setEventsLimit] = useState(workSessionEventsPageSize);
 	const [followUpError, setFollowUpError] = useState<string | undefined>(undefined);
+	const [editDialogOpened, editDialog] = useDisclosure(false);
+	const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
 
 	const sessionQuery = useWorkSession(sessionId);
 	const conversationId = sessionQuery.data?.conversationId;
@@ -55,6 +63,8 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 	const eventsQuery = useWorkSessionEvents(sessionId, eventsLimit, poll);
 	const lifecycle = useWorkSessionLifecycle(sessionId);
 	const postMessage = usePostWorkSessionMessage();
+	const updateSession = useUpdateWorkSession(sessionId);
+	const deleteSession = useDeleteWorkSession();
 
 	// The snapshot paints the header before the detail query lands; once it has, the query is the authority.
 	const status = toWorkSessionStatus(sessionQuery.data?.status ?? live.status);
@@ -91,12 +101,52 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 		lifecycle.pause.mutate({ path: { sessionId } });
 	}, [lifecycle.pause, sessionId]);
 
+	const agentDefinitionId = sessionQuery.data?.agentDefinitionId;
+	const handleSaveEdits = useCallback(
+		(values: { title: string; objective: string }) => {
+			if (!agentDefinitionId) {
+				return;
+			}
+			// PATCH, but the generated request types all three fields as required, so the unchanged agent rides along.
+			updateSession.mutate(
+				{ path: { sessionId }, body: { ...values, agentDefinitionId } },
+				{ onSuccess: () => editDialog.close() },
+			);
+		},
+		[agentDefinitionId, editDialog, sessionId, updateSession],
+	);
+
+	const handleDelete = useCallback(async (): Promise<void> => {
+		const confirmed = await confirm({
+			title: t("pages.workSessions.delete.title", "Delete this work session?"),
+			description: t(
+				"pages.workSessions.delete.description",
+				"Its plan, findings, artifacts, checkpoints and its whole conversation are removed. This cannot be undone.",
+			),
+			confirmationText: t("pages.workSessions.delete.confirm", "Delete"),
+			cancellationText: t("common.cancel", "Cancel"),
+		});
+		if (!confirmed) {
+			return;
+		}
+		setDeleteError(undefined);
+		try {
+			await deleteSession.mutateAsync({ path: { sessionId } });
+		} catch (error) {
+			// A running session 409s — cancel it first. Never leave the route open on a half-deleted session.
+			setDeleteError(apiErrorMessage(error, t("pages.workSessions.delete.failed", "Could not delete this work session.")));
+			return;
+		}
+		// The delete also removes the OWNED conversation, so this route must not stay open on it.
+		navigate({ to: "/work-sessions" });
+	}, [confirm, deleteSession, navigate, sessionId, t]);
+
 	const scope = useMemo<ChatScope | undefined>(
 		() =>
 			conversationId
 				? {
 						conversationId,
-						pinnedAgentId: sessionQuery.data?.agentDefinitionId,
+						pinnedAgentId: agentDefinitionId,
 						resumeNonce: live.resumeNonce,
 						onSendOverride: handleSendFollowUp,
 						onStopOverride: handlePause,
@@ -104,7 +154,7 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 						embedded: true,
 					}
 				: undefined,
-		[conversationId, sessionQuery.data?.agentDefinitionId, live.resumeNonce, handleSendFollowUp, handlePause, status],
+		[conversationId, agentDefinitionId, live.resumeNonce, handleSendFollowUp, handlePause, status],
 	);
 
 	if (sessionQuery.isPending) {
@@ -193,6 +243,28 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 					<Badge size="sm" variant="light" color="gray">
 						{t(`pages.workSessions.kind.${toWorkSessionKind(sessionQuery.data.kind)}`, sessionQuery.data.kind ?? "")}
 					</Badge>
+					<Menu position="bottom-end" withinPortal={true}>
+						<Menu.Target>
+							<ActionIcon variant="subtle" aria-label={t("pages.workSessions.detail.actions", "Session actions")} data-testid="work-session-actions">
+								<IconDotsVertical size={18} />
+							</ActionIcon>
+						</Menu.Target>
+						<Menu.Dropdown>
+							<Menu.Item leftSection={<IconPencil size={14} />} onClick={editDialog.open} data-testid="work-session-edit">
+								{t("pages.workSessions.edit.open", "Edit")}
+							</Menu.Item>
+							<Menu.Item
+								color="red"
+								leftSection={<IconTrash size={14} />}
+								onClick={() => {
+									handleDelete().catch(() => undefined);
+								}}
+								data-testid="work-session-delete"
+							>
+								{t("pages.workSessions.delete.open", "Delete")}
+							</Menu.Item>
+						</Menu.Dropdown>
+					</Menu>
 					{isMobile ? (
 						<Tooltip label={t("pages.workSessions.detail.showDetails", "Show findings and artifacts")}>
 							<ActionIcon variant="subtle" onClick={sideDrawer.open} aria-label={t("pages.workSessions.detail.showDetails", "Show findings and artifacts")} data-testid="work-session-side-toggle">
@@ -201,6 +273,30 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 						</Tooltip>
 					) : null}
 				</Group>
+
+				{deleteError ? (
+					<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="work-session-delete-error">
+						{deleteError}
+					</Alert>
+				) : null}
+
+				<EditWorkSessionDialog
+					opened={editDialogOpened}
+					status={status}
+					initialTitle={sessionQuery.data.title ?? ""}
+					initialObjective={sessionQuery.data.objective ?? ""}
+					isSubmitting={updateSession.isPending}
+					errorMessage={
+						updateSession.isError
+							? apiErrorMessage(updateSession.error, t("pages.workSessions.edit.failed", "Could not save those changes."))
+							: undefined
+					}
+					onClose={() => {
+						updateSession.reset();
+						editDialog.close();
+					}}
+					onSubmit={handleSaveEdits}
+				/>
 
 				{isMobile ? (
 					<>

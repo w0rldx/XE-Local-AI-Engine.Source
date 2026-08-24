@@ -4354,7 +4354,8 @@
 				"back": "Back to work sessions",
 				"showPlan": "Show plan",
 				"showDetails": "Show findings and artifacts",
-				"details": "Details"
+				"details": "Details",
+				"actions": "Session actions"
 			},
 			"plan": {
 				"title": "Plan",
@@ -4415,6 +4416,20 @@
 				"queued": "Queued for the next step.",
 				"closed": "This session is finished and takes no further messages.",
 				"failed": "Could not send that message."
+			},
+			"edit": {
+				"open": "Edit",
+				"title": "Edit work session",
+				"submit": "Save",
+				"failed": "Could not save those changes.",
+				"objectiveLocked": "The objective can only change while the session is paused or not yet started."
+			},
+			"delete": {
+				"open": "Delete",
+				"title": "Delete this work session?",
+				"description": "Its plan, findings, artifacts, checkpoints and its whole conversation are removed. This cannot be undone.",
+				"confirm": "Delete",
+				"failed": "Could not delete this work session."
 			}
 		}
 	},

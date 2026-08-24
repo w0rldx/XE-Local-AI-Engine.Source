@@ -4354,7 +4354,8 @@
 				"back": "Zurück zu den Arbeitssitzungen",
 				"showPlan": "Plan anzeigen",
 				"showDetails": "Erkenntnisse und Artefakte anzeigen",
-				"details": "Details"
+				"details": "Details",
+				"actions": "Sitzungsaktionen"
 			},
 			"plan": {
 				"title": "Plan",
@@ -4415,6 +4416,20 @@
 				"queued": "Für den nächsten Schritt eingereiht.",
 				"closed": "Diese Sitzung ist abgeschlossen und nimmt keine weiteren Nachrichten an.",
 				"failed": "Diese Nachricht konnte nicht gesendet werden."
+			},
+			"edit": {
+				"open": "Bearbeiten",
+				"title": "Arbeitssitzung bearbeiten",
+				"submit": "Speichern",
+				"failed": "Die Änderungen konnten nicht gespeichert werden.",
+				"objectiveLocked": "Das Ziel lässt sich nur ändern, solange die Sitzung pausiert oder noch nicht gestartet ist."
+			},
+			"delete": {
+				"open": "Löschen",
+				"title": "Diese Arbeitssitzung löschen?",
+				"description": "Ihr Plan, ihre Erkenntnisse, Artefakte, Checkpoints und die gesamte Unterhaltung werden entfernt. Das lässt sich nicht rückgängig machen.",
+				"confirm": "Löschen",
+				"failed": "Diese Arbeitssitzung konnte nicht gelöscht werden."
 			}
 		}
 	},

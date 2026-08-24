@@ -22,7 +22,7 @@ export type {
 	WorkSessionTaskResponse,
 };
 
-export const workSessionStatuses = [
+const workSessionStatuses = [
 	"Draft",
 	"Running",
 	"Paused",
@@ -39,13 +39,13 @@ export type WorkSessionStatus = (typeof workSessionStatuses)[number];
 export const workSessionKinds = ["General", "Research"] as const;
 export type WorkSessionKind = (typeof workSessionKinds)[number];
 
-export const workSessionTaskStatuses = ["Planned", "Active", "Blocked", "Done", "Dropped"] as const;
+const workSessionTaskStatuses = ["Planned", "Active", "Blocked", "Done", "Dropped"] as const;
 export type WorkSessionTaskStatus = (typeof workSessionTaskStatuses)[number];
 
 export const workSessionFindingKinds = ["Finding", "Evidence", "Decision", "OpenQuestion"] as const;
 export type WorkSessionFindingKind = (typeof workSessionFindingKinds)[number];
 
-export const workSessionArtifactKinds = ["Report", "Note", "File", "Patch"] as const;
+const workSessionArtifactKinds = ["Report", "Note", "File", "Patch"] as const;
 export type WorkSessionArtifactKind = (typeof workSessionArtifactKinds)[number];
 
 function narrow<T extends string>(values: readonly T[], value: string | undefined, fallback: T): T {
