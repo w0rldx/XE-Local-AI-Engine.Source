@@ -99,6 +99,69 @@ public sealed class ProviderCallBudgetChatClientTests
     }
 
     [Test]
+    public async Task GetResponseAsync_WhenInputFillsMostOfTheWindow_NarrowsTheReasoningBudgetToWhatIsLeft()
+    {
+        // The provider-side clamp only sees the launched window, so on a long conversation it still permits a budget
+        // bigger than the tokens remaining after the prompt — and a reasoning phase that eats the remainder returns no
+        // answer. This hop knows both numbers, so it narrows the marker to half of what the input actually leaves.
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        // ~1000 tokens of input (4 chars/token) against a 2000-token window: ~1000 left, so the budget becomes ~500 —
+        // far below the 24576 a "high" effort carries.
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, new string('x', 4000))
+        };
+        var options = new ChatOptions
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["num_ctx"] = 2000,
+                [ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey] = 24576
+            }
+        };
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { ReservedOutputTokenFloor = 0 }))
+        {
+            _ = await sut.GetResponseAsync(messages, options);
+        }
+
+        var sent = AssertEx.NotNull(inner.ReceivedOptions.Single());
+        AssertEx.True(sent.AdditionalProperties!.TryGetValue<int>(ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey, out var narrowed));
+        AssertEx.True(narrowed < 24576, "a budget larger than the window can hold must not survive this hop");
+        AssertEx.True(narrowed <= 1000, $"the budget must fit the room the prompt leaves, but was {narrowed}");
+        AssertEx.Equal(expected: 24576, options.AdditionalProperties[ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey],
+            "the caller's options must not be mutated; narrowing clones");
+    }
+
+    [Test]
+    public async Task GetResponseAsync_WhenTheBudgetAlreadyFits_LeavesTheOptionsInstanceAlone()
+    {
+        // The overwhelming majority of rounds: a short prompt in a big window. Nothing should be cloned.
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        var messages = new List<ChatMessage> { new(ChatRole.User, "hi") };
+        var options = new ChatOptions
+        {
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["num_ctx"] = 65536,
+                [ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey] = 2048
+            }
+        };
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { ReservedOutputTokenFloor = 0 }))
+        {
+            _ = await sut.GetResponseAsync(messages, options);
+        }
+
+        AssertEx.True(ReferenceEquals(options, inner.ReceivedOptions.Single()),
+            "a budget that already fits must pass the same options instance through");
+    }
+
+    [Test]
     public async Task GetResponseAsync_WhenRoundIrreduciblyExceedsWindow_ThrowsAndNeverCallsInner()
     {
         using var inner = new FailIfCalledChatClient();
@@ -366,9 +429,12 @@ public sealed class ProviderCallBudgetChatClientTests
     {
         public List<IReadOnlyList<ChatMessage>> ReceivedMessageSets { get; } = [];
 
+        public List<ChatOptions?> ReceivedOptions { get; } = [];
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             ReceivedMessageSets.Add([.. messages]);
+            ReceivedOptions.Add(options);
             return Task.FromResult(new ChatResponse());
         }
 
@@ -378,6 +444,7 @@ public sealed class ProviderCallBudgetChatClientTests
             CancellationToken cancellationToken = default)
         {
             ReceivedMessageSets.Add([.. messages]);
+            ReceivedOptions.Add(options);
             await Task.Yield();
             yield break;
         }

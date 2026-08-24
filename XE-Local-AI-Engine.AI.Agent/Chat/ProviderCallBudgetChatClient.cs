@@ -58,12 +58,12 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        var budgeted = ApplyBudget(messages, options);
+        var (budgeted, budgetedOptions) = ApplyBudget(messages, options);
         var budget = ProviderCallBudget.Current;
         var startedTimestamp = Stopwatch.GetTimestamp();
         try
         {
-            return await base.GetResponseAsync(budgeted, options, cancellationToken).ConfigureAwait(false);
+            return await base.GetResponseAsync(budgeted, budgetedOptions, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -78,12 +78,12 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     {
         // Budget (and enforce the cumulative ceiling) BEFORE the first chunk is pulled, so a ceiling breach fails the
         // round up front rather than after streaming begins.
-        var budgeted = ApplyBudget(messages, options);
+        var (budgeted, budgetedOptions) = ApplyBudget(messages, options);
         var budget = ProviderCallBudget.Current;
         var startedTimestamp = Stopwatch.GetTimestamp();
         try
         {
-            await foreach (var update in base.GetStreamingResponseAsync(budgeted, options, cancellationToken).ConfigureAwait(false))
+            await foreach (var update in base.GetStreamingResponseAsync(budgeted, budgetedOptions, cancellationToken).ConfigureAwait(false))
             {
                 yield return update;
             }
@@ -98,15 +98,17 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
 
     /// <summary>
     ///     Applies the per-round input budget and registers the round against the cumulative ceilings. Returns the
-    ///     (possibly reduced) message list to send. A pass-through (returns the input unchanged) when no ambient budget
+    ///     (possibly reduced) message list to send, plus the options to send with it — the same instance unless the
+    ///     reasoning budget had to be narrowed against the room this round's input actually leaves (see
+    ///     <see cref="NarrowReasoningBudget" />). A pass-through (returns both inputs unchanged) when no ambient budget
     ///     scope is present. Throws <see cref="ProviderCallBudgetExceededException" /> when a cumulative ceiling trips.
     /// </summary>
-    private IEnumerable<ChatMessage> ApplyBudget(IEnumerable<ChatMessage> messages, ChatOptions? options)
+    private (IEnumerable<ChatMessage> Messages, ChatOptions? Options) ApplyBudget(IEnumerable<ChatMessage> messages, ChatOptions? options)
     {
         var budget = ProviderCallBudget.Current;
         if (budget is null)
         {
-            return messages;
+            return (messages, options);
         }
 
         var budgetOptions = budget.Options;
@@ -175,7 +177,45 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
             throw;
         }
 
-        return result.Messages;
+        return (result.Messages, NarrowReasoningBudget(options, window, result.EstimatedTokensAfter));
+    }
+
+    /// <summary>
+    ///     Narrows the llama.cpp thinking-budget marker to the room THIS round's input actually leaves, when the turn
+    ///     carries one. The provider-side clamp can only see the launched window, so on a long conversation it still
+    ///     permits a budget larger than the tokens remaining after the prompt — and a reasoning phase that eats the
+    ///     remainder returns no answer, which is the failure the budget exists to prevent. This hop is the one place
+    ///     that knows both numbers: the window and the round's estimated input.
+    ///     <para>
+    ///         Half the remainder, matching the provider clamp's split, so at least as many tokens are left for the
+    ///         answer as the model may spend thinking. Returns <paramref name="options" /> unchanged whenever there is
+    ///         no marker or the marker is already smaller — the overwhelming majority of rounds — so nothing is cloned
+    ///         on the common path.
+    ///     </para>
+    /// </summary>
+    private static ChatOptions? NarrowReasoningBudget(ChatOptions? options, int window, int estimatedInputTokens)
+    {
+        if (options?.AdditionalProperties is not { } properties
+            || !properties.TryGetValue(ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey, out var raw)
+            || !TryToInt(raw, out var budgetTokens)
+            || budgetTokens <= 0)
+        {
+            return options;
+        }
+
+        var remaining = Math.Max(window - estimatedInputTokens, 0);
+        var allowed = Math.Max(remaining / 2, 1);
+        if (allowed >= budgetTokens)
+        {
+            return options;
+        }
+
+        var narrowed = options.Clone();
+        narrowed.AdditionalProperties = new AdditionalPropertiesDictionary(properties)
+        {
+            [ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey] = allowed
+        };
+        return narrowed;
     }
 
     private static int ResolveContextWindow(ChatOptions? options, ProviderCallBudgetOptions budgetOptions)

@@ -341,6 +341,15 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     ///         spend thinking, and it leaves the common 64k case unchanged (32768 > every graded budget). When neither
     ///         figure is known the budget is left exactly as the marker carried it.
     ///     </para>
+    ///     <para>
+    ///         KNOWN GAP, deliberately not closed here: this bounds against the WINDOW, not against the room left after
+    ///         the prompt. On a long conversation the true generation room is smaller than what this sees, so the cap
+    ///         it computes can still exceed it. Closing it needs the round's input-token count, which does not exist at
+    ///         this seam — the estimator lives in the AI.Agent assembly this provider does not reference.
+    ///         <c>ProviderCallBudgetChatClient.NarrowReasoningBudget</c> therefore narrows the marker against the
+    ///         MEASURED input before it reaches here; this clamp is the backstop for the paths that run without an
+    ///         ambient budget scope (the eval and preview-workflow runners), where a coarse bound beats none.
+    ///     </para>
     /// </summary>
     private static int ClampToGenerationRoom(int budgetTokens, ChatOptions options)
     {
