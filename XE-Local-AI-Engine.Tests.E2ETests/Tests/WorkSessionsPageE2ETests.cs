@@ -5,7 +5,9 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
@@ -18,6 +20,10 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///             <item>Land on <c>/work-sessions/{id}</c>: three panes, a <c>Draft</c> badge, Start enabled.</item>
 ///             <item>Press Start. The supervisor picks the session up out of band (the endpoint answers 202).</item>
 ///             <item>The badge leaves <c>Draft</c> and the Events tab shows the supervisor's own lifecycle feed.</item>
+///             <item>
+///                 The scripted step calls <c>update_work_plan</c> then <c>complete_work_session</c>: the task appears
+///                 in the plan panel and the badge settles on <c>Completed</c>.
+///             </item>
 ///         </list>
 ///     </para>
 ///     <para>
@@ -38,6 +44,10 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
     private const string GeneralAgentName = "Work Session — General";
     private const string GeneralAgentSlug = "work-session-general";
     private const string FakeChatModel = "qwen3.5:0.8b";
+    private const string PlannedTaskTitle = "Decide between the two candidate specs";
+
+    private IReadOnlyList<string>? _previousToolCapableModels;
+    private bool _toolCapableModelsChanged;
 
     /// <summary>
     ///     Pins the fixture's chat model on the seeded General persona, which the create path REQUIRES here.
@@ -111,6 +121,41 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
         Factory.Services.GetRequiredService<ILocalModelProviderResolver>().InvalidateModelProviderMap();
     }
 
+    /// <summary>
+    ///     Adds the fixture's chat model to the node's tool-capable allow-list, which is what actually decides whether a
+    ///     step is OFFERED the four state tools.
+    ///     <para>
+    ///         <c>LocalToolOfferProvider.IsToolCapable</c> answers from
+    ///         <c>INodeRuntimeSettings.GetToolCapableModels()</c> — the operator-maintained allow-list seeded from
+    ///         <c>AgentHome:ToolCapableModels</c>, which lists neither FakeOllama model. That is a DIFFERENT source from
+    ///         the <c>/api/show</c> capability probe the create path consults, so create succeeds while a model outside
+    ///         the list still drops to the non-capable offer: no state tools, no <c>ask_user</c>. The step then runs, the
+    ///         model asks for <c>update_work_plan</c>, and the invocation pipeline answers "Requested function
+    ///         update_work_plan not found" — a silent no-op that leaves the plan empty and the session running to its
+    ///         step cap. Listing the model is exactly what an operator does in Node Settings, so it stays a fixture
+    ///         concession; the previous value is restored in <see cref="RestoreToolCapableModelsAsync" /> so the shared
+    ///         serial host is handed on unchanged.
+    ///     </para>
+    /// </summary>
+    private async Task MarkChatModelToolCapableAsync()
+    {
+        using var scope = Factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<INodeSettingsStore>();
+
+        var stored = await store.LoadAsync();
+        if (stored.ToolCapableModels?.Contains(FakeChatModel, StringComparer.Ordinal) == true)
+        {
+            return;
+        }
+
+        _previousToolCapableModels = stored.ToolCapableModels;
+        _toolCapableModelsChanged = true;
+        await store.SaveAsync(stored with
+        {
+            ToolCapableModels = [.. stored.ToolCapableModels ?? [], FakeChatModel]
+        });
+    }
+
     [After(Test)]
     public void ResetScripts()
     {
@@ -118,13 +163,42 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
         Factory.FakeOllamaState.ToolCallScript = null;
     }
 
+    [After(Test)]
+    public async Task RestoreToolCapableModelsAsync()
+    {
+        if (!_toolCapableModelsChanged)
+        {
+            return;
+        }
+
+        using var scope = Factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<INodeSettingsStore>();
+        var stored = await store.LoadAsync();
+        await store.SaveAsync(stored with
+        {
+            ToolCapableModels = _previousToolCapableModels
+        });
+
+        _toolCapableModelsChanged = false;
+    }
+
     /// <summary>
-    ///     Stops at the first step rather than at <c>Completed</c>. Since <c>ChatTurnResolver</c> clears the
-    ///     "no chat model installed" guard whenever the agent's pinned <c>ModelProfile</c> resolves a model, a step on
-    ///     this GGUF-less FakeOllama node can now run through the pin (hence <see cref="PinChatModelOnSeededAgentAsync" />
-    ///     + <see cref="MapChatModelToOllamaAsync" />). What this test asserts is the frontend contract up to
-    ///     <c>StepStarted</c>; the <c>update_work_plan</c> / <c>complete_work_session</c> leg still needs a scripted
-    ///     FakeOllama tool-call reply for the step and is tracked separately.
+    ///     Drives one whole server-initiated step, through the agent's pinned Ollama model, to a <c>Completed</c>
+    ///     session. Since <c>ChatTurnResolver</c> clears the "no chat model installed" guard whenever the agent's
+    ///     pinned <c>ModelProfile</c> resolves a model, a step on this GGUF-less FakeOllama node runs through the pin
+    ///     (hence <see cref="PinChatModelOnSeededAgentAsync" /> + <see cref="MapChatModelToOllamaAsync" /> +
+    ///     <see cref="MarkChatModelToolCapableAsync" />).
+    ///     <para>
+    ///         What the scripted turn proves: the supervisor starts a step on its own, the step's provider calls reach
+    ///         the pinned model, both work-session tool round trips land (<c>update_work_plan</c> writes a task the plan
+    ///         panel renders, <c>complete_work_session</c> sets <c>CompletionRequested</c>), the supervisor settles the
+    ///         session at step end, and every hop of that reaches the browser live — badge, plan panel, Events feed.
+    ///     </para>
+    ///     <para>
+    ///         What it does NOT prove: any model reasoning. FakeOllama ignores the offered <c>tools</c> array and
+    ///         replays whatever the script hands it, so tool CHOICE, argument quality, and the step's stopping logic
+    ///         are the test's, not a model's. Whether a real model would pick these tools is out of scope here.
+    ///     </para>
     /// </summary>
     [Test]
     [Category("Page")]
@@ -132,7 +206,7 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
     {
         await PinChatModelOnSeededAgentAsync();
         await MapChatModelToOllamaAsync();
-        await MapChatModelToOllamaAsync();
+        await MarkChatModelToolCapableAsync();
 
         await Page.GotoAsync($"{NodeAppUrl}/work-sessions", new PageGotoOptions
         {
@@ -183,6 +257,41 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
         await Expect(Page.GetByTestId("work-session-side-panel")).ToBeVisibleAsync();
         await Expect(Page.GetByTestId("work-session-status-badge")).ToHaveTextAsync("Draft");
 
+        // Script the step's provider calls BEFORE Start — the supervisor picks the session up immediately, so a script
+        // assigned after the click can miss the first call. FakeOllama ignores the offered `tools` array and checks
+        // this closure on every /api/chat request, so sequencing is ours: turn 1 writes the plan, turn 2 closes the
+        // session, everything after falls through to the text echo. Both tool calls land inside the SAME step
+        // (MaxProviderCallsPerStep is 10) and neither sits behind an approval gate, so the step runs unattended and
+        // `complete_work_session`'s CompletionRequested settles the session at step end. [After(Test)] nulls it again.
+        var providerTurn = 0;
+        Factory.FakeOllamaState.ToolCallScript = _ => Interlocked.Increment(ref providerTurn) switch
+        {
+            1 => new FakeOllamaToolCall
+            {
+                Name = "update_work_plan",
+                Arguments = new
+                {
+                    operations = new[]
+                    {
+                        new
+                        {
+                            op = "add",
+                            title = PlannedTaskTitle
+                        }
+                    }
+                }
+            },
+            2 => new FakeOllamaToolCall
+            {
+                Name = "complete_work_session",
+                Arguments = new
+                {
+                    summary = "Picked spec B; findings recorded."
+                }
+            },
+            _ => null
+        };
+
         var start = Page.GetByTestId("work-session-start");
         await Expect(start).ToBeEnabledAsync();
         await start.ClickAsync();
@@ -202,6 +311,23 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
         await Page.GetByTestId("work-session-tab-events").ClickAsync();
         await Expect(Page.GetByTestId("work-session-events-tab")).ToContainTextAsync("StepStarted",
             new LocatorAssertionsToContainTextOptions
+            {
+                Timeout = 30_000
+            });
+
+        await File.AppendAllTextAsync("/tmp/xe-ws-diag.txt", $"[DIAG] test reached the plan assertion, turns={providerTurn}\n").ConfigureAwait(false);
+
+        // The plan panel renders what `update_work_plan` wrote. The per-task test id carries a server-side GUID, so
+        // match the row by its title instead.
+        await Expect(Page.GetByTestId("work-session-plan-panel").GetByText(PlannedTaskTitle))
+            .ToBeVisibleAsync(new LocatorAssertionsToBeVisibleOptions
+            {
+                Timeout = 30_000
+            });
+
+        // And `complete_work_session` closes it: the supervisor settles the session at the end of the same step.
+        await Expect(Page.GetByTestId("work-session-status-badge")).ToHaveTextAsync("Completed",
+            new LocatorAssertionsToHaveTextOptions
             {
                 Timeout = 30_000
             });
