@@ -268,6 +268,52 @@ public sealed class WorkSessionStepLoopTests
     }
 
     [Test]
+    public async Task Supervisor_WhenMoreSessionsStartAtOnceThanTheCapAllows_AdmitsExactlyTheCap()
+    {
+        // Distinct session ids, so the ConcurrentDictionary never refuses the add: the cap is the only thing that can
+        // turn a start down. A cap checked AFTER the add let two starts each see room and then each back out, admitting
+        // fewer than the cap allows — the gate has to be taken before the run is registered.
+        var sessionIds = Enumerable.Range(start: 0, count: 4).Select(_ => Guid.NewGuid()).ToArray();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(
+                ("WorkSessions:MaxConcurrentSessions", "3"),
+                ("WorkSessions:MaxParkedSeconds", "599")),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionIds[0]),
+                publisher)
+        };
+
+        foreach (var sessionId in sessionIds)
+        {
+            _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        }
+
+        var fake = ResolveStream(factory, ref stream);
+        // Every admitted run parks and holds its slot until it is cancelled, so the count below is not a race with a
+        // run that already finished.
+        foreach (var _ in sessionIds)
+        {
+            fake.Enqueue(new StepScript([], Park: true));
+        }
+
+        var supervisor = factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>();
+        var admitted = await Task.WhenAll(sessionIds.Select(sessionId => Task.Run(() => supervisor.TryStart(sessionId)))).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 3, admitted.Count(started => started), "The cap is three, and four starts raced for it.");
+        AssertEx.False(supervisor.HasCapacity, "Every slot is taken while the admitted sessions are in flight.");
+
+        foreach (var sessionId in sessionIds)
+        {
+            _ = await supervisor.TryStopAsync(sessionId, WorkSessionStopReason.Cancel).ConfigureAwait(false);
+        }
+
+        AssertEx.True(supervisor.HasCapacity, "A stopped run hands its slot back, or the node admits nothing ever again.");
+    }
+
+    [Test]
     public async Task Loop_WhenAToolWritesWhileTheSupervisorMovesTheStatus_DoesNotThrow()
     {
         // Two writers by design: the supervisor moves the status while the turn's tools write from inside the

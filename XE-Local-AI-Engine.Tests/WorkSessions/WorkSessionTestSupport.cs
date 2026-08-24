@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -37,7 +38,10 @@ internal sealed record StepScript(IReadOnlyList<string> EventTypes,
 internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegistry cancellationRegistry, IServiceProvider services, Guid sessionId)
     : INodeChatStreamService
 {
-    private readonly Queue<StepScript> _scripts = new();
+    // Concurrent because the admission test drives several sessions through one fake at once; every other test has a
+    // single run and does not care.
+    private readonly ConcurrentQueue<StepScript> _scripts = new();
+    private readonly Lock _recordGate = new();
 
     /// <summary>Every request the supervisor sent, in order.</summary>
     public List<NodeChatStreamRequest> Requests { get; } = [];
@@ -57,11 +61,14 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
     private async IAsyncEnumerable<ChatStreamEvent> SendCoreAsync(NodeChatStreamRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        Requests.Add(request);
-        Trace.Add("send");
+        lock (_recordGate)
+        {
+            Requests.Add(request);
+            Trace.Add("send");
+        }
 
-        var script = _scripts.Count > 0
-            ? _scripts.Dequeue()
+        var script = _scripts.TryDequeue(out var next)
+            ? next
             : new StepScript([ChatStreamEventTypes.AssistantCompleted]);
 
         var correlation = new NodeChatMessageCorrelation(request.ConversationId,
@@ -119,14 +126,20 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
 /// <summary>Records every publish so a test can assert what the hub would have been told, and when.</summary>
 internal sealed class RecordingWorkSessionEventPublisher : IWorkSessionEventPublisher
 {
+    private readonly Lock _gate = new();
+
     public List<(Guid SessionId, long Sequence, WorkSessionChangeKind Kind)> Published { get; } = [];
 
     public List<string> Trace { get; } = [];
 
     public Task PublishAsync(Guid sessionId, long sequence, WorkSessionChangeKind kind, CancellationToken cancellationToken = default)
     {
-        Published.Add((sessionId, sequence, kind));
-        Trace.Add($"publish:{kind}");
+        lock (_gate)
+        {
+            Published.Add((sessionId, sequence, kind));
+            Trace.Add($"publish:{kind}");
+        }
+
         return Task.CompletedTask;
     }
 }
