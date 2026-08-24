@@ -514,14 +514,329 @@ public sealed class ConversationContextBudgeterTests
             $"The trimmed round must fit the margin, was {result.EstimatedTokensAfter}.");
     }
 
+    [Test]
+    public void Budget_WhenProtectedReasoningIsTheOverflow_StripsItOldestFirstAndStopsOnceItFits()
+    {
+        // The failure Pass 4 exists for: every turn is inside the protected window, so Passes 1-3 have nothing to take
+        // and the round would hard-fail. Stripping the OLDEST message's reasoning alone closes the gap, so the newer
+        // message's reasoning must survive untouched — a pass that stripped unconditionally, or newest-first, would
+        // needlessly discard the thinking closest to the in-flight round.
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            AssistantReasoning(new string('r', 100), "a0"),
+            AssistantReasoning(new string('s', 100), "a1"),
+            User("u1")
+        };
+        var sut = CreateSut(CharCountEstimator(), stripProtectedReasoning: true);
+
+        // 208 chars; a budget of 120 is met by stripping the first 100-char reasoning alone (208 -> 108).
+        var result = sut.Budget(messages, contextTokenCapacity: CapacityFor(120), reservedOutputTokens: 0);
+
+        AssertEx.True(result.Trimmed);
+        AssertEx.False(result.ExceedsBudget, "stripping superseded reasoning must rescue a round that would otherwise fail");
+        AssertEx.Equal(expected: 1, result.ReasoningStrippedCount);
+        AssertEx.Equal(expected: 0, result.MessagesDropped);
+        AssertEx.Equal(expected: 0, result.ProtectedResultsExcerptedCount);
+        AssertEx.Equal(expected: 108, result.EstimatedTokensAfter);
+        AssertEx.Equal(string.Empty, ReasoningTextOf(result.Messages[1]), "the oldest reasoning is the one that pays");
+        AssertEx.Equal(new string('s', 100), ReasoningTextOf(result.Messages[2]), "stripping stops the moment the round fits");
+        AssertEx.True(ContainsText(result.Messages, "a0"), "only the reasoning part is removed, never the message's answer text");
+    }
+
+    [Test]
+    public void Budget_WhenStrippingProtectedReasoningIsDisabled_KeepsItAndFlagsOverflow()
+    {
+        // The pass is opt-in, so with it off this is exactly today's behaviour: the protected window is irreducible, the
+        // overflow is flagged, and the runner's hard stop fails the turn.
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            AssistantReasoning(new string('r', 100), "a0"),
+            AssistantReasoning(new string('s', 100), "a1"),
+            User("u1")
+        };
+        var sut = CreateSut(CharCountEstimator(), stripProtectedReasoning: false);
+
+        var result = sut.Budget(messages, contextTokenCapacity: CapacityFor(120), reservedOutputTokens: 0);
+
+        AssertEx.False(result.Trimmed);
+        AssertEx.True(result.ExceedsBudget);
+        AssertEx.Equal(expected: 0, result.ReasoningStrippedCount);
+        AssertEx.Equal(new string('r', 100), ReasoningTextOf(result.Messages[1]));
+        AssertEx.Equal(new string('s', 100), ReasoningTextOf(result.Messages[2]));
+    }
+
+    [Test]
+    public void Budget_Pass4_NeverStripsTheLastMessage_EvenWhenStillOverBudget()
+    {
+        // The last message is the in-flight round the model is producing against. Reclaiming from it is the one thing
+        // that could leave the next provider call without the content it is answering, so overflow is the right answer.
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            AssistantReasoning(new string('r', 100), "a0"),
+            AssistantReasoning(new string('t', 200))
+        };
+        var sut = CreateSut(CharCountEstimator(), stripProtectedReasoning: true);
+
+        // 304 chars; a budget of 150 is unreachable once the last message is off limits (304 - 100 = 204).
+        var result = sut.Budget(messages, contextTokenCapacity: CapacityFor(150), reservedOutputTokens: 0);
+
+        AssertEx.True(result.Trimmed);
+        AssertEx.True(result.ExceedsBudget, "an irreducible last message must still be flagged rather than reclaimed");
+        AssertEx.Equal(expected: 1, result.ReasoningStrippedCount);
+        AssertEx.Equal(new string('t', 200), ReasoningTextOf(result.Messages[2]), "the in-flight round's own reasoning is never taken");
+    }
+
+    [Test]
+    public void Budget_Pass4_DropsAReasoningOnlyMessageWhole_RatherThanSendingItEmpty()
+    {
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            AssistantReasoning(new string('r', 100)),
+            Assistant("a1"),
+            User("u1")
+        };
+        var sut = CreateSut(CharCountEstimator(), stripProtectedReasoning: true);
+
+        var result = sut.Budget(messages, contextTokenCapacity: CapacityFor(50), reservedOutputTokens: 0);
+
+        AssertEx.False(result.ExceedsBudget);
+        AssertEx.Equal(expected: 1, result.ReasoningStrippedCount);
+        AssertEx.Equal(expected: 1, result.MessagesDropped, "a message whose only content was reasoning goes whole");
+        AssertEx.Equal(expected: 3, result.Messages.Count);
+        AssertEx.Empty(result.Messages.Where(static message => message.Contents.Count == 0), "a contentless message must never be sent");
+    }
+
+    [Test]
+    public void Budget_Pass4_TouchesSurvivorsOnly_AndLeavesToolCorrelationIntact()
+    {
+        // Reasoning inside a turn Pass 2 already dropped is not "stripped" — it is gone, and counting it would inflate
+        // the number the notice reports. And the pass must never reach a tool call, its result, or their correlation.
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            AssistantReasoning(new string('h', 100)),
+            User("run"),
+            AssistantToolCall("call-1", "search"),
+            ToolResult("call-1", "r1"),
+            AssistantReasoning(new string('r', 100), "a1"),
+            User("u2")
+        };
+        var sut = CreateSut(CharCountEstimator(), recentTurnKeepCount: 2, stripProtectedReasoning: true);
+
+        // 217 chars. Budget 110: Pass 2 drops turn 0 (102) leaving 115, still over; Pass 4 then strips the ONE surviving
+        // reasoning (100) leaving 15.
+        var result = sut.Budget(messages, contextTokenCapacity: CapacityFor(110), reservedOutputTokens: 0);
+
+        AssertEx.False(result.ExceedsBudget);
+        AssertEx.Equal(expected: 2, result.MessagesDropped, "the oldest turn is still reclaimed the ordinary way first");
+        AssertEx.Equal(expected: 1, result.ReasoningStrippedCount, "only reasoning on a SURVIVING message is stripped or counted");
+        AssertEx.Contains(CallCallIds(result.Messages), "call-1", "the tool call must survive Pass 4 untouched");
+        AssertEx.Contains(ResultCallIds(result.Messages), "call-1", "and so must the result correlated to it");
+        AssertEx.Equal("r1", FindToolResultText(result.Messages, "call-1"), "Pass 4 never shortens a tool result");
+        AssertNoOrphanedToolResults(result.Messages);
+    }
+
+    [Test]
+    public void Budget_Pass5_ExcerptsProtectedToolResultsOldestFirstAndStopsOnceItFits()
+    {
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            ToolResult("call-1", new string('x', 300)),
+            ToolResult("call-2", new string('y', 300)),
+            User("u1")
+        };
+        var sut = CreateSut(CharCountEstimator(),
+            historicalToolResultExcerptChars: 50,
+            excerptProtectedToolResults: true);
+
+        // 604 chars, every message inside the protected window. Excerpting the OLDEST result alone (300 -> 81) brings the
+        // round to 385, under a budget of 400 — so the newer result must be left whole.
+        var result = sut.Budget(messages, contextTokenCapacity: CapacityFor(400), reservedOutputTokens: 0);
+
+        AssertEx.True(result.Trimmed);
+        AssertEx.False(result.ExceedsBudget);
+        AssertEx.Equal(expected: 0, result.ToolResultsTruncated, "Pass 1 never touches the protected window; this is Pass 5's count");
+        AssertEx.Equal(expected: 1, result.ProtectedResultsExcerptedCount);
+        AssertEx.Equal(expected: 250, result.CharsTruncated);
+        AssertEx.Contains(FindToolResultText(result.Messages, "call-1"), "[truncated: 250 chars omitted]");
+        AssertEx.Equal(new string('y', 300), FindToolResultText(result.Messages, "call-2"), "excerpting stops the moment the round fits");
+        AssertEx.Contains(ResultCallIds(result.Messages), "call-1", "excerpting must preserve the call id the validator matches on");
+    }
+
+    [Test]
+    public void Budget_Pass5_NeverExcerptsTheLastMessage_EvenWhenStillOverBudget()
+    {
+        // The last message is the pending tool result the model must answer next; shortening it is the one reclaim that
+        // could change what the round is about.
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            ToolResult("call-1", new string('x', 300))
+        };
+        var sut = CreateSut(CharCountEstimator(),
+            historicalToolResultExcerptChars: 50,
+            excerptProtectedToolResults: true);
+
+        var result = sut.Budget(messages, contextTokenCapacity: CapacityFor(100), reservedOutputTokens: 0);
+
+        AssertEx.True(result.ExceedsBudget);
+        AssertEx.Equal(expected: 0, result.ProtectedResultsExcerptedCount);
+        AssertEx.Equal(new string('x', 300), FindToolResultText(result.Messages, "call-1"));
+    }
+
+    [Test]
+    public void Budget_WhenExcerptingProtectedToolResultsIsDisabled_ReproducesTodaysOverflow()
+    {
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            ToolResult("call-1", new string('x', 300)),
+            ToolResult("call-2", new string('y', 300)),
+            User("u1")
+        };
+        var sut = CreateSut(CharCountEstimator(), historicalToolResultExcerptChars: 50, stripProtectedReasoning: true);
+
+        var result = sut.Budget(messages, contextTokenCapacity: CapacityFor(400), reservedOutputTokens: 0);
+
+        AssertEx.False(result.Trimmed);
+        AssertEx.True(result.ExceedsBudget, "Pass 5 stays opt-in: with it off the protected window is irreducible");
+        AssertEx.Equal(expected: 0, result.ProtectedResultsExcerptedCount);
+        AssertEx.Equal(new string('x', 300), FindToolResultText(result.Messages, "call-1"));
+    }
+
+    [Test]
+    public void Budget_WhenTheOrdinaryPassesAlreadyFit_NeverFiresPass4Or5()
+    {
+        // Both last-resort passes are enabled here and must still report zero: they exist for the rounds that would
+        // otherwise hard-fail, not as a routine reclaim on top of a trim that already worked.
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            AssistantReasoning(new string('h', 100), "a0"),
+            User("u1"),
+            AssistantReasoning(new string('r', 100), "a1"),
+            User("u2"),
+            ToolResult("call-1", new string('x', 100)),
+            User("u3")
+        };
+        var sut = CreateSut(CharCountEstimator(),
+            recentTurnKeepCount: 2,
+            historicalToolResultExcerptChars: 50,
+            stripProtectedReasoning: true,
+            excerptProtectedToolResults: true);
+
+        // 312 chars; a budget of 250 is met by dropping turn 0 (104) alone.
+        var result = sut.Budget(messages, contextTokenCapacity: CapacityFor(250), reservedOutputTokens: 0);
+
+        AssertEx.True(result.Trimmed);
+        AssertEx.False(result.ExceedsBudget);
+        AssertEx.Equal(expected: 0, result.ReasoningStrippedCount);
+        AssertEx.Equal(expected: 0, result.ProtectedResultsExcerptedCount);
+        AssertEx.Equal(new string('r', 100), ReasoningTextOf(result.Messages[1]), "surviving reasoning is untouched when the ordinary passes suffice");
+        AssertEx.Equal(new string('x', 100), FindToolResultText(result.Messages, "call-1"));
+    }
+
+    [Test]
+    public void Budget_EveryRewrite_PreservesMessageIdentity()
+    {
+        // N13: every rewrite used to reconstruct a message from role + contents, silently dropping the id, author name,
+        // provider raw representation and additional properties. All three rewriting passes are covered here — Pass 1's
+        // historical excerpt, Pass 4's reasoning strip, Pass 5's protected excerpt.
+        var raw = new object();
+        // The historical result is pinned to an UNDECIDED approval round, so Pass 1 excerpts it but Pass 2/3 leave it in
+        // place — otherwise the message this test wants to inspect would simply be dropped before it could be inspected.
+        var (undecidedRequest, _) = ApprovalRound("call-0", "search");
+        var historical = Identified(ToolResult("call-0", new string('h', 300)), "message-historical", raw);
+        var reasoning = Identified(AssistantReasoning(new string('r', 300), "a1"), "message-reasoning", raw);
+        var protectedResult = Identified(ToolResult("call-1", new string('x', 300)), "message-protected", raw);
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            undecidedRequest,
+            historical,
+            User("u1"),
+            reasoning,
+            protectedResult,
+            User("u2")
+        };
+        var sut = CreateSut(CharCountEstimator(),
+            recentTurnKeepCount: 2,
+            historicalToolResultExcerptChars: 50,
+            stripProtectedReasoning: true,
+            excerptProtectedToolResults: true);
+
+        // 908 chars against a budget of 120 forces all three rewriting passes to run before the round fits.
+        var result = sut.Budget(messages, contextTokenCapacity: CapacityFor(120), reservedOutputTokens: 0);
+
+        AssertEx.Equal(expected: 1, result.ToolResultsTruncated);
+        AssertEx.Equal(expected: 1, result.ReasoningStrippedCount);
+        AssertEx.Equal(expected: 1, result.ProtectedResultsExcerptedCount);
+        foreach (var messageId in new[] { "message-historical", "message-reasoning", "message-protected" })
+        {
+            var rewritten = AssertEx.NotNull(result.Messages.FirstOrDefault(message => string.Equals(message.MessageId, messageId, StringComparison.Ordinal)));
+            AssertEx.Equal("budgeter-identity", rewritten.AuthorName, "a rewrite must keep the message's author");
+            AssertEx.True(ReferenceEquals(raw, rewritten.RawRepresentation), "a rewrite must keep the provider raw representation");
+            AssertEx.Equal("kept", AssertEx.NotNull(rewritten.AdditionalProperties)["marker"] as string, "a rewrite must keep the additional properties");
+        }
+    }
+
+    [Test]
+    public void Budget_ReportsEstimatedTokensAfter_MeasuredOnTheMaterializedSurvivors()
+    {
+        // The running total is maintained incrementally across five passes that add, subtract and rewrite; the reported
+        // figure — and the ExceedsBudget hard stop derived from it — must describe the list actually being sent.
+        var estimator = CharCountEstimator();
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            AssistantReasoning(new string('h', 200)),
+            User("u1"),
+            ToolResult("call-1", new string('x', 300)),
+            AssistantReasoning(new string('r', 200), "a1"),
+            User("u2")
+        };
+        var sut = CreateSut(estimator,
+            recentTurnKeepCount: 2,
+            historicalToolResultExcerptChars: 50,
+            stripProtectedReasoning: true,
+            excerptProtectedToolResults: true);
+
+        var result = sut.Budget(messages, contextTokenCapacity: CapacityFor(150), reservedOutputTokens: 0);
+
+        AssertEx.Equal(estimator.EstimateTokens(result.Messages), result.EstimatedTokensAfter);
+    }
+
+    private static ChatMessage Identified(ChatMessage message, string messageId, object rawRepresentation)
+    {
+        message.MessageId = messageId;
+        message.AuthorName = "budgeter-identity";
+        message.RawRepresentation = rawRepresentation;
+        message.AdditionalProperties = new AdditionalPropertiesDictionary
+        {
+            ["marker"] = "kept"
+        };
+        return message;
+    }
+
+    // The last two defaults track the SHIPPED defaults deliberately, so a test that says nothing about them is a test
+    // about production behaviour. A test that wants a pass off says so explicitly.
     private static ConversationContextBudgeter CreateSut(ITokenEstimator estimator,
         int recentTurnKeepCount = 4,
-        int historicalToolResultExcerptChars = 2000)
+        int historicalToolResultExcerptChars = 2000,
+        bool stripProtectedReasoning = true,
+        bool excerptProtectedToolResults = false)
     {
         var options = Options.Create(new ConversationContextBudgetOptions
         {
             RecentTurnKeepCount = recentTurnKeepCount,
-            HistoricalToolResultExcerptChars = historicalToolResultExcerptChars
+            HistoricalToolResultExcerptChars = historicalToolResultExcerptChars,
+            StripProtectedReasoning = stripProtectedReasoning,
+            ExcerptProtectedToolResults = excerptProtectedToolResults
         });
         return new ConversationContextBudgeter(estimator, options);
     }
@@ -552,6 +867,25 @@ public sealed class ConversationContextBudgeterTests
         }
 
         return total;
+    }
+
+    private static ChatMessage AssistantReasoning(string reasoning, string? text = null)
+    {
+        var contents = new List<AIContent>
+        {
+            new TextReasoningContent(reasoning)
+        };
+        if (text is not null)
+        {
+            contents.Add(new TextContent(text));
+        }
+
+        return new ChatMessage(ChatRole.Assistant, contents);
+    }
+
+    private static string ReasoningTextOf(ChatMessage message)
+    {
+        return string.Concat(message.Contents.OfType<TextReasoningContent>().Select(static reasoning => reasoning.Text ?? string.Empty));
     }
 
     private static ChatMessage User(string text)

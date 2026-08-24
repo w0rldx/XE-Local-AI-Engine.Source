@@ -8,12 +8,23 @@ using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 /// <summary>
 ///     Deterministic, LLM-free implementation of <see cref="IConversationContextBudgeter" />. Groups the history into
 ///     turns (a user message and every assistant/tool message that follows it up to the next user message), always keeps
-///     system messages, tool-approval correlation records, and the most recent
-///     <see cref="ConversationContextBudgetOptions.RecentTurnKeepCount" /> turns,
-///     and when the estimate exceeds the budget reduces in two ordered passes: first shorten oversized historical tool
-///     results to an excerpt, then drop the oldest turns whole. Because tool-call and tool-result messages of one turn
-///     share a turn index, dropping a turn never orphans a tool-call from its result, and the protected recent turns —
-///     which contain the in-flight tool-calling round — are never modified.
+///     system messages and tool-approval correlation records, and when the estimate exceeds the budget reduces in
+///     ordered passes: (1) shorten oversized HISTORICAL tool results to an excerpt, (2) drop the oldest historical turns
+///     whole, (3) evict whole historical approval groups oldest-first. Because tool-call and tool-result messages of one
+///     turn share a turn index, dropping a turn never orphans a tool-call from its result.
+/// <para>
+///     Two further passes exist only for the rounds those three cannot rescue — the ones that would otherwise raise
+///     <see cref="ContextBudgetExceededException" /> and fail the turn outright, which in practice means the PROTECTED
+///     recent window alone exceeds the budget and there is no older history left to reclaim. Both are opt-in
+///     (<see cref="ConversationContextBudgetOptions.StripProtectedReasoning" />,
+///     <see cref="ConversationContextBudgetOptions.ExcerptProtectedToolResults" />), both act on SURVIVORS only, both
+///     work oldest-first and stop the moment the round fits, and neither ever touches the last surviving message:
+///     (4) strip <see cref="TextReasoningContent" /> — superseded scratch-pad thinking, never a call/result/approval
+///     record, so no correlation can be orphaned; a message that carried nothing else is dropped whole rather than sent
+///     empty — and (5) excerpt tool results inside the protected window with the same marker Pass 1 uses. Rewrites are
+///     clone-PRESERVING (id, author, raw representation, additional properties survive), so a rewritten message is still
+///     the same message to everything downstream.
+/// </para>
 /// </summary>
 public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 {
@@ -179,6 +190,92 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             }
         }
 
+        // Passes 4 and 5 are the last-resort reclaims, and they run ONLY because Passes 1-3 left the round over budget —
+        // which, once Pass 3 has evicted everything historical it may, means the PROTECTED window itself is what does not
+        // fit. No amount of further older-history compaction (deterministic or LLM-summarized) can reach that; the
+        // alternative to these two passes is the hard stop below, i.e. failing the turn outright. Both work on SURVIVORS
+        // only (a message an earlier pass already dropped is not rewritten and never re-counted) and both stop the moment
+        // the round fits, so a round that Passes 1-3 rescued pays nothing here.
+        //
+        // The LAST surviving message is exempt from both: it is the in-flight round the model is producing against (the
+        // pending tool result, or the approval decision just replayed), and it is the one thing the next provider call
+        // cannot be asked to work without.
+        var lastSurvivor = -1;
+        for (var i = count - 1; i >= 0; i--)
+        {
+            if (!dropped[i])
+            {
+                lastSurvivor = i;
+                break;
+            }
+        }
+
+        // Pass 4: strip the model's own superseded reasoning, oldest first, only while still over budget. Reasoning is
+        // dead scratch-pad text once a later round supersedes it, and neither the approval validator nor the tool-call
+        // correlation (BuildApprovalGroups / FunctionResultContent CallIds) ever inspects it — so removing it can orphan
+        // nothing. System messages are excluded, keeping "system messages are never modified" absolute.
+        var reasoningStripped = 0;
+        if (_options.StripProtectedReasoning)
+        {
+            for (var i = 0; i < count && currentEstimate > effectiveBudget; i++)
+            {
+                if (dropped[i] || i == lastSurvivor || working[i].Role == ChatRole.System)
+                {
+                    continue;
+                }
+
+                if (!TryStripReasoning(working[i], out var stripped, out var emptied))
+                {
+                    continue;
+                }
+
+                reasoningStripped++;
+
+                // A reasoning-ONLY message has nothing left to say once its reasoning is gone. Sending an empty message
+                // is a shape some providers reject outright and none can use, so it goes whole.
+                if (emptied)
+                {
+                    dropped[i] = true;
+                    currentEstimate -= perMessageTokens[i];
+                    messagesDropped++;
+                    continue;
+                }
+
+                working[i] = stripped;
+                var strippedTokens = _estimator.EstimateTokensWithDivisor(stripped, divisor);
+                currentEstimate += strippedTokens - perMessageTokens[i];
+                perMessageTokens[i] = strippedTokens;
+            }
+        }
+
+        // Pass 5: excerpt tool results inside the PROTECTED window — the one pass that shortens content the current round
+        // is actively working with, hence opt-in. Restricted to the protected region because Pass 1 has already visited
+        // every historical message (it runs under the same while-over-budget condition, so reaching here means it ran to
+        // the end of the list). Excerpting preserves the CallId the validator matches on, so the correlation survives.
+        var protectedResultsExcerpted = 0;
+        if (_options.ExcerptProtectedToolResults)
+        {
+            for (var i = 0; i < count && currentEstimate > effectiveBudget; i++)
+            {
+                if (dropped[i] || i == lastSurvivor || turnOf[i] < protectedFrom || working[i].Role == ChatRole.System)
+                {
+                    continue;
+                }
+
+                if (!TryTruncateToolResult(working[i], out var excerpted, out var protectedOmitted))
+                {
+                    continue;
+                }
+
+                working[i] = excerpted;
+                var excerptedTokens = _estimator.EstimateTokensWithDivisor(excerpted, divisor);
+                currentEstimate += excerptedTokens - perMessageTokens[i];
+                perMessageTokens[i] = excerptedTokens;
+                protectedResultsExcerpted++;
+                charsTruncated += protectedOmitted;
+            }
+        }
+
         var survivors = new List<ChatMessage>(count - messagesDropped);
         for (var i = 0; i < count; i++)
         {
@@ -188,16 +285,24 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             }
         }
 
+        // Measured on the MATERIALIZED survivor list rather than reported from the running total. The running total is
+        // maintained incrementally across five passes that add, subtract and rewrite; re-estimating the exact list that
+        // is about to be sent is what makes EstimatedTokensAfter — and the ExceedsBudget hard stop derived from it — a
+        // statement about the payload rather than about the bookkeeping.
+        var estimatedAfter = _estimator.EstimateTokensWithDivisor(survivors, divisor);
+
         return new ConversationBudgetResult
         {
             Messages = survivors,
-            Trimmed = messagesDropped > 0 || toolResultsTruncated > 0,
+            Trimmed = messagesDropped > 0 || toolResultsTruncated > 0 || reasoningStripped > 0 || protectedResultsExcerpted > 0,
             MessagesDropped = messagesDropped,
             ToolResultsTruncated = toolResultsTruncated,
+            ReasoningStrippedCount = reasoningStripped,
+            ProtectedResultsExcerptedCount = protectedResultsExcerpted,
             CharsTruncated = charsTruncated,
             EstimatedTokensBefore = estimatedBefore,
-            EstimatedTokensAfter = currentEstimate,
-            ExceedsBudget = currentEstimate > effectiveBudget
+            EstimatedTokensAfter = estimatedAfter,
+            ExceedsBudget = estimatedAfter > effectiveBudget
         };
     }
 
@@ -445,6 +550,8 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     ///     a leading excerpt plus an explicit omitted-count marker. Truncates <see cref="FunctionResultContent" />
     ///     anywhere and, for a <see cref="ChatRole.Tool" /> message, its plain <see cref="TextContent" /> (history that
     ///     arrives as a tool-role text message rather than a structured result). Returns false when nothing was oversized.
+    ///     Shared by Pass 1 (historical results) and Pass 5 (protected-window results) so both produce byte-identical
+    ///     excerpt markers. The rewrite is clone-preserving (see <see cref="CloneWithContents" />).
     /// </summary>
     private bool TryTruncateToolResult(ChatMessage message, out ChatMessage truncated, out int charsOmitted)
     {
@@ -500,8 +607,74 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             return false;
         }
 
-        truncated = new ChatMessage(message.Role, rewritten);
+        truncated = CloneWithContents(message, rewritten);
         return true;
+    }
+
+    /// <summary>
+    ///     Removes every <see cref="TextReasoningContent" /> part from a message (Pass 4). Returns false when the message
+    ///     carries none, so an unaffected message is neither re-allocated nor counted.
+    ///     <paramref name="emptied" /> reports the reasoning-ONLY case: nothing survives the strip, so the caller drops the
+    ///     message whole instead of sending a contentless one.
+    /// </summary>
+    private static bool TryStripReasoning(ChatMessage message, out ChatMessage stripped, out bool emptied)
+    {
+        stripped = message;
+        emptied = false;
+
+        // Stays null until the first reasoning part is seen: the overwhelmingly common no-reasoning message allocates
+        // nothing and returns after one scan.
+        List<AIContent>? retained = null;
+        for (var i = 0; i < message.Contents.Count; i++)
+        {
+            var content = message.Contents[i];
+            if (content is not TextReasoningContent)
+            {
+                retained?.Add(content);
+                continue;
+            }
+
+            if (retained is null)
+            {
+                retained = new List<AIContent>(message.Contents.Count);
+                for (var earlier = 0; earlier < i; earlier++)
+                {
+                    retained.Add(message.Contents[earlier]);
+                }
+            }
+        }
+
+        if (retained is null)
+        {
+            return false;
+        }
+
+        emptied = retained.Count == 0;
+        if (!emptied)
+        {
+            stripped = CloneWithContents(message, retained);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    ///     Rewrites a message's content list while PRESERVING its identity — id, author, provider raw representation and
+    ///     additional properties all carry over. Reconstructing from role + contents alone (which every rewrite here used
+    ///     to do) silently dropped those, so a truncated or reasoning-stripped message stopped being the same message to
+    ///     anything downstream that keys on <see cref="ChatMessage.MessageId" /> or reads provider metadata off
+    ///     <see cref="ChatMessage.RawRepresentation" />.
+    /// </summary>
+    private static ChatMessage CloneWithContents(ChatMessage message, IList<AIContent> contents)
+    {
+        return new ChatMessage(message.Role, contents)
+        {
+            AuthorName = message.AuthorName,
+            MessageId = message.MessageId,
+            CreatedAt = message.CreatedAt,
+            RawRepresentation = message.RawRepresentation,
+            AdditionalProperties = message.AdditionalProperties
+        };
     }
 
     private static string Excerpt(string value, int excerptChars, int omitted)

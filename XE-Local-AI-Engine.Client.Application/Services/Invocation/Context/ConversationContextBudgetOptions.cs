@@ -40,4 +40,32 @@ public sealed class ConversationContextBudgetOptions
     ///     capacity can still be derived without probing the model. Must be at least 1.
     /// </summary>
     public int DefaultContextTokens { get; set; } = 8192;
+
+    /// <summary>
+    ///     Enables the budgeter's Pass 4: when the ordinary passes (excerpt historical tool results, drop whole historical
+    ///     turns, evict whole historical approval groups) still leave the round over budget, strip
+    ///     <see cref="Microsoft.Extensions.AI.TextReasoningContent" /> from surviving messages OLDEST FIRST, and only for
+    ///     as long as the round is still over budget. The last surviving message is never touched. This is the first pass
+    ///     allowed to reach into the protected recent window, and the only content it takes there is the model's own
+    ///     superseded scratch-pad thinking — never a tool call, a tool result, or an approval record — so it cannot orphan
+    ///     a correlation. It fires ONLY in rounds that would otherwise raise
+    ///     <see cref="ContextBudgetExceededException" /> and fail the turn outright.
+    ///     <para>
+    ///         Default ON. It shipped off and was flipped only once the combined replay gate
+    ///         (<c>BudgetedApprovalReplayTests</c>) proved a history it rewrote still survives the approval validator,
+    ///         function invocation, the inner provider-call budgeter and the real OpenAI/llama-server wire adapter. What
+    ///         it discards is informationally inert; the alternative in exactly these rounds is a failed turn.
+    ///     </para>
+    /// </summary>
+    public bool StripProtectedReasoning { get; set; } = true;
+
+    /// <summary>
+    ///     Enables the budgeter's Pass 5: when Pass 4 still leaves the round over budget, excerpt oversized tool results
+    ///     inside the PROTECTED recent window (the same excerpt + omitted-count marker Pass 1 applies to historical ones),
+    ///     oldest first, only while still over budget, and never on the last surviving message. Default OFF: unlike Pass 4
+    ///     this shortens content the model is actively working with, so it is an explicit operator opt-in rather than a
+    ///     silent behaviour change to the "protected recent turns are never modified" invariant. The replay gate covers it
+    ///     too — the default is a deliberate policy choice, not an unproven pass.
+    /// </summary>
+    public bool ExcerptProtectedToolResults { get; set; }
 }

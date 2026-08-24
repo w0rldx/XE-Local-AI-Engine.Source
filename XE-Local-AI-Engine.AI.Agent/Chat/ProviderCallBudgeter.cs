@@ -294,7 +294,17 @@ internal static class ProviderCallBudgeter
             return false;
         }
 
-        truncated = new ChatMessage(message.Role, rewritten);
+        // Clone-PRESERVING: id, author, provider raw representation and additional properties carry over. This hop can
+        // re-excerpt a message the OUTER budgeter already excerpted, so a rewrite that reconstructed from role + contents
+        // alone would strip a message's identity on the way to the provider — and would do it twice on a long tool loop.
+        truncated = new ChatMessage(message.Role, rewritten)
+        {
+            AuthorName = message.AuthorName,
+            MessageId = message.MessageId,
+            CreatedAt = message.CreatedAt,
+            RawRepresentation = message.RawRepresentation,
+            AdditionalProperties = message.AdditionalProperties
+        };
         return true;
     }
 

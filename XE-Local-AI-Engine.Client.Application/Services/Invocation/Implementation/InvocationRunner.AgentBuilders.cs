@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
@@ -306,12 +307,14 @@ public sealed partial class InvocationRunner
         {
             gate.Logged = true;
             _logger.LogWarning(
-                "Conversation context budgeted for invocation {InvocationId} ({Stage}): dropped {Dropped} message(s), truncated {Truncated} tool result(s) ({Chars} chars), estimated tokens {Before} -> {After}, capacity {Capacity} reserving {Reserved} (still over budget: {Overflow}).",
+                "Conversation context budgeted for invocation {InvocationId} ({Stage}): dropped {Dropped} message(s), truncated {Truncated} tool result(s) ({Chars} chars), stripped reasoning from {ReasoningStripped} message(s), excerpted {ProtectedResultsExcerpted} protected tool result(s), estimated tokens {Before} -> {After}, capacity {Capacity} reserving {Reserved} (still over budget: {Overflow}).",
                 package.InvocationId,
                 stage,
                 result.MessagesDropped,
                 result.ToolResultsTruncated,
                 result.CharsTruncated,
+                result.ReasoningStrippedCount,
+                result.ProtectedResultsExcerptedCount,
                 result.EstimatedTokensBefore,
                 result.EstimatedTokensAfter,
                 turnPolicy.ContextCapacityTokens,
@@ -334,11 +337,44 @@ public sealed partial class InvocationRunner
         return result.Messages;
     }
 
-    /// <summary>Sanitized, user-facing text for a <see cref="TurnNoticeKind.HistoryTruncated" /> notice — counts only, never content.</summary>
+    /// <summary>
+    ///     Sanitized, user-facing text for a <see cref="TurnNoticeKind.HistoryTruncated" /> notice — counts only, never
+    ///     content. The two last-resort budgeter passes are reported DISTINCTLY (reasoning removed vs. recent tool output
+    ///     shortened) because they mean different things to a reader: one discards the model's scratch-pad, the other
+    ///     shortens output the current round is working with.
+    ///     <para>
+    ///         The reassurance that "the originals are kept" is deliberately withheld once either fires. It is true of the
+    ///         saved conversation — which this never edits — but NOT of what those passes reclaim: reasoning and tool
+    ///         output produced inside this turn's tool/approval loop are never persisted, so once dropped they are gone
+    ///         rather than merely absent from this send. Saying otherwise would be a comfortable lie.
+    ///     </para>
+    /// </summary>
     private static string BuildHistoryTruncatedNoticeMessage(ConversationBudgetResult result)
     {
-        return
-            $"Conversation history was trimmed to fit the model's context window ({result.MessagesDropped} older message(s) dropped, {result.ToolResultsTruncated} tool result(s) shortened). The originals are kept — use Compact to summarize older messages and preserve their context.";
+        var builder = new StringBuilder("Conversation history was trimmed to fit the model's context window (")
+                      .Append(result.MessagesDropped)
+                      .Append(" older message(s) dropped, ")
+                      .Append(result.ToolResultsTruncated)
+                      .Append(" tool result(s) shortened");
+
+        if (result.ReasoningStrippedCount > 0)
+        {
+            _ = builder.Append(", reasoning removed from ").Append(result.ReasoningStrippedCount).Append(" message(s)");
+        }
+
+        if (result.ProtectedResultsExcerptedCount > 0)
+        {
+            _ = builder.Append(", ").Append(result.ProtectedResultsExcerptedCount).Append(" recent tool result(s) shortened");
+        }
+
+        _ = builder.Append("). ");
+
+        _ = result.ReasoningStrippedCount > 0 || result.ProtectedResultsExcerptedCount > 0
+            ? builder.Append(
+                "Your saved messages are unchanged, but the reasoning and tool output reclaimed from this turn are not kept — use Compact to summarize older messages and preserve their context.")
+            : builder.Append("The originals are kept — use Compact to summarize older messages and preserve their context.");
+
+        return builder.ToString();
     }
 
     /// <summary>

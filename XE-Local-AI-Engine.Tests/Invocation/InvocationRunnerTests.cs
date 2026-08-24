@@ -2679,6 +2679,83 @@ public sealed class InvocationRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenTheApprovalResumeOverrunsOnReasoningAlone_FailsTheTurnWithoutPass4()
+    {
+        // The boundary Pass 4 is measured against. On the approval resume the runner re-budgets the FOLDED segment, whose
+        // assistant message carries the model's reasoning. Every message of that history is inside the protected recent
+        // window, so Passes 1-3 have nothing to reclaim: with the pass off the turn dies before the resumed provider call.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? ReasoningHeavyApprovalRequestUpdates(reasoningChars: 100_000) : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender,
+            factory,
+            eventDispatcher: dispatcher,
+            contextBudgetOptions: new ConversationContextBudgetOptions
+            {
+                DefaultContextTokens = 4096,
+                ReservedOutputTokenFloor = 0,
+                StripProtectedReasoning = false
+            });
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("run_in_agent_home").Build();
+
+        var runTask = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await runTask;
+
+        AssertEx.Equal(expected: 1, segment, "the resume segment must never start once the round is rejected as over budget");
+        await dispatcher.Received(1).ReportInvocationFailedAsync(package.InvocationId,
+            Arg.Any<string>(),
+            FailureCategory.ContextWindowExceeded);
+    }
+
+    [Test]
+    public async Task RunAsync_WhenTheApprovalResumeOverrunsOnReasoningAlone_CompletesWithPass4AndAnEnrichedNotice()
+    {
+        // Same turn, same numbers, Pass 4 at its shipped default: the superseded reasoning is reclaimed, the resume runs,
+        // and the user is told what happened in a notice that names the reasoning strip rather than a plain history trim.
+        var sender = new MockHubMessageSender();
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var segment = 0;
+        var factory = CreateFactory(_ =>
+        {
+            segment++;
+            return segment == 1 ? ReasoningHeavyApprovalRequestUpdates(reasoningChars: 100_000) : CreateUpdates("done");
+        });
+        var runner = CreateRunner(sender,
+            factory,
+            eventDispatcher: dispatcher,
+            contextBudgetOptions: new ConversationContextBudgetOptions
+            {
+                // StripProtectedReasoning is deliberately NOT set: this grades the SHIPPED default, so flipping the pass
+                // back off fails here rather than silently reintroducing the failed turn above.
+                DefaultContextTokens = 4096,
+                ReservedOutputTokenFloor = 0
+            });
+        var package = RuntimePackageBuilder.Valid().WithAllowedTool("run_in_agent_home").Build();
+
+        var runTask = RunAsync(runner, package);
+        await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        runner.ResolveApprovalResult(new ApprovalResolvedEvent(sender.SentApprovals.Single().RequestId, Approved: true));
+        await runTask;
+
+        AssertEx.Equal(expected: 2, segment, "the approved resume must run instead of the turn failing");
+        await dispatcher.DidNotReceive().ReportInvocationFailedAsync(package.InvocationId,
+            Arg.Any<string>(),
+            FailureCategory.ContextWindowExceeded);
+        await dispatcher.Received(1).ReportTurnNoticeAsync(Arg.Is<TurnNoticePayload>(payload =>
+            payload.InvocationId == package.InvocationId
+            && payload.Kind == TurnNoticeKind.HistoryTruncated
+            && payload.Message.Contains("reasoning removed from 1 message(s)", StringComparison.Ordinal)
+            && !payload.Message.Contains("The originals are kept", StringComparison.Ordinal)));
+    }
+
+    [Test]
     public async Task RunAsync_WhenLaunchedWindowExceedsTheConfiguredDefault_BudgetsAgainstTheRealWindow()
     {
         // The regression: the launched window was only ever allowed to SHRINK the configured default, so a model
@@ -3652,6 +3729,20 @@ public sealed class InvocationRunnerTests
         var approvalRequest = new ToolApprovalRequestContent("approval-run-in-agent-home", toolCall);
         yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
         {
+            approvalRequest
+        });
+        await Task.Yield();
+    }
+
+    // An approval-gated segment whose assistant turn carries a very large chunk of model reasoning, so the folded history
+    // the tool-loop re-budgets on the approval resume overruns the window by that reasoning alone.
+    private static async IAsyncEnumerable<AgentResponseUpdate> ReasoningHeavyApprovalRequestUpdates(int reasoningChars)
+    {
+        var toolCall = new ToolCallContent("call-run-in-agent-home");
+        var approvalRequest = new ToolApprovalRequestContent("approval-run-in-agent-home", toolCall);
+        yield return new AgentResponseUpdate(ChatRole.Assistant, new List<AIContent>
+        {
+            new TextReasoningContent(new string(c: 'r', reasoningChars)),
             approvalRequest
         });
         await Task.Yield();

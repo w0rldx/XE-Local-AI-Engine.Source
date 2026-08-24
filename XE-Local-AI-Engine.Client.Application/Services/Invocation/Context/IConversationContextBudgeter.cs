@@ -6,8 +6,15 @@ using Microsoft.Extensions.AI;
 ///     Deterministically fits a conversation history into an input-token budget before it is sent to the provider.
 ///     Policy: always keep system messages, the latest user message, and the most recent turns; when the estimated
 ///     footprint exceeds the budget, first shorten oversized historical tool results to an excerpt, then drop the oldest
-///     turns whole (never splitting an assistant tool-call from its tool-result). The most recent turns are never
-///     modified, so an in-flight tool-calling round is preserved intact. No LLM summarization is performed.
+///     turns whole (never splitting an assistant tool-call from its tool-result), then evict whole historical approval
+///     groups. The most recent turns survive those passes intact, so an in-flight tool-calling round is preserved.
+///     <para>
+///         For the rounds those passes cannot rescue — where the protected window itself exceeds the budget, so the only
+///         alternative is failing the turn — two opt-in last-resort passes reach into that window on SURVIVORS only,
+///         oldest-first, stopping the moment the round fits and never touching the last surviving message: stripping the
+///         model's superseded reasoning, and excerpting protected tool results. Neither touches a tool call, a tool-result
+///         correlation id, or an approval record. No LLM summarization is performed at any point.
+///     </para>
 /// </summary>
 public interface IConversationContextBudgeter
 {
