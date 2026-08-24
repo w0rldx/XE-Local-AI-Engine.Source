@@ -24,7 +24,10 @@ internal sealed record StepScript(IReadOnlyList<string> EventTypes,
     bool Park = false,
     bool ParkThenContinue = false,
     string ParkToolName = "ask_user",
-    string ParkEventType = ChatStreamEventTypes.ApprovalRequested);
+    string ParkEventType = ChatStreamEventTypes.ApprovalRequested,
+    // Rides on the scripted terminal event. The supervisor reads it to tell a step that spent a BOUND (the
+    // provider-call cap, whose message is a fixed constant) from one that actually broke.
+    string? TerminalError = null);
 
 /// <summary>
 ///     Stands in for the chat send path. It records what the supervisor asked for, yields a scripted event sequence, and
@@ -96,11 +99,11 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
 
         foreach (var eventType in script.EventTypes)
         {
-            yield return Event(correlation, eventType);
+            yield return Event(correlation, eventType, error: script.TerminalError);
         }
     }
 
-    private static ChatStreamEvent Event(NodeChatMessageCorrelation correlation, string type, string? toolName = null) =>
+    private static ChatStreamEvent Event(NodeChatMessageCorrelation correlation, string type, string? toolName = null, string? error = null) =>
         new(type,
             correlation.ConversationId,
             correlation.MessageId,
@@ -108,6 +111,7 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
             Status: "streaming",
             Sequence: 0,
             OccurredAtUtc: 0,
+            Error: error,
             ToolName: toolName,
             ApprovalRequestId: toolName is null ? null : Guid.NewGuid().ToString("N"));
 }

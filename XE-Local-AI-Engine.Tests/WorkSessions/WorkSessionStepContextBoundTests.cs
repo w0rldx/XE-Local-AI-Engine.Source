@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -154,6 +155,64 @@ public sealed class WorkSessionStepContextBoundTests
 
         AssertEx.Equal(expected: 16_000, seenInsideTurn, "The step's tightened tool-result budget must reach the tool loop.");
         AssertEx.True(ToolResultBudgetScope.Current is null, "The scope must not leak out of the step.");
+    }
+
+    [Test]
+    public async Task Loop_WhenAStepSpendsItsProviderCallBudget_EndsTheStepAndRunsTheNextOne()
+    {
+        // The cap is a bound, not a fault: the tools the step ran are persisted and the state block carries the plan
+        // forward, so ending the SESSION on its own safety limit would be the bug.
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "2")),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantFailed], TerminalError: ProviderCallBudget.CeilingExceededMessage));
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted]));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2, fake.Requests.Count, "The next step must still be sent after the cap ends one.");
+        AssertEx.Equal(expected: 2, settled.StepCount, "A capped step still counts as a step.");
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        AssertEx.Contains(events, entry => entry.EventType == "StepEnded" && entry.Outcome == nameof(ProviderCallBudget));
+        AssertEx.Empty(events.Where(entry => entry.EventType == "StepFailed").ToList(), "A spent budget is not a failure.");
+    }
+
+    [Test]
+    public async Task Loop_WhenAStepFailsForAnyOtherReason_StillFailsTheSession()
+    {
+        // The guard above keys on the budget's own fixed terminal message, so an ordinary failure must be unaffected.
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantFailed], TerminalError: "The model went away."));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        AssertEx.Contains(events, entry => entry.EventType == "StepFailed");
     }
 
     [Test]

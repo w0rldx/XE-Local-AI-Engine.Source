@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -315,7 +316,14 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             ? ToolResultBudgetScope.BeginScope(_options.MaxToolResultCharacters)
             : null;
 
-        string terminal;
+        // Cap the tool-calling loop for this step, seeded the same way and for the same reason. Each iteration re-sends
+        // every prior result and reasoning block, so a step's context grows quadratically in its own calls; clipping
+        // each result is not enough once there are fourteen of them. Hitting the cap ends the step, not the session.
+        using var callBudget = _options.MaxProviderCallsPerStep > 0
+            ? ProviderCallBudget.BeginCallCapScope(_options.MaxProviderCallsPerStep)
+            : null;
+
+        ChatStreamEvent terminal;
         try
         {
             terminal = await DrainStepAsync(turnScope.ServiceProvider.GetRequiredService<INodeChatStreamService>(), guard, request, sessionId).ConfigureAwait(false);
@@ -329,7 +337,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     }
 
     /// <summary>Drains one step's stream to its terminal, mapping parks onto the session status as they happen.</summary>
-    private async Task<string> DrainStepAsync(INodeChatStreamService stream, StepCancellationGuard guard, NodeChatStreamRequest request, Guid sessionId)
+    private async Task<ChatStreamEvent> DrainStepAsync(INodeChatStreamService stream, StepCancellationGuard guard, NodeChatStreamRequest request, Guid sessionId)
     {
         var parked = false;
         await foreach (var streamEvent in stream.SendMessageAsync(request, CancellationToken.None).ConfigureAwait(false))
@@ -362,7 +370,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 case ChatStreamEventTypes.AssistantFailed:
                 case ChatStreamEventTypes.AssistantCancelled:
                 case ChatStreamEventTypes.AssistantInterrupted:
-                    return streamEvent.Type;
+                    return streamEvent;
 
                 default:
                     break;
@@ -371,7 +379,13 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 
         // The stream ended without a terminal event. Read that as a failure rather than looping: the assistant row was
         // terminalized by the pump either way, and a second step would go out over an unknown state.
-        return ChatStreamEventTypes.AssistantFailed;
+        return new ChatStreamEvent(ChatStreamEventTypes.AssistantFailed,
+            request.ConversationId,
+            request.MessageId.GetValueOrDefault(),
+            request.RequestId.GetValueOrDefault(),
+            NodeChatMessageStatusValues.Failed,
+            Sequence: 0,
+            _timeProvider.GetUtcNow().ToUnixTimeMilliseconds());
     }
 
     private async Task<StepOutcome> SettleStepAsync(SessionRun run,
@@ -380,8 +394,28 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         int step,
         int stepsThisRun,
         long stepStartedSequence,
-        string terminal)
+        ChatStreamEvent terminalEvent)
     {
+        var terminal = terminalEvent.Type;
+
+        // A step that spent its provider-call cap is BOUNDED, not broken: the tools it ran are already persisted and
+        // the next step resumes from the state block. Recognised by the budget's own fixed, path-free terminal message
+        // (ProviderCallBudget.CeilingExceededMessage), which the classifier forwards verbatim onto the failed row.
+        // Falling through to the failure branch would end the session on its own safety limit.
+        if (terminal == ChatStreamEventTypes.AssistantFailed
+            && string.Equals(terminalEvent.Error, ProviderCallBudget.CeilingExceededMessage, StringComparison.Ordinal))
+        {
+            _logger.LogInformation("Work session {SessionId} step {Step} reached its provider-call budget; ending the step and continuing.", sessionId, step);
+            _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
+                            WorkSessionVersions.Any,
+                            WorkSessionEventTypes.StepEnded,
+                            WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Ended),
+                            nameof(ProviderCallBudget)),
+                        CancellationToken.None))
+                .ConfigureAwait(false);
+            terminal = ChatStreamEventTypes.AssistantCompleted;
+        }
+
         switch (terminal)
         {
             case ChatStreamEventTypes.AssistantInterrupted:

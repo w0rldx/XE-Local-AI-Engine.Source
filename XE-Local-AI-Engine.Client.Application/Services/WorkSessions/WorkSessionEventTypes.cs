@@ -14,6 +14,13 @@ internal static class WorkSessionEventTypes
     public const string StepFailed = "StepFailed";
 
     /// <summary>
+    ///     The step stopped on a bound rather than a fault — today only its provider-call cap. NOT a failure: the
+    ///     session stays runnable and the next step resumes from the state block, so this must never be written as
+    ///     <see cref="StepFailed" />. The outcome names which bound stopped it.
+    /// </summary>
+    public const string StepEnded = "StepEnded";
+
+    /// <summary>
     ///     <c>complete_work_session</c> fired inside the turn. The supervisor reads this back at step end rather than
     ///     holding a flag in memory, so the request survives the process the same way every other session fact does.
     /// </summary>
@@ -28,5 +35,6 @@ internal static class WorkSessionStepPhases
 {
     public const string Started = "started";
     public const string Failed = "failed";
+    public const string Ended = "ended";
     public const string ParkExpired = "park-expired";
 }

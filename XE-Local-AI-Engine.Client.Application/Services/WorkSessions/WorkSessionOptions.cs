@@ -70,5 +70,20 @@ public sealed class WorkSessionOptions
     ///     </para>
     /// </summary>
     [Range(0, 1_000_000)]
-    public int MaxToolResultCharacters { get; init; } = 16_000;
+    public int MaxToolResultCharacters { get; init; } = 8_000;
+
+    /// <summary>
+    ///     How many raw provider rounds one step may make, tightening the node-wide
+    ///     <c>Agent:ProviderCallBudget:MaxProviderCallsPerInvocation</c> (200) for the duration of the turn. Zero leaves
+    ///     the node value.
+    ///     <para>
+    ///         The function-invocation loop re-sends every prior tool result and every reasoning block on each
+    ///         iteration, so a step's context grows QUADRATICALLY in its own tool calls — 14 calls in one step is what
+    ///         overran a 65,536-token window on 2026-08-24, with each individual result already clipped. Neither the
+    ///         step-boundary fold nor the per-result cap can reach that; only a cap on the iterations can. Hitting it
+    ///         ends the step cleanly and the next one resumes from the state block, so the work continues.
+    ///     </para>
+    /// </summary>
+    [Range(0, 10_000)]
+    public int MaxProviderCallsPerStep { get; init; } = 10;
 }

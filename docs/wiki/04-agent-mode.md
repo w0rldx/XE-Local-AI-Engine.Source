@@ -716,12 +716,34 @@ the synopsis `CompactionContextResolver` already splices. That is safe precisely
 is rebuilt from the database; folding costs the model nothing it still needs.
 
 Compaction cannot touch the other half — the results the step's own tool loop produces *within* the
-turn. So the supervisor also seeds `ToolResultBudgetScope` for the duration of the step, tightening the
-node-wide budget to `WorkSessions:MaxToolResultCharacters` (16,000). The scope is an `AsyncLocal` in the
-same shape as `AgentRunConversationContext`, read in `BudgetedToolResultAIFunction` — the single wrapper
-every ClientLocal, Custom and MCP tool routes through, which is why one edit there bounds all three. It
-is **tighten-only**: an ambient value above the node ceiling has no effect, so no run can raise it, and
-an unseeded flow (every ordinary chat turn) is byte-identical to before.
+turn. **Three bounds, not one**, because each catches what the others cannot:
+
+| Bound | Setting | Catches |
+|---|---|---|
+| Transcript fold at the step boundary | `StepContextBudgetTokens` (12,000) | Growth ACROSS steps |
+| Tool-result clip inside the step | `MaxToolResultCharacters` (8,000) | One oversized result |
+| Provider-call cap inside the step | `MaxProviderCallsPerStep` (10) | Many results, each already clipped |
+
+The third exists because the second is not sufficient. `FunctionInvokingChatClient` re-sends every prior
+tool result **and** every reasoning block on each iteration, so a step's context grows *quadratically in
+its own tool calls*: on 2026-08-24 one step made 14 calls (10 × `search_knowledge_base`) whose results
+were each correctly clipped to ~16k chars, and the re-sending still reached 71,172 tokens against a
+65,536 window. Only capping the iterations reaches that.
+
+Both in-step bounds are seeded by the supervisor as `AsyncLocal` scopes before the enumeration begins,
+in the same shape as `AgentRunConversationContext`: `ToolResultBudgetScope` (read in
+`BudgetedToolResultAIFunction` — the single wrapper every ClientLocal, Custom and MCP tool routes
+through, which is why one edit there bounds all three) and `ProviderCallBudget.BeginCallCapScope` (read
+when the runner builds its own budget scope, since that scope replaces any the caller seeded). Both are
+**tighten-only**: a value at or above the node ceiling has no effect, so no run can raise it, and an
+unseeded flow — every ordinary chat turn — is byte-identical.
+
+**A spent call cap ends the STEP, not the session.** `ProviderCallBudgetExceededException` classifies as
+a failure, so the supervisor recognises the budget's own fixed terminal message
+(`ProviderCallBudget.CeilingExceededMessage`, forwarded verbatim onto the failed row), writes a
+`StepEnded` event with outcome `ProviderCallBudget`, and settles the step as if it had completed. The
+tools that ran are already persisted and the state block carries the plan, so the next step resumes the
+work. Letting it fall through to the failure branch would end a session on its own safety limit.
 
 The checkpoint's own compaction is not that bound. It lands every `CheckpointEveryNSteps` steps and keeps
 the configured `Agent:ConversationCompaction:RecentMessagesToKeepVerbatim` (8) — four whole steps for a
@@ -783,7 +805,8 @@ the state block would otherwise carry off the node on the next step.
 | `WorkSessions:MaxArtifactBytes` | `1048576` | 1 MiB |
 | `WorkSessions:StepTimeoutSeconds` | `0` | 0 inherits the node's maximum message request timeout |
 | `WorkSessions:StepContextBudgetTokens` | `12000` | Replayed-transcript budget per step; over it the boundary force-compacts (§5.3). 0 disables |
-| `WorkSessions:MaxToolResultCharacters` | `16000` | Tightens the node's tool-result budget for a step (§5.3). Tighten-only; 0 leaves the node value |
+| `WorkSessions:MaxToolResultCharacters` | `8000` | Tightens the node's tool-result budget for a step (§5.3). Tighten-only; 0 leaves the node value |
+| `WorkSessions:MaxProviderCallsPerStep` | `10` | Tool-loop iterations per step (§5.3). Hitting it ends the step cleanly; 0 leaves the node value |
 
 `IWorkSessionSandboxRuntimeProvider` exists as a role marker with **no consumer in v1**: nothing a
 session tool does needs a jail yet, and the role is there so the first one that does gets a per-feature
