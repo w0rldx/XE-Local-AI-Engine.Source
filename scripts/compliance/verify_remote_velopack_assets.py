@@ -119,7 +119,16 @@ def verify_json_feed(feed_path: Path, version: str, packages: dict[str, Path]) -
         )
 
 
-def verify_legacy_feed(feed_path: Path, packages: dict[str, Path]) -> None:
+def verify_legacy_feed(feed_path: Path, version: str, packages: dict[str, Path]) -> None:
+    # The legacy Squirrel feed does not mirror the modern JSON feed, and both differences only became observable
+    # once a release had a predecessor to build a delta against (measured on the rc.1 -> rc.2 vpk 1.2.0 outputs,
+    # pinned in tests/fixtures/velopack-1.2.0-linux-output.json):
+    #   1. It lists FULL packages only. Velopack deltas are not consumable by a legacy Squirrel client, so vpk
+    #      never writes them here -- requiring the delta made rc.2 fail as a spurious "missing" package.
+    #   2. It accumulates earlier releases' full packages, which is how a Squirrel client walks back to an older
+    #      version. Those are hosted by their own release, so they cannot be hashed against this release's assets.
+    # Fail-closed rules kept: every current-version full package must be described, every described package that
+    # IS attached must match byte-for-byte, and anything carrying this version must be attached.
     described: set[str] = set()
     for raw_line in feed_path.read_text(encoding="utf-8-sig").splitlines():
         line = raw_line.strip()
@@ -131,17 +140,17 @@ def verify_legacy_feed(feed_path: Path, packages: dict[str, Path]) -> None:
         digest, file_name, size_text = match.groups()
         package = packages.get(file_name)
         if package is None:
-            raise ValueError(f"{feed_path.name} references unattached package '{file_name}'")
+            if f"-{version}-" in file_name or not file_name.endswith("-full.nupkg"):
+                raise ValueError(f"{feed_path.name} references unattached package '{file_name}'")
+            continue
         if hashlib.sha1(package.read_bytes(), usedforsecurity=False).hexdigest().lower() != digest.lower():
             raise ValueError(f"{feed_path.name} SHA-1 does not match attached package '{file_name}'")
         if package.stat().st_size != int(size_text):
             raise ValueError(f"{feed_path.name} size does not match attached package '{file_name}'")
         described.add(file_name)
-    if described != set(packages):
-        raise ValueError(
-            f"{feed_path.name} package set mismatch: missing={sorted(set(packages) - described)} "
-            f"extra={sorted(described - set(packages))}"
-        )
+    undescribed = sorted({name for name in packages if name.endswith("-full.nupkg")} - described)
+    if undescribed:
+        raise ValueError(f"{feed_path.name} does not describe attached full package(s): {undescribed}")
 
 
 def verify(version: str, local_roots: dict[str, Path], remote_root: Path) -> None:
@@ -181,7 +190,7 @@ def verify(version: str, local_roots: dict[str, Path], remote_root: Path) -> Non
         legacy_feed_path = (
             remote[policy.legacy_feed] if policy.legacy_feed_published else channel_files[policy.legacy_feed]
         )
-        verify_legacy_feed(legacy_feed_path, packages)
+        verify_legacy_feed(legacy_feed_path, version, packages)
 
 
 def parse_local(value: str) -> tuple[str, Path]:

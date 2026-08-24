@@ -26,6 +26,10 @@
     "assets.linux.json",
     "releases.linux.json"
   ],
+  "deltaPackLegacyFeedFileNames": [
+    "XE-Local-AI-Engine-1.2.3-rc.1-linux-full.nupkg",
+    "XE-Local-AI-Engine-1.2.3-rc.2-linux-full.nupkg"
+  ],
   "deltaPackUploadManifest": [
     {
       "RelativeFileName": "XE-Local-AI-Engine-1.2.3-rc.2-linux-delta.nupkg",

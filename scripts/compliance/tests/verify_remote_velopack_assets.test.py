@@ -53,10 +53,13 @@ class RemoteVelopackAssetTests(unittest.TestCase):
                         "Size": package.stat().st_size,
                     }
                 )
-                legacy_lines.append(
-                    f"{hashlib.sha1(package.read_bytes(), usedforsecurity=False).hexdigest()} "
-                    f"{name} {package.stat().st_size}"
-                )
+                # vpk writes FULL packages only into the legacy Squirrel feed -- a legacy client cannot consume a
+                # Velopack delta. Mirrors deltaPackLegacyFeedFileNames in the pinned 1.2.0 capture.
+                if name.endswith("-full.nupkg"):
+                    legacy_lines.append(
+                        f"{hashlib.sha1(package.read_bytes(), usedforsecurity=False).hexdigest()} "
+                        f"{name} {package.stat().st_size}"
+                    )
             (local / policy.feed).write_text(json.dumps({"Assets": assets}), encoding="utf-8")
             (remote / policy.feed).write_text(json.dumps({"Assets": assets}), encoding="utf-8")
             (local / policy.legacy_feed).write_text("\n".join(legacy_lines) + "\n", encoding="utf-8")
@@ -68,9 +71,85 @@ class RemoteVelopackAssetTests(unittest.TestCase):
             (local / "CHECKSUMS.sha256").write_text("retained evidence", encoding="utf-8")
         return root, local_roots, remote
 
+    def verified_legacy_feeds(self, local_roots: dict[str, Path], remote: Path) -> dict[str, Path]:
+        """The legacy feed each channel is actually reconciled against: win's from the release, linux's retained."""
+        return {
+            channel: (remote if policy.legacy_feed_published else local_roots[channel]) / policy.legacy_feed
+            for channel, policy in MODULE.POLICIES.items()
+        }
+
+    @staticmethod
+    def append_legacy_line(feed: Path, file_name: str, size: int = 4096) -> None:
+        line = f"{'A' * 40} {file_name} {size}"
+        feed.write_text(feed.read_text(encoding="utf-8") + line + "\n", encoding="utf-8")
+
+    def drop_delta(self, channel: str, local_roots: dict[str, Path], remote: Path) -> str:
+        """Turn a channel into a delta-less release, the way the first release of a line packs."""
+        name = f"XE-Local-AI-Engine-{self.VERSION}-{channel}-delta.nupkg"
+        (local_roots[channel] / name).unlink()
+        (remote / name).unlink()
+        for root in (local_roots[channel], remote):
+            feed = root / MODULE.POLICIES[channel].feed
+            payload = json.loads(feed.read_text(encoding="utf-8"))
+            payload["Assets"] = [asset for asset in payload["Assets"] if asset["FileName"] != name]
+            feed.write_text(json.dumps(payload), encoding="utf-8")
+        return name
+
     def test_internal_local_manifests_are_not_expected_remote_assets(self) -> None:
         _, local_roots, remote = self.make_fixture()
         MODULE.verify(self.VERSION, local_roots, remote)
+
+    def test_delta_is_published_but_absent_from_the_legacy_feed(self) -> None:
+        # Regression for the rc.2 draft failure: the first release with a predecessor attaches a delta, and vpk
+        # lists only full packages in the legacy feed. Requiring the delta there reported it as spuriously missing.
+        _, local_roots, remote = self.make_fixture()
+        for channel, feed in self.verified_legacy_feeds(local_roots, remote).items():
+            delta = f"XE-Local-AI-Engine-{self.VERSION}-{channel}-delta.nupkg"
+            self.assertTrue((remote / delta).is_file())
+            self.assertNotIn(delta, feed.read_text(encoding="utf-8"))
+        MODULE.verify(self.VERSION, local_roots, remote)
+
+    def test_legacy_feed_may_carry_earlier_releases_full_packages(self) -> None:
+        # The legacy feed accumulates so a Squirrel client can walk back a version. Those packages belong to their
+        # own release and cannot be hashed here, but they must not make this release's reconciliation fail.
+        _, local_roots, remote = self.make_fixture()
+        for channel, feed in self.verified_legacy_feeds(local_roots, remote).items():
+            self.append_legacy_line(feed, f"XE-Local-AI-Engine-1.2.2-{channel}-full.nupkg")
+        MODULE.verify(self.VERSION, local_roots, remote)
+
+    def test_legacy_feed_omitting_the_attached_full_package_fails_closed(self) -> None:
+        _, local_roots, remote = self.make_fixture()
+        feed = self.verified_legacy_feeds(local_roots, remote)["win"]
+        full = f"XE-Local-AI-Engine-{self.VERSION}-win-full.nupkg"
+        kept = [line for line in feed.read_text(encoding="utf-8").splitlines() if full not in line]
+        feed.write_text("\n".join(kept) + "\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "does not describe attached full package"):
+            MODULE.verify(self.VERSION, local_roots, remote)
+
+    def test_legacy_feed_listing_an_unattached_delta_fails_closed(self) -> None:
+        # The inverse of the regression: a delta named by the feed but missing from the release must still fail.
+        _, local_roots, remote = self.make_fixture()
+        delta = self.drop_delta("win", local_roots, remote)
+        self.append_legacy_line(self.verified_legacy_feeds(local_roots, remote)["win"], delta)
+        with self.assertRaisesRegex(ValueError, "references unattached package"):
+            MODULE.verify(self.VERSION, local_roots, remote)
+
+    def test_legacy_feed_listing_an_unattached_current_version_package_fails_closed(self) -> None:
+        _, local_roots, remote = self.make_fixture()
+        self.append_legacy_line(
+            self.verified_legacy_feeds(local_roots, remote)["win"],
+            f"XE-Local-AI-Engine-{self.VERSION}-linux-full.nupkg",
+        )
+        with self.assertRaisesRegex(ValueError, "references unattached package"):
+            MODULE.verify(self.VERSION, local_roots, remote)
+
+    def test_legacy_feed_must_match_attached_package_hash(self) -> None:
+        _, local_roots, remote = self.make_fixture()
+        feed = self.verified_legacy_feeds(local_roots, remote)["win"]
+        original = feed.read_text(encoding="utf-8")
+        feed.write_text(original.replace(original[:40], "B" * 40), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "SHA-1"):
+            MODULE.verify(self.VERSION, local_roots, remote)
 
     def test_previous_full_package_must_be_removed_after_pack(self) -> None:
         _, local_roots, remote = self.make_fixture()
@@ -123,6 +202,16 @@ class RemoteVelopackAssetTests(unittest.TestCase):
         self.assertNotIn(
             "XE-Local-AI-Engine-1.2.3-rc.1-linux-full.nupkg",
             {entry["RelativeFileName"] for entry in fixture["deltaPackUploadManifest"]},
+        )
+
+        # The legacy Squirrel feed carries full packages only, and keeps the previous release's full package.
+        legacy_feed = fixture["deltaPackLegacyFeedFileNames"]
+        self.assertEqual([name for name in legacy_feed if name.endswith("-full.nupkg")], legacy_feed)
+        self.assertIn("XE-Local-AI-Engine-1.2.3-rc.1-linux-full.nupkg", legacy_feed)
+        self.assertNotIn(
+            "XE-Local-AI-Engine-1.2.3-rc.2-linux-delta.nupkg",
+            legacy_feed,
+            "a Velopack delta is not consumable by a legacy Squirrel client and is never listed there",
         )
 
         with tempfile.TemporaryDirectory() as temporary_directory:
