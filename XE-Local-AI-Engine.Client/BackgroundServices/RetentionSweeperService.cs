@@ -6,11 +6,13 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
 ///     Ages out whole conversations once they pass the configured retention window, deleting the complete footprint the
 ///     interactive immediate-purge deletes: every child DB row (via <see cref="INodeRetentionStore" />) <b>and</b> the
-///     on-disk upload blobs. Retention permanently destroys user chat history, so it is <b>disabled by default</b> —
+///     on-disk upload blobs plus the artifact bytes of any work session the conversation owned. Retention permanently
+///     destroys user chat history, so it is <b>disabled by default</b> —
 ///     see <see cref="ChatRetentionOptions" />. The DB rows are deleted and committed first; the on-disk blobs are torn
 ///     down after the commit, and an orphan resweep on each pass removes any upload directory whose conversation row no
 ///     longer exists (covering a crash between the commit and the blob teardown), so an interruption can never leave a
@@ -97,6 +99,8 @@ public sealed class RetentionSweeperService : BackgroundService
         await using var scope = _serviceScopeFactory.CreateAsyncScope();
         var retentionStore = scope.ServiceProvider.GetRequiredService<INodeRetentionStore>();
         var uploadedFileStore = scope.ServiceProvider.GetRequiredService<IConversationUploadedFileStore>();
+        var workSessionStore = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
+        var workSessionArtifactBlobStore = scope.ServiceProvider.GetRequiredService<IWorkSessionArtifactBlobStore>();
 
         // Production timestamps are Unix MILLISECONDS (created/last-seen are written with ToUnixTimeMilliseconds), so the
         // cutoff must be milliseconds too — a seconds cutoff is ~1000x smaller than any real last_seen and the age
@@ -110,29 +114,40 @@ public sealed class RetentionSweeperService : BackgroundService
         // deleted get their on-disk upload blobs torn down.
         var candidateConversationIds = await retentionStore.ListExpiredConversationCandidatesAsync(cutoffUtc, cancellationToken).ConfigureAwait(false);
 
-        var deletedConversationIds = new List<Guid>(candidateConversationIds.Count);
+        var deletedConversations = new List<(Guid ConversationId, Guid? WorkSessionId)>(candidateConversationIds.Count);
         foreach (var conversationId in candidateConversationIds)
         {
+            // The owned session (1:1, may be none) is resolved BEFORE the purge: its row carries the only
+            // conversation → session mapping, and the purge deletes it along with everything else.
+            var workSession = await workSessionStore.FindByConversationAsync(conversationId, cancellationToken).ConfigureAwait(false);
+
             var deleted = await _writer.ExecuteConversationExclusiveAsync(conversationId,
                 (dbContext, token) => ConversationRetentionPurge.TryPurgeIfExpiredAsync(dbContext, conversationId, cutoffUtc, token),
                 cancellationToken).ConfigureAwait(false);
             if (deleted)
             {
-                deletedConversationIds.Add(conversationId);
+                deletedConversations.Add((conversationId, workSession?.Id));
             }
         }
 
-        foreach (var conversationId in deletedConversationIds)
+        foreach (var (conversationId, workSessionId) in deletedConversations)
         {
             await uploadedFileStore.DeleteAllForConversationAsync(conversationId, cancellationToken).ConfigureAwait(false);
+            if (workSessionId is { } sessionId)
+            {
+                // Work-session artifact bytes live on disk under the session id, so the row purge cannot reach them.
+                // follow-up: no orphan resweep for stranded artifact directories yet, mirroring
+                // PurgeOrphanedUploadDirectoriesAsync — a crash between the commit and this call leaks one directory.
+                workSessionArtifactBlobStore.DeleteSession(sessionId);
+            }
         }
 
         var orphanCount = await PurgeOrphanedUploadDirectoriesAsync(scope, uploadedFileStore, cancellationToken).ConfigureAwait(false);
 
-        if (deletedConversationIds.Count > 0 || orphanCount > 0)
+        if (deletedConversations.Count > 0 || orphanCount > 0)
         {
             _logger.LogInformation("Retention sweep deleted {DeletedConversationCount} conversation(s) and {OrphanCount} orphaned upload director(ies).",
-                deletedConversationIds.Count,
+                deletedConversations.Count,
                 orphanCount);
         }
     }
