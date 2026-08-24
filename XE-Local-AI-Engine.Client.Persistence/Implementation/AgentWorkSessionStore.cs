@@ -593,6 +593,7 @@ internal sealed class AgentWorkSessionStore(NodeChatDbContext dbContext, TimePro
                 CreatedStep = session.StepCount,
                 UpdatedStep = session.StepCount
             });
+            TrackCurrentTask(session, change.TaskId, change.Status ?? AgentWorkSessionTaskStatus.Planned);
             return;
         }
 
@@ -628,9 +629,32 @@ internal sealed class AgentWorkSessionStore(NodeChatDbContext dbContext, TimePro
             _ => change.Status ?? task.Status
         };
 
+        TrackCurrentTask(session, task.Id, task.Status);
+
         // The change watermark moves on every mutation, not only on insert, so a ?sinceSeq= list replays updates too.
         task.Sequence = NextSequence(session);
         task.UpdatedStep = session.StepCount;
+    }
+
+    /// <summary>
+    ///     Keeps the session's current-task pointer true as the plan changes. A task moved to <c>Active</c> becomes the
+    ///     current one; the pointer is cleared when the task it names is finished or dropped.
+    ///     <para>
+    ///         Without this the pointer only ever moved on a status transition, so it went stale for the rest of a
+    ///         multi-step run every time the agent switched tasks — and every reader outside the step loop (the REST
+    ///         detail, the checkpoint state) read the stale value.
+    ///     </para>
+    /// </summary>
+    private static void TrackCurrentTask(AgentWorkSession session, Guid taskId, AgentWorkSessionTaskStatus status)
+    {
+        if (status == AgentWorkSessionTaskStatus.Active)
+        {
+            session.CurrentTaskId = taskId;
+        }
+        else if (session.CurrentTaskId == taskId && status is AgentWorkSessionTaskStatus.Done or AgentWorkSessionTaskStatus.Dropped)
+        {
+            session.CurrentTaskId = null;
+        }
     }
 
     private async Task EnsureTaskBelongsAsync(Guid sessionId, Guid taskId, CancellationToken cancellationToken)

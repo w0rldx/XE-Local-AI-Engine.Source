@@ -13,13 +13,16 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     One scripted turn: what the fake stream service yields, and what the tools of that turn would have written.
 ///     <para>
 ///         <see cref="Park" /> makes the turn stop on an approval and wait to be cancelled, which is the only faithful
-///         way to exercise the supervisor's park handling — the real send path parks by holding the run open until the
-///         cancellation registry releases it.
+///         way to exercise the supervisor's park timeout — the real send path parks by holding the run open until the
+///         cancellation registry releases it. <see cref="ParkThenContinue" /> is the answered park: the prompt is
+///         emitted and the turn carries straight on through <see cref="EventTypes" />, which is what a human answering
+///         the card looks like from the supervisor's side.
 ///     </para>
 /// </summary>
 internal sealed record StepScript(IReadOnlyList<string> EventTypes,
     Func<IServiceProvider, Guid, Task>? DuringTurn = null,
     bool Park = false,
+    bool ParkThenContinue = false,
     string ParkToolName = "ask_user",
     string ParkEventType = ChatStreamEventTypes.ApprovalRequested);
 
@@ -68,6 +71,11 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
         if (script.DuringTurn is { } during)
         {
             await during(services, sessionId).ConfigureAwait(false);
+        }
+
+        if (script.ParkThenContinue)
+        {
+            yield return Event(correlation, script.ParkEventType, script.ParkToolName);
         }
 
         if (script.Park)

@@ -46,6 +46,44 @@ public sealed class WorkSessionToolHandlerTests
     }
 
     [Test]
+    public async Task UpdateWorkPlan_MovesTheSessionsCurrentTaskPointer_SoTheDetailReadIsNotStale()
+    {
+        // The pointer used to move only on a status transition, so it went stale for the rest of a multi-step run every
+        // time the agent switched tasks — and WorkSessionDetail.CurrentTaskId is what the session page reads.
+        await using var factory = NewFactory();
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            _ = await handler.ExecuteAsync("""{"operations":[{"op":"add","title":"First","status":"Active"},{"op":"add","title":"Second"}]}""").ConfigureAwait(false);
+        }
+
+        var tasks = await ReadTasksAsync(factory, sessionId).ConfigureAwait(false);
+        var first = tasks.Single(task => task.Title == "First");
+        var second = tasks.Single(task => task.Title == "Second");
+        AssertEx.Equal(first.Id, await ReadDetailCurrentTaskAsync(factory, sessionId).ConfigureAwait(false));
+
+        // Switching the active task mid-run must move the pointer with it.
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            _ = await handler.ExecuteAsync($$"""{"operations":[{"op":"complete","taskId":"{{first.Id}}"},{"op":"update","taskId":"{{second.Id}}","status":"Active"}]}""")
+                             .ConfigureAwait(false);
+        }
+
+        AssertEx.Equal(second.Id, await ReadDetailCurrentTaskAsync(factory, sessionId).ConfigureAwait(false));
+
+        // Finishing the current task leaves no pointer rather than one aimed at finished work.
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            _ = await handler.ExecuteAsync($$"""{"operations":[{"op":"complete","taskId":"{{second.Id}}"}]}""").ConfigureAwait(false);
+        }
+
+        AssertEx.Null(await ReadDetailCurrentTaskAsync(factory, sessionId).ConfigureAwait(false));
+    }
+
+    [Test]
     public async Task UpdateWorkPlan_WhenAnOperationIsUnknown_ReturnsAnActionableSentence()
     {
         await using var factory = NewFactory();
@@ -277,6 +315,12 @@ public sealed class WorkSessionToolHandlerTests
     private static IClientLocalToolHandler Handler(TestServerWebAppFactory factory, string toolName) =>
         AssertEx.NotNull(factory.Services.GetServices<IClientLocalToolHandler>().SingleOrDefault(handler => handler.ToolName == toolName),
             $"{toolName} must be registered exactly once.");
+
+    private static async Task<Guid?> ReadDetailCurrentTaskAsync(TestServerWebAppFactory factory, Guid sessionId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        return (await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().GetAsync(sessionId).ConfigureAwait(false)).CurrentTaskId;
+    }
 
     private static async Task<IReadOnlyList<WorkSessionTaskSnapshot>> ReadTasksAsync(TestServerWebAppFactory factory, Guid sessionId)
     {

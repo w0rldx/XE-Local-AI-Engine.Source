@@ -129,7 +129,7 @@ public sealed class WorkSessionStepLoopTests
     }
 
     [Test]
-    public async Task Loop_WhenTheTurnParksOnAnApproval_MovesToWaitingAndBackWhenItResumes()
+    public async Task Loop_WhenAParkOutlivesMaxParkedSeconds_CheckpointsPausesAndRecordsTheOpenQuestion()
     {
         var sessionId = Guid.NewGuid();
         var publisher = new RecordingWorkSessionEventPublisher();
@@ -168,6 +168,47 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.ContainsSingle(findings,
             finding => finding.Kind == AgentWorkSessionFindingKind.OpenQuestion,
             "The unanswered prompt is recorded as an open question so the next step re-asks it; the park itself does not survive.");
+    }
+
+    [Test]
+    public async Task Loop_WhenAParkedTurnIsAnswered_MovesWaitingForApprovalBackToRunning()
+    {
+        // The other half of the park: the prompt is answered, the turn carries on, and the session must leave
+        // WaitingForApproval instead of sitting in it for the rest of the run. The park clock is disarmed on the way
+        // through, so the long MaxParkedSeconds here proves the resume happened rather than the timeout.
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1"), ("WorkSessions:MaxParkedSeconds", "3600")),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantDelta, ChatStreamEventTypes.AssistantCompleted], ParkThenContinue: true));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, settled.StepCount, "An answered park still finishes its step.");
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var waiting = AssertEx.NotNull(
+            events.FirstOrDefault(entry => entry.EventType == "SessionStatusChanged" && entry.Outcome == nameof(AgentWorkSessionStatus.WaitingForApproval)),
+            "The approval request has to show as WaitingForApproval while it is pending.");
+        var running = AssertEx.NotNull(
+            events.FirstOrDefault(entry => entry.EventType == "SessionStatusChanged"
+                                           && entry.Outcome == nameof(AgentWorkSessionStatus.Running)
+                                           && entry.Sequence > waiting.Sequence),
+            "The next delta must move the session back to Running.");
+        AssertEx.True(running.Sequence > waiting.Sequence);
+
+        AssertEx.Empty(await WorkSessionTestSupport.ReadFindingsAsync(factory.Services, sessionId).ConfigureAwait(false),
+            "An answered park records no open question — that finding exists only because a timeout loses the prompt.");
+        AssertEx.False(events.Any(entry => entry.EventType == WorkSessionEventTypes.ParkTimedOut), "The park clock was disarmed, not fired.");
     }
 
     [Test]
