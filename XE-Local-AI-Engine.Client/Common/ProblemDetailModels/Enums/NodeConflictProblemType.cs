@@ -60,5 +60,18 @@ public enum NodeConflictProblemType
     ///     An installed-model deletion lost a race with a concurrent model mutation that moved the provider map past
     ///     the revision it read. Retryable after refreshing the model list.
     /// </summary>
-    InstalledModelProviderMapSuperseded
+    InstalledModelProviderMapSuperseded,
+
+    /// <summary>
+    ///     A work-session lifecycle call the session's current status forbids — starting one that is already running,
+    ///     deleting one mid-step, or repointing the objective of a live run. The operator cancels or pauses first.
+    /// </summary>
+    WorkSessionInvalidTransition,
+
+    /// <summary>
+    ///     A work-session write lost a race with a concurrent one. Two writers touch a running session by design (the
+    ///     supervisor moves the status while the state tools write tasks and findings), so this is ordinary rather than
+    ///     exceptional: refresh and retry.
+    /// </summary>
+    WorkSessionVersionConflict
 }

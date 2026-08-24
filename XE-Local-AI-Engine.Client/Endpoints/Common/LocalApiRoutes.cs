@@ -782,6 +782,41 @@ public static class LocalApiRoutes
         public const string ArtifactQualityDiscard = "training/artifacts/{artifactId}/quality/discard";
     }
 
+    /// <summary>
+    ///     Agent work sessions: the objective-scoped runs an operator starts, their lifecycle verbs, the five
+    ///     sequence-filtered feeds the session view pages through, and the live-notification hub.
+    ///     <para>
+    ///         Approvals and <c>ask_user</c> answers deliberately have no route here — a session view embeds the
+    ///         conversation the session owns and resolves both through the existing chat routes, so there is one
+    ///         approval path on the node rather than two that can drift.
+    ///     </para>
+    /// </summary>
+    public static class WorkSessions
+    {
+        public const string Root = "work-sessions";
+        public const string ById = "work-sessions/{sessionId}";
+        public const string Start = "work-sessions/{sessionId}/start";
+        public const string Pause = "work-sessions/{sessionId}/pause";
+        public const string Resume = "work-sessions/{sessionId}/resume";
+        public const string Cancel = "work-sessions/{sessionId}/cancel";
+
+        // The five feeds. Each takes an exclusive sinceSeq query parameter, so the client re-reads only what the hub
+        // said had changed; only the event feed pages, because it is the only one that grows without bound.
+        public const string Tasks = "work-sessions/{sessionId}/tasks";
+        public const string Findings = "work-sessions/{sessionId}/findings";
+        public const string Artifacts = "work-sessions/{sessionId}/artifacts";
+        public const string Checkpoints = "work-sessions/{sessionId}/checkpoints";
+        public const string Events = "work-sessions/{sessionId}/events";
+        public const string ArtifactContent = "work-sessions/{sessionId}/artifacts/{artifactId}/content";
+
+        // A user follow-up into the session's owned conversation. Not the chat hub's SendMessage: this one persists a
+        // standalone user row and hands the turn to the supervisor rather than streaming an assistant reply.
+        public const string Messages = "work-sessions/{sessionId}/messages";
+
+        // SignalR notification hub. Full path (mapped via MapHub, not the FastEndpoints prefix), mirroring the others.
+        public const string Hub = "/api/local/v1/work-sessions/hub";
+    }
+
     public static class Automation
     {
         public const string Commands = "automation/commands";
