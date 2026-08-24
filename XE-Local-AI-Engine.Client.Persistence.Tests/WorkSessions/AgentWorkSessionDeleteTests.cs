@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.WorkSessions;
 
+using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -30,6 +31,33 @@ public sealed class AgentWorkSessionDeleteTests
         {
             AssertEx.Equal(expected: 0L, await fixture.RawCountAsync(table, column, doomedId).ConfigureAwait(false), $"{table} must be empty for the deleted session.");
             AssertEx.True(await fixture.RawCountAsync(table, column, survivorId).ConfigureAwait(false) > 0, $"{table} must still carry the sibling session's rows.");
+        }
+    }
+
+    [Test]
+    public async Task PurgingTheConversation_TakesTheSessionAndItsWholeSubtree()
+    {
+        using var fixture = new WorkSessionTestFixture();
+        var purgedId = Guid.NewGuid();
+        var survivorId = Guid.NewGuid();
+        Guid purgedConversationId;
+
+        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        {
+            var store = WorkSessionTestFixture.StoreFor(context);
+            await PopulateAsync(store, purgedId).ConfigureAwait(false);
+            await PopulateAsync(store, survivorId).ConfigureAwait(false);
+            purgedConversationId = (await store.GetAsync(purgedId).ConfigureAwait(false)).ConversationId;
+
+            // A session owns its conversation, so a retention purge that left the objective, plan and findings behind
+            // would be exactly the privacy gap ConversationFootprintPurge exists to close.
+            await ConversationFootprintPurge.DeleteAsync(context, purgedConversationId, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        foreach (var (table, column) in Tables)
+        {
+            AssertEx.Equal(expected: 0L, await fixture.RawCountAsync(table, column, purgedId).ConfigureAwait(false), $"{table} must be empty after the conversation purge.");
+            AssertEx.True(await fixture.RawCountAsync(table, column, survivorId).ConfigureAwait(false) > 0, $"{table} must still carry the untouched session's rows.");
         }
     }
 

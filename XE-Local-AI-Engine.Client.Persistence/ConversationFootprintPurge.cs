@@ -29,7 +29,8 @@ public static class ConversationFootprintPurge
         "tool_events",
         "conversation_uploaded_files",
         "agent_execution_logs",
-        "purged_tombstones"
+        "purged_tombstones",
+        "agent_work_sessions"
     ];
 
     /// <summary>
@@ -51,6 +52,42 @@ public static class ConversationFootprintPurge
         // record kinds by deleting on conversation_id.
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_execution_logs WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM purged_tombstones WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
+
+        // A work session owns its conversation, so purging the conversation takes the session and its whole subtree with
+        // it: the objective, the plan, the findings and the checkpoints are all conversation-derived encrypted content,
+        // and leaving them keyed to a purged conversation is the privacy gap this class exists to close. Only
+        // agent_work_sessions carries conversation_id, so the five child tables resolve through a subselect on it and
+        // must go FIRST — once the session row is gone the subselect no longer finds them. They are deliberately absent
+        // from CoveredChildTables, which mirrors what BE-08 discovers: conversation/message-keyed tables only.
+        //
+        // Follow-up (owned by the work-session runtime): a session's artifact BYTES live encrypted on disk under
+        // work-sessions/artifacts/{sessionId:N}/, so this row purge leaves them behind exactly as it leaves upload blobs
+        // behind. The caller owns that teardown, the way DeleteAllForConversationAsync handles uploads.
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_session_events WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
+                [conversationId],
+                cancellationToken)
+            .ConfigureAwait(false);
+        await dbContext.Database
+                       .ExecuteSqlRawAsync("DELETE FROM agent_work_session_checkpoints WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
+                           [conversationId],
+                           cancellationToken)
+                       .ConfigureAwait(false);
+        await dbContext.Database
+                       .ExecuteSqlRawAsync("DELETE FROM agent_work_session_artifacts WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
+                           [conversationId],
+                           cancellationToken)
+                       .ConfigureAwait(false);
+        await dbContext.Database
+                       .ExecuteSqlRawAsync("DELETE FROM agent_work_session_findings WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
+                           [conversationId],
+                           cancellationToken)
+                       .ConfigureAwait(false);
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_session_tasks WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
+                [conversationId],
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_sessions WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversations WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
     }
 }
