@@ -257,6 +257,39 @@ public sealed class ConversationContextBudgeterTests
     }
 
     [Test]
+    public void Budget_WhenApprovalsCarryNoCallId_StillEvictsRequestAndResponseTogether()
+    {
+        // A blank CallId is a supported shape (InvocationRunnerTests exercises the blank-call-id approval path).
+        // Correlating a pair on CallId therefore left the request and its decision in SEPARATE groups, so eviction
+        // could take one and keep the other. RequestId is the link the approval validator itself matches on and is
+        // never blank, so the pair now moves as one in both directions.
+        var (request1, response1) = BlankCallIdApprovalRound("approval-1");
+        var (request2, response2) = BlankCallIdApprovalRound("approval-2");
+        var messages = new List<ChatMessage>
+        {
+            User("run the tools"),
+            request1,
+            response1,
+            request2,
+            response2,
+            User("u2"),
+            User("u3")
+        };
+        var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 2);
+
+        // 70 tokens; a budget of 35 cannot be met without taking an approval group whole.
+        var result = sut.Budget(messages, contextTokenCapacity: 35, reservedOutputTokens: 0);
+
+        AssertNoOrphanedApprovals(result.Messages);
+        var requests = ApprovalRequestIds(result.Messages);
+        var responses = ApprovalResponseIds(result.Messages);
+        AssertEx.Equal(requests.Contains("approval-1"), responses.Contains("approval-1"),
+            "a blank-call-id round must be evicted whole or kept whole, never split");
+        AssertEx.Equal(requests.Contains("approval-2"), responses.Contains("approval-2"));
+        AssertEx.False(requests.Contains("approval-1"), "the oldest complete round is still the one that pays");
+    }
+
+    [Test]
     public void Budget_WhenTheOnlyEvictableApprovalsAreUndecided_KeepsThemAndFlagsOverflow()
     {
         // Eviction is bounded by correlation, not by the budget. These two rounds sit squarely in the droppable region
@@ -507,6 +540,14 @@ public sealed class ConversationContextBudgeterTests
     private static (ChatMessage Request, ChatMessage Response) ApprovalRound(string callId, string toolName)
     {
         var request = new ToolApprovalRequestContent(callId, new FunctionCallContent(callId, toolName));
+        return (new ChatMessage(ChatRole.Assistant, [request]),
+            new ChatMessage(ChatRole.User, [request.CreateResponse(approved: true, "Approved by user.")]));
+    }
+
+    /// <summary>An approval round for a tool call that carries NO call id — only the request id links the pair.</summary>
+    private static (ChatMessage Request, ChatMessage Response) BlankCallIdApprovalRound(string requestId)
+    {
+        var request = new ToolApprovalRequestContent(requestId, new FunctionCallContent(string.Empty, "run_in_agent_home"));
         return (new ChatMessage(ChatRole.Assistant, [request]),
             new ChatMessage(ChatRole.User, [request.CreateResponse(approved: true, "Approved by user.")]));
     }

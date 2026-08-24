@@ -205,9 +205,11 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     ///     messages into the correlated GROUPS Pass 3 may then evict whole. Both come from one scan; the pin array is
     ///     null when the history holds no approval content at all, which is the common case.
     ///     <para>
-    ///         A group is a connected component over "shares a call id", so a message carrying several rounds' content
-    ///         merges them rather than splitting a correlation across two evictions. Groups are ordered by their oldest
-    ///         message, which is the order Pass 3 evicts in.
+    ///         A group is a connected component over "shares a request id or a call id" — request id links a request to
+    ///         its replayed decision (a call id can be blank, a request id never is), call id attaches the results that
+    ///         decision produced. A message carrying several rounds' content merges them rather than splitting a
+    ///         correlation across two evictions. Groups are ordered by their oldest message, which is the order Pass 3
+    ///         evicts in.
     ///     </para>
     ///     <para>
     ///         Deliberately NOT applied to Pass 1: the approval records themselves hold neither a tool result nor
@@ -222,6 +224,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         // still costs exactly one scan and no allocation.
         bool[]? pinned = null;
         MessageUnion? union = null;
+        Dictionary<string, int>? messageOfRequestId = null;
         Dictionary<string, int>? messageOfCallId = null;
         HashSet<int>? decided = null;
 
@@ -229,14 +232,19 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         {
             foreach (var content in messages[i].Contents)
             {
-                var toolCall = content switch
+                // A request and the decision replayed for it correlate on REQUEST id — the id the approval validator
+                // matches them on, and the only one always present. A blank CallId is a supported shape (an approval
+                // surfaced for a call that has none); correlating on CallId left such a request and its response in
+                // separate groups, so Pass 3 could take the decision and keep the request — the orphan this whole
+                // mechanism exists to prevent.
+                var (requestId, toolCall) = content switch
                 {
-                    ToolApprovalRequestContent request => request.ToolCall,
-                    ToolApprovalResponseContent response => response.ToolCall,
-                    _ => null
+                    ToolApprovalRequestContent request => (request.RequestId, request.ToolCall),
+                    ToolApprovalResponseContent response => (response.RequestId, response.ToolCall),
+                    _ => ((string?)null, (ToolCallContent?)null)
                 };
 
-                if (toolCall is null)
+                if (string.IsNullOrEmpty(requestId))
                 {
                     continue;
                 }
@@ -245,17 +253,13 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
                 union ??= new MessageUnion(messages.Count);
                 pinned[i] = true;
 
-                if (!string.IsNullOrEmpty(toolCall.CallId))
+                Correlate(ref messageOfRequestId, union, requestId, i);
+
+                // CallId is recorded ONLY so the FunctionResultContent sweep below can find its round. It is not the
+                // request/response link, and it is legitimately empty.
+                if (toolCall is not null && !string.IsNullOrEmpty(toolCall.CallId))
                 {
-                    messageOfCallId ??= new Dictionary<string, int>(StringComparer.Ordinal);
-                    if (messageOfCallId.TryGetValue(toolCall.CallId, out var earlier))
-                    {
-                        union.Merge(i, earlier);
-                    }
-                    else
-                    {
-                        messageOfCallId[toolCall.CallId] = i;
-                    }
+                    Correlate(ref messageOfCallId, union, toolCall.CallId, i);
                 }
 
                 // Only a replayed decision makes a round historical. A request still awaiting one is the in-flight
@@ -289,6 +293,23 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         }
 
         return new ApprovalCorrelation(pinned, union.CollectGroups(pinned, decided));
+    }
+
+    /// <summary>
+    ///     Records the first message an id was seen on, or joins this message to the one that already owns it. The
+    ///     dictionary is created on first use so an approval-free history allocates nothing.
+    /// </summary>
+    private static void Correlate(ref Dictionary<string, int>? messageOfId, MessageUnion union, string id, int messageIndex)
+    {
+        messageOfId ??= new Dictionary<string, int>(StringComparer.Ordinal);
+        if (messageOfId.TryGetValue(id, out var owner))
+        {
+            union.Merge(messageIndex, owner);
+        }
+        else
+        {
+            messageOfId[id] = messageIndex;
+        }
     }
 
     /// <summary>
