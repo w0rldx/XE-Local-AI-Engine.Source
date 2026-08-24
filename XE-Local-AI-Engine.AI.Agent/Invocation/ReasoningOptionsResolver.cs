@@ -93,7 +93,10 @@ internal static class ReasoningOptionsResolver
     ///         windows local runtimes are launched with: low is a short scratchpad, medium the everyday cap, and high
     ///         (24576) still leaves well over half the window for the answer plus the prompt. Without a cap a
     ///         Qwen3-class model can spend the whole window thinking and return no answer at all — the failure this
-    ///         mapping exists to prevent. <c>minimal</c>/<c>xhigh</c> are the Codex-only levels
+    ///         mapping exists to prevent. Because these are FIXED counts and neither caller knows the window here, the
+    ///         value is a ceiling rather than a promise: <c>DeferredLlamaServerChatClient.ClampToGenerationRoom</c>
+    ///         narrows it to half the room a SMALLER launched window (or an explicit max-output cap) actually leaves,
+    ///         which is the seam that has those numbers. <c>minimal</c>/<c>xhigh</c> are the Codex-only levels
     ///         (see <see cref="ResolveCodexReasoningEffort" />); they are mapped rather than left null so a definition
     ///         that pins one onto a local model does not silently get MORE thinking than <c>high</c>.
     ///     </para>

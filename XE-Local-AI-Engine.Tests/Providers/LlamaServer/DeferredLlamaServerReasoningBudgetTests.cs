@@ -95,6 +95,46 @@ public sealed class DeferredLlamaServerReasoningBudgetTests
             "the in-process marker itself must never be serialized.");
     }
 
+    [Test]
+    [Arguments(16384, null, 8192)]
+    [Arguments(8192, null, 4096)]
+    [Arguments(65536, null, 24576)]
+    [Arguments(null, 4096, 2048)]
+    [Arguments(65536, 2048, 1024)]
+    [Arguments(null, null, 24576)]
+    public async Task ApplyReasoningBudget_ClampsTheBudgetToHalfTheGenerationRoom(int? numCtx, int? maxOutputTokens, int expected)
+    {
+        // The graded budgets are fixed counts sized for a 64k window; on a smaller launched window (or under an
+        // explicit max-output cap) an unclamped 24576 is a budget the model can never spend and still answer — the
+        // very "thought until the window ran out, returned nothing" failure the budget exists to prevent. Neither
+        // marker call site knows the window, so the clamp lives here, where num_ctx and MaxOutputTokens both exist.
+        using var handler = new CapturingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var chat = BuildOpenAiChatClient(http);
+
+        var properties = new AdditionalPropertiesDictionary
+        {
+            [DeferredLlamaServerChatClient.ReasoningBudgetMarkerKey] = 24576
+        };
+        if (numCtx is { } window)
+        {
+            properties["num_ctx"] = window;
+        }
+
+        var options = new ChatOptions
+        {
+            AdditionalProperties = properties,
+            MaxOutputTokens = maxOutputTokens
+        };
+        var patched = DeferredLlamaServerChatClient.ApplyReasoningBudget(options);
+
+        await chat.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], patched, CancellationToken.None);
+
+        var body = AssertEx.NotNull(handler.CapturedBody);
+        using var doc = JsonDocument.Parse(body);
+        AssertEx.Equal(expected, doc.RootElement.GetProperty("reasoning_budget_tokens").GetInt32());
+    }
+
     private static IChatClient BuildOpenAiChatClient(HttpClient http)
     {
         var options = new OpenAIClientOptions

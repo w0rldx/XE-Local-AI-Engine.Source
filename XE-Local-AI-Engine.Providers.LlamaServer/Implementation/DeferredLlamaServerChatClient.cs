@@ -300,11 +300,12 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     /// </summary>
     internal static ChatOptions? ApplyReasoningBudget(ChatOptions? options)
     {
-        if (TryReadInt32(options?.AdditionalProperties, ReasoningBudgetMarkerKey) is not { } budgetTokens || budgetTokens <= 0)
+        if (TryReadInt32(options?.AdditionalProperties, ReasoningBudgetMarkerKey) is not { } markerTokens || markerTokens <= 0)
         {
             return options;
         }
 
+        var budgetTokens = ClampToGenerationRoom(markerTokens, options!);
         var priorFactory = options!.RawRepresentationFactory;
         var patched = options.Clone();
         patched.RawRepresentationFactory = client =>
@@ -318,6 +319,43 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             return baseOptions;
         };
         return patched;
+    }
+
+    /// <summary>
+    ///     Caps the marker's budget at HALF the room this turn can actually generate into, so the reasoning phase can
+    ///     never consume everything the model had to answer with.
+    ///     <para>
+    ///         The graded budgets are fixed token counts (<c>ReasoningOptionsResolver.ResolveReasoningBudgetTokens</c>)
+    ///         sized for the 64k windows local runtimes are usually launched with, and neither call site that sets the
+    ///         marker knows the window: the orchestration participant path has no context figure at all, and the
+    ///         single-agent factory resolves its <c>num_ctx</c> after the marker is written. A model launched with a
+    ///         16k window — or a turn carrying an explicit max-output cap — would otherwise be handed a 24576-token
+    ///         budget it can never spend and still answer, reproducing the exact "thought until the window ran out,
+    ///         returned nothing" failure the budget exists to prevent.
+    ///     </para>
+    ///     <para>
+    ///         Room is the launched window the invocation factory carried onto <c>num_ctx</c> (llama-server's own
+    ///         <c>-c</c>, never sent on the wire — see <see cref="ApplySamplingPassthrough" />), narrowed by
+    ///         <see cref="ChatOptions.MaxOutputTokens" /> when the turn sets one, since llama-server counts reasoning
+    ///         tokens against that cap too. Half leaves at least as many tokens for the final answer as the model may
+    ///         spend thinking, and it leaves the common 64k case unchanged (32768 > every graded budget). When neither
+    ///         figure is known the budget is left exactly as the marker carried it.
+    ///     </para>
+    /// </summary>
+    private static int ClampToGenerationRoom(int budgetTokens, ChatOptions options)
+    {
+        int? room = null;
+        if (TryReadInt32(options.AdditionalProperties, SamplingOptionKeys.NumCtx) is { } window && window > 0)
+        {
+            room = window;
+        }
+
+        if (options.MaxOutputTokens is { } maxOutput && maxOutput > 0)
+        {
+            room = room is { } known ? Math.Min(known, maxOutput) : maxOutput;
+        }
+
+        return room is { } resolved ? Math.Min(budgetTokens, Math.Max(resolved / 2, 1)) : budgetTokens;
     }
 
     /// <summary>
