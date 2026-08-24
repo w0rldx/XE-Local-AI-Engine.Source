@@ -131,7 +131,8 @@
 		"trainingGroup": "Training",
 		"training": "Training",
 		"trainingDatasets": "Datensätze",
-		"trainingComparisons": "Vergleiche"
+		"trainingComparisons": "Vergleiche",
+		"workSessions": "Arbeitssitzungen"
 	},
 	"chat": {
 		"thoughts": "Gedanken",
@@ -4291,6 +4292,144 @@
 			"comparisons": {
 				"title": "Vergleiche",
 				"subtitle": "Bewerte ein Basismodell und sein feinabgestimmtes Gegenstück anhand derselben eingefrorenen Hold-out-Beispiele und lies die Differenz ab."
+			}
+		},
+		"workSessions": {
+			"title": "Arbeitssitzungen",
+			"subtitle": "Langlaufende Agentenarbeit mit eigenem Plan, eigenen Erkenntnissen und Artefakten.",
+			"empty": "Noch keine Arbeitssitzungen. Gib einem Agenten ein Ziel — er plant und erledigt die Arbeit.",
+			"loadFailed": "Arbeitssitzungen konnten nicht geladen werden.",
+			"retry": "Erneut versuchen",
+			"kind": {
+				"General": "Allgemein",
+				"Research": "Recherche"
+			},
+			"status": {
+				"Draft": "Entwurf",
+				"Running": "Läuft",
+				"Paused": "Pausiert",
+				"WaitingForInput": "Wartet auf dich",
+				"WaitingForApproval": "Wartet auf Freigabe",
+				"Completed": "Abgeschlossen",
+				"Failed": "Fehlgeschlagen",
+				"Cancelled": "Abgebrochen",
+				"Interrupted": "Unterbrochen"
+			},
+			"taskStatus": {
+				"Planned": "Geplant",
+				"Active": "Aktiv",
+				"Blocked": "Blockiert",
+				"Done": "Erledigt",
+				"Dropped": "Verworfen"
+			},
+			"findingKind": {
+				"Finding": "Erkenntnisse",
+				"Evidence": "Belege",
+				"Decision": "Entscheidungen",
+				"OpenQuestion": "Offene Fragen"
+			},
+			"artifactKind": {
+				"Report": "Bericht",
+				"Note": "Notiz",
+				"File": "Datei",
+				"Patch": "Patch"
+			},
+			"card": {
+				"meta": "{{steps}} Schritte · aktualisiert {{updated}}"
+			},
+			"create": {
+				"open": "Neue Arbeitssitzung",
+				"first": "Erste Arbeitssitzung anlegen",
+				"title": "Neue Arbeitssitzung",
+				"submit": "Anlegen",
+				"titleLabel": "Titel",
+				"objectiveLabel": "Ziel",
+				"objectiveHint": "Was soll der Agent erreichen? Daraus plant er seine eigenen Aufgaben.",
+				"kindLabel": "Art",
+				"agentLabel": "Agent",
+				"failed": "Die Arbeitssitzung konnte nicht angelegt werden."
+			},
+			"detail": {
+				"notFound": "Diese Arbeitssitzung konnte nicht geladen werden.",
+				"back": "Zurück zu den Arbeitssitzungen",
+				"showPlan": "Plan anzeigen",
+				"showDetails": "Erkenntnisse und Artefakte anzeigen",
+				"details": "Details",
+				"actions": "Sitzungsaktionen"
+			},
+			"plan": {
+				"title": "Plan",
+				"start": "Starten",
+				"pause": "Pausieren",
+				"resume": "Fortsetzen",
+				"cancel": "Abbrechen",
+				"stepOf": "Schritt {{step}} von {{max}}",
+				"blocked": "Blockiert: {{reason}}",
+				"empty": "Noch keine Aufgaben.",
+				"emptyDraft": "Der Agent entwirft den Plan in seinem ersten Schritt.",
+				"interrupted": "Die Engine wurde mitten im Lauf neu gestartet. Setze fort, um beim letzten Checkpoint weiterzumachen.",
+				"waitingForApproval": "Wartet auf deine Freigabe in der Unterhaltung — die Sitzung belegt so lange das Modell dieses Knotens.",
+				"waitingForInput": "Der Agent hat dir eine Frage in der Unterhaltung gestellt — die Sitzung belegt so lange das Modell dieses Knotens.",
+				"pausedAtCheckpoint": "Pausiert bei Checkpoint {{step}}",
+				"liveUnavailable": "Abfrage",
+				"liveUnavailableHint": "Live-Aktualisierungen sind nicht verfügbar; diese Seite fragt stattdessen regelmäßig ab."
+			},
+			"tabs": {
+				"findings": "Erkenntnisse",
+				"artifacts": "Artefakte",
+				"checkpoints": "Checkpoints",
+				"events": "Ereignisse"
+			},
+			"findings": {
+				"count": "{{count}} Erkenntnisse",
+				"showSuperseded": "Überholte anzeigen",
+				"empty": "Der Agent hat noch nichts festgehalten.",
+				"step": "Schritt {{step}}"
+			},
+			"artifacts": {
+				"empty": "Der Agent hat noch keine Artefakte gespeichert.",
+				"invalid": "Nicht lesbar",
+				"invalidBody": "Der gespeicherte Inhalt dieses Artefakts konnte nicht gelesen werden und kann nicht angezeigt werden.",
+				"meta": "{{mediaType}} · {{bytes}} Bytes · Schritt {{step}}",
+				"binary": "Dieses Artefakt ist binär und hat keine Textvorschau.",
+				"loadFailed": "Dieses Artefakt konnte nicht geladen werden."
+			},
+			"checkpoints": {
+				"empty": "Es wurde noch kein Checkpoint geschrieben.",
+				"step": "Checkpoint bei Schritt {{step}}",
+				"noSummary": "Es wurde keine Textzusammenfassung erzeugt.",
+				"showState": "Zustand anzeigen",
+				"hideState": "Zustand ausblenden",
+				"stateLabel": "Checkpoint-Zustand"
+			},
+			"events": {
+				"empty": "In dieser Sitzung ist noch nichts passiert.",
+				"meta": "Schritt {{step}} · #{{sequence}}",
+				"showDetail": "Details anzeigen",
+				"hideDetail": "Details ausblenden",
+				"loadMore": "Mehr laden",
+				"truncated": "Es werden nur die ersten Ereignisse angezeigt."
+			},
+			"followUp": {
+				"draft": "Gespeichert — wird verwendet, sobald du die Sitzung startest.",
+				"resuming": "Gesendet — wird fortgesetzt.",
+				"queued": "Für den nächsten Schritt eingereiht.",
+				"closed": "Diese Sitzung ist abgeschlossen und nimmt keine weiteren Nachrichten an.",
+				"failed": "Diese Nachricht konnte nicht gesendet werden."
+			},
+			"edit": {
+				"open": "Bearbeiten",
+				"title": "Arbeitssitzung bearbeiten",
+				"submit": "Speichern",
+				"failed": "Die Änderungen konnten nicht gespeichert werden.",
+				"objectiveLocked": "Das Ziel lässt sich nur ändern, solange die Sitzung pausiert oder noch nicht gestartet ist."
+			},
+			"delete": {
+				"open": "Löschen",
+				"title": "Diese Arbeitssitzung löschen?",
+				"description": "Ihr Plan, ihre Erkenntnisse, Artefakte, Checkpoints und die gesamte Unterhaltung werden entfernt. Das lässt sich nicht rückgängig machen.",
+				"confirm": "Löschen",
+				"failed": "Diese Arbeitssitzung konnte nicht gelöscht werden."
 			}
 		}
 	},

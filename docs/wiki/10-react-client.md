@@ -97,12 +97,13 @@ Source: the first-level directories under `XE-Local-AI-Engine.Client.React/src/f
 | `training` | QLoRA fine-tuning at `/training`, `/training/datasets` and `/training/comparisons` (three **sibling** file routes, each with its own `beforeLoad` capability gate): the runtime install card, dataset definition editor and sample review, the run wizard and run list, the artifact panel, comparison creation, and three hubs (`useDatasetGenerationHub`, `useTrainingRunHub`, `useTrainingRuntimeHub`) | [Training](18-training.md) |
 | `usage-dashboard` | Agent token-usage dashboard at `/usage`, backed by the single `agents/usage-summary` endpoint. `models/UsageDashboardModel.ts` does all the aggregation **client-side** — `aggregateByDay` / `aggregateByModel`, `clampDateRange` against the server-reported retention floor (30-day fallback) — feeding `UsageTotalsCards`, `UsageDailyChart`, `UsageProviderBreakdown` and `UsageModelTable`. Like `/invocations` it carries no extra route guard: the authenticated `_layout` *is* the operator gate and the endpoint 401s otherwise | [Agent Mode](04-agent-mode.md) |
 | `voice` | Web Speech text-to-speech: node-settings feature gate, platform-voice catalog, preferences store, composer controls, per-message play button, and voice preview. Browser/OS voice behavior is outside repository control. | [Chat](05-chat.md) |
+| `workSessions` | Long-running agent work sessions at `/work-sessions` and `/work-sessions/{id}`: the list + create dialog, and a 3-pane detail page whose centre pane **is** `features/chat`'s `Chat` component. Owns `useWorkSessionHub` and the query hooks over the 16 generated work-session operations. The one feature that deliberately composes another feature's page — see [Work Sessions: the chat-embed seam](#work-sessions-the-chat-embed-seam) | [Agent Mode](04-agent-mode.md) |
 
 Each feature follows the same shape, e.g. `features/agents/` has `pages/AgentsPage.tsx`, `components/*` (forms, panels, gallery), `queries/use*.ts` (TanStack Query hooks), `models/*Models.ts` + `*Mappers.ts` (Zod + DTO mapping), and `stores/AgentManagementStore.ts`. Two features deviate deliberately: `diagnostics` is flat (no `pages/`, no `queries/` — it has no backend to query), and `about` renders as a dialog rather than a route.
 
 ### Feature ↔ route ↔ capability
 
-Route paths and their capability flags are declared centrally in `src/capabilities/NodeCapabilities.ts` (`nodeRoutePaths`, `nodeCapabilities`), not scattered across route files. Capability-flagged pages (`agents`, `skills`, `mcp`, `scheduler`, `modelFit`, `loadedModels`, `preview`, `knowledgeBase`, `images`, `development`, `benchmarks`, `training`) are all **on** by default; Custom Tools shares the `agentManagement` capability, while `commands`, `usage`, and `diagnostics` are authenticated but otherwise ungated. `development` additionally re-checks the *server* capability at runtime — a frontend flag alone is not treated as authoritative.
+Route paths and their capability flags are declared centrally in `src/capabilities/NodeCapabilities.ts` (`nodeRoutePaths`, `nodeCapabilities`), not scattered across route files. Capability-flagged pages (`agents`, `skills`, `mcp`, `scheduler`, `modelFit`, `loadedModels`, `preview`, `knowledgeBase`, `images`, `development`, `benchmarks`, `training`, `workSessions`) are all **on** by default; Custom Tools shares the `agentManagement` capability, while `commands`, `usage`, and `diagnostics` are authenticated but otherwise ungated. `development` additionally re-checks the *server* capability at runtime — a frontend flag alone is not treated as authoritative.
 
 ---
 
@@ -185,6 +186,99 @@ second browser-side secret store.
 | `addApiProblemDetailsInterceptor` | Maps non-2xx/401/429 responses to a typed `ApiError(status, ProblemDetails)`; turns `ERR_NETWORK` into a `"Network error"`. |
 
 The 401 refresh/redirect path is deliberately isolated: it calls a dedicated `refreshNodeAuthToken()` (not a generic SDK call) and guards redirects with `isRedirectingToLogin` plus a `/login`/`/setup` short-circuit, so it cannot recurse through the same interceptor. Response boundary parsing uses Zod (`core/api/ResponseValidation.ts`) — never trust raw server JSON shape.
+
+---
+
+## Work Sessions: the chat-embed seam
+
+`features/workSessions/` owns two file routes — `routes/_layout/work-sessions.index.tsx` (`/work-sessions`, list +
+create dialog) and `routes/_layout/work-sessions.$sessionId.tsx` (`/work-sessions/{id}`, the 3-pane detail page).
+Both are thin adapters with a `beforeLoad` gate on `nodeCapabilities.workSessions`; the page components stay
+router-free. Note that the node *also* has its own `WorkSessions:Enabled` switch which 404s the API — the frontend
+flag only decides whether the surface is offered.
+
+The detail page is `FullHeightPage` → a fixed grid `320px | 1fr | minmax(380px, 420px)`: the plan/task tree with the
+Start/Pause/Resume/Cancel controls, the session's own conversation, and a Findings | Artifacts | Checkpoints | Events
+panel. Below **1024px** it collapses to the conversation with the two side panes in `Drawer`s — the same breakpoint,
+for the same reason, that `ChatDisplayShell.tsx` records.
+
+### The centre pane IS `Chat`, via one optional `scope` prop
+
+A work session owns a conversation, and its **supervisor is the single writer of invocations on it**. Everything that
+makes a conversation work — the `LocalChatHub` readiness gate, the rAF-batched stream commit, the tool timeline, and
+decisively the cold-load `resumeActiveTurn` re-attach — lives in `Chat.tsx`. A wrapper would have to re-implement all
+of it or ship a session view that cannot stream, so `Chat` instead takes one optional `ChatScope`
+(`features/chat/models/ChatModels.ts`). `/chat` passes nothing and behaves exactly as before; `Chat.scope.test.tsx` is
+the regression guard for that.
+
+Under a scope, `Chat`:
+
+- pins `selectedConversationId` to `scope.conversationId` and makes **every** write to the global chat preference
+  store a no-op — otherwise opening a session would rewrite the operator's remembered `/chat` thread;
+- hides the conversation column outright (`ChatDisplayShellProps.hideConversationList`; `conversationListCollapsed`
+  only shrinks it to an icon rail, which is wrong when there is no list to pick from);
+- forces agent mode on with `scope.pinnedAgentId` and renders the agent **and** model selectors read-only (the
+  session pins the agent, the agent pins the model);
+- routes the composer through `scope.onSendOverride` → `POST work-sessions/{id}/messages`, never
+  `nodeChatAdapter.sendMessage`, and maps the Stop button to Pause via `scope.onStopOverride`;
+- drops regenerate / branch / feedback / rename / delete, and disables the composer once the session is terminal;
+- renders bare under `scope.embedded` (the parent owns the `FullHeightPage` frame).
+
+One related change reaches `ChatInputArea`: `onSend` may now return a promise, and the draft is cleared only when it
+**resolves**. The scoped composer posts over REST, so a rejected follow-up (an over-cap 400) must stay on screen to
+retry. `/chat` returns void and clears synchronously, unchanged.
+
+Approvals and `ask_user` need nothing: `ToolCallCard` and `AskUserQuestionCard` own their own mutations and read the
+capability gate from a module constant, so rendering `MessageParts` renders working controls wherever it is mounted.
+
+### `useWorkSessionHub` contract
+
+`hooks/useWorkSessionHub.ts` acquires `work-sessions/hub` through `SharedHubConnection` and borrows the *shape* of
+`useDevelopmentAttemptHub` (connection-state machine, pre-snapshot buffering, `seq` dedupe, re-subscribe on
+reconnect). Four things differ and must not be copied from that hook:
+
+1. **`SubscribeSession(sessionId, afterSeq)` takes two arguments.** The hook keeps its highest seen `seq` in a ref and
+   passes it on the first connect **and on every reconnect**. The hub is store-backed, not ring-buffered, so a client
+   absent for days is served correctly and there is no `replayReset`.
+2. **`kind` is lowercase on the wire** — `status | step | task | finding | artifact | checkpoint`. The lookup table
+   uses those literals and `useWorkSessionHub.test.tsx` asserts them literally, because a casing slip is a **silent
+   no-op**, not an error: every invalidation would simply stop firing. An unrecognised kind falls back to refreshing
+   every feed rather than being dropped.
+3. **The snapshot's replay is a watermark plus a "something changed", not cache seed data.** A replayed
+   `WorkSessionEventResponse` carries an `eventType` (`StepStarted`, …), *not* a change kind, so the missed feeds
+   cannot be derived from it — and P3's design makes the store, not the client, the replay authority. A non-empty
+   replay or `replayTruncated: true` therefore triggers one full-feed refetch; pushed events, which do carry a kind,
+   drive the fine-grained per-feed invalidation.
+4. **`step` also invalidates the conversation query and bumps a `resumeNonce`** that feeds `scope.resumeNonce`, which
+   re-arms `Chat`'s re-attach so each supervisor step streams live instead of back-filling from the query a beat
+   later. This depends on the backend publishing `step` at step *start*, while the invocation is still resumable.
+
+`UnsubscribeSession(sessionId)` runs before `hub.release()` on unmount. When the subscribe fails the hook reports
+`connectionState: "unavailable"` and a 3 s `pollIntervalMs` that every query on the page picks up — a dimmed
+"Polling" chip in the plan header, never a blocking error.
+
+### Two gate baselines this feature moved
+
+- **`config/dependency-baseline.json` gained seven `no-cross-feature` fingerprints.** The "keep cross-feature reuse in
+  `core/`" rule below is real, and this feature is the recorded exception: the centre pane *is* the chat page, so
+  `workSessions/*` importing `chat/pages/Chat.tsx`, `chat/models/ChatModels.ts`, `chat/components/AgentSelectorCard.tsx`,
+  `chat/queries/NodeChatQueryKeys.ts` and `agents/queries/useAgentDefinitions.ts` is the design, not drift. Hoisting
+  `Chat` into `core/` to satisfy the rule would be a far worse trade.
+- **`config/bundle-budget.json` `applicationJavaScriptBytes` rose 4 192 000 → 4 252 000.** Measured: 4 145 967 bytes
+  without the feature, 4 204 890 with it. The old budget had ~46 kB of headroom and this feature consumed all of it.
+  The two routes are separately code-split (6.2 kB list, 25.0 kB detail) and Monaco stays in its own lazy chunk, so
+  `lazyEditorJavaScriptBytes` is untouched.
+
+### E2E: the seeder has to be put back
+
+`XE-Local-AI-Engine.Tests.E2ETests/Tests/WorkSessionsPageE2ETests.cs` drives create → Start → `update_work_plan` →
+`complete_work_session` against `FakeOllamaState.ToolCallScript`. The E2E host does a blanket
+`services.RemoveAll<IHostedService>()`, which strips `WorkSessionAgentSeeder` — and the two seeded personas are the
+**only** agents that can run a session, because the four state tools are held out of the general chat offer and the
+agent-send intersection (offered ∩ allowed) drops them for any agent built through the UI. The factory therefore
+re-adds that one hosted service, beside the existing `KnowledgeIngestionWorker` exception. The execution supervisor
+itself survives the blanket removal (it is also registered as a plain singleton and its `StartAsync` is a no-op), so
+a session started from the browser still runs.
 
 ---
 
@@ -272,7 +366,7 @@ Notes for maintainers:
 - **One axios instance, one baseURL.** Do not create ad-hoc axios instances or change `baseURL` away from `""`; both break the same-origin invariant. There is exactly **one** sanctioned exception — `authClient` in `core/auth/api/NodeAuthApi.ts` — and it exists so the shared instance's 401-refresh interceptor cannot recurse through the refresh call itself. Anything else belongs on the shared instance via `buildLocalApiUrl()`.
 - **Hub connections are shared, not per-component.** Acquire through `SharedHubConnection`; never `new HubConnectionBuilder()` inside a feature hook.
 - **Secrets never reach the store.** Auth/cloud/HMAC credentials stay node-local; the browser only ever holds a short-lived node access token in `NodeAuthStore`. See [Security & Privacy](12-security-and-privacy.md).
-- **Feature isolation.** New UI goes in a `features/<name>/` folder mirroring the existing shape (`pages` / `components` / `queries` / `models` / optional `stores`); keep cross-feature reuse in `core/`.
+- **Feature isolation.** New UI goes in a `features/<name>/` folder mirroring the existing shape (`pages` / `components` / `queries` / `models` / optional `stores`); keep cross-feature reuse in `core/`. The one recorded exception is `workSessions`, whose centre pane is `features/chat`'s `Chat` component — see [Work Sessions](#work-sessions-the-chat-embed-seam) for why, and for the seven baselined `no-cross-feature` fingerprints that go with it.
 
 ---
 

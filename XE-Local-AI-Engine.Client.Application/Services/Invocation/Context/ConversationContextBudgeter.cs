@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
 ///     Deterministic, LLM-free implementation of <see cref="IConversationContextBudgeter" />. Groups the history into
@@ -52,7 +53,10 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         // outer estimate over-counts slightly by framing each tool as its own System message — the safe direction).
         var divisor = _estimator.ResolveDivisor(modelName);
         var fixedOverhead = EstimateFixedOverhead(systemPrompt, toolDefinitions, divisor);
-        var effectiveBudget = Math.Max(contextTokenCapacity - reservedOutputTokens - fixedOverhead, 0);
+        // Same safety margin the inner provider-round budgeter applies, for the same reason and from the same constant:
+        // the shared char heuristic under-counts on markdown and JSON, and an under-count at the window edge is a
+        // provider rejection rather than a trim. Comparison only.
+        var effectiveBudget = Math.Max(TokenEstimatorCalibrationStore.ApplySafetyMargin(contextTokenCapacity) - reservedOutputTokens - fixedOverhead, 0);
         var estimatedBefore = _estimator.EstimateTokensWithDivisor(messages, divisor);
 
         if (messages.Count == 0 || estimatedBefore <= effectiveBudget)

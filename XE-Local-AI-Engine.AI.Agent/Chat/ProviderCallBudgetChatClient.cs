@@ -116,7 +116,11 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
 
         var window = ResolveContextWindow(options, budgetOptions);
         var reserved = ResolveReservedOutputTokens(options, budgetOptions);
-        var effectiveWindow = Math.Max(window - reserved, 0);
+
+        // Measure against TokenEstimatorCalibrationStore.EstimateSafetyFactor of the window, not the whole of it: the
+        // char heuristic under-counts by roughly a tenth on markdown and JSON, and an under-count at the window edge is
+        // a provider rejection rather than a trim. Comparison only — nothing else here knows about the margin.
+        var effectiveWindow = Math.Max(TokenEstimatorCalibrationStore.ApplySafetyMargin(window) - reserved, 0);
         var charsPerToken = _calibrationStore.ResolveDivisor(options?.ModelId);
         // Instructions AND the tool definitions (name + description + JSON schema) are fixed per-round input the model
         // never sees as a droppable message but which still counts against the window — folding both into the overhead

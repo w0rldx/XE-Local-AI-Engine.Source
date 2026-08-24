@@ -22,6 +22,7 @@ using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
@@ -412,6 +413,14 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             // endpoint -> bounded dispatcher -> scoped ingestion pipeline as production instead of calling ingestion
             // directly from test code. The scheduled corpus reindex worker remains disabled.
             services.AddHostedService<KnowledgeIngestionWorker>();
+
+            // The two work-session personas are seeded by an IHostedService, and they are the only agents that carry
+            // the four state tool names in AllowedToolNames — the agent-send intersection (offered n allowed) drops
+            // those tools for any agent created through the UI, because they are held out of the general chat offer.
+            // So a work-session E2E cannot build its own agent the way the chat suites do; the seeder has to run.
+            // The execution supervisor itself survives RemoveAll<IHostedService> (it is also registered as a plain
+            // singleton and its StartAsync is a no-op), so a session started from the UI still runs here.
+            services.AddHostedService<WorkSessionAgentSeeder>();
 
             services.Configure<CentralPlatformOptions>(options =>
             {

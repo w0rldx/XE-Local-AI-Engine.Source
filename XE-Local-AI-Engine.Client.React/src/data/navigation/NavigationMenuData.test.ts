@@ -123,6 +123,7 @@ describe("navigationLinks", () => {
 		expect(automation?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.commands,
 			nodeRoutePaths.agents,
+			nodeRoutePaths.workSessions,
 			nodeRoutePaths.skills,
 			nodeRoutePaths.customTools,
 			nodeRoutePaths.mcp,
@@ -154,6 +155,8 @@ describe("navigationLinks", () => {
 
 		expect(automation?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.commands,
+			// Work sessions carry their OWN capability, so turning agentManagement off does not drop them.
+			nodeRoutePaths.workSessions,
 			nodeRoutePaths.mcp,
 			nodeRoutePaths.scheduler,
 			nodeRoutePaths.tools,

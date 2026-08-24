@@ -31,4 +31,19 @@ public static class AgentDefaults
 
     /// <summary>The data-row display name of the seeded "Mathematician" definition (not localized).</summary>
     public const string MathematicianAgentName = "Mathematician";
+
+    /// <summary>
+    ///     The forge-proof seed slug of the general work-session persona: the four state tools plus <c>ask_user</c> and
+    ///     the clock.
+    /// </summary>
+    public const string WorkSessionGeneralAgentSeedSlug = "work-session-general";
+
+    /// <summary>The data-row display name of the seeded general work-session definition (not localized).</summary>
+    public const string WorkSessionGeneralAgentName = "Work Session — General";
+
+    /// <summary>The forge-proof seed slug of the research work-session persona: the general set plus the knowledge-base reads.</summary>
+    public const string WorkSessionResearchAgentSeedSlug = "work-session-research";
+
+    /// <summary>The data-row display name of the seeded research work-session definition (not localized).</summary>
+    public const string WorkSessionResearchAgentName = "Work Session — Research";
 }

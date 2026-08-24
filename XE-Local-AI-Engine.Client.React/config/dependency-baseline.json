@@ -96,5 +96,12 @@
   "[\"no-cross-feature\",\"src/features/training/models/TrainingModels.ts\",\"src/features/chat/models/ChatModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/voice/components/VoiceMessagePlayButton.tsx\",\"src/features/chat/models/ChatModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/voice/useVoicePlayback.ts\",\"src/features/chat/models/ChatModels.ts\"]",
+  "[\"no-cross-feature\",\"src/features/workSessions/components/CreateWorkSessionDialog.tsx\",\"src/features/chat/components/AgentSelectorCard.tsx\"]",
+  "[\"no-cross-feature\",\"src/features/workSessions/components/CreateWorkSessionDialog.tsx\",\"src/features/chat/models/ChatModels.ts\"]",
+  "[\"no-cross-feature\",\"src/features/workSessions/hooks/useWorkSessionAgentOptions.ts\",\"src/features/agents/queries/useAgentDefinitions.ts\"]",
+  "[\"no-cross-feature\",\"src/features/workSessions/hooks/useWorkSessionAgentOptions.ts\",\"src/features/chat/models/ChatModels.ts\"]",
+  "[\"no-cross-feature\",\"src/features/workSessions/hooks/useWorkSessionHub.ts\",\"src/features/chat/queries/NodeChatQueryKeys.ts\"]",
+  "[\"no-cross-feature\",\"src/features/workSessions/pages/WorkSessionDetailPage.tsx\",\"src/features/chat/models/ChatModels.ts\"]",
+  "[\"no-cross-feature\",\"src/features/workSessions/pages/WorkSessionDetailPage.tsx\",\"src/features/chat/pages/Chat.tsx\"]",
   "[\"no-orphans\",\"src/features/api-foundation/api/ValidationProblemProbeApi.ts\",\"src/features/api-foundation/api/ValidationProblemProbeApi.ts\"]"
 ]

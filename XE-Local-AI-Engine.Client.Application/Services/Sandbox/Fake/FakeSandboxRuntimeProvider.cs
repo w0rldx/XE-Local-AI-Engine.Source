@@ -14,7 +14,7 @@ using System.Text.RegularExpressions;
 /// </summary>
 // Serves BOTH per-feature roles, so a test host — and the CI-mandatory default — can drive AgentHome, Coder and
 // Development Mode off one deterministic provider instance.
-public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, IDevelopmentSandboxRuntimeProvider
+public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, IDevelopmentSandboxRuntimeProvider, IWorkSessionSandboxRuntimeProvider
 {
     /// <summary>The provider name this fake registers under for configuration-bound selection.</summary>
     public const string Name = "fake";

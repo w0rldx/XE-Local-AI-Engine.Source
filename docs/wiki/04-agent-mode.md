@@ -636,6 +636,184 @@ produce, since it has no access to the memo.
 
 ---
 
+## 5. Work Sessions (`Client.Application/Services/WorkSessions/*`)
+
+A **work session** runs one objective as a bounded sequence of *steps*, detached from any HTTP or
+SignalR caller. Each step is an ordinary chat turn on the session's own conversation, so nothing about
+message persistence, ordered parts, approvals or `ask_user` is re-implemented — the session layer adds
+durable structure around turns the chat path already knows how to run.
+
+Two kinds ship: **General** and **Research** (which adds the read-only knowledge-base tools).
+`Development` is reserved and the store refuses it. `WorkSessions:Enabled` is `false` by default and
+gates *behaviour* in the supervisor and in every tool handler — never registration, so a disabled node
+answers legibly instead of 500-ing out of an empty container.
+
+### 5.1 One step
+
+`WorkSessionExecutionSupervisor` (hosted service + singleton) drives
+`INodeChatStreamService.SendMessageAsync` and drains the returned stream. It does **not** call
+`IInvocationRunner.RunAsync`: the runner persists nothing into a conversation — the message rows, the
+ordered parts, the pump's terminalization, the resume registry a reloading browser re-attaches through,
+and the approval/question lifecycle all live in the send path.
+
+Per step it: writes a `StepStarted` event and **publishes it before the send** (by the time a step
+terminalizes, `InvocationResumeRegistry` has dropped its entry, so a client told only afterwards
+re-attaches to an empty stream); composes the state block; drains the stream, mapping
+`ApprovalRequested`/`QuestionRequested` onto `WaitingForApproval`/`WaitingForInput` and back; then
+settles on the terminal — `complete_work_session` → checkpoint + `Completed`, budget reached →
+checkpoint + `Paused`, failure → checkpoint + `Failed`.
+
+Stops never cancel the enumeration. Cancelling it only stops the supervisor watching while the run keeps
+going, and the loop would never see its terminal. A pause, a cancel, an unanswered park and a step
+deadline all stop a step the way the operator's stop button does: through
+`INodeChatStreamCancellationRegistry`, so the pump persists a real `Cancelled` terminal.
+
+Every store write runs in its own scope. The tool handlers write the same session row from inside the
+turn, and a `DbContext` held across that carries a stale row version into the supervisor's next write.
+
+### 5.2 The node has one invocation slot
+
+`MaxConcurrentSessions` (default `1`) is an **admission cap, not concurrency**.
+`WorkerEventDispatcher` holds a `SemaphoreSlim(1, 1)` that *every* invocation takes, so a second
+admitted session buys queue depth, not parallelism — and **a running step delays the operator's own
+chat turn, every scheduled run and every benchmark until it finishes**. That is a node-wide behavioural
+consequence of shipping work sessions, not a page-local feature.
+
+`MaxParkedSeconds` (default 300) is what bounds its worst case: a step that parks on an approval nobody
+answers is cancelled, the session is checkpointed and paused, and the unanswered prompt is recorded as
+an `OpenQuestion` finding so the next step re-asks it. The park itself is in-memory and survives neither
+the timeout nor a restart; the finding is what makes the question durable. The checkpoint commits
+**before** the `Paused` status: a crash in that window reconciles to `Interrupted` off a valid
+checkpoint, where status-first would resume from a stale state block.
+
+### 5.3 The state block
+
+The step prompt carries only state, rebuilt from the database every step: the objective, the current
+task, the open tasks, the recent non-superseded findings, the artifact names, and the last checkpoint's
+synopsis. Rebuilding is load-bearing — a tool-only assistant turn is dropped from later context
+entirely (the send path keeps only completed, non-empty messages), and older history is bounded by
+compaction.
+
+Everything agent-authored in the block sits inside **one `UntrustedContentFraming` fence**: task titles
+and details, finding text and `sourceRef`, artifact names, the synopsis. All of it has derived
+provenance and may be verbatim knowledge-base or MCP output. The objective stays outside the fence — it
+is the operator's own text and the one instruction in the block meant to be followed.
+
+#### The transcript bound at the step boundary
+
+Rebuilding the state block bounds what the model *needs*; it does not bound what the send path *sends*.
+A step is an ordinary chat turn, so `BuildConversationContext` replays every earlier step's state block,
+answer and **reasoning** verbatim (tool calls and results are not replayed — they live in ordered parts,
+never in `Content`), and the transcript grows for the life of the session. Meanwhile the step's own tool
+loop is the expensive half: one `read_document` result is capped at 50,000 characters — some 16k tokens —
+and `Agent:ToolPipeline:MaxToolResultCharacters` (65,536) is larger than that cap, so nothing clips it.
+
+`WorkSessionStepContextBound` therefore runs **before every send**: it projects what the next step will
+replay using the same `ITokenEstimator` the context budgeters use, and over
+`WorkSessions:StepContextBudgetTokens` it forces a compaction of the owned conversation through
+`IConversationCompactionService` with a keep window of **2** — one step verbatim, the rest folded into
+the synopsis `CompactionContextResolver` already splices. That is safe precisely because the state block
+is rebuilt from the database; folding costs the model nothing it still needs.
+
+Compaction cannot touch the other half — the results the step's own tool loop produces *within* the
+turn. **Three bounds, not one**, because each catches what the others cannot:
+
+| Bound | Setting | Catches |
+|---|---|---|
+| Transcript fold at the step boundary | `StepContextBudgetTokens` (12,000) | Growth ACROSS steps |
+| Tool-result clip inside the step | `MaxToolResultCharacters` (8,000) | One oversized result |
+| Provider-call cap inside the step | `MaxProviderCallsPerStep` (10) | Many results, each already clipped |
+
+The third exists because the second is not sufficient. `FunctionInvokingChatClient` re-sends every prior
+tool result **and** every reasoning block on each iteration, so a step's context grows *quadratically in
+its own tool calls*: on 2026-08-24 one step made 14 calls (10 × `search_knowledge_base`) whose results
+were each correctly clipped to ~16k chars, and the re-sending still reached 71,172 tokens against a
+65,536 window. Only capping the iterations reaches that.
+
+Both in-step bounds are seeded by the supervisor as `AsyncLocal` scopes before the enumeration begins,
+in the same shape as `AgentRunConversationContext`: `ToolResultBudgetScope` (read in
+`BudgetedToolResultAIFunction` — the single wrapper every ClientLocal, Custom and MCP tool routes
+through, which is why one edit there bounds all three) and `ProviderCallBudget.BeginCallCapScope` (read
+when the runner builds its own budget scope, since that scope replaces any the caller seeded). Both are
+**tighten-only**: a value at or above the node ceiling has no effect, so no run can raise it, and an
+unseeded flow — every ordinary chat turn — is byte-identical.
+
+**A spent call cap ends the STEP, not the session.** `ProviderCallBudgetExceededException` classifies as
+a failure, so the supervisor recognises the budget's own fixed terminal message
+(`ProviderCallBudget.CeilingExceededMessage`, forwarded verbatim onto the failed row), writes a
+`StepEnded` event with outcome `ProviderCallBudget`, and settles the step as if it had completed. The
+tools that ran are already persisted and the state block carries the plan, so the next step resumes the
+work. Letting it fall through to the failure branch would end a session on its own safety limit.
+
+The checkpoint's own compaction is not that bound. It lands every `CheckpointEveryNSteps` steps and keeps
+the configured `Agent:ConversationCompaction:RecentMessagesToKeepVerbatim` (8) — four whole steps for a
+session — so it folds nothing until a session is long, and it runs *after* a step, never before one.
+Without the step-boundary bound a 27B model at a 65,536-token window overflowed at step 5
+(2026-08-24, live research session): the transcript had eaten the headroom the step's knowledge-base
+reads needed, and because both context budgeters are estimate-gated at `chars/4` — some 12 % optimistic
+for Qwen3 on markdown — the round was passed through as fitting and llama.cpp rejected it with
+`HTTP 400 exceed_context_size_error` instead of being trimmed.
+
+### 5.4 The four state tools
+
+`update_work_plan`, `record_finding`, `save_artifact` and `complete_work_session` are
+`IClientLocalToolHandler`s, all `ToolCategory.WriteExecute` with `RequiresApproval = false`. They are
+held out of the whole chat offer and appended only in `GetOfferedToolsForProfile[Async]`, beside
+`spawn_subagent` — the same profile-opt-in seam (**HIGH-1**: registering a handler in DI surfaces it in
+the resolution seam only; without the offer merge the seeded personas intersect to an empty tool set).
+
+Each resolves its session from `AgentRunConversationContext.Current` plus a conversation-to-session
+lookup — **never from the arguments**, which are model-authored. That is what makes the profile-opt-in
+offer safe: a work-session agent bound to an ordinary chat resolves no session and gets four inert
+tools. Every guard fails closed to a sentence rather than a throw, because a throw inside the
+function-invocation pipeline ends the turn.
+
+`complete_work_session` does not terminalize anything. It appends one event and returns, so the turn
+finishes cleanly and the supervisor closes the session after the terminal — which also makes the request
+survive a crash between the call and the end of the step.
+
+`save_artifact` writes the **blob first, then the row**. The other order would leave a row pointing at
+bytes that never existed; this one leaks at worst a blob bounded by `MaxArtifactBytes`.
+
+> **Consequence of the honest category:** tightening `ToolCategory.WriteExecute` in
+> `NodeToolApprovalPolicy` makes all four approval-required, so every recorded finding needs a click.
+> Labelling them `ReadLocal` would hide the write from the layer whose job is to see it, which is worse.
+
+### 5.5 Checkpoints, and what a repoint may not do
+
+`WorkSessionCheckpointComposer` writes the structured state (current task, open task ids, key finding
+ids — decisions and open questions first) plus the prose synopsis from the **existing**
+`IConversationCompactionService`. That one call both bounds the owned conversation's raw history and
+produces the summary, so no new summarizer seam exists. Every compaction no-op is non-fatal and the
+summary is `string?` end to end: a node with no local chat model produces none, and a placeholder would
+be a lie a resumed session reads as fact.
+
+`IWorkSessionService.UpdateAsync` refuses to repoint a session that already holds findings at a
+cloud-effective agent unless `KnowledgeBase:AllowCloudModelAccess` is set. The knowledge-base cloud gate
+is per turn and acts on the *offer*; it says nothing about text a local model already extracted, which
+the state block would otherwise carry off the node on the next step.
+
+### 5.6 Settings
+
+| Key | Default | Note |
+|---|---|---|
+| `WorkSessions:Enabled` | `false` | Gates behaviour, never registration |
+| `WorkSessions:MaxStepsPerRun` | `25` | Per start/resume, not per lifetime |
+| `WorkSessions:CheckpointEveryNSteps` | `5` | |
+| `WorkSessions:MaxConcurrentSessions` | `1` | Admission cap — see §5.2 |
+| `WorkSessions:MaxParkedSeconds` | `300` | Must stay under the node's `MaxPendingToolCallAge` |
+| `WorkSessions:MaxArtifactBytes` | `1048576` | 1 MiB |
+| `WorkSessions:StepTimeoutSeconds` | `0` | 0 inherits the node's maximum message request timeout |
+| `WorkSessions:StepContextBudgetTokens` | `12000` | Replayed-transcript budget per step; over it the boundary force-compacts (§5.3). 0 disables |
+| `WorkSessions:MaxToolResultCharacters` | `8000` | Tightens the node's tool-result budget for a step (§5.3). Tighten-only; 0 leaves the node value |
+| `WorkSessions:MaxProviderCallsPerStep` | `10` | Tool-loop iterations per step (§5.3). Hitting it ends the step cleanly; 0 leaves the node value |
+
+`IWorkSessionSandboxRuntimeProvider` exists as a role marker with **no consumer in v1**: nothing a
+session tool does needs a jail yet, and the role is there so the first one that does gets a per-feature
+provider choice rather than a new registration to keep correct.
+
+---
+
 ## Key invariants for maintainers
 
 - **MAF stays behind interfaces.** `Microsoft.Agents.AI.Workflows` types live only inside AI.Agent
@@ -667,6 +845,10 @@ produce, since it has no access to the memo.
   extraction all run on node-local models — never cloud. See [Security & Privacy](12-security-and-privacy.md).
 - **Spawn is bounded.** Depth cap (child omits the tool), per-root fan-out lease, and a cloud-spawn
   wallet cap are all enforced in `SubAgentSpawnService`.
+- **A work session's state block is rebuilt from the database every step, and fenced.** Never source it
+  from surviving conversation history, and never emit an agent-authored string outside the
+  `UntrustedContentFraming` fence. The session id reaches a state tool only through
+  `AgentRunConversationContext`, never through a tool argument.
 - **Imported skill content is untrusted, and it is fenced at one place.** `AgentDefinitionResolver`
   wraps an `Origin == Imported` skill's body and every resource through `UntrustedContentFraming`
   before either invocation or sub-agent construction sees it; a new skill-resolution path that bypasses

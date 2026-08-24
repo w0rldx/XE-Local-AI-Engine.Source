@@ -44,6 +44,7 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.PreviewWorkflows;
 using XE_Local_AI_Engine.Client.Services.Proxy;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
@@ -203,6 +204,10 @@ public static class ConfigureServices
         // AddSingleton, so it wins over that TryAdd) so uv install phase + log lines push live to operator clients
         // (TrainingRuntimeHub mapped in Program). IHubContext is singleton-safe.
         builder.Services.AddSingleton<ITrainingRuntimeEventPublisher, TrainingRuntimeEventPublisher>();
+
+        // Hub-backed work-session event publisher — supersedes the no-op the work-session module registers with
+        // TryAddSingleton, so a change committed by the supervisor or by a state tool reaches the session view live.
+        builder.Services.AddSingleton<IWorkSessionEventPublisher, WorkSessionEventPublisher>();
 
         // Development ships enabled. Keep the no-op publisher only when the administrator explicitly disables it.
         var developmentEnabled = configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);

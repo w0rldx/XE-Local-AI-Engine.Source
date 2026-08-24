@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels;
 using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Models;
@@ -41,6 +42,8 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             InstalledModelDependentAdaptersException => NodeConflictProblemType.InstalledModelHasDependentAdapters,
             InstalledModelProviderConflictException => NodeConflictProblemType.InstalledModelProviderConflict,
             InstalledModelProviderMapSupersededException => NodeConflictProblemType.InstalledModelProviderMapSuperseded,
+            WorkSessionInvalidTransitionException => NodeConflictProblemType.WorkSessionInvalidTransition,
+            WorkSessionConcurrencyException => NodeConflictProblemType.WorkSessionVersionConflict,
             _ => (NodeConflictProblemType?)null
         };
 

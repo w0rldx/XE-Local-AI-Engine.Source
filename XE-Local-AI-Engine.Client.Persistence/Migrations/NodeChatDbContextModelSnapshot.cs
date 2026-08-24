@@ -15,7 +15,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentDefinition", b =>
                 {
@@ -371,6 +371,372 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsUnique();
 
                     b.ToTable("agent_skill_resources", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AgentDefinitionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agent_definition_id");
+
+                    b.Property<int>("ConfigVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("config_version");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("conversation_id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid?>("CurrentTaskId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("current_task_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid?>("LastCheckpointId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("last_checkpoint_id");
+
+                    b.Property<long>("LastSequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_sequence");
+
+                    b.Property<byte[]>("Objective")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("objective");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<int>("StepCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("step_count");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("title");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_agent_work_sessions_conversation_id");
+
+                    b.HasIndex("Status", "UpdatedAtUtc")
+                        .HasDatabaseName("ix_agent_work_sessions_status_updated");
+
+                    b.ToTable("agent_work_sessions", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSessionArtifact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentSha256")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("content_sha256");
+
+                    b.Property<int>("CreatedStep")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_step");
+
+                    b.Property<bool>("IsValid")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_valid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("ManagedReference")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("managed_reference");
+
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("media_type");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_id");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("size_bytes");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ux_agent_work_session_artifacts_session_name");
+
+                    b.HasIndex("SessionId", "Sequence")
+                        .HasDatabaseName("ix_agent_work_session_artifacts_session_sequence");
+
+                    b.ToTable("agent_work_session_artifacts", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSessionCheckpoint", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_id");
+
+                    b.Property<byte[]>("StateJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("state_json");
+
+                    b.Property<int>("Step")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("step");
+
+                    b.Property<byte[]>("Summary")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("summary");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId", "Sequence")
+                        .HasDatabaseName("ix_agent_work_session_checkpoints_session_sequence");
+
+                    b.ToTable("agent_work_session_checkpoints", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSessionEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("DetailJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("detail_json");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("event_type");
+
+                    b.Property<long>("OccurredAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<Guid?>("OperationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("operation_id");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("outcome");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_id");
+
+                    b.Property<int>("Step")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("step");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId", "OperationId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_agent_work_session_events_operation")
+                        .HasFilter("operation_id IS NOT NULL");
+
+                    b.HasIndex("SessionId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ux_agent_work_session_events_session_sequence");
+
+                    b.ToTable("agent_work_session_events", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSessionFinding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<int>("CreatedStep")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_step");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_id");
+
+                    b.Property<byte[]>("SourceRef")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("source_ref");
+
+                    b.Property<bool>("Superseded")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("superseded");
+
+                    b.Property<Guid?>("TaskId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("task_id");
+
+                    b.Property<byte[]>("Text")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskId");
+
+                    b.HasIndex("SessionId", "Sequence")
+                        .HasDatabaseName("ix_agent_work_session_findings_session_sequence");
+
+                    b.HasIndex("SessionId", "Kind", "Superseded")
+                        .HasDatabaseName("ix_agent_work_session_findings_session_kind_superseded");
+
+                    b.ToTable("agent_work_session_findings", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSessionTask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("BlockedReason")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("blocked_reason");
+
+                    b.Property<int>("CreatedStep")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_step");
+
+                    b.Property<byte[]>("Detail")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("detail");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("origin");
+
+                    b.Property<Guid?>("ParentTaskId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("parent_task_id");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<byte[]>("Title")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("title");
+
+                    b.Property<int>("UpdatedStep")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_step");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParentTaskId")
+                        .HasDatabaseName("ix_agent_work_session_tasks_parent");
+
+                    b.HasIndex("SessionId", "Sequence")
+                        .HasDatabaseName("ix_agent_work_session_tasks_session_sequence");
+
+                    b.ToTable("agent_work_session_tasks", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgeAttempt", b =>
@@ -4623,6 +4989,56 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentSkill", null)
                         .WithMany()
                         .HasForeignKey("SkillId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSessionArtifact", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSessionCheckpoint", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSessionEvent", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSessionFinding", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSessionTask", null)
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSessionTask", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentWorkSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

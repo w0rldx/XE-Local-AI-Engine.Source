@@ -144,6 +144,18 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<TrainingComparisonReport> TrainingComparisonReports => Set<TrainingComparisonReport>();
 
+    internal DbSet<AgentWorkSession> AgentWorkSessions => Set<AgentWorkSession>();
+
+    internal DbSet<AgentWorkSessionTask> AgentWorkSessionTasks => Set<AgentWorkSessionTask>();
+
+    internal DbSet<AgentWorkSessionFinding> AgentWorkSessionFindings => Set<AgentWorkSessionFinding>();
+
+    internal DbSet<AgentWorkSessionArtifact> AgentWorkSessionArtifacts => Set<AgentWorkSessionArtifact>();
+
+    internal DbSet<AgentWorkSessionCheckpoint> AgentWorkSessionCheckpoints => Set<AgentWorkSessionCheckpoint>();
+
+    internal DbSet<AgentWorkSessionEvent> AgentWorkSessionEvents => Set<AgentWorkSessionEvent>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     /// <summary>
@@ -406,5 +418,11 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new TrainingArtifactConfiguration());
         modelBuilder.ApplyConfiguration(new TrainingEvaluationRunConfiguration());
         modelBuilder.ApplyConfiguration(new TrainingComparisonReportConfiguration());
+        modelBuilder.ApplyConfiguration(new AgentWorkSessionConfiguration());
+        modelBuilder.ApplyConfiguration(new AgentWorkSessionTaskConfiguration());
+        modelBuilder.ApplyConfiguration(new AgentWorkSessionFindingConfiguration());
+        modelBuilder.ApplyConfiguration(new AgentWorkSessionArtifactConfiguration());
+        modelBuilder.ApplyConfiguration(new AgentWorkSessionCheckpointConfiguration());
+        modelBuilder.ApplyConfiguration(new AgentWorkSessionEventConfiguration());
     }
 }

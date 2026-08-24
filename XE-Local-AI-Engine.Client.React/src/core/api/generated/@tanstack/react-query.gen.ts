@@ -39,6 +39,7 @@ import {
 	cancelStableDiffusionCppSourceBuild,
 	cancelTrainingDataset,
 	cancelTrainingRun,
+	cancelWorkSession,
 	clearBenchmarkRunScore,
 	clearCloudSettings,
 	codexLogin,
@@ -70,6 +71,7 @@ import {
 	createToolMock,
 	createTrainingDefinition,
 	createTrainingRun,
+	createWorkSession,
 	createWorkspace,
 	decideTrainingArtifactQuality,
 	deleteAgentDefinition,
@@ -97,6 +99,7 @@ import {
 	deleteTrainingArtifact,
 	deleteTrainingDataset,
 	deleteTrainingDefinition,
+	deleteWorkSession,
 	deleteWorkspace,
 	detectDevelopmentRepositoryProfile,
 	disableAutoConnect,
@@ -196,6 +199,8 @@ import {
 	getTrainingRuntimePrerequisites,
 	getTrainingRuntimeStatus,
 	getTutorialState,
+	getWorkSession,
+	getWorkSessionArtifactContent,
 	harvestGoldenConversations,
 	importAgentTemplates,
 	importKnowledgeRepository,
@@ -246,6 +251,12 @@ import {
 	listTrainingDefinitions,
 	listTrainingRuns,
 	listTrainingSamples,
+	listWorkSessionArtifacts,
+	listWorkSessionCheckpoints,
+	listWorkSessionEvents,
+	listWorkSessionFindings,
+	listWorkSessions,
+	listWorkSessionTasks,
 	listWorkspaces,
 	nodeAuthStatus,
 	nodeChangePassword,
@@ -256,8 +267,10 @@ import {
 	nodeSetup,
 	type Options,
 	overrideTrainingArtifactQuality,
+	pauseWorkSession,
 	pinNodeChatConversation,
 	pollNodeBinding,
+	postWorkSessionMessage,
 	previewDevelopmentPatch,
 	previewGgufImport,
 	previewSkillImport,
@@ -284,6 +297,7 @@ import {
 	resolveToolApproval,
 	resolveUserQuestion,
 	resumeEvaluation,
+	resumeWorkSession,
 	retrieveImage,
 	reviewTrainingSample,
 	revokeLocalModelProxyApiKey,
@@ -313,6 +327,7 @@ import {
 	startStableDiffusionCppSourceBuild,
 	startTrainingExport,
 	startTrainingRuntimeInstall,
+	startWorkSession,
 	suggestComparison,
 	triggerScheduledJob,
 	unhandledExceptionProbe,
@@ -331,6 +346,7 @@ import {
 	updateSuggestedPlaybookAction,
 	updateToolMock,
 	updateTrainingDefinition,
+	updateWorkSession,
 	uploadConversationFile,
 	uploadKnowledgeDocument,
 	validateExecutable,
@@ -402,6 +418,9 @@ import type {
 	CancelTrainingDatasetResponse,
 	CancelTrainingRunData,
 	CancelTrainingRunResponse,
+	CancelWorkSessionData,
+	CancelWorkSessionError,
+	CancelWorkSessionResponse,
 	ClearBenchmarkRunScoreData,
 	ClearBenchmarkRunScoreError,
 	ClearBenchmarkRunScoreResponse,
@@ -479,6 +498,9 @@ import type {
 	CreateTrainingRunData,
 	CreateTrainingRunError,
 	CreateTrainingRunResponse,
+	CreateWorkSessionData,
+	CreateWorkSessionError,
+	CreateWorkSessionResponse,
 	CreateWorkspaceData,
 	CreateWorkspaceError,
 	CreateWorkspaceResponse,
@@ -543,6 +565,9 @@ import type {
 	DeleteTrainingDatasetResponse,
 	DeleteTrainingDefinitionData,
 	DeleteTrainingDefinitionResponse,
+	DeleteWorkSessionData,
+	DeleteWorkSessionError,
+	DeleteWorkSessionResponse,
 	DeleteWorkspaceData,
 	DeleteWorkspaceError,
 	DeleteWorkspaceResponse,
@@ -763,6 +788,11 @@ import type {
 	GetTrainingRuntimeStatusResponse,
 	GetTutorialStateData,
 	GetTutorialStateResponse,
+	GetWorkSessionArtifactContentData,
+	GetWorkSessionArtifactContentError,
+	GetWorkSessionArtifactContentResponse,
+	GetWorkSessionData,
+	GetWorkSessionResponse,
 	HarvestGoldenConversationsData,
 	HarvestGoldenConversationsResponse,
 	ImportAgentTemplatesData,
@@ -868,6 +898,23 @@ import type {
 	ListTrainingRunsResponse,
 	ListTrainingSamplesData,
 	ListTrainingSamplesResponse,
+	ListWorkSessionArtifactsData,
+	ListWorkSessionArtifactsError,
+	ListWorkSessionArtifactsResponse,
+	ListWorkSessionCheckpointsData,
+	ListWorkSessionCheckpointsError,
+	ListWorkSessionCheckpointsResponse,
+	ListWorkSessionEventsData,
+	ListWorkSessionEventsError,
+	ListWorkSessionEventsResponse,
+	ListWorkSessionFindingsData,
+	ListWorkSessionFindingsError,
+	ListWorkSessionFindingsResponse,
+	ListWorkSessionsData,
+	ListWorkSessionsResponse,
+	ListWorkSessionTasksData,
+	ListWorkSessionTasksError,
+	ListWorkSessionTasksResponse,
 	ListWorkspacesData,
 	ListWorkspacesResponse,
 	NodeAuthStatusData,
@@ -890,11 +937,17 @@ import type {
 	OverrideTrainingArtifactQualityData,
 	OverrideTrainingArtifactQualityError,
 	OverrideTrainingArtifactQualityResponse,
+	PauseWorkSessionData,
+	PauseWorkSessionError,
+	PauseWorkSessionResponse,
 	PinNodeChatConversationData,
 	PinNodeChatConversationError,
 	PinNodeChatConversationResponse,
 	PollNodeBindingData,
 	PollNodeBindingResponse,
+	PostWorkSessionMessageData,
+	PostWorkSessionMessageError,
+	PostWorkSessionMessageResponse,
 	PreviewDevelopmentPatchData,
 	PreviewDevelopmentPatchError,
 	PreviewDevelopmentPatchResponse,
@@ -960,6 +1013,9 @@ import type {
 	ResolveUserQuestionResponse,
 	ResumeEvaluationData,
 	ResumeEvaluationResponse,
+	ResumeWorkSessionData,
+	ResumeWorkSessionError,
+	ResumeWorkSessionResponse,
 	RetrieveImageData,
 	RetrieveImageResponse,
 	ReviewTrainingSampleData,
@@ -1035,6 +1091,9 @@ import type {
 	StartTrainingRuntimeInstallData,
 	StartTrainingRuntimeInstallError,
 	StartTrainingRuntimeInstallResponse,
+	StartWorkSessionData,
+	StartWorkSessionError,
+	StartWorkSessionResponse,
 	SuggestComparisonData,
 	SuggestComparisonError,
 	SuggestComparisonResponse,
@@ -1078,6 +1137,9 @@ import type {
 	UpdateToolMockResponse,
 	UpdateTrainingDefinitionData,
 	UpdateTrainingDefinitionResponse,
+	UpdateWorkSessionData,
+	UpdateWorkSessionError,
+	UpdateWorkSessionResponse,
 	UploadConversationFileData,
 	UploadConversationFileResponse,
 	UploadKnowledgeDocumentData,
@@ -1181,6 +1243,344 @@ export const deleteWorkspaceMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await deleteWorkspace({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listWorkSessionsQueryKey = (options?: Options<ListWorkSessionsData>) => createQueryKey("listWorkSessions", options);
+
+export const listWorkSessionsOptions = (options?: Options<ListWorkSessionsData>) =>
+	queryOptions<
+		ListWorkSessionsResponse,
+		AxiosError<DefaultError>,
+		ListWorkSessionsResponse,
+		ReturnType<typeof listWorkSessionsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listWorkSessions({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listWorkSessionsQueryKey(options),
+	});
+
+export const createWorkSessionMutation = (
+	options?: Partial<Options<CreateWorkSessionData>>,
+): UseMutationOptions<CreateWorkSessionResponse, AxiosError<CreateWorkSessionError>, Options<CreateWorkSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		CreateWorkSessionResponse,
+		AxiosError<CreateWorkSessionError>,
+		Options<CreateWorkSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createWorkSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteWorkSessionMutation = (
+	options?: Partial<Options<DeleteWorkSessionData>>,
+): UseMutationOptions<DeleteWorkSessionResponse, AxiosError<DeleteWorkSessionError>, Options<DeleteWorkSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteWorkSessionResponse,
+		AxiosError<DeleteWorkSessionError>,
+		Options<DeleteWorkSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteWorkSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getWorkSessionQueryKey = (options: Options<GetWorkSessionData>) => createQueryKey("getWorkSession", options);
+
+export const getWorkSessionOptions = (options: Options<GetWorkSessionData>) =>
+	queryOptions<
+		GetWorkSessionResponse,
+		AxiosError<DefaultError>,
+		GetWorkSessionResponse,
+		ReturnType<typeof getWorkSessionQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getWorkSession({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getWorkSessionQueryKey(options),
+	});
+
+export const updateWorkSessionMutation = (
+	options?: Partial<Options<UpdateWorkSessionData>>,
+): UseMutationOptions<UpdateWorkSessionResponse, AxiosError<UpdateWorkSessionError>, Options<UpdateWorkSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateWorkSessionResponse,
+		AxiosError<UpdateWorkSessionError>,
+		Options<UpdateWorkSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateWorkSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startWorkSessionMutation = (
+	options?: Partial<Options<StartWorkSessionData>>,
+): UseMutationOptions<StartWorkSessionResponse, AxiosError<StartWorkSessionError>, Options<StartWorkSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartWorkSessionResponse,
+		AxiosError<StartWorkSessionError>,
+		Options<StartWorkSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startWorkSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const pauseWorkSessionMutation = (
+	options?: Partial<Options<PauseWorkSessionData>>,
+): UseMutationOptions<PauseWorkSessionResponse, AxiosError<PauseWorkSessionError>, Options<PauseWorkSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		PauseWorkSessionResponse,
+		AxiosError<PauseWorkSessionError>,
+		Options<PauseWorkSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await pauseWorkSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const resumeWorkSessionMutation = (
+	options?: Partial<Options<ResumeWorkSessionData>>,
+): UseMutationOptions<ResumeWorkSessionResponse, AxiosError<ResumeWorkSessionError>, Options<ResumeWorkSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		ResumeWorkSessionResponse,
+		AxiosError<ResumeWorkSessionError>,
+		Options<ResumeWorkSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await resumeWorkSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelWorkSessionMutation = (
+	options?: Partial<Options<CancelWorkSessionData>>,
+): UseMutationOptions<CancelWorkSessionResponse, AxiosError<CancelWorkSessionError>, Options<CancelWorkSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelWorkSessionResponse,
+		AxiosError<CancelWorkSessionError>,
+		Options<CancelWorkSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelWorkSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listWorkSessionTasksQueryKey = (options: Options<ListWorkSessionTasksData>) =>
+	createQueryKey("listWorkSessionTasks", options);
+
+export const listWorkSessionTasksOptions = (options: Options<ListWorkSessionTasksData>) =>
+	queryOptions<
+		ListWorkSessionTasksResponse,
+		AxiosError<ListWorkSessionTasksError>,
+		ListWorkSessionTasksResponse,
+		ReturnType<typeof listWorkSessionTasksQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listWorkSessionTasks({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listWorkSessionTasksQueryKey(options),
+	});
+
+export const listWorkSessionFindingsQueryKey = (options: Options<ListWorkSessionFindingsData>) =>
+	createQueryKey("listWorkSessionFindings", options);
+
+export const listWorkSessionFindingsOptions = (options: Options<ListWorkSessionFindingsData>) =>
+	queryOptions<
+		ListWorkSessionFindingsResponse,
+		AxiosError<ListWorkSessionFindingsError>,
+		ListWorkSessionFindingsResponse,
+		ReturnType<typeof listWorkSessionFindingsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listWorkSessionFindings({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listWorkSessionFindingsQueryKey(options),
+	});
+
+export const listWorkSessionArtifactsQueryKey = (options: Options<ListWorkSessionArtifactsData>) =>
+	createQueryKey("listWorkSessionArtifacts", options);
+
+export const listWorkSessionArtifactsOptions = (options: Options<ListWorkSessionArtifactsData>) =>
+	queryOptions<
+		ListWorkSessionArtifactsResponse,
+		AxiosError<ListWorkSessionArtifactsError>,
+		ListWorkSessionArtifactsResponse,
+		ReturnType<typeof listWorkSessionArtifactsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listWorkSessionArtifacts({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listWorkSessionArtifactsQueryKey(options),
+	});
+
+export const listWorkSessionCheckpointsQueryKey = (options: Options<ListWorkSessionCheckpointsData>) =>
+	createQueryKey("listWorkSessionCheckpoints", options);
+
+export const listWorkSessionCheckpointsOptions = (options: Options<ListWorkSessionCheckpointsData>) =>
+	queryOptions<
+		ListWorkSessionCheckpointsResponse,
+		AxiosError<ListWorkSessionCheckpointsError>,
+		ListWorkSessionCheckpointsResponse,
+		ReturnType<typeof listWorkSessionCheckpointsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listWorkSessionCheckpoints({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listWorkSessionCheckpointsQueryKey(options),
+	});
+
+export const listWorkSessionEventsQueryKey = (options: Options<ListWorkSessionEventsData>) =>
+	createQueryKey("listWorkSessionEvents", options);
+
+export const listWorkSessionEventsOptions = (options: Options<ListWorkSessionEventsData>) =>
+	queryOptions<
+		ListWorkSessionEventsResponse,
+		AxiosError<ListWorkSessionEventsError>,
+		ListWorkSessionEventsResponse,
+		ReturnType<typeof listWorkSessionEventsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listWorkSessionEvents({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listWorkSessionEventsQueryKey(options),
+	});
+
+export const getWorkSessionArtifactContentQueryKey = (options: Options<GetWorkSessionArtifactContentData>) =>
+	createQueryKey("getWorkSessionArtifactContent", options);
+
+export const getWorkSessionArtifactContentOptions = (options: Options<GetWorkSessionArtifactContentData>) =>
+	queryOptions<
+		GetWorkSessionArtifactContentResponse,
+		AxiosError<GetWorkSessionArtifactContentError>,
+		GetWorkSessionArtifactContentResponse,
+		ReturnType<typeof getWorkSessionArtifactContentQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getWorkSessionArtifactContent({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getWorkSessionArtifactContentQueryKey(options),
+	});
+
+export const postWorkSessionMessageMutation = (
+	options?: Partial<Options<PostWorkSessionMessageData>>,
+): UseMutationOptions<
+	PostWorkSessionMessageResponse,
+	AxiosError<PostWorkSessionMessageError>,
+	Options<PostWorkSessionMessageData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		PostWorkSessionMessageResponse,
+		AxiosError<PostWorkSessionMessageError>,
+		Options<PostWorkSessionMessageData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await postWorkSessionMessage({
 				...options,
 				...fnOptions,
 				throwOnError: true,

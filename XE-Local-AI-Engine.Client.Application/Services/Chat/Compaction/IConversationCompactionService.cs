@@ -45,5 +45,19 @@ public interface IConversationCompactionService
     ///     summarization when it is an installed LOCAL chat model, otherwise a node-local default is used so conversation
     ///     content never leaves the machine (a cloud/unknown selection degrades to local). Blank uses the node default.
     /// </summary>
-    Task<ConversationCompactionResult> CompactAsync(Guid conversationId, string? requestedModel = null, CancellationToken cancellationToken = default);
+    Task<ConversationCompactionResult> CompactAsync(Guid conversationId, string? requestedModel = null, CancellationToken cancellationToken = default) =>
+        CompactAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim: null, cancellationToken);
+
+    /// <summary>
+    ///     The same compaction with an explicit keep window. <paramref name="recentMessagesToKeepVerbatim" /> overrides
+    ///     <see cref="ConversationCompactionOptions.RecentMessagesToKeepVerbatim" /> for this call only (clamped to the
+    ///     same floor of 2), so a caller that knows its conversation does not depend on verbatim history can fold it
+    ///     down to the last exchange. A work-session step is that caller: its state block is rebuilt from the database
+    ///     every step, so the transcript beyond the previous step carries nothing the model still needs. Null keeps the
+    ///     configured window, which is what the operator-driven chat compaction passes.
+    /// </summary>
+    Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
+        string? requestedModel,
+        int? recentMessagesToKeepVerbatim,
+        CancellationToken cancellationToken = default);
 }

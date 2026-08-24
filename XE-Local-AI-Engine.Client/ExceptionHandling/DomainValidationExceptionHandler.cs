@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Automation;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using ProblemDetails = FastEndpoints.ProblemDetails;
 
 /// <summary>
@@ -40,7 +41,8 @@ public sealed class DomainValidationExceptionHandler(ILogger<DomainValidationExc
             or SlashCommandValidationException
             or PlaybookActionValidationException
             or AgentDefinitionValidationException
-            or AgentSkillValidationException))
+            or AgentSkillValidationException
+            or WorkSessionValidationException))
         {
             return false;
         }

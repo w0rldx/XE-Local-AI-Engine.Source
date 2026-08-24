@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class ProviderCallBudgetChatClientTests
@@ -218,10 +219,44 @@ public sealed class ProviderCallBudgetChatClientTests
                }))
         {
             var exception = await AssertEx.ThrowsAsync<ProviderContextWindowExceededException>(async () => await sut.GetResponseAsync(messages, options));
-            AssertEx.Equal(EffectiveWindow, exception.WindowTokens);
+            // Sized off num_ctx (32, less the safety margin) rather than the 1,000,000 default — which is the point.
+            AssertEx.Equal(TokenEstimatorCalibrationStore.ApplySafetyMargin(EffectiveWindow), exception.WindowTokens);
         }
 
         AssertEx.False(inner.WasCalled, "the round must be rejected against the effective window before the inner client is called.");
+    }
+
+    [Test]
+    public async Task GetResponseAsync_WhenTheEstimateSitsJustUnderTheWindow_StillExcerpts()
+    {
+        // The margin's whole point. The char heuristic under-counts by roughly a tenth on markdown and JSON, so a round
+        // estimated at ~0.9x the window is in truth AT or OVER it — and passing it through means a provider rejection
+        // instead of a trim. Budgeting against TokenEstimatorCalibrationStore.EstimateSafetyFactor catches it.
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+
+        // ~4 chars/token plus per-message framing: 3,400 characters lands near 900 estimated tokens against a 1,000
+        // window — comfortably inside the old full-window budget, outside the 850 the margin allows.
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "first"),
+            new(ChatRole.Tool, new string('x', 3_400)),
+            new(ChatRole.User, "latest")
+        };
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   DefaultContextTokens = 1_000,
+                   ReservedOutputTokenFloor = 0,
+                   OversizedToolResultExcerptChars = 100
+               }))
+        {
+            _ = await sut.GetResponseAsync(messages, new ChatOptions());
+        }
+
+        var sent = inner.ReceivedMessageSets.Single();
+        var toolText = sent.First(message => message.Role == ChatRole.Tool).Text;
+        AssertEx.True(toolText.Length < 3_400, $"the oversized result must be excerpted inside the margin, was {toolText.Length} chars.");
+        AssertEx.Contains(toolText, "[truncated:");
     }
 
     [Test]
@@ -271,7 +306,10 @@ public sealed class ProviderCallBudgetChatClientTests
 
         var budgetOptions = new ProviderCallBudgetOptions
         {
-            DefaultContextTokens = 650,
+            // The window whose safety-margined budget is 650. Derived, not a bare 650: the budgeter measures against
+            // EstimateSafetyFactor of the window, so a bare 650 would leave the tool-LESS control arm already trimming
+            // and the comparison would prove nothing about the tool schemas.
+            DefaultContextTokens = (int)Math.Ceiling(650 / TokenEstimatorCalibrationStore.EstimateSafetyFactor),
             ReservedOutputTokenFloor = 0,
             RecentMessagesToKeep = 2,
             OversizedToolResultExcerptChars = 100_000

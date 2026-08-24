@@ -86,6 +86,7 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
     using XE_Local_AI_Engine.Client.Services.Proxy;
     using XE_Local_AI_Engine.Client.Services.Shutdown;
+    using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
     /// <summary>
     ///     Application entry point for this executable.
@@ -338,6 +339,7 @@ namespace XE_Local_AI_Engine.Client
 
             // Add services to the container.
             var isDevelopmentModeEnabled = builder.Configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);
+            var areWorkSessionsEnabled = builder.Configuration.GetValue($"{WorkSessionOptions.Section}:Enabled", defaultValue: false);
             builder.AddServices(builder.Configuration);
 
             // App self-update (Velopack + anonymous public GitHub releases). Desktop-mode only: off the flag this registers nothing and the
@@ -546,6 +548,27 @@ namespace XE_Local_AI_Engine.Client
                 });
             }
 
+            if (!areWorkSessionsEnabled)
+            {
+                // Unlike Development, the work-session endpoints and hub stay DISCOVERED when the feature is off — their
+                // dependencies are registered unconditionally, and dropping them from discovery would drop all sixteen
+                // paths out of the OpenAPI document and therefore out of the generated client. Behaviour is gated here
+                // instead: without this, a disabled node would reach the service and answer 500 where the honest answer
+                // is "no such surface". Ahead of local API security and authentication, like the Development gate, so the
+                // switch cannot be probed by status code.
+                var workSessionPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.WorkSessions.Root}");
+                app.Use(async (context, next) =>
+                {
+                    if (context.Request.Path.StartsWithSegments(workSessionPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status404NotFound;
+                        return;
+                    }
+
+                    await next(context).ConfigureAwait(false);
+                });
+            }
+
             app.UseMiddleware<LocalApiSecurityMiddleware>();
             app.UseRouting();
             // Skipped in the Testing environment, where the permit limits are relaxed to non-limits anyway (see
@@ -623,6 +646,8 @@ namespace XE_Local_AI_Engine.Client
             app.MapHub<ImageJobHub>(LocalApiRoutes.Images.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<StableDiffusionCppSourceBuildHub>(LocalApiRoutes.Images.RuntimeSourceBuildHub)
+               .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+            app.MapHub<WorkSessionHub>(LocalApiRoutes.WorkSessions.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             if (isDevelopmentModeEnabled)
             {

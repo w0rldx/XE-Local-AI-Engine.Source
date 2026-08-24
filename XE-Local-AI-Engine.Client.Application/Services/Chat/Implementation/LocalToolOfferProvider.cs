@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
 internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
@@ -43,6 +44,11 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly AllowedToolDto _spawnOfferDto;
     private readonly AllowedToolDto _computeOfferDto;
+
+    // The four work-session state tools, held out of the whole offer for the same reason spawn_subagent is: they are
+    // profile-opt-in only. They are also inert outside a session — each handler resolves its session from the ambient
+    // conversation id and fails closed when there is none — so the projection here is convenience, not the boundary.
+    private readonly IReadOnlyList<AllowedToolDto> _workSessionOfferDtos;
 
     public LocalToolOfferProvider(IAgentToolRegistry toolRegistry,
         IMcpToolRegistry mcpToolRegistry,
@@ -136,6 +142,12 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // every approval-required tool, so they strip this one for free.
         _computeOfferDto = ToOfferDto(ComputeToolDefinition.ToolName, ComputeToolDefinition.ParameterSchema, requiresApproval: true, ToolCategory.WriteExecute);
 
+        // WriteExecute is the honest category: every one of these writes durable session rows, and it is the only write
+        // category the enum has. Labelling them ReadLocal to keep them out of a category-based operator policy would
+        // hide the write from the layer whose job is to see it — at the cost that tightening WriteExecute in
+        // NodeToolApprovalPolicy makes every recorded finding need a click.
+        _workSessionOfferDtos = [.. WorkSessionToolCatalog.Descriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))];
+
         // Precompute the capability-gated variant once: the built-ins minus run_in_agent_home, the coder/knowledge tools
         // and ask_user, returned when the active model is not tool-capable. Those tools are offered only to a
         // tool-capable model. The encrypted path stays server-gated and never reaches this provider. (spawn_subagent is
@@ -204,7 +216,15 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
                 // operator add it to a profile's AllowedToolNames at all; without it CRUD validation would warn on an
                 // unknown name and the picker would not show it.
                 Category = ToolCategory.WriteExecute
-            }
+            },
+            .. WorkSessionToolCatalog.Descriptors.Select(static descriptor => new LocalToolCatalogEntry
+            {
+                Name = descriptor.Name,
+                Description = descriptor.Description,
+                RequiresApproval = descriptor.RequiresApproval,
+                Source = BuiltinSource,
+                Category = descriptor.Category
+            })
         ];
 
         _builtinNames =
@@ -214,7 +234,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             .. knowledgeDescriptors.Select(static descriptor => descriptor.Name),
             askUserDescriptor.Name,
             SpawnSubAgentToolDefinition.ToolName,
-            ComputeToolDefinition.ToolName
+            ComputeToolDefinition.ToolName,
+            .. WorkSessionToolCatalog.Descriptors.Select(static descriptor => descriptor.Name)
         ];
     }
 
@@ -343,7 +364,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             return _builtinWithoutAgentHome;
         }
 
-        return [.. GetOfferedTools(activeModelId, isCloudModel), _spawnOfferDto, .. ComputeOffer(activeModelId, isCloudModel)];
+        return [.. GetOfferedTools(activeModelId, isCloudModel), _spawnOfferDto, .. ComputeOffer(activeModelId, isCloudModel), .. _workSessionOfferDtos];
     }
 
     public async Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsForProfileAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default)
@@ -360,7 +381,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         [
             .. await GetOfferedToolsAsync(activeModelId, isCloudModel, cancellationToken).ConfigureAwait(false),
             _spawnOfferDto,
-            .. ComputeOffer(activeModelId, isCloudModel)
+            .. ComputeOffer(activeModelId, isCloudModel),
+            .. _workSessionOfferDtos
         ];
     }
 

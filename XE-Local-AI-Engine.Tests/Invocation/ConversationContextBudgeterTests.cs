@@ -3,10 +3,21 @@ namespace XE_Local_AI_Engine.Tests.Invocation;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class ConversationContextBudgeterTests
 {
+    /// <summary>
+    ///     The context capacity whose safety-margined budget is <paramref name="budgetTokens" />. The budgeter measures
+    ///     against <see cref="TokenEstimatorCalibrationStore.EstimateSafetyFactor" /> of the window, so a test that wants
+    ///     a known budget must ask for it rather than hard-coding the capacity: a bare number leaves the arithmetic these
+    ///     fixtures are built on short by the margin, and each of them then proves something other than what it was
+    ///     written for. Retuning the factor moves these capacities with it.
+    /// </summary>
+    private static int CapacityFor(int budgetTokens) =>
+        (int)Math.Ceiling(budgetTokens / TokenEstimatorCalibrationStore.EstimateSafetyFactor);
+
     [Test]
     public void Budget_WhenUnderBudget_ReturnsInputUnchangedByReference()
     {
@@ -195,8 +206,8 @@ public sealed class ConversationContextBudgeterTests
         };
         var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 2);
 
-        // 150 tokens; budget 100 drops the two ordinary turns (40) plus the lone unpinned message of turn 2 (10).
-        var result = sut.Budget(messages, contextTokenCapacity: 100, reservedOutputTokens: 0);
+        // 150 tokens; a budget of 100 drops the two ordinary turns (40) plus the lone unpinned message of turn 2 (10).
+        var result = sut.Budget(messages, contextTokenCapacity: CapacityFor(100), reservedOutputTokens: 0);
 
         AssertEx.True(result.Trimmed);
         AssertEx.False(result.ExceedsBudget);
@@ -240,8 +251,10 @@ public sealed class ConversationContextBudgeterTests
         var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 2);
 
         // 110 tokens, of which 100 are pinned approval content. A budget of 75 is unreachable by dropping ordinary
-        // history alone — only evicting whole approval groups can clear it.
-        var result = sut.Budget(messages, contextTokenCapacity: 75, reservedOutputTokens: 0);
+        // history alone — only evicting whole approval groups can clear it. Any tighter and round 2 would have to go
+        // too, except that it is anchored in a protected turn, so the budgeter would legitimately keep it and report
+        // ExceedsBudget: the scenario would stop being about eviction at all.
+        var result = sut.Budget(messages, contextTokenCapacity: CapacityFor(75), reservedOutputTokens: 0);
 
         AssertEx.True(result.Trimmed);
         AssertEx.False(result.ExceedsBudget, "an approval-heavy history must not be permanently over budget");
@@ -449,12 +462,12 @@ public sealed class ConversationContextBudgeterTests
         var sut = CreateSut(CharCountEstimator(), recentTurnKeepCount: 2);
 
         // Control: history (70) fits a 70-token capacity with no overhead, so nothing is trimmed.
-        var control = sut.Budget(messages, contextTokenCapacity: 70, reservedOutputTokens: 0);
+        var control = sut.Budget(messages, contextTokenCapacity: CapacityFor(70), reservedOutputTokens: 0);
         AssertEx.False(control.Trimmed, "history alone fits the capacity");
         AssertEx.True(ReferenceEquals(messages, control.Messages), "an exactly-fitting history passes through unchanged");
 
         // A 20-char system prompt folds in 20 tokens of overhead: effective budget 50 -> the oldest turn (20) drops.
-        var withPrompt = sut.Budget(messages, contextTokenCapacity: 70, reservedOutputTokens: 0, systemPrompt: new string('s', 20));
+        var withPrompt = sut.Budget(messages, contextTokenCapacity: CapacityFor(70), reservedOutputTokens: 0, systemPrompt: new string('s', 20));
         AssertEx.True(withPrompt.Trimmed, "the system-prompt overhead must push the round over and force a trim");
         AssertEx.False(withPrompt.ExceedsBudget);
         AssertEx.Equal(expected: 2, withPrompt.MessagesDropped);
@@ -464,7 +477,7 @@ public sealed class ConversationContextBudgeterTests
         // Adding a 16-char tool definition folds in 16 more tokens: effective budget 34 -> a SECOND turn must drop,
         // proving the tool-schema footprint is counted on top of the system prompt.
         var withPromptAndTool = sut.Budget(messages,
-            contextTokenCapacity: 70,
+            contextTokenCapacity: CapacityFor(70),
             reservedOutputTokens: 0,
             systemPrompt: new string('s', 20),
             toolDefinitions: [new string('t', 16)]);
@@ -473,6 +486,32 @@ public sealed class ConversationContextBudgeterTests
         AssertEx.Equal(expected: 4, withPromptAndTool.MessagesDropped);
         AssertEx.False(ContainsText(withPromptAndTool.Messages, "user-msg-1"), "the tool-schema overhead forces a second turn to drop");
         AssertEx.True(ContainsText(withPromptAndTool.Messages, "user-msg-2"), "the protected recent turns are still kept");
+    }
+
+    [Test]
+    public void Budget_WhenTheEstimateSitsJustUnderTheWindow_StillTrims()
+    {
+        // The safety margin's whole point: an estimate at 0.9x the window used to pass as "fitting", and because the
+        // char heuristic under-counts by roughly a tenth, the provider then rejected the round outright rather than the
+        // budgeter trimming it. Budgeting against 85% turns that back into a trim.
+        var messages = new List<ChatMessage>
+        {
+            User("turn one"),
+            Assistant("answer one"),
+            User("turn two"),
+            Assistant("answer two"),
+            User("turn three"),
+            Assistant("answer three")
+        };
+        var sut = CreateSut(FixedEstimator(perMessage: 15), recentTurnKeepCount: 2);
+
+        // Six messages at 15 = 90 estimated, against a window of 100 with nothing reserved: 90% of the window.
+        var result = sut.Budget(messages, contextTokenCapacity: 100, reservedOutputTokens: 0);
+
+        AssertEx.True(result.Trimmed, "An estimate at 0.9x the window is inside the margin and must be trimmed.");
+        AssertEx.True(result.MessagesDropped > 0);
+        AssertEx.True(result.EstimatedTokensAfter <= TokenEstimatorCalibrationStore.ApplySafetyMargin(100),
+            $"The trimmed round must fit the margin, was {result.EstimatedTokensAfter}.");
     }
 
     private static ConversationContextBudgeter CreateSut(ITokenEstimator estimator,

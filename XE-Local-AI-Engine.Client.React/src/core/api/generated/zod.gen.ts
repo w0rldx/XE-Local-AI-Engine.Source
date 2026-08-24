@@ -81,6 +81,191 @@ export const zXeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse =
 	items: z.array(zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse).optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionSummaryResponse = z.object({
+	id: z.guid().optional(),
+	title: z.string().optional(),
+	kind: z.string().optional(),
+	status: z.string().optional(),
+	agentDefinitionId: z.guid().optional(),
+	stepCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	updatedAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionSummaryResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse = z.object({
+	id: z.guid().optional(),
+	title: z.string().optional(),
+	objective: z.string().optional(),
+	kind: z.string().optional(),
+	agentDefinitionId: z.guid().optional(),
+	conversationId: z.guid().optional(),
+	status: z.string().optional(),
+	currentTaskId: z.guid().nullish(),
+	stepCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxStepsPerRun: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	lastCheckpointId: z.guid().nullish(),
+	createdAtUtc: z.int().optional(),
+	updatedAtUtc: z.int().optional(),
+	version: z.int().optional(),
+	lastSequence: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1CreateWorkSessionRequest = z.object({
+	title: z.string().min(0).max(200),
+	objective: z.string().min(0).max(8000),
+	kind: z.string().optional(),
+	agentDefinitionId: z.guid().min(1),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1UpdateWorkSessionRequest = z.object({
+	title: z.string().min(0).max(200),
+	objective: z.string().min(0).max(8000),
+	agentDefinitionId: z.guid().min(1),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionTaskResponse = z.object({
+	id: z.guid().optional(),
+	parentTaskId: z.guid().nullish(),
+	sequence: z.int().optional(),
+	title: z.string().optional(),
+	detail: z.string().nullish(),
+	status: z.string().optional(),
+	blockedReason: z.string().nullish(),
+	origin: z.string().optional(),
+	createdStep: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	updatedStep: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionTasksResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionTaskResponse).optional(),
+	lastSequence: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionFeedRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionFindingResponse = z.object({
+	id: z.guid().optional(),
+	taskId: z.guid().nullish(),
+	sequence: z.int().optional(),
+	kind: z.string().optional(),
+	text: z.string().optional(),
+	sourceRef: z.string().nullish(),
+	createdStep: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	superseded: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionFindingsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionFindingResponse).optional(),
+	lastSequence: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse = z.object({
+	id: z.guid().optional(),
+	sequence: z.int().optional(),
+	kind: z.string().optional(),
+	name: z.string().optional(),
+	mediaType: z.string().optional(),
+	contentSha256: z.string().optional(),
+	sizeBytes: z.int().optional(),
+	isValid: z.boolean().optional(),
+	createdStep: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionArtifactsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse).optional(),
+	lastSequence: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionCheckpointResponse = z.object({
+	id: z.guid().optional(),
+	sequence: z.int().optional(),
+	step: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	summary: z.string().nullish(),
+	stateJson: z.string().optional(),
+	createdAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionCheckpointsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionCheckpointResponse).optional(),
+	lastSequence: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionEventResponse = z.object({
+	id: z.guid().optional(),
+	sequence: z.int().optional(),
+	step: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	eventType: z.string().optional(),
+	detailJson: z.string().nullish(),
+	outcome: z.string().nullish(),
+	occurredAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionEventsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionEventResponse).optional(),
+	lastSequence: z.int().optional(),
+	hasMore: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionEventFeedRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse = z.object({
+	artifact: zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse.optional(),
+	content: z.string().optional(),
+	isBase64: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageResponse = z.object({
+	messageId: z.guid().optional(),
+	conversationId: z.guid().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageRequest = z.object({
+	text: z.string().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsTutorialStateV1TutorialStateEntryResponse = z.object({
 	key: z.string(),
 	status: z.string(),
@@ -5233,6 +5418,175 @@ export const zDeleteWorkspacePath = z.object({
  * No Content
  */
 export const zDeleteWorkspaceResponse = z.void();
+
+/**
+ * Success
+ */
+export const zListWorkSessionsResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionsResponse;
+
+export const zCreateWorkSessionBody = zXeLocalAiEngineClientEndpointsWorkSessionsV1CreateWorkSessionRequest;
+
+/**
+ * Success
+ */
+export const zCreateWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
+
+export const zDeleteWorkSessionPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteWorkSessionResponse = z.void();
+
+export const zGetWorkSessionPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
+
+export const zUpdateWorkSessionBody = zXeLocalAiEngineClientEndpointsWorkSessionsV1UpdateWorkSessionRequest;
+
+export const zUpdateWorkSessionPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
+
+export const zStartWorkSessionPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zStartWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
+
+export const zPauseWorkSessionPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zPauseWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
+
+export const zResumeWorkSessionPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zResumeWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
+
+export const zCancelWorkSessionPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zCancelWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
+
+export const zListWorkSessionTasksPath = z.object({
+	sessionId: z.guid(),
+});
+
+export const zListWorkSessionTasksQuery = z.object({
+	sinceSeq: z.int(),
+});
+
+/**
+ * Success
+ */
+export const zListWorkSessionTasksResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionTasksResponse;
+
+export const zListWorkSessionFindingsPath = z.object({
+	sessionId: z.guid(),
+});
+
+export const zListWorkSessionFindingsQuery = z.object({
+	sinceSeq: z.int(),
+});
+
+/**
+ * Success
+ */
+export const zListWorkSessionFindingsResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionFindingsResponse;
+
+export const zListWorkSessionArtifactsPath = z.object({
+	sessionId: z.guid(),
+});
+
+export const zListWorkSessionArtifactsQuery = z.object({
+	sinceSeq: z.int(),
+});
+
+/**
+ * Success
+ */
+export const zListWorkSessionArtifactsResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionArtifactsResponse;
+
+export const zListWorkSessionCheckpointsPath = z.object({
+	sessionId: z.guid(),
+});
+
+export const zListWorkSessionCheckpointsQuery = z.object({
+	sinceSeq: z.int(),
+});
+
+/**
+ * Success
+ */
+export const zListWorkSessionCheckpointsResponse =
+	zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionCheckpointsResponse;
+
+export const zListWorkSessionEventsPath = z.object({
+	sessionId: z.guid(),
+});
+
+export const zListWorkSessionEventsQuery = z.object({
+	sinceSeq: z.int(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+/**
+ * Success
+ */
+export const zListWorkSessionEventsResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionEventsResponse;
+
+export const zGetWorkSessionArtifactContentPath = z.object({
+	sessionId: z.guid(),
+	artifactId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetWorkSessionArtifactContentResponse =
+	zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse;
+
+export const zPostWorkSessionMessageBody = zXeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageRequest;
+
+export const zPostWorkSessionMessagePath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zPostWorkSessionMessageResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageResponse;
 
 /**
  * Success

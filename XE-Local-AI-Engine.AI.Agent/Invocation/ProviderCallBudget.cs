@@ -26,6 +26,12 @@ public sealed class ProviderCallBudget
     // reads the invocation's shared counters without threading a parameter through the MAF/IChatClient surface.
     private static readonly AsyncLocal<ProviderCallBudget?> AmbientBudget = new();
 
+    // A caller-seeded TIGHTENING of MaxProviderCallsPerInvocation, read when a scope is created. The runner builds its
+    // own scope from the node options, so an outer caller cannot pass a per-run cap by seeding a budget itself — its
+    // scope is immediately replaced. A work-session step is that caller: one step made 14 tool calls on 2026-08-24 and
+    // the re-sent results overran the window from inside the loop, which no cross-step bound can reach.
+    private static readonly AsyncLocal<int?> AmbientMaxProviderCalls = new();
+
     private readonly int _maxProviderCalls;
     private readonly int _maxCumulativeInputTokens;
     private readonly long _startedTimestamp;
@@ -53,7 +59,7 @@ public sealed class ProviderCallBudget
     private ProviderCallBudget(ProviderCallBudgetOptions options, long startedTimestamp)
     {
         Options = options;
-        _maxProviderCalls = options.MaxProviderCallsPerInvocation;
+        _maxProviderCalls = ResolveMaxProviderCalls(options.MaxProviderCallsPerInvocation);
         _maxCumulativeInputTokens = options.MaxCumulativeInputTokens;
         _startedTimestamp = startedTimestamp;
     }
@@ -92,6 +98,28 @@ public sealed class ProviderCallBudget
         var previous = AmbientBudget.Value;
         AmbientBudget.Value = new ProviderCallBudget(options, startedTimestamp);
         return new Scope(previous);
+    }
+
+    /// <summary>
+    ///     Tightens <see cref="ProviderCallBudgetOptions.MaxProviderCallsPerInvocation" /> for every scope created in the
+    ///     current async flow, and returns a disposable restoring the prior value. Seed it BEFORE the run begins — the
+    ///     runner creates its own scope from the node options, so this is the only way an outer caller can cap one run.
+    ///     <b>Tighten-only</b>: a value at or above the configured ceiling is ignored, so no caller can raise it.
+    /// </summary>
+    public static IDisposable BeginCallCapScope(int maxProviderCalls)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxProviderCalls);
+
+        var previous = AmbientMaxProviderCalls.Value;
+        AmbientMaxProviderCalls.Value = maxProviderCalls;
+        return new CallCapScope(previous);
+    }
+
+    private static int ResolveMaxProviderCalls(int configuredMaxProviderCalls)
+    {
+        return AmbientMaxProviderCalls.Value is { } ambient && ambient < configuredMaxProviderCalls
+            ? ambient
+            : configuredMaxProviderCalls;
     }
 
     /// <summary>
@@ -228,6 +256,22 @@ public sealed class ProviderCallBudget
         public void Dispose()
         {
             AmbientBudget.Value = _previous;
+        }
+    }
+
+    // Restores the prior ambient call cap when disposed, so a nested seed cannot leak into an outer turn.
+    private sealed class CallCapScope : IDisposable
+    {
+        private readonly int? _previous;
+
+        public CallCapScope(int? previous)
+        {
+            _previous = previous;
+        }
+
+        public void Dispose()
+        {
+            AmbientMaxProviderCalls.Value = _previous;
         }
     }
 }

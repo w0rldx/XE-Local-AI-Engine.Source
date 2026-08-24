@@ -277,6 +277,61 @@ public sealed class OpenApiDocumentTests
         AssertSchemaProperties(schemas, "ImageRuntimeBlockedResponse", ["reason", "message", "activity"]);
     }
 
+    /// <summary>
+    ///     The only drift gate that can see a NEW path: <c>openapi:check</c> regenerates the client from the committed
+    ///     spec, so it passes happily while an endpoint is missing from it.
+    ///     <para>
+    ///         This fixture runs with the work-session feature at its default, which proves the second half of the
+    ///         design: the routes stay DISCOVERED when the node has the feature off — only their behaviour is gated —
+    ///         so the generated client describes the surface on every node rather than on some of them.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task LocalOpenApiDocument_DescribesWorkSessionSurface()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        var paths = document.RootElement.GetProperty("paths");
+
+        foreach (var (path, verbs) in new[]
+                 {
+                     ("/api/local/v1/work-sessions", new[] { "get", "post" }),
+                     ("/api/local/v1/work-sessions/{sessionId}", ["get", "patch", "delete"]),
+                     ("/api/local/v1/work-sessions/{sessionId}/start", ["post"]),
+                     ("/api/local/v1/work-sessions/{sessionId}/pause", ["post"]),
+                     ("/api/local/v1/work-sessions/{sessionId}/resume", ["post"]),
+                     ("/api/local/v1/work-sessions/{sessionId}/cancel", ["post"]),
+                     ("/api/local/v1/work-sessions/{sessionId}/tasks", ["get"]),
+                     ("/api/local/v1/work-sessions/{sessionId}/findings", ["get"]),
+                     ("/api/local/v1/work-sessions/{sessionId}/artifacts", ["get"]),
+                     ("/api/local/v1/work-sessions/{sessionId}/checkpoints", ["get"]),
+                     ("/api/local/v1/work-sessions/{sessionId}/events", ["get"]),
+                     ("/api/local/v1/work-sessions/{sessionId}/artifacts/{artifactId}/content", ["get"]),
+                     ("/api/local/v1/work-sessions/{sessionId}/messages", ["post"])
+                 })
+        {
+            AssertEx.True(paths.TryGetProperty(path, out var pathItem), $"Expected work-session path '{path}'.");
+            foreach (var verb in verbs)
+            {
+                AssertEx.True(pathItem.TryGetProperty(verb, out _), $"Expected {verb.ToUpperInvariant()} {path}.");
+            }
+        }
+
+        AssertResponses(paths, "/api/local/v1/work-sessions/{sessionId}/start", "post", ["202", "404", "409"]);
+        AssertResponses(paths, "/api/local/v1/work-sessions/{sessionId}/artifacts/{artifactId}/content", "get", ["404", "413"]);
+
+        // The blob path never leaves the process, so it must never appear in the artifact schema either.
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        AssertSchemaProperties(schemas,
+            "WorkSessionArtifactResponse",
+            ["id", "sequence", "kind", "name", "mediaType", "contentSha256", "sizeBytes", "isValid", "createdStep"]);
+    }
+
     private static void AssertResponses(JsonElement paths, string path, string verb, IReadOnlyList<string> expected)
     {
         var responses = paths.GetProperty(path).GetProperty(verb).GetProperty("responses");

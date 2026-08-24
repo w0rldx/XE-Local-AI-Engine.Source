@@ -56,6 +56,10 @@ export interface NodeCapabilityConfig {
 	// its nav entry is a child of the Preview group (next to Open Canvas and Image Generation) rather than a
 	// top-level link. This flag alone gates both the nav child and the /development route.
 	readonly development: boolean;
+	// Long-running agent Work Sessions (own plan, findings, artifacts and checkpoints, driven by a detached
+	// supervisor). Gates both the nav entry and the two /work-sessions routes. The node ALSO has its own
+	// `WorkSessions:Enabled` switch, which 404s the API — this flag only decides whether the surface is offered.
+	readonly workSessions: boolean;
 }
 
 export const nodeCapabilities: NodeCapabilityConfig = {
@@ -136,6 +140,7 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// DevelopmentPage resolves the authenticated server capability before exposing projects or actions, so an
 	// operator kill switch still fails closed without requiring a separate frontend build.
 	development: true,
+	workSessions: true,
 };
 
 export const nodeRoutePaths = {
@@ -181,6 +186,8 @@ export const nodeRoutePaths = {
 	images: "/images",
 	// Dedicated Development Mode project/task workflow — gated on nodeCapabilities.development.
 	development: "/development",
+	// Agent work sessions list — gated on nodeCapabilities.workSessions. The detail route is /work-sessions/{id}.
+	workSessions: "/work-sessions",
 	// Local-only diagnostics panel (frontend error snapshots) — always available.
 	diagnostics: "/diagnostics",
 } as const;

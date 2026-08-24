@@ -311,6 +311,59 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     artifact.Id,
                     "training_artifact_quality_decision_json");
                 break;
+            case AgentWorkSession workSession:
+                workSession.Objective = NodePayloadProtector.Decrypt(workSession.Objective, context.NodeEncryptionKey.Span, workSession.Id, workSession.Id, "work_session_objective");
+                break;
+            case AgentWorkSessionTask workSessionTask:
+                // The owning session id sits in the conversation slot, so a task row re-parented onto another session
+                // fails the tag check here rather than surfacing in that session's plan.
+                workSessionTask.Title = NodePayloadProtector.Decrypt(workSessionTask.Title,
+                    context.NodeEncryptionKey.Span,
+                    workSessionTask.SessionId,
+                    workSessionTask.Id,
+                    "work_session_task_title");
+                workSessionTask.Detail = DecryptIfPresent(workSessionTask.Detail,
+                    context.NodeEncryptionKey.Span,
+                    workSessionTask.SessionId,
+                    workSessionTask.Id,
+                    "work_session_task_detail");
+                workSessionTask.BlockedReason = DecryptIfPresent(workSessionTask.BlockedReason,
+                    context.NodeEncryptionKey.Span,
+                    workSessionTask.SessionId,
+                    workSessionTask.Id,
+                    "work_session_task_blocked_reason");
+                break;
+            case AgentWorkSessionFinding workSessionFinding:
+                workSessionFinding.Text = NodePayloadProtector.Decrypt(workSessionFinding.Text,
+                    context.NodeEncryptionKey.Span,
+                    workSessionFinding.SessionId,
+                    workSessionFinding.Id,
+                    "work_session_finding_text");
+                workSessionFinding.SourceRef = DecryptIfPresent(workSessionFinding.SourceRef,
+                    context.NodeEncryptionKey.Span,
+                    workSessionFinding.SessionId,
+                    workSessionFinding.Id,
+                    "work_session_finding_source_ref");
+                break;
+            case AgentWorkSessionCheckpoint workSessionCheckpoint:
+                workSessionCheckpoint.Summary = DecryptIfPresent(workSessionCheckpoint.Summary,
+                    context.NodeEncryptionKey.Span,
+                    workSessionCheckpoint.SessionId,
+                    workSessionCheckpoint.Id,
+                    "work_session_checkpoint_summary");
+                workSessionCheckpoint.StateJson = NodePayloadProtector.Decrypt(workSessionCheckpoint.StateJson,
+                    context.NodeEncryptionKey.Span,
+                    workSessionCheckpoint.SessionId,
+                    workSessionCheckpoint.Id,
+                    "work_session_checkpoint_state_json");
+                break;
+            case AgentWorkSessionEvent workSessionEvent:
+                workSessionEvent.DetailJson = DecryptIfPresent(workSessionEvent.DetailJson,
+                    context.NodeEncryptionKey.Span,
+                    workSessionEvent.SessionId,
+                    workSessionEvent.Id,
+                    "work_session_event_detail_json");
+                break;
         }
 
         return entity;

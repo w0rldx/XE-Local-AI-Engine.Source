@@ -29,7 +29,13 @@ internal sealed class ConversationCompactionService(
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     private readonly ILogger<ConversationCompactionService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-    public async Task<ConversationCompactionResult> CompactAsync(Guid conversationId, string? requestedModel = null, CancellationToken cancellationToken = default)
+    public Task<ConversationCompactionResult> CompactAsync(Guid conversationId, string? requestedModel = null, CancellationToken cancellationToken = default) =>
+        CompactAsync(conversationId, requestedModel, recentMessagesToKeepVerbatim: null, cancellationToken);
+
+    public async Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
+        string? requestedModel,
+        int? recentMessagesToKeepVerbatim,
+        CancellationToken cancellationToken = default)
     {
         var conversation = await _persistence.GetConversationAsync(conversationId, cancellationToken).ConfigureAwait(false);
         if (conversation is null)
@@ -60,7 +66,9 @@ internal sealed class ConversationCompactionService(
                         .OrderBy(anchorSequence)
                         .ToList();
 
-        var keep = Math.Max(2, _options.RecentMessagesToKeepVerbatim);
+        // The per-call override wins when present, otherwise the configured window. The floor of 2 applies to both, so a
+        // caller can shrink the window but never below the last exchange.
+        var keep = Math.Max(2, recentMessagesToKeepVerbatim ?? _options.RecentMessagesToKeepVerbatim);
         if (completed.Count <= keep)
         {
             return new ConversationCompactionResult(ConversationCompactionOutcome.NothingToCompact);

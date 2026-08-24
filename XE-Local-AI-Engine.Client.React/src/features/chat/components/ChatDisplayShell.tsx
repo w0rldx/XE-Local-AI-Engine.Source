@@ -77,6 +77,7 @@ export function ChatDisplayShell({
 	pendingFeedbackMessageId,
 	onSubmitFeedback,
 	conversationListCollapsed = false,
+	hideConversationList = false,
 	disabledNotice,
 	isLoadingMessages = false,
 	messagesLoadFailed = false,
@@ -157,7 +158,7 @@ export function ChatDisplayShell({
 	const chatPaneHeader = (
 		<Stack gap={4}>
 			<Group gap="xs" wrap="nowrap" align="center">
-				{isMobile ? (
+				{isMobile && !hideConversationList ? (
 					<Tooltip label={t("pages.chat.conversationList.show", "Show conversations")}>
 						<ActionIcon
 							variant="subtle"
@@ -212,7 +213,10 @@ export function ChatDisplayShell({
 				flexDirection: "column",
 				minHeight: 0,
 				minWidth: 0,
-				borderRadius: isMobile ? "var(--mantine-radius-md)" : "0 var(--mantine-radius-md) var(--mantine-radius-md) 0",
+				borderRadius:
+					isMobile || hideConversationList
+						? "var(--mantine-radius-md)"
+						: "0 var(--mantine-radius-md) var(--mantine-radius-md) 0",
 			}}
 		>
 			{isFileDragActive ? (
@@ -269,6 +273,7 @@ export function ChatDisplayShell({
 					modelOptions={modelOptions}
 					cloudModelOptions={cloudModelOptions}
 					modelSelectorDisabled={inputStatus.modelSelectorDisabled}
+					agentSelectorDisabled={inputStatus.agentSelectorDisabled}
 					sendDisabled={inputStatus.sendDisabled}
 					selectedModel={selectedModel}
 					reasoningEffort={reasoningEffort}
@@ -309,6 +314,7 @@ export function ChatDisplayShell({
 			<Stack gap="md" h="100%">
 				{notice}
 				<div style={{ flex: 1, minHeight: 0 }}>{chatPane}</div>
+				{hideConversationList ? null : (
 				<Drawer
 					opened={conversationDrawerOpened}
 					onClose={closeConversationDrawer}
@@ -327,6 +333,7 @@ export function ChatDisplayShell({
 				>
 					{conversationList}
 				</Drawer>
+				)}
 			</Stack>
 		);
 	}
@@ -341,7 +348,11 @@ export function ChatDisplayShell({
 				style={{
 					position: "relative",
 					display: "grid",
-					gridTemplateColumns: conversationListCollapsed ? "68px minmax(0, 1fr)" : "320px minmax(0, 1fr)",
+					gridTemplateColumns: hideConversationList
+						? "minmax(0, 1fr)"
+						: conversationListCollapsed
+							? "68px minmax(0, 1fr)"
+							: "320px minmax(0, 1fr)",
 					gridTemplateRows: "minmax(0, 1fr)",
 					gap: "var(--mantine-spacing-md)",
 					flex: 1,
@@ -349,7 +360,7 @@ export function ChatDisplayShell({
 					transition: "grid-template-columns 240ms cubic-bezier(0.4, 0, 0.2, 1)",
 				}}
 			>
-				{conversationList}
+				{hideConversationList ? null : conversationList}
 				{chatPane}
 			</div>
 		</Stack>

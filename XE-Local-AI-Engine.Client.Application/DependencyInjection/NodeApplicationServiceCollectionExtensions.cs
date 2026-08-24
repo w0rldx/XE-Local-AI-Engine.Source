@@ -42,6 +42,10 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeKnowledgeBase(configuration);
         builder.AddNodeChat(configuration);
         builder.AddNodeChatStreamBudget(configuration);
+
+        // After AddNodeChat: hosted services start in registration order, so the chat restart recovery terminalizes
+        // rows orphaned by a crash before the work-session reconciler collapses those sessions to Interrupted.
+        builder.AddNodeWorkSessions(configuration);
         builder.AddNodeDevelopment(configuration);
         // Development Mode container sandbox (ADR 0004). After AddNodeDevelopment so it reads as what it is: a
         // Development Mode concern, not an AgentHome one.
