@@ -81,7 +81,18 @@ internal sealed class WorkSessionCheckpointComposer(IAgentWorkSessionStore store
     {
         // A blank requested model means "the node default", which is right here: a work-session agent pins no model, and
         // compaction stays on-node regardless of what the session itself runs on.
-        var result = await _compaction.CompactAsync(conversationId, requestedModel: null, cancellationToken).ConfigureAwait(false);
+        // The keep window is the session one (WorkSessionStepContextBound.SessionKeepVerbatim), not the configured chat
+        // default of eight: at eight, a session that checkpoints before its fourth step has nothing OUTSIDE the window
+        // to fold, compaction answers NothingToCompact, and the checkpoint's prose half stays null — precisely on the
+        // short sessions whose checkpoint is the only record of what happened. Two is safe for the same reason it is
+        // safe there: everything durable is in the state block, rebuilt from the database on every step. Deliberate
+        // side effect: the fold persists the synopsis and advances the send path's compaction cover, so the step after
+        // a checkpoint resumes on the synopsis plus the last exchange — one on-node summarizer call per checkpoint.
+        var result = await _compaction.CompactAsync(conversationId,
+                                          requestedModel: null,
+                                          WorkSessionStepContextBound.SessionKeepVerbatim,
+                                          cancellationToken)
+                                      .ConfigureAwait(false);
 
         // Any non-blank synopsis wins, not only a freshly folded one. The step boundary
         // (WorkSessionStepContextBound) folds this conversation with a keep window of 2 whenever it grows past the

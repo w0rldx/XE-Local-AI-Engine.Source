@@ -1605,6 +1605,7 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 				mutatingConversationId={mutatingConversationId}
 				conversationListCollapsed={collapsed}
 				hideConversationList={isScoped}
+				isWorkSessionConversation={isScoped}
 				onSelectConversation={setRequestedConversationId}
 				onCreateConversation={handleCreateConversation}
 				onToggleConversationList={toggleSidebar}

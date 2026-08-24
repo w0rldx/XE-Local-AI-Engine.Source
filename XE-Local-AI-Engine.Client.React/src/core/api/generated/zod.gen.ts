@@ -239,6 +239,7 @@ export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionEventRespon
 	detailJson: z.string().nullish(),
 	outcome: z.string().nullish(),
 	occurredAtUtc: z.int().optional(),
+	operationId: z.guid().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionEventsResponse = z.object({

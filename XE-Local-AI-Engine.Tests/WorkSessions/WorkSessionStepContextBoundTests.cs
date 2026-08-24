@@ -77,12 +77,15 @@ public sealed class WorkSessionStepContextBoundTests
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         await SeedTranscriptAsync(factory.Services, session.ConversationId, turns: 4, contentChars: 1_000).ConfigureAwait(false);
         var fake = ResolveStream(factory, ref stream);
+        compaction.SendsSoFar = () => fake.Requests.Count;
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
 
         AssertEx.Equal(expected: 1, fake.Requests.Count);
-        AssertEx.Empty(compaction.Calls.Where(call => call.KeepVerbatim is not null).ToList(),
+        // Only the folds that precede the send are the boundary's. The checkpoint the pause takes afterwards folds the
+        // same conversation with the same window on purpose — that is what gives a short session a synopsis at all.
+        AssertEx.Empty(compaction.Calls.Where(call => call.KeepVerbatim is not null && call.SendsBefore == 0).ToList(),
             "Under budget, the step boundary must not summarize — that is a local model call per step for nothing.");
     }
 
@@ -175,7 +178,9 @@ public sealed class WorkSessionStepContextBoundTests
 
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         var fake = ResolveStream(factory, ref stream);
-        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantFailed], TerminalError: ProviderCallBudget.CeilingExceededMessage));
+        // The message the step cap actually produces: the supervisor seeds a per-step cap tighter than the node-wide
+        // ceiling, so the budget throws its step wording, which the classifier forwards verbatim onto the failed row.
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantFailed], TerminalError: ProviderCallBudget.StepCallCapReachedMessage));
         fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted]));
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
@@ -183,6 +188,34 @@ public sealed class WorkSessionStepContextBoundTests
 
         AssertEx.Equal(expected: 2, fake.Requests.Count, "The next step must still be sent after the cap ends one.");
         AssertEx.Equal(expected: 2, settled.StepCount, "A capped step still counts as a step.");
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        AssertEx.Contains(events, entry => entry.EventType == "StepEnded" && entry.Outcome == nameof(ProviderCallBudget));
+        AssertEx.Empty(events.Where(entry => entry.EventType == "StepFailed").ToList(), "A spent budget is not a failure.");
+    }
+
+    [Test]
+    public async Task Loop_WhenAStepHitsTheNodeWideCeiling_StillEndsTheStepRatherThanTheSession()
+    {
+        // The wider ceiling is a bound too. A session that reaches it is bounded, not broken, so the supervisor keeps
+        // matching BOTH of the budget's fixed messages — dropping this one would move the same bug one ceiling out.
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1")),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantFailed], TerminalError: ProviderCallBudget.CeilingExceededMessage));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
 
         var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
         AssertEx.Contains(events, entry => entry.EventType == "StepEnded" && entry.Outcome == nameof(ProviderCallBudget));
@@ -349,14 +382,21 @@ public sealed class WorkSessionStepContextBoundTests
     /// <summary>Records every compaction the loop asks for, including the keep window it asked with.</summary>
     private sealed class RecordingCompactionService : IConversationCompactionService
     {
-        public List<(Guid ConversationId, int? KeepVerbatim)> Calls { get; } = [];
+        public List<(Guid ConversationId, int? KeepVerbatim, int SendsBefore)> Calls { get; } = [];
+
+        /// <summary>
+        ///     Sends observed so far, when a test sets it. The step boundary and the checkpoint composer now both fold
+        ///     the same conversation with the same keep window, so the keep window alone no longer says which one
+        ///     called: the boundary folds BEFORE the step's send, the checkpoint only after it.
+        /// </summary>
+        public Func<int>? SendsSoFar { get; set; }
 
         public Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
             string? requestedModel,
             int? recentMessagesToKeepVerbatim,
             CancellationToken cancellationToken = default)
         {
-            Calls.Add((conversationId, recentMessagesToKeepVerbatim));
+            Calls.Add((conversationId, recentMessagesToKeepVerbatim, SendsSoFar?.Invoke() ?? 0));
             return Task.FromResult(new ConversationCompactionResult(ConversationCompactionOutcome.NothingToCompact));
         }
     }

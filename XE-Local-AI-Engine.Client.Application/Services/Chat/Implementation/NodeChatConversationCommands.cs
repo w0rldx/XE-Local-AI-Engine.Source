@@ -4,6 +4,7 @@ using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using static NodeChatMetadataSerializer;
 using static NodeChatPersistenceSql;
 
@@ -12,12 +13,17 @@ using static NodeChatPersistenceSql;
 ///     archive/delete plus the conversation-scoped origin and selected-path accessors. Shares the single
 ///     <see cref="NodeChatPersistenceWriter" /> so the per-conversation write-key serialization is preserved.
 /// </summary>
-internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter writer, IConversationUploadedFileStore? uploadedFileStore)
+internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter writer,
+    IConversationUploadedFileStore? uploadedFileStore,
+    IWorkSessionArtifactBlobStore? workSessionArtifactBlobStore)
 {
     private readonly NodeChatPersistenceWriter _writer = writer ?? throw new ArgumentNullException(nameof(writer));
 
     // Optional: present in production (DI), absent in the single-arg test compositions that create no uploaded files.
     private readonly IConversationUploadedFileStore? _uploadedFileStore = uploadedFileStore;
+
+    // Optional for the same reason: a test composition that owns no work session has no artifact bytes to tear down.
+    private readonly IWorkSessionArtifactBlobStore? _workSessionArtifactBlobStore = workSessionArtifactBlobStore;
 
     public async Task<NodeChatConversationDto> CreateConversationAsync(NodeChatCreateConversationRequest request, CancellationToken cancellationToken = default)
     {
@@ -193,6 +199,10 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // Captured inside the transaction, used after it: the artifact blobs are keyed by session id and the only
+        // record of the conversation → session mapping is the row the purge below deletes.
+        Guid? workSessionId = null;
+
         var result = await _writer.ExecuteConversationExclusiveAsync(request.ConversationId,
             async (dbContext, token) =>
             {
@@ -212,6 +222,9 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
 
                 if (request.PurgeImmediately)
                 {
+                    // Read the owned session id BEFORE the rows go; nothing can resolve it afterwards.
+                    workSessionId = await ReadWorkSessionIdAsync(dbContext, request.ConversationId, token).ConfigureAwait(false);
+
                     // Delete the complete DB footprint through the shared helper so this path and the retention sweeper
                     // never drift on which child tables constitute a conversation. On-disk upload blobs are torn down
                     // after commit below.
@@ -236,7 +249,28 @@ internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter wri
             await _uploadedFileStore.DeleteAllForConversationAsync(request.ConversationId, cancellationToken).ConfigureAwait(false);
         }
 
+        if (workSessionId is { } sessionId)
+        {
+            // Same shape as the uploads above: the artifact bytes live on disk under the session id, so the row purge
+            // cannot reach them. Best-effort and never throws on a missing directory.
+            _workSessionArtifactBlobStore?.DeleteSession(sessionId);
+        }
+
         return result;
+    }
+
+    /// <summary>
+    ///     The id of the work session this conversation owns (1:1), or null when it owns none. Read on the writer's own
+    ///     connection rather than through <c>IAgentWorkSessionStore</c>: that store is scoped and this collaborator
+    ///     hangs off a singleton facade, so injecting it would be a captive dependency.
+    /// </summary>
+    private static async Task<Guid?> ReadWorkSessionIdAsync(NodeChatDbContext dbContext, Guid conversationId, CancellationToken cancellationToken)
+    {
+        return await dbContext.AgentWorkSessions.AsNoTracking()
+                              .Where(entity => entity.ConversationId == conversationId)
+                              .Select(entity => (Guid?)entity.Id)
+                              .SingleOrDefaultAsync(cancellationToken)
+                              .ConfigureAwait(false);
     }
 
     public async Task<NodeChatConversationDto?> RenameConversationAsync(NodeChatRenameConversationRequest request, CancellationToken cancellationToken = default)

@@ -173,13 +173,7 @@ public sealed class GetWorkSessionArtifactContentEndpoint(IWorkSessionService se
             // The ceiling is checked against the RECORDED size before the blob is opened, so an over-ceiling artifact
             // is never read into memory to be refused afterwards. It can only exist if the operator lowered the cap
             // after the artifact was saved — the save path enforces the same number.
-            var artifacts = await _service.ListArtifactsAsync(req.SessionId, sinceSequence: 0, ct).ConfigureAwait(false);
-            var artifact = artifacts.SingleOrDefault(candidate => candidate.Id == req.ArtifactId);
-            if (artifact is null)
-            {
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
-                return;
-            }
+            var artifact = await _service.GetArtifactAsync(req.SessionId, req.ArtifactId, ct).ConfigureAwait(false);
 
             if (artifact.SizeBytes > _options.MaxArtifactBytes)
             {

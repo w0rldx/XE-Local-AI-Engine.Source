@@ -13,13 +13,16 @@ internal sealed record RecordFindingRequest(string? Kind, string? Text, string? 
 /// </summary>
 internal sealed class RecordFindingToolHandler(IServiceScopeFactory scopeFactory,
     IOptions<WorkSessionOptions> options,
-    IWorkSessionEventPublisher publisher) : WorkSessionToolHandler<RecordFindingRequest>(scopeFactory, options, publisher)
+    IWorkSessionEventPublisher publisher,
+    ILogger<RecordFindingToolHandler> logger) : WorkSessionToolHandler<RecordFindingRequest>(scopeFactory, options, publisher, logger)
 {
     public override string ToolName => WorkSessionToolDefinitions.RecordFinding.ToolName;
 
     public override string Description => WorkSessionToolDefinitions.RecordFinding.Description;
 
     public override string ParameterSchema => WorkSessionToolDefinitions.RecordFinding.ParameterSchema;
+
+    protected override string ExampleArguments => WorkSessionToolDefinitions.RecordFinding.ExampleArguments;
 
     protected override string? Validate(RecordFindingRequest request)
     {

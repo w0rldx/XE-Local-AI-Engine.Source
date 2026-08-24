@@ -21,13 +21,16 @@ internal sealed record WorkSessionCompletionDetail(string Summary);
 /// </summary>
 internal sealed class CompleteWorkSessionToolHandler(IServiceScopeFactory scopeFactory,
     IOptions<WorkSessionOptions> options,
-    IWorkSessionEventPublisher publisher) : WorkSessionToolHandler<CompleteWorkSessionRequest>(scopeFactory, options, publisher)
+    IWorkSessionEventPublisher publisher,
+    ILogger<CompleteWorkSessionToolHandler> logger) : WorkSessionToolHandler<CompleteWorkSessionRequest>(scopeFactory, options, publisher, logger)
 {
     public override string ToolName => WorkSessionToolDefinitions.CompleteWorkSession.ToolName;
 
     public override string Description => WorkSessionToolDefinitions.CompleteWorkSession.Description;
 
     public override string ParameterSchema => WorkSessionToolDefinitions.CompleteWorkSession.ParameterSchema;
+
+    protected override string ExampleArguments => WorkSessionToolDefinitions.CompleteWorkSession.ExampleArguments;
 
     protected override string? Validate(CompleteWorkSessionRequest request)
     {

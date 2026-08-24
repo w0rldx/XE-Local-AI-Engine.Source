@@ -21,6 +21,17 @@ public sealed class ProviderCallBudget
     public const string CeilingExceededMessage =
         "The agent exceeded this turn's provider-call budget (a runaway tool or hand-off loop) and was stopped — start a new chat or simplify the request.";
 
+    /// <summary>
+    ///     Fixed, path-free terminal message for the OTHER trip: a caller-seeded per-step cap
+    ///     (<see cref="BeginCallCapScope" />) that is TIGHTER than the configured invocation ceiling. That is a bound
+    ///     being spent, not a runaway loop — the work-session supervisor ends the step and the next one resumes from the
+    ///     saved state — so the copy must not read as a fault. Pinned by
+    ///     <c>ProviderCallBudgetTests.RegisterProviderRound_WhenTheStepCapTrips_ReportsTheStepMessage</c> and matched
+    ///     verbatim by the supervisor and by the chat pane (<c>ChatMessage.tsx</c>).
+    /// </summary>
+    public const string StepCallCapReachedMessage =
+        "This step reached its provider-call cap; the work session continues from its saved state on the next step.";
+
     // The single ambient slot. AsyncLocal flows the value into every continuation the run awaits, including the
     // function-invocation pipeline's inner provider rounds and the MAF workflow's participant turns, so the middleware
     // reads the invocation's shared counters without threading a parameter through the MAF/IChatClient surface.
@@ -33,6 +44,9 @@ public sealed class ProviderCallBudget
     private static readonly AsyncLocal<int?> AmbientMaxProviderCalls = new();
 
     private readonly int _maxProviderCalls;
+    // True when the ambient per-step cap, not the configured invocation ceiling, is what _maxProviderCalls holds —
+    // the one bit that tells a spent step bound apart from a runaway loop when the call count trips.
+    private readonly bool _callCapTightened;
     private readonly int _maxCumulativeInputTokens;
     private readonly long _startedTimestamp;
     private long _charsTruncated;
@@ -59,7 +73,10 @@ public sealed class ProviderCallBudget
     private ProviderCallBudget(ProviderCallBudgetOptions options, long startedTimestamp)
     {
         Options = options;
-        _maxProviderCalls = ResolveMaxProviderCalls(options.MaxProviderCallsPerInvocation);
+        // "<=" not "<": a step cap seeded at exactly the invocation ceiling is still the caller's per-step bound, and its
+        // trip must read as a spent step, not a runaway loop.
+        _callCapTightened = AmbientMaxProviderCalls.Value is { } ambient && ambient <= options.MaxProviderCallsPerInvocation;
+        _maxProviderCalls = _callCapTightened ? AmbientMaxProviderCalls.Value!.Value : options.MaxProviderCallsPerInvocation;
         _maxCumulativeInputTokens = options.MaxCumulativeInputTokens;
         _startedTimestamp = startedTimestamp;
     }
@@ -115,13 +132,6 @@ public sealed class ProviderCallBudget
         return new CallCapScope(previous);
     }
 
-    private static int ResolveMaxProviderCalls(int configuredMaxProviderCalls)
-    {
-        return AmbientMaxProviderCalls.Value is { } ambient && ambient < configuredMaxProviderCalls
-            ? ambient
-            : configuredMaxProviderCalls;
-    }
-
     /// <summary>
     ///     Registers one raw provider round of <paramref name="estimatedInputTokens" /> against the cumulative ceilings.
     ///     Throws <see cref="ProviderCallBudgetExceededException" /> when either ceiling is exceeded, so the middleware can
@@ -142,7 +152,11 @@ public sealed class ProviderCallBudget
         {
             Interlocked.Increment(ref _providerRoundsRejected);
             Interlocked.Add(ref _rejectedInputTokens, normalizedInputTokens);
-            throw new ProviderCallBudgetExceededException(CeilingExceededMessage);
+
+            // Only a call-count trip under a caller-tightened step cap is the benign "bound spent" case. A cumulative
+            // input-token trip keeps the runaway wording even under a step cap — that one is never routine.
+            var stepCapReached = _callCapTightened && tokens <= _maxCumulativeInputTokens;
+            throw new ProviderCallBudgetExceededException(stepCapReached ? StepCallCapReachedMessage : CeilingExceededMessage);
         }
 
         Interlocked.Add(ref _toolSchemaTokens, Math.Max(0, toolSchemaTokens));

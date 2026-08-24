@@ -84,6 +84,60 @@ public sealed class WorkSessionToolHandlerTests
     }
 
     [Test]
+    [Arguments("name")]
+    [Arguments("text")]
+    [Arguments("summary")]
+    public async Task UpdateWorkPlan_Add_AcceptsATitleAlias(string alias)
+    {
+        // A 27B model reached for these keys instead of 'title' and, when the unknown key failed the whole batch at
+        // deserialization, burned the step's entire provider-call budget retrying.
+        await using var factory = NewFactory();
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
+
+        using (AgentRunConversationContext.BeginScope(session.ConversationId))
+        {
+            AssertEx.Contains(await handler.ExecuteAsync($$"""{"operations":[{"op":"add","{{alias}}":" Read the runtime docs "}]}""").ConfigureAwait(false),
+                "1 work-plan change");
+        }
+
+        AssertEx.Equal("Read the runtime docs",
+            (await ReadTasksAsync(factory, sessionId).ConfigureAwait(false)).Single().Title,
+            $"'{alias}' is an alias for 'title', trimmed like one.");
+    }
+
+    [Test]
+    public async Task UpdateWorkPlan_Add_WhenNoTitleOrAlias_ReturnsSentenceWithExample()
+    {
+        await using var factory = NewFactory();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
+
+        using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
+        var result = await handler.ExecuteAsync("""{"operations":[{"op":"add"}]}""").ConfigureAwait(false);
+
+        AssertEx.Contains(result, "needs a title");
+        AssertEx.Contains(result, "\"op\":\"add\"", message: "The sentence carries a shape the model can copy, not just a complaint.");
+    }
+
+    [Test]
+    public async Task UpdateWorkPlan_WhenAKeyIsUnknown_ReturnsTheExampleAndNoClrTypeName()
+    {
+        // Valid JSON, wrong shape: the deserializer rejects the unknown key for the whole batch, and its own message
+        // names the CLR request type — useless to a model and the thing that used to be echoed straight back.
+        await using var factory = NewFactory();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
+        var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
+
+        using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
+        var result = await handler.ExecuteAsync("""{"operations":[{"op":"add","label":"Investigate"}]}""").ConfigureAwait(false);
+
+        AssertEx.Contains(result, WorkSessionToolDefinitions.UpdateWorkPlan.ExampleArguments);
+        AssertEx.False(result.Contains("WorkPlanOperationRequest", StringComparison.Ordinal), "The parser's message is for the log, never for the model.");
+    }
+
+    [Test]
     public async Task UpdateWorkPlan_WhenAnOperationIsUnknown_ReturnsAnActionableSentence()
     {
         await using var factory = NewFactory();
@@ -295,9 +349,21 @@ public sealed class WorkSessionToolHandlerTests
         using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);
         foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => WorkSessionToolDefinitions.ToolNames.Contains(candidate.ToolName)))
         {
-            AssertEx.Contains(await handler.ExecuteAsync("{ not json").ConfigureAwait(false), "were not valid JSON");
+            var result = await handler.ExecuteAsync("{ not json").ConfigureAwait(false);
+            AssertEx.Contains(result, "were not valid JSON");
+            AssertEx.Contains(result,
+                Example(handler.ToolName),
+                message: $"{handler.ToolName} must hand back a shape the model can copy rather than the parser's message.");
         }
     }
+
+    private static string Example(string toolName) => toolName switch
+    {
+        WorkSessionToolDefinitions.UpdateWorkPlan.ToolName => WorkSessionToolDefinitions.UpdateWorkPlan.ExampleArguments,
+        WorkSessionToolDefinitions.RecordFinding.ToolName => WorkSessionToolDefinitions.RecordFinding.ExampleArguments,
+        WorkSessionToolDefinitions.SaveArtifact.ToolName => WorkSessionToolDefinitions.SaveArtifact.ExampleArguments,
+        _ => WorkSessionToolDefinitions.CompleteWorkSession.ExampleArguments
+    };
 
     private static TestServerWebAppFactory NewFactory(RecordingWorkSessionEventPublisher? publisher = null, params (string Key, string Value)[] configuration) =>
         new()

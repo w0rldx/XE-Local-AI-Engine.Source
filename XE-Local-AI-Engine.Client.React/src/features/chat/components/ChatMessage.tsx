@@ -1,5 +1,5 @@
 import { Alert, Anchor, Avatar, Badge, Box, Group, Paper, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconPlayerStop, IconSparkles } from "@tabler/icons-react";
+import { IconAlertTriangle, IconPlayerStop, IconPlayerTrackNext, IconSparkles } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import { memo, type ReactNode } from "react";
@@ -25,6 +25,14 @@ import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPref
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
 const EMPTY_PARTS: ChatMessagePart[] = [];
+
+// Verbatim copy of ProviderCallBudget.StepCallCapReachedMessage (XE-Local-AI-Engine.AI.Agent/Invocation/
+// ProviderCallBudget.cs), the fixed message a work-session step carries when it ends because it spent its
+// per-step provider-call cap. The backend cannot un-fail that row (a terminalized chat message is immutable) and
+// the stream event carries no failure category, so the text IS the signal. Pinned server-side by
+// ProviderCallBudgetTests.RegisterProviderRound_WhenTheStepCapTrips_ReportsTheStepMessage — change both together.
+const STEP_CALL_CAP_MESSAGE =
+	"This step reached its provider-call cap; the work session continues from its saved state on the next step.";
 
 /**
  * Resolves the ordered parts to render for an assistant turn. Prefers the streaming/persisted `parts`; otherwise
@@ -68,6 +76,9 @@ interface ChatMessageProps {
 	// Live failure classification (e.g. "inter-chunk-stall") from the stream state. Only present for the
 	// transient streaming turn; persisted failed turns carry just `message.error`. Folded into the error block.
 	failureCategory?: string;
+	// The conversation belongs to a work session. Scopes the step-cap notice below so the same text in an ordinary
+	// chat still renders as the red failure it is there.
+	isWorkSessionConversation?: boolean;
 }
 
 function hasText(value?: string): boolean {
@@ -107,6 +118,7 @@ export const ChatMessage = memo(function ChatMessage({
 	onSubmitFeedback,
 	reasoningEffort,
 	failureCategory,
+	isWorkSessionConversation = false,
 }: ChatMessageProps) {
 	const { t } = useTranslation();
 	const reducedMotion = useReducedMotion();
@@ -170,7 +182,13 @@ export const ChatMessage = memo(function ChatMessage({
 	// string-matching the (localized) error text, so it holds for the live cancel, the cancelled stream event,
 	// and the persisted reload alike.
 	const isCancelled = assistantMessage && message.status === "cancelled";
-	const showErrorAlert = !isCancelled && (Boolean(errorText) || failureCategory === "ModelNotInstalled");
+	// A work-session step that ended on its own provider-call cap is a bound being spent, not a fault: the tools it
+	// ran are persisted and the next step resumes from the saved state. The row is persisted `failed` (a chat message
+	// cannot be un-failed once terminalized) and carries no category, so the fixed backend message is the only signal
+	// — matched verbatim, and only inside a session, so ordinary chat is untouched.
+	const isStepBudgetNotice =
+		isWorkSessionConversation && assistantMessage && message.status === "failed" && errorText === STEP_CALL_CAP_MESSAGE;
+	const showErrorAlert = !isCancelled && !isStepBudgetNotice && (Boolean(errorText) || failureCategory === "ModelNotInstalled");
 	const canCopy = hasContentStarted && !isStreaming;
 	const canRegenerate = assistantMessage && !isStreaming && Boolean(onRegenerate);
 	const canBranch = assistantMessage && !isStreaming && Boolean(onBranch);
@@ -301,6 +319,14 @@ export const ChatMessage = memo(function ChatMessage({
 						<IconPlayerStop size={14} color="var(--mantine-color-dimmed)" />
 						<Text size="sm" c="dimmed">
 							{t("pages.chat.stopped", "Generation stopped")}
+						</Text>
+					</Group>
+				) : null}
+				{isStepBudgetNotice ? (
+					<Group gap={6} align="center" data-testid={`chat-message-step-budget-${message.id}`} role="status">
+						<IconPlayerTrackNext size={14} color="var(--mantine-color-dimmed)" />
+						<Text size="sm" c="dimmed">
+							{t("pages.chat.stepBudgetReached", "Step ended — call budget reached, continuing.")}
 						</Text>
 					</Group>
 				) : null}

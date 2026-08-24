@@ -462,6 +462,9 @@ export interface ChatDisplayShellProps {
 	// Drops the conversation column (and its header toggle) entirely. `conversationListCollapsed` only shrinks the
 	// sidebar to an icon rail, which is wrong for an owner-pinned conversation that has no list to pick from.
 	hideConversationList?: boolean;
+	// The conversation belongs to a work session (a {@link ChatScope} owner). Forwarded to the message list so a
+	// step that ended on its own provider-call cap renders as a neutral notice instead of a red failure.
+	isWorkSessionConversation?: boolean;
 	disabledNotice?: ReactNode;
 	// True while the selected conversation's full payload (with messages) is loading. Forwarded to the
 	// message list so the empty-state never flashes over a populated thread during the refetch.

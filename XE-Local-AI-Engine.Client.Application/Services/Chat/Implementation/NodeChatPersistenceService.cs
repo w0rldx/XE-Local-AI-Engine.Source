@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
 ///     Facade over the node chat persistence path. Implements <see cref="INodeChatPersistenceService" /> by delegating
@@ -18,14 +19,17 @@ public sealed class NodeChatPersistenceService : INodeChatPersistenceService
     private readonly NodeChatReadModel _readModel;
     private readonly NodeChatVariantBranchService _variants;
 
-    // The uploaded-file store is an optional dependency: the DI container injects the real singleton in production so
-    // conversation-delete also tears down on-disk attachments, while existing single-arg test constructions stay valid
-    // (they exercise paths that create no uploaded files, so a null store simply skips the disk cleanup).
-    public NodeChatPersistenceService(NodeChatPersistenceWriter writer, IConversationUploadedFileStore? uploadedFileStore = null)
+    // The uploaded-file and work-session artifact blob stores are optional dependencies: the DI container injects the
+    // real singletons in production so conversation-delete also tears down the on-disk attachments and work-session
+    // artifact bytes, while existing shorter test constructions stay valid (they exercise paths that create neither, so
+    // a null store simply skips that disk cleanup).
+    public NodeChatPersistenceService(NodeChatPersistenceWriter writer,
+        IConversationUploadedFileStore? uploadedFileStore = null,
+        IWorkSessionArtifactBlobStore? workSessionArtifactBlobStore = null)
     {
         ArgumentNullException.ThrowIfNull(writer);
 
-        _conversations = new NodeChatConversationCommands(writer, uploadedFileStore);
+        _conversations = new NodeChatConversationCommands(writer, uploadedFileStore, workSessionArtifactBlobStore);
         _readModel = new NodeChatReadModel(writer);
         _messages = new NodeChatMessageCommands(writer);
         _variants = new NodeChatVariantBranchService(writer, _readModel);

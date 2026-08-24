@@ -46,11 +46,29 @@ public sealed class ChatTurnResolver(
         var resolveStartTimestamp = Stopwatch.GetTimestamp();
         using var resolveActivity = NodeActivitySource.Source.StartActivity("chat.turn.resolve");
 
+        // Capabilities must describe the model that ACTUALLY runs the turn. With no installed GGUF chat model the active
+        // model is null, yet a bound agent's pin still gives the turn a model to run (every server-initiated
+        // work-session step on an Ollama-only node). Resolving from the null head there would report NOT-capable and
+        // strip the entire tool offer, so on that branch alone the PIN is the capability head. One extra store read, and
+        // only when there is no active model to key on: the UI path with an installed GGUF never reaches it and stays
+        // byte-identical. The agent resolver below still receives the null active model and re-derives the pin itself; it
+        // also re-classifies the pin's locality, so the `activeModelIsCloud` we pass it is unused whenever it honors a
+        // pin — which is exactly when this lookup fired.
+        var capabilityModel = activeModel;
+        if (activeModel is null && !userPickedConcreteModel && effectiveAgentId is { } pinnedDefinitionId)
+        {
+            var pinnedDefinition = await agentDefinitionStore.GetByIdAsync(pinnedDefinitionId, cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(pinnedDefinition?.ModelProfile))
+            {
+                capabilityModel = pinnedDefinition.ModelProfile;
+            }
+        }
+
         var capabilitiesStart = Stopwatch.GetTimestamp();
         ModelCapabilitySnapshot capabilities;
         using (NodeActivitySource.Source.StartActivity("chat.turn.resolve_capabilities"))
         {
-            capabilities = await modelCapabilityResolver.ResolveAsync(activeModel, cancellationToken).ConfigureAwait(false);
+            capabilities = await modelCapabilityResolver.ResolveAsync(capabilityModel, cancellationToken).ConfigureAwait(false);
         }
 
         var supportsThinking = capabilities.SupportsThinking;
@@ -113,8 +131,13 @@ public sealed class ChatTurnResolver(
                 orchestration.Orchestration is not null);
         }
 
-        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, supportsVision, requiresInstalledChatModel, activeModelIsCloud,
-            effectiveModelIsCloud);
+        // The caller's flag is raised from the LOCAL-default head alone (no installed GGUF chat model), before the agent
+        // pin is known. The runner turns it into NoChatModelInstalledException, so it must only survive when the turn
+        // truly has no model to run: neither the local GGUF default NOR the agent's pin produced one. An Ollama-only
+        // node with a pinning agent (every server-initiated work-session step) resolves an effective model here and must
+        // not be failed as "no chat model installed".
+        return new ChatTurnResolution(activeModel, effectiveModel, resolved, orchestration, supportsThinking, supportsTools, supportsVision,
+            requiresInstalledChatModel && effectiveModel is null, activeModelIsCloud, effectiveModelIsCloud);
     }
 
     /// <summary>

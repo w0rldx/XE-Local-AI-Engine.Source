@@ -48,16 +48,19 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
 
     private const string ConcurrencyRefusalSuffix = " could not be recorded because the work session changed underneath it. Try the same call once more.";
 
+    protected ILogger Logger { get; }
     private readonly IWorkSessionEventPublisher _publisher;
     private readonly IServiceScopeFactory _scopeFactory;
 
     protected WorkSessionToolHandler(IServiceScopeFactory scopeFactory,
         IOptions<WorkSessionOptions> options,
-        IWorkSessionEventPublisher publisher)
+        IWorkSessionEventPublisher publisher,
+        ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
+        Logger = logger ?? throw new ArgumentNullException(nameof(logger));
         Options = options.Value;
     }
 
@@ -68,6 +71,14 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
     public abstract string Description { get; }
 
     public abstract string ParameterSchema { get; }
+
+    /// <summary>
+    ///     One concrete, valid argument payload for this tool, handed back verbatim whenever the arguments could not be
+    ///     read. A small model that got the shape wrong recovers from an example far more reliably than from a
+    ///     description of the shape — and the alternative, echoing the parser's own message, spends the step's whole
+    ///     call budget telling it the name of a CLR type.
+    /// </summary>
+    protected abstract string ExampleArguments { get; }
 
     /// <summary>
     ///     Auto-execute. These tools write only into the session's own rows, and an approval prompt per finding would
@@ -104,7 +115,11 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
         }
         catch (JsonException exception)
         {
-            return $"{ToolName} arguments were not valid JSON: {exception.Message}";
+            // The parser's own message is for an operator, not for the model: it names the CLR request type and, for an
+            // unknown property, never mentions the property the model should have used instead. It goes to the log; the
+            // model gets a shape it can copy.
+            Logger.LogDebug(exception, "{ToolName} could not read its arguments.", ToolName);
+            return InvalidArguments;
         }
 
         if (request is null)
@@ -177,6 +192,10 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
         AgentWorkSessionSnapshot session,
         IAgentWorkSessionStore store,
         CancellationToken cancellationToken);
+
+    /// <summary>The sentence handed back when the arguments would not read as this tool's shape.</summary>
+    protected string InvalidArguments =>
+        $"{ToolName} arguments were not valid JSON for this tool. Send exactly this shape and no other keys: {ExampleArguments}";
 
     protected string Exceeded(string argumentName, int maximumLength) =>
         $"{ToolName} argument '{argumentName}' exceeded the maximum length of {maximumLength} characters.";

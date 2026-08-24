@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.BackgroundServices;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -16,8 +17,11 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.WorkSessions;
 
 public sealed class RetentionSweeperServiceTests : IDisposable
 {
@@ -198,6 +202,55 @@ public sealed class RetentionSweeperServiceTests : IDisposable
     }
 
     [Test]
+    public async Task Sweep_WhenEnabled_DeletesWorkSessionArtifactBlobs()
+    {
+        // A work session's artifact BYTES live on disk under the session id, so the conversation row purge cannot
+        // reach them. Retention must tear them down the same way it tears down upload blobs, or ageing out the
+        // conversation leaves the session's content readable on disk forever.
+        await using var factory = WorkSessionServiceTests.NewFactory();
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var artifactDirectory = await WriteArtifactBlobAsync(factory.Services, sessionId).ConfigureAwait(false);
+
+        using var sweeper = CreateSweeper(factory.Services, enabled: true);
+        await sweeper.RunSweepOnceAsync(CancellationToken.None).ConfigureAwait(false);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var chat = scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>();
+        AssertEx.True(await chat.GetConversationAsync(session.ConversationId).ConfigureAwait(false) is null, "The expired session conversation must be deleted.");
+        AssertEx.False(Directory.Exists(artifactDirectory), "Retention must delete the artifact bytes of a session whose conversation it aged out.");
+    }
+
+    [Test]
+    public async Task InteractivePurge_AlsoDeletesWorkSessionArtifactBlobs()
+    {
+        // Same footprint, the other entry point: an immediate purge from the chat surface.
+        await using var factory = WorkSessionServiceTests.NewFactory();
+        var sessionId = Guid.NewGuid();
+        var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var artifactDirectory = await WriteArtifactBlobAsync(factory.Services, sessionId).ConfigureAwait(false);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var chat = scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>();
+        _ = await chat.DeleteConversationAsync(new NodeChatDeleteConversationRequest(session.ConversationId, DeletedAtUtc: 100, PurgeImmediately: true)).ConfigureAwait(false);
+
+        AssertEx.True(await chat.GetConversationAsync(session.ConversationId).ConfigureAwait(false) is null, "The purged conversation must be deleted.");
+        AssertEx.False(Directory.Exists(artifactDirectory), "An immediate purge must also delete the session's artifact bytes.");
+    }
+
+    // Writes one artifact through the real blob store and returns the session's on-disk directory, asserting it exists
+    // so a later "gone" assertion cannot pass vacuously.
+    private static async Task<string> WriteArtifactBlobAsync(IServiceProvider services, Guid sessionId)
+    {
+        var blobStore = services.GetRequiredService<IWorkSessionArtifactBlobStore>();
+        _ = await blobStore.WriteAsync(sessionId, Guid.NewGuid(), new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("artifact bytes")), CancellationToken.None).ConfigureAwait(false);
+
+        var directory = Path.Combine(services.GetRequiredService<INodeDataDirectory>().Root, "work-sessions", "artifacts", sessionId.ToString("N"));
+        AssertEx.True(Directory.Exists(directory), "The seeded artifact directory must exist before the purge.");
+        return directory;
+    }
+
+    [Test]
     public async Task Sweep_WithMillisecondTimestamps_DeletesJustInsideCutoffButNotJustOutside()
     {
         // Production timestamps are Unix MILLISECONDS. The cutoff must be milliseconds too: seeding 13-digit last_seen
@@ -338,6 +391,12 @@ public sealed class RetentionSweeperServiceTests : IDisposable
         services.AddSingleton<IConversationUploadedFileStore, ConversationUploadedFileStore>();
         services.AddScoped<INodeRetentionStore, NodeRetentionStore>();
 
+        // The sweeper also tears down work-session artifact bytes. These hand-rolled compositions own no session, so
+        // the store is a substitute that finds none; the two work-session tests use the real host instead.
+        services.AddSingleton(Options.Create(new WorkSessionOptions()));
+        services.AddSingleton<IWorkSessionArtifactBlobStore, ManagedWorkSessionArtifactBlobStore>();
+        services.AddScoped(_ => Substitute.For<IAgentWorkSessionStore>());
+
         // Lets an individual test replace a registration (e.g. wrap INodeRetentionStore to inject a deterministic touch
         // between candidate selection and deletion). Last registration wins, so the override supersedes the default.
         customize?.Invoke(services);
@@ -357,7 +416,7 @@ public sealed class RetentionSweeperServiceTests : IDisposable
             provider.GetRequiredService<IConversationUploadedFileStore>());
     }
 
-    private static RetentionSweeperService CreateSweeper(ServiceProvider provider, bool enabled, TimeProvider? timeProvider = null)
+    private static RetentionSweeperService CreateSweeper(IServiceProvider provider, bool enabled, TimeProvider? timeProvider = null)
     {
         return new RetentionSweeperService(provider.GetRequiredService<IServiceScopeFactory>(),
             timeProvider ?? TimeProvider.System,

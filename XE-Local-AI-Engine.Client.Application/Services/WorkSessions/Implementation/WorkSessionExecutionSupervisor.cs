@@ -399,11 +399,15 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         var terminal = terminalEvent.Type;
 
         // A step that spent its provider-call cap is BOUNDED, not broken: the tools it ran are already persisted and
-        // the next step resumes from the state block. Recognised by the budget's own fixed, path-free terminal message
-        // (ProviderCallBudget.CeilingExceededMessage), which the classifier forwards verbatim onto the failed row.
-        // Falling through to the failure branch would end the session on its own safety limit.
+        // the next step resumes from the state block. Recognised by the budget's own fixed, path-free terminal messages,
+        // which the classifier forwards verbatim onto the failed row. Falling through to the failure branch would end
+        // the session on its own safety limit.
+        // Both messages are matched: StepCallCapReachedMessage is the per-step cap this supervisor itself seeds, and
+        // CeilingExceededMessage is the node-wide invocation ceiling — a session that hits the wider one is still only
+        // bounded, so ending it there would be the same bug one ceiling further out.
         if (terminal == ChatStreamEventTypes.AssistantFailed
-            && string.Equals(terminalEvent.Error, ProviderCallBudget.CeilingExceededMessage, StringComparison.Ordinal))
+            && (string.Equals(terminalEvent.Error, ProviderCallBudget.StepCallCapReachedMessage, StringComparison.Ordinal)
+                || string.Equals(terminalEvent.Error, ProviderCallBudget.CeilingExceededMessage, StringComparison.Ordinal)))
         {
             _logger.LogInformation("Work session {SessionId} step {Step} reached its provider-call budget; ending the step and continuing.", sessionId, step);
             _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,

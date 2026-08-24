@@ -78,6 +78,7 @@ export function ChatDisplayShell({
 	onSubmitFeedback,
 	conversationListCollapsed = false,
 	hideConversationList = false,
+	isWorkSessionConversation = false,
 	disabledNotice,
 	isLoadingMessages = false,
 	messagesLoadFailed = false,
@@ -262,6 +263,7 @@ export function ChatDisplayShell({
 					messagesLoadErrorText={messagesLoadErrorText}
 					onRetryLoadMessages={onRetryLoadMessages}
 					reasoningEffort={reasoningEffort}
+					isWorkSessionConversation={isWorkSessionConversation}
 				/>
 				<ChatInputArea
 					availableReasoningEfforts={availableReasoningEfforts}

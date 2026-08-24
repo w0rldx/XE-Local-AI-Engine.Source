@@ -157,6 +157,24 @@ public sealed class WorkSessionEndpointTests
     }
 
     [Test]
+    public async Task EventFeed_CarriesTheOperationIdOfTheToolCallThatProducedTheRow()
+    {
+        // The journal row already records which tool call it belongs to; the feed has to hand it over, or a client
+        // cannot group a step's rows by operation.
+        var operationId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        var service = SubstituteWithEmptyFeeds();
+        service.ListEventsAsync(SessionId, 0, 50, Arg.Any<CancellationToken>()).Returns([Event(sequence: 1, operationId)]);
+        await using var factory = EnabledFactory(service);
+
+        using var response = await SendAsync(factory, "GET", $"{Session}/events?limit=50").ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(operationId, document.RootElement.GetProperty("items")[0].GetProperty("operationId").GetGuid());
+    }
+
+    [Test]
     public async Task CreateWorkSession_WhenValid_ReturnsCreatedWithLocation()
     {
         var service = Substitute.For<IWorkSessionService>();
@@ -268,6 +286,7 @@ public sealed class WorkSessionEndpointTests
         service.ListArtifactsAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
         service.ListCheckpointsAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
         service.ListEventsAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
+        service.GetArtifactAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
         service.PostFollowUpAsync(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
         await using var factory = EnabledFactory(service);
 
@@ -353,6 +372,7 @@ public sealed class WorkSessionEndpointTests
         const string ManagedReference = "work-sessions/11111111/22222222.bin";
         var service = SubstituteWithEmptyFeeds();
         service.ListArtifactsAsync(SessionId, 0, Arg.Any<CancellationToken>()).Returns([Artifact()]);
+        service.GetArtifactAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact());
         service.ReadArtifactContentAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>())
                .Returns(new WorkSessionArtifactContent(Artifact(), "# report", IsBase64: false));
         await using var factory = EnabledFactory(service);
@@ -375,7 +395,7 @@ public sealed class WorkSessionEndpointTests
     public async Task ArtifactContent_WhenTheBytesNoLongerVerify_ReturnsNotFound()
     {
         var service = SubstituteWithEmptyFeeds();
-        service.ListArtifactsAsync(SessionId, 0, Arg.Any<CancellationToken>()).Returns([Artifact(isValid: false)]);
+        service.GetArtifactAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact());
         service.ReadArtifactContentAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>())
                .ThrowsAsyncForAnyArgs(new KeyNotFoundException("could not be read"));
         await using var factory = EnabledFactory(service);
@@ -383,19 +403,24 @@ public sealed class WorkSessionEndpointTests
         using var response = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content").ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+
+        // The ceiling check reads the one artifact, never the whole feed: a session with thousands of artifacts must
+        // not pay a full scan for one content read.
+        await service.DidNotReceive().ListArtifactsAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
     public async Task ArtifactContent_OverTheNodeCeiling_Returns413AndNeverReadsTheBlob()
     {
         var service = SubstituteWithEmptyFeeds();
-        service.ListArtifactsAsync(SessionId, 0, Arg.Any<CancellationToken>()).Returns([Artifact(sizeBytes: 4096)]);
+        service.GetArtifactAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact(sizeBytes: 4096));
         await using var factory = EnabledFactory(service, ("WorkSessions:MaxArtifactBytes", "1024"));
 
         using var response = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content").ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
         await service.DidNotReceive().ReadArtifactContentAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await service.DidNotReceive().ListArtifactsAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -404,7 +429,7 @@ public sealed class WorkSessionEndpointTests
     public async Task ArtifactContent_ReportsWhetherTheServiceEncodedTheBytes(string mediaType, bool isBase64)
     {
         var service = SubstituteWithEmptyFeeds();
-        service.ListArtifactsAsync(SessionId, 0, Arg.Any<CancellationToken>()).Returns([Artifact(mediaType: mediaType)]);
+        service.GetArtifactAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact(mediaType: mediaType));
         service.ReadArtifactContentAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>())
                .Returns(new WorkSessionArtifactContent(Artifact(mediaType: mediaType), "payload", isBase64));
         await using var factory = EnabledFactory(service);
@@ -551,8 +576,8 @@ public sealed class WorkSessionEndpointTests
             CreatedStep: 1,
             UpdatedStep: 1);
 
-    private static WorkSessionEventDto Event(long sequence) =>
-        new(Guid.NewGuid(), sequence, Step: 1, "step.started", DetailJson: null, Outcome: null, OccurredUtc: 100);
+    private static WorkSessionEventDto Event(long sequence, Guid? operationId = null) =>
+        new(Guid.NewGuid(), sequence, Step: 1, "step.started", DetailJson: null, Outcome: null, OccurredUtc: 100, operationId);
 
     private static WorkSessionArtifactDto Artifact(bool isValid = true, long sizeBytes = 8, string mediaType = "text/markdown") =>
         new(ArtifactId,

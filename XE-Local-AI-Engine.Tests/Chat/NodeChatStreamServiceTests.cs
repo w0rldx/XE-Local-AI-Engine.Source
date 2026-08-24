@@ -3161,6 +3161,82 @@ public sealed class NodeChatStreamServiceTests
     }
 
     [Test]
+    public async Task SendMessage_WhenNoInstalledGgufButAgentPinsModel_RoutesThePin()
+    {
+        // The server-initiated companion to the case above: the node has NO installed GGUF chat model, but the bound
+        // agent pins a (non-GGUF, e.g. Ollama) model. The turn has a model to run, so it must route the pin instead of
+        // failing with FailureCategory.ModelNotInstalled — the work-session step path, which never sets request.Model.
+        // It must ALSO offer that pin's tools: capabilities keyed on the null active model would report not-capable and
+        // strip the offer, leaving a work session unable to call update_work_plan/record_finding/complete_work_session.
+        const string pinnedModel = "llama3.1:8b";
+        var conversationId = Guid.NewGuid();
+        var assistantMessageId = Guid.NewGuid();
+        var requestId = Guid.NewGuid();
+        var agentDefinitionId = Guid.NewGuid();
+        var persistence = CreatePersistence(conversationId, assistantMessageId, requestId, _ => { }, agentDefinitionId);
+        var dispatcher = new RecordingWorkerEventDispatcher();
+        var runner = new PackageCapturingInvocationRunner(dispatcher);
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(agentDefinitionId, Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(callInfo =>
+                {
+                    // Mirrors the real resolver: an incapable model projects an EMPTY offer, so a non-empty offer here
+                    // proves supportsTools:true reached it.
+                    var supportsTools = callInfo.ArgAt<bool>(3);
+                    var honorModelProfile = callInfo.ArgAt<bool>(4);
+                    return new ResolvedAgentRuntime("Pinned persona.",
+                        supportsTools ? [CreateLocalToolDto("record_finding", "{}")] : [],
+                        honorModelProfile ? pinnedModel : null,
+                        ReasoningEffort: null,
+                        AgentDefinitionVersion: 9,
+                        agentDefinitionId,
+                        "Pinned Agent");
+                });
+
+        var service = new NodeChatStreamService(persistence,
+            new ChatInvocationStatePump(ChatPumpTestFactory.Create(persistence), TimeProvider.System),
+            // The store carries the same pin the definition resolver reports: with no active model it is the capability head.
+            new ChatTurnResolver(resolver, CreateAgentDefinitionStore(agentDefinitionId, pinnedModel), CreateOrchestrationResolver(), CreateModelCapabilityResolver(),
+                NullLogger<ChatTurnResolver>.Instance),
+            new NodeChatMutationGuard(persistence),
+            new LocalChatRuntimePackageBuilder(),
+            runner,
+            dispatcher,
+            Options.Create(new LocalChatAgentOptions()),
+            StubNodeRuntimeSettings.Create().WithEnableTools(true).Build(),
+            new NodeChatStreamCancellationRegistry(),
+            CreateOfferProvider(),
+            CreateDefaultAgentProvider(),
+            CreateNodeSettingsStore(),
+            // Resolver reports no installed GGUF chat model (null) — the pin is the only model this turn has.
+            CreateLocalDefaultChatModelResolver(resolved: null, echoPersistedDefault: false),
+            CreateMemoryExtractionDispatcher(),
+            CreateTurnContextBuilder(),
+            Substitute.For<IConversationSandboxStager>(),
+            Options.Create(new KnowledgeBaseOptions()),
+            Options.Create(new ChatStreamBudgetOptions()),
+            TimeProvider.System,
+            new PermissiveToolApprovalPolicy(),
+            NullLogger<NodeChatStreamService>.Instance);
+
+        var drained = 0;
+        await foreach (var _ in service.SendMessageAsync(new NodeChatStreamRequest(conversationId,
+                           "hello",
+                           MessageId: assistantMessageId,
+                           RequestId: requestId,
+                           UseLocalTools: true)).ConfigureAwait(false))
+        {
+            drained++;
+        }
+
+        AssertEx.True(drained > 0, "Expected the send to stream events.");
+        AssertEx.Equal(pinnedModel, runner.LastModelProfile);
+        AssertEx.True(runner.LastAllowedTools.Count > 0, "Expected the pin's tool offer to reach the package.");
+        AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.NotEqual(FailureCategory.ModelNotInstalled, dispatcher.CurrentInvocation!.FailureCategory);
+    }
+
+    [Test]
     public async Task SendMessageAsync_WhenLocalDefaultResolvesInstalledGgufModel_RoutesThatModel()
     {
         // A "Local runtime default" send where the resolver returns an installed GGUF chat model routes the turn on
@@ -3634,10 +3710,30 @@ public sealed class NodeChatStreamServiceTests
 
     // The default store/orchestration resolver: GetByIdAsync returns null so ResolveOrchestrationAsync never reaches the
     // orchestration resolver — the package carries no spec and the single-agent path is byte-identical.
-    private static IAgentDefinitionStore CreateAgentDefinitionStore()
+    // The default store reads back nothing (the orchestration reload's null-record path). A pinnedModel supplies the one
+    // definition the turn resolver reads when there is no active model, so the pin can be the capability head.
+    private static IAgentDefinitionStore CreateAgentDefinitionStore(Guid? pinningDefinitionId = null, string? pinnedModel = null)
     {
         var store = Substitute.For<IAgentDefinitionStore>();
         store.GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((AgentDefinitionRecord?)null);
+        if (pinningDefinitionId is { } definitionId && pinnedModel is not null)
+        {
+            store.GetByIdAsync(definitionId, Arg.Any<CancellationToken>())
+                 .Returns(new AgentDefinitionRecord(definitionId,
+                     "Pinned Agent",
+                     Description: null,
+                     "Pinned persona.",
+                     pinnedModel,
+                     ReasoningEffort: null,
+                     AgentDefinitionKind.Single,
+                     [],
+                     new Dictionary<string, bool>(),
+                     OrchestrationTopologyJson: null,
+                     Version: 9,
+                     CreatedAtUtc: 10,
+                     UpdatedAtUtc: 10));
+        }
+
         return store;
     }
 

@@ -1028,6 +1028,7 @@
 			"retryConnection": "Retry",
 			"stop": "Stop",
 			"stopped": "Generation stopped",
+			"stepBudgetReached": "Step ended — call budget reached, continuing.",
 			"loadError": {
 				"title": "Couldn't load this conversation",
 				"body": "Something went wrong loading these messages.",

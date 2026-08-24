@@ -505,4 +505,40 @@ describe("ChatMessage actions", () => {
 		expect(screen.getByTestId("chat-message-error-assistant-1")).toBeTruthy();
 		expect(screen.queryByTestId("chat-message-stopped-assistant-1")).toBeNull();
 	});
+
+	// Verbatim ProviderCallBudget.StepCallCapReachedMessage. If the backend constant changes, this test and the copy
+	// in ChatMessage.tsx must change with it (the backend side is pinned by ProviderCallBudgetTests).
+	const stepCapError = "This step reached its provider-call cap; the work session continues from its saved state on the next step.";
+
+	it("renders a work-session step that spent its call cap as a neutral notice, not the red error alert", () => {
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ content: "Partial step output…", status: "failed", error: stepCapError })}
+				isWorkSessionConversation={true}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-message-step-budget-assistant-1").textContent).toContain("Step ended");
+		expect(screen.queryByTestId("chat-message-error-assistant-1")).toBeNull();
+		expect(screen.getByText("Partial step output…")).toBeTruthy();
+	});
+
+	it("keeps the red error alert for the same text outside a work session", () => {
+		renderWithProviders(<ChatMessage message={assistantMessage({ content: "", status: "failed", error: stepCapError })} />);
+
+		expect(screen.getByTestId("chat-message-error-assistant-1")).toBeTruthy();
+		expect(screen.queryByTestId("chat-message-step-budget-assistant-1")).toBeNull();
+	});
+
+	it("keeps the red error alert for any other failure inside a work session", () => {
+		renderWithProviders(
+			<ChatMessage
+				message={assistantMessage({ content: "", status: "failed", error: "The model went away." })}
+				isWorkSessionConversation={true}
+			/>,
+		);
+
+		expect(screen.getByTestId("chat-message-error-assistant-1")).toBeTruthy();
+		expect(screen.queryByTestId("chat-message-step-budget-assistant-1")).toBeNull();
+	});
 });

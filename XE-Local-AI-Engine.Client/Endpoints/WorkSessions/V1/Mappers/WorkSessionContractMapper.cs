@@ -58,7 +58,7 @@ internal static class WorkSessionContractMapper
         new(value.Id, value.Sequence, value.Step, value.Summary, value.StateJson, value.CreatedUtc);
 
     public static WorkSessionEventResponse ToResponse(this WorkSessionEventDto value) =>
-        new(value.Id, value.Sequence, value.Step, value.EventType, value.DetailJson, value.Outcome, value.OccurredUtc);
+        new(value.Id, value.Sequence, value.Step, value.EventType, value.DetailJson, value.Outcome, value.OccurredUtc, value.OperationId);
 
     public static ListWorkSessionTasksResponse ToResponse(this IReadOnlyList<WorkSessionTaskDto> value) =>
         new([.. value.Select(ToResponse)], HighestSequence(value.Select(static item => item.Sequence)));

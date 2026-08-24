@@ -154,13 +154,18 @@ public sealed record WorkSessionCheckpointResponse(Guid Id,
     string StateJson,
     long CreatedAtUtc);
 
+/// <summary>
+///     One journal entry. <see cref="OperationId" /> is the tool call the entry belongs to when it has one, so a client
+///     can group a step's rows by the operation that produced them; it is null for entries no single tool call owns.
+/// </summary>
 public sealed record WorkSessionEventResponse(Guid Id,
     long Sequence,
     int Step,
     string EventType,
     string? DetailJson,
     string? Outcome,
-    long OccurredAtUtc);
+    long OccurredAtUtc,
+    Guid? OperationId);
 
 /// <summary>
 ///     An artifact with its bytes. <see cref="IsBase64" /> is decided from the media type, never by sniffing the

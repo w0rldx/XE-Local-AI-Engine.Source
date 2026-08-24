@@ -211,6 +211,7 @@ export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionEventResponse
 	detailJson?: string | null;
 	outcome?: string | null;
 	occurredAtUtc?: number;
+	operationId?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionEventFeedRequest = {
