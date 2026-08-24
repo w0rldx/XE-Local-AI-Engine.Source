@@ -270,6 +270,14 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             return StepOutcome.Settled;
         }
 
+        // Bound what this step will replay BEFORE the send. Every earlier step's state block, answer and reasoning is
+        // otherwise re-sent verbatim for the life of the session, and the step's own tool loop — a single knowledge-base
+        // read is capped at 50,000 characters — needs that room. Over budget, the older turns fold into the synopsis the
+        // send path splices. Nothing durable is lost: the state block below is rebuilt from the database every step.
+        await turnScope.ServiceProvider.GetRequiredService<WorkSessionStepContextBound>()
+                       .ApplyAsync(state.Session.ConversationId, _options.StepContextBudgetTokens, CancellationToken.None)
+                       .ConfigureAwait(false);
+
         // Published BEFORE the send, not after. By the time a step terminalizes, the invocation resume registry has
         // dropped its entry, so a client told about the step only then re-attaches to an empty stream and never sees the
         // turn go live.

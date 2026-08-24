@@ -43,4 +43,18 @@ public sealed class WorkSessionOptions
     /// <summary>Wall-clock budget for one step. Zero inherits the node's maximum message request timeout.</summary>
     [Range(0, 24 * 60 * 60)]
     public int StepTimeoutSeconds { get; init; }
+
+    /// <summary>
+    ///     How large the transcript one step replays may get, in estimated tokens, before the step boundary folds the
+    ///     older turns into the conversation synopsis. Zero disables the bound.
+    ///     <para>
+    ///         Deliberately a flat budget rather than a fraction of the model's context window. What consumes a
+    ///         research step is its own tool loop — a single <c>read_document</c> is capped at 50,000 characters, some
+    ///         16k tokens — so the transcript's job is to stay out of the way, and the state block (rebuilt from the
+    ///         database on every step) is what actually carries the session's state forward. The default leaves the
+    ///         large majority of a 64k window to the step itself.
+    ///     </para>
+    /// </summary>
+    [Range(0, 1_000_000)]
+    public int StepContextBudgetTokens { get; init; } = 12_000;
 }
