@@ -167,7 +167,7 @@ public sealed class WorkSessionHubTests
     }
 
     private static WorkSessionEventDto Event(long sequence) =>
-        new(Guid.NewGuid(), sequence, Step: 1, "step.started", DetailJson: null, Outcome: null, OccurredUtc: 10);
+        new(Guid.NewGuid(), sequence, Step: 1, "step.started", DetailJson: null, Outcome: null, OccurredUtc: 10, OperationId: null);
 
     [SuppressMessage("Reliability",
         "CA2000:Dispose objects before losing scope",

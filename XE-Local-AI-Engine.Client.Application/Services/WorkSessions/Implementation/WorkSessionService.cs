@@ -310,17 +310,19 @@ internal sealed class WorkSessionService : IWorkSessionService
                          entry.EventType,
                          entry.DetailJson,
                          entry.Outcome,
-                         entry.OccurredAtUtc))
+                         entry.OccurredAtUtc,
+                         entry.OperationId))
         ];
+    }
+
+    public async Task<WorkSessionArtifactDto> GetArtifactAsync(Guid sessionId, Guid artifactId, CancellationToken cancellationToken = default)
+    {
+        return ToDto(await GetOwnedArtifactAsync(sessionId, artifactId, cancellationToken).ConfigureAwait(false));
     }
 
     public async Task<WorkSessionArtifactContent> ReadArtifactContentAsync(Guid sessionId, Guid artifactId, CancellationToken cancellationToken = default)
     {
-        var artifact = await _store.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
-        if (artifact.SessionId != sessionId || !artifact.IsValid)
-        {
-            throw new KeyNotFoundException($"Work session artifact '{artifactId}' was not found on session '{sessionId}'.");
-        }
+        var artifact = await GetOwnedArtifactAsync(sessionId, artifactId, cancellationToken).ConfigureAwait(false);
 
         var read = await _blobStore.ReadAsync(sessionId, artifactId, artifact.ContentSha256, artifact.SizeBytes, cancellationToken).ConfigureAwait(false);
         if (read.Status != WorkSessionArtifactReadStatus.Found)
@@ -334,6 +336,21 @@ internal sealed class WorkSessionService : IWorkSessionService
         var isBase64 = !IsTextMediaType(artifact.MediaType);
         var content = isBase64 ? Convert.ToBase64String(read.Content.Span) : Encoding.UTF8.GetString(read.Content.Span);
         return new WorkSessionArtifactContent(ToDto(artifact), content, isBase64);
+    }
+
+    /// <summary>
+    ///     The artifact row, once. An artifact that belongs to another session — or whose bytes the node already marked
+    ///     invalid — reads as absent, so neither reader can leak one session's artifact through another's route.
+    /// </summary>
+    private async Task<WorkSessionArtifactSnapshot> GetOwnedArtifactAsync(Guid sessionId, Guid artifactId, CancellationToken cancellationToken)
+    {
+        var artifact = await _store.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
+        if (artifact.SessionId != sessionId || !artifact.IsValid)
+        {
+            throw new KeyNotFoundException($"Work session artifact '{artifactId}' was not found on session '{sessionId}'.");
+        }
+
+        return artifact;
     }
 
     private async Task<WorkSessionDetail> BeginAsync(Guid sessionId, AgentWorkSessionStatus[] allowedFrom, CancellationToken cancellationToken)

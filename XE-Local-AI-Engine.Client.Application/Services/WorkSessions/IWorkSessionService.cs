@@ -68,6 +68,13 @@ public interface IWorkSessionService
     Task<IReadOnlyList<WorkSessionEventDto>> ListEventsAsync(Guid sessionId, long sinceSequence, int limit, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     One artifact's metadata, without opening its bytes. Throws <see cref="KeyNotFoundException" /> for an unknown
+    ///     artifact or one that belongs to a different session — same ownership rule as the content read below, so a
+    ///     caller that only needs the size (a ceiling check) never has to scan the whole artifact feed for it.
+    /// </summary>
+    Task<WorkSessionArtifactDto> GetArtifactAsync(Guid sessionId, Guid artifactId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Reads one artifact's bytes. Throws <see cref="KeyNotFoundException" /> for an unknown artifact, one that
     ///     belongs to a different session, or one whose bytes no longer verify — a caller must not be handed content the
     ///     node cannot vouch for.

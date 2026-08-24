@@ -274,16 +274,62 @@ public sealed class WorkSessionServiceTests
     }
 
     [Test]
-    public async Task ListEvents_ClampsTheRequestedPageSize()
+    public async Task GetArtifact_ReturnsTheRowWithoutOpeningTheBytes_AndRefusesAForeignSession()
+    {
+        await using var factory = NewFactory();
+        var sessionId = Guid.NewGuid();
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var otherSessionId = Guid.NewGuid();
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, otherSessionId).ConfigureAwait(false);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
+        var artifactId = Guid.NewGuid();
+        _ = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand(sessionId,
+                    artifactId,
+                    WorkSessionVersions.Any,
+                    Guid.NewGuid(),
+                    AgentWorkSessionArtifactKind.Report,
+                    "report.md",
+                    "text/markdown",
+                    new string('b', 64),
+                    SizeBytes: 12,
+                    "work-session-artifact:report"))
+            .ConfigureAwait(false);
+
+        var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
+
+        // The row alone — the bytes were never written, and the metadata read must not need them (this is what the
+        // content endpoint's size ceiling is checked against, before any blob is opened).
+        var artifact = await service.GetArtifactAsync(sessionId, artifactId).ConfigureAwait(false);
+        AssertEx.Equal("report.md", artifact.Name);
+        AssertEx.Equal(expected: 12L, artifact.SizeBytes);
+
+        // Asked through another session's route, the artifact reads as absent — an id is not an authorization.
+        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => service.GetArtifactAsync(otherSessionId, artifactId)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => service.GetArtifactAsync(sessionId, Guid.NewGuid())).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task ListEvents_ClampsTheRequestedPageSize_AndCarriesTheOperationId()
     {
         await using var factory = NewFactory();
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
 
         await using var scope = factory.Services.CreateAsyncScope();
+        var operationId = Guid.NewGuid();
+        _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
+                       .AppendEventAsync(new AppendWorkSessionEventCommand(sessionId, WorkSessionVersions.Any, "tool.completed", operationId))
+                       .ConfigureAwait(false);
+
         var events = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ListEventsAsync(sessionId, sinceSequence: 0, limit: 100_000).ConfigureAwait(false);
 
         AssertEx.True(events.Count <= 500, "A caller cannot ask the node for an unbounded page.");
+
+        // The operation id the store records is the one a client groups a step's rows by, so the DTO must carry it.
+        var recorded = events.Single(entry => entry.EventType == "tool.completed");
+        AssertEx.Equal(operationId, recorded.OperationId);
     }
 
     [Test]

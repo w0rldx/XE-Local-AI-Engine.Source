@@ -17925,6 +17925,11 @@
           },
           "occurredAtUtc": {
             "type": "integer"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
           }
         }
       },

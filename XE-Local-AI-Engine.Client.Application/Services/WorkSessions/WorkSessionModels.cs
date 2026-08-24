@@ -79,7 +79,8 @@ public sealed record WorkSessionEventDto(Guid Id,
     string EventType,
     string? DetailJson,
     string? Outcome,
-    long OccurredUtc);
+    long OccurredUtc,
+    Guid? OperationId);
 
 /// <summary>
 ///     An artifact's bytes as text. <see cref="IsBase64" /> is set for a media type the node cannot hand over as UTF-8,
