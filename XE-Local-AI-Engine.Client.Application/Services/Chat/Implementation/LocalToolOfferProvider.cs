@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
@@ -41,6 +42,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     // fresh scope per offer call rather than captured — the established singleton→scoped-store pattern in this codebase.
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly AllowedToolDto _spawnOfferDto;
+    private readonly AllowedToolDto _computeOfferDto;
 
     public LocalToolOfferProvider(IAgentToolRegistry toolRegistry,
         IMcpToolRegistry mcpToolRegistry,
@@ -126,6 +128,14 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // from an unattended plain chat turn is exactly what we are preventing.
         _spawnOfferDto = ToOfferDto(SpawnSubAgentToolDefinition.ToolName, SpawnSubAgentToolDefinition.ParameterSchema, requiresApproval: false, ToolCategory.Orchestration);
 
+        // run_python gets the SAME profile-opt-in treatment as spawn_subagent, and for a sharper reason: it executes
+        // model-authored code on the node. It is therefore held out of the whole offer entirely — a default/mode-off
+        // chat turn is never offered a code-execution tool — and added back by GetOfferedToolsForProfile only when an
+        // agent profile named it in AllowedToolNames. WriteExecute + RequiresApproval is what the UI badges and the
+        // approval round-trip key off; the unattended paths (sub-agent, scheduler, delegate-scope inbound MCP) strip
+        // every approval-required tool, so they strip this one for free.
+        _computeOfferDto = ToOfferDto(ComputeToolDefinition.ToolName, ComputeToolDefinition.ParameterSchema, requiresApproval: true, ToolCategory.WriteExecute);
+
         // Precompute the capability-gated variant once: the built-ins minus run_in_agent_home, the coder/knowledge tools
         // and ask_user, returned when the active model is not tool-capable. Those tools are offered only to a
         // tool-capable model. The encrypted path stays server-gated and never reaches this provider. (spawn_subagent is
@@ -182,6 +192,18 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
                 Source = BuiltinSource,
                 // spawn_subagent drives other agents/models — matches the Orchestration category used for its offer DTO.
                 Category = ToolCategory.Orchestration
+            },
+            new LocalToolCatalogEntry
+            {
+                Name = ComputeToolDefinition.ToolName,
+                Description = ComputeToolDefinition.Description,
+                RequiresApproval = true,
+                Source = BuiltinSource,
+                // run_python runs commands on the node — the existing category for that class, which is what drives the
+                // picker's danger badge. Listing it here (ungated by model, like spawn_subagent) is what lets an
+                // operator add it to a profile's AllowedToolNames at all; without it CRUD validation would warn on an
+                // unknown name and the picker would not show it.
+                Category = ToolCategory.WriteExecute
             }
         ];
 
@@ -191,7 +213,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             .. coderDescriptors.Select(static descriptor => descriptor.Name),
             .. knowledgeDescriptors.Select(static descriptor => descriptor.Name),
             askUserDescriptor.Name,
-            SpawnSubAgentToolDefinition.ToolName
+            SpawnSubAgentToolDefinition.ToolName,
+            ComputeToolDefinition.ToolName
         ];
     }
 
@@ -320,7 +343,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             return _builtinWithoutAgentHome;
         }
 
-        return [.. GetOfferedTools(activeModelId, isCloudModel), _spawnOfferDto];
+        return [.. GetOfferedTools(activeModelId, isCloudModel), _spawnOfferDto, .. ComputeOffer(activeModelId, isCloudModel)];
     }
 
     public async Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsForProfileAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default)
@@ -333,7 +356,28 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
         // The async whole offer (built-in + MCP + capability/local-gated custom) PLUS the opt-in-only spawn tool — the same
         // asymmetry as the synchronous GetOfferedToolsForProfile, with custom tools folded in through GetOfferedToolsAsync.
-        return [.. await GetOfferedToolsAsync(activeModelId, isCloudModel, cancellationToken).ConfigureAwait(false), _spawnOfferDto];
+        return
+        [
+            .. await GetOfferedToolsAsync(activeModelId, isCloudModel, cancellationToken).ConfigureAwait(false),
+            _spawnOfferDto,
+            .. ComputeOffer(activeModelId, isCloudModel)
+        ];
+    }
+
+    /// <summary>
+    ///     <c>run_python</c> for the profile pool, or nothing for a cloud-hosted model.
+    ///     <para>
+    ///         The locality gate here is NOT the knowledge/coder tools' content-leak rationale. What is withheld is the
+    ///         ability of a REMOTE model to direct code execution on the operator's machine — the same concern that put
+    ///         bare interpreters on <c>HostExecutableGuard</c>'s denylist — so it is withheld unconditionally rather than
+    ///         behind the <c>AllowCloudModelAccess</c> opt-in that governs reading node-local data. The synchronous Codex
+    ///         check mirrors the custom-tool gate: it catches a model pinned to a Codex id even when the turn's active
+    ///         model was local.
+    ///     </para>
+    /// </summary>
+    private IReadOnlyList<AllowedToolDto> ComputeOffer(string? activeModelId, bool isCloudModel)
+    {
+        return isCloudModel || CodexModelCatalog.IsCodexModel(activeModelId) ? [] : [_computeOfferDto];
     }
 
     public IReadOnlyList<string> GetKnownToolNames()

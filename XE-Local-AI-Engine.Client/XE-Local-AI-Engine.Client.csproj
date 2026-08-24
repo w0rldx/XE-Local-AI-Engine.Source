@@ -136,6 +136,15 @@
              Link="training-scripts/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToPublishDirectory="PreserveNewest"
              CopyToOutputDirectory="Never"/>
+    <!-- The pinned Python compute runtime (pyproject.toml + uv.lock) the sandboxed run_python tool provisions from.
+         Same reasoning as the training include above, including the .venv/__pycache__ exclusion for a dev `uv sync`
+         inside tools/compute; ComputePythonEnvironment.ResolveScriptsDirectory walks up to tools/compute/ when the
+         published copy is absent. -->
+    <Content Include="$(MSBuildProjectDirectory)/../tools/compute/**"
+             Exclude="$(MSBuildProjectDirectory)/../tools/compute/.venv/**;$(MSBuildProjectDirectory)/../tools/compute/**/__pycache__/**;$(MSBuildProjectDirectory)/../tools/compute/.*_cache/**"
+             Link="compute-scripts/%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToPublishDirectory="PreserveNewest"
+             CopyToOutputDirectory="Never"/>
   </ItemGroup>
 
   <Target Name="ValidateDotNetRuntimeLicenseAssets"

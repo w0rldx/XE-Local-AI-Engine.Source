@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
@@ -200,6 +201,92 @@ public sealed class LocalToolOfferProviderTests
         var names = provider.GetKnownToolNames();
 
         AssertEx.Contains(names, "spawn_subagent");
+    }
+
+    [Test]
+    public void GetOfferedTools_WhenModelIsToolCapable_DoesNotOfferRunPythonToTheDefaultPath()
+    {
+        // run_python is profile-opt-in only, for a sharper reason than spawn_subagent: it executes model-authored code
+        // on the node. A default/mode-off chat turn must never carry a code-execution tool, capable model or not.
+        var provider = CreateProvider("qwen3:8b");
+
+        var offered = provider.GetOfferedTools("qwen3:8b");
+
+        AssertEx.False(offered.Any(tool => tool.Name == ComputeToolDefinition.ToolName),
+            "run_python must NOT be in the default/mode-off whole offer");
+    }
+
+    [Test]
+    public void GetOfferedToolsForProfile_WhenModelIsToolCapable_IncludesRunPythonInProfilePool()
+    {
+        var provider = CreateProvider("qwen3:8b");
+
+        var pool = provider.GetOfferedToolsForProfile("qwen3:8b");
+
+        var compute = AssertEx.NotNull(pool.FirstOrDefault(tool => tool.Name == ComputeToolDefinition.ToolName));
+        AssertEx.True(compute.RequiresApproval, "run_python must reach the model carrying its approval requirement");
+        AssertEx.Equal(ToolCategory.WriteExecute, compute.Category);
+    }
+
+    [Test]
+    public void GetOfferedToolsForProfile_WhenModelIsNotToolCapable_WithholdsRunPython()
+    {
+        var provider = CreateProvider("qwen3:8b");
+
+        var pool = provider.GetOfferedToolsForProfile("some-other-model");
+
+        AssertEx.False(pool.Any(tool => tool.Name == ComputeToolDefinition.ToolName),
+            "run_python must be withheld from a model that is not tool-capable, even in the profile pool");
+    }
+
+    [Test]
+    public void GetOfferedToolsForProfile_WhenModelIsCloudHosted_WithholdsRunPython()
+    {
+        // The gate here is NOT the knowledge/coder tools' content-leak rationale: what is withheld is a REMOTE model's
+        // ability to direct code execution on the operator's machine. It is therefore unconditional, not behind the
+        // AllowCloudModelAccess opt-in — and spawn_subagent, which does not execute node code, is deliberately still
+        // offered, so this asserts the two are gated differently rather than together.
+        var provider = CreateProvider("qwen3:8b");
+
+        var pool = provider.GetOfferedToolsForProfile("qwen3:8b", isCloudModel: true);
+
+        AssertEx.False(pool.Any(tool => tool.Name == ComputeToolDefinition.ToolName),
+            "run_python must never be offered to a cloud-hosted model");
+        AssertEx.Contains(pool, tool => tool.Name == "spawn_subagent");
+    }
+
+    [Test]
+    public async Task GetOfferedToolsForProfileAsync_WhenModelIsCloudHosted_WithholdsRunPython()
+    {
+        // The async pool is a separate code path (it folds in custom tools), so the cloud gate is pinned on both or one
+        // of them can drift open.
+        var provider = CreateProvider("qwen3:8b");
+
+        var pool = await provider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: true);
+
+        AssertEx.False(pool.Any(tool => tool.Name == ComputeToolDefinition.ToolName),
+            "run_python must never be offered to a cloud-hosted model on the async pool either");
+    }
+
+    [Test]
+    public async Task GetOfferedToolsForProfileAsync_WhenModelIsLocalAndCapable_IncludesRunPython()
+    {
+        var provider = CreateProvider("qwen3:8b");
+
+        var pool = await provider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: false);
+
+        AssertEx.Contains(pool, tool => tool.Name == ComputeToolDefinition.ToolName);
+    }
+
+    [Test]
+    public void GetKnownToolNames_IncludesRunPython()
+    {
+        // The UI tool picker + CRUD validation must list run_python, or an operator could not add it to a profile's
+        // AllowedToolNames at all — which is the ONLY way the tool is ever offered.
+        var provider = CreateProvider("qwen3:8b");
+
+        AssertEx.Contains(provider.GetKnownToolNames(), ComputeToolDefinition.ToolName);
+        AssertEx.Contains(provider.GetKnownTools(), entry => entry.Name == ComputeToolDefinition.ToolName);
     }
 
     [Test]

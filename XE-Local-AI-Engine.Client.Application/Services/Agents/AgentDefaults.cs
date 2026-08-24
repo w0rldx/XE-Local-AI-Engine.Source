@@ -22,4 +22,13 @@ public static class AgentDefaults
 
     /// <summary>The data-row display name of the seeded "Coder (read-only)" definition (not localized).</summary>
     public const string CoderAgentName = "Coder (read-only)";
+
+    /// <summary>
+    ///     The forge-proof seed slug of the node-local "Mathematician" definition — the one seeded persona that opts
+    ///     into <c>run_python</c> through its <c>AllowedToolNames</c>.
+    /// </summary>
+    public const string MathematicianAgentSeedSlug = "mathematician";
+
+    /// <summary>The data-row display name of the seeded "Mathematician" definition (not localized).</summary>
+    public const string MathematicianAgentName = "Mathematician";
 }

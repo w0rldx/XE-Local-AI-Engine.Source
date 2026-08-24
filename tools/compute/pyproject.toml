@@ -1,0 +1,31 @@
+# Compute-tool dependency closure — the venv the sandboxed `run_python` tool executes in.
+#
+# This file plus uv.lock ARE the runtime: `uv sync --locked` provisions it, exactly as
+# tools/training does for the fine-tuning stack (ADR 0005: the host's Python is never used).
+# It is deliberately a SECOND, much smaller closure rather than a share of the training venv:
+# nothing here pulls torch or CUDA, so a chat user pays a few tens of MB and a few seconds,
+# not the multi-GB training provision — and a compute-tool bump can never disturb a training
+# runtime that a live GPU gate was re-verified against.
+#
+# Three libraries, chosen to cover numeric, symbolic and scientific work in one import:
+# numpy (arrays/linear algebra), scipy (integration, optimization, statistics, special
+# functions) and sympy (exact symbolic algebra and calculus). Adding anything else is a
+# deliberate decision, not a convenience — every package here is code a model can execute.
+#
+# tool.uv.environments narrows resolution to linux/x86_64 for the same reason the training
+# closure does: the uv binary pin and the process runner are Linux-only, so solving for
+# other platforms would only produce a lockfile no supported host ever installs.
+
+[project]
+name = "xe-compute-runtime"
+version = "0.1.0"
+description = "Pinned Python runtime for the XE Local AI Engine sandboxed compute tool."
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "numpy==2.3.5",
+    "scipy==1.16.3",
+    "sympy==1.14.0",
+]
+
+[tool.uv]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]

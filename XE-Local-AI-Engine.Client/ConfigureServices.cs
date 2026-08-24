@@ -502,6 +502,10 @@ public static class ConfigureServices
         // coder profile is selectable out of the box. Idempotent by slug and self-healing across boots, like the
         // Default Assistant seeder above.
         builder.Services.AddHostedService<CoderAgentSeeder>();
+        // Seeds the node-local "Mathematician" agent definition — the one persona that opts into the sandboxed
+        // run_python compute tool, which is profile-opt-in only and therefore unreachable without a definition naming
+        // it. Idempotent by slug and self-healing across boots, like the two seeders above.
+        builder.Services.AddHostedService<MathematicianAgentSeeder>();
         builder.Services.AddHostedService<ToolCallCleanupService>();
         // Encrypts any legacy plaintext message rows (content + metadata_json written before content encryption
         // shipped) into the read-both at-rest envelope. Batched, transactional, resumable, and idempotent — a

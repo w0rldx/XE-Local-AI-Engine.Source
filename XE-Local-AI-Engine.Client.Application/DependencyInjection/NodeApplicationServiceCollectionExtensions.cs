@@ -34,6 +34,9 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeModelCapabilitiesAndMcp(configuration);
         builder.AddNodeAgentHome(configuration);
         builder.AddNodeCoder(configuration);
+        // Sandboxed run_python compute tool. After AddNodeAgentHome, which registers the agent-role sandbox provider
+        // and the owner/node identity its jail is keyed on.
+        builder.AddNodeCompute(configuration);
         builder.AddNodePreviewWorkflows(configuration);
         builder.AddNodeDocumentIngestion(configuration);
         builder.AddNodeKnowledgeBase(configuration);

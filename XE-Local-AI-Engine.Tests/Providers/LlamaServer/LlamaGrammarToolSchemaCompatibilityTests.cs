@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -272,6 +274,19 @@ public sealed class LlamaGrammarToolSchemaCompatibilityTests
             AssertEx.False(LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(tool.JsonSchema),
                 $"'{tool.Name}' still carries a bound llama.cpp cannot compile after the compatibility pass.");
         }
+    }
+
+    [Test]
+    public void ComputeToolSchema_CompilesWithoutTheSanitizingPass()
+    {
+        // run_python's schema is authored grammar-safe rather than repaired into it: it states no maxLength, so the only
+        // bound it carries (minLength 1) is far under the cap, and the authoritative 20 000-character ceiling lives in
+        // the handler instead. This pins that choice — adding a maxLength here "for the model" would have the pass
+        // silently strip it on the llama.cpp wire, leaving a schema that does not say what it appears to say.
+        var schema = MetadataToolFunction.ParseSchema(ComputeToolDefinition.ParameterSchema);
+
+        AssertEx.False(LlamaGrammarToolSchemaCompatibility.RequiresSanitizing(schema),
+            "the compute tool schema must compile into GBNF as authored, with no sanitizing rewrite");
     }
 
     [Test]
