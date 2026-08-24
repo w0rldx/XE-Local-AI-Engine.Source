@@ -48,6 +48,32 @@ public sealed class WorkSessionCheckpointTests
     }
 
     [Test]
+    public async Task Compose_ForAShortSession_FoldsWithTheSessionKeepWindow()
+    {
+        // The configured chat window keeps eight messages — four whole steps — verbatim, so a session that checkpoints
+        // before its fourth step has nothing OUTSIDE the window to fold: compaction answered NothingToCompact and the
+        // checkpoint's prose half stayed null, on exactly the sessions whose checkpoint is the only record of them.
+        var compaction = new StubCompactionService(new ConversationCompactionResult(ConversationCompactionOutcome.NothingToCompact))
+        {
+            ResultByKeepVerbatim = keep => keep == WorkSessionStepContextBound.SessionKeepVerbatim
+                ? new ConversationCompactionResult(ConversationCompactionOutcome.Compacted, "Two steps in, one document read.")
+                : new ConversationCompactionResult(ConversationCompactionOutcome.NothingToCompact)
+        };
+
+        await using var factory = NewFactory(compaction);
+        var sessionId = Guid.NewGuid();
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+
+        await ComposeAsync(factory, sessionId).ConfigureAwait(false);
+
+        AssertEx.Equal<int?>(WorkSessionStepContextBound.SessionKeepVerbatim,
+            compaction.LastKeepVerbatim,
+            "The checkpoint folds with the session window, not the configured chat default.");
+        AssertEx.Equal("Two steps in, one document read.",
+            (await WorkSessionTestSupport.ReadCheckpointsAsync(factory.Services, sessionId).ConfigureAwait(false)).Single().Summary);
+    }
+
+    [Test]
     [Arguments(ConversationCompactionOutcome.NothingToCompact)]
     [Arguments(ConversationCompactionOutcome.NoLocalModel)]
     [Arguments(ConversationCompactionOutcome.SummarizerReturnedNothing)]
@@ -163,10 +189,18 @@ public sealed class WorkSessionCheckpointTests
     {
         public ConversationCompactionResult Result { get; set; } = result;
 
+        /// <summary>Set to answer per keep window — what the short-session case needs to tell the two windows apart.</summary>
+        public Func<int?, ConversationCompactionResult>? ResultByKeepVerbatim { get; set; }
+
+        public int? LastKeepVerbatim { get; private set; }
+
         public Task<ConversationCompactionResult> CompactAsync(Guid conversationId,
             string? requestedModel,
             int? recentMessagesToKeepVerbatim,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(Result);
+            CancellationToken cancellationToken = default)
+        {
+            LastKeepVerbatim = recentMessagesToKeepVerbatim;
+            return Task.FromResult(ResultByKeepVerbatim is null ? Result : ResultByKeepVerbatim(recentMessagesToKeepVerbatim));
+        }
     }
 }
