@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -68,24 +69,62 @@ internal static class LlamaGrammarToolOffer
     /// </summary>
     public static async Task<string> CaptureWireBodyAsync(ChatOptions options, CancellationToken cancellationToken = default)
     {
+        return await CaptureWireBodyAsync([new ChatMessage(ChatRole.User, "hi")], options, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     As <see cref="CaptureWireBodyAsync(ChatOptions,CancellationToken)" />, but for a caller-supplied message list —
+    ///     so a test can grade the bytes an ACTUAL budgeted, approval-replayed history serializes to rather than just its
+    ///     tool schemas. The same adapter, so the two capture paths cannot drift.
+    /// </summary>
+    public static async Task<string> CaptureWireBodyAsync(IReadOnlyList<ChatMessage> messages,
+        ChatOptions? options,
+        CancellationToken cancellationToken = default)
+    {
         using var handler = new CapturingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
-        var chat = BuildOpenAiChatClient(http);
+        var chat = BuildOpenAiChatClient(BuildDefaultClientOptions(), http);
 
-        await chat.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options, cancellationToken).ConfigureAwait(false);
+        await chat.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
 
         return handler.CapturedBody
                ?? throw new InvalidOperationException("The OpenAI adapter produced no request body to capture.");
     }
 
-    private static IChatClient BuildOpenAiChatClient(HttpClient http)
+    /// <summary>
+    ///     The same capture through the PRODUCTION llama-server client options
+    ///     (<see cref="LlamaServerOpenAIAdapterFactory.BuildClientOptions" />) rather than a locally-declared equivalent,
+    ///     with only the transport swapped for the capturing handler. llama-server speaks the OpenAI completions shape, so
+    ///     both providers share this adapter — capturing through both entry points is what proves a change on one lane did
+    ///     not quietly move the bytes on the other.
+    /// </summary>
+    public static async Task<string> CaptureLlamaServerWireBodyAsync(IReadOnlyList<ChatMessage> messages,
+        ChatOptions? options,
+        CancellationToken cancellationToken = default)
     {
-        var options = new OpenAIClientOptions
+        using var handler = new CapturingHandler();
+        using var http = new HttpClient(handler, disposeHandler: false);
+        var chat = BuildOpenAiChatClient(LlamaServerOpenAIAdapterFactory.BuildClientOptions(new Uri("http://127.0.0.1:1/v1"), TimeSpan.FromSeconds(30)),
+            http);
+
+        await chat.GetResponseAsync(messages, options, cancellationToken).ConfigureAwait(false);
+
+        return handler.CapturedBody
+               ?? throw new InvalidOperationException("The llama-server OpenAI adapter produced no request body to capture.");
+    }
+
+    private static OpenAIClientOptions BuildDefaultClientOptions()
+    {
+        return new OpenAIClientOptions
         {
             Endpoint = new Uri("http://127.0.0.1:1/v1"),
-            Transport = new HttpClientPipelineTransport(http),
             RetryPolicy = new ClientRetryPolicy(maxRetries: 0)
         };
+    }
+
+    private static IChatClient BuildOpenAiChatClient(OpenAIClientOptions options, HttpClient http)
+    {
+        options.Transport = new HttpClientPipelineTransport(http);
         var client = new OpenAIClient(new ApiKeyCredential("ignored"), options);
         return client.GetChatClient("test-model").AsIChatClient();
     }
