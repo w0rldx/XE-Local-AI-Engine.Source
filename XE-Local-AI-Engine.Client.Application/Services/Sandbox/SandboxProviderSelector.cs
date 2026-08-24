@@ -67,6 +67,25 @@ internal static class SandboxProviderSelector
         };
     }
 
+    /// <summary>
+    ///     Resolves the work-session sandbox. It follows whatever the agent role resolved: there is no
+    ///     <c>WorkSessions:Sandbox:Provider</c> key, because nothing in v1 executes inside this jail and inventing a
+    ///     setting for a role with no consumer would be one more thing an operator can get wrong for no effect. Give it
+    ///     its own key when a session tool needs one.
+    /// </summary>
+    public static IWorkSessionSandboxRuntimeProvider ResolveWorkSession(IServiceProvider services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        var providerName = ResolveAgentProviderName(services);
+        return providerName switch
+        {
+            FakeSandboxRuntimeProvider.Name => services.GetRequiredService<FakeSandboxRuntimeProvider>(),
+            ProcessSandboxRuntimeProvider.Name => services.GetRequiredService<ProcessSandboxRuntimeProvider>(),
+            _ => throw new InvalidOperationException($"Unknown work session sandbox provider '{providerName}'.")
+        };
+    }
+
     // An unset provider resolves to the deterministic fake. This is the safe non-Production path; in Production the
     // SandboxOptions startup validation rejects an unset provider before anything resolves the selector, so a
     // stripped config can never reach here and silently fall back.
