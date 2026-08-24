@@ -197,6 +197,23 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         await Task.CompletedTask;
     }
 
+    [Test]
+    public async Task Reap_WhenThereAreNoMarkersAtAll_StillSweepsTheScopesAPreviousRunLeft()
+    {
+        // The crash window the scope sweep exists for is exactly the one with no marker: `systemd-run` has created the
+        // scope and the workload is running inside it, but the worker died before the marker reached disk. Returning
+        // early on an empty marker set skipped the sweep in precisely that case, leaving the isolated workload running
+        // until its RuntimeMaxSec — the failure mode the sweep was added to close.
+        var leftoverUnit = SandboxScopeUnit.Create("compute");
+        var killer = new FakeKiller();
+        var scopeKiller = new FakeScopeKiller([leftoverUnit]);
+
+        await new SandboxOrphanReaper(new FakeMarkerStore(), killer, NullLogger<SandboxOrphanReaper>.Instance, containmentProbe: null, scopeKiller)
+            .StartAsync(CancellationToken.None);
+
+        AssertEx.Contains(scopeKiller.Killed, leftoverUnit);
+    }
+
     // ---- helpers ----
 
     private static SandboxProcessMarker Marker(int pgid, int ownerProcessId, string? scopeUnitName)

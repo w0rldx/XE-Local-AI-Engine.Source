@@ -101,11 +101,12 @@ public sealed class SandboxOrphanReaper : IHostedService
 
     private async Task ReapAsync(CancellationToken cancellationToken)
     {
+        // Deliberately NOT short-circuited on an empty marker set: the transient-scope sweep below is the only thing
+        // that finds a scope whose marker was never written. A worker killed between `systemd-run` creating the scope
+        // and the marker hitting disk leaves an isolated workload running inside a cgroup nothing references, and with
+        // an early return here its RuntimeMaxSec was the only thing that would ever stop it. An empty set costs one
+        // unit listing on a host that has the mechanism, and nothing at all on a host that does not.
         var markers = _markerStore.ReadAll();
-        if (markers.Count == 0)
-        {
-            return;
-        }
 
         var containerRoot = Path.GetFullPath(SandboxPaths.ContainerRoot);
         var reapedGroups = 0;
