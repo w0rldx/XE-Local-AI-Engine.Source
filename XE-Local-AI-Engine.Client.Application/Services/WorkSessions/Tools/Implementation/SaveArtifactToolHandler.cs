@@ -21,7 +21,7 @@ internal sealed class SaveArtifactToolHandler(IServiceScopeFactory scopeFactory,
     IOptions<WorkSessionOptions> options,
     IWorkSessionEventPublisher publisher,
     IWorkSessionArtifactBlobStore blobStore,
-    ILogger<SaveArtifactToolHandler> logger) : WorkSessionToolHandler<SaveArtifactRequest>(scopeFactory, options, publisher)
+    ILogger<SaveArtifactToolHandler> logger) : WorkSessionToolHandler<SaveArtifactRequest>(scopeFactory, options, publisher, logger)
 {
     private readonly IWorkSessionArtifactBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
     private readonly ILogger<SaveArtifactToolHandler> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -31,6 +31,8 @@ internal sealed class SaveArtifactToolHandler(IServiceScopeFactory scopeFactory,
     public override string Description => WorkSessionToolDefinitions.SaveArtifact.Description;
 
     public override string ParameterSchema => WorkSessionToolDefinitions.SaveArtifact.ParameterSchema;
+
+    protected override string ExampleArguments => WorkSessionToolDefinitions.SaveArtifact.ExampleArguments;
 
     protected override string? Validate(SaveArtifactRequest request)
     {

@@ -53,6 +53,9 @@ internal static class WorkSessionToolDefinitions
                                                         "op": { "type": "string", "enum": ["add", "update", "complete", "drop"] },
                                                         "taskId": { "type": "string" },
                                                         "title": { "type": "string" },
+                                                        "name": { "type": "string", "description": "Alias for title." },
+                                                        "text": { "type": "string", "description": "Alias for title." },
+                                                        "summary": { "type": "string", "description": "Alias for title." },
                                                         "detail": { "type": "string" },
                                                         "status": { "type": "string", "enum": ["Planned", "Active", "Blocked", "Done", "Dropped"] },
                                                         "blockedReason": { "type": "string" },
@@ -63,6 +66,9 @@ internal static class WorkSessionToolDefinitions
                                                 }
                                               }
                                               """;
+
+        /// <summary>Handed back verbatim when the arguments would not read: a model recovers from a shape it can copy.</summary>
+        public const string ExampleArguments = """{"operations":[{"op":"add","title":"Investigate X"}]}""";
     }
 
     public static class RecordFinding
@@ -89,6 +95,9 @@ internal static class WorkSessionToolDefinitions
                                                 }
                                               }
                                               """;
+
+        /// <summary>Handed back verbatim when the arguments would not read: a model recovers from a shape it can copy.</summary>
+        public const string ExampleArguments = """{"kind":"Finding","text":"The runtime pins llama.cpp b10201.","sourceRef":"docs/agent-knowledge.md"}""";
     }
 
     public static class SaveArtifact
@@ -113,6 +122,9 @@ internal static class WorkSessionToolDefinitions
                                                 }
                                               }
                                               """;
+
+        /// <summary>Handed back verbatim when the arguments would not read: a model recovers from a shape it can copy.</summary>
+        public const string ExampleArguments = """{"name":"report.md","mediaType":"text/markdown","kind":"Report","text":"The whole report."}""";
     }
 
     public static class CompleteWorkSession
@@ -134,6 +146,9 @@ internal static class WorkSessionToolDefinitions
                                                 }
                                               }
                                               """;
+
+        /// <summary>Handed back verbatim when the arguments would not read: a model recovers from a shape it can copy.</summary>
+        public const string ExampleArguments = """{"summary":"What the session achieved."}""";
     }
 
     /// <summary>Every work-session tool name, in offer order.</summary>

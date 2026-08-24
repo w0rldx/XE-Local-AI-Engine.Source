@@ -5,13 +5,28 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
+/// <summary>
+///     One plan operation as the model wrote it. <c>name</c>, <c>text</c> and <c>summary</c> are aliases for
+///     <c>title</c> and exist because a small model reliably reaches for one of them instead: before they were
+///     accepted, the unknown key failed the WHOLE batch at deserialization and the retry spent the step's entire
+///     provider-call budget guessing.
+/// </summary>
 internal sealed record WorkPlanOperationRequest(string? Op,
     string? TaskId,
     string? Title,
+    string? Name,
+    string? Text,
+    string? Summary,
     string? Detail,
     string? Status,
     string? BlockedReason,
-    string? ParentTaskId);
+    string? ParentTaskId)
+{
+    /// <summary>The title under whichever key it arrived, trimmed; null when none of them carried anything.</summary>
+    public string? EffectiveTitle => Trimmed(Title) ?? Trimmed(Name) ?? Trimmed(Text) ?? Trimmed(Summary);
+
+    private static string? Trimmed(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
 
 internal sealed record UpdateWorkPlanRequest(IReadOnlyList<WorkPlanOperationRequest>? Operations);
 
@@ -21,13 +36,16 @@ internal sealed record UpdateWorkPlanRequest(IReadOnlyList<WorkPlanOperationRequ
 /// </summary>
 internal sealed class UpdateWorkPlanToolHandler(IServiceScopeFactory scopeFactory,
     IOptions<WorkSessionOptions> options,
-    IWorkSessionEventPublisher publisher) : WorkSessionToolHandler<UpdateWorkPlanRequest>(scopeFactory, options, publisher)
+    IWorkSessionEventPublisher publisher,
+    ILogger<UpdateWorkPlanToolHandler> logger) : WorkSessionToolHandler<UpdateWorkPlanRequest>(scopeFactory, options, publisher, logger)
 {
     public override string ToolName => WorkSessionToolDefinitions.UpdateWorkPlan.ToolName;
 
     public override string Description => WorkSessionToolDefinitions.UpdateWorkPlan.Description;
 
     public override string ParameterSchema => WorkSessionToolDefinitions.UpdateWorkPlan.ParameterSchema;
+
+    protected override string ExampleArguments => WorkSessionToolDefinitions.UpdateWorkPlan.ExampleArguments;
 
     protected override string? Validate(UpdateWorkPlanRequest request)
     {
@@ -90,7 +108,7 @@ internal sealed class UpdateWorkPlanToolHandler(IServiceScopeFactory scopeFactor
             return $"{ToolName} operation 'op' must be one of add, update, complete or drop.";
         }
 
-        if (Exceeds(operation.Title, WorkSessionToolDefinitions.TitleMaxLength))
+        if (Exceeds(operation.EffectiveTitle, WorkSessionToolDefinitions.TitleMaxLength))
         {
             return Exceeded("title", WorkSessionToolDefinitions.TitleMaxLength);
         }
@@ -112,8 +130,8 @@ internal sealed class UpdateWorkPlanToolHandler(IServiceScopeFactory scopeFactor
 
         if (parsed == WorkPlanTaskOperation.Add)
         {
-            return string.IsNullOrWhiteSpace(operation.Title)
-                ? $"{ToolName} operation 'add' needs a title."
+            return operation.EffectiveTitle is null
+                ? $"{ToolName} operation 'add' needs a title. Example: {ExampleArguments}"
                 : null;
         }
 
@@ -159,7 +177,7 @@ internal sealed class UpdateWorkPlanToolHandler(IServiceScopeFactory scopeFactor
         change = new WorkPlanTaskChange(taskId,
             parsed,
             parentTaskId,
-            string.IsNullOrWhiteSpace(operation.Title) ? null : operation.Title,
+            operation.EffectiveTitle,
             string.IsNullOrWhiteSpace(operation.Detail) ? null : operation.Detail,
             status,
             string.IsNullOrWhiteSpace(operation.BlockedReason) ? null : operation.BlockedReason);
