@@ -357,6 +357,15 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             };
         }
 
+        // Anchor the jail's occupancy baseline BEFORE the child is started, while the jail still holds only what the
+        // ENGINE staged. Capturing it after the launch let a command that writes as its very first act — the common
+        // shape for a compute workload — put its own bytes into the baseline, which made them free for it AND for every
+        // later command in this sandbox, so a ceiling smaller than that first write never fired at all. Only the first
+        // command in a sandbox pays for the walk; every later one reads the captured value. A null answer means the
+        // watchdog does not apply to this sandbox (no ceiling, or a preserved host workspace) and nothing was walked.
+        var jailDiskCeiling = ResolveJailDiskCeiling(state);
+        var jailOccupancyBaseline = CaptureJailOccupancyBaseline(state, jailDiskCeiling);
+
         var process = new Process
         {
             StartInfo = startInfo,
@@ -434,9 +443,9 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         }
 
         // Bound the child's OWN writes into the jail. MaxCopyFileBytes governs only the host→jail copy-in re-read, so
-        // without this a runaway command could fill the host disk from inside the jail and nothing would stop it.
-        var jailDiskCeiling = ResolveJailDiskCeiling(state);
-        using var diskWatchdog = StartJailDiskWatchdog(state, jailDiskCeiling, diskCapSource, linkedSource.Token);
+        // without this a runaway command could fill the host disk from inside the jail and nothing would stop it. The
+        // ceiling and the baseline were both resolved before the child was started; only the ticking starts here.
+        using var diskWatchdog = StartJailDiskWatchdog(state, jailDiskCeiling, jailOccupancyBaseline, diskCapSource, linkedSource.Token);
 
         try
         {
@@ -770,12 +779,34 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     }
 
     /// <summary>
+    ///     Captures (or reads back) this sandbox's jail occupancy baseline, or returns <see langword="null" /> when the
+    ///     watchdog does not apply to it — a non-positive ceiling, or an engine-managed trusted host workspace.
+    ///     <para>
+    ///         Called from the command path BEFORE the child is started, and that ordering is the whole point: the walk
+    ///         must see the jail holding only what the ENGINE staged. Taken after the launch instead, a command whose
+    ///         first act is a write had its own bytes measured INTO the baseline — permanently, since the baseline is
+    ///         per sandbox — so those bytes were free for it and for every command after it, and a ceiling smaller than
+    ///         that first write could never fire. Only the first command in a sandbox pays for the walk.
+    ///     </para>
+    /// </summary>
+    private static long? CaptureJailOccupancyBaseline(JailState state, long ceiling)
+    {
+        if (ceiling <= 0 || state.PreserveJailRoot)
+        {
+            return null;
+        }
+
+        var jailRoot = state.JailRoot;
+        return state.GetOrCaptureOccupancyBaseline(() => MeasureDirectoryBytes(jailRoot, long.MaxValue));
+    }
+
+    /// <summary>
     ///     Starts the jail disk watchdog for one command, or returns a no-op when it does not apply. Cancelling
     ///     <paramref name="diskCapSource" /> is what unblocks the command's wait and routes it to the over-cap result.
     ///     <para>
     ///         The ceiling bounds the jail's OCCUPANCY, not one command's growth: what is measured is everything below
-    ///         the jail root above the baseline captured when this SANDBOX ran its first command
-    ///         (<see cref="JailState.GetOrCaptureOccupancyBaseline" />). A baseline re-taken per command handed every
+    ///         the jail root above the baseline captured before this SANDBOX started its first command
+    ///         (<see cref="CaptureJailOccupancyBaseline" />). A baseline re-taken per command handed every
     ///         new command a fresh allowance, so a caller could leave any amount on disk by writing just under the
     ///         ceiling repeatedly and nothing would ever fire. Anchoring at what the engine staged before the sandbox
     ///         ran anything closes that without charging a command for a workspace copy-in it did not write.
@@ -804,23 +835,19 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     /// </summary>
     private IDisposable StartJailDiskWatchdog(JailState state,
         long ceiling,
+        long? occupancyBaseline,
         CancellationTokenSource diskCapSource,
         CancellationToken commandToken)
     {
-        if (ceiling <= 0 || state.PreserveJailRoot)
+        // The baseline is null exactly when the watchdog does not apply — CaptureJailOccupancyBaseline made that call
+        // against the same ceiling and the same state before the child was launched.
+        if (ceiling <= 0 || state.PreserveJailRoot || occupancyBaseline is not { } baseline)
         {
             return new NoOpDisposable();
         }
 
         var watchdogSource = CancellationTokenSource.CreateLinkedTokenSource(commandToken);
         var jailRoot = state.JailRoot;
-
-        // Per SANDBOX, not per command — see the summary. Captured HERE rather than inside the task below, so it is
-        // anchored to when the sandbox's first command started rather than to whenever the thread pool got round to
-        // running the watchdog: with a fast first command those are different moments, and the difference decided
-        // whether that command's own writes landed in the baseline (making them free for every later command) or in
-        // its budget. Only the first command in a sandbox pays for the walk; the rest read the captured value.
-        var baseline = state.GetOrCaptureOccupancyBaseline(() => MeasureDirectoryBytes(jailRoot, long.MaxValue));
 
         _ = Task.Run(async () =>
         {

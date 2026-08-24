@@ -997,6 +997,46 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    public async Task ProcessSandboxProvider_Execute_WhenTheFirstCommandWritesImmediately_DoesNotBankItsBytesInTheBaseline()
+    {
+        // The occupancy baseline is captured ONCE per sandbox and is permanent, so WHEN it is walked decides what the
+        // ceiling can ever see. Walked after the child was launched, a command whose first act is a write had its own
+        // bytes measured into the baseline — free for it and for every command after it — and a ceiling smaller than
+        // that first write could never fire at all.
+        //
+        // The marker store is the seam that makes this deterministic instead of a race: the provider writes the marker
+        // between launching the child and starting the disk watchdog, so a store that blocks there guarantees the
+        // child's 8 MiB is on disk before any walk could happen. With the baseline anchored before the launch the
+        // ceiling still fires; with it anchored after, this command runs to completion. The marker is only written for
+        // a group-leader launch, so the real host containment is required for the seam to exist at all.
+        if (!OperatingSystem.IsLinux())
+        {
+            Skip("the jail disk watchdog test uses /bin/sh and dd");
+            return;
+        }
+
+        var containment = HostContainment();
+        if (!containment.SupportsProcessGroup)
+        {
+            Skip("this host has no setsid, so no marker is written and the ordering seam does not exist");
+            return;
+        }
+
+        var markerStore = new BlockingMarkerStore(TimeSpan.FromSeconds(1.5));
+        using var provider = CreateProvider(containment: containment, maxJailDiskBytes: 2L * 1024 * 1024, markerStore: markerStore);
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+
+        // Writes 8 MiB as its very first act — four times the ceiling — then stays alive long enough for several
+        // watchdog ticks.
+        var result = await provider.ExecuteAsync(handle,
+            JailShellCommand("disk-baseline-race", "dd if=/dev/zero of=first-write.bin bs=1M count=8 2>/dev/null; sleep 10"));
+
+        AssertEx.False(result.Completed, "bytes a command writes before the baseline walk must count against its ceiling, not become part of the baseline");
+        AssertEx.Equal(expected: -1, result.ExitCode);
+        AssertEx.Contains(result.StandardError ?? string.Empty, "disk ceiling");
+    }
+
+    [Test]
     public async Task ProcessSandboxProvider_Execute_WhenTheNodeDisabledTheWatchdog_APerSandboxCeilingDoesNotReEnableIt()
     {
         // The node-wide value is the operator's, in both directions: a non-positive one turns the watchdog off, and a
@@ -1400,6 +1440,33 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     private static void Skip(string reason)
     {
         throw new SkipTestException(reason);
+    }
+
+    /// <summary>
+    ///     A marker store that blocks inside <see cref="Write" />. The provider writes the marker between launching the
+    ///     child and starting the disk watchdog, so this stalls that window on purpose: it makes "the child got to write
+    ///     before the engine measured the jail" a certainty rather than a race, without a test-only seam in the
+    ///     provider.
+    /// </summary>
+    private sealed class BlockingMarkerStore(TimeSpan delay) : ISandboxMarkerStore
+    {
+        public string? Write(SandboxProcessMarker marker)
+        {
+            // A never-set gate waited on with a timeout: the same block a sleep would give, through an API the repo's
+            // analyzer wall allows.
+            using var gate = new ManualResetEventSlim(initialState: false);
+            _ = gate.Wait(delay);
+            return "marker-" + Guid.NewGuid().ToString("N");
+        }
+
+        public void Delete(string markerId)
+        {
+        }
+
+        public IReadOnlyList<SandboxMarkerEntry> ReadAll()
+        {
+            return [];
+        }
     }
 
     /// <summary>Records marker writes and deletions so the launch-side bookkeeping can be asserted without touching disk.</summary>
