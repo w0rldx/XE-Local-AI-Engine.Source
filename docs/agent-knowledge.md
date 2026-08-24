@@ -318,6 +318,12 @@ The generated client at `XE-Local-AI-Engine.Client.React/src/core/api/generated/
 
 > **Regen trap — this one is invisible.** The throwaway host used for regen **must** run with `XE_LAUNCH_MODE=desktop`, or the spec silently omits every `IDesktopOnlyEndpoint`-gated path (`app-update`, `github-auth`, image endpoints). The generated client then drops them, and you get dozens of phantom `TS2305 no exported member ...` errors. A non-desktop regen is *incomplete without saying so*. Prefer merging new/changed paths into the committed `openapi/v1.json` over overwriting it wholesale.
 
+> **`scripts/openapi-live-check.sh` fails on a mise-managed toolchain unless you pin two mise variables.** It isolates `HOME` and
+> `XDG_DATA_HOME` for the throwaway desktop host, which loses mise's trust database (`config … are not trusted`) and then its tool
+> installs (`dotnet is not a valid shim`) — the backend dies before readiness and the script reports a contract failure that has nothing
+> to do with the contract. Reproduce with `env HOME=/tmp/nope dotnet --version`. Run it as
+> `MISE_TRUSTED_CONFIG_PATHS=~/.config/mise/config.toml MISE_DATA_DIR=~/.local/share/mise scripts/openapi-live-check.sh`.
+
 > **A feature flag must gate BEHAVIOUR, not endpoint discovery, or the spec depends on which node produced it.** Development Mode
 > keeps its endpoints out of `EndpointDiscoveryOptions.Filter` when disabled, which is right for it (its services are registered only when
 > the feature is on, so a discovered endpoint would fail the node's boot). Copying that for a feature whose services register
