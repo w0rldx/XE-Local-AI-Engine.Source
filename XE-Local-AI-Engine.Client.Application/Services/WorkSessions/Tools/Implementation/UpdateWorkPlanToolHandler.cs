@@ -1,0 +1,180 @@
+namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
+
+using System.Globalization;
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+
+internal sealed record WorkPlanOperationRequest(string? Op,
+    string? TaskId,
+    string? Title,
+    string? Detail,
+    string? Status,
+    string? BlockedReason,
+    string? ParentTaskId);
+
+internal sealed record UpdateWorkPlanRequest(IReadOnlyList<WorkPlanOperationRequest>? Operations);
+
+/// <summary>
+///     <c>update_work_plan</c>: the model's only way to change the session's task list. The whole batch commits in one
+///     store transaction, so a partially-applied plan is not a state the session can be observed in.
+/// </summary>
+internal sealed class UpdateWorkPlanToolHandler(IServiceScopeFactory scopeFactory,
+    IOptions<WorkSessionOptions> options,
+    IWorkSessionEventPublisher publisher) : WorkSessionToolHandler<UpdateWorkPlanRequest>(scopeFactory, options, publisher)
+{
+    public override string ToolName => WorkSessionToolDefinitions.UpdateWorkPlan.ToolName;
+
+    public override string Description => WorkSessionToolDefinitions.UpdateWorkPlan.Description;
+
+    public override string ParameterSchema => WorkSessionToolDefinitions.UpdateWorkPlan.ParameterSchema;
+
+    protected override string? Validate(UpdateWorkPlanRequest request)
+    {
+        if (request.Operations is not { Count: > 0 })
+        {
+            return $"{ToolName} needs at least one operation.";
+        }
+
+        if (request.Operations.Count > WorkSessionToolDefinitions.MaxPlanOperations)
+        {
+            return $"{ToolName} accepts at most {WorkSessionToolDefinitions.MaxPlanOperations} operations in one call.";
+        }
+
+        foreach (var operation in request.Operations)
+        {
+            if (ValidateOperation(operation) is { } error)
+            {
+                return error;
+            }
+        }
+
+        return null;
+    }
+
+    protected override async Task<WorkSessionToolOutcome> ExecuteCoreAsync(UpdateWorkPlanRequest request,
+        AgentWorkSessionSnapshot session,
+        IAgentWorkSessionStore store,
+        CancellationToken cancellationToken)
+    {
+        var changes = new List<WorkPlanTaskChange>(request.Operations!.Count);
+        foreach (var operation in request.Operations)
+        {
+            if (TryMap(operation, out var change, out var error))
+            {
+                changes.Add(change);
+                continue;
+            }
+
+            return new WorkSessionToolOutcome(error);
+        }
+
+        var result = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(session.Id,
+                    session.Version,
+                    // One operation id per batch content, so the same batch replayed after a lost response commits once.
+                    WorkSessionOperationId.For(session.Id, session.StepCount, DescribeBatch(changes)),
+                    AgentWorkSessionTaskOrigin.Agent,
+                    changes),
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        return new WorkSessionToolOutcome(string.Create(CultureInfo.InvariantCulture, $"Recorded {changes.Count} work-plan change(s)."),
+            result.Sequence,
+            WorkSessionChangeKind.Task);
+    }
+
+    private string? ValidateOperation(WorkPlanOperationRequest operation)
+    {
+        if (!TryParseOperation(operation.Op, out var parsed))
+        {
+            return $"{ToolName} operation 'op' must be one of add, update, complete or drop.";
+        }
+
+        if (Exceeds(operation.Title, WorkSessionToolDefinitions.TitleMaxLength))
+        {
+            return Exceeded("title", WorkSessionToolDefinitions.TitleMaxLength);
+        }
+
+        if (Exceeds(operation.Detail, WorkSessionToolDefinitions.TextMaxLength))
+        {
+            return Exceeded("detail", WorkSessionToolDefinitions.TextMaxLength);
+        }
+
+        if (Exceeds(operation.BlockedReason, WorkSessionToolDefinitions.ReferenceMaxLength))
+        {
+            return Exceeded("blockedReason", WorkSessionToolDefinitions.ReferenceMaxLength);
+        }
+
+        if (operation.Status is not null && !Enum.TryParse<AgentWorkSessionTaskStatus>(operation.Status, out _))
+        {
+            return $"{ToolName} operation 'status' must be one of Planned, Active, Blocked, Done or Dropped.";
+        }
+
+        if (parsed == WorkPlanTaskOperation.Add)
+        {
+            return string.IsNullOrWhiteSpace(operation.Title)
+                ? $"{ToolName} operation 'add' needs a title."
+                : null;
+        }
+
+        return string.IsNullOrWhiteSpace(operation.TaskId)
+            ? $"{ToolName} operation '{operation.Op}' needs the taskId of an existing task."
+            : null;
+    }
+
+    private bool TryMap(WorkPlanOperationRequest operation, out WorkPlanTaskChange change, out string error)
+    {
+        change = null!;
+        _ = TryParseOperation(operation.Op, out var parsed);
+
+        Guid taskId;
+        if (parsed == WorkPlanTaskOperation.Add)
+        {
+            // The node mints the id: a model-supplied one is either a collision or a forgery attempt, and the state
+            // block hands the real one back on the very next step anyway.
+            taskId = Guid.NewGuid();
+        }
+        else if (!TryParseId(operation.TaskId, out taskId))
+        {
+            error = $"{ToolName} could not read '{operation.TaskId}' as a task id. Use the ids from the work session state block.";
+            return false;
+        }
+
+        Guid? parentTaskId = null;
+        if (!string.IsNullOrWhiteSpace(operation.ParentTaskId))
+        {
+            if (!TryParseId(operation.ParentTaskId, out var parent))
+            {
+                error = $"{ToolName} could not read '{operation.ParentTaskId}' as a parent task id.";
+                return false;
+            }
+
+            parentTaskId = parent;
+        }
+
+        AgentWorkSessionTaskStatus? status = operation.Status is null
+            ? null
+            : Enum.Parse<AgentWorkSessionTaskStatus>(operation.Status);
+
+        change = new WorkPlanTaskChange(taskId,
+            parsed,
+            parentTaskId,
+            string.IsNullOrWhiteSpace(operation.Title) ? null : operation.Title,
+            string.IsNullOrWhiteSpace(operation.Detail) ? null : operation.Detail,
+            status,
+            string.IsNullOrWhiteSpace(operation.BlockedReason) ? null : operation.BlockedReason);
+        error = string.Empty;
+        return true;
+    }
+
+    private static bool TryParseOperation(string? op, out WorkPlanTaskOperation parsed)
+    {
+        parsed = default;
+        return !string.IsNullOrWhiteSpace(op) && Enum.TryParse(op, ignoreCase: true, out parsed);
+    }
+
+    // The batch's identity for idempotency: the operations it carries, in order. Two genuinely different batches in one
+    // step therefore get different ids, while a replay of the same one collapses.
+    private static string DescribeBatch(IReadOnlyList<WorkPlanTaskChange> changes) =>
+        "plan:" + string.Join('|', changes.Select(static change => string.Create(CultureInfo.InvariantCulture, $"{change.Operation}:{change.TaskId:N}")));
+}
