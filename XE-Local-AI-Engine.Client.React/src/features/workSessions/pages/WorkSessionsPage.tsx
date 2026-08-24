@@ -46,7 +46,9 @@ export function WorkSessionsPage() {
 				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="work-sessions-error">
 					<Stack gap="sm" align="flex-start">
 						<Text size="sm">{apiErrorMessage(listQuery.error, t("pages.workSessions.loadFailed", "Could not load work sessions."))}</Text>
-						<Button size="xs" variant="light" onClick={() => void listQuery.refetch()} data-testid="work-sessions-retry">
+						<Button size="xs" variant="light" onClick={() => {
+									listQuery.refetch().catch(() => undefined);
+								}} data-testid="work-sessions-retry">
 							{t("pages.workSessions.retry", "Retry")}
 						</Button>
 					</Stack>
@@ -70,7 +72,9 @@ export function WorkSessionsPage() {
 							withBorder={true}
 							padding="md"
 							data-testid={`work-session-card-${session.id}`}
-							onClick={() => void navigate({ to: "/work-sessions/$sessionId", params: { sessionId: session.id ?? "" } })}
+							onClick={() => {
+									navigate({ to: "/work-sessions/$sessionId", params: { sessionId: session.id ?? "" } });
+								}}
 							style={{ cursor: "pointer" }}
 						>
 							<Stack gap="xs">
@@ -114,7 +118,7 @@ export function WorkSessionsPage() {
 						{
 							onSuccess: (created) => {
 								setDialogOpened(false);
-								void navigate({ to: "/work-sessions/$sessionId", params: { sessionId: created.id ?? "" } });
+								navigate({ to: "/work-sessions/$sessionId", params: { sessionId: created.id ?? "" } });
 							},
 						},
 					);

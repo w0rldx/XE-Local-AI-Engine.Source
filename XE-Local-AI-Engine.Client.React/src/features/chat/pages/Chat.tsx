@@ -1187,6 +1187,7 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	// persisted in-flight assistant row.
 	const loadedSelectedConversationId = selectedConversationData?.id === selectedConversationId ? selectedConversationId : "";
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: resumeNonce is a re-arm signal, not an input the body reads.
 	useEffect(() => {
 		if (!loadedSelectedConversationId) {
 			return;

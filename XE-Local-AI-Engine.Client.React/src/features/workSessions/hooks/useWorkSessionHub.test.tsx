@@ -68,7 +68,9 @@ function emit(change: { sessionId: string; seq: number; kind: string }): void {
 	act(() => hubMock.handlers.get("workSessionChanged")?.(change));
 }
 
-type InvalidateSpy = { mock: { calls: unknown[][] } };
+interface InvalidateSpy {
+	readonly mock: { readonly calls: unknown[][] };
+}
 
 function invalidatedKeys(spy: InvalidateSpy): unknown[] {
 	return spy.mock.calls.map((call) => (call[0] as { queryKey: unknown }).queryKey);

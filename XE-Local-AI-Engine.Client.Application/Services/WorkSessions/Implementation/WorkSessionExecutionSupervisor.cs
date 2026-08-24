@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -304,6 +305,15 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             RequestId: correlation.RequestId,
             UseLocalTools: true,
             AgentDefinitionId: state.Session.AgentDefinitionId);
+
+        // Tighten the tool-result ceiling for this step, seeded BEFORE the enumeration starts so the value flows into
+        // the invocation's async context (the send path calls the runner inline, not through a detached Task). The
+        // node-wide budget is larger than read_document's own 50,000-character cap, so without this nothing clips a
+        // knowledge-base read and three of them fill a 65,536-token window on their own. Disposal restores the prior
+        // value; a step still running after the drain keeps the value its context already captured.
+        using var resultBudget = _options.MaxToolResultCharacters > 0
+            ? ToolResultBudgetScope.BeginScope(_options.MaxToolResultCharacters)
+            : null;
 
         string terminal;
         try

@@ -25,6 +25,11 @@ internal sealed class BudgetedToolResultAIFunction : DelegatingAIFunction
     protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         var result = await base.InvokeCoreAsync(arguments, cancellationToken).ConfigureAwait(false);
-        return ToolResultBudget.Apply(result, _maxResultCharacters);
+
+        // The configured budget is read once when the registries are built, so it is a node-wide constant. A run that
+        // needs a tighter ceiling for itself seeds one ambiently (ToolResultBudgetScope); the resolve is tighten-only,
+        // so a run can never raise the node's ceiling and an unseeded flow is byte-identical to before. This wrapper is
+        // the single choke point for ClientLocal, Custom and MCP tools alike, which is why the override lives here.
+        return ToolResultBudget.Apply(result, ToolResultBudgetScope.Resolve(_maxResultCharacters));
     }
 }

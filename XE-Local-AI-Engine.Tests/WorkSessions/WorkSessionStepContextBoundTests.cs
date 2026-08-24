@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -118,6 +119,41 @@ public sealed class WorkSessionStepContextBoundTests
         AssertEx.Contains(sent, "Read the runtime wiki", message: "The open task survives the fold.");
         AssertEx.Contains(sent, "Still open after folding", message: "The blocked task survives the fold.");
         AssertEx.Contains(sent, "llama.cpp is the default runtime", message: "The recorded finding survives the fold.");
+    }
+
+    [Test]
+    public async Task Loop_SeedsTheTightenedToolResultBudget_ForTheDurationOfTheTurn()
+    {
+        // The ambient budget is what actually clips a knowledge-base read (ToolResultBudgetScopeTests covers the
+        // clipping). What this proves is the half that fake-driven unit tests cannot: the value the supervisor seeds
+        // reaches the code running INSIDE the turn, which is where the tool loop lives.
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        int? seenInsideTurn = null;
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1"),
+                ("WorkSessions:MaxToolResultCharacters", "16000")),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted],
+            DuringTurn: (_, _) =>
+            {
+                seenInsideTurn = ToolResultBudgetScope.Current;
+                return Task.CompletedTask;
+            }));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 16_000, seenInsideTurn, "The step's tightened tool-result budget must reach the tool loop.");
+        AssertEx.True(ToolResultBudgetScope.Current is null, "The scope must not leak out of the step.");
     }
 
     [Test]

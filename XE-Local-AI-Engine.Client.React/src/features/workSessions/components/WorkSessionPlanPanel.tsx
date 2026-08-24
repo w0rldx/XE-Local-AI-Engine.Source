@@ -36,7 +36,7 @@ interface TaskNode {
 }
 
 /** Nests by `parentTaskId` and orders each level by `sequence`. An orphaned child renders at the root, never dropped. */
-export function buildTaskTree(tasks: readonly WorkSessionTaskResponse[]): readonly TaskNode[] {
+function buildTaskTree(tasks: readonly WorkSessionTaskResponse[]): readonly TaskNode[] {
 	const byParent = new Map<string, WorkSessionTaskResponse[]>();
 	const ids = new Set(tasks.map((task) => task.id ?? ""));
 	for (const task of tasks) {

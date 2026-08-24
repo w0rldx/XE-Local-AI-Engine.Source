@@ -51,11 +51,16 @@ describe("nodeCapabilities", () => {
 		});
 	});
 
+	it("enables the work-session surface by default", () => {
+		expect(nodeCapabilities.workSessions).toBe(true);
+	});
+
 	it("defines the route paths targeted by the node shell", () => {
 		expect(nodeRoutePaths).toEqual({
 			home: "/",
 			chat: "/chat",
 			development: "/development",
+			workSessions: "/work-sessions",
 			knowledgeBase: "/knowledge-base",
 			dashboard: "/dashboard",
 			binding: "/node-binding",

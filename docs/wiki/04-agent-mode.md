@@ -715,6 +715,14 @@ replay using the same `ITokenEstimator` the context budgeters use, and over
 the synopsis `CompactionContextResolver` already splices. That is safe precisely because the state block
 is rebuilt from the database; folding costs the model nothing it still needs.
 
+Compaction cannot touch the other half — the results the step's own tool loop produces *within* the
+turn. So the supervisor also seeds `ToolResultBudgetScope` for the duration of the step, tightening the
+node-wide budget to `WorkSessions:MaxToolResultCharacters` (16,000). The scope is an `AsyncLocal` in the
+same shape as `AgentRunConversationContext`, read in `BudgetedToolResultAIFunction` — the single wrapper
+every ClientLocal, Custom and MCP tool routes through, which is why one edit there bounds all three. It
+is **tighten-only**: an ambient value above the node ceiling has no effect, so no run can raise it, and
+an unseeded flow (every ordinary chat turn) is byte-identical to before.
+
 The checkpoint's own compaction is not that bound. It lands every `CheckpointEveryNSteps` steps and keeps
 the configured `Agent:ConversationCompaction:RecentMessagesToKeepVerbatim` (8) — four whole steps for a
 session — so it folds nothing until a session is long, and it runs *after* a step, never before one.
@@ -775,6 +783,7 @@ the state block would otherwise carry off the node on the next step.
 | `WorkSessions:MaxArtifactBytes` | `1048576` | 1 MiB |
 | `WorkSessions:StepTimeoutSeconds` | `0` | 0 inherits the node's maximum message request timeout |
 | `WorkSessions:StepContextBudgetTokens` | `12000` | Replayed-transcript budget per step; over it the boundary force-compacts (§5.3). 0 disables |
+| `WorkSessions:MaxToolResultCharacters` | `16000` | Tightens the node's tool-result budget for a step (§5.3). Tighten-only; 0 leaves the node value |
 
 `IWorkSessionSandboxRuntimeProvider` exists as a role marker with **no consumer in v1**: nothing a
 session tool does needs a jail yet, and the role is there so the first one that does gets a per-feature

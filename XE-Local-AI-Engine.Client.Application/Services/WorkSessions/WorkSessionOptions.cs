@@ -57,4 +57,18 @@ public sealed class WorkSessionOptions
     /// </summary>
     [Range(0, 1_000_000)]
     public int StepContextBudgetTokens { get; init; } = 12_000;
+
+    /// <summary>
+    ///     Tool-result character ceiling for a session step, tightening the node-wide
+    ///     <c>Agent:ToolPipeline:MaxToolResultCharacters</c> (65,536) for the duration of the turn. Zero leaves the node
+    ///     value in place.
+    ///     <para>
+    ///         The node value is larger than <c>read_document</c>'s own 50,000-character cap, so nothing clips a
+    ///         knowledge-base read today; several of them in one research step is what overran a 65,536-token window.
+    ///         The default of 16,000 (~4–5k tokens per result) leaves a step room for three or four reads. Tighten-only:
+    ///         a value above the node ceiling has no effect.
+    ///     </para>
+    /// </summary>
+    [Range(0, 1_000_000)]
+    public int MaxToolResultCharacters { get; init; } = 16_000;
 }
