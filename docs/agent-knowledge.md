@@ -704,6 +704,21 @@ Two traps worth keeping:
 
 MCP servers supply third-party tool schemas the node does not control, so this is not a closed problem: the compatibility pass is the guard, and `FailureCategory.ModelCapabilityUnsupported` carries the translated message when something still slips through.
 
+### A work session is chat turns in a loop, and it takes the node's only invocation slot
+
+Three things about `Services/WorkSessions/*` that reading the code will not tell you fast enough:
+
+- **The supervisor drives `INodeChatStreamService.SendMessageAsync`, not `IInvocationRunner.RunAsync`.** The runner persists *nothing* into a conversation: message rows, ordered parts, pump terminalization, the resume registry a reloading browser re-attaches through, and the whole approval / `ask_user` lifecycle all live in the send path. The scheduler calls the runner directly and pays for it by having no conversation; a work session cannot.
+- **Stopping a step never cancels the enumeration.** Cancelling it only stops the supervisor watching — the run keeps going and keeps the slot, and the loop never sees its terminal. Pause, cancel, an expired park and the step deadline all go through `INodeChatStreamCancellationRegistry.TryCancel`, the same path the operator's stop button takes, so the pump persists a real `Cancelled`. For the same reason every store write inside the loop passes `CancellationToken.None`: those writes are the record of what already happened.
+- **`MaxConcurrentSessions` is an admission cap, not concurrency.** `WorkerEventDispatcher` holds one `SemaphoreSlim(1, 1)` that every invocation takes, so a running session step delays the operator's `/chat` turn, every scheduled run and every benchmark until it finishes. `MaxParkedSeconds` (default 300) bounds the worst case; without it an unanswered approval holds the whole node for `MaxPendingToolCallAge` (15 minutes).
+
+Two smaller traps already paid for once:
+
+- **Do not hold one DI scope across a step.** The four state tool handlers write the same session row from their own scopes mid-turn, so a `DbContext` kept across the turn carries a stale row version into the supervisor's next write and fails it as a lost update — even though nothing was actually lost. Each store write gets its own scope.
+- **A checkpoint's operation id must be unique per checkpoint, not per step.** One step takes more than one (the park-timeout checkpoint and the pause checkpoint land at the same step count), and a step-derived key makes the store's idempotency swallow the second — the one that records where the work actually stopped.
+
+Session-tool safety rests on `AgentRunConversationContext`: the session id is resolved from the ambient conversation id the runner seeds for the whole tool loop plus a conversation-to-session lookup, **never** from a tool argument. That is what makes the profile-opt-in offer (the `spawn_subagent` seam) safe rather than merely convenient — a work-session agent bound to an ordinary chat resolves no session and gets four inert tools.
+
 ### Capability detection is a substring scan of the chat template — know what it can and cannot see
 
 `GgufCapabilityDetector` decides a GGUF's advertised capabilities by scanning `tokenizer.chat_template` for literal substrings: tools from `tool_calls`/`tool_call`/`function_call`/`tools`, reasoning from `<think`/`enable_thinking`/`reasoning_content`. Two consequences that have already bitten:
