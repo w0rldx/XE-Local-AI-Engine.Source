@@ -150,6 +150,39 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     }
 
     [Test]
+    public async Task RunPython_ConcurrentCalls_GetTheirOwnJailAndSurviveEachOther()
+    {
+        // Two genuinely overlapping invocations through ONE gateway — the shape a research loop produces. With a
+        // constant attach key the registry handed both the SAME live jail: they shared a working directory, and the
+        // first to finish killed it under the one still running. Each script writes a file named after itself, sleeps
+        // past the other's start, then lists its own directory, so a shared jail shows up as the sibling's file.
+        RequireOptIn();
+        using var provider = CreateHostProvider();
+        var gateway = CreateGateway(provider);
+
+        Task<string> RunAsync(string tag)
+        {
+            return gateway.ExecuteAsync(new ComputeRunToolRequest
+            {
+                Code = $"""
+                        import pathlib, time
+                        pathlib.Path("{tag}.txt").write_text("{tag}")
+                        time.sleep(2)
+                        print("SAW", sorted(p.name for p in pathlib.Path(".").iterdir()))
+                        """
+            });
+        }
+
+        var results = await Task.WhenAll(RunAsync("alpha"), RunAsync("beta"));
+
+        // Both must COMPLETE: under one shared jail the loser was torn down mid-run.
+        AssertEx.Contains(results[0], "exit_code: 0");
+        AssertEx.Contains(results[1], "exit_code: 0");
+        AssertEx.Contains(results[0], "SAW ['alpha.txt']");
+        AssertEx.Contains(results[1], "SAW ['beta.txt']");
+    }
+
+    [Test]
     public async Task RunPython_CannotReachTheNetwork()
     {
         RequireOptIn();

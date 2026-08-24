@@ -28,7 +28,10 @@ public sealed class ComputeToolGatewayTests
 
         var create = AssertEx.NotNull(provider.CreateRequest);
         AssertEx.Equal(ComputeToolGateway.RuntimeProfile, create.RuntimeProfile);
-        AssertEx.Equal(ComputeToolGateway.RuntimeProfile, create.AttachKey.RuntimeProfile);
+        // The attach key carries the profile plus this invocation's id (see the concurrency test below); the profile
+        // PREFIX is what keeps the jail keyed apart from AgentHome's.
+        AssertEx.True(create.AttachKey.RuntimeProfile.StartsWith(ComputeToolGateway.RuntimeProfile, StringComparison.Ordinal),
+            "the attach key must stay within this tool's runtime profile");
         AssertEx.NotEqual("dotnet-agent-home", create.AttachKey.RuntimeProfile,
             "the compute jail must be keyed apart from AgentHome's, or a script could reach a staged workspace");
 
@@ -61,6 +64,25 @@ public sealed class ComputeToolGatewayTests
         AssertEx.False(Directory.Exists(first), "the scratch directory must not outlive the call that used it");
         AssertEx.False(Directory.Exists(second));
         AssertEx.Equal(first, provider.CommandRequests[0].Environment!["TMPDIR"], "HOME and TMPDIR share the one per-call directory");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_KeysEveryInvocationToItsOwnJail()
+    {
+        // The registry attaches BY the attach key, so a constant one handed two overlapping calls a single live jail:
+        // one shared working directory between unrelated conversations, and — now that teardown is per call — whichever
+        // finished first killing the jail out from under the other.
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.None);
+        var gateway = CreateGateway(provider);
+
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(2)" });
+
+        AssertEx.Equal(expected: 2, provider.CreateRequests.Count);
+        AssertEx.NotEqual(provider.CreateRequests[0].AttachKey, provider.CreateRequests[1].AttachKey,
+            "two invocations must never share an attach key, or the registry hands them one jail");
+        AssertEx.Equal(provider.CreateRequests[0].RuntimeProfile, provider.CreateRequests[1].RuntimeProfile,
+            "only the KEY varies per call; the profile the jail is built from is the same shape every time");
     }
 
     [Test]
@@ -282,6 +304,8 @@ public sealed class ComputeToolGatewayTests
 
         public SandboxCommandRequest? CommandRequest { get; private set; }
 
+        public List<SandboxCreateRequest> CreateRequests { get; } = [];
+
         public List<SandboxCommandRequest> CommandRequests { get; } = [];
 
         public List<string> KilledSandboxIds { get; } = [];
@@ -300,10 +324,11 @@ public sealed class ComputeToolGatewayTests
         public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
         {
             CreateRequest = request;
+            CreateRequests.Add(request);
             return Task.FromResult(new SandboxHandle
             {
                 ProviderName = ProviderName,
-                SandboxId = "sandbox-1",
+                SandboxId = "sandbox-" + CreateRequests.Count,
                 AttachKey = request.AttachKey,
                 CreatedAt = DateTimeOffset.UnixEpoch,
                 ManifestVersion = request.AttachKey.ManifestVersion

@@ -55,7 +55,7 @@ No torch, no pandas, no network libraries, no system shell. All three libraries 
 2. **Gateway setup** (`ComputeToolGateway.ExecuteAsync`):
    - Resolves the pinned-venv Python interpreter path (`IComputePythonEnvironment.GetInterpreterPathAsync`).
    - Acquires the node's identity (OwnerUserId, NodeId) from `IAgentHomeIdentityProvider` (shared with AgentHome).
-   - Creates a sandbox with a distinct runtime profile (`"compute-python"`, separate from AgentHome's `"dotnet-agent-home"`), so compute scripts never share a jail with workspace operations.
+   - Creates a sandbox with a distinct runtime profile (`"compute-python"`, separate from AgentHome's `"dotnet-agent-home"`), so compute scripts never share a jail with workspace operations. The attach key carries that profile **plus this invocation's id**: the registry attaches *by* the key, so a constant one hands two concurrent `run_python` calls a single live jail — one shared working directory, and the first call to finish tearing it down under the other.
    - Creates a fresh per-invocation directory for the script's `HOME`/`TMPDIR`.
 
 3. **Sandbox execution** (`IAgentSandboxRuntimeProvider.ExecuteAsync`):

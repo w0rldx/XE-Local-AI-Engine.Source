@@ -20,10 +20,11 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 ///         access to AgentHome's single workspace, and this sandbox has no workspace to serialize.
 ///     </para>
 ///     <para>
-///         The jail is also per INVOCATION: it is killed when the call returns, which deletes the jail root the script
-///         ran in, and the per-call HOME/TMPDIR scratch directory is deleted alongside it. The tool advertises itself
-///         to the model as stateless, and only tearing both down each call makes that true — a reused jail would have
-///         let one script's files be read by a later call, including one from a different conversation. Only writable
+///         The jail is also per INVOCATION — keyed on the invocation id, killed when the call returns, which deletes
+///         the jail root the script ran in; the per-call HOME/TMPDIR scratch directory is deleted alongside it. The
+///         tool advertises itself to the model as stateless, and only a per-call key plus that teardown makes it true:
+///         a constant key let a later call read an earlier script's files, and let two CONCURRENT calls share one jail
+///         and one working directory, with the first to finish tearing it down mid-run under the second. Only writable
 ///         state is discarded; the expensive part, the uv-provisioned venv, lives outside the jail and is untouched.
 ///     </para>
 ///     <para>
@@ -38,7 +39,11 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 /// </remarks>
 internal sealed class ComputeToolGateway : IComputeToolGateway
 {
-    /// <summary>The sandbox runtime profile this tool's jail is keyed on — deliberately not AgentHome's.</summary>
+    /// <summary>
+    ///     The sandbox runtime profile this tool's jail is keyed on — deliberately not AgentHome's. This is the create
+    ///     request's profile verbatim; the ATTACH KEY carries it with the invocation id appended, so every call gets
+    ///     its own jail (see <see cref="BuildCreateRequest" />).
+    /// </summary>
     internal const string RuntimeProfile = "compute-python";
 
     /// <summary>
@@ -88,18 +93,19 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         var code = request.Code
                    ?? throw new ArgumentException("The compute request carries no code.", nameof(request));
 
-        // Per-invocation writable state. The jail and the scratch directory are the only two places a script can leave
-        // a file behind, and BOTH are torn down below — that is what makes the advertised statelessness real rather
-        // than a claim. The provisioned venv is NOT here: it lives under the compute cache root, costs seconds to
-        // build, and is read-only to the script, so it survives untouched.
-        var scratch = Path.Combine(ScratchRoot, "run-" + Guid.NewGuid().ToString("N"));
+        // One id for everything this invocation owns: its jail, its scratch directory, its execution. All three are per
+        // call and all are torn down below — that is what makes the advertised statelessness real rather than a claim.
+        // The provisioned venv is NOT here: it lives under the compute cache root, costs seconds to build, and is
+        // read-only to the script, so it survives untouched.
+        var invocationId = Guid.NewGuid().ToString("N");
+        var scratch = Path.Combine(ScratchRoot, "run-" + invocationId);
         SandboxHandle? handle = null;
         try
         {
             var interpreter = await _environment.GetInterpreterPathAsync(cancellationToken).ConfigureAwait(false);
             var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
-            handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity), cancellationToken).ConfigureAwait(false);
-            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(interpreter, code, scratch), cancellationToken)
+            handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity, invocationId), cancellationToken).ConfigureAwait(false);
+            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(interpreter, code, scratch, invocationId), cancellationToken)
                                         .ConfigureAwait(false);
             return FormatResult(result);
         }
@@ -158,7 +164,16 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         }
     }
 
-    private SandboxCreateRequest BuildCreateRequest(AgentHomeOwnerIdentity identity)
+    /// <summary>
+    ///     Builds the create request. The attach key carries <paramref name="invocationId" /> so it is unique per call:
+    ///     the key is what the registry attaches BY, so a constant one made two overlapping run_python calls share a
+    ///     single live jail — one working directory between unrelated conversations, and, now that teardown is per call,
+    ///     whichever finished first killing the jail out from under the other. The registry already treats the runtime
+    ///     profile as the scope that lets distinct jails coexist (it is hashed into the sandbox id), so widening it is
+    ///     the whole fix and nothing needs to serialize. Only different-OWNER jails on a node are evicted on create, so
+    ///     two calls by the same owner never disturb each other.
+    /// </summary>
+    private SandboxCreateRequest BuildCreateRequest(AgentHomeOwnerIdentity identity, string invocationId)
     {
         var capabilities = _provider.Capabilities;
         return new SandboxCreateRequest
@@ -168,7 +183,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
                 OwnerUserId = identity.OwnerUserId,
                 NodeId = identity.NodeId,
                 ProviderName = _provider.ProviderName,
-                RuntimeProfile = RuntimeProfile,
+                RuntimeProfile = RuntimeProfile + "-" + invocationId,
                 ManifestVersion = SandboxGeneration
             },
             RuntimeProfile = RuntimeProfile,
@@ -186,11 +201,11 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         };
     }
 
-    private SandboxCommandRequest BuildCommandRequest(string interpreter, string code, string scratch)
+    private SandboxCommandRequest BuildCommandRequest(string interpreter, string code, string scratch, string invocationId)
     {
         return new SandboxCommandRequest
         {
-            ExecutionId = "compute-" + Guid.NewGuid().ToString("N"),
+            ExecutionId = "compute-" + invocationId,
             Executable = interpreter,
             // `-I` is isolated mode: no PYTHONPATH, no user site-packages, no script-directory import. It is what keeps
             // the interpreter's import surface the provisioned lockfile closure rather than whatever happens to sit in
