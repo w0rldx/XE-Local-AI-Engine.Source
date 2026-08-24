@@ -39,9 +39,10 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 ///         Enforced unconditionally: the working-directory jail, path/symlink guards, a scrubbed child environment (the
 ///         worker's secret-bearing environment is NOT inherited — only a fixed system/toolchain allow-list is
 ///         forwarded), the per-command timeout, tree-kill, captured-output byte caps, and a jail-directory disk ceiling
-///         on the child's OWN writes — node-wide by configuration, and tightenable per sandbox through
-///         <see cref="SandboxCreateRequest.MaxJailDiskBytes" /> (never loosenable; see
-///         <see cref="ResolveJailDiskCeiling" />).
+///         on what the sandbox's OWN commands leave behind — node-wide by configuration, tightenable per sandbox
+///         through <see cref="SandboxCreateRequest.MaxJailDiskBytes" /> (never loosenable; see
+///         <see cref="ResolveJailDiskCeiling" />), and measured as occupancy rather than per-command growth (see
+///         <see cref="StartJailDiskWatchdog" />).
 ///     </para>
 ///     <para>
 ///         Enforced only where the host supplies the mechanism, measured once by
@@ -693,8 +694,16 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///     Starts the jail disk watchdog for one command, or returns a no-op when it does not apply. Cancelling
     ///     <paramref name="diskCapSource" /> is what unblocks the command's wait and routes it to the over-cap result.
     ///     <para>
-    ///         The ceiling is measured as GROWTH from a baseline taken now, not as absolute jail size — the control
-    ///         exists to bound the child's OWN writes, and a jail can legitimately start non-empty after copy-in.
+    ///         The ceiling bounds the jail's OCCUPANCY, not one command's growth: what is measured is everything below
+    ///         the jail root above the baseline captured when this SANDBOX ran its first command
+    ///         (<see cref="JailState.GetOrCaptureOccupancyBaseline" />). A baseline re-taken per command handed every
+    ///         new command a fresh allowance, so a caller could leave any amount on disk by writing just under the
+    ///         ceiling repeatedly and nothing would ever fire. Anchoring at what the engine staged before the sandbox
+    ///         ran anything closes that without charging a command for a workspace copy-in it did not write.
+    ///     </para>
+    ///     <para>
+    ///         A command that STARTS in an over-full jail is therefore terminated on the spot, before its first tick —
+    ///         the budget belongs to the sandbox, and an earlier command in it has already spent the budget.
     ///     </para>
     ///     <para>
     ///         It is skipped for an engine-managed trusted host workspace: that directory is the user's own checkout,
@@ -715,29 +724,38 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         var watchdogSource = CancellationTokenSource.CreateLinkedTokenSource(commandToken);
         var jailRoot = state.JailRoot;
 
+        // Per SANDBOX, not per command — see the summary. Captured HERE rather than inside the task below, so it is
+        // anchored to when the sandbox's first command started rather than to whenever the thread pool got round to
+        // running the watchdog: with a fast first command those are different moments, and the difference decided
+        // whether that command's own writes landed in the baseline (making them free for every later command) or in
+        // its budget. Only the first command in a sandbox pays for the walk; the rest read the captured value.
+        var baseline = state.GetOrCaptureOccupancyBaseline(() => MeasureDirectoryBytes(jailRoot, long.MaxValue));
+
         _ = Task.Run(async () =>
         {
             try
             {
                 // A coarse interval: this is a safety net against a runaway writer, not a byte-accurate meter, and a
-                // tight loop would cost more than the protection is worth.
+                // tight loop would cost more than the protection is worth. The body runs BEFORE the first wait, so a
+                // jail an earlier command already filled past the ceiling is caught at once rather than one tick later.
                 using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
-                var baseline = MeasureDirectoryBytes(jailRoot, long.MaxValue);
-
-                while (await timer.WaitForNextTickAsync(watchdogSource.Token).ConfigureAwait(false))
+                do
                 {
                     // Summing stops as soon as the ceiling is passed, so the cost stays bounded even when a command is
                     // actively filling the jail.
-                    var current = MeasureDirectoryBytes(jailRoot, baseline + ceiling);
-                    if (current - baseline > ceiling)
+                    var occupancy = MeasureDirectoryBytes(jailRoot, baseline + ceiling);
+                    if (occupancy - baseline > ceiling)
                     {
-                        _logger.LogWarning("Sandbox command exceeded the jail disk ceiling of {Ceiling} bytes (grew {Grown} bytes); terminating it.",
+                        _logger.LogWarning(
+                            "Sandbox command exceeded the jail disk ceiling of {Ceiling} bytes (jail occupancy {Occupancy} bytes over a baseline of {Baseline}); terminating it.",
                             ceiling,
-                            current - baseline);
+                            occupancy,
+                            baseline);
                         await diskCapSource.CancelAsync().ConfigureAwait(false);
                         return;
                     }
                 }
+                while (await timer.WaitForNextTickAsync(watchdogSource.Token).ConfigureAwait(false));
             }
             catch (OperationCanceledException)
             {

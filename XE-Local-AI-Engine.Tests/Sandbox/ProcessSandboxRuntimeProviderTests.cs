@@ -969,6 +969,89 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     [Test]
+    public async Task ProcessSandboxProvider_Execute_WhenAnEarlierCommandAlreadyFilledTheJail_StopsTheNextOne()
+    {
+        // The ceiling bounds OCCUPANCY, not one command's growth. Re-baselining per command gave every command a fresh
+        // allowance, so a caller could leave any amount of data in a jail by writing just under the line repeatedly and
+        // no single command ever exceeded it. The second command here writes far LESS than the ceiling and must still
+        // be stopped, because the jail it is writing into is already full.
+        if (!OperatingSystem.IsLinux())
+        {
+            Skip("the jail disk watchdog test uses /bin/sh and dd");
+            return;
+        }
+
+        using var provider = CreateProvider(maxJailDiskBytes: 8L * 1024 * 1024);
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
+
+        var first = await provider.ExecuteAsync(handle, JailShellCommand("disk-occupancy-1", "dd if=/dev/zero of=fill-a.bin bs=1M count=6 2>/dev/null"));
+        AssertEx.True(first.Completed, "the first command stays under the ceiling and must run normally");
+        AssertEx.Equal(expected: 0, first.ExitCode);
+
+        var second = await provider.ExecuteAsync(handle,
+            JailShellCommand("disk-occupancy-2", "dd if=/dev/zero of=fill-b.bin bs=1M count=4 2>/dev/null; sleep 5"));
+
+        AssertEx.False(second.Completed, "6 MiB already on disk plus 4 MiB more is past an 8 MiB ceiling, however little this command wrote");
+        AssertEx.Equal(expected: -1, second.ExitCode);
+        AssertEx.Contains(second.StandardError ?? string.Empty, "disk ceiling");
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_Execute_WhenTheNodeDisabledTheWatchdog_APerSandboxCeilingDoesNotReEnableIt()
+    {
+        // The node-wide value is the operator's, in both directions: a non-positive one turns the watchdog off, and a
+        // per-sandbox request must not be able to switch it back on. min(node, request) gives that for free — the
+        // asymmetry is worth a test of its own because the alternative reading (treat 0 as "no opinion") is tempting.
+        if (!OperatingSystem.IsLinux())
+        {
+            Skip("the jail disk watchdog test uses /bin/sh and dd");
+            return;
+        }
+
+        using var provider = CreateProvider(maxJailDiskBytes: 0);
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 1L * 1024 * 1024 });
+
+        // Well past the 1 MiB the sandbox asked for, and running long enough for several watchdog ticks to have fired.
+        var result = await provider.ExecuteAsync(handle,
+            JailShellCommand("disk-node-disabled", "dd if=/dev/zero of=fill.bin bs=1M count=8 2>/dev/null; sleep 5"));
+
+        AssertEx.True(result.Completed, "a sandbox request must not re-enable a watchdog the operator turned off");
+        AssertEx.Equal(expected: 0, result.ExitCode);
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_Execute_WhenAnAttachTightensTheCeilingMidCommand_TheRunningCommandKeepsItsSnapshot()
+    {
+        // Future-command tightening. The running command was launched against a budget and is judged by it to the end —
+        // moving the line under a process that is mid-write would kill it for bytes that were within the rules when it
+        // wrote them. The command that starts AFTER the attach gets the new, stricter ceiling, and is stopped at once
+        // because the jail is already over it.
+        if (!OperatingSystem.IsLinux())
+        {
+            Skip("the jail disk watchdog test uses /bin/sh and dd");
+            return;
+        }
+
+        using var provider = CreateProvider(maxJailDiskBytes: 512L * 1024 * 1024);
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 32L * 1024 * 1024 });
+
+        var running = provider.ExecuteAsync(handle,
+            JailShellCommand("disk-snapshot", "dd if=/dev/zero of=fill.bin bs=1M count=8 2>/dev/null; sleep 5"));
+
+        // Long enough for the command to be well inside its run, short enough that several watchdog ticks still follow.
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        _ = await provider.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 1L * 1024 * 1024 });
+
+        var result = await running;
+        AssertEx.True(result.Completed, "a command already running must be judged by the ceiling it started under");
+        AssertEx.Equal(expected: 0, result.ExitCode);
+
+        var next = await provider.ExecuteAsync(handle, JailShellCommand("disk-snapshot-next", "sleep 5"));
+        AssertEx.False(next.Completed, "the tightened ceiling must apply to the next command, which starts in a jail already past it");
+        AssertEx.Contains(next.StandardError ?? string.Empty, (1L * 1024 * 1024).ToString(CultureInfo.InvariantCulture));
+    }
+
+    [Test]
     public async Task ProcessSandboxProvider_Execute_WhenEgressDenied_ChildCannotReachLoopbackLanOrMetadata()
     {
         // LIVE default-deny egress. Asserts the mechanism's real effect, not the argument mapping — SandboxLaunchPlanTests covers
@@ -1660,11 +1743,21 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     /// </summary>
     private static SandboxCommandRequest FillJailCommand(string executionId)
     {
+        return JailShellCommand(executionId,
+            "i=0; while [ $i -lt 400 ]; do dd if=/dev/zero of=fill-$i.bin bs=1M count=2 2>/dev/null; i=$((i+1)); sleep 0.05; done");
+    }
+
+    /// <summary>
+    ///     Runs a shell script with the jail as its working directory, under a timeout generous enough that a test
+    ///     asserting on the DISK ceiling can never be reading a timeout kill by mistake.
+    /// </summary>
+    private static SandboxCommandRequest JailShellCommand(string executionId, string script)
+    {
         return new SandboxCommandRequest
         {
             ExecutionId = executionId,
             Executable = "/bin/sh",
-            Arguments = ["-c", "i=0; while [ $i -lt 400 ]; do dd if=/dev/zero of=fill-$i.bin bs=1M count=2 2>/dev/null; i=$((i+1)); sleep 0.05; done"],
+            Arguments = ["-c", script],
             Timeout = TimeSpan.FromSeconds(60)
         };
     }

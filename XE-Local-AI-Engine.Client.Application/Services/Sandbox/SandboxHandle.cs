@@ -33,6 +33,27 @@ public sealed record SandboxHandle
     public IReadOnlyList<SandboxMountBinding> Mounts { get; init; } = [];
 
     /// <summary>
+    ///     The directory this sandbox is rooted at, named the way a COMMAND INSIDE IT sees the path: where a
+    ///     <see cref="SandboxCommandRequest" /> with no <see cref="SandboxCommandRequest.WorkingDirectory" /> starts,
+    ///     and what a sandbox-relative path (the argument to <c>ReadFileAsync</c>, <c>ResetDirectoryAsync</c>, …)
+    ///     resolves against.
+    ///     <para>
+    ///         It is a SANDBOX path, not necessarily a host path — the container provider reports its workspace mount
+    ///         target, which names nothing on the host. Use it to compose a path for the CHILD (an environment
+    ///         variable, an argument); never to open a file from engine code, which is what the provider's own file
+    ///         surface exists for. The process provider identity-maps its jail, so there the two happen to coincide.
+    ///     </para>
+    ///     <para>
+    ///         <see langword="null" /> when the provider has no such directory to name: the deterministic fake backs its
+    ///         sandbox with a virtual filesystem, so there is no path a child could be pointed at. A caller that needs
+    ///         one must read null as "this provider cannot serve me" rather than substituting a path of its own —
+    ///         <c>ComputeToolGateway</c> refuses the call, because the scratch directory it points a script at has to
+    ///         sit inside the jail the disk watchdog meters.
+    ///     </para>
+    /// </summary>
+    public string? WorkingRoot { get; init; }
+
+    /// <summary>
     ///     Translates a host path into the path that names the same bytes inside this sandbox, or
     ///     <see langword="null" /> when no mount covers it.
     ///     <para>

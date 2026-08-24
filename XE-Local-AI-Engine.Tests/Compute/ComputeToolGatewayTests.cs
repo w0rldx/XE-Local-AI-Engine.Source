@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Compute;
 
+using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
@@ -48,7 +49,8 @@ public sealed class ComputeToolGatewayTests
     {
         // The tool advertises itself to the model as stateless. Both places a script can leave a file — the jail it
         // ran in and the HOME/TMPDIR scratch it was pointed at — must therefore be per call and gone afterwards, or
-        // one conversation's files are readable by the next.
+        // one conversation's files are readable by the next. One teardown now covers both, because the scratch lives
+        // inside the jail — and the "must not outlive the call" assertions below are unchanged, which is the point.
         var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
         var gateway = CreateGateway(provider);
 
@@ -63,7 +65,48 @@ public sealed class ComputeToolGatewayTests
         AssertEx.NotEqual(first, second, "a shared scratch directory would carry one script's files into the next call");
         AssertEx.False(Directory.Exists(first), "the scratch directory must not outlive the call that used it");
         AssertEx.False(Directory.Exists(second));
-        AssertEx.Equal(first, provider.CommandRequests[0].Environment!["TMPDIR"], "HOME and TMPDIR share the one per-call directory");
+        AssertEx.NotEqual(first, provider.CommandRequests[0].Environment!["TMPDIR"],
+            "HOME and TMPDIR are separate directories: a script clearing its temp files must not wipe its own home");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_PointsHomeAndTmpdirInsideTheJailTheDiskCeilingMeters()
+    {
+        // The disk ceiling is enforced by walking the JAIL, so scratch outside it is space the ceiling does not
+        // measure — a script could fill the host disk through TMPDIR while the watchdog reported nothing. This is the
+        // assertion that keeps the two facts (where the scratch is, what the ceiling covers) from drifting apart.
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        var gateway = CreateGateway(provider);
+
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+
+        var jailRoot = AssertEx.NotNull(provider.LastJailRoot);
+        var environment = AssertEx.NotNull(provider.CommandRequests[0].Environment);
+        string[] scratchVariables = ["HOME", "TMPDIR", "TMP", "TEMP"];
+        foreach (var name in scratchVariables)
+        {
+            AssertEx.True(environment[name].StartsWith(jailRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal),
+                $"{name} must name a directory inside the jail, or the jail disk ceiling does not cover what a script writes there");
+        }
+
+        AssertEx.Equal(environment["TMPDIR"], environment["TMP"]);
+        AssertEx.Equal(environment["TMPDIR"], environment["TEMP"]);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheProviderNamesNoJailRoot_RefusesRatherThanRunningWithUnmeteredScratch()
+    {
+        // Fails closed for the same reason the egress check does. A provider that cannot name the directory its
+        // commands run in cannot be handed a scratch path inside it either, and the alternative — putting the scratch
+        // back outside the jail — would quietly restore the hole this change closed.
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy, namesAJailRoot: false);
+        var gateway = CreateGateway(provider);
+
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+
+        AssertEx.Contains(rendered, "run_python rejected");
+        AssertEx.Empty(provider.CommandRequests, "a jail with no nameable root must not run the script anyway");
+        AssertEx.Equal(expected: 1, provider.KilledSandboxIds.Count, "the refusal must still tear down the jail it created");
     }
 
     [Test]
@@ -333,12 +376,26 @@ public sealed class ComputeToolGatewayTests
         }
     }
 
-    /// <summary>Records what the gateway asked for and answers with a canned result; no process is ever spawned.</summary>
+    /// <summary>
+    ///     Records what the gateway asked for and answers with a canned result; no process is ever spawned. It DOES
+    ///     keep a real directory per sandbox, because the jail is not incidental to what this suite checks: the
+    ///     gateway now places the script's scratch inside it and relies on the jail teardown to reclaim it, so a fake
+    ///     whose kill left nothing to observe could not tell a leaked scratch directory from a cleaned one.
+    /// </summary>
     private sealed class RecordingSandboxProvider : IAgentSandboxRuntimeProvider
     {
-        public RecordingSandboxProvider(SandboxProviderCapabilities capabilities)
+        private readonly Dictionary<string, string> _jails = new(StringComparer.Ordinal);
+        private readonly bool _namesAJailRoot;
+
+        /// <param name="capabilities">What the gateway is told this provider can enforce.</param>
+        /// <param name="namesAJailRoot">
+        ///     False models a provider that reports no <see cref="SandboxHandle.WorkingRoot" /> — the deterministic
+        ///     fake's shape, and the case the gateway must refuse rather than serve with unmetered scratch.
+        /// </param>
+        public RecordingSandboxProvider(SandboxProviderCapabilities capabilities, bool namesAJailRoot = true)
         {
             Capabilities = capabilities;
+            _namesAJailRoot = namesAJailRoot;
         }
 
         public SandboxCreateRequest? CreateRequest { get; private set; }
@@ -350,6 +407,9 @@ public sealed class ComputeToolGatewayTests
         public List<SandboxCommandRequest> CommandRequests { get; } = [];
 
         public List<string> KilledSandboxIds { get; } = [];
+
+        /// <summary>The jail directory handed to the most recent call, so a test can assert what sits under it.</summary>
+        public string? LastJailRoot { get; private set; }
 
         public SandboxCommandResult Result { get; init; } = new()
         {
@@ -366,13 +426,27 @@ public sealed class ComputeToolGatewayTests
         {
             CreateRequest = request;
             CreateRequests.Add(request);
+            var sandboxId = "sandbox-" + CreateRequests.Count.ToString(CultureInfo.InvariantCulture);
+            string? jail = null;
+            if (_namesAJailRoot)
+            {
+                // Directly under the system temp root, not under a per-provider parent: KillAsync deletes the jail, so
+                // nothing survives a passing test, and there is no leftover parent directory to sweep either.
+                jail = Path.Combine(Path.GetTempPath(), "xe-compute-gateway-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(jail);
+                _jails[sandboxId] = jail;
+            }
+
+            LastJailRoot = jail;
+
             return Task.FromResult(new SandboxHandle
             {
                 ProviderName = ProviderName,
-                SandboxId = "sandbox-" + CreateRequests.Count,
+                SandboxId = sandboxId,
                 AttachKey = request.AttachKey,
                 CreatedAt = DateTimeOffset.UnixEpoch,
-                ManifestVersion = request.AttachKey.ManifestVersion
+                ManifestVersion = request.AttachKey.ManifestVersion,
+                WorkingRoot = jail
             });
         }
 
@@ -400,7 +474,18 @@ public sealed class ComputeToolGatewayTests
 
         public Task ResetDirectoryAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default)
         {
-            throw new NotSupportedException();
+            // The narrow contract the real providers serve: a known-empty directory under the jail, addressed by a
+            // sandbox-relative path. Enough to prove the gateway asks for its scratch through the provider rather than
+            // reaching around it to the host filesystem.
+            var jail = _jails[handle.SandboxId];
+            var resolved = Path.Combine(jail, sandboxPath.TrimStart('/'));
+            if (Directory.Exists(resolved))
+            {
+                Directory.Delete(resolved, recursive: true);
+            }
+
+            Directory.CreateDirectory(resolved);
+            return Task.CompletedTask;
         }
 
         public Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)
@@ -416,6 +501,14 @@ public sealed class ComputeToolGatewayTests
         public Task KillAsync(SandboxHandle handle, CancellationToken cancellationToken = default)
         {
             KilledSandboxIds.Add(handle.SandboxId);
+
+            // Killing the jail is what discards everything below it — including the scratch the gateway no longer
+            // deletes by hand.
+            if (_jails.Remove(handle.SandboxId, out var jail) && Directory.Exists(jail))
+            {
+                Directory.Delete(jail, recursive: true);
+            }
+
             return Task.CompletedTask;
         }
     }

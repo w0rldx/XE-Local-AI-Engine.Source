@@ -19,7 +19,8 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 ///     </para>
 ///     <para>
 ///         Attach is idempotent by <see cref="SandboxAttachKey" />: a create request that matches a live jail returns
-///         that jail's handle instead of a second one, after checking the trusted-host-workspace binding still agrees.
+///         that jail's handle instead of a second one, after checking the trusted-host-workspace binding still agrees
+///         and letting a stricter jail-disk ceiling tighten the live one (<see cref="JailState.TightenMaxJailDiskBytes" />).
 ///         A same-node request under a DIFFERENT owner is not an attach — the old jail is killed and removed before
 ///         the new one is created, so one user's sandbox is never handed to another.
 ///     </para>
@@ -55,6 +56,11 @@ internal sealed class SandboxLifecycleRegistry
             if (attached is not null)
             {
                 EnsureCompatibleWorkspaceBinding(attached, request.TrustedHostWorkspace);
+
+                // The disk ceiling is a CREATE-TIME property of the sandbox, so an attach cannot re-specify it — but it
+                // can ask for LESS, and refusing that would be the wrong asymmetry: the request that wants a tighter
+                // bound is the one being careful. It takes effect for future commands only (see the method's docs).
+                attached.TightenMaxJailDiskBytes(request.MaxJailDiskBytes);
                 return Task.FromResult(attached.Handle);
             }
 
@@ -75,7 +81,11 @@ internal sealed class SandboxLifecycleRegistry
                 AttachKey = request.AttachKey,
                 CreatedAt = _timeProvider.GetUtcNow(),
                 ManifestVersion = request.AttachKey.ManifestVersion,
-                Mounts = ResolveIdentityMounts(request, jailDirectory)
+                Mounts = ResolveIdentityMounts(request, jailDirectory),
+                // A host child sees host paths, so the jail directory names the same bytes inside and out. That
+                // identity is what lets a caller compose a child-visible path UNDER the jail — which is where anything
+                // the jail disk watchdog is supposed to meter has to live.
+                WorkingRoot = jailDirectory
             };
             _sandboxes[sandboxId] = new JailState(handle,
                 jailDirectory,

@@ -48,6 +48,11 @@ public sealed class ComputeOptions
     ///         node-wide <c>LocalContainer:MaxJailDiskBytes</c>. Raising it past the node-wide ceiling therefore has no
     ///         effect — that number is the operator's, and this one is the tool's opinion about its own workload.
     ///     </para>
+    ///     <para>
+    ///         It covers EVERYTHING the script can write, because the script's <c>HOME</c> and <c>TMPDIR</c> are
+    ///         directories inside that same jail. A scratch directory elsewhere would be space this ceiling does not
+    ///         measure, which is worse than no ceiling: it reads as a bound and is not one.
+    ///     </para>
     /// </summary>
     public long MaxJailDiskBytes { get; set; } = 256L * 1024 * 1024;
 }

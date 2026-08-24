@@ -147,6 +147,75 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     }
 
     [Test]
+    public async Task RunPython_WhenTheScriptFillsItsTempDirectory_IsStillKilledAtTheComputeDiskCeiling()
+    {
+        // The same ceiling, reached through TMPDIR instead of the working directory. While the scratch sat beside the
+        // venv under the node data directory it was OUTSIDE the jail the watchdog walks, so this exact script — the
+        // obvious one for anything doing real work, since that is where `tempfile` writes — filled the host disk with
+        // the ceiling reporting nothing. It is a hole that reads as a bound, which is worse than having no bound.
+        RequireOptIn();
+        using var provider = CreateHostProvider();
+        var gateway = CreateGateway(provider,
+            new ComputeOptions
+            {
+                TimeoutSeconds = 60,
+                MaxJailDiskBytes = 4L * 1024 * 1024
+            });
+
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = """
+                   import pathlib, tempfile, time
+                   # Through tempfile.gettempdir() rather than the raw variable, so this really is the path a library
+                   # would write to. That it resolves to the engine's scratch is asserted separately, on a run that is
+                   # allowed to finish — an over-cap kill returns no stdout to assert on.
+                   chunk = b"0" * (1024 * 1024)
+                   for index in range(64):
+                       pathlib.Path(tempfile.gettempdir(), f"fill-{index}.bin").write_bytes(chunk)
+                       time.sleep(0.1)
+                   print("FILLED")
+                   """
+        });
+
+        AssertEx.Contains(rendered, "disk ceiling");
+        AssertEx.False(rendered.Contains("FILLED", StringComparison.Ordinal),
+            "a script that fills its TMPDIR must hit the same ceiling as one filling its working directory");
+    }
+
+    [Test]
+    public async Task RunPython_PointsHomeAndTmpdirAtSeparateDirectoriesInsideTheJail()
+    {
+        // The child's own view of the two facts the metering depends on: HOME and TMPDIR exist, are writable, are not
+        // the same directory, and both sit under the working directory — which IS the jail for this provider.
+        RequireOptIn();
+        using var provider = CreateHostProvider();
+        var gateway = CreateGateway(provider);
+
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = """
+                   import os, pathlib, tempfile
+                   jail = pathlib.Path.cwd().resolve()
+                   home = pathlib.Path(os.environ["HOME"]).resolve()
+                   temp = pathlib.Path(os.environ["TMPDIR"]).resolve()
+                   # What a library actually writes to has to be the same directory, or metering TMPDIR proves nothing.
+                   print("TEMPFILE_AGREES", pathlib.Path(tempfile.gettempdir()).resolve() == temp)
+                   print("UNDER_JAIL", jail in home.parents, jail in temp.parents)
+                   print("DISTINCT", home != temp)
+                   (home / "probe.txt").write_text("home")
+                   (temp / "probe.txt").write_text("temp")
+                   print("WRITABLE", (home / "probe.txt").exists(), (temp / "probe.txt").exists())
+                   """
+        });
+
+        AssertEx.Contains(rendered, "exit_code: 0");
+        AssertEx.Contains(rendered, "TEMPFILE_AGREES True");
+        AssertEx.Contains(rendered, "UNDER_JAIL True True");
+        AssertEx.Contains(rendered, "DISTINCT True");
+        AssertEx.Contains(rendered, "WRITABLE True True");
+    }
+
+    [Test]
     public async Task RunPython_CannotSeeWhatAnEarlierCallWrote()
     {
         // The advertised contract is that a call leaves nothing behind. ONE provider and ONE gateway across both calls
@@ -196,13 +265,15 @@ public sealed class ComputeSandboxLiveTests : IDisposable
 
         Task<string> RunAsync(string tag)
         {
+            // Only the .txt files: the jail root also holds this call's own HOME and TMPDIR now, and listing those
+            // would say nothing about whether the two calls shared a jail — which is the whole question here.
             return gateway.ExecuteAsync(new ComputeRunToolRequest
             {
                 Code = $"""
                         import pathlib, time
                         pathlib.Path("{tag}.txt").write_text("{tag}")
                         time.sleep(2)
-                        print("SAW", sorted(p.name for p in pathlib.Path(".").iterdir()))
+                        print("SAW", sorted(p.name for p in pathlib.Path(".").glob("*.txt")))
                         """
             });
         }

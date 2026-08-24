@@ -25,7 +25,7 @@ public sealed record SandboxCreateRequest
     public IReadOnlyDictionary<string, string>? Labels { get; init; }
 
     /// <summary>
-    ///     Optional per-sandbox ceiling, in bytes, on how far a command may grow THIS sandbox's jail directory.
+    ///     Optional per-sandbox ceiling, in bytes, on how much THIS sandbox's commands may leave in its jail directory.
     ///     <see langword="null" /> (the default) means "inherit the node-wide ceiling"; a supplied value must be
     ///     greater than zero.
     ///     <para>
@@ -35,6 +35,20 @@ public sealed record SandboxCreateRequest
     ///         (<c>LocalContainerOptions.MaxJailDiskBytes</c>) is the OPERATOR's ceiling on what any sandbox on the box
     ///         may write, and a caller — whose request shape is influenced by whatever workload it serves — must not be
     ///         able to widen it. Naming a smaller number only shrinks the blast radius of one runaway command.
+    ///     </para>
+    ///     <para>
+    ///         <b>It is a CREATE-TIME ceiling, with future-command tightening on attach.</b> The sandbox this request
+    ///         creates carries it for its whole life. A later <c>CreateOrAttachAsync</c> under the same attach key does
+    ///         not create a second sandbox, so it cannot re-specify the ceiling — but if it names a STRICTER one, the
+    ///         live sandbox's ceiling is lowered to it, atomically and permanently, and applies to every command
+    ///         started from then on. A looser value, or none at all, changes nothing; a disabled node-wide watchdog
+    ///         stays disabled. Commands already running keep the ceiling they started under: they were launched
+    ///         against a budget, and moving the line mid-write would kill a process for bytes that were within the
+    ///         rules when it wrote them.
+    ///     </para>
+    ///     <para>
+    ///         A caller whose attach key is unique per call (<c>ComputeToolGateway</c> keys its jail per invocation)
+    ///         therefore only ever exercises the create-time path — every call is a fresh sandbox with its own ceiling.
     ///     </para>
     ///     <para>
     ///         Like <see cref="ResourceLimits" /> this is a preference, applied by providers that implement a

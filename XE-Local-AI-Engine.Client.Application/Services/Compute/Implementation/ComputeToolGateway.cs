@@ -21,9 +21,9 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 ///     </para>
 ///     <para>
 ///         The jail is also per INVOCATION — keyed on the invocation id, killed when the call returns, which deletes
-///         the jail root the script ran in; the per-call HOME/TMPDIR scratch directory is deleted alongside it. The
-///         tool advertises itself to the model as stateless, and only a per-call key plus that teardown makes it true:
-///         a constant key let a later call read an earlier script's files, and let two CONCURRENT calls share one jail
+///         the jail root the script ran in and, with it, the HOME/TMPDIR scratch that lives INSIDE that root. The tool
+///         advertises itself to the model as stateless, and only a per-call key plus that teardown makes it true: a
+///         constant key let a later call read an earlier script's files, and let two CONCURRENT calls share one jail
 ///         and one working directory, with the first to finish tearing it down mid-run under the second. Only writable
 ///         state is discarded; the expensive part, the uv-provisioned venv, lives outside the jail and is untouched.
 ///     </para>
@@ -62,12 +62,15 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     /// <summary>The marker every capped stream in this product ends with, so a model reads one convention.</summary>
     private const string Marker = "…[output truncated]";
 
-    /// <summary>Parent of the per-invocation HOME/TMPDIR directories, beside the provisioned venv so the uninstaller sweep already reaches it.</summary>
-    private static readonly string ScratchRoot = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "XE-Local-AI-Engine",
-        "compute-runtime",
-        "scratch");
+    /// <summary>
+    ///     The script's <c>HOME</c>, as a sandbox-relative path under the jail root. Below the jail deliberately: the
+    ///     provider's disk watchdog meters the JAIL, so a scratch directory anywhere else is unmetered space a script
+    ///     can fill while the ceiling it was given reports nothing.
+    /// </summary>
+    private const string HomeDirectoryName = "home";
+
+    /// <summary>The script's <c>TMPDIR</c>/<c>TMP</c>/<c>TEMP</c>, likewise under the jail root and likewise metered.</summary>
+    private const string TempDirectoryName = ".tmp";
 
     private readonly IComputePythonEnvironment _environment;
     private readonly IAgentHomeIdentityProvider _identityProvider;
@@ -111,18 +114,29 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             return "run_python rejected: this node cannot run the compute sandbox offline, and the tool never runs with network access.";
         }
 
-        // One id for everything this invocation owns: its jail, its scratch directory, its execution. All three are per
-        // call and all are torn down below — that is what makes the advertised statelessness real rather than a claim.
-        // The provisioned venv is NOT here: it lives under the compute cache root, costs seconds to build, and is
-        // read-only to the script, so it survives untouched.
+        // One id for everything this invocation owns: its jail and its execution. Both are per call, and killing the
+        // jail discards every byte the script wrote — including its scratch, which lives inside it. That is what makes
+        // the advertised statelessness real rather than a claim. The provisioned venv is NOT here: it lives under the
+        // compute cache root, costs seconds to build, and is read-only to the script, so it survives untouched.
         var invocationId = Guid.NewGuid().ToString("N");
-        var scratch = Path.Combine(ScratchRoot, "run-" + invocationId);
         SandboxHandle? handle = null;
         try
         {
             var interpreter = await _environment.GetInterpreterPathAsync(cancellationToken).ConfigureAwait(false);
             var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
             handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity, invocationId), cancellationToken).ConfigureAwait(false);
+            if (handle.WorkingRoot is not { } jailRoot)
+            {
+                // Fails closed for the same reason the egress check does: the alternative is pointing HOME and TMPDIR
+                // somewhere the disk ceiling this call was granted does not measure, which reads as a bounded sandbox
+                // and is not one. No agent-role provider that actually executes anything hits this.
+                _logger.LogWarning(
+                    "run_python refused: the '{Provider}' sandbox provider reports no jail root, so the script's HOME/TMPDIR scratch cannot be placed inside the directory the disk ceiling meters.",
+                    _provider.ProviderName);
+                return "run_python rejected: this node's sandbox cannot give the script a scratch directory inside its own jail.";
+            }
+
+            var scratch = await CreateScratchAsync(handle, jailRoot, cancellationToken).ConfigureAwait(false);
             var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(interpreter, code, scratch, invocationId), cancellationToken)
                                         .ConfigureAwait(false);
             return FormatResult(result);
@@ -140,14 +154,31 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         finally
         {
             // CancellationToken.None deliberately: a cancelled or failed call is exactly when a script is most likely to
-            // have left something behind, so the teardown must still run.
+            // have left something behind, so the teardown must still run. ONE teardown covers both writable surfaces
+            // now that the scratch sits under the jail root — a cancelled call cannot leave a scratch directory behind
+            // that the jail kill missed, because there is no longer a directory outside the jail to miss.
             if (handle is not null)
             {
                 await KillQuietlyAsync(handle).ConfigureAwait(false);
             }
-
-            TryDeleteDirectory(scratch);
         }
+    }
+
+    /// <summary>
+    ///     Materializes the script's HOME and TMPDIR inside the jail, through the provider's own reset operation rather
+    ///     than a host <c>Directory.CreateDirectory</c>: that is the surface that applies the jail's path and symlink
+    ///     guards, and it is the only one that stays correct for a provider whose sandbox paths are not host paths.
+    ///     <para>
+    ///         Returns the paths as the CHILD sees them, which is what the environment must carry. For the process
+    ///         provider — the only agent-role provider that runs a real process — the jail is identity-mapped, so those
+    ///         are the same bytes the watchdog walks.
+    ///     </para>
+    /// </summary>
+    private async Task<ComputeScratchPaths> CreateScratchAsync(SandboxHandle handle, string jailRoot, CancellationToken cancellationToken)
+    {
+        await _provider.ResetDirectoryAsync(handle, HomeDirectoryName, cancellationToken).ConfigureAwait(false);
+        await _provider.ResetDirectoryAsync(handle, TempDirectoryName, cancellationToken).ConfigureAwait(false);
+        return new ComputeScratchPaths(Path.Combine(jailRoot, HomeDirectoryName), Path.Combine(jailRoot, TempDirectoryName));
     }
 
     /// <summary>
@@ -164,21 +195,6 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         catch (Exception exception) when (exception is SandboxHandleInvalidException or IOException or UnauthorizedAccessException)
         {
             _logger.LogWarning(exception, "The compute jail could not be torn down after the call.");
-        }
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort: the next call gets its own directory regardless, so a stuck sweep cannot leak state INTO it.
         }
     }
 
@@ -223,7 +239,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         };
     }
 
-    private SandboxCommandRequest BuildCommandRequest(string interpreter, string code, string scratch, string invocationId)
+    private SandboxCommandRequest BuildCommandRequest(string interpreter, string code, ComputeScratchPaths scratch, string invocationId)
     {
         return new SandboxCommandRequest
         {
@@ -246,20 +262,23 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     ///     would let a script read and write the operator's <c>~/.config</c> and <c>~/.cache</c> as an ordinary side
     ///     effect of importing a library, which nothing about running arithmetic needs.
     ///     <para>
-    ///         The directory is per INVOCATION, not per node. A shared one would have made every cache, dotfile and
-    ///         temp file a script writes readable by the next call — including a call in another conversation — which
-    ///         is the opposite of what the tool advertises. The caller deletes it once the call returns.
+    ///         The directories are per INVOCATION and live INSIDE that invocation's jail. Both halves are load-bearing.
+    ///         Per invocation, because a shared scratch made every cache, dotfile and temp file a script writes
+    ///         readable by the next call — including a call in another conversation. Inside the jail, because the disk
+    ///         ceiling this call was granted is enforced by walking the jail: while the scratch sat beside the venv
+    ///         under the node data directory, a script could fill the host disk through <c>TMPDIR</c> and the watchdog
+    ///         measured nothing. They now cost the same budget as anything else the script writes, and the jail
+    ///         teardown reclaims them.
     ///     </para>
     /// </summary>
-    private static IReadOnlyDictionary<string, string> BuildEnvironment(string scratch)
+    private static IReadOnlyDictionary<string, string> BuildEnvironment(ComputeScratchPaths scratch)
     {
-        Directory.CreateDirectory(scratch);
         return new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["HOME"] = scratch,
-            ["TMPDIR"] = scratch,
-            ["TMP"] = scratch,
-            ["TEMP"] = scratch,
+            ["HOME"] = scratch.Home,
+            ["TMPDIR"] = scratch.Temp,
+            ["TMP"] = scratch.Temp,
+            ["TEMP"] = scratch.Temp,
             // Nothing re-reads a __pycache__ across calls (each run is a fresh stdin program), so writing one only
             // litters the jail against the disk watchdog.
             ["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -322,4 +341,12 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
 
         return value[..lastCharIndex];
     }
+
+    /// <summary>
+    ///     The two writable scratch paths one invocation hands its script, as the child sees them. Separate directories
+    ///     rather than one: <c>HOME</c> is where a library drops a dotfile or a cache it may re-read within the call,
+    ///     and <c>TMPDIR</c> is where it drops files it expects to be able to clear — a single directory conflated the
+    ///     two and made a script's own <c>tempfile</c> cleanup look like it had wiped its home.
+    /// </summary>
+    private readonly record struct ComputeScratchPaths(string Home, string Temp);
 }

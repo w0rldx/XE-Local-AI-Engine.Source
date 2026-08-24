@@ -670,7 +670,10 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                 ManifestVersion = request.AttachKey.ManifestVersion,
                 // Read off the SPECIFICATION, which is the same list the read-back was verified against — so what the
                 // handle reports is what the daemon confirmed it applied, not what the caller asked for.
-                Mounts = [.. bindMounts.Select(static mount => new SandboxMountBinding(mount.HostPath, mount.ContainerPath, mount.ReadOnly))]
+                Mounts = [.. bindMounts.Select(static mount => new SandboxMountBinding(mount.HostPath, mount.ContainerPath, mount.ReadOnly))],
+                // The CONTAINER path a command with no working directory runs in — the same value ExecuteAsync falls
+                // back to. It names nothing on the host, which is exactly why the handle reports it as a sandbox path.
+                WorkingRoot = options.WorkspaceMountTarget
             };
 
             _sandboxes[sandboxId] = new SandboxState(handle, client, containerId, workspaceRoot, options.WorkspaceMountTarget);
