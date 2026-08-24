@@ -80,10 +80,10 @@
       "scope": "Third-party, native, WASM, .NET, and Velopack license and binary redistribution terms.",
       "status": "approved",
       "approver": { "name": "w0rldx", "authority_basis": "Project owner; redistribution terms bound to the release license inventory and corpus." },
-      "decision_date": "2026-08-08",
-      "expires_on": "2027-08-08",
+      "decision_date": "2026-08-24",
+      "expires_on": "2027-08-24",
       "evidence": [
-        { "reference": "UTF.Unknown 2.6.0 selected as MPL-1.1; redistributed unmodified with source-availability notice; upstream tag v2.6 verified to resolve to commit 7e69ebbdd6ef96a3625fcaf39df42429b8eb0463.", "repository_path": "docs/compliance/utf-unknown-mpl-source-availability.md" },
+        { "reference": "UTF.Unknown 2.7.0 selected as MPL-1.1; redistributed unmodified with source-availability notice; upstream tag v2.7 verified to resolve to commit 404ca51e057ff299934cabc485ae80122410f56b.", "repository_path": "docs/compliance/utf-unknown-mpl-source-availability.md" },
         { "reference": "Third-party license and notice summary for shipped and runtime-obtained components, including the UTF.Unknown MPL-1.1 source-availability notice.", "repository_path": "NOTICE" },
         { "reference": "Curated NuGet license override recording the UTF.Unknown MPL-1.1 basis and upstream license URL.", "repository_path": "scripts/compliance/nuget-license-overrides.json" }
       ]
