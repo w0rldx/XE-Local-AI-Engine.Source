@@ -176,13 +176,92 @@ public sealed class ChatTurnResolverTests
             userPickedConcreteModel: false,
             CancellationToken.None);
 
-        // With an installed chat model the head stays the ACTIVE model: the pin lookup never runs, so this path is
-        // byte-identical to before the no-GGUF branch existed.
+        // With an installed chat model the CAPABILITY HEAD stays the ACTIVE model — the think gate, the tool offer and
+        // the locality flag are all still read from it, and the pin's definition record is never fetched.
         AssertEx.False(resolution.SupportsTools);
         AssertEx.False(resolution.SupportsThinking);
         await capabilityResolver.Received(1).ResolveAsync(activeModel, Arg.Any<CancellationToken>());
-        await capabilityResolver.DidNotReceive().ResolveAsync(pinnedModel, Arg.Any<CancellationToken>());
         await store.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+
+        // The pin IS resolved once more, and for one thing only: the reasoning-budget flag, which is a property of the
+        // template of the model that actually runs (see the ResolveWithPinAsync tests below). This assertion used to
+        // read DidNotReceive, on the then-true premise that nothing downstream needed the pin's capabilities; grading
+        // the budget against the active model shipped a cap llama-server accepted and ignored, so the extra lookup is
+        // the fix rather than a regression. The gate assertions above are what keep the head itself from drifting.
+        await capabilityResolver.Received(1).ResolveAsync(pinnedModel, Arg.Any<CancellationToken>());
+    }
+
+    // ---- The reasoning budget is graded against the EFFECTIVE model, not the active one ----
+
+    [Test]
+    public async Task ResolveAsync_WhenTheBoundAgentPinsAnUnenforceableModel_ReportsTheBudgetUnenforceable()
+    {
+        // The active model can cap its reasoning; the pinned model the turn will actually run on cannot. Reading the
+        // ACTIVE model's flag here emitted a budget llama-server accepts and then ignores, so the reasoning free-ran
+        // while every layer above believed the cap held.
+        var resolution = await ResolveWithPinAsync(activeModelEnforceable: true, pinnedModelEnforceable: false);
+
+        AssertEx.False(resolution.ReasoningBudgetEnforceable, "the pinned model's template cannot be capped, so the turn must report the budget unenforceable");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenTheBoundAgentPinsAnEnforceableModel_ReportsTheBudgetEnforceable()
+    {
+        // The converse, so the fix cannot be a constant: an unenforceable ACTIVE model must not suppress the budget for
+        // a pinned model that can enforce it.
+        var resolution = await ResolveWithPinAsync(activeModelEnforceable: false, pinnedModelEnforceable: true);
+
+        AssertEx.True(resolution.ReasoningBudgetEnforceable, "the pinned model is what runs, and its template renders a reasoning end marker");
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenTheBoundAgentPinsNoModel_KeepsTheActiveModelsBudgetFlag()
+    {
+        // No honored pin: the effective model IS the active model, so the turn keeps the active model's flag and makes
+        // no second lookup. Passing `true` for the pinned model here would flip the answer if the pin were consulted.
+        var resolution = await ResolveWithPinAsync(activeModelEnforceable: false, pinnedModelEnforceable: null);
+
+        AssertEx.False(resolution.ReasoningBudgetEnforceable, "with no pin the active model's flag is the turn's flag");
+    }
+
+    private static async Task<ChatTurnResolution> ResolveWithPinAsync(bool activeModelEnforceable, bool? pinnedModelEnforceable)
+    {
+        const string ActiveModel = "active-gguf";
+        const string PinnedModel = "pinned-gguf";
+
+        var agentId = Guid.NewGuid();
+        var store = Substitute.For<IAgentDefinitionStore>();
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("persona",
+                    [],
+                    ModelProfile: pinnedModelEnforceable is null ? null : PinnedModel,
+                    ReasoningEffort: "high",
+                    AgentDefinitionVersion: 1,
+                    agentId,
+                    "Agent",
+                    Kind: AgentDefinitionKind.Single));
+
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(ActiveModel, Arg.Any<CancellationToken>())
+                          .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false)
+                          {
+                              ReasoningBudgetEnforceable = activeModelEnforceable
+                          }));
+        capabilityResolver.ResolveAsync(PinnedModel, Arg.Any<CancellationToken>())
+                          .Returns(Task.FromResult(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false)
+                          {
+                              ReasoningBudgetEnforceable = pinnedModelEnforceable ?? true
+                          }));
+
+        var sut = CreateSut(resolver, store, out _, capabilityResolver);
+
+        return await sut.ResolveAsync(ActiveModel,
+            requiresInstalledChatModel: false,
+            effectiveAgentId: agentId,
+            retrievalQuery: null,
+            userPickedConcreteModel: false,
+            CancellationToken.None);
     }
 
     private static AgentDefinitionRecord CreatePinningDefinition(Guid id, string pinnedModel)

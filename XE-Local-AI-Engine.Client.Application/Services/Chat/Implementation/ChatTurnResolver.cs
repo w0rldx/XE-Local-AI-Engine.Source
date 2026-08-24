@@ -72,10 +72,6 @@ public sealed class ChatTurnResolver(
         }
 
         var supportsThinking = capabilities.SupportsThinking;
-        // Whether llama.cpp could enforce a per-request thinking budget for THIS model. Resolved from the same single
-        // capability lookup as the think gate above, so the budget can never be judged against a different model than
-        // the one the effort is graded for.
-        var reasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable;
         var supportsTools = capabilities.SupportsTools;
         var supportsVision = capabilities.SupportsVision;
         var activeModelIsCloud = capabilities.IsCloud;
@@ -122,6 +118,25 @@ public sealed class ChatTurnResolver(
         // and conversation attachments). The resolver classified the pinned effective model; with no bound agent (or no
         // pin) the effective model IS the active model, so reuse the active-model flag.
         var effectiveModelIsCloud = resolved?.EffectiveModelIsCloud ?? activeModelIsCloud;
+
+        // Whether llama.cpp could enforce a per-request thinking budget for the model that RUNS this turn. It has to be
+        // read from the EFFECTIVE model: when a bound agent's pin is honored the runtime executes the pin, and this
+        // flag is a property of that model's chat template. Read from the active model instead, a pinned model
+        // llama-server cannot cap was graded as if it could — the budget marker went out, llama-server accepted it and
+        // silently ignored it, and the reasoning free-ran while every layer above believed the cap held.
+        // A pin the capability lookup above ALREADY described reuses that resolution; only a pin that genuinely differs
+        // from the capability head pays a second lookup, and the capability resolver serves that cache-first. Compared
+        // against `capabilityModel` rather than `activeModel` on purpose: on the no-installed-GGUF branch the head is
+        // already the pin, so comparing against the null active model would re-resolve the very model just resolved.
+        // It is deliberately NOT threaded out of the agent resolver alongside EffectiveModelIsCloud:
+        // ResolvedAgentRuntime is embedded verbatim in the FROZEN v1 benchmark runtime snapshot, so a new member on it
+        // stops stored rows from replaying (BenchmarkRuntimeSnapshotV1CompatibilityTests is that alarm).
+        var reasoningBudgetEnforceable = capabilities.ReasoningBudgetEnforceable;
+        if (!string.Equals(effectiveModel, capabilityModel, StringComparison.Ordinal))
+        {
+            var effectiveCapabilities = await modelCapabilityResolver.ResolveAsync(effectiveModel, cancellationToken).ConfigureAwait(false);
+            reasoningBudgetEnforceable = effectiveCapabilities.ReasoningBudgetEnforceable;
+        }
 
         if (logger.IsEnabled(LogLevel.Debug))
         {
