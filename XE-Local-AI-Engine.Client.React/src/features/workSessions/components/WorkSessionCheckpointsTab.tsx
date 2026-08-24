@@ -18,7 +18,7 @@ export function WorkSessionCheckpointsTab({ checkpoints }: { checkpoints: readon
 	}
 
 	// Newest first: the latest checkpoint is the recovery point a paused or interrupted session resumes from.
-	const ordered = checkpoints.slice().sort((left, right) => (right.step ?? 0) - (left.step ?? 0));
+	const ordered = checkpoints.toSorted((left, right) => (right.step ?? 0) - (left.step ?? 0));
 
 	return (
 		<Stack gap="sm" data-testid="work-session-checkpoints-tab">

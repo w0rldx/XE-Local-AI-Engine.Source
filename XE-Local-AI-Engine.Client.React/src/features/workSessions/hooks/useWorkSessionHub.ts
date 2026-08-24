@@ -194,7 +194,7 @@ export function useWorkSessionHub(sessionId: string | undefined, conversationId:
 					invalidateEveryFeed();
 				}
 				snapshotResolved = true;
-				for (const change of [...buffered].sort((left, right) => left.seq - right.seq)) {
+				for (const change of buffered.toSorted((left, right) => left.seq - right.seq)) {
 					if (change.seq > watermark) {
 						apply(change);
 					}

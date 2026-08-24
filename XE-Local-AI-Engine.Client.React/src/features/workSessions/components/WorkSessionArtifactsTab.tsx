@@ -1,6 +1,6 @@
 import { Alert, Badge, Group, Loader, NavLink, Paper, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -22,16 +22,14 @@ export interface WorkSessionArtifactsTabProps {
 
 export function WorkSessionArtifactsTab({ sessionId, artifacts, preselectReport }: WorkSessionArtifactsTabProps) {
 	const { t } = useTranslation();
-	const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+	const [pickedId, setPickedId] = useState<string | undefined>(undefined);
 
+	// Derived, not synced through an effect: the report is only the DEFAULT selection, so an explicit pick simply
+	// wins over it and there is no state to keep in step with the prop.
 	const reportId = preselectReport
 		? artifacts.find((artifact) => toWorkSessionArtifactKind(artifact.kind) === "Report")?.id
 		: undefined;
-	useEffect(() => {
-		if (reportId) {
-			setSelectedId((current) => current ?? reportId);
-		}
-	}, [reportId]);
+	const selectedId = pickedId ?? reportId;
 
 	const selected = artifacts.find((artifact) => artifact.id === selectedId);
 	// An invalid artifact's blob is unreadable — the list row already says so, and the content route would 404.
@@ -49,7 +47,7 @@ export function WorkSessionArtifactsTab({ sessionId, artifacts, preselectReport 
 						<NavLink
 							key={artifact.id}
 							active={artifact.id === selectedId}
-							onClick={() => setSelectedId(artifact.id)}
+							onClick={() => setPickedId(artifact.id)}
 							data-testid={`work-session-artifact-${artifact.id}`}
 							label={
 								<Group gap="xs" wrap="nowrap">

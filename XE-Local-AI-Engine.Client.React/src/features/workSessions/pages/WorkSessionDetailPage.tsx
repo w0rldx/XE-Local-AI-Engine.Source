@@ -78,8 +78,7 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 		undefined,
 	);
 	const lastFailureOutcome = events
-		.slice()
-		.sort((left, right) => (right.sequence ?? 0) - (left.sequence ?? 0))
+		.toSorted((left, right) => (right.sequence ?? 0) - (left.sequence ?? 0))
 		.find((event) => Boolean(event.outcome))?.outcome;
 
 	const handleSendFollowUp = useCallback(

@@ -47,8 +47,7 @@ function buildTaskTree(tasks: readonly WorkSessionTaskResponse[]): readonly Task
 	}
 	const build = (parentId: string): readonly TaskNode[] =>
 		(byParent.get(parentId) ?? [])
-			.slice()
-			.sort((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0))
+			.toSorted((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0))
 			.map((task) => ({ task, children: build(task.id ?? "") }));
 	return build("");
 }

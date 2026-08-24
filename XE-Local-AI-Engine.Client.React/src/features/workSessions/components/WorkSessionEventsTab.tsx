@@ -25,7 +25,7 @@ export function WorkSessionEventsTab({ events, hasMore, canLoadMore, onLoadMore 
 		);
 	}
 
-	const ordered = events.slice().sort((left, right) => (right.sequence ?? 0) - (left.sequence ?? 0));
+	const ordered = events.toSorted((left, right) => (right.sequence ?? 0) - (left.sequence ?? 0));
 
 	return (
 		<Stack gap="xs" data-testid="work-session-events-tab">
