@@ -39,7 +39,9 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 ///         Enforced unconditionally: the working-directory jail, path/symlink guards, a scrubbed child environment (the
 ///         worker's secret-bearing environment is NOT inherited — only a fixed system/toolchain allow-list is
 ///         forwarded), the per-command timeout, tree-kill, captured-output byte caps, and a jail-directory disk ceiling
-///         on the child's OWN writes.
+///         on the child's OWN writes — node-wide by configuration, and tightenable per sandbox through
+///         <see cref="SandboxCreateRequest.MaxJailDiskBytes" /> (never loosenable; see
+///         <see cref="ResolveJailDiskCeiling" />).
 ///     </para>
 ///     <para>
 ///         Enforced only where the host supplies the mechanism, measured once by
@@ -164,7 +166,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         _maxCopyFileBytes = copyOptions.Value.MaxCopyFileBytes;
 
         // The child's OWN writes into the jail are bounded separately: MaxCopyFileBytes governs only the host→jail
-        // copy-in re-read, so without this a runaway command could fill the host disk from inside the jail.
+        // copy-in re-read, so without this a runaway command could fill the host disk from inside the jail. This is the
+        // NODE-WIDE ceiling — the operator's — which a create request may tighten for its own sandbox but never raise.
         _maxJailDiskBytes = copyOptions.Value.MaxJailDiskBytes;
 
         // A worker-local jail container directory owned by this provider instance. The provider is a DI singleton, so
@@ -380,7 +383,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
         // Bound the child's OWN writes into the jail. MaxCopyFileBytes governs only the host→jail copy-in re-read, so
         // without this a runaway command could fill the host disk from inside the jail and nothing would stop it.
-        using var diskWatchdog = StartJailDiskWatchdog(state, diskCapSource, linkedSource.Token);
+        var jailDiskCeiling = ResolveJailDiskCeiling(state);
+        using var diskWatchdog = StartJailDiskWatchdog(state, jailDiskCeiling, diskCapSource, linkedSource.Token);
 
         try
         {
@@ -417,7 +421,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 ExecutionId = request.ExecutionId,
                 ExitCode = -1,
                 StandardError = string.Create(CultureInfo.InvariantCulture,
-                    $"Command exceeded the sandbox jail disk ceiling of {_maxJailDiskBytes} bytes and was terminated."),
+                    $"Command exceeded the sandbox jail disk ceiling of {jailDiskCeiling} bytes and was terminated."),
                 Completed = false,
                 Duration = _timeProvider.GetUtcNow() - startedAt
             };
@@ -668,6 +672,24 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     }
 
     /// <summary>
+    ///     Resolves the jail-growth ceiling for one sandbox: the node-wide
+    ///     <see cref="LocalContainerOptions.MaxJailDiskBytes" />, tightened by this sandbox's optional
+    ///     <see cref="SandboxCreateRequest.MaxJailDiskBytes" />.
+    ///     <para>
+    ///         TIGHTEN-ONLY, deliberately: the node-wide value is the operator's ceiling on what any sandbox on this box
+    ///         may write, so a create request may ask for less than it but never for more. The same asymmetry keeps a
+    ///         request from re-enabling a watchdog the operator disabled with a non-positive node-wide value — a bigger
+    ///         number never wins, so a disabled ceiling stays disabled.
+    ///     </para>
+    /// </summary>
+    private long ResolveJailDiskCeiling(JailState state)
+    {
+        return state.MaxJailDiskBytes is { } requested && requested < _maxJailDiskBytes
+            ? requested
+            : _maxJailDiskBytes;
+    }
+
+    /// <summary>
     ///     Starts the jail disk watchdog for one command, or returns a no-op when it does not apply. Cancelling
     ///     <paramref name="diskCapSource" /> is what unblocks the command's wait and routes it to the over-cap result.
     ///     <para>
@@ -680,16 +702,18 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///         the control is worth there.
     ///     </para>
     /// </summary>
-    private IDisposable StartJailDiskWatchdog(JailState state, CancellationTokenSource diskCapSource, CancellationToken commandToken)
+    private IDisposable StartJailDiskWatchdog(JailState state,
+        long ceiling,
+        CancellationTokenSource diskCapSource,
+        CancellationToken commandToken)
     {
-        if (_maxJailDiskBytes <= 0 || state.PreserveJailRoot)
+        if (ceiling <= 0 || state.PreserveJailRoot)
         {
             return new NoOpDisposable();
         }
 
         var watchdogSource = CancellationTokenSource.CreateLinkedTokenSource(commandToken);
         var jailRoot = state.JailRoot;
-        var ceiling = _maxJailDiskBytes;
 
         _ = Task.Run(async () =>
         {

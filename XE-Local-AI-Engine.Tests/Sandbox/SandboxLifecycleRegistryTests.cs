@@ -128,6 +128,29 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
         AssertEx.True(Directory.Exists(workspace), "a trusted host workspace must survive the sandbox that was bound to it.");
     }
 
+    [Test]
+    public async Task CreateOrAttach_CarriesThePerSandboxDiskCeilingOntoTheJailState()
+    {
+        // The registry is the only place the create request is still in hand, so if the per-sandbox ceiling is not
+        // captured here it is gone by the time a command runs and the sandbox silently falls back to the node-wide one.
+        var registry = CreateRegistry();
+
+        var handle = await registry.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 4L * 1024 * 1024 });
+
+        AssertEx.Equal(expected: 4L * 1024 * 1024, registry.GetAliveState(handle).MaxJailDiskBytes!.Value);
+    }
+
+    [Test]
+    public async Task CreateOrAttach_WithoutAPerSandboxDiskCeiling_LeavesTheJailStateOnTheNodeDefault()
+    {
+        var registry = CreateRegistry();
+
+        var handle = await registry.CreateOrAttachAsync(CreateRequest(Key()));
+
+        AssertEx.Null(registry.GetAliveState(handle).MaxJailDiskBytes,
+            "an unset ceiling must stay null, which is what the provider reads as 'use the node-wide one'");
+    }
+
     private SandboxLifecycleRegistry CreateRegistry()
     {
         return new SandboxLifecycleRegistry(_jailRoot,

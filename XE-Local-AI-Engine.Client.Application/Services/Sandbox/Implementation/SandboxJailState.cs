@@ -16,12 +16,17 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 /// </summary>
 internal sealed class JailState
 {
-    public JailState(SandboxHandle handle, string jailRoot, SandboxLaunchPolicy launchPolicy, bool preserveJailRoot = false)
+    public JailState(SandboxHandle handle,
+        string jailRoot,
+        SandboxLaunchPolicy launchPolicy,
+        bool preserveJailRoot = false,
+        long? maxJailDiskBytes = null)
     {
         Handle = handle;
         JailRoot = jailRoot;
         LaunchPolicy = launchPolicy;
         PreserveJailRoot = preserveJailRoot;
+        MaxJailDiskBytes = maxJailDiskBytes;
     }
 
     public SandboxHandle Handle { get; }
@@ -32,6 +37,15 @@ internal sealed class JailState
     public SandboxLaunchPolicy LaunchPolicy { get; }
 
     public bool PreserveJailRoot { get; }
+
+    /// <summary>
+    ///     The per-sandbox jail-growth ceiling this sandbox was created with (<c>SandboxCreateRequest.MaxJailDiskBytes</c>),
+    ///     or <see langword="null" /> to inherit the node-wide one. It is stored RAW rather than pre-resolved: the
+    ///     node-wide ceiling belongs to the provider, and
+    ///     <c>ProcessSandboxRuntimeProvider.ResolveJailDiskCeiling</c> is the single place the tighten-only
+    ///     <c>min(node, request)</c> is applied.
+    /// </summary>
+    public long? MaxJailDiskBytes { get; }
 
     public object Sync { get; } = new();
 

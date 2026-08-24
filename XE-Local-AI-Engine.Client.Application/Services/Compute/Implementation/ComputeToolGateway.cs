@@ -207,6 +207,11 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             RuntimeProfile = RuntimeProfile,
             // Unconditional: ExecuteAsync already refused the call if this provider cannot honor it.
             NetworkPolicy = SandboxNetworkPolicy.None,
+            // Unconditional too, and for the same reason it needs no capability check: it can only ASK FOR LESS than
+            // the node-wide jail ceiling the provider would otherwise apply, so a provider that ignores it is no worse
+            // off than before. A script doing arithmetic writes almost nothing, and inheriting the node-wide number let
+            // one runaway `open(..., "w")` loop consume the whole allowance a workspace run is sized for.
+            MaxJailDiskBytes = _options.MaxJailDiskBytes,
             ResourceLimits = capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits)
                 ? new SandboxResourceLimits
                 {

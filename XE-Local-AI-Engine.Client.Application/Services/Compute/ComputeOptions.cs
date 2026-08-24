@@ -37,4 +37,17 @@ public sealed class ComputeOptions
 
     /// <summary>Process/thread ceiling for the sandbox, applied only where the host can enforce it. Defaults to 64.</summary>
     public int PidsLimit { get; set; } = 64;
+
+    /// <summary>
+    ///     How many bytes a single script may write into its own jail before the process tree is terminated. Defaults
+    ///     to 256 MiB — far tighter than the node-wide sandbox ceiling, because arithmetic and symbolic algebra write
+    ///     almost nothing, so a script filling hundreds of megabytes is a runaway rather than a workload.
+    ///     <para>
+    ///         It can only TIGHTEN: the gateway passes it as
+    ///         <c>SandboxCreateRequest.MaxJailDiskBytes</c>, and the provider applies the smaller of this and the
+    ///         node-wide <c>LocalContainer:MaxJailDiskBytes</c>. Raising it past the node-wide ceiling therefore has no
+    ///         effect — that number is the operator's, and this one is the tool's opinion about its own workload.
+    ///     </para>
+    /// </summary>
+    public long MaxJailDiskBytes { get; set; } = 256L * 1024 * 1024;
 }

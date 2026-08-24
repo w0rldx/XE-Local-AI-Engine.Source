@@ -20,6 +20,11 @@ public sealed class ComputeOptionsValidator : IValidateOptions<ComputeOptions>
                                    "Compute:CpuCount must be greater than zero.")
                                .AppendIf(options.PidsLimit <= 0,
                                    "Compute:PidsLimit must be greater than zero.")
+                               // Unlike LocalContainer:MaxJailDiskBytes, a non-positive value is NOT a supported way to
+                               // disable the watchdog here: this ceiling can only tighten the node-wide one, so zero
+                               // would silently mean "inherit" rather than "unlimited" and read as the opposite.
+                               .AppendIf(options.MaxJailDiskBytes <= 0,
+                                   "Compute:MaxJailDiskBytes must be greater than zero.")
                                .ToArray();
 
         return errors.Length == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(errors);

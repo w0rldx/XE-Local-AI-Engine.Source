@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Configuration;
 
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class ComputeOptionsValidatorTests
@@ -41,6 +42,26 @@ public sealed class ComputeOptionsValidatorTests
 
         AssertEx.False(result.Succeeded);
         AssertEx.Contains(result.Failures, failure => failure.Contains("MaxOutputBytes", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void Validate_WhenTheJailDiskCeilingIsNotPositive_ReturnsFailure()
+    {
+        // Zero disables the node-wide LocalContainer watchdog, but it cannot mean that here: this value only ever
+        // tightens the node's ceiling, so a non-positive one is a configuration mistake rather than an opt-out.
+        var result = _validator.Validate(name: null, new ComputeOptions { MaxJailDiskBytes = 0 });
+
+        AssertEx.False(result.Succeeded);
+        AssertEx.Contains(result.Failures, failure => failure.Contains("MaxJailDiskBytes", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void ComputeOptions_DefaultTheJailDiskCeilingBelowTheNodeWideOne()
+    {
+        // The point of the per-sandbox ceiling is that compute asks for LESS. A default at or above the node-wide one
+        // would make the whole option a no-op and nothing would notice.
+        AssertEx.True(new ComputeOptions().MaxJailDiskBytes < LocalContainerOptions.DefaultMaxJailDiskBytes,
+            "the compute ceiling must be tighter than the node-wide default, or it changes nothing");
     }
 
     [Test]

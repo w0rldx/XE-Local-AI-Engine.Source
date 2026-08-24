@@ -917,19 +917,55 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         using var provider = CreateProvider(maxJailDiskBytes: 4L * 1024 * 1024);
         var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()));
 
-        var result = await provider.ExecuteAsync(handle, new SandboxCommandRequest
-        {
-            ExecutionId = "disk-1",
-            Executable = "/bin/sh",
-            // Write steadily rather than in one burst, so the periodic watchdog observes the growth while the command
-            // is still running.
-            Arguments = ["-c", "i=0; while [ $i -lt 400 ]; do dd if=/dev/zero of=fill-$i.bin bs=1M count=2 2>/dev/null; i=$((i+1)); sleep 0.05; done"],
-            Timeout = TimeSpan.FromSeconds(60)
-        });
+        var result = await provider.ExecuteAsync(handle, FillJailCommand("disk-1"));
 
         AssertEx.False(result.Completed, "a command that blows the jail disk ceiling must not be Completed");
         AssertEx.Equal(expected: -1, result.ExitCode);
         AssertEx.Contains(result.StandardError ?? string.Empty, "disk ceiling");
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_Execute_WhenTheSandboxAsksForATighterDiskCap_EnforcesTheSandboxCeiling()
+    {
+        // A caller whose workload writes almost nothing (the compute tool) should not have to inherit the node-wide
+        // allowance sized for a workspace build. The per-sandbox ceiling is what lets it bound its own blast radius.
+        if (!OperatingSystem.IsLinux())
+        {
+            Skip("the jail disk watchdog test uses /bin/sh and dd");
+            return;
+        }
+
+        using var provider = CreateProvider(maxJailDiskBytes: 512L * 1024 * 1024);
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 4L * 1024 * 1024 });
+
+        var result = await provider.ExecuteAsync(handle, FillJailCommand("disk-tighten"));
+
+        AssertEx.False(result.Completed, "the per-sandbox ceiling must terminate the command even though the node-wide one is far higher");
+        AssertEx.Equal(expected: -1, result.ExitCode);
+        // The reported number is the ceiling that actually fired, not the node's — a message naming 512 MiB after
+        // stopping at 4 MiB would send an operator looking at the wrong setting.
+        AssertEx.Contains(result.StandardError ?? string.Empty, (4L * 1024 * 1024).ToString(CultureInfo.InvariantCulture));
+    }
+
+    [Test]
+    public async Task ProcessSandboxProvider_Execute_WhenTheSandboxAsksForALooserDiskCap_KeepsTheNodeCeiling()
+    {
+        // Tighten-only. The node-wide value is the OPERATOR's ceiling, so a create request that names a bigger number
+        // must not widen it — otherwise the control is advisory and the caller sets its own limit.
+        if (!OperatingSystem.IsLinux())
+        {
+            Skip("the jail disk watchdog test uses /bin/sh and dd");
+            return;
+        }
+
+        using var provider = CreateProvider(maxJailDiskBytes: 4L * 1024 * 1024);
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 8L * 1024 * 1024 * 1024 });
+
+        var result = await provider.ExecuteAsync(handle, FillJailCommand("disk-loosen"));
+
+        AssertEx.False(result.Completed, "a request asking for more than the node allows must still stop at the node's ceiling");
+        AssertEx.Equal(expected: -1, result.ExitCode);
+        AssertEx.Contains(result.StandardError ?? string.Empty, (4L * 1024 * 1024).ToString(CultureInfo.InvariantCulture));
     }
 
     [Test]
@@ -1616,6 +1652,21 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         File.WriteAllBytes(path, content);
         _tempPaths.Add(path);
         return path;
+    }
+
+    /// <summary>
+    ///     A command that grows the jail steadily rather than in one burst, so the periodic watchdog observes the
+    ///     growth while the command is still running.
+    /// </summary>
+    private static SandboxCommandRequest FillJailCommand(string executionId)
+    {
+        return new SandboxCommandRequest
+        {
+            ExecutionId = executionId,
+            Executable = "/bin/sh",
+            Arguments = ["-c", "i=0; while [ $i -lt 400 ]; do dd if=/dev/zero of=fill-$i.bin bs=1M count=2 2>/dev/null; i=$((i+1)); sleep 0.05; done"],
+            Timeout = TimeSpan.FromSeconds(60)
+        };
     }
 
     private static SandboxCreateRequest CreateRequest(SandboxAttachKey attachKey)

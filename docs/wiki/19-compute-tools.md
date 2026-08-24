@@ -66,6 +66,7 @@ No torch, no pandas, no network libraries, no system shell. All three libraries 
      - **Environment scrub**: only whitelisted environment variables are inherited; `HOME` and `TMPDIR` are pointed at the call's own scratch directory to prevent library side-effects (e.g. caching to `~/.cache`).
      - **Network policy**: empty network namespace — no DNS, no IP stack, no loopback access *to the outside*. **Unconditional and fail-closed**: a host that cannot create one gets the call refused (`run_python rejected: this node cannot run the compute sandbox offline…`) plus an operator-facing log line, because "no network" is what the tool's description promises the model and what the user approved the call on. It is never downgraded to unrestricted.
      - **Resource ceilings**: configurable CPU cores, resident memory, and PID limits, applied where the host can enforce them (systemd cgroup v2). These stay capability-gated where egress denial does not: they bound *cost*, not reachability, so degrading them is logged rather than fatal.
+     - **Jail disk ceiling**: the compute jail carries its OWN growth ceiling (`Compute:MaxJailDiskBytes`, default 256 MiB) rather than inheriting the node-wide `LocalContainer:MaxJailDiskBytes` (default 512 MiB), which is sized for workspace builds. The gateway passes it as `SandboxCreateRequest.MaxJailDiskBytes` and the provider applies `min(node-wide, per-sandbox)` — **tighten-only**: the node-wide value is the operator's ceiling, so a larger request never widens it, and a per-sandbox value can never re-enable a watchdog the operator disabled. It needs no capability gate for the same reason: a provider without a jail-growth watchdog ignores a field that could only have asked for *less*.
      - **Wall-clock timeout**: process tree is killed if execution exceeds the configured ceiling (default 30 seconds).
      - **Output byte caps**: stdout and stderr are each truncated at `MaxOutputBytes` (default 64 KiB) with a truncation marker `…[output truncated]`.
 
@@ -141,6 +142,7 @@ Seeded agent example: `MathematicianAgentSeeder` (`Services/Agents/Implementatio
 | `MemoryMb` | `int` | `2048` | Resident-memory ceiling for the sandbox, applied where the host can enforce it. |
 | `CpuCount` | `double` | `2` | CPU-core ceiling for the sandbox, applied where the host can enforce it. |
 | `PidsLimit` | `int` | `64` | Process/thread ceiling for the sandbox, applied where the host can enforce it. |
+| `MaxJailDiskBytes` | `long` | `268435456` (256 MiB) | How far one script may grow its own jail before the process tree is killed. Tightens the node-wide `LocalContainer:MaxJailDiskBytes` for the compute jail only; raising it past that value has no effect. |
 
 **Egress denial is not gated at all**: a host that cannot create an empty network namespace has `run_python` refuse every call, since the offline guarantee is the one the model and the approving user were shown. Resource limits remain **capability-gated** — an old system without cgroup v2 or systemd --user runs without the ceilings and says so in the containment log, because they bound cost rather than reachability.
 
@@ -238,7 +240,7 @@ Real-sandbox tests (Linux CI, skip-not-pass on hosts without the sandbox):
 - Network attempt inside a script is denied (empty netns confirmation).
 - A `while True: pass` script is killed at timeout, reported as timed-out.
 - Output over the byte cap is truncated with the marker.
-- A script that writes past `MaxJailDiskBytes` is terminated (jail-growth watchdog).
+- A script that writes past `Compute:MaxJailDiskBytes` is terminated (jail-growth watchdog) even when the node-wide `LocalContainer:MaxJailDiskBytes` is far higher — `ComputeSandboxLiveTests.RunPython_WhenTheScriptFillsTheJail_IsKilledAtTheComputeDiskCeiling_NotTheNodeWideOne`. The tighten-only direction is pinned without a live host by `ProcessSandboxRuntimeProviderTests` (a looser per-sandbox request still stops at the node ceiling).
 - `import numpy, scipy, sympy` succeeds (venv provisioning end-to-end).
 
 ### 7.3 E2E smoke test

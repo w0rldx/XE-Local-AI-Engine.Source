@@ -124,6 +124,33 @@ public sealed class ComputeToolGatewayTests
     }
 
     [Test]
+    public async Task ExecuteAsync_AsksForItsOwnJailDiskCeiling_RatherThanInheritingTheNodeWideOne()
+    {
+        // A script doing arithmetic writes almost nothing, so the node-wide allowance — sized for a workspace build —
+        // is the wrong number for this jail. The request may only TIGHTEN it, so no capability gate is needed: a
+        // provider that ignores the field is exactly as bounded as it was before.
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        var gateway = CreateGateway(provider, new ComputeOptions { MaxJailDiskBytes = 8L * 1024 * 1024 });
+
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+
+        var create = AssertEx.NotNull(provider.CreateRequest);
+        AssertEx.Equal(expected: 8L * 1024 * 1024, create.MaxJailDiskBytes!.Value);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WithDefaultOptions_AsksForTheDefaultComputeDiskCeiling()
+    {
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        var gateway = CreateGateway(provider);
+
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+
+        var create = AssertEx.NotNull(provider.CreateRequest);
+        AssertEx.Equal(new ComputeOptions().MaxJailDiskBytes, create.MaxJailDiskBytes!.Value);
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenTheHostCannotDenyEgress_RefusesRatherThanRunningOnline()
     {
         // "No network" is what the tool's description promises the model and what the user approved the call on, so it

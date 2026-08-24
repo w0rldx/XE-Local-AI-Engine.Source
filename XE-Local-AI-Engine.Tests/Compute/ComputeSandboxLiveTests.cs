@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Compute;
 
+using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using TUnit.Core.Exceptions;
@@ -110,6 +111,39 @@ public sealed class ComputeSandboxLiveTests : IDisposable
 
         AssertEx.Contains(rendered, "…[output truncated]");
         AssertEx.True(rendered.Length < 20000, "a runaway print must not reach the model in full");
+    }
+
+    [Test]
+    public async Task RunPython_WhenTheScriptFillsTheJail_IsKilledAtTheComputeDiskCeiling_NotTheNodeWideOne()
+    {
+        // The node-wide ceiling stays at its default (512 MiB) while compute asks for 4 MiB, so anything that stops
+        // this script is the PER-SANDBOX ceiling — the whole point of the option. A generous timeout keeps the two
+        // controls distinguishable: a timeout kill would report the wall clock, not the disk ceiling.
+        RequireOptIn();
+        using var provider = CreateHostProvider();
+        var gateway = CreateGateway(provider,
+            new ComputeOptions
+            {
+                TimeoutSeconds = 60,
+                MaxJailDiskBytes = 4L * 1024 * 1024
+            });
+
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = """
+                   import pathlib, time
+                   chunk = b"0" * (1024 * 1024)
+                   for index in range(64):
+                       pathlib.Path(f"fill-{index}.bin").write_bytes(chunk)
+                       time.sleep(0.1)
+                   print("FILLED")
+                   """
+        });
+
+        AssertEx.Contains(rendered, "disk ceiling");
+        AssertEx.Contains(rendered, (4L * 1024 * 1024).ToString(CultureInfo.InvariantCulture));
+        AssertEx.False(rendered.Contains("FILLED", StringComparison.Ordinal),
+            "a script that blows the compute disk ceiling must not run to completion");
     }
 
     [Test]

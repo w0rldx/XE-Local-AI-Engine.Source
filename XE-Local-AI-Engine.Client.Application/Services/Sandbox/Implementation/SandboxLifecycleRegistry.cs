@@ -77,7 +77,11 @@ internal sealed class SandboxLifecycleRegistry
                 ManifestVersion = request.AttachKey.ManifestVersion,
                 Mounts = ResolveIdentityMounts(request, jailDirectory)
             };
-            _sandboxes[sandboxId] = new JailState(handle, jailDirectory, launchPolicy, request.TrustedHostWorkspace is not null);
+            _sandboxes[sandboxId] = new JailState(handle,
+                jailDirectory,
+                launchPolicy,
+                request.TrustedHostWorkspace is not null,
+                request.MaxJailDiskBytes);
             return Task.FromResult(handle);
         }
     }
