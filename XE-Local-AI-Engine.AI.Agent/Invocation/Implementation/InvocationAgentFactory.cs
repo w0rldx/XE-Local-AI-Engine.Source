@@ -31,6 +31,9 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     /// </summary>
     internal const string LlamaDisableThinkingMarkerKey = "xe.llama.disable_thinking";
 
+    /// <summary>Forwards to <see cref="ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey" />; kept alongside the disable-thinking marker so both llama.cpp markers read the same here.</summary>
+    internal const string LlamaReasoningBudgetMarkerKey = ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey;
+
     private readonly IChatClient _chatClient;
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
     private readonly ICustomToolCatalog _customToolCatalog;
@@ -103,6 +106,15 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             if (think is false)
             {
                 additionalProperties[LlamaDisableThinkingMarkerKey] = true;
+            }
+
+            // Reasoning ON with an explicit graded effort: cap how long the model may think so it cannot spend the whole
+            // context window reasoning and return no answer. The budget rides its own marker for the llama.cpp client to
+            // patch onto the body as reasoning_budget_tokens; an unspecified effort resolves to null and sends nothing,
+            // keeping the no-effort request byte-identical.
+            if (ReasoningOptionsResolver.ResolveReasoningBudgetTokens(definition.ReasoningEffort) is { } budgetTokens)
+            {
+                additionalProperties[LlamaReasoningBudgetMarkerKey] = budgetTokens;
             }
 
             // Codex-only side channel: when a graded/explicit effort is present, also carry the RAW normalized effort

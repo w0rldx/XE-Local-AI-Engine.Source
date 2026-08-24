@@ -403,6 +403,83 @@ public sealed class InvocationAgentFactoryTests
     }
 
     [Test]
+    [Arguments("minimal", 1024)]
+    [Arguments("low", 2048)]
+    [Arguments("medium", 8192)]
+    [Arguments("high", 24576)]
+    [Arguments("xhigh", 24576)]
+    public async Task CreateAsync_ThinkingCapableWithGradedEffort_CarriesTheMappedReasoningBudget(string effort, int expectedBudget)
+    {
+        // The effort→budget table. Without a budget llama-server lets a Qwen3-class model reason until the context
+        // window is exhausted and the turn returns no final answer; the marker is what the llama.cpp chat client patches
+        // onto the body as reasoning_budget_tokens. "xhigh" is capped at the same budget as "high" so a Codex-only level
+        // pinned onto a local model cannot buy MORE thinking than the highest local level.
+        var definition = new InvocationAgentDefinition("qwen3:8b",
+            "Be helpful.",
+            [],
+            [],
+            effort);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
+        AssertEx.True(additionalProperties.TryGetValue<int>(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey, out var budget));
+        AssertEx.Equal(expectedBudget, budget);
+    }
+
+    [Test]
+    [Arguments(null)]
+    [Arguments("")]
+    [Arguments("none")]
+    [Arguments("on")]
+    public async Task CreateAsync_ThinkingCapableWithoutGradedEffort_OmitsTheReasoningBudget(string? effort)
+    {
+        // No explicit graded effort → no budget at all, preserving the unrestricted pre-budget behavior (and, for
+        // "none", reasoning is being turned off outright, where a budget would be meaningless).
+        var definition = new InvocationAgentDefinition("qwen3:8b",
+            "Be helpful.",
+            [],
+            [],
+            effort);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
+        AssertEx.False(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey));
+    }
+
+    [Test]
+    [Arguments("low")]
+    [Arguments("medium")]
+    [Arguments("high")]
+    public async Task CreateAsync_NonThinkingModelWithGradedEffort_OmitsTheReasoningBudget(string effort)
+    {
+        // A model without the graded thinking capability (including the native-reasoning harmony family) has no
+        // think-end tag for llama-server to close the reasoning phase on, so the budget would be a no-op — it is never
+        // set, keeping that path byte-identical.
+        var definition = new InvocationAgentDefinition("gemma:12b",
+            "Be helpful.",
+            [],
+            [],
+            effort,
+            SupportsThinking: false);
+
+        using var chatClient = new FakeChatClient();
+        var sut = CreateSut(chatClient);
+
+        await using var context = await sut.CreateAsync(definition);
+
+        var additionalProperties = AssertEx.NotNull(ResolveChatOptions(context).AdditionalProperties);
+        AssertEx.False(additionalProperties.ContainsKey(InvocationAgentFactory.LlamaReasoningBudgetMarkerKey));
+    }
+
+    [Test]
     public async Task CreateAsync_NonThinkingModelReasoningNone_OmitsLlamaDisableThinkingMarker()
     {
         // A non-thinking model has no default reasoning to disable — think:false alone is enough and no llama.cpp

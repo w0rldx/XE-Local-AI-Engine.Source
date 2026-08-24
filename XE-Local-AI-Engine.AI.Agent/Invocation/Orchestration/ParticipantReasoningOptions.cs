@@ -21,6 +21,9 @@ internal static class ParticipantReasoningOptions
     /// <summary>Forwards to <see cref="ReasoningOptionsResolver.CodexReasoningEffortKey" />; kept for callers already using this name.</summary>
     internal const string CodexReasoningEffortKey = ReasoningOptionsResolver.CodexReasoningEffortKey;
 
+    /// <summary>Forwards to <see cref="ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey" />.</summary>
+    internal const string LlamaReasoningBudgetMarkerKey = ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey;
+
     /// <summary>
     ///     Produces the reasoning properties for a participant, gated on its resolved model's thinking capability:
     ///     <list type="bullet">
@@ -45,6 +48,14 @@ internal static class ParticipantReasoningOptions
             if (codexEffort is not null)
             {
                 properties[ReasoningOptionsResolver.CodexReasoningEffortKey] = codexEffort;
+            }
+
+            // Per-request thinking budget for the llama.cpp path, mirroring the single-agent factory: an explicit graded
+            // effort caps the reasoning so a participant cannot burn its whole window thinking and answer nothing. An
+            // unspecified effort resolves to null and adds no entry.
+            if (ReasoningOptionsResolver.ResolveReasoningBudgetTokens(reasoningEffort) is { } budgetTokens)
+            {
+                properties[LlamaReasoningBudgetMarkerKey] = budgetTokens;
             }
         }
         else if (ReasoningOptionsResolver.IsReasoningRequested(reasoningEffort))

@@ -46,6 +46,12 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     // OpenAI adapter drops unmapped AdditionalProperties — so the switch is injected here instead.
     internal const string DisableThinkingMarkerKey = "xe.llama.disable_thinking";
 
+    // In-process marker (duplicated from ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey — AI.Agent does not
+    // reference this assembly). When present, it carries the turn's thinking budget in tokens, which must ride the
+    // outbound body as reasoning_budget_tokens: llama-server otherwise lets a reasoning model think until the context
+    // window is exhausted, so the turn ends with no final answer at all.
+    internal const string ReasoningBudgetMarkerKey = "xe.llama.reasoning_budget_tokens";
+
     // The raw utf8 JSON object written at $.chat_template_kwargs. The OpenAI chat body has no typed field for it, so it
     // rides the wire via ChatCompletionOptions.Patch — MEAI's OpenAI adapter uses the ChatCompletionOptions returned by
     // ChatOptions.RawRepresentationFactory as its serialization base, Patch included (verified against MEAI 10.7).
@@ -79,7 +85,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        options = ApplyToolSchemaCompatibility(ApplySamplingPassthrough(ApplyThinkingSwitch(options)));
+        options = ApplyToolSchemaCompatibility(ApplySamplingPassthrough(ApplyReasoningBudget(ApplyThinkingSwitch(options))));
         var healed = false;
         while (true)
         {
@@ -135,7 +141,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         [EnumeratorCancellation]
         CancellationToken cancellationToken = default)
     {
-        options = ApplyToolSchemaCompatibility(ApplySamplingPassthrough(ApplyThinkingSwitch(options)));
+        options = ApplyToolSchemaCompatibility(ApplySamplingPassthrough(ApplyReasoningBudget(ApplyThinkingSwitch(options))));
         var healed = false;
         while (true)
         {
@@ -269,6 +275,45 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             // the MAAI001 pattern (docs/agent-knowledge.md §4).
 #pragma warning disable SCME0001
             baseOptions.Patch.Set("$.chat_template_kwargs"u8, DisableThinkingKwargs);
+#pragma warning restore SCME0001
+            return baseOptions;
+        };
+        return patched;
+    }
+
+    /// <summary>
+    ///     When the turn carries the <see cref="ReasoningBudgetMarkerKey" /> marker (an explicit graded reasoning effort
+    ///     on a thinking-capable model), returns a clone of <paramref name="options" /> whose
+    ///     <see cref="ChatOptions.RawRepresentationFactory" /> yields a <see cref="ChatCompletionOptions" /> with
+    ///     <c>reasoning_budget_tokens</c> patched in, so llama-server caps the reasoning phase instead of letting it run
+    ///     until the context window is exhausted. Without the marker the options are returned unchanged, so every other
+    ///     request is byte-identical. A pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> (the thinking
+    ///     switch above sets one) is composed rather than dropped.
+    ///     <para>
+    ///         Semantics at the pinned build b10201 (<c>tools/server/server-common.cpp</c>
+    ///         <c>oaicompat_chat_params_parse</c>): the per-request value overrides the launch-time
+    ///         <c>--reasoning-budget</c> default, and on hitting the budget the server injects its budget message before
+    ///         the end-of-thinking tag and forces the final-answer phase — a capped answer rather than a truncated one.
+    ///         The field is only read for chat templates with explicit think-end tags (the Qwen3/DeepSeek-R1 family),
+    ///         and is a silent no-op otherwise — the same acceptable caveat as the <c>enable_thinking</c> switch above.
+    ///     </para>
+    /// </summary>
+    internal static ChatOptions? ApplyReasoningBudget(ChatOptions? options)
+    {
+        if (TryReadInt32(options?.AdditionalProperties, ReasoningBudgetMarkerKey) is not { } budgetTokens || budgetTokens <= 0)
+        {
+            return options;
+        }
+
+        var priorFactory = options!.RawRepresentationFactory;
+        var patched = options.Clone();
+        patched.RawRepresentationFactory = client =>
+        {
+            var baseOptions = priorFactory?.Invoke(client) as ChatCompletionOptions ?? new ChatCompletionOptions();
+            // SCME0001: same scoped suppression as ApplyThinkingSwitch above — ChatCompletionOptions.Patch is the only
+            // seam that serializes a body field the typed OpenAI chat schema does not model.
+#pragma warning disable SCME0001
+            baseOptions.Patch.Set("$.reasoning_budget_tokens"u8, budgetTokens);
 #pragma warning restore SCME0001
             return baseOptions;
         };

@@ -31,6 +31,18 @@ internal static class ReasoningOptionsResolver
     internal const string CodexReasoningEffortKey = "codex_reasoning_effort";
 
     /// <summary>
+    ///     In-process marker carrying the per-request thinking budget in tokens
+    ///     (<see cref="ResolveReasoningBudgetTokens" />) that the llama.cpp chat client patches onto the outbound body
+    ///     as <c>reasoning_budget_tokens</c>. Present ONLY when an explicit graded effort is requested on a
+    ///     thinking-capable model; without it llama-server free-runs the reasoning until the context window is
+    ///     exhausted and the turn returns no final answer. Like the disable-thinking marker the key never reaches any
+    ///     wire — the Ollama mapper reads a fixed allowlist and Codex reads its own keys, so only
+    ///     <c>DeferredLlamaServerChatClient</c> consumes it. The literal is duplicated there (the AI.Agent assembly does
+    ///     not reference the LlamaServer provider); keep the two in sync.
+    /// </summary>
+    internal const string LlamaReasoningBudgetMarkerKey = "xe.llama.reasoning_budget_tokens";
+
+    /// <summary>
     ///     Maps a normalized reasoning effort to the Ollama <c>think</c> option value for a thinking-capable model:
     ///     false / "low" / "medium" / "high", or true (reason) as the default/fallback. minimal/xhigh — OpenAI
     ///     Responses reasoning levels Ollama does not understand — collapse to true here (Ollama 400s on an unknown
@@ -68,6 +80,44 @@ internal static class ReasoningOptionsResolver
         }
 
         return true;
+    }
+
+    /// <summary>
+    ///     Maps a normalized reasoning effort to the llama.cpp per-request thinking budget in tokens
+    ///     (<c>reasoning_budget_tokens</c>), or <see langword="null" /> to send no budget at all. Null is the
+    ///     unrestricted status quo: blank/unspecified effort, <c>none</c> (reasoning is being turned OFF, so a budget is
+    ///     meaningless), the binary <c>on</c> sentinel, and any unrecognized value all keep the model free-running,
+    ///     leaving the no-effort request byte-identical to before.
+    ///     <para>
+    ///         The levels are sized so the capped reasoning still leaves room for a real final answer inside the 64k
+    ///         windows local runtimes are launched with: low is a short scratchpad, medium the everyday cap, and high
+    ///         (24576) still leaves well over half the window for the answer plus the prompt. Without a cap a
+    ///         Qwen3-class model can spend the whole window thinking and return no answer at all — the failure this
+    ///         mapping exists to prevent. <c>minimal</c>/<c>xhigh</c> are the Codex-only levels
+    ///         (see <see cref="ResolveCodexReasoningEffort" />); they are mapped rather than left null so a definition
+    ///         that pins one onto a local model does not silently get MORE thinking than <c>high</c>.
+    ///     </para>
+    ///     <para>
+    ///         llama-server honors the budget only for chat templates with explicit think-end tags — the same
+    ///         Qwen3/DeepSeek-R1 family the capability detector classifies as graded-reasoning-capable — and ignores the
+    ///         field otherwise. That is the same acceptable silent no-op as the existing <c>enable_thinking</c> switch.
+    ///     </para>
+    /// </summary>
+    internal static int? ResolveReasoningBudgetTokens(string? reasoningEffort)
+    {
+        if (string.IsNullOrWhiteSpace(reasoningEffort))
+        {
+            return null;
+        }
+
+        return reasoningEffort.Trim().ToUpperInvariant() switch
+        {
+            "MINIMAL" => 1024,
+            "LOW" => 2048,
+            "MEDIUM" => 8192,
+            "HIGH" or "XHIGH" => 24576,
+            _ => null
+        };
     }
 
     /// <summary>
