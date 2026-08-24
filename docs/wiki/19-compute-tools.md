@@ -64,8 +64,8 @@ No torch, no pandas, no network libraries, no system shell. All three libraries 
    - Execution runs inside the process sandbox with:
      - **Working directory jail**: the script cannot `cd` outside its assigned directory.
      - **Environment scrub**: only whitelisted environment variables are inherited; `HOME` and `TMPDIR` are pointed at the call's own scratch directory to prevent library side-effects (e.g. caching to `~/.cache`).
-     - **Network policy**: empty network namespace (if the host supports it) — no DNS, no IP stack, no loopback access *to the outside*.
-     - **Resource ceilings**: configurable CPU cores, resident memory, and PID limits, applied where the host can enforce them (systemd cgroup v2; silently degraded on older systems per the sandbox provider's fail-closed contract).
+     - **Network policy**: empty network namespace — no DNS, no IP stack, no loopback access *to the outside*. **Unconditional and fail-closed**: a host that cannot create one gets the call refused (`run_python rejected: this node cannot run the compute sandbox offline…`) plus an operator-facing log line, because "no network" is what the tool's description promises the model and what the user approved the call on. It is never downgraded to unrestricted.
+     - **Resource ceilings**: configurable CPU cores, resident memory, and PID limits, applied where the host can enforce them (systemd cgroup v2). These stay capability-gated where egress denial does not: they bound *cost*, not reachability, so degrading them is logged rather than fatal.
      - **Wall-clock timeout**: process tree is killed if execution exceeds the configured ceiling (default 30 seconds).
      - **Output byte caps**: stdout and stderr are each truncated at `MaxOutputBytes` (default 64 KiB) with a truncation marker `…[output truncated]`.
 
@@ -98,7 +98,9 @@ No torch, no pandas, no network libraries, no system shell. All three libraries 
 
 - **Cold-start provisioning**: The first call to `GetInterpreterPathAsync` triggers provisioning if the venv is missing, which takes ~1 minute and ~220 MB for numpy/scipy/sympy on a typical box. Subsequent calls reuse it.
 
-- **Cleanup**: The venv directory is never cleaned up automatically — it persists across node restarts, which is the point: it is the expensive part, it is read-only to scripts, and it is what a per-call jail teardown must *not* take with it. An operator can delete it manually; the next compute call re-provisions it. Per-call state (the jail, the `HOME`/`TMPDIR` scratch) is the opposite and is deleted every call — see step 4 of the execution flow.
+- **Lockdown**: after a successful sync the whole venv tree has its write bits cleared (restored only for a re-provision). Scripts reach it through `sys.executable`, and a writable `site-packages` would let one call drop a module that every later approved call imports — a single approval turned into persistent code execution. **This is defence in depth, not a boundary**: the sandbox child runs under the *same uid* as the engine (`unshare --user --map-current-user`) and this provider has no mount layer, so a deliberate script can `os.chmod` the tree back. It stops accidental and low-effort writes; the real fix is a read-only bind mount in a mount namespace, which would be worth doing for the whole host filesystem rather than this tree alone. Covered by `ComputeSandboxLiveTests.RunPython_CannotWriteIntoTheProvisionedVenv`.
+
+- **Cleanup**: The venv directory is never cleaned up automatically — it persists across node restarts, which is the point: it is the expensive part, and it is what a per-call jail teardown must *not* take with it. An operator can delete it manually; the next compute call re-provisions it. Per-call state (the jail, the `HOME`/`TMPDIR` scratch) is the opposite and is deleted every call — see step 4 of the execution flow.
 
 - **Pinning discipline**: `tools/compute/pyproject.toml` and `uv.lock` are both committed to the repo. Adding a dependency is a deliberate decision, never a convenience — every package here is code a model can execute.
 
@@ -140,7 +142,7 @@ Seeded agent example: `MathematicianAgentSeeder` (`Services/Agents/Implementatio
 | `CpuCount` | `double` | `2` | CPU-core ceiling for the sandbox, applied where the host can enforce it. |
 | `PidsLimit` | `int` | `64` | Process/thread ceiling for the sandbox, applied where the host can enforce it. |
 
-All resource limits are **capability-gated** — the sandbox provider fails closed if the host cannot deliver the requested containment. An old system without cgroup v2 or systemd --user will report its limitations and requests will fail with a clear message rather than silently degrading.
+**Egress denial is not gated at all**: a host that cannot create an empty network namespace has `run_python` refuse every call, since the offline guarantee is the one the model and the approving user were shown. Resource limits remain **capability-gated** — an old system without cgroup v2 or systemd --user runs without the ceilings and says so in the containment log, because they bound cost rather than reachability.
 
 **Maintainer rule**: The `Enabled` kill-switch is the single source of truth for "is this node allowed to execute code" — it parallels `AgentHome:Enabled` and is read the same way. Never add a code path that runs Python without checking this flag first.
 

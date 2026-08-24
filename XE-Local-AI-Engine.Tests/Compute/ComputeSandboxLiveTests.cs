@@ -215,6 +215,43 @@ public sealed class ComputeSandboxLiveTests : IDisposable
             "a script inside the compute jail must not reach the network");
     }
 
+    [Test]
+    public async Task RunPython_CannotWriteIntoTheProvisionedVenv()
+    {
+        // site-packages is imported by every later call, so a script that can drop a module there turns one approval
+        // into code that runs on all the following ones. Second call proves the lockdown did not break the closure it
+        // is protecting — a read-only venv that cannot import numpy would be a worse bug than the one being fixed.
+        RequireOptIn();
+        using var provider = CreateHostProvider();
+        var gateway = CreateGateway(provider);
+
+        var attempt = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = """
+                   import pathlib, sysconfig
+                   target = pathlib.Path(sysconfig.get_paths()["purelib"], "xe_trojan.py")
+                   try:
+                       target.write_text("import os")
+                       print("WROTE")
+                   except OSError as error:
+                       print("DENIED", type(error).__name__)
+                   """
+        });
+
+        AssertEx.Contains(attempt, "exit_code: 0");
+        AssertEx.Contains(attempt, "DENIED");
+        AssertEx.False(attempt.Contains("WROTE", StringComparison.Ordinal),
+            "a script must not be able to drop a module into the venv every later call imports");
+
+        var reuse = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "import numpy; print('IMPORT OK', numpy.ndarray)"
+        });
+
+        AssertEx.Contains(reuse, "exit_code: 0");
+        AssertEx.Contains(reuse, "IMPORT OK");
+    }
+
     private ComputeToolGateway CreateGateway(IAgentSandboxRuntimeProvider provider, ComputeOptions? options = null)
     {
         return new ComputeToolGateway(provider,

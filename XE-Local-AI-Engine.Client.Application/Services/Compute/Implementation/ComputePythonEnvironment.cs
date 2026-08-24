@@ -146,6 +146,10 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         var statePath = Path.Combine(_cacheRoot, StateFileName);
         if (File.Exists(interpreter) && MatchesInstalledLock(statePath, lockfileSha))
         {
+            // Re-applied on the warm path too: a venv provisioned by an older build (or left writable by an
+            // interrupted run) would otherwise stay writable for the life of the process. This runs at most once per
+            // process — the interpreter path is cached above it.
+            SetTreeWritable(venvDirectory, writable: false);
             return interpreter;
         }
 
@@ -159,6 +163,9 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         CreateOwnerOnlyDirectory(isolatedHome);
         CreateOwnerOnlyDirectory(isolatedTmp);
         CreateOwnerOnlyDirectory(venvDirectory);
+
+        // A re-provision has to write over a tree the previous one locked down.
+        SetTreeWritable(venvDirectory, writable: true);
 
         var uv = await _acquirer.EnsureUvAsync(_cacheRoot, LogLine, cancellationToken).ConfigureAwait(false);
 
@@ -193,7 +200,44 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         // cache on the next call.
         await File.WriteAllTextAsync(statePath, lockfileSha, cancellationToken).ConfigureAwait(false);
         TryDeleteDirectory(workDirectory);
+        SetTreeWritable(venvDirectory, writable: false);
         return interpreter;
+    }
+
+    /// <summary>
+    ///     Clears (or restores) the write bits across the venv tree. Scripts run with this interpreter and can reach it
+    ///     through <c>sys.executable</c>; a writable <c>site-packages</c> lets one call drop a module that every later
+    ///     approved call imports, which turns a single approval into persistent code execution.
+    ///     <para>
+    ///         <b>This is defence in depth, not a boundary.</b> The sandbox child runs under the SAME uid as the engine
+    ///         (<c>unshare --user --map-current-user</c>) and this provider has no mount layer, so the script owns these
+    ///         files and a deliberate one can <c>os.chmod</c> them back before writing. What it does buy: accidental and
+    ///         low-effort writes fail, and the tree stops being writable by anything that does not specifically set out
+    ///         to defeat it. The real fix is a read-only bind mount in a mount namespace, which needs a mount layer the
+    ///         process provider does not have — and which would be worth doing for the whole host filesystem, not just
+    ///         this tree, since a script can equally trojan the user's dotfiles today.
+    ///     </para>
+    /// </summary>
+    private static void SetTreeWritable(string root, bool writable)
+    {
+        if (OperatingSystem.IsWindows() || !Directory.Exists(root))
+        {
+            return;
+        }
+
+        const UnixFileMode WriteBits = UnixFileMode.UserWrite | UnixFileMode.GroupWrite | UnixFileMode.OtherWrite;
+        foreach (var path in Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories).Append(root))
+        {
+            try
+            {
+                var mode = File.GetUnixFileMode(path);
+                File.SetUnixFileMode(path, writable ? mode | UnixFileMode.UserWrite : mode & ~WriteBits);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // A dangling symlink or a file removed under the walk is not worth failing a provision over.
+            }
+        }
     }
 
     private void LogLine(string line)
