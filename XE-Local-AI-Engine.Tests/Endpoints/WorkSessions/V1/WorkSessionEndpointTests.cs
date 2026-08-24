@@ -416,6 +416,34 @@ public sealed class WorkSessionEndpointTests
         AssertEx.Equal(isBase64, document.RootElement.GetProperty("isBase64").GetBoolean());
     }
 
+    /// <summary>
+    ///     The generated SDK declares `body: never` for the four lifecycle verbs, so it posts nothing while the axios
+    ///     instance still stamps a JSON content type. A route-only POST must therefore be accepted with no body at all —
+    ///     this repo has a standing 415 trap for exactly that shape.
+    /// </summary>
+    [Test]
+    [Arguments("start")]
+    [Arguments("pause")]
+    [Arguments("resume")]
+    [Arguments("cancel")]
+    public async Task LifecycleVerb_WithNoRequestBody_IsAcceptedRatherThanUnsupportedMediaType(string verb)
+    {
+        var service = Substitute.For<IWorkSessionService>();
+        service.StartAsync(SessionId, Arg.Any<CancellationToken>()).Returns(Detail());
+        service.PauseAsync(SessionId, Arg.Any<CancellationToken>()).Returns(Detail());
+        service.ResumeAsync(SessionId, Arg.Any<CancellationToken>()).Returns(Detail());
+        service.CancelAsync(SessionId, Arg.Any<CancellationToken>()).Returns(Detail());
+        await using var factory = EnabledFactory(service);
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{Session}/{verb}");
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.True(response.StatusCode is HttpStatusCode.OK or HttpStatusCode.Accepted,
+            $"POST {verb} with no body answered {(int)response.StatusCode}.");
+    }
+
     [Test]
     public async Task PostMessage_ForwardsTheTextVerbatimAndAnswersAccepted()
     {
