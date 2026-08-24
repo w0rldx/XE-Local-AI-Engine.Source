@@ -197,6 +197,70 @@ Codex-only levels `minimal` and `xhigh` are offered only for Codex models; they 
 
 On the React side `clampReasoningEffort` (`stores/NodeChatPreferencesStore.ts`) maps a carried-over effort onto a different model's available set **without collapsing reasoning intent** (e.g. switching from a Codex model to a binary-only local model): a reasoning-OFF source (`none`) stays `none` when offered; any reasoning-ON source maps to the available reasoning-ON level of nearest intensity rank (`xhigh→high`, `minimal→low` onto a graded set; any graded level→`on` onto a binary set), falling back to the set's first entry only when no comparable level exists. The effort that actually drives the turn is persisted on the message metadata (`ReasoningEffort`, `NodeChatStreamService.cs`) so it survives reload.
 
+### Thinking budget (llama.cpp) and where it is enforceable
+
+A graded effort also caps HOW LONG the model may think. `ReasoningOptionsResolver.ResolveReasoningBudgetTokens`
+maps the effort to a token ceiling (`minimal` 1024, `low` 2048, `medium` 8192, `high`/`xhigh` 24576) and both
+marker emitters — `InvocationAgentFactory` (single-agent) and `ParticipantReasoningOptions`
+(orchestration participants, MCP-bound children, spawned sub-agents) — put it on the in-process marker
+`xe.llama.reasoning_budget_tokens`, which `DeferredLlamaServerChatClient.ApplyReasoningBudget` patches onto the
+outbound body as `reasoning_budget_tokens` (clamped to the launched window by `ClampToGenerationRoom`). An
+unspecified effort resolves to `null` and sends nothing, so the no-effort request stays byte-identical.
+
+**llama-server honours that field only for templates it can find a thinking END tag for.** Its gate writes the
+budget onto the sampler only when the chat-template classification produced a non-empty think-end-tag set —
+filled either by a specialised per-family parser (gemma-4, gpt-oss, …) that hardcodes the tags, or by the generic
+differential autoparser, which renders the template with and without a `reasoning_content` and diffs out the
+marker the template writes after the reasoning. With an empty set the field is accepted and then **silently
+ignored**, and the reasoning free-runs exactly as if nothing had been sent.
+
+`GgufCapabilityDetector` therefore reports a second reasoning fact next to the graded/native split:
+**`ReasoningBudgetEnforceable`** — does the template render a literal reasoning end marker (`</think>`,
+`</thinking>`, or gemma-4's `<channel|>`)? It is computed at IMPORT (`GgufImportInspector.Classify`, from the
+strict header, which also raises an operator warning) and in lazy discovery (`HuggingFaceGgufStore`), persisted on
+`LocalModelDescriptor`, surfaced on the model-list DTO (`LocalModelResponse.reasoningBudgetEnforceable`), and
+threaded `IGgufModelCapabilityResolver → ModelCapabilitySnapshot → ChatTurnResolution → RuntimePackage →
+InvocationAgentDefinition` / `OrchestrationSpecParticipant → OrchestrationParticipant` / `McpExecutionBinding`.
+When it is `false` **every** marker emitter omits the budget and `ReasoningBudgetSkipLog` reports it once per model
+at Information — a field that does nothing is worse than no field, because every layer above would read it as a cap
+that holds. The flag is only ever read alongside `SupportsThinking` (a budget is sent exclusively on the graded
+branch), and it defaults to `true` everywhere, so an unknown model, an unreadable header, and every cloud/Ollama
+route keep the request they had before the flag existed.
+
+#### Enforcement evidence (b10201, 2026-08-24)
+
+Measured on this repo's pinned runtime — the source-build CUDA `llama-server` at commit `8f4646a6` (tag `b10201`),
+RTX 5090 — launched with the app's chat-role flags (`--jinja -c 16384 --n-gpu-layers 99 -fa on --metrics`). One
+prompt, run twice per model: *"Think very carefully and at length, exploring many cases, before answering: how
+many primes are there below 10000? Show your reasoning."* at `max_tokens: 8192`, `temperature: 0.6`, `seed: 12345`,
+once with no budget and once with `reasoning_budget_tokens: 256`. Reasoning/answer lengths are the server's own
+`/tokenize` counts of `reasoning_content` and `content`.
+
+| Model (template family, `chat_format`) | Control — no budget | With `reasoning_budget_tokens: 256` |
+| --- | --- | --- |
+| `unsloth/gemma-4-12b-it-GGUF:Q4_K_M` — specialised gemma4 parser, `peg-gemma4` | 2 382 reasoning tok → 815 answer tok, `finish_reason: stop` | **255** reasoning tok → 1 187 answer tok, `finish_reason: stop` |
+| `unsloth/qwen3.8-27b-GGUF:Q4_K_M` — generic differential autoparser, `peg-native` | 8 192 reasoning tok → **0 answer tok**, `finish_reason: length` | **255** reasoning tok → 274 answer tok, `finish_reason: stop` |
+
+The Qwen row is the failure this cap exists to prevent, observed rather than argued: uncapped, the model spent the
+entire 8 192-token generation allowance thinking and returned **no answer at all**; with the budget it produced a
+complete answer in 532 total tokens. gemma-4 does answer either way, but the budget still cut its thinking by ~89%.
+
+Secondary confirmation, from the server's own debug trace (`-lv 5`, which is what surfaces `SRV_DBG` — note that
+`-lv 1` in this build means *errors only* and prints nothing). The line is emitted only on the enforcing path, and
+`end=1 seqs` is the non-empty think-end-tag set the gate requires:
+
+```text
+gemma-4  : reasoning budget: tokens=256, generation_prompt='<|turn>model
+',            start=2 toks, end=1 seqs, forced=1 toks
+qwen3.8  : reasoning budget: tokens=256, generation_prompt='<|im_start|>assistant
+<think>
+', start=1 toks, end=1 seqs, forced=1 toks
+```
+
+Both installed families therefore ENFORCE the budget today; the enforceability flag exists for the next model
+whose template does not, and the detector tests pin all three shapes (Qwen `</think>`, gemma `<channel|>`, and a
+closing-tag-less thinking channel that stays reasoning-capable while reporting the budget unenforceable).
+
 ## Conversation compaction (non-destructive)
 
 A long conversation is kept inside the context window by **folding its older turns into a synopsis instead of
