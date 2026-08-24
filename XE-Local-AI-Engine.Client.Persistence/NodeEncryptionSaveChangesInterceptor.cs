@@ -545,6 +545,53 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
+        // Work sessions take the Development layout exactly: the session's own id fills both AAD slots on the session
+        // row, and the owning session id fills the conversation slot on every child row so a writer cannot re-parent a
+        // task, finding, checkpoint or event onto another session and have its text read back as that session's work.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<AgentWorkSession>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Objective), entry.Entity.Id, entry.Entity.Id, "work_session_objective", trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<AgentWorkSessionTask>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Title), entry.Entity.SessionId, entry.Entity.Id, "work_session_task_title", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.Detail), entry.Entity.SessionId, entry.Entity.Id, "work_session_task_detail", trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.BlockedReason),
+                entry.Entity.SessionId,
+                entry.Entity.Id,
+                "work_session_task_blocked_reason",
+                trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<AgentWorkSessionFinding>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Text), entry.Entity.SessionId, entry.Entity.Id, "work_session_finding_text", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.SourceRef), entry.Entity.SessionId, entry.Entity.Id, "work_session_finding_source_ref", trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<AgentWorkSessionCheckpoint>())
+        {
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.Summary),
+                entry.Entity.SessionId,
+                entry.Entity.Id,
+                "work_session_checkpoint_summary",
+                trackedProperties);
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.StateJson),
+                entry.Entity.SessionId,
+                entry.Entity.Id,
+                "work_session_checkpoint_state_json",
+                trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<AgentWorkSessionEvent>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.DetailJson), entry.Entity.SessionId, entry.Entity.Id, "work_session_event_detail_json", trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;
