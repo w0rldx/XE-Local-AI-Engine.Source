@@ -147,7 +147,7 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	// reloads via localStorage (NodeChatPreferencesStore), mirroring the platform ToolCallingStore. Persisted
 	// values are validated below: the model against the live model list / effort set, and the last-selected
 	// conversation against the loaded list (a stale id falls back to the first conversation).
-	const selectedModel = useNodeChatPreferencesStore((state) => state.selectedModel);
+	const preferredModel = useNodeChatPreferencesStore((state) => state.selectedModel);
 	const reasoningEffort = useNodeChatPreferencesStore((state) => state.reasoningEffort);
 	const toolsEnabled = useNodeChatPreferencesStore((state) => state.toolsEnabled);
 	const knowledgeBaseEnabled = useNodeChatPreferencesStore((state) => state.knowledgeBaseEnabled);
@@ -158,6 +158,17 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	// A scope that pins an agent wins over the stored composer preference: the session owns the binding.
 	const agentModeEnabled = scope?.pinnedAgentId ? true : preferredAgentModeEnabled;
 	const selectedAgentId = scope?.pinnedAgentId ?? preferredSelectedAgentId;
+	// …and so does the model that agent pins. The scoped selectors are read-only, so falling back to the operator's
+	// stored `/chat` choice would show a model label they cannot correct AND poll details for a model this session
+	// is not running. An agent that pins nothing (both seeded personas do) resolves to the local default — which is
+	// what the backend will actually pick — never to the stored preference.
+	const agentDefinitionsQuery = useAgentDefinitions();
+	const pinnedAgentModelProfile = scope?.pinnedAgentId
+		? agentDefinitionsQuery.data?.find((agent) => agent.id === scope.pinnedAgentId)?.modelProfile
+		: undefined;
+	// The pinned agent is not loaded yet, so the model it runs is still unknown.
+	const scopedModelPending = scope?.pinnedAgentId !== undefined && agentDefinitionsQuery.data === undefined;
+	const selectedModel = scope?.pinnedAgentId ? (pinnedAgentModelProfile ?? localDefaultModelValue) : preferredModel;
 	const {
 		setSelectedModel,
 		setReasoningEffort,
@@ -310,7 +321,6 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		return [...binaryReasoningEfforts];
 	}, [activeModelReasoningCapable, selectedModelIsCloud]);
 
-	const agentDefinitionsQuery = useAgentDefinitions();
 	// Build the live agent option list (sorted, excluding the Default Assistant by shared constant).
 	// Single derivation site — AgentSelectorCard receives this as a prop (no internal query call).
 	// Chat.tsx uses this list to gate send: a stale/deleted selectedAgentId that no longer appears here is
@@ -364,11 +374,17 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 			return;
 		}
 
+		// Under scope the displayed model comes from the pinned agent, not the store — reconciling here would
+		// rewrite the operator's own /chat preference from a session they merely opened.
+		if (isScoped) {
+			return;
+		}
+
 		const isCloudSelection = cloudModelOptions.some((option) => option.value === selectedModel);
 		if (!isCloudSelection && !modelOptions.some((option) => option.value === selectedModel)) {
 			setSelectedModel(localDefaultModelValue);
 		}
-	}, [cloudModelOptions, localModelsData, modelOptions, selectedModel, setSelectedModel]);
+	}, [cloudModelOptions, isScoped, localModelsData, modelOptions, selectedModel, setSelectedModel]);
 	// Keep the selected reasoning effort valid for the active model's reasoning mode so the composer never SENDS an
 	// effort the model can't honor. Graded models accept none/low/medium/high; binary models accept on/none; Codex
 	// models add minimal/xhigh. When the current effort isn't in the active model's set (a Codex "xhigh" carried onto
@@ -408,12 +424,10 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		() => selectedConcreteModelName.length > 0 && modelOptions.some((option) => option.value === selectedConcreteModelName),
 		[modelOptions, selectedConcreteModelName],
 	);
-	const selectedModelDetailsEnabled = shouldFetchLocalModelDetails(
-		selectedConcreteModelName,
-		selectedModelOption,
-		selectedModelIsCloud,
-		concreteModelInstalled,
-	);
+	const selectedModelDetailsEnabled =
+		// Don't poll for a name we are about to replace once the pinned agent lands.
+		!scopedModelPending &&
+		shouldFetchLocalModelDetails(selectedConcreteModelName, selectedModelOption, selectedModelIsCloud, concreteModelInstalled);
 	const { data: selectedModelDetails } = useQuery({
 		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: selectedConcreteModelName } })),
 		enabled: selectedModelDetailsEnabled,

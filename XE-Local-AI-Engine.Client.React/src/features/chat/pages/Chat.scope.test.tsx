@@ -49,9 +49,10 @@ vi.mock("@/features/chat/api/NodeChatAdapter", () => ({
 	},
 }));
 
-const { listLocalModelsQueryFn, listAgentDefinitionsQueryFn } = vi.hoisted(() => ({
+const { listLocalModelsQueryFn, listAgentDefinitionsQueryFn, getLocalModelDetailsOptionsSpy } = vi.hoisted(() => ({
 	listLocalModelsQueryFn: vi.fn(),
 	listAgentDefinitionsQueryFn: vi.fn(),
+	getLocalModelDetailsOptionsSpy: vi.fn(),
 }));
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal) => ({
@@ -61,11 +62,14 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 		queryKey: [{ _id: "listLocalModels" }],
 		queryFn: () => listLocalModelsQueryFn(),
 	})),
-	getLocalModelDetailsOptions: vi.fn(() => ({
-		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
-		queryKey: [{ _id: "getLocalModelDetails" }],
-		queryFn: async () => ({}),
-	})),
+	getLocalModelDetailsOptions: vi.fn((options: { path: { modelName: string } }) => {
+		getLocalModelDetailsOptionsSpy(options.path.modelName);
+		return {
+			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
+			queryKey: [{ _id: "getLocalModelDetails", path: options.path }],
+			queryFn: async () => ({}),
+		};
+	}),
 	listAgentDefinitionsOptions: vi.fn(() => ({
 		// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator.
 		queryKey: [{ _id: "listAgentDefinitions" }],
@@ -165,7 +169,10 @@ describe("Chat scope seam", () => {
 		installJsdomEnvironmentMocks();
 		vi.clearAllMocks();
 		listLocalModelsQueryFn.mockResolvedValue({
-			items: [{ name: "qwen3:8b", isAvailable: true, isToolCapable: true }],
+			items: [
+				{ modelName: "qwen3:8b", kind: "Chat", isToolCapable: true },
+				{ modelName: "qwen3:32b", kind: "Chat", isToolCapable: true },
+			],
 			isAvailable: true,
 			selectedModelName: "qwen3:8b",
 			configuredDefaultModelName: "qwen3:8b",
@@ -179,7 +186,7 @@ describe("Chat scope seam", () => {
 					description: "Research persona",
 					kind: "Single",
 					instructions: "research",
-					modelProfile: null,
+					modelProfile: "qwen3:32b",
 					isEnabled: true,
 				},
 			],
@@ -190,6 +197,7 @@ describe("Chat scope seam", () => {
 		);
 		adapter.resumeConversation.mockImplementation(() => emptyResumeStream());
 		useNodeChatPreferencesStore.getState().actions.setSelectedConversationId("chat-1");
+		useNodeChatPreferencesStore.getState().actions.setSelectedModel("qwen3:8b");
 	});
 
 	afterEach(() => {
@@ -228,6 +236,25 @@ describe("Chat scope seam", () => {
 		expect(screen.getByTestId("chat-model-selector-trigger").hasAttribute("disabled")).toBe(true);
 	});
 
+	it("shows the pinned agent's model, not whatever /chat last used", async () => {
+		renderChat({ conversationId: "session-conversation", pinnedAgentId: "agent-1", embedded: true });
+
+		// The store still holds the operator's own choice; the scoped composer must ignore it.
+		const trigger = await screen.findByTestId("chat-model-selector-trigger");
+		await waitFor(() => expect(trigger.textContent).toContain("qwen3:32b"));
+		expect(trigger.textContent).not.toContain("qwen3:8b");
+		expect(useNodeChatPreferencesStore.getState().selectedModel).toBe("qwen3:8b");
+	});
+
+	it("fetches details for the pinned model and never for the default", async () => {
+		renderChat({ conversationId: "session-conversation", pinnedAgentId: "agent-1", embedded: true });
+
+		await waitFor(() => expect(getLocalModelDetailsOptionsSpy).toHaveBeenCalledWith("qwen3:32b"));
+		// A stale preference resolving through to the node default is the bug this guards: the session would poll
+		// details for a model it is not running.
+		expect(getLocalModelDetailsOptionsSpy).not.toHaveBeenCalledWith("qwen3:8b");
+	});
+
 	it("routes the composer through onSendOverride and never starts a chat invocation", async () => {
 		const onSendOverride = vi.fn().mockResolvedValue(undefined);
 		renderChat({ conversationId: "session-conversation", onSendOverride, embedded: true });
@@ -239,7 +266,6 @@ describe("Chat scope seam", () => {
 		await waitFor(() => expect((screen.getByTestId("chat-send-button") as HTMLButtonElement).disabled).toBe(false));
 		fireEvent.click(screen.getByTestId("chat-send-button"));
 
-		// eslint-disable-next-line
 		await waitFor(() => expect(onSendOverride).toHaveBeenCalledWith("check the second source"));
 		expect(adapter.sendMessage).not.toHaveBeenCalled();
 	});

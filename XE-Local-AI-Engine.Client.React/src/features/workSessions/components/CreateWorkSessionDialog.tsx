@@ -103,6 +103,7 @@ export function CreateWorkSessionDialog({
 						value={kind}
 						onChange={(value) => setKind(value as WorkSessionKind)}
 						data={workSessionKinds.map((value) => ({ value, label: t(`pages.workSessions.kind.${value}`, value) }))}
+						aria-label={t("pages.workSessions.create.kindLabel", "Kind")}
 						data-testid="create-work-session-kind"
 					/>
 				</Stack>

@@ -88,7 +88,6 @@ export function useWorkSessionHub(sessionId: string | undefined, conversationId:
 		let snapshotResolved = false;
 		let watermark = 0;
 		let buffered: WorkSessionChanged[] = [];
-		const seenSequences = new Set<number>();
 
 		setState({ ...emptyState, connectionState: "connecting" });
 
@@ -109,12 +108,13 @@ export function useWorkSessionHub(sessionId: string | undefined, conversationId:
 			}
 		};
 
+		// Both call sites gate on `change.seq > watermark` first, and `watermark` is bumped here before the next one
+		// is read, so the sequence itself is the dedupe — a separate seen-set would only grow for the hook's life.
 		const apply = (change: WorkSessionChanged): void => {
-			if (change.sessionId !== sessionId || seenSequences.has(change.seq)) {
+			if (change.sessionId !== sessionId || change.seq <= watermark) {
 				return;
 			}
-			seenSequences.add(change.seq);
-			watermark = Math.max(watermark, change.seq);
+			watermark = change.seq;
 			// Every kind moves the append-only event feed.
 			invalidate(workSessionInvalidationKey(workSessionQueryIds.events, sessionId));
 			const kind = isChangeKind(change.kind) ? change.kind : undefined;
