@@ -102,10 +102,33 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             Volatile.Write(ref _interpreterPath, resolved);
             return resolved;
         }
+        catch (Exception exception) when (IsProvisioningFailure(exception, cancellationToken))
+        {
+            // Cold start reaches out to the network (the digest-pinned uv download) and then spawns uv itself, so this
+            // boundary can surface HttpRequestException, IOException, TrainingRuntimeException and an HTTP-timeout
+            // TaskCanceledException — none of which ComputeToolGateway converts. Left unwrapped they fault the whole
+            // tool invocation instead of returning the model-safe rejection every other provisioning failure returns.
+            // The inner exception is preserved (and logged here) so the operator-facing detail is not lost with it.
+            _logger.LogWarning(exception, "Provisioning the compute Python runtime failed.");
+            throw new ComputeEnvironmentException("The pinned compute runtime could not be provisioned on this node.", exception);
+        }
         finally
         {
             _provisionGate.Release();
         }
+    }
+
+    /// <summary>
+    ///     True for a provisioning failure that must be converted into the model-safe
+    ///     <see cref="ComputeEnvironmentException" />. A <see cref="ComputeEnvironmentException" /> is already in that
+    ///     shape, and a cancellation the CALLER asked for is a real cancellation and must propagate — but a
+    ///     cancellation nobody asked for is a download/sync timeout, which is exactly the expected cold-start failure
+    ///     this boundary exists to convert.
+    /// </summary>
+    private static bool IsProvisioningFailure(Exception exception, CancellationToken cancellationToken)
+    {
+        return exception is not ComputeEnvironmentException
+               && !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested);
     }
 
     private async Task<string> ProvisionAsync(CancellationToken cancellationToken)
