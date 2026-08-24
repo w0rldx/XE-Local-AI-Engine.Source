@@ -246,17 +246,25 @@ public sealed class NodeChatStreamService(
             // KB sources that grounded this turn land on the terminal row's metadata_json; null when
             // the turn used no knowledge base.
             turnContext.KnowledgeSources);
-        runTask = RunInvocationAsync(package,
-            assistantMessageId,
-            stateChannel.Writer,
-            eventSink,
-            correlation,
-            requestId,
-            sequence,
-            resolution.RequiresInstalledChatModel,
-            harnessStartedTimestamp,
-            preRunDurationMs,
-            runCancellation.Token);
+        // The AgentHome sandbox is touched only by the tool calls inside the run, so hand the workspace back the moment
+        // the run finishes rather than when this whole stream unwinds. Everything after the run — the pump's terminal
+        // hook (memory extraction can be a model call of its own), the drain below, and this iterator's own teardown —
+        // happens AFTER the client has already seen the terminal event and can have sent its next turn. The lease never
+        // queues, so any of that still holding it answers that next turn with "the AgentHome workspace is busy" for a
+        // workspace nothing is using. The scope-level disposal above stays as the fallback for a throw before this
+        // point; both are idempotent.
+        runTask = ReleaseSandboxAfterAsync(RunInvocationAsync(package,
+                assistantMessageId,
+                stateChannel.Writer,
+                eventSink,
+                correlation,
+                requestId,
+                sequence,
+                resolution.RequiresInstalledChatModel,
+                harnessStartedTimestamp,
+                preRunDurationMs,
+                runCancellation.Token),
+            staging?.Preparation);
 
         // Ownership is now established: the pump + runner are running and the finally below drives every row to the
         // runner's true terminal, so the pre-ownership guard must stand down (a client disconnect from here on must NOT
@@ -850,6 +858,24 @@ public sealed class NodeChatStreamService(
                 resolution.EffectiveModel,
                 () => CollectUserTurns(conversation, userMessage, selectedPath))
             : null;
+    }
+
+    // Releases the AgentHome workspace as soon as the invocation itself is over, whatever its outcome, then lets the
+    // run's result reach DrainRunAsync unchanged. Disposal is idempotent, so the caller's scope-level disposal remains
+    // the fallback.
+    private static async Task ReleaseSandboxAfterAsync(Task runTask, ConversationSandboxPreparation? preparation)
+    {
+        try
+        {
+            await runTask.ConfigureAwait(false);
+        }
+        finally
+        {
+            if (preparation is not null)
+            {
+                await preparation.DisposeAsync().ConfigureAwait(false);
+            }
+        }
     }
 
     // Drains the run after the SSE consumer is gone. The pump is observed FIRST: on a persistence fault it faults here,
