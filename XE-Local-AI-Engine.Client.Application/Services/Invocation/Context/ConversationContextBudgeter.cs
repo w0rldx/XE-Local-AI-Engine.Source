@@ -7,7 +7,8 @@ using Microsoft.Extensions.Options;
 /// <summary>
 ///     Deterministic, LLM-free implementation of <see cref="IConversationContextBudgeter" />. Groups the history into
 ///     turns (a user message and every assistant/tool message that follows it up to the next user message), always keeps
-///     system messages and the most recent <see cref="ConversationContextBudgetOptions.RecentTurnKeepCount" /> turns,
+///     system messages, tool-approval correlation records, and the most recent
+///     <see cref="ConversationContextBudgetOptions.RecentTurnKeepCount" /> turns,
 ///     and when the estimate exceeds the budget reduces in two ordered passes: first shorten oversized historical tool
 ///     results to an excerpt, then drop the oldest turns whole. Because tool-call and tool-result messages of one turn
 ///     share a turn index, dropping a turn never orphans a tool-call from its result, and the protected recent turns —
@@ -88,6 +89,15 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
 
         var maxTurn = turn;
 
+        // Approval correlation records outlive the turn window. FunctionInvokingChatClient pairs each
+        // ToolApprovalRequestContent with the ToolApprovalResponseContent replayed for it, and the approval validator
+        // fails the whole invocation when a replayed batch carries one without the other — or, for an already-resolved
+        // round, without the FunctionResultContent that decision produced. Every replayed decision is its own
+        // ChatRole.User message, so a turn using many approved tools puts each resolved round in its own turn, far
+        // outside the keep window the floor below protects; whole-turn dropping would then split pairs that must stay
+        // together. Pinning is per message, not per turn, so the surrounding history still trims.
+        var pinned = BuildApprovalPins(messages);
+
         // Floor of 2, even against a mis-set config: the approval-replay path splits one in-flight round across two
         // turns — the assistant tool-call (and its approval request) land in turn M, and the User approval-decision
         // that FunctionInvokingChatClient replays lands in turn M+1. Protecting only one turn could drop turn M and
@@ -129,7 +139,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         {
             for (var i = 0; i < count; i++)
             {
-                if (dropped[i] || turnOf[i] != t || working[i].Role == ChatRole.System)
+                if (dropped[i] || turnOf[i] != t || working[i].Role == ChatRole.System || (pinned is not null && pinned[i]))
                 {
                     continue;
                 }
@@ -160,6 +170,76 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
             EstimatedTokensAfter = currentEstimate,
             ExceedsBudget = currentEstimate > effectiveBudget
         };
+    }
+
+    /// <summary>
+    ///     Flags the messages Pass 2 must never drop because doing so would break a tool-approval correlation: the
+    ///     messages carrying a <see cref="ToolApprovalRequestContent" /> or <see cref="ToolApprovalResponseContent" />,
+    ///     plus every message holding a <see cref="FunctionResultContent" /> for one of their tool calls (a resolved
+    ///     round's response is only replayable while its result is still in the batch). Returns null when the history
+    ///     holds no approval content at all, which is the common case and costs one scan.
+    ///     <para>
+    ///         Deliberately NOT applied to Pass 1: the approval records themselves hold neither a tool result nor
+    ///         tool-role text, so excerpting cannot touch them, while the paired results must stay excerptable or a
+    ///         long approved-tool turn would leave the budget nothing to reclaim. Excerpting preserves the CallId the
+    ///         validator matches on, so it never breaks the correlation.
+    ///     </para>
+    /// </summary>
+    private static bool[]? BuildApprovalPins(IReadOnlyList<ChatMessage> messages)
+    {
+        bool[]? pinned = null;
+        HashSet<string>? approvedCallIds = null;
+
+        for (var i = 0; i < messages.Count; i++)
+        {
+            foreach (var content in messages[i].Contents)
+            {
+                var toolCall = content switch
+                {
+                    ToolApprovalRequestContent request => request.ToolCall,
+                    ToolApprovalResponseContent response => response.ToolCall,
+                    _ => null
+                };
+
+                if (toolCall is null)
+                {
+                    continue;
+                }
+
+                pinned ??= new bool[messages.Count];
+                pinned[i] = true;
+
+                if (!string.IsNullOrEmpty(toolCall.CallId))
+                {
+                    approvedCallIds ??= new HashSet<string>(StringComparer.Ordinal);
+                    _ = approvedCallIds.Add(toolCall.CallId);
+                }
+            }
+        }
+
+        if (pinned is null || approvedCallIds is null)
+        {
+            return pinned;
+        }
+
+        for (var i = 0; i < messages.Count; i++)
+        {
+            if (pinned[i])
+            {
+                continue;
+            }
+
+            foreach (var content in messages[i].Contents)
+            {
+                if (content is FunctionResultContent result && approvedCallIds.Contains(result.CallId))
+                {
+                    pinned[i] = true;
+                    break;
+                }
+            }
+        }
+
+        return pinned;
     }
 
     /// <summary>

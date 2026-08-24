@@ -164,6 +164,96 @@ public sealed class ConversationContextBudgeterTests
     }
 
     [Test]
+    public void Budget_WhenManyApprovalRoundsPushOverBudget_KeepsEveryApprovalPairAndItsResult()
+    {
+        // One long tool-using turn with four approval rounds. Each replayed decision is its own ChatRole.User message,
+        // so the rounds occupy turns 2..5 and the keep-count floor protects only the last two — the earlier rounds are
+        // squarely inside the droppable region. Dropping turn 2 whole would take call-1's REQUEST while its response in
+        // turn 3 survived, which is the orphan the approval validator fails the whole invocation on.
+        var (request1, response1) = ApprovalRound("call-1", "search");
+        var (request2, response2) = ApprovalRound("call-2", "search");
+        var (request3, response3) = ApprovalRound("call-3", "search");
+        var (request4, _) = ApprovalRound("call-4", "search");
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            Assistant("a0"),
+            User("u1"),
+            Assistant("a1"),
+            User("run the tools"),
+            request1,
+            response1,
+            ToolResult("call-1", "r1"),
+            request2,
+            response2,
+            ToolResult("call-2", "r2"),
+            request3,
+            response3,
+            ToolResult("call-3", "r3"),
+            // The in-flight round: its request is surfaced but no decision has been replayed for it yet.
+            request4
+        };
+        var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 2);
+
+        // 150 tokens; budget 100 drops the two ordinary turns (40) plus the lone unpinned message of turn 2 (10).
+        var result = sut.Budget(messages, contextTokenCapacity: 100, reservedOutputTokens: 0);
+
+        AssertEx.True(result.Trimmed);
+        AssertEx.False(result.ExceedsBudget);
+        AssertEx.Equal(expected: 5, result.MessagesDropped);
+        AssertEx.False(ContainsText(result.Messages, "u0"), "ordinary history must still be reclaimed");
+        AssertEx.False(ContainsText(result.Messages, "u1"));
+        AssertEx.False(ContainsText(result.Messages, "run the tools"), "the unpinned message of a partly pinned turn still drops");
+        AssertNoOrphanedApprovals(result.Messages);
+        // A resolved round is only replayable while the result its decision produced is also in the batch.
+        AssertEx.Contains(ResultCallIds(result.Messages), "call-1", "a resolved approval keeps the result it produced");
+        AssertEx.Contains(ResultCallIds(result.Messages), "call-2");
+        AssertEx.Contains(ResultCallIds(result.Messages), "call-3");
+    }
+
+    [Test]
+    public void Budget_ExcerptsAnApprovedToolResult_RatherThanPinningItWholesale()
+    {
+        // Pinning approval rounds must not cost the budget its only lever over a long approved-tool turn: the paired
+        // results stay excerptable, and excerpting preserves the call id the approval validator matches on.
+        var bigResult = new string('x', 1000);
+        var (request1, response1) = ApprovalRound("call-1", "search");
+        var (request2, response2) = ApprovalRound("call-2", "search");
+        var (request3, response3) = ApprovalRound("call-3", "search");
+        var (request4, _) = ApprovalRound("call-4", "search");
+        var messages = new List<ChatMessage>
+        {
+            User("u0"),
+            Assistant("a0"),
+            User("start-tools"),
+            request1,
+            // The oversized result belongs to round 1, two rounds back — outside the protected recent window and so
+            // inside the region Pass 1 excerpts.
+            response1,
+            ToolResult("call-1", bigResult),
+            request2,
+            response2,
+            ToolResult("call-2", "ok"),
+            request3,
+            response3,
+            ToolResult("call-3", "ok3"),
+            request4
+        };
+        var sut = CreateSut(CharCountEstimator(), recentTurnKeepCount: 2, historicalToolResultExcerptChars: 50);
+
+        // 1020 chars; budget 200 is met by excerpting the oversized result alone, so nothing has to drop.
+        var result = sut.Budget(messages, contextTokenCapacity: 200, reservedOutputTokens: 0);
+
+        AssertEx.True(result.Trimmed);
+        AssertEx.Equal(expected: 0, result.MessagesDropped);
+        AssertEx.Equal(expected: 1, result.ToolResultsTruncated);
+        AssertEx.Equal(expected: 950, result.CharsTruncated);
+        AssertEx.Contains(FindToolResultText(result.Messages, "call-1"), "[truncated: 950 chars omitted]");
+        AssertEx.Contains(ResultCallIds(result.Messages), "call-1", "excerpting must preserve the call id");
+        AssertNoOrphanedApprovals(result.Messages);
+    }
+
+    [Test]
     public void Budget_WhenAlwaysKeepSetExceedsBudget_KeepsItAndFlagsOverflow()
     {
         // Two turns, keep-count 4 -> every turn is protected; nothing is droppable.
@@ -338,6 +428,15 @@ public sealed class ConversationContextBudgeterTests
         return new ChatMessage(ChatRole.Assistant, [new FunctionCallContent(callId, name, new Dictionary<string, object?>())]);
     }
 
+    // One resolved approval round as the runner replays it: the assistant segment carrying the request, then the
+    // separate user message carrying the decision FunctionInvokingChatClient correlates back to it by request id.
+    private static (ChatMessage Request, ChatMessage Response) ApprovalRound(string callId, string toolName)
+    {
+        var request = new ToolApprovalRequestContent(callId, new FunctionCallContent(callId, toolName));
+        return (new ChatMessage(ChatRole.Assistant, [request]),
+            new ChatMessage(ChatRole.User, [request.CreateResponse(approved: true, "Approved by user.")]));
+    }
+
     private static ChatMessage ToolResult(string callId, string result)
     {
         return new ChatMessage(ChatRole.Tool, [new FunctionResultContent(callId, result)]);
@@ -371,6 +470,15 @@ public sealed class ConversationContextBudgeterTests
         foreach (var resultId in ResultCallIds(messages))
         {
             AssertEx.Contains(callIds, resultId, "a tool result must retain its originating tool call");
+        }
+    }
+
+    private static void AssertNoOrphanedApprovals(IReadOnlyList<ChatMessage> messages)
+    {
+        var requestIds = messages.SelectMany(m => m.Contents.OfType<ToolApprovalRequestContent>()).Select(r => r.RequestId).ToList();
+        foreach (var response in messages.SelectMany(m => m.Contents.OfType<ToolApprovalResponseContent>()))
+        {
+            AssertEx.Contains(requestIds, response.RequestId, "an approval response must retain its originating request");
         }
     }
 
