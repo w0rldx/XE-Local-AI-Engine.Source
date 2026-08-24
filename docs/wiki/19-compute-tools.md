@@ -127,7 +127,7 @@ It is **offered only when**:
 
 **Rationale**: The tool executes model-authored code on the node. Offering it to a remote model — especially when the model cannot see the code's effect before committing to it — is a sharper version of the "arbitrary code execution offered to a model" concern the Custom Tool denylist was built to prevent. The operator who shapes an agent definition chooses its tools; the tool is never speculatively offered.
 
-Seeded agent example: `MathematicianAgentSeeder` (`Services/Agents/Implementation/MathematicianAgentSeeder.cs`) names `run_python` in its `AllowedToolNames`, which is how a Mathematician agent gets access to it.
+Seeded agent example: `MathematicianAgentSeeder` (`Services/Agents/Implementation/MathematicianAgentSeeder.cs`) names `run_python` in its `AllowedToolNames`, which is how a Mathematician agent gets access to it. **The seeder is itself gated on `Compute:Enabled`**: it runs at startup only when the kill-switch is on, so the shipped (disabled) configuration never publishes an agent whose only tool is refused on every call. Enabling compute seeds the Mathematician on the **next start**, not immediately. Disabling it again does **not** remove an agent that was already seeded — the seeder is additive-only and never deletes.
 
 ### 3.3 Configuration kill-switch and defaults
 
@@ -183,6 +183,8 @@ Set `Compute:Enabled=true` in configuration:
   }
 }
 ```
+
+Restart the node afterwards: the `Mathematician` agent (§3.2) is seeded at startup only when this switch is on, so it appears in the agent list on the next start.
 
 ### 5.2 Offer the tool to an agent profile
 
@@ -276,7 +278,7 @@ curl -X POST http://localhost:5000/api/local/v1/agents/invoke \
 | `Services/Compute/IComputePythonEnvironment.cs` | Venv provisioning contract |
 | `Services/Compute/Implementation/ComputePythonEnvironment.cs` | Resolves/provisions the venv via shared `uv` helper against `tools/compute/uv.lock` |
 | `Services/Chat/Implementation/LocalToolOfferProvider.cs` | Merges compute offer DTO; gates profile-opt-in and cloud-model exclusion |
-| `Services/Agents/Implementation/MathematicianAgentSeeder.cs` | Seeded Mathematician agent with `run_python` in `AllowedToolNames` |
+| `Services/Agents/Implementation/MathematicianAgentSeeder.cs` | Seeded Mathematician agent with `run_python` in `AllowedToolNames`; seeds only when `Compute:Enabled` is true |
 | `DependencyInjection/Modules/AddNodeComputeExtensions.cs` | DI module; registers handler, gateway, options, environment; mirrors `AddNodeAgentHomeExtensions` |
 | `tools/compute/pyproject.toml` | Venv dependency specification (numpy, scipy, sympy pins) |
 | `tools/compute/uv.lock` | Locked venv closure (committed to repo, used by `uv sync --locked`) |

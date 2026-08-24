@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Compute;
@@ -14,6 +15,13 @@ using XE_Local_AI_Engine.Client.Services.Compute;
 ///         offer and merged into the profile pool only for a profile that names it, so without a definition that names
 ///         it the tool is inert. Its approval stays <see langword="true" /> — the seed opts INTO the tool, never out of
 ///         the approval round-trip.
+///     </para>
+///     <para>
+///         <b>Gated on <c>Compute:Enabled</c>.</b> The persona's only tool is <c>run_python</c>, which a disabled node
+///         refuses on every call, so seeding it there would publish an agent that cannot do the one thing it exists
+///         for. When the kill-switch is off the seeder logs once and skips; it never DELETES an already-seeded row, so
+///         turning the switch back off leaves an existing Mathematician (and any operator edits to it) intact — the
+///         seeder stays additive-only in both directions. Enabling compute seeds it on the next start.
 ///     </para>
 ///     <para>
 ///         <b>Idempotent + self-healing.</b> It seeds only when the slug is absent from
@@ -54,17 +62,34 @@ public sealed class MathematicianAgentSeeder : IHostedService
         small enough that a reader can check it.
         """;
 
+    private readonly bool _computeEnabled;
     private readonly ILogger<MathematicianAgentSeeder> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public MathematicianAgentSeeder(IServiceScopeFactory scopeFactory, ILogger<MathematicianAgentSeeder> logger)
+    // Reads the kill-switch through the validated options, the same way RunPythonToolHandler does, so
+    // ComputeOptions.Enabled stays the single definition of "is this node allowed to execute code" instead of this
+    // seeder growing a second reading of the raw configuration.
+    public MathematicianAgentSeeder(IServiceScopeFactory scopeFactory,
+        IOptions<ComputeOptions> computeOptions,
+        ILogger<MathematicianAgentSeeder> logger)
     {
+        ArgumentNullException.ThrowIfNull(computeOptions);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _computeEnabled = computeOptions.Value.Enabled;
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        if (!_computeEnabled)
+        {
+            // One line per start, not per call: an operator who wonders where the agent went gets the reason and the
+            // fix, and a node that never enables compute pays a single Information line at boot.
+            _logger.LogInformation(
+                "Skipped seeding the Mathematician agent definition because the compute tool is disabled on this node (Compute:Enabled=false); it is seeded on the next start after compute is enabled.");
+            return;
+        }
+
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();

@@ -504,7 +504,9 @@ public static class ConfigureServices
         builder.Services.AddHostedService<CoderAgentSeeder>();
         // Seeds the node-local "Mathematician" agent definition — the one persona that opts into the sandboxed
         // run_python compute tool, which is profile-opt-in only and therefore unreachable without a definition naming
-        // it. Idempotent by slug and self-healing across boots, like the two seeders above.
+        // it. Idempotent by slug and self-healing across boots, like the two seeders above. Registered
+        // unconditionally, but the seeder itself skips when Compute:Enabled is false (its only tool is refused on a
+        // disabled node), so the gate reads the validated ComputeOptions rather than the raw configuration here.
         builder.Services.AddHostedService<MathematicianAgentSeeder>();
         builder.Services.AddHostedService<ToolCallCleanupService>();
         // Encrypts any legacy plaintext message rows (content + metadata_json written before content encryption
