@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 
 using System.Globalization;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
 /// <summary>
 ///     The pure, side-effect-free mapping from (requested policy × measured host containment × the command) to the exact
@@ -151,6 +152,51 @@ public static class SandboxLaunchPlan
             AppliedResourceLimits = applyLimits,
             AppliedNetworkIsolation = applyNetwork,
             WrapperEnvironment = wrapperEnvironment
+        };
+    }
+
+    /// <summary>
+    ///     The ISOLATED layer: the descriptor for a command that runs behind a filesystem boundary. It is a different
+    ///     chain rather than another optional wrapper on the existing one, because the mechanisms overlap — the
+    ///     namespaces <c>bwrap</c> creates subsume what <c>unshare</c> did, and <c>--clearenv</c> subsumes the
+    ///     <c>env -u</c> layer — and composing both would produce a chain in which neither half's guarantees are
+    ///     legible.
+    ///     <para>
+    ///         Everything here is already decided: <paramref name="launch" /> holds the rendered vector and the unit
+    ///         name, and the flags below are facts about that vector rather than a second opinion about the host. A
+    ///         command reaching this point has already been accepted by the registry against a host the probe measured
+    ///         able to isolate, so there is no degradation branch — an isolated launch either happens or the create
+    ///         request was refused.
+    ///     </para>
+    /// </summary>
+    internal static SandboxLaunchDescriptor CreateIsolated(SandboxIsolationLaunch launch,
+        SandboxLaunchPolicy policy,
+        SandboxContainment containment)
+    {
+        ArgumentNullException.ThrowIfNull(launch);
+        ArgumentNullException.ThrowIfNull(policy);
+        ArgumentNullException.ThrowIfNull(containment);
+
+        var chain = launch.Chain;
+
+        return new SandboxLaunchDescriptor
+        {
+            FileName = chain[0],
+            Arguments = [.. chain.Skip(1)],
+            // setsid is unconditional in the isolated chain, so the pid started really is a process-group leader and
+            // the PGID fallback kill has a legitimate target.
+            AppliedProcessGroup = true,
+            AppliedResourceLimits = NormalizeLimits(policy.ResourceLimits) is not null,
+            // bwrap's --unshare-net is an empty network namespace by construction; the probe proves it by failing a
+            // loopback connect that succeeds outside.
+            AppliedNetworkIsolation = true,
+            AppliedFilesystemIsolation = true,
+            ScopeUnitName = launch.ScopeUnitName,
+            LaunchResources = launch,
+            // systemd-run --user still needs the bus address. The isolated chain needs no env -u layer to take it away
+            // again: --clearenv inside bwrap removes the whole environment before the workload runs.
+            WrapperEnvironment = containment.FilesystemIsolation?.UserBusEnvironment
+                                 ?? new Dictionary<string, string>(StringComparer.Ordinal)
         };
     }
 

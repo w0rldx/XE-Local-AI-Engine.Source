@@ -1,5 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
+
 /// <summary>
 ///     Startup <see cref="IHostedService" /> that reaps sandbox children orphaned by a previous run of THIS app, and the
 ///     stale jails they left behind. It is the direct structural mirror of <c>StaleLlamaServerReaper</c>.
@@ -41,13 +44,15 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 /// </remarks>
 public sealed class SandboxOrphanReaper : IHostedService
 {
+    private readonly ISandboxContainmentProbe? _containmentProbe;
     private readonly ISandboxProcessGroupKiller _killer;
     private readonly ILogger<SandboxOrphanReaper> _logger;
     private readonly ISandboxMarkerStore _markerStore;
 
     public SandboxOrphanReaper(ISandboxMarkerStore markerStore,
         ISandboxProcessGroupKiller killer,
-        ILogger<SandboxOrphanReaper> logger)
+        ILogger<SandboxOrphanReaper> logger,
+        ISandboxContainmentProbe? containmentProbe = null)
     {
         ArgumentNullException.ThrowIfNull(markerStore);
         ArgumentNullException.ThrowIfNull(killer);
@@ -55,6 +60,9 @@ public sealed class SandboxOrphanReaper : IHostedService
         _markerStore = markerStore;
         _killer = killer;
         _logger = logger;
+        // Optional so the existing marker-only tests construct the reaper unchanged. When present it supplies the
+        // systemctl path and bus address the transient-scope sweep needs.
+        _containmentProbe = containmentProbe;
     }
 
     /// <inheritdoc />
@@ -87,7 +95,11 @@ public sealed class SandboxOrphanReaper : IHostedService
 
         var containerRoot = Path.GetFullPath(SandboxPaths.ContainerRoot);
         var reapedGroups = 0;
+        var reapedScopes = 0;
         var deletedJails = 0;
+
+        var scopeKiller = SandboxScopeUnitKiller.TryCreate(_containmentProbe?.Containment.FilesystemIsolation);
+        var liveScopeUnits = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var (markerId, marker) in markers)
         {
@@ -95,7 +107,22 @@ public sealed class SandboxOrphanReaper : IHostedService
             // in place, since deleting it would blind the reaper to that child if the owner later crashes.
             if (_killer.IsProcessAlive(marker.OwnerProcessId))
             {
+                if (marker.ScopeUnitName is { } liveUnit)
+                {
+                    // Remember it: the scope sweep below must not touch a unit that belongs to a worker still running.
+                    _ = liveScopeUnits.Add(liveUnit);
+                }
+
                 continue;
+            }
+
+            // The scope's cgroup, when there was one. Unlike the process-group signal this needs no pid-reuse guard:
+            // a unit NAME carries a fresh GUID per command and is never recycled, so the only thing it can ever
+            // identify is the command that generated it.
+            if (marker.ScopeUnitName is { } unitName && scopeKiller is not null)
+            {
+                await scopeKiller.KillAsync(unitName, cancellationToken).ConfigureAwait(false);
+                reapedScopes++;
             }
 
             // Gate 2: only signal the group when the leader is still the process we launched.
@@ -113,12 +140,55 @@ public sealed class SandboxOrphanReaper : IHostedService
             _markerStore.Delete(markerId);
         }
 
-        if (reapedGroups > 0 || deletedJails > 0)
+        reapedScopes += await SweepUnreferencedScopesAsync(scopeKiller, liveScopeUnits, cancellationToken).ConfigureAwait(false);
+
+        if (reapedGroups > 0 || reapedScopes > 0 || deletedJails > 0)
         {
-            _logger.LogInformation("Reaped {Groups} orphaned sandbox process group(s) and removed {Jails} stale jail(s) left by a previous run.",
+            _logger.LogInformation(
+                "Reaped {Groups} orphaned sandbox process group(s) and {Scopes} transient scope(s), and removed {Jails} stale jail(s) left by a previous run.",
                 reapedGroups,
+                reapedScopes,
                 deletedJails);
         }
+    }
+
+    /// <summary>
+    ///     Kills every transient scope this engine owns that no LIVE worker still claims.
+    ///     <para>
+    ///         A scope with <c>--collect</c> disappears on its own as soon as its cgroup is empty, so anything still
+    ///         loaded here has processes in it. The only such scope that legitimately exists at startup belongs to a
+    ///         second worker instance that is still running — which is exactly the set collected above from markers
+    ///         with live owners, and exactly the set skipped here. Everything else is a jail whose supervising engine
+    ///         died, and whose <c>RuntimeMaxSec</c> would otherwise be the only thing that ever stopped it.
+    ///     </para>
+    ///     <para>
+    ///         The unit-name shape is checked twice — once when listing, once inside the killer — because this is the
+    ///         one place the reaper acts on a name it did not read from its own marker file.
+    ///     </para>
+    /// </summary>
+    private async Task<int> SweepUnreferencedScopesAsync(SandboxScopeUnitKiller? scopeKiller,
+        IReadOnlySet<string> liveScopeUnits,
+        CancellationToken cancellationToken)
+    {
+        if (scopeKiller is null)
+        {
+            return 0;
+        }
+
+        var swept = 0;
+        foreach (var unitName in scopeKiller.ListEngineOwnedUnits())
+        {
+            if (liveScopeUnits.Contains(unitName))
+            {
+                continue;
+            }
+
+            _logger.LogInformation("Reaping orphaned sandbox scope {Unit} left by a previous run.", unitName);
+            await scopeKiller.KillAsync(unitName, cancellationToken).ConfigureAwait(false);
+            swept++;
+        }
+
+        return swept;
     }
 
     private async Task<bool> TryReapProcessGroupAsync(SandboxProcessMarker marker, CancellationToken cancellationToken)

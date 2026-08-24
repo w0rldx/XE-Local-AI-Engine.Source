@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using System.ComponentModel;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
 /// <summary>
 ///     The production <see cref="ISandboxContainmentProbe" />: measures what this host can really do by EXERCISING each
@@ -36,12 +37,24 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
     ];
 
     private readonly Lazy<SandboxContainment> _containment;
+    private readonly Func<IReadOnlyDictionary<string, string>, SandboxFilesystemIsolationProbeResult> _filesystemProbe;
     private readonly ILogger<HostSandboxContainmentProbe> _logger;
 
     // The logger is optional so tests can construct the probe directly; ActivatorUtilities injects it in production.
     public HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger = null)
+        : this(logger, HostSandboxFilesystemIsolationProbe.Measure)
     {
+    }
+
+    // The filesystem-isolation probe is injectable for one reason: a test has to be able to make it FAIL and show that
+    // the resource-limit and network results survive that failure intact. That independence is a contract, not an
+    // implementation detail, so it is testable rather than asserted in prose.
+    internal HostSandboxContainmentProbe(ILogger<HostSandboxContainmentProbe>? logger,
+        Func<IReadOnlyDictionary<string, string>, SandboxFilesystemIsolationProbeResult> filesystemProbe)
+    {
+        ArgumentNullException.ThrowIfNull(filesystemProbe);
         _logger = logger ?? NullLogger<HostSandboxContainmentProbe>.Instance;
+        _filesystemProbe = filesystemProbe;
         _containment = new Lazy<SandboxContainment>(Measure, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
@@ -62,7 +75,8 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             return SandboxContainment.None with
             {
                 ResourceLimitsUnavailableReason = "the containment probe failed",
-                NetworkIsolationUnavailableReason = "the containment probe failed"
+                NetworkIsolationUnavailableReason = "the containment probe failed",
+                FilesystemIsolationUnavailableReason = "the containment probe failed"
             };
         }
     }
@@ -78,7 +92,8 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             return SandboxContainment.None with
             {
                 ResourceLimitsUnavailableReason = reason,
-                NetworkIsolationUnavailableReason = reason
+                NetworkIsolationUnavailableReason = reason,
+                FilesystemIsolationUnavailableReason = reason
             };
         }
 
@@ -90,9 +105,12 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
 
         var (limitsActive, limitsReason, userBusEnvironment) = MeasureResourceLimits(setsid: setsid, systemdRun: systemdRun, envBinary: envBinary, trueBinary: trueBinary);
         var (networkActive, networkReason) = MeasureNetworkIsolation(unshare, trueBinary);
+        var filesystem = MeasureFilesystemIsolation(CollectUserBusEnvironment());
 
         var containment = new SandboxContainment
         {
+            FilesystemIsolation = filesystem.Isolation,
+            FilesystemIsolationUnavailableReason = filesystem.Reason,
             SupportsProcessGroup = setsid is not null,
             SupportsResourceLimits = limitsActive,
             SupportsNetworkIsolation = networkActive,
@@ -105,14 +123,41 @@ public sealed class HostSandboxContainmentProbe : ISandboxContainmentProbe
             NetworkIsolationUnavailableReason = networkReason
         };
 
-        _logger.LogInformation("Sandbox containment probe: process group {ProcessGroup}, resource limits {Limits}{LimitsReason}, network isolation {Network}{NetworkReason}.",
+        _logger.LogInformation(
+            "Sandbox containment probe: process group {ProcessGroup}, resource limits {Limits}{LimitsReason}, network isolation {Network}{NetworkReason}, filesystem isolation {Filesystem}{FilesystemReason}.",
             containment.SupportsProcessGroup,
             containment.SupportsResourceLimits,
             limitsReason is null ? string.Empty : $" ({limitsReason})",
             containment.SupportsNetworkIsolation,
-            networkReason is null ? string.Empty : $" ({networkReason})");
+            networkReason is null ? string.Empty : $" ({networkReason})",
+            containment.SupportsFilesystemIsolation,
+            filesystem.Reason is null ? string.Empty : $" ({filesystem.Reason})");
 
         return containment;
+    }
+
+    /// <summary>
+    ///     Runs the filesystem-isolation measurement inside its OWN guard.
+    ///     <para>
+    ///         The separate catch is the point. This probe does far more than the other two — it opens descriptors,
+    ///         creates memory files, starts a five-namespace chain and runs a shell script inside it — so it has far
+    ///         more ways to fail, and a shared guard would let one of those failures erase the resource-limit and
+    ///         network-isolation results that were already measured successfully. A host that cannot isolate the
+    ///         filesystem must keep every ceiling and every egress denial it does have.
+    ///     </para>
+    /// </summary>
+    private SandboxFilesystemIsolationProbeResult MeasureFilesystemIsolation(IReadOnlyDictionary<string, string> userBusEnvironment)
+    {
+        try
+        {
+            return _filesystemProbe(userBusEnvironment);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "The sandbox filesystem-isolation probe failed; the filesystem boundary will not be advertised.");
+
+            return new SandboxFilesystemIsolationProbeResult(Isolation: null, $"the filesystem isolation probe threw: {exception.Message}");
+        }
     }
 
     /// <summary>

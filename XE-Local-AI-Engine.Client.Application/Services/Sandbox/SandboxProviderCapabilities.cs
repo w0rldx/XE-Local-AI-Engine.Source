@@ -17,5 +17,12 @@ public enum SandboxProviderCapabilities
     SupportsCommandCancellation = 1 << 5,
     SupportsAttach = 1 << 6,
     SupportsKill = 1 << 7,
-    SupportsTrustedHostWorkspace = 1 << 8
+    SupportsTrustedHostWorkspace = 1 << 8,
+
+    /// <summary>
+    ///     The provider can run a command with the host filesystem absent from its mount namespace
+    ///     (<see cref="SandboxIsolationMode.Filesystem" />). Advertised only where a probe has EXERCISED the real
+    ///     chain and confirmed its positive controls, never on the strength of a binary being installed.
+    /// </summary>
+    SupportsFilesystemIsolation = 1 << 9
 }

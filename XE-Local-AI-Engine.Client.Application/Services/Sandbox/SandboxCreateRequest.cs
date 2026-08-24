@@ -8,6 +8,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 public sealed record SandboxCreateRequest
 {
     private readonly long? _maxJailDiskBytes;
+    private readonly int? _threadLimit;
 
     /// <summary>Owner/node-scoped identity for the sandbox.</summary>
     public required SandboxAttachKey AttachKey { get; init; }
@@ -23,6 +24,53 @@ public sealed record SandboxCreateRequest
 
     /// <summary>Optional provider-neutral labels/metadata to associate with the sandbox.</summary>
     public IReadOnlyDictionary<string, string>? Labels { get; init; }
+
+    /// <summary>
+    ///     How strongly this sandbox's commands are separated from the host filesystem. Defaults to
+    ///     <see cref="SandboxIsolationMode.None" />, which is exactly the behaviour every existing caller already has:
+    ///     opting in is the only way to change anything.
+    ///     <para>
+    ///         Unlike <see cref="ResourceLimits" /> this is NOT a preference a provider may quietly drop. A provider
+    ///         that cannot deliver it rejects the request with <see cref="SandboxCapabilityNotSupportedException" />,
+    ///         because a caller asking for a filesystem boundary is asking for the one thing it must not be wrong
+    ///         about.
+    ///     </para>
+    /// </summary>
+    public SandboxIsolationMode Isolation { get; init; } = SandboxIsolationMode.None;
+
+    /// <summary>
+    ///     Host trees the isolated sandbox must be able to READ, bound read-only at their own canonical paths. Only
+    ///     meaningful with <see cref="SandboxIsolationMode.Filesystem" />; supplying them without it is rejected,
+    ///     because under the non-isolated mode the sandbox can already read the whole host filesystem and honouring
+    ///     the list would suggest a narrowing that did not happen.
+    ///     <para>
+    ///         Engine-generated only, and deliberately narrow: name the interpreter tree, never the directory that
+    ///         also holds the scratch, the cache or the lock state a later command would inherit.
+    ///     </para>
+    /// </summary>
+    public IReadOnlyList<string>? ReadOnlyTrees { get; init; }
+
+    /// <summary>
+    ///     The value every numeric-library thread-count variable is pinned to inside an isolated sandbox. Left unset
+    ///     it is one. It exists because those libraries size their pools from the HOST's core count, which is not what
+    ///     the sandbox's CPU quota allows — an unpinned BLAS starts a thread per host core and then thrashes inside a
+    ///     fraction of one.
+    /// </summary>
+    public int? ThreadLimit
+    {
+        get => _threadLimit;
+        init
+        {
+            if (value is { } limit && limit <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value),
+                    limit,
+                    "A sandbox thread limit must be greater than zero; omit it to pin every numeric library to a single thread.");
+            }
+
+            _threadLimit = value;
+        }
+    }
 
     /// <summary>
     ///     Optional per-sandbox ceiling, in bytes, on how much THIS sandbox's commands may leave in its jail directory.

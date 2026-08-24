@@ -7,6 +7,7 @@ using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 
 /// <summary>
@@ -244,6 +245,11 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 capabilities |= SandboxProviderCapabilities.SupportsNetworkPolicy;
             }
 
+            if (containment.SupportsFilesystemIsolation)
+            {
+                capabilities |= SandboxProviderCapabilities.SupportsFilesystemIsolation;
+            }
+
             return capabilities;
         }
     }
@@ -310,7 +316,35 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // timeout and tree-kill all continue to behave exactly as before. It is deliberately applied AFTER the
         // environment scrub, because the resource-limit wrapper needs the user-bus address the scrub would otherwise
         // have removed — and strips it again before the sandboxed executable runs.
-        var launch = _launcher.Apply(startInfo, state.LaunchPolicy);
+        SandboxLaunchDescriptor launch;
+        try
+        {
+            launch = _launcher.Apply(startInfo,
+                state.LaunchPolicy,
+                new SandboxLaunchContext
+                {
+                    JailRoot = state.JailRoot,
+                    CommandTimeout = request.Timeout
+                });
+        }
+        catch (SandboxIsolationUnavailableException exception)
+        {
+            // FAIL CLOSED, and non-throwing. The sandbox was created against a host the probe measured able to
+            // isolate, so getting here means something changed underneath (a jail whose mode was altered, a helper
+            // replaced, a kernel knob turned off). Running the command anyway would put a workload that was promised a
+            // filesystem boundary directly onto the host filesystem, so it is NOT run — and the caller learns why in
+            // the same result shape a failed launch already produces.
+            _logger.LogError(exception, "The sandbox filesystem boundary could not be established; the command was not run.");
+
+            return new SandboxCommandResult
+            {
+                ExecutionId = request.ExecutionId,
+                ExitCode = -1,
+                StandardError = $"The sandbox filesystem boundary could not be established ({exception.Message}); the command was not run.",
+                Completed = false,
+                Duration = _timeProvider.GetUtcNow() - startedAt
+            };
+        }
 
         var process = new Process
         {
@@ -334,6 +368,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         }
         catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
         {
+            launch.LaunchResources?.Dispose();
             process.Dispose();
             // The executable could not be launched (not found / not executable). Surface a non-completed result rather
             // than throwing, so the AgentHome run flow records a failed command the same way a non-zero exit does.
@@ -347,6 +382,11 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             };
         }
 
+        // The chain has been exec'd and the child holds its own copies of every descriptor the argument vector names,
+        // so the engine's copies are released here. Holding them for the command's lifetime would leak one descriptor
+        // per bind per command, which over a long session exhausts the engine's own table.
+        launch.LaunchResources?.Dispose();
+
         // Record the live process group so a hard host kill (which skips Dispose/KillAsync entirely) leaves something
         // the next start can reap. Only meaningful when the child really is a group leader — see the marker's own docs
         // for why a non-leader pid must never be used as a group id.
@@ -356,12 +396,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // firing yields a non-throwing Completed=false result — parity with the fake's CancelCommandAsync — distinct
         // from a caller-token cancel (which throws) and a timeout (which returns a timed-out result).
         var commandCancelSource = new CancellationTokenSource();
-        var inFlight = new InFlightExecution(process, commandCancelSource);
+        var inFlight = new InFlightExecution(process, commandCancelSource, launch.ScopeUnitName);
         if (!state.InFlight.TryAdd(request.ExecutionId, inFlight))
         {
             // Another command is already in flight under this execution id; kill the just-started one and reject.
             SandboxProcessTree.TreeKill(process);
-            await KillProcessGroupIfLeaderAsync(launch, process).ConfigureAwait(false);
+            await TerminateLaunchAsync(launch, process).ConfigureAwait(false);
             if (markerId is not null)
             {
                 _markerStore.Delete(markerId);
@@ -416,7 +456,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // The child wrote past the jail disk ceiling: tree-kill and return the same non-throwing incomplete shape as
             // a timeout, with an explanatory StandardError so the AgentHome run flow can tell the user WHY it stopped.
             SandboxProcessTree.TreeKill(process);
-            await KillProcessGroupIfLeaderAsync(launch, process).ConfigureAwait(false);
+            await TerminateLaunchAsync(launch, process).ConfigureAwait(false);
             return new SandboxCommandResult
             {
                 ExecutionId = request.ExecutionId,
@@ -431,7 +471,11 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // A best-effort CancelCommandAsync (or a sandbox kill) fired: tree-kill and return a non-throwing
             // Completed=false result so AgentHome treats it like the fake's cancelled command, not a caller cancel.
+            // The scope and process-group kill run here too. They did NOT before, and the gap was real: a cancel left
+            // the workload's own descendants alive, and under the isolated mode it left everything alive, because the
+            // tree the runtime walks stops at the outer helper.
             SandboxProcessTree.TreeKill(process);
+            await TerminateLaunchAsync(launch, process).ConfigureAwait(false);
             return new SandboxCommandResult
             {
                 ExecutionId = request.ExecutionId,
@@ -446,7 +490,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // Per-command timeout fired while the caller token stayed un-cancelled: kill the tree and return a
             // non-throwing timed-out result (Completed=false / ExitCode=-1), matching the container/fake timeout shape.
             SandboxProcessTree.TreeKill(process);
-            await KillProcessGroupIfLeaderAsync(launch, process).ConfigureAwait(false);
+            await TerminateLaunchAsync(launch, process).ConfigureAwait(false);
             return new SandboxCommandResult
             {
                 ExecutionId = request.ExecutionId,
@@ -461,7 +505,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // A caller cancel tree-kills and propagates OperationCanceledException so AgentHomeService can disambiguate
             // caller-cancel from timeout.
             SandboxProcessTree.TreeKill(process);
-            await KillProcessGroupIfLeaderAsync(launch, process).ConfigureAwait(false);
+            await TerminateLaunchAsync(launch, process).ConfigureAwait(false);
             throw;
         }
         finally
@@ -630,6 +674,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             {
                 SandboxId = state.Handle.SandboxId,
                 ProcessGroupId = processId,
+                ScopeUnitName = launch.ScopeUnitName,
                 LeaderStartTicks = startTicks.Value,
                 JailPath = state.JailRoot,
                 PreserveJail = state.PreserveJailRoot,
@@ -645,13 +690,36 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     }
 
     /// <summary>
-    ///     Signals the child's whole process group after a tree-kill, as defense in depth.
-    ///     <see cref="SandboxProcessTree.TreeKill" /> remains the primary mechanism and is unchanged; this catches a
-    ///     descendant that detached from the process tree the runtime walks but is still in the group the child leads.
-    ///     A no-op unless the child really is a group leader.
+    ///     Tears down everything one launch started, in order of decreasing reach.
+    ///     <list type="number">
+    ///         <item>
+    ///             The transient scope's CGROUP, when the command ran in one. This is the only mechanism that is
+    ///             complete for an isolated command: its processes live in a PID namespace the engine cannot see, so
+    ///             neither the runtime's tree walk nor a process-group signal can enumerate them.
+    ///         </item>
+    ///         <item>
+    ///             The child's process GROUP, when the child is a group leader. This is what catches a descendant that
+    ///             detached from the tree the runtime walks, and it remains the whole story for a non-isolated command.
+    ///         </item>
+    ///     </list>
+    ///     <see cref="SandboxProcessTree.TreeKill" /> has already run by the time this is called and is unchanged;
+    ///     these are the layers underneath it, and all of it is best-effort — nothing here throws into the run flow.
     /// </summary>
-    private async Task KillProcessGroupIfLeaderAsync(SandboxLaunchDescriptor launch, Process process)
+    private async Task TerminateLaunchAsync(SandboxLaunchDescriptor launch, Process process)
     {
+        if (launch.ScopeUnitName is { } unitName
+            && SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation) is { } scopeKiller)
+        {
+            try
+            {
+                await scopeKiller.KillAsync(unitName).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogDebug(exception, "Best-effort sandbox scope kill failed for unit {Unit}.", unitName);
+            }
+        }
+
         if (!launch.AppliedProcessGroup || !OperatingSystem.IsLinux())
         {
             return;

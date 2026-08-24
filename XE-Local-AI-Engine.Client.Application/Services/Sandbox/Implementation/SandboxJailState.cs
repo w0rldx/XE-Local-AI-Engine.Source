@@ -181,13 +181,22 @@ internal sealed class InFlightExecution
 {
     private readonly CancellationTokenSource _cancelSource;
 
-    public InFlightExecution(Process process, CancellationTokenSource cancelSource)
+    public InFlightExecution(Process process, CancellationTokenSource cancelSource, string? scopeUnitName = null)
     {
         Process = process;
         _cancelSource = cancelSource;
+        ScopeUnitName = scopeUnitName;
     }
 
     public Process Process { get; }
+
+    /// <summary>
+    ///     The transient systemd scope this command runs in, when it runs behind a filesystem boundary. It is carried
+    ///     here — rather than only in the descriptor the command path holds — because a sandbox KILL arrives from a
+    ///     different call frame entirely, and without the unit name it could only tree-kill a pid whose descendants
+    ///     live in a PID namespace it cannot see.
+    /// </summary>
+    public string? ScopeUnitName { get; }
 
     public void RequestCancel()
     {

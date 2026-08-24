@@ -25,4 +25,24 @@ public sealed record SandboxLaunchPolicy
     ///     posture of <see cref="SandboxCreateRequest" />.
     /// </summary>
     public bool DenyNetworkEgress { get; init; }
+
+    /// <summary>
+    ///     The filesystem posture this sandbox's commands run under. A policy only ever carries
+    ///     <see cref="SandboxIsolationMode.Filesystem" /> when the host was measured able to deliver it — the registry
+    ///     rejects the create request otherwise — so a value here implies an active boundary, exactly as a non-null
+    ///     <see cref="ResourceLimits" /> implies an active ceiling.
+    /// </summary>
+    public SandboxIsolationMode Isolation { get; init; } = SandboxIsolationMode.None;
+
+    /// <summary>Host trees the isolated chain binds read-only. Empty under <see cref="SandboxIsolationMode.None" />.</summary>
+    public IReadOnlyList<string> ReadOnlyTrees { get; init; } = [];
+
+    /// <summary>The value the isolated chain pins every numeric-library thread-count variable to.</summary>
+    public int ThreadLimit { get; init; } = 1;
+
+    /// <summary>
+    ///     The role segment of the transient scope's unit name, so <c>systemctl</c> output and the startup sweep's
+    ///     logs say WHAT was running rather than only that something was.
+    /// </summary>
+    public string? Role { get; init; }
 }

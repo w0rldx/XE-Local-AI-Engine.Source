@@ -33,4 +33,27 @@ public sealed record SandboxLaunchDescriptor
     /// </summary>
     public IReadOnlyDictionary<string, string> WrapperEnvironment { get; init; } =
         new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     <see langword="true" /> when the command runs inside a mount namespace that does not contain the host
+    ///     filesystem. Like every other <c>Applied…</c> flag it is the measured outcome, and it is what the marker file
+    ///     and the logs report — never the request.
+    /// </summary>
+    public bool AppliedFilesystemIsolation { get; init; }
+
+    /// <summary>
+    ///     The transient systemd scope the command runs in, or <see langword="null" /> when no named scope was
+    ///     created. It is the KILL AUTHORITY: with a PID namespace in the way the engine cannot see the workload's
+    ///     processes and the pid it holds belongs to <c>setsid</c>, so signalling the cgroup by unit name is the only
+    ///     thing that reaches every process — including one that detached on purpose.
+    /// </summary>
+    public string? ScopeUnitName { get; init; }
+
+    /// <summary>
+    ///     Descriptors and sealed memory files the chain references BY NUMBER, owned by the caller and disposed once
+    ///     the process has been started. The child inherits copies at start, so releasing these afterwards is both
+    ///     correct and required — one leaked descriptor per command would exhaust the engine's table over a session.
+    ///     <see langword="null" /> for every non-isolated launch.
+    /// </summary>
+    public IDisposable? LaunchResources { get; init; }
 }

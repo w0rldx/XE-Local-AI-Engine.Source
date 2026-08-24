@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
 /// <summary>
 ///     Owns the live process-jail set of one <see cref="ProcessSandboxRuntimeProvider" />: create-or-attach by key,
@@ -135,7 +136,7 @@ internal sealed class SandboxLifecycleRegistry
         {
             if (_sandboxes.TryRemove(sandboxId, out var state))
             {
-                TerminateState(state);
+                TerminateState(state, SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation));
             }
         }
     }
@@ -148,7 +149,7 @@ internal sealed class SandboxLifecycleRegistry
     {
         foreach (var state in _sandboxes.Values)
         {
-            TerminateState(state);
+            TerminateState(state, SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation));
         }
 
         _sandboxes.Clear();
@@ -172,10 +173,51 @@ internal sealed class SandboxLifecycleRegistry
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider has no network allow-list mechanism and cannot honor NetworkPolicy.Restricted. Use NetworkPolicy.None for default-deny egress, or an OS-isolated provider for an allow-list."));
         }
 
+        // A filesystem boundary is the one request that is never a preference: a caller asking for it is asking to be
+        // TOLD when it is not there, because everything it does next depends on the answer. Rejected fail-closed on a
+        // host the probe could not measure it on, with the measured reason attached.
+        var wantsIsolation = request.Isolation == SandboxIsolationMode.Filesystem;
+        if (wantsIsolation && !containment.SupportsFilesystemIsolation)
+        {
+            throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
+                $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot isolate the host filesystem on this host ({containment.FilesystemIsolationUnavailableReason ?? "no mechanism is available"}), so SandboxIsolationMode.Filesystem cannot be honored. Gate the request on SupportsFilesystemIsolation, or use a provider that advertises it."));
+        }
+
+        // An isolated jail is tightened to 0700 and is never exposed at its host pathname, neither of which is a
+        // thing to do to a user's own checkout. The two features are therefore refused together rather than one
+        // silently reshaping the other's directory.
+        if (wantsIsolation && request.TrustedHostWorkspace is not null)
+        {
+            throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
+                $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot combine SandboxIsolationMode.Filesystem with a trusted host workspace: the isolated jail is private to one sandbox and is not reachable at its host path, which is the opposite of what a preserved workspace is for."));
+        }
+
+        // Read-only trees only mean something inside a mount namespace. Under the non-isolated mode the sandbox can
+        // already read the whole host filesystem, so accepting the list would advertise a narrowing that did not
+        // happen — the same silent downgrade the branches around it exist to prevent.
+        if (!wantsIsolation && request.ReadOnlyTrees is { Count: > 0 })
+        {
+            throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
+                $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider only binds read-only trees under SandboxIsolationMode.Filesystem; without it the sandbox already reads the whole host filesystem and the list would mean nothing."));
+        }
+
+        // Rejected at CREATE time as well as at launch time: a caller that named an unbindable tree has made a
+        // configuration mistake, and finding out at the first command — after provisioning, in a result string — is
+        // far worse than finding out when the sandbox is asked for.
+        var shadowed = (request.ReadOnlyTrees ?? [])
+            .FirstOrDefault(tree => !SandboxIsolatedChain.CanBindReadOnlyTree(Path.TrimEndingDirectorySeparator(Path.GetFullPath(tree))));
+        if (shadowed is not null)
+        {
+            throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
+                $"The read-only tree '{shadowed}' lies under a mount point the isolated sandbox owns ({string.Join(", ", SandboxIsolatedChain.ReservedMountPoints)}); it would be shadowed by the sandbox's own mounts rather than visible inside it."));
+        }
+
         // None means no egress. Honored when the host can create an empty network namespace; rejected fail-closed when
-        // it cannot, rather than handing back a sandbox that silently shares the host network.
+        // it cannot, rather than handing back a sandbox that silently shares the host network. Under the isolated mode
+        // the denial comes from bwrap's own --unshare-net — which the probe positively controlled with a loopback
+        // connect — so the separate unshare(1) mechanism is not additionally required.
         var denyEgress = request.NetworkPolicy == SandboxNetworkPolicy.None;
-        if (denyEgress && !containment.SupportsNetworkIsolation)
+        if (denyEgress && !wantsIsolation && !containment.SupportsNetworkIsolation)
         {
             throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot deny network egress on this host ({containment.NetworkIsolationUnavailableReason ?? "no mechanism is available"}), so NetworkPolicy.None cannot be honored. Use NetworkPolicy.Unrestricted to accept a shared host network, or an OS-isolated provider."));
@@ -186,7 +228,7 @@ internal sealed class SandboxLifecycleRegistry
         // contract exists to prevent.
         var limits = request.ResourceLimits;
         var wantsLimits = limits is not null && (limits.CpuCount.HasValue || limits.MemoryMb.HasValue || limits.PidsLimit.HasValue);
-        if (wantsLimits && !containment.SupportsResourceLimits)
+        if (wantsLimits && !wantsIsolation && !containment.SupportsResourceLimits)
         {
             throw new SandboxCapabilityNotSupportedException(string.Create(CultureInfo.InvariantCulture,
                 $"The '{ProcessSandboxRuntimeProvider.Name}' sandbox provider cannot enforce resource limits (CPU/memory/PID) on this host ({containment.ResourceLimitsUnavailableReason ?? "no mechanism is available"}). Remove SandboxResourceLimits or use a provider that advertises SupportsResourceLimits."));
@@ -207,7 +249,11 @@ internal sealed class SandboxLifecycleRegistry
         return new SandboxLaunchPolicy
         {
             ResourceLimits = wantsLimits ? limits : null,
-            DenyNetworkEgress = denyEgress
+            DenyNetworkEgress = denyEgress,
+            Isolation = wantsIsolation ? SandboxIsolationMode.Filesystem : SandboxIsolationMode.None,
+            ReadOnlyTrees = wantsIsolation ? [.. request.ReadOnlyTrees ?? []] : [],
+            ThreadLimit = request.ThreadLimit ?? 1,
+            Role = request.RuntimeProfile
         };
     }
 
@@ -302,7 +348,7 @@ internal sealed class SandboxLifecycleRegistry
         {
             if (_sandboxes.TryRemove(sandboxId, out var state))
             {
-                TerminateState(state);
+                TerminateState(state, SandboxScopeUnitKiller.TryCreate(_launcher.Containment.FilesystemIsolation));
             }
         }
     }
@@ -333,7 +379,7 @@ internal sealed class SandboxLifecycleRegistry
         return builder.Length == 0 ? "node" : builder.ToString();
     }
 
-    private static void TerminateState(JailState state)
+    private static void TerminateState(JailState state, SandboxScopeUnitKiller? scopeKiller)
     {
         lock (state.Sync)
         {
@@ -350,6 +396,15 @@ internal sealed class SandboxLifecycleRegistry
             // Signal the in-flight ExecuteAsync that its command was cancelled (Completed=false) AND tree-kill the
             // process so a sandbox kill terminates every running command immediately.
             inFlight.RequestCancel();
+            // For an isolated command the tree-kill alone is not enough: its processes live in a PID namespace this
+            // process cannot see, so the scope's cgroup is signalled FIRST and the tree-kill is what finishes the
+            // outer helpers. Synchronous on purpose — the jail directory is deleted a few lines below, and deleting a
+            // directory processes are still writing to is how a teardown leaves a half-removed jail behind.
+            if (inFlight.ScopeUnitName is { } unitName)
+            {
+                scopeKiller?.Kill(unitName);
+            }
+
             SandboxProcessTree.TreeKill(inFlight.Process);
         }
 

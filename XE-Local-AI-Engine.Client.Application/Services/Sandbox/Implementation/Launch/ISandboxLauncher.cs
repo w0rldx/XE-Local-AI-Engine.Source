@@ -24,6 +24,12 @@ public interface ISandboxLauncher
     ///     Rewrites <paramref name="startInfo" /> in place to wrap its command under the mechanisms that are both
     ///     requested by <paramref name="policy" /> and available on this host, and returns what was actually applied.
     ///     Must never throw for an unavailable mechanism — it degrades, reports, and lets the command run.
+    ///     <para>
+    ///         The one exception is <see cref="SandboxIsolationMode.Filesystem" />, which does NOT degrade: a policy
+    ///         carrying it was already accepted against a host measured able to deliver it, so a failure to prepare
+    ///         the boundary at launch time throws rather than quietly running the command without one.
+    ///         <paramref name="context" /> supplies the per-command facts that mode needs.
+    ///     </para>
     /// </summary>
-    SandboxLaunchDescriptor Apply(ProcessStartInfo startInfo, SandboxLaunchPolicy policy);
+    SandboxLaunchDescriptor Apply(ProcessStartInfo startInfo, SandboxLaunchPolicy policy, SandboxLaunchContext? context = null);
 }

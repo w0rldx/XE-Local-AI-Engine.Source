@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
+
 /// <summary>
 ///     What containment the CURRENT host can actually deliver for a sandboxed child, as measured once at startup by
 ///     <see cref="ISandboxContainmentProbe" />. This record is the single source of truth for both halves of the
@@ -77,4 +79,26 @@ public sealed record SandboxContainment
 
     /// <summary>Measured reason network isolation is unavailable, for logging and skip-with-reason tests.</summary>
     public string? NetworkIsolationUnavailableReason { get; init; }
+
+    /// <summary>
+    ///     <see langword="true" /> when a command can be run with the host filesystem absent from its mount namespace.
+    ///     Defined as "<see cref="FilesystemIsolation" /> is not null" rather than as an independent flag, so
+    ///     advertisement and the values the chain is rendered from are one fact rather than two that could disagree.
+    ///     Gates <see cref="SandboxProviderCapabilities.SupportsFilesystemIsolation" />.
+    /// </summary>
+    public bool SupportsFilesystemIsolation => FilesystemIsolation is not null;
+
+    /// <summary>
+    ///     The measured ingredients of the isolated chain, or <see langword="null" /> when this host cannot deliver
+    ///     it. Internal because every member is an implementation detail of the chain; the public surface is the flag
+    ///     above and the reason below.
+    /// </summary>
+    internal SandboxFilesystemIsolation? FilesystemIsolation { get; init; }
+
+    /// <summary>
+    ///     Measured reason the filesystem boundary is unavailable. This is a SEPARATE result from the other two: the
+    ///     filesystem probe is caught on its own, so its failure clears this capability and nothing else. A host that
+    ///     can impose ceilings and deny egress but has no usable <c>bwrap</c> keeps both of those.
+    /// </summary>
+    public string? FilesystemIsolationUnavailableReason { get; init; }
 }

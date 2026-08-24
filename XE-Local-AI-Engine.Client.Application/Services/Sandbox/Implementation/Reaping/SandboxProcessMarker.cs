@@ -47,4 +47,16 @@ public sealed record SandboxProcessMarker
 
     /// <summary>When the marker was written, for diagnostics.</summary>
     public required DateTimeOffset CreatedAt { get; init; }
+
+    /// <summary>
+    ///     The transient systemd scope the command ran in, when it ran behind a filesystem boundary; otherwise
+    ///     <see langword="null" />.
+    ///     <para>
+    ///         For such a command this — not <see cref="ProcessGroupId" /> — is the reapable handle. Its processes are
+    ///         in their own PID namespace, so a pid recorded from outside identifies only the outermost helper, and a
+    ///         signal to that group reaches nothing the workload started. Recording the unit name is what lets the
+    ///         next start empty the cgroup instead.
+    ///     </para>
+    /// </summary>
+    public string? ScopeUnitName { get; init; }
 }
