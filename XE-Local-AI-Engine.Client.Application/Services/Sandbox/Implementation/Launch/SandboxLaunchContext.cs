@@ -21,4 +21,12 @@ public sealed record SandboxLaunchContext
     ///     hard-killed: the scope stops on its own instead of running until the box reboots.
     /// </summary>
     public TimeSpan? CommandTimeout { get; init; }
+
+    /// <summary>
+    ///     The caller's explicit <c>SandboxCommandRequest.Environment</c>. The non-isolated path receives it through
+    ///     the start info's own environment; the isolated chain cannot, because it clears the environment inside the
+    ///     namespace, so it has to be carried here and re-emitted as <c>--setenv</c> entries. Without this a variable
+    ///     a caller relies on would silently stop arriving the moment the sandbox opted into isolation.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? CommandEnvironment { get; init; }
 }

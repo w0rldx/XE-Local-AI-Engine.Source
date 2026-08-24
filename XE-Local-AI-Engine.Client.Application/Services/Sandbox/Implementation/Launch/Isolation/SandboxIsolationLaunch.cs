@@ -116,7 +116,9 @@ internal sealed class SandboxIsolationLaunch : IDisposable
                 JailTempDescriptor = tempDescriptor.FileDescriptor,
                 ReadOnlyTrees = readOnlyTrees,
                 ResourceLimits = request.ResourceLimits,
-                ThreadLimit = request.ThreadLimit
+                ThreadLimit = request.ThreadLimit,
+                WorkingDirectory = request.WorkingDirectory,
+                AdditionalEnvironment = request.AdditionalEnvironment
             };
 
             return new SandboxIsolationLaunch(SandboxIsolatedChain.Render(inputs, request.Executable, request.Arguments), unitName, resources);
@@ -194,4 +196,11 @@ internal sealed record SandboxIsolationLaunchRequest
 
     /// <summary>The role segment of the unit name, for readability in <c>systemctl</c> output.</summary>
     public string? Role { get; init; }
+
+    /// <summary>The command's working directory inside the sandbox; <c>/work</c> or a path beneath it.</summary>
+    public string WorkingDirectory { get; init; } = SandboxIsolatedChain.WorkPath;
+
+    /// <summary>Caller-supplied environment, emitted after the chain's own allow-list so it overrides it.</summary>
+    public IReadOnlyDictionary<string, string> AdditionalEnvironment { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
 }

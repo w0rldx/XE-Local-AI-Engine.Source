@@ -51,6 +51,24 @@ internal sealed record SandboxIsolatedChainInputs
 
     /// <summary>The value every numeric-library thread-count variable is pinned to inside the jail.</summary>
     public required int ThreadLimit { get; init; }
+
+    /// <summary>
+    ///     The command's working directory INSIDE the sandbox. Always <c>/work</c> or a path beneath it — the jail is
+    ///     the only writable tree and the only place a caller's requested subdirectory can be.
+    /// </summary>
+    public string WorkingDirectory { get; init; } = SandboxIsolatedChain.WorkPath;
+
+    /// <summary>
+    ///     Variables the CALLER asked the command to run with, emitted after the fixed allow-list so they override it.
+    ///     <para>
+    ///         Passing them through matters more than it looks. The chain is <c>--clearenv</c> plus an allow-list, so a
+    ///         caller's <c>SandboxCommandRequest.Environment</c> — which the non-isolated path honours — would
+    ///         otherwise be silently dropped the moment a sandbox opted into isolation. A variable that quietly stops
+    ///         arriving is a far worse failure than one that is refused.
+    ///     </para>
+    /// </summary>
+    public IReadOnlyDictionary<string, string> AdditionalEnvironment { get; init; } =
+        new Dictionary<string, string>(StringComparer.Ordinal);
 }
 
 /// <summary>
@@ -361,7 +379,7 @@ internal static class SandboxIsolatedChain
         chain.Add(inputs.JailTempDescriptor.ToString(CultureInfo.InvariantCulture));
         chain.Add(TempPath);
         chain.Add("--chdir");
-        chain.Add(WorkPath);
+        chain.Add(inputs.WorkingDirectory);
     }
 
     private static void AppendReadOnlyPosture(List<string> chain)
@@ -398,6 +416,13 @@ internal static class SandboxIsolatedChain
         foreach (var name in ThreadCountVariableNames)
         {
             AppendVariable(chain, name, threads);
+        }
+
+        // Last, so a caller that genuinely needs to override PATH or HOME can. Ordered by name so the rendered vector
+        // is a pure function of its input and can be asserted byte for byte.
+        foreach (var pair in inputs.AdditionalEnvironment.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            AppendVariable(chain, pair.Key, pair.Value);
         }
     }
 

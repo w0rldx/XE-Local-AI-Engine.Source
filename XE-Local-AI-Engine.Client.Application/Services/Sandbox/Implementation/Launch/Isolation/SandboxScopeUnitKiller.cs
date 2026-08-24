@@ -4,6 +4,20 @@ using System.ComponentModel;
 using System.Diagnostics;
 
 /// <summary>
+///     The seam the transient-scope kill authority is reached through, so the startup sweep's DECISIONS — which unit
+///     is claimed by a live worker, which is an orphan, which name is not one this engine generated — can be tested
+///     without a systemd user manager and without signalling anything real.
+/// </summary>
+internal interface ISandboxScopeUnitKiller
+{
+    /// <summary>Signals every process in the unit's cgroup and waits for it to empty.</summary>
+    Task KillAsync(string unitName, CancellationToken cancellationToken = default);
+
+    /// <summary>The engine-owned transient scopes currently loaded on the user manager.</summary>
+    IReadOnlyList<string> ListEngineOwnedUnits();
+}
+
+/// <summary>
 ///     The kill authority for an isolated command: <c>systemctl --user kill --kill-whom=cgroup --signal=SIGKILL
 ///     --wait &lt;unit&gt;</c>.
 ///     <para>
@@ -24,7 +38,7 @@ using System.Diagnostics;
 ///         provider performs alongside this remains the fallback.
 ///     </para>
 /// </summary>
-internal sealed class SandboxScopeUnitKiller
+internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
 {
     // Bounded so a wedged user manager cannot stall a teardown path. --wait normally returns as soon as the cgroup is
     // empty, which for SIGKILL is immediate.
@@ -50,7 +64,7 @@ internal sealed class SandboxScopeUnitKiller
             : new SandboxScopeUnitKiller(isolation.SystemctlPath, isolation.UserBusEnvironment);
     }
 
-    /// <summary>Signals every process in <paramref name="unitName" />'s cgroup and waits for the cgroup to empty.</summary>
+    /// <inheritdoc />
     public async Task KillAsync(string unitName, CancellationToken cancellationToken = default)
     {
         if (!SandboxScopeUnit.IsEngineOwned(unitName))
@@ -101,6 +115,7 @@ internal sealed class SandboxScopeUnitKiller
     ///     sweep; anything whose name fails <see cref="SandboxScopeUnit.IsEngineOwned" /> is dropped here rather than
     ///     later, so a caller cannot act on a name the sweep would refuse to signal anyway.
     /// </summary>
+    /// <inheritdoc />
     public IReadOnlyList<string> ListEngineOwnedUnits()
     {
         using var process = TryStart(["list-units", "--type=scope", "--all", "--no-legend", "--plain", SandboxScopeUnit.ListPattern]);

@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 
 using System.Diagnostics;
-using System.Globalization;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
 /// <summary>
@@ -96,6 +95,8 @@ public sealed class SandboxLauncher : ISandboxLauncher
             new SandboxIsolationLaunchRequest
             {
                 JailRoot = jailRoot,
+                WorkingDirectory = ResolveSandboxWorkingDirectory(startInfo.WorkingDirectory, jailRoot),
+                AdditionalEnvironment = context.CommandEnvironment ?? new Dictionary<string, string>(StringComparer.Ordinal),
                 Executable = startInfo.FileName,
                 Arguments = [.. startInfo.ArgumentList],
                 ReadOnlyTrees = policy.ReadOnlyTrees,
@@ -114,5 +115,36 @@ public sealed class SandboxLauncher : ISandboxLauncher
             launch.Dispose();
             throw;
         }
+    }
+
+    /// <summary>
+    ///     Translates the HOST working directory the provider resolved into the path the same directory has INSIDE the
+    ///     sandbox. The jail is <c>/work</c> there and is never reachable at its host name, so a chain that kept the
+    ///     host path would chdir to a directory that does not exist and the command would not start.
+    /// </summary>
+    private static string ResolveSandboxWorkingDirectory(string? hostWorkingDirectory, string jailRoot)
+    {
+        if (string.IsNullOrEmpty(hostWorkingDirectory))
+        {
+            return SandboxIsolatedChain.WorkPath;
+        }
+
+        var canonical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(hostWorkingDirectory));
+        var canonicalJail = Path.TrimEndingDirectorySeparator(Path.GetFullPath(jailRoot));
+        if (string.Equals(canonical, canonicalJail, StringComparison.Ordinal))
+        {
+            return SandboxIsolatedChain.WorkPath;
+        }
+
+        if (!canonical.StartsWith(canonicalJail + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            // The provider's own jail guard should already have made this impossible. Refusing rather than falling
+            // back to /work keeps a bug there from turning into a command that quietly ran somewhere else.
+            throw new SandboxIsolationUnavailableException($"the working directory '{hostWorkingDirectory}' is not inside the sandbox jail");
+        }
+
+        var relative = canonical[(canonicalJail.Length + 1)..].Replace(Path.DirectorySeparatorChar, '/');
+
+        return $"{SandboxIsolatedChain.WorkPath}/{relative}";
     }
 }

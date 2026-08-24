@@ -68,10 +68,12 @@ internal static class AddNodeAgentHomeExtensions
                .ValidateOnStart();
         builder.Services.AddSingleton<IValidateOptions<LocalContainerOptions>, LocalContainerOptionsValidator>();
         // Sandbox containment. The probe measures ONCE per host which mechanisms a sandboxed child can really be
-        // launched under (systemd user scope for CPU/memory/PID ceilings, empty network namespace for egress denial),
-        // and is a singleton precisely so that measurement is shared: the provider's advertised Capabilities and the
-        // launch path both read it, which is what makes "advertise only what is enforced" mechanical rather than a
-        // convention someone has to remember.
+        // launched under (systemd user scope for CPU/memory/PID ceilings, empty network namespace for egress denial,
+        // and a bubblewrap mount namespace for the opt-in filesystem boundary), and is a singleton precisely so that
+        // measurement is shared: the provider's advertised Capabilities and the launch path both read it, which is
+        // what makes "advertise only what is enforced" mechanical rather than a convention someone has to remember.
+        // The filesystem probe is the expensive one — it runs the whole production chain once — which is a second
+        // reason the result must not be re-measured per resolution.
         builder.Services.AddSingleton<ISandboxContainmentProbe, HostSandboxContainmentProbe>();
         builder.Services.AddSingleton<ISandboxLauncher, SandboxLauncher>();
         builder.Services.AddSingleton<ISandboxMarkerStore, FileSandboxMarkerStore>();

@@ -69,6 +69,17 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
+        // An in-memory sandbox has no mount namespace and never will. Rejecting rather than ignoring keeps the fake
+        // honest in the same direction as the real providers: a caller that asked for a filesystem boundary and was
+        // handed a sandbox without one would go on believing it had the boundary, which is precisely the failure the
+        // fail-closed capability contract exists to prevent — and a fake that quietly accepted it would hide exactly
+        // that bug in every test that used it.
+        if (request.Isolation == SandboxIsolationMode.Filesystem)
+        {
+            throw new SandboxCapabilityNotSupportedException(
+                "The fake sandbox provider has no mount namespace and cannot honor SandboxIsolationMode.Filesystem.");
+        }
+
         lock (_sync)
         {
             var attached = FindAliveByKey(request.AttachKey);

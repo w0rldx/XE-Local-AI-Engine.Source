@@ -70,9 +70,19 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 ///         Where a mechanism is absent the provider logs, runs without it, and claims nothing.
 ///     </para>
 ///     <para>
-///         Still absent by design: read-only mounts, a network allowlist, and any hardware isolation boundary. The
-///         single-user local-node threat model accepts these — risky execution is approval-gated upstream — and they
-///         are deferred to MXC.
+///         A THIRD mechanism is available on hosts that can deliver it, and it is opt-in rather than default:
+///         <see cref="SandboxIsolationMode.Filesystem" /> runs the command in a mount namespace that does not contain
+///         the host filesystem at all (<c>setsid</c> → a named transient <c>systemd-run --user --scope</c> →
+///         <c>bwrap</c>; see <c>SandboxIsolatedChain</c>). Every existing caller — AgentHome, Coder, Development Mode —
+///         names no isolation mode and therefore gets the byte-identical chain it always got. Like the other two it is
+///         advertised only where a probe EXERCISED the real chain and confirmed its positive controls, and requesting
+///         it on a host without it is rejected fail-closed rather than served weaker.
+///     </para>
+///     <para>
+///         Still absent by design: read-only MOUNTS as a per-sandbox concept (the isolated mode's
+///         <see cref="SandboxCreateRequest.ReadOnlyTrees" /> is a different, narrower surface), a network allowlist,
+///         and any hardware isolation boundary. The single-user local-node threat model accepts these — risky
+///         execution is approval-gated upstream — and they are deferred to MXC.
 ///     </para>
 /// </summary>
 // Serves BOTH per-feature roles: AgentHome/Coder resolve it through IAgentSandboxRuntimeProvider, and Development
@@ -324,7 +334,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                 new SandboxLaunchContext
                 {
                     JailRoot = state.JailRoot,
-                    CommandTimeout = request.Timeout
+                    CommandTimeout = request.Timeout,
+                    CommandEnvironment = request.Environment
                 });
         }
         catch (SandboxIsolationUnavailableException exception)

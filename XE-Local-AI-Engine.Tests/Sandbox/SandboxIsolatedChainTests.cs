@@ -86,6 +86,42 @@ public sealed class SandboxIsolatedChainTests
     }
 
     [Test]
+    public async Task Render_CarriesTheCallersOwnEnvironment_AfterTheFixedAllowList()
+    {
+        // The chain is --clearenv plus an allow-list, so a caller's SandboxCommandRequest.Environment — which the
+        // non-isolated path honours — would silently stop arriving the moment a sandbox opted into isolation. Emitting
+        // it LAST also means a caller that genuinely needs a different HOME gets one rather than being overridden.
+        var inputs = UsrMergedInputs() with
+        {
+            AdditionalEnvironment = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["ZZ_LAST"] = "1",
+                ["HOME"] = "/work/custom"
+            }
+        };
+
+        var chain = SandboxIsolatedChain.Render(inputs, "/bin/sh", []);
+        var fixedHome = IndexOfSequence(chain, ["--setenv", "HOME", "/work/home"]);
+        var callerHome = IndexOfSequence(chain, ["--setenv", "HOME", "/work/custom"]);
+
+        AssertEx.True(fixedHome >= 0 && callerHome > fixedHome, "a caller's HOME must be emitted after the chain's own");
+        AssertEx.True(IndexOfSequence(chain, ["--setenv", "ZZ_LAST", "1"]) >= 0, "a caller variable must reach the sandbox");
+
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task Render_ChdirsIntoTheRequestedSubdirectoryOfTheJail()
+    {
+        var chain = SandboxIsolatedChain.Render(UsrMergedInputs() with { WorkingDirectory = "/work/project" }, "/bin/sh", []);
+
+        AssertEx.True(IndexOfSequence(chain, ["--chdir", "/work/project"]) >= 0, "the requested working directory must be the sandbox one");
+        AssertEx.False(IndexOfSequence(chain, ["--chdir", "/work"]) >= 0, "the default working directory must not also be emitted");
+
+        await Task.CompletedTask;
+    }
+
+    [Test]
     public async Task Render_OmitsMemorySwapMax_WhenNoMemoryCeilingWasAskedFor()
     {
         var chain = SandboxIsolatedChain.Render(UsrMergedInputs() with { ResourceLimits = new SandboxResourceLimits { PidsLimit = 8 } },

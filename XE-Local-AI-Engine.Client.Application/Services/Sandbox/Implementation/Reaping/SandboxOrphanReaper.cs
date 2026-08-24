@@ -46,6 +46,7 @@ public sealed class SandboxOrphanReaper : IHostedService
 {
     private readonly ISandboxContainmentProbe? _containmentProbe;
     private readonly ISandboxProcessGroupKiller _killer;
+    private readonly ISandboxScopeUnitKiller? _scopeKillerOverride;
     private readonly ILogger<SandboxOrphanReaper> _logger;
     private readonly ISandboxMarkerStore _markerStore;
 
@@ -53,6 +54,18 @@ public sealed class SandboxOrphanReaper : IHostedService
         ISandboxProcessGroupKiller killer,
         ILogger<SandboxOrphanReaper> logger,
         ISandboxContainmentProbe? containmentProbe = null)
+        : this(markerStore, killer, logger, containmentProbe, scopeKiller: null)
+    {
+    }
+
+    // The scope killer is injectable so the sweep's DECISIONS can be tested without a systemd user manager: which unit
+    // a live worker still claims, which is an orphan, and which name this engine did not generate. Signalling a cgroup
+    // is irreversible, so those decisions are worth asserting rather than reasoning about.
+    internal SandboxOrphanReaper(ISandboxMarkerStore markerStore,
+        ISandboxProcessGroupKiller killer,
+        ILogger<SandboxOrphanReaper> logger,
+        ISandboxContainmentProbe? containmentProbe,
+        ISandboxScopeUnitKiller? scopeKiller)
     {
         ArgumentNullException.ThrowIfNull(markerStore);
         ArgumentNullException.ThrowIfNull(killer);
@@ -63,6 +76,7 @@ public sealed class SandboxOrphanReaper : IHostedService
         // Optional so the existing marker-only tests construct the reaper unchanged. When present it supplies the
         // systemctl path and bus address the transient-scope sweep needs.
         _containmentProbe = containmentProbe;
+        _scopeKillerOverride = scopeKiller;
     }
 
     /// <inheritdoc />
@@ -98,7 +112,7 @@ public sealed class SandboxOrphanReaper : IHostedService
         var reapedScopes = 0;
         var deletedJails = 0;
 
-        var scopeKiller = SandboxScopeUnitKiller.TryCreate(_containmentProbe?.Containment.FilesystemIsolation);
+        var scopeKiller = _scopeKillerOverride ?? SandboxScopeUnitKiller.TryCreate(_containmentProbe?.Containment.FilesystemIsolation);
         var liveScopeUnits = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var (markerId, marker) in markers)
@@ -166,7 +180,7 @@ public sealed class SandboxOrphanReaper : IHostedService
     ///         one place the reaper acts on a name it did not read from its own marker file.
     ///     </para>
     /// </summary>
-    private async Task<int> SweepUnreferencedScopesAsync(SandboxScopeUnitKiller? scopeKiller,
+    private async Task<int> SweepUnreferencedScopesAsync(ISandboxScopeUnitKiller? scopeKiller,
         IReadOnlySet<string> liveScopeUnits,
         CancellationToken cancellationToken)
     {

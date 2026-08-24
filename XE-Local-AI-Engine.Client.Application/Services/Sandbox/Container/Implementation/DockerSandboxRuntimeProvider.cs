@@ -508,6 +508,17 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
             throw new SandboxCapabilityNotSupportedException("The docker sandbox provider requires an engine-managed trusted host workspace on the create request.");
         }
 
+        // A container does have a filesystem boundary, but it is NOT the one SandboxIsolationMode.Filesystem describes:
+        // that mode's contract is the bubblewrap chain's — a named read-only tree list, an invented /etc, one writable
+        // jail — and none of it is implemented here. Serving the request on the strength of "a container is also
+        // isolated" would hand the caller a different boundary than the one it asked for, so it is refused until this
+        // provider implements the same contract.
+        if (request.Isolation == SandboxIsolationMode.Filesystem)
+        {
+            throw new SandboxCapabilityNotSupportedException("The docker sandbox provider does not implement SandboxIsolationMode.Filesystem; its container boundary is a different contract "
+                                                             + "(no ReadOnlyTrees, no synthetic /etc, no jail-backed /tmp). Gate the request on SupportsFilesystemIsolation.");
+        }
+
         // `None` and `Unrestricted` both have a mechanism and are both served exactly as asked; `Restricted` does not
         // and is rejected here rather than downgraded, because an allow-list quietly served as an open bridge is the
         // silent weakening this contract exists to prevent. Rejecting before creating also keeps the caller from ever

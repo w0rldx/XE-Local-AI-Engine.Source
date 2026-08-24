@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Sandbox;
 using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -155,7 +156,62 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         AssertEx.Empty(killer.Killed);
     }
 
+    [Test]
+    public async Task Reap_KillsTheScopeOfADeadOwner_AndTheUnreferencedScopesAPreviousRunLeft()
+    {
+        // The transient scope is the reapable handle for an isolated command: its processes are in their own PID
+        // namespace, so the recorded pid identifies only the outermost helper and signalling that group reaches
+        // nothing the workload started.
+        var deadOwnerUnit = SandboxScopeUnit.Create("compute");
+        var leftoverUnit = SandboxScopeUnit.Create("compute");
+        var killer = new FakeKiller();
+        var scopeKiller = new FakeScopeKiller([leftoverUnit]);
+        var store = new FakeMarkerStore(Marker(pgid: 4242, ownerProcessId: 9999, deadOwnerUnit));
+
+        await new SandboxOrphanReaper(store, killer, NullLogger<SandboxOrphanReaper>.Instance, containmentProbe: null, scopeKiller)
+            .StartAsync(CancellationToken.None);
+
+        AssertEx.Contains(scopeKiller.Killed, deadOwnerUnit);
+        AssertEx.Contains(scopeKiller.Killed, leftoverUnit);
+
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task Reap_LeavesTheScopeOfALiveWorkerAlone_EvenThoughItMatchesTheSweepPattern()
+    {
+        // The one scope that legitimately exists at startup belongs to a SECOND worker instance that is still running.
+        // Without this the sweep would be a restart that kills another instance's in-flight command.
+        var liveUnit = SandboxScopeUnit.Create("compute");
+        var killer = new FakeKiller();
+        killer.Alive.Add(4321);
+        var scopeKiller = new FakeScopeKiller([liveUnit]);
+        var store = new FakeMarkerStore(Marker(pgid: 4242, ownerProcessId: 4321, liveUnit));
+
+        await new SandboxOrphanReaper(store, killer, NullLogger<SandboxOrphanReaper>.Instance, containmentProbe: null, scopeKiller)
+            .StartAsync(CancellationToken.None);
+
+        AssertEx.Empty(scopeKiller.Killed);
+        AssertEx.Empty(killer.Killed);
+
+        await Task.CompletedTask;
+    }
+
     // ---- helpers ----
+
+    private static SandboxProcessMarker Marker(int pgid, int ownerProcessId, string? scopeUnitName)
+    {
+        return new SandboxProcessMarker
+        {
+            SandboxId = "sandbox",
+            ProcessGroupId = pgid,
+            LeaderStartTicks = 1,
+            JailPath = Path.Combine(SandboxPaths.ContainerRoot, "absent"),
+            OwnerProcessId = ownerProcessId,
+            CreatedAt = DateTimeOffset.UnixEpoch,
+            ScopeUnitName = scopeUnitName
+        };
+    }
 
     private static SandboxOrphanReaper CreateReaper(ISandboxMarkerStore store, ISandboxProcessGroupKiller killer)
     {
@@ -213,6 +269,30 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         {
             Killed.Add(processGroupId);
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeScopeKiller : ISandboxScopeUnitKiller
+    {
+        private readonly IReadOnlyList<string> _loaded;
+
+        public FakeScopeKiller(IReadOnlyList<string> loaded)
+        {
+            _loaded = loaded;
+        }
+
+        public List<string> Killed { get; } = [];
+
+        public Task KillAsync(string unitName, CancellationToken cancellationToken = default)
+        {
+            Killed.Add(unitName);
+
+            return Task.CompletedTask;
+        }
+
+        public IReadOnlyList<string> ListEngineOwnedUnits()
+        {
+            return _loaded;
         }
     }
 
