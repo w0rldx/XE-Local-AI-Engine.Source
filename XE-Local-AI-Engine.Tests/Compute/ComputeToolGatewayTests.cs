@@ -49,7 +49,7 @@ public sealed class ComputeToolGatewayTests
         // The tool advertises itself to the model as stateless. Both places a script can leave a file — the jail it
         // ran in and the HOME/TMPDIR scratch it was pointed at — must therefore be per call and gone afterwards, or
         // one conversation's files are readable by the next.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.None);
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
         var gateway = CreateGateway(provider);
 
         _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
@@ -72,7 +72,7 @@ public sealed class ComputeToolGatewayTests
         // The registry attaches BY the attach key, so a constant one handed two overlapping calls a single live jail:
         // one shared working directory between unrelated conversations, and — now that teardown is per call — whichever
         // finished first killing the jail out from under the other.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.None);
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
         var gateway = CreateGateway(provider);
 
         _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
@@ -90,7 +90,7 @@ public sealed class ComputeToolGatewayTests
     {
         // A failed or cancelled run is exactly when a script is most likely to have left something behind, so the
         // teardown cannot sit on the success path.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.None)
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy)
         {
             Result = Completed(exitCode: 1, standardOutput: string.Empty, standardError: "boom")
         };
@@ -124,26 +124,40 @@ public sealed class ComputeToolGatewayTests
     }
 
     [Test]
-    public async Task ExecuteAsync_WhenTheHostCannotContain_AsksForNothingItCannotGet()
+    public async Task ExecuteAsync_WhenTheHostCannotDenyEgress_RefusesRatherThanRunningOnline()
     {
-        // The provider FAILS CLOSED on a guarantee it cannot honor, so asking unconditionally would not harden the tool
-        // — it would make it unusable on every host without user namespaces or a systemd user scope. Asking for exactly
-        // what is advertised keeps the guarantee real where it exists, with the degradation visible in the containment
-        // log rather than silent.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.None);
+        // "No network" is what the tool's description promises the model and what the user approved the call on, so it
+        // fails CLOSED. Asking for Unrestricted instead handed a model-authored script the operator's network, with no
+        // signal to either of them that the guarantee had lapsed.
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsResourceLimits);
+        var gateway = CreateGateway(provider);
+
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+
+        AssertEx.Contains(rendered, "run_python rejected");
+        AssertEx.Contains(rendered, "offline");
+        AssertEx.Null(provider.CreateRequest, "a host that cannot deny egress must not get as far as creating a jail");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenOnlyTheCeilingsAreUnavailable_StillRuns()
+    {
+        // Resource ceilings bound COST, not reachability: degrading them is visible in the containment log and costs no
+        // advertised guarantee, so they stay capability-gated where egress denial no longer is.
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
         var gateway = CreateGateway(provider);
 
         _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
 
         var create = AssertEx.NotNull(provider.CreateRequest);
-        AssertEx.Equal(SandboxNetworkPolicy.Unrestricted, create.NetworkPolicy);
+        AssertEx.Equal(SandboxNetworkPolicy.None, create.NetworkPolicy);
         AssertEx.Null(create.ResourceLimits);
     }
 
     [Test]
     public async Task ExecuteAsync_RendersExitCodeStdoutAndStderr()
     {
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.None)
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy)
         {
             Result = Completed(exitCode: 1, standardOutput: "4\n", standardError: "boom\n")
         };
@@ -161,7 +175,7 @@ public sealed class ComputeToolGatewayTests
     {
         // A timed-out run comes back Completed=false with exit code -1. Rendering that as a bare "exit_code: -1" would
         // read to a model as a normal failing program, and it would try to debug a script that never finished.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.None)
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy)
         {
             Result = new SandboxCommandResult
             {
@@ -181,7 +195,7 @@ public sealed class ComputeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenOutputExceedsTheCap_TruncatesWithTheSharedMarker()
     {
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.None)
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy)
         {
             Result = Completed(exitCode: 0, standardOutput: new string('a', 500), standardError: string.Empty)
         };
@@ -200,7 +214,7 @@ public sealed class ComputeToolGatewayTests
         // The sandbox caps capture at its own 4 MiB ceiling before this gateway ever sees the bytes, so a stream can be
         // short enough to pass our budget and still be incomplete. Dropping the marker there would tell a model it had
         // the whole output.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.None)
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy)
         {
             Result = Completed(exitCode: 0, standardOutput: "head", standardError: string.Empty) with
             {
@@ -217,7 +231,7 @@ public sealed class ComputeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenTheEnvironmentCannotBeProvisioned_ReturnsTheModelSafeReasonWithoutTouchingTheSandbox()
     {
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.None);
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
         var gateway = CreateGateway(provider,
             environment: new StubEnvironment(new ComputeEnvironmentException("The Python compute tool is available on Linux only.")));
 
@@ -230,7 +244,7 @@ public sealed class ComputeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenCancelled_Throws()
     {
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.None);
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
         var gateway = CreateGateway(provider);
         using var cancellationTokenSource = new CancellationTokenSource();
         await cancellationTokenSource.CancelAsync();

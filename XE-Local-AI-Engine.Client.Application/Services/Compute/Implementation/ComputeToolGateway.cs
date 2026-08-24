@@ -28,13 +28,19 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 ///         state is discarded; the expensive part, the uv-provisioned venv, lives outside the jail and is untouched.
 ///     </para>
 ///     <para>
-///         Egress denial and the resource ceilings are CAPABILITY-GATED rather than unconditional, exactly as AgentHome
-///         requests them: the provider fails closed on a guarantee it cannot honor, so asking for containment a host
-///         cannot deliver would not harden the tool — it would stop it running at all, with the degradation already
-///         visible in the sandbox containment log rather than silent. What the sandbox does NOT provide is a filesystem
-///         boundary (this provider has no mount layer, so the child sees the host filesystem as the worker user); that
-///         is why the tool is <c>WriteExecute</c>, approval-required, off by default, and never offered to a
-///         cloud-hosted model.
+///         Egress denial is UNCONDITIONAL and fails the call closed: "no network" is what the tool's description
+///         promises the model and what the user approved the call on, so a host that cannot build an empty network
+///         namespace gets a refusal rather than a script with the operator's network. The resource ceilings stay
+///         capability-gated, because they bound cost rather than reachability — degrading them is visible in the
+///         containment log and costs no guarantee.
+///     </para>
+///     <para>
+///         What the sandbox does NOT provide is a filesystem boundary: this provider has no mount layer and the child
+///         runs under the SAME uid as the engine (<c>unshare --user --map-current-user</c>), so a script sees, and can
+///         write, everything that user can. The venv is chmod'd read-only after provisioning, which stops accidental
+///         and low-effort writes into <c>site-packages</c>, but a deliberate script can chmod it back — see
+///         <c>ComputePythonEnvironment</c>. That is why the tool is <c>WriteExecute</c>, approval-required, off by
+///         default, and never offered to a cloud-hosted model.
 ///     </para>
 /// </remarks>
 internal sealed class ComputeToolGateway : IComputeToolGateway
@@ -92,6 +98,18 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         // on a null-forgiving operator at the call site.
         var code = request.Code
                    ?? throw new ArgumentException("The compute request carries no code.", nameof(request));
+
+        // Offline is ADVERTISED, so it fails closed. Asking for Unrestricted when the host cannot build an empty
+        // network namespace silently handed a model-authored script the operator's network — the one guarantee the
+        // tool's description makes and the user approved the call on. Refusing is the honest answer; the resource
+        // ceilings below stay capability-gated because they bound cost, not reachability.
+        if (!_provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy))
+        {
+            _logger.LogWarning(
+                "run_python refused: the '{Provider}' sandbox provider cannot deny egress on this host, and the tool's offline guarantee is not optional. Install the user-namespace support the sandbox containment probe reports as missing, or leave Compute:Enabled off.",
+                _provider.ProviderName);
+            return "run_python rejected: this node cannot run the compute sandbox offline, and the tool never runs with network access.";
+        }
 
         // One id for everything this invocation owns: its jail, its scratch directory, its execution. All three are per
         // call and all are torn down below — that is what makes the advertised statelessness real rather than a claim.
@@ -187,9 +205,8 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
                 ManifestVersion = SandboxGeneration
             },
             RuntimeProfile = RuntimeProfile,
-            NetworkPolicy = capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy)
-                ? SandboxNetworkPolicy.None
-                : SandboxNetworkPolicy.Unrestricted,
+            // Unconditional: ExecuteAsync already refused the call if this provider cannot honor it.
+            NetworkPolicy = SandboxNetworkPolicy.None,
             ResourceLimits = capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits)
                 ? new SandboxResourceLimits
                 {
