@@ -84,6 +84,35 @@ public sealed class ApplicationStartupTests
     }
 
     [Test]
+    public async Task ConfigurationValidation_WithAParkBudgetOverTheNodeToolCallAge_FailsStartup()
+    {
+        // The relation neither section's data annotations can see: 600 seconds of park against the node's 10-minute
+        // pending tool-call age. A node that boots with this pair parks on calls the node has already expired.
+        await using var invalidFactory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["WorkSessions:MaxParkedSeconds"] = "600",
+                ["WorkerNode:MaxPendingToolCallAgeMinutes"] = "10"
+            }
+        };
+
+        Exception? exception = null;
+
+        try
+        {
+            _ = invalidFactory.Services;
+            throw new AssertionException("Expected startup to fail for a park budget at or over the node's pending tool-call age.");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or OptionsValidationException)
+        {
+            exception = ex;
+        }
+
+        AssertEx.NotNull(exception);
+    }
+
+    [Test]
     public async Task ConfigurationValidation_WithMissingBaseUrl_FailsStartup()
     {
         await using var invalidFactory = new TestServerWebAppFactory

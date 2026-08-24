@@ -32,6 +32,17 @@ public sealed class WorkSessionOptions
     /// <summary>
     ///     How long a session may sit waiting on an approval or a question before it is demoted to <c>Paused</c>. An
     ///     unattended parked session would otherwise hold the node's only invocation slot indefinitely.
+    ///     <para>
+    ///         Must stay strictly under <c>WorkerNode:MaxPendingToolCallAgeMinutes</c> (in minutes; 10 by default, so
+    ///         600 seconds), or the node expires the pending tool call the session is parked on before the park clock
+    ///         fires and the park times out against a prompt that can no longer be answered.
+    ///         <c>WorkSessionOptionsValidator</c> enforces the relation at startup.
+    ///     </para>
+    ///     <para>
+    ///         follow-up: that check reads the configured value only. <c>INodeRuntimeSettings.GetMaxPendingToolCallAgeMinutes</c>
+    ///         lets the database override the tool-call age at runtime, and a startup check cannot see a value written
+    ///         after it ran — an operator who lowers it below this park budget re-opens the gap.
+    ///     </para>
     /// </summary>
     [Range(1, 24 * 60 * 60)]
     public int MaxParkedSeconds { get; init; } = 300;

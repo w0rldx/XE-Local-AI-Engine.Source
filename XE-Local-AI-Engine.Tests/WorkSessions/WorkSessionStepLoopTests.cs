@@ -175,13 +175,15 @@ public sealed class WorkSessionStepLoopTests
     {
         // The other half of the park: the prompt is answered, the turn carries on, and the session must leave
         // WaitingForApproval instead of sitting in it for the rest of the run. The park clock is disarmed on the way
-        // through, so the long MaxParkedSeconds here proves the resume happened rather than the timeout.
+        // through, so the long MaxParkedSeconds here proves the resume happened rather than the timeout. 599 rather
+        // than an arbitrarily huge number: WorkSessionOptionsValidator refuses a park budget that reaches the node's
+        // 10-minute pending tool-call age.
         var sessionId = Guid.NewGuid();
         var publisher = new RecordingWorkSessionEventPublisher();
         FakeNodeChatStreamService? stream = null;
         await using var factory = new TestServerWebAppFactory
         {
-            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1"), ("WorkSessions:MaxParkedSeconds", "3600")),
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1"), ("WorkSessions:MaxParkedSeconds", "599")),
             ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
                 services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
                 publisher)
@@ -219,7 +221,7 @@ public sealed class WorkSessionStepLoopTests
         FakeNodeChatStreamService? stream = null;
         await using var factory = new TestServerWebAppFactory
         {
-            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxParkedSeconds", "3600")),
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxParkedSeconds", "599")),
             ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
                 services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
                 publisher)
@@ -249,7 +251,7 @@ public sealed class WorkSessionStepLoopTests
         FakeNodeChatStreamService? stream = null;
         await using var factory = new TestServerWebAppFactory
         {
-            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxParkedSeconds", "3600")),
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxParkedSeconds", "599")),
             ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
                 services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
                 publisher)
