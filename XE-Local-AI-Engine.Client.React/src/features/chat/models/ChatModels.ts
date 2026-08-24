@@ -292,6 +292,33 @@ export interface ChatInputStatus {
 	chatInputDisabled?: boolean;
 	modelSelectorDisabled?: boolean;
 	sendDisabled?: boolean;
+	/** Renders the agent picker read-only. Set by an owner that pins the agent (see {@link ChatScope}). */
+	agentSelectorDisabled?: boolean;
+}
+
+/**
+ * Embeds the chat page inside a feature that OWNS a conversation (today: a work session). Everything the chat page
+ * does — the readiness gate, the streaming fold, the tool timeline, the cold-load re-attach — stays in `Chat`; this
+ * prop only pins the view and redirects the composer. `/chat` passes nothing and behaves exactly as before.
+ */
+export interface ChatScope {
+	/** Pin the view to exactly this conversation: no sidebar, no selection writes to the global preference store. */
+	readonly conversationId: string;
+	/** Owner-pinned agent. Forces agent mode on and renders the agent + model selectors read-only. */
+	readonly pinnedAgentId?: string;
+	/** Bumped by the owner when a NEW server-side turn starts on the same conversation; re-arms the re-attach. */
+	readonly resumeNonce?: number;
+	/**
+	 * Composer target. When set, the composer posts here instead of starting a chat invocation — the owner's
+	 * supervisor stays the single writer of invocations on this conversation. A REJECTED promise keeps the draft.
+	 */
+	readonly onSendOverride?: (content: string) => Promise<void>;
+	/** Stop-button target (a work session maps it to pause). */
+	readonly onStopOverride?: () => void;
+	/** Disables the composer (a terminal session takes no further input). */
+	readonly composerDisabled?: boolean;
+	/** The parent owns the full-height frame, so `Chat` renders bare. */
+	readonly embedded?: boolean;
 }
 
 // The conversation-list fetch, envelope and all: the list itself plus the node-level chat facts the endpoint reports
@@ -408,7 +435,9 @@ export interface ChatDisplayShellProps {
 	pendingUploads?: readonly PendingAttachmentUpload[];
 	onUploadFiles?: (files: File[]) => void;
 	onRemoveAttachment?: (fileId: string) => void;
-	onSend: (content: string, effort: ReasoningEffort, model: string) => void;
+	// Returning a promise defers the draft clear until it RESOLVES (a rejection keeps the draft) — the scoped
+	// composer posts over REST, where a rejected follow-up must not vanish. A void return clears immediately.
+	onSend: (content: string, effort: ReasoningEffort, model: string) => void | Promise<void>;
 	onCancel: () => void;
 	onRegenerate?: (messageId: string) => void;
 	onConversationSearchChange?: (query: string) => void;
@@ -430,6 +459,9 @@ export interface ChatDisplayShellProps {
 	pendingFeedbackMessageId?: string;
 	onSubmitFeedback?: (messageId: string, rating: ChatFeedbackRating, comment: string | undefined) => void;
 	conversationListCollapsed?: boolean;
+	// Drops the conversation column (and its header toggle) entirely. `conversationListCollapsed` only shrinks the
+	// sidebar to an icon rail, which is wrong for an owner-pinned conversation that has no list to pick from.
+	hideConversationList?: boolean;
 	disabledNotice?: ReactNode;
 	// True while the selected conversation's full payload (with messages) is loading. Forwarded to the
 	// message list so the empty-state never flashes over a populated thread during the refetch.

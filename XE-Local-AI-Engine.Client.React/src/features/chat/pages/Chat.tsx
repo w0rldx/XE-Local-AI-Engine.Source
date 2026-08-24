@@ -2,7 +2,7 @@ import { Alert, Anchor, Button, Center, Loader, Stack, Text } from "@mantine/cor
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useCommands } from "@/features/commands/queries/useCommands";
 import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
@@ -40,6 +40,7 @@ import type {
 	ChatConversationModel,
 	ChatFeedbackRating,
 	ChatMessageFeedback,
+	ChatScope,
 	ChatStreamingState,
 	ChatTimelineEntry,
 	ModelOption,
@@ -124,8 +125,11 @@ function createId(): string {
 	return crypto.randomUUID();
 }
 
-export function Chat() {
+export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	const { t } = useTranslation();
+	// Owner-embedded mode (a work session pinning its own conversation). `/chat` passes no scope and every branch
+	// below falls back to the exact behaviour it had before the prop existed.
+	const isScoped = scope !== undefined;
 	const { confirm } = useConfirm();
 	const queryClient = useQueryClient();
 	const commandsQuery = useCommands();
@@ -149,19 +153,33 @@ export function Chat() {
 	const knowledgeBaseEnabled = useNodeChatPreferencesStore((state) => state.knowledgeBaseEnabled);
 	const requestedConversationId = useNodeChatPreferencesStore((state) => state.selectedConversationId);
 	const collapsed = useNodeChatPreferencesStore((state) => state.sidebarCollapsed);
-	const agentModeEnabled = useNodeChatPreferencesStore((state) => state.agentModeEnabled);
-	const selectedAgentId = useNodeChatPreferencesStore((state) => state.selectedAgentId);
+	const preferredAgentModeEnabled = useNodeChatPreferencesStore((state) => state.agentModeEnabled);
+	const preferredSelectedAgentId = useNodeChatPreferencesStore((state) => state.selectedAgentId);
+	// A scope that pins an agent wins over the stored composer preference: the session owns the binding.
+	const agentModeEnabled = scope?.pinnedAgentId ? true : preferredAgentModeEnabled;
+	const selectedAgentId = scope?.pinnedAgentId ?? preferredSelectedAgentId;
 	const {
 		setSelectedModel,
 		setReasoningEffort,
 		toggleTools,
 		toggleKnowledgeBase,
-		setSelectedConversationId: setRequestedConversationId,
+		setSelectedConversationId: setSelectedConversationIdPreference,
 		toggleSidebar,
 		setAgentModeEnabled,
 		setSelectedAgentId,
 		clearSelectedAgent,
 	} = useNodeChatPreferencesStore((state) => state.actions);
+	// The preference store is GLOBAL: opening a scoped (owner-pinned) conversation must never rewrite the operator's
+	// remembered `/chat` thread, so every selection write becomes a no-op under scope.
+	const setRequestedConversationId = useCallback(
+		(conversationId: string) => {
+			if (isScoped) {
+				return;
+			}
+			setSelectedConversationIdPreference(conversationId);
+		},
+		[isScoped, setSelectedConversationIdPreference],
+	);
 	// Developer mode + per-send sampling overrides. Read directly from global stores.
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
 	const samplingOptions = useChatSamplingPreferencesStore((state) => state.options);
@@ -425,7 +443,10 @@ export function Chat() {
 	// first fetch lands (or on a node that omits it) — the composer then skips its pre-check and the hub enforces.
 	const maxMessageSizeKb = conversationsData?.maxMessageSizeKb;
 	const requestedConversationExists = conversations.some((conversation) => conversation.id === requestedConversationId);
-	const selectedConversationId = requestedConversationExists ? requestedConversationId : (conversations[0]?.id ?? "");
+	// mergeSelectedConversation prepends the pinned conversation when the list does not contain it, so a scoped id
+	// renders correctly whatever the (still-fetched — it carries maxMessageSizeKb) conversation list returns.
+	const selectedConversationId =
+		scope?.conversationId ?? (requestedConversationExists ? requestedConversationId : (conversations[0]?.id ?? ""));
 
 	const {
 		data: selectedConversationData,
@@ -1178,7 +1199,9 @@ export function Chat() {
 		// post-turn refresh, which must not raise a banner on conversation open.
 		resumeActiveTurnRef.current(loadedSelectedConversationId, abortController).catch(() => undefined);
 		return () => abortController.abort();
-	}, [loadedSelectedConversationId]);
+		// resumeNonce re-arms the re-attach when the OWNER starts a new server-side turn on the same conversation
+		// (a work-session step), which the conversation id alone cannot observe.
+	}, [loadedSelectedConversationId, scope?.resumeNonce]);
 
 	const handleCancel = useCallback(async (): Promise<void> => {
 		const active = activeStream.current;
@@ -1481,7 +1504,7 @@ export function Chat() {
 	// shared hub is live. Once connected it latches `ready` and transient reconnects are handled in-band.
 	if (connectionReadiness !== "ready") {
 		return (
-			<FullHeightPage data-tour="chat-overview">
+			<ChatFrame embedded={scope?.embedded === true}>
 				<Center style={{ flex: 1 }}>
 					{connectionReadiness === "connecting" ? (
 						<Stack align="center" gap="sm">
@@ -1509,12 +1532,12 @@ export function Chat() {
 						</Alert>
 					)}
 				</Center>
-			</FullHeightPage>
+			</ChatFrame>
 		);
 	}
 
 	return (
-		<FullHeightPage data-tour="chat-overview">
+		<ChatFrame embedded={scope?.embedded === true}>
 			{isLoadingInitialConversations ? (
 				<Alert color="blue" variant="light" icon={<Loader size={16} />}>
 					{t("pages.chat.loadingHistory", "Loading local chat history…")}
@@ -1556,14 +1579,17 @@ export function Chat() {
 				onRetryLoadMessages={handleRetryLoadMessages}
 				inputStatus={{
 					isSending,
-					chatInputDisabled: isCreatingConversation || isRemoteConversation,
-					modelSelectorDisabled: isRemoteConversation,
-					sendDisabled: selectedConversationIsLoading || isRemoteConversation,
+					chatInputDisabled: isCreatingConversation || isRemoteConversation || scope?.composerDisabled === true,
+					// A scoped session pins the agent, and the agent pins the model — both selectors read-only.
+					modelSelectorDisabled: isRemoteConversation || isScoped,
+					agentSelectorDisabled: isScoped,
+					sendDisabled: selectedConversationIsLoading || isRemoteConversation || scope?.composerDisabled === true,
 				}}
 				conversationSearchQuery={conversationSearchQuery}
 				showArchivedConversations={showArchivedConversations}
 				mutatingConversationId={mutatingConversationId}
 				conversationListCollapsed={collapsed}
+				hideConversationList={isScoped}
 				onSelectConversation={setRequestedConversationId}
 				onCreateConversation={handleCreateConversation}
 				onToggleConversationList={toggleSidebar}
@@ -1582,27 +1608,47 @@ export function Chat() {
 				onUploadFiles={handleUploadAttachments}
 				onRemoveAttachment={handleRemoveAttachment}
 				onSend={(content, effort, model) => {
+					// The owner's supervisor is the single writer of invocations on a scoped conversation, so the
+					// composer posts through the override instead of starting a second, unsupervised turn. The
+					// returned promise is what defers ChatInputArea's draft clear until the post is accepted.
+					if (scope?.onSendOverride) {
+						return scope.onSendOverride(content);
+					}
 					handleSend(content, effort, model).catch((error: unknown) => setStreamError(errorMessage(error)));
+					return undefined;
 				}}
 				onCancel={() => {
+					if (scope?.onStopOverride) {
+						scope.onStopOverride();
+						return;
+					}
 					handleCancel().catch((error: unknown) => setStreamError(errorMessage(error)));
 				}}
-				onRegenerate={isRemoteConversation ? undefined : handleRegenerate}
+				onRegenerate={isScoped || isRemoteConversation ? undefined : handleRegenerate}
 				onConversationSearchChange={setConversationSearchQuery}
 				onToggleShowArchivedConversations={setShowArchivedConversations}
-				onRenameConversation={handleRenameConversation}
-				onToggleConversationPinned={handleToggleConversationPinned}
-				onToggleConversationArchived={handleToggleConversationArchived}
+				onRenameConversation={isScoped ? undefined : handleRenameConversation}
+				onToggleConversationPinned={isScoped ? undefined : handleToggleConversationPinned}
+				onToggleConversationArchived={isScoped ? undefined : handleToggleConversationArchived}
 				boundAgentMemoryEnabled={boundAgentMemoryEnabled}
 				onToggleConversationMemoryExcluded={handleToggleConversationMemoryExcluded}
-				onDeleteConversation={handleDeleteConversation}
-				onBranchFromMessage={isRemoteConversation ? undefined : handleBranch}
+				onDeleteConversation={isScoped ? undefined : handleDeleteConversation}
+				onBranchFromMessage={isScoped || isRemoteConversation ? undefined : handleBranch}
 				activeRevisionByGroup={activeRevisionByGroup}
 				onSelectRevision={handleSelectRevision}
 				feedbackByMessageId={feedbackByMessageId}
 				pendingFeedbackMessageId={pendingFeedbackMessageId}
-				onSubmitFeedback={isRemoteConversation ? undefined : handleSubmitFeedback}
+				onSubmitFeedback={isScoped || isRemoteConversation ? undefined : handleSubmitFeedback}
 			/>
-		</FullHeightPage>
+		</ChatFrame>
 	);
+}
+
+// The chat page normally claims the Layout scroll container's full height; an embedded scope's parent already owns
+// that frame (and its own padding), so `Chat` renders bare inside it.
+function ChatFrame({ embedded, children }: { embedded: boolean; children: ReactNode }) {
+	if (embedded) {
+		return <>{children}</>;
+	}
+	return <FullHeightPage data-tour="chat-overview">{children}</FullHeightPage>;
 }

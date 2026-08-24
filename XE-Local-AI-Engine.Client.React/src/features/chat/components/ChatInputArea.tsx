@@ -74,6 +74,8 @@ interface ChatInputAreaProps {
 	// Cloud (Codex) model options forwarded to ModelSelectorCard. Optional; absent hides the cloud section.
 	cloudModelOptions?: ModelOption[];
 	modelSelectorDisabled?: boolean;
+	/** Renders the agent picker read-only (an owner-pinned agent — see ChatScope). ORed with the local conditions. */
+	agentSelectorDisabled?: boolean;
 	sendDisabled?: boolean;
 	selectedModel: string;
 	reasoningEffort: ReasoningEffort;
@@ -111,7 +113,8 @@ interface ChatInputAreaProps {
 	onToggleKnowledgeBase?: () => void;
 	// Single merged agent control: "" => Default Assistant (agent mode off); any other id => enable mode + stamp it.
 	onSelectAgent?: (agentId: string) => void;
-	onSend: (content: string, effort: ReasoningEffort, model: string) => void;
+	// A returned promise defers the draft clear until it RESOLVES; a rejection keeps the draft (see ChatModels).
+	onSend: (content: string, effort: ReasoningEffort, model: string) => void | Promise<void>;
 }
 
 function isEffortAvailable(effort: ReasoningEffort, availableEfforts: ReasoningEffort[]): boolean {
@@ -128,6 +131,7 @@ export function ChatInputArea({
 	modelOptions,
 	cloudModelOptions,
 	modelSelectorDisabled = false,
+	agentSelectorDisabled: agentSelectorDisabledProp = false,
 	sendDisabled: sendDisabledProp = false,
 	selectedModel,
 	reasoningEffort,
@@ -180,8 +184,8 @@ export function ChatInputArea({
 	const sizeState = useMemo(() => evaluateComposerSize(trimmed, maxMessageSizeKb), [trimmed, maxMessageSizeKb]);
 	const overSizeLimit = sizeState?.overLimit === true;
 	const sendDisabled = isSending ? false : disabled || sendDisabledProp || !trimmed || overSizeLimit;
-	// Agent selector is disabled while sending or when there are no agents to pick from.
-	const agentSelectorDisabled = disabled || isSending || agentOptions.length === 0;
+	// Agent selector is disabled while sending, when there are no agents to pick from, or when the owner pinned one.
+	const agentSelectorDisabled = agentSelectorDisabledProp || disabled || isSending || agentOptions.length === 0;
 	// File attachments are offered only behind the capability gate, with a wired upload handler, and while the
 	// composer is interactive (not disabled / mid-send).
 	const fileAttachmentsEnabled = capabilities.showFileAttachmentControls && Boolean(onUploadFiles);
@@ -305,9 +309,19 @@ export function ChatInputArea({
 			? reasoningEffort
 			: (availableReasoningEfforts[0] ?? "none");
 		const command = resolveSlashCommand(trimmed, commandOptions);
-		onSend(command?.prompt ?? trimmed, safeEffort, selectedModel);
-		setContent("");
-		setSelection({ start: 0, end: 0 });
+		const clearDraft = (): void => {
+			setContent("");
+			setSelection({ start: 0, end: 0 });
+		};
+		const sent = onSend(command?.prompt ?? trimmed, safeEffort, selectedModel);
+		// An embedded composer posts over REST and hands back the in-flight promise: hold the draft until the post is
+		// accepted so a rejected follow-up (an over-cap 400, a 409) is still on screen to retry. `/chat` returns void
+		// and clears synchronously, exactly as before.
+		if (sent instanceof Promise) {
+			sent.then(clearDraft, () => undefined);
+			return;
+		}
+		clearDraft();
 	};
 
 	// The toolbar is hosted in the Textarea's bottomSection (rendered inside the input border, pointer-events:all —
