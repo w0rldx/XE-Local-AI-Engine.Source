@@ -57,6 +57,9 @@ interface ChatMessageListProps {
 	// Active composer reasoning effort; forwarded to each message so the bypass note can flag reasoning
 	// emitted while "none" is selected.
 	reasoningEffort?: ReasoningEffort;
+	// The conversation is owned by a work session. Only used to render a step that ended on its own provider-call
+	// cap as a neutral notice rather than a failure (see ChatMessage).
+	isWorkSessionConversation?: boolean;
 }
 
 function bySortOrder(left: ChatMessageModel, right: ChatMessageModel): number {
@@ -92,6 +95,7 @@ export function ChatMessageList({
 	messagesLoadErrorText,
 	onRetryLoadMessages,
 	reasoningEffort,
+	isWorkSessionConversation = false,
 }: ChatMessageListProps) {
 	const { t } = useTranslation();
 	const endRef = useRef<HTMLDivElement>(null);
@@ -275,6 +279,7 @@ export function ChatMessageList({
 				feedbackPending={pendingFeedbackMessageId === message.id}
 				onSubmitFeedback={onSubmitFeedback}
 				reasoningEffort={reasoningEffort}
+				isWorkSessionConversation={isWorkSessionConversation}
 				footer={
 					isStreamingTarget ? (
 						<StreamingIndicator
@@ -322,6 +327,7 @@ export function ChatMessageList({
 				isStreaming={scopedStreamingMessage.isActive && !scopedStreamingMessage.isQueued}
 				reasoningEffort={reasoningEffort}
 				failureCategory={scopedStreamingMessage.failureCategory}
+				isWorkSessionConversation={isWorkSessionConversation}
 				footer={
 					<StreamingIndicator
 						hasContent={hasStreamingContent}
