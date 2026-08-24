@@ -10,11 +10,19 @@ using System.Security.Cryptography;
 ///     extract-to-sibling-then-move step that stops a partial extract from masquerading as a warm cache.
 /// </summary>
 /// <remarks>
-///     A cache hit short-circuits the whole thing, so a re-install on a box that already fetched uv performs no network
-///     I/O. The digest is checked before anything is unpacked, never after — an archive that fails verification is never
-///     written anywhere a later step could find it.
+///     <para>
+///         A cache hit short-circuits the whole thing, so a re-install on a box that already fetched uv performs no
+///         network I/O. The digest is checked before anything is unpacked, never after — an archive that fails
+///         verification is never written anywhere a later step could find it.
+///     </para>
+///     <para>
+///         Public because it is the SHARED uv acquisition for every uv-managed venv the engine provisions, not the
+///         training runtime's private detail: the sandboxed compute tool provisions its own (numpy/scipy/sympy) closure
+///         through this same pipeline under its own cache root. Nothing here is training-specific — the caller supplies
+///         the cache root — so a second digest-pinned downloader would be a duplicate of this one, not a new capability.
+///     </para>
 /// </remarks>
-internal sealed class UvBinaryAcquirer(HttpClient httpClient)
+public sealed class UvBinaryAcquirer(HttpClient httpClient)
 {
     // uv's Linux tarball is ~20 MB; the ceiling only exists so a hostile or misconfigured host cannot stream forever.
     private const long MaxDownloadBytes = 512L * 1024 * 1024;

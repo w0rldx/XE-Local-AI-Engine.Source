@@ -5,8 +5,13 @@ namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 ///     through; everything else — <c>LD_PRELOAD</c>, <c>LD_LIBRARY_PATH</c>, proxy and credential variables, and every
 ///     node secret — is dropped by construction, and <see cref="LinuxTrainingProcessRunner" /> clears the inherited
 ///     environment before applying the result.
+///     <para>
+///         Public for <see cref="BuildUvEnvironment" /> alone, which is not training-specific: it is the environment any
+///         uv install must run under (isolated HOME/TMPDIR, no user <c>uv.toml</c>, managed interpreter only), so the
+///         compute tool's venv provision shares it rather than restating those four flags a second time.
+///     </para>
 /// </summary>
-internal static class TrainingRuntimeEnvironment
+public static class TrainingRuntimeEnvironment
 {
     private static readonly string[] Allowlist = ["PATH", "LANG", "LC_ALL", "CUDA_HOME", "CUDA_PATH"];
 

@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     secret. This mirrors <c>StreamingProcessRunner</c> in the LlamaServer provider, which cannot be reused directly:
 ///     it is internal to that assembly and this project references <c>Providers.Abstractions</c> only (ADR 0005 §3).
 /// </remarks>
-internal sealed class LinuxTrainingProcessRunner : ITrainingProcessRunner
+public sealed class LinuxTrainingProcessRunner : ITrainingProcessRunner
 {
     public Task<int> RunAsync(string file,
         IReadOnlyList<string> args,
