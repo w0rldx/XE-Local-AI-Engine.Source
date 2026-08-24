@@ -41,6 +41,45 @@ public sealed class ComputeToolGatewayTests
     }
 
     [Test]
+    public async Task ExecuteAsync_TearsDownEveryWritableSurfaceAfterTheCall()
+    {
+        // The tool advertises itself to the model as stateless. Both places a script can leave a file — the jail it
+        // ran in and the HOME/TMPDIR scratch it was pointed at — must therefore be per call and gone afterwards, or
+        // one conversation's files are readable by the next.
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.None);
+        var gateway = CreateGateway(provider);
+
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(2)" });
+
+        AssertEx.Equal(expected: 2, provider.KilledSandboxIds.Count, "each call must terminate the jail it ran in");
+        AssertEx.Equal(expected: 2, provider.CommandRequests.Count);
+
+        var first = provider.CommandRequests[0].Environment!["HOME"];
+        var second = provider.CommandRequests[1].Environment!["HOME"];
+        AssertEx.NotEqual(first, second, "a shared scratch directory would carry one script's files into the next call");
+        AssertEx.False(Directory.Exists(first), "the scratch directory must not outlive the call that used it");
+        AssertEx.False(Directory.Exists(second));
+        AssertEx.Equal(first, provider.CommandRequests[0].Environment!["TMPDIR"], "HOME and TMPDIR share the one per-call directory");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenTheScriptFails_StillTearsDownTheJail()
+    {
+        // A failed or cancelled run is exactly when a script is most likely to have left something behind, so the
+        // teardown cannot sit on the success path.
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.None)
+        {
+            Result = Completed(exitCode: 1, standardOutput: string.Empty, standardError: "boom")
+        };
+        var gateway = CreateGateway(provider);
+
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "raise SystemExit(1)" });
+
+        AssertEx.Equal(expected: 1, provider.KilledSandboxIds.Count);
+    }
+
+    [Test]
     public async Task ExecuteAsync_WhenTheProviderAdvertisesContainment_RequestsEgressDenialAndCeilings()
     {
         var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy
@@ -243,6 +282,10 @@ public sealed class ComputeToolGatewayTests
 
         public SandboxCommandRequest? CommandRequest { get; private set; }
 
+        public List<SandboxCommandRequest> CommandRequests { get; } = [];
+
+        public List<string> KilledSandboxIds { get; } = [];
+
         public SandboxCommandResult Result { get; init; } = new()
         {
             ExecutionId = "x",
@@ -275,6 +318,7 @@ public sealed class ComputeToolGatewayTests
         public Task<SandboxCommandResult> ExecuteAsync(SandboxHandle handle, SandboxCommandRequest request, CancellationToken cancellationToken = default)
         {
             CommandRequest = request;
+            CommandRequests.Add(request);
             return Task.FromResult(Result with { ExecutionId = request.ExecutionId });
         }
 
@@ -305,6 +349,7 @@ public sealed class ComputeToolGatewayTests
 
         public Task KillAsync(SandboxHandle handle, CancellationToken cancellationToken = default)
         {
+            KilledSandboxIds.Add(handle.SandboxId);
             return Task.CompletedTask;
         }
     }

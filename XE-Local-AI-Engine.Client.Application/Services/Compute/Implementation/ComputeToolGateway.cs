@@ -20,6 +20,13 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 ///         access to AgentHome's single workspace, and this sandbox has no workspace to serialize.
 ///     </para>
 ///     <para>
+///         The jail is also per INVOCATION: it is killed when the call returns, which deletes the jail root the script
+///         ran in, and the per-call HOME/TMPDIR scratch directory is deleted alongside it. The tool advertises itself
+///         to the model as stateless, and only tearing both down each call makes that true — a reused jail would have
+///         let one script's files be read by a later call, including one from a different conversation. Only writable
+///         state is discarded; the expensive part, the uv-provisioned venv, lives outside the jail and is untouched.
+///     </para>
+///     <para>
 ///         Egress denial and the resource ceilings are CAPABILITY-GATED rather than unconditional, exactly as AgentHome
 ///         requests them: the provider fails closed on a guarantee it cannot honor, so asking for containment a host
 ///         cannot deliver would not harden the tool — it would stop it running at all, with the degradation already
@@ -43,6 +50,13 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
 
     /// <summary>The marker every capped stream in this product ends with, so a model reads one convention.</summary>
     private const string Marker = "…[output truncated]";
+
+    /// <summary>Parent of the per-invocation HOME/TMPDIR directories, beside the provisioned venv so the uninstaller sweep already reaches it.</summary>
+    private static readonly string ScratchRoot = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "XE-Local-AI-Engine",
+        "compute-runtime",
+        "scratch");
 
     private readonly IComputePythonEnvironment _environment;
     private readonly IAgentHomeIdentityProvider _identityProvider;
@@ -74,12 +88,18 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         var code = request.Code
                    ?? throw new ArgumentException("The compute request carries no code.", nameof(request));
 
+        // Per-invocation writable state. The jail and the scratch directory are the only two places a script can leave
+        // a file behind, and BOTH are torn down below — that is what makes the advertised statelessness real rather
+        // than a claim. The provisioned venv is NOT here: it lives under the compute cache root, costs seconds to
+        // build, and is read-only to the script, so it survives untouched.
+        var scratch = Path.Combine(ScratchRoot, "run-" + Guid.NewGuid().ToString("N"));
+        SandboxHandle? handle = null;
         try
         {
             var interpreter = await _environment.GetInterpreterPathAsync(cancellationToken).ConfigureAwait(false);
             var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
-            var handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity), cancellationToken).ConfigureAwait(false);
-            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(interpreter, code), cancellationToken)
+            handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity), cancellationToken).ConfigureAwait(false);
+            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(interpreter, code, scratch), cancellationToken)
                                         .ConfigureAwait(false);
             return FormatResult(result);
         }
@@ -92,6 +112,49 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         {
             _logger.LogWarning(exception, "The compute sandbox could not be created with the requested containment.");
             return "run_python rejected: this node's sandbox cannot provide the containment the compute tool requires.";
+        }
+        finally
+        {
+            // CancellationToken.None deliberately: a cancelled or failed call is exactly when a script is most likely to
+            // have left something behind, so the teardown must still run.
+            if (handle is not null)
+            {
+                await KillQuietlyAsync(handle).ConfigureAwait(false);
+            }
+
+            TryDeleteDirectory(scratch);
+        }
+    }
+
+    /// <summary>
+    ///     Terminates the jail this call ran in, which is what deletes everything the script wrote below it. Failures
+    ///     are logged rather than thrown: the model already has its result by now, and replacing a completed run's
+    ///     output with a teardown error would tell it the computation failed when it did not.
+    /// </summary>
+    private async Task KillQuietlyAsync(SandboxHandle handle)
+    {
+        try
+        {
+            await _provider.KillAsync(handle, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is SandboxHandleInvalidException or IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(exception, "The compute jail could not be torn down after the call.");
+        }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Best-effort: the next call gets its own directory regardless, so a stuck sweep cannot leak state INTO it.
         }
     }
 
@@ -123,7 +186,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         };
     }
 
-    private SandboxCommandRequest BuildCommandRequest(string interpreter, string code)
+    private SandboxCommandRequest BuildCommandRequest(string interpreter, string code, string scratch)
     {
         return new SandboxCommandRequest
         {
@@ -135,7 +198,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             // never written to disk and never becomes an argv the process table exposes.
             Arguments = ["-I", "-"],
             StandardInput = code,
-            Environment = BuildEnvironment(),
+            Environment = BuildEnvironment(scratch),
             Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds)
         };
     }
@@ -145,13 +208,14 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     ///     scratch directory rather than left inherited: the provider identity-maps the filesystem, so an inherited HOME
     ///     would let a script read and write the operator's <c>~/.config</c> and <c>~/.cache</c> as an ordinary side
     ///     effect of importing a library, which nothing about running arithmetic needs.
+    ///     <para>
+    ///         The directory is per INVOCATION, not per node. A shared one would have made every cache, dotfile and
+    ///         temp file a script writes readable by the next call — including a call in another conversation — which
+    ///         is the opposite of what the tool advertises. The caller deletes it once the call returns.
+    ///     </para>
     /// </summary>
-    private static IReadOnlyDictionary<string, string> BuildEnvironment()
+    private static IReadOnlyDictionary<string, string> BuildEnvironment(string scratch)
     {
-        var scratch = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XE-Local-AI-Engine",
-            "compute-runtime",
-            "scratch");
         Directory.CreateDirectory(scratch);
         return new Dictionary<string, string>(StringComparer.Ordinal)
         {

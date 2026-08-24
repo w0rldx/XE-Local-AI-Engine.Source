@@ -113,6 +113,43 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     }
 
     [Test]
+    public async Task RunPython_CannotSeeWhatAnEarlierCallWrote()
+    {
+        // The advertised contract is that a call leaves nothing behind. ONE provider and ONE gateway across both calls
+        // is the point: that is the shape a real turn has, and the shape that used to reattach to the same jail and the
+        // same scratch directory, handing the second script the first one's files.
+        RequireOptIn();
+        using var provider = CreateHostProvider();
+        var gateway = CreateGateway(provider);
+
+        // Both the working directory (the jail) and HOME (the scratch) — the two writable surfaces a script has.
+        var wrote = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = """
+                   import os, pathlib
+                   pathlib.Path("leaked-cwd.txt").write_text("from call one")
+                   pathlib.Path(os.environ["HOME"], "leaked-home.txt").write_text("from call one")
+                   print("WROTE")
+                   """
+        });
+        AssertEx.Contains(wrote, "exit_code: 0");
+        AssertEx.Contains(wrote, "WROTE");
+
+        var read = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = """
+                   import os, pathlib
+                   print("CWD", pathlib.Path("leaked-cwd.txt").exists())
+                   print("HOME", pathlib.Path(os.environ["HOME"], "leaked-home.txt").exists())
+                   """
+        });
+
+        AssertEx.Contains(read, "exit_code: 0");
+        AssertEx.Contains(read, "CWD False");
+        AssertEx.Contains(read, "HOME False");
+    }
+
+    [Test]
     public async Task RunPython_CannotReachTheNetwork()
     {
         RequireOptIn();

@@ -33,7 +33,7 @@ The `run_python` tool (`ComputeToolDefinition`, `XE-Local-AI-Engine.Client.Appli
 **What it is not:**
 - Not a **data-science environment** — the full scipy/numpy/pandas stack is not provisioned; the closure is deliberately minimal (numpy, scipy, sympy only) to keep provisioning fast and safe.
 - Not a **code-generation tool** — the agent author defines what tools the agent has access to; a tool is never offered speculatively.
-- Not **filesystem persistent** — anything written to disk during execution is torn down with the sandbox when the call completes; the script cannot read or corrupt prior state.
+- Not **filesystem persistent** — the jail the script runs in and the `HOME`/`TMPDIR` scratch it is pointed at are both created per call and deleted when it returns, so one call's files are never readable by the next. (A script writing to an *absolute* host path outside both is a separate matter: the process provider has no mount layer — see §2.2.)
 
 **Available libraries:**
 - **numpy** — arrays, linear algebra, broadcasting, dtypes.
@@ -55,20 +55,23 @@ No torch, no pandas, no network libraries, no system shell. All three libraries 
 2. **Gateway setup** (`ComputeToolGateway.ExecuteAsync`):
    - Resolves the pinned-venv Python interpreter path (`IComputePythonEnvironment.GetInterpreterPathAsync`).
    - Acquires the node's identity (OwnerUserId, NodeId) from `IAgentHomeIdentityProvider` (shared with AgentHome).
-   - Creates or attaches to a sandbox with a distinct runtime profile (`"compute-python"`, separate from AgentHome's `"dotnet-agent-home"`), so compute scripts never share a jail with workspace operations.
+   - Creates a sandbox with a distinct runtime profile (`"compute-python"`, separate from AgentHome's `"dotnet-agent-home"`), so compute scripts never share a jail with workspace operations.
+   - Creates a fresh per-invocation directory for the script's `HOME`/`TMPDIR`.
 
 3. **Sandbox execution** (`IAgentSandboxRuntimeProvider.ExecuteAsync`):
    - The Python interpreter is invoked with `-I` (isolated mode: no PYTHONPATH, no user site-packages, no script directory import).
    - The script is passed on stdin with `-` (not written to disk, not exposed in the process table).
    - Execution runs inside the process sandbox with:
      - **Working directory jail**: the script cannot `cd` outside its assigned directory.
-     - **Environment scrub**: only whitelisted environment variables are inherited; `HOME` and `TMPDIR` are pointed at compute-owned scratch directories to prevent library side-effects (e.g. caching to `~/.cache`).
+     - **Environment scrub**: only whitelisted environment variables are inherited; `HOME` and `TMPDIR` are pointed at the call's own scratch directory to prevent library side-effects (e.g. caching to `~/.cache`).
      - **Network policy**: empty network namespace (if the host supports it) — no DNS, no IP stack, no loopback access *to the outside*.
      - **Resource ceilings**: configurable CPU cores, resident memory, and PID limits, applied where the host can enforce them (systemd cgroup v2; silently degraded on older systems per the sandbox provider's fail-closed contract).
      - **Wall-clock timeout**: process tree is killed if execution exceeds the configured ceiling (default 30 seconds).
      - **Output byte caps**: stdout and stderr are each truncated at `MaxOutputBytes` (default 64 KiB) with a truncation marker `…[output truncated]`.
 
-4. **Result formatting** (`ComputeToolGateway.FormatResult`): Exit code, stdout, and stderr are formatted the same way `HostProcessExecutor.FormatResult` does, so all command-shaped tools in the product read uniformly to agents:
+4. **Teardown** (`finally`): The jail is killed and the scratch directory deleted, which is what makes the statelessness above real rather than advertised — the jail root and that directory are the only two places a script can write. It runs on failure and cancellation too, since that is when a script is most likely to have left something behind. The provisioned venv sits outside both and is never touched, so a fresh jail per call costs a directory create, not a re-provision. Covered by `ComputeSandboxLiveTests.RunPython_CannotSeeWhatAnEarlierCallWrote` (write in call 1, assert absent in call 2).
+
+5. **Result formatting** (`ComputeToolGateway.FormatResult`): Exit code, stdout, and stderr are formatted the same way `HostProcessExecutor.FormatResult` does, so all command-shaped tools in the product read uniformly to agents:
 
    ```
    Exit code: 0
@@ -81,7 +84,7 @@ No torch, no pandas, no network libraries, no system shell. All three libraries 
 
 **Docker**: [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) explicitly excludes the chat/inference path from Docker with no fallback. Requiring a container daemon for every chat turn contradicts the product's driver-only footprint, and the containment Docker provides (toolchain supply, language isolation) is not needed here — only resource isolation and network denial, both of which the process sandbox already provides.
 
-**HostProcessExecutor / uncontained host process**: This is what Custom Tools use. The `HostExecutableGuard` denylist blocks bare interpreters because the executor offers zero filesystem boundary and zero network isolation — an operator-chosen path with no confinement is inherently a foot-gun. The process sandbox is *different* — it is a *different execution role* than the Custom Tool host executor, which is precisely why routing through it does not undermine the denylist. An agent can never select the interpreter path (it is the one fixed, digest-pinned venv Python the engine provisions), and it cannot reach the host filesystem or network.
+**HostProcessExecutor / uncontained host process**: This is what Custom Tools use. The `HostExecutableGuard` denylist blocks bare interpreters because the executor offers zero filesystem boundary and zero network isolation — an operator-chosen path with no confinement is inherently a foot-gun. The process sandbox is *different* — it is a *different execution role* than the Custom Tool host executor, which is precisely why routing through it does not undermine the denylist. An agent can never select the interpreter path (it is the one fixed, digest-pinned venv Python the engine provisions), and it cannot reach the network. Note what this does *not* buy: the process provider has no mount layer, so a script still sees the host filesystem as the worker user — that is why the tool is `WriteExecute`, approval-required, off by default, and never offered to a cloud-hosted model.
 
 **System Python via detection / custom wrapper**: [ADR 0005](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md) decided this for Training: "the host's Python is not usable." Fragmentation, version drift, missing or bloated site-packages, no clean uninstall — those problems do not go away for compute tools. The pinned-venv approach (uv binary download, `uv sync` with a repo-committed lockfile) gives every node the *exact same* packages with no operator setup, no version surprises, and a clean teardown (delete the venv directory).
 
@@ -95,7 +98,7 @@ No torch, no pandas, no network libraries, no system shell. All three libraries 
 
 - **Cold-start provisioning**: The first call to `GetInterpreterPathAsync` triggers provisioning if the venv is missing, which takes ~1 minute and ~220 MB for numpy/scipy/sympy on a typical box. Subsequent calls reuse it.
 
-- **Cleanup**: The venv directory is never cleaned up automatically — it persists across node restarts. An operator can delete it manually; the next compute call re-provisions it.
+- **Cleanup**: The venv directory is never cleaned up automatically — it persists across node restarts, which is the point: it is the expensive part, it is read-only to scripts, and it is what a per-call jail teardown must *not* take with it. An operator can delete it manually; the next compute call re-provisions it. Per-call state (the jail, the `HOME`/`TMPDIR` scratch) is the opposite and is deleted every call — see step 4 of the execution flow.
 
 - **Pinning discipline**: `tools/compute/pyproject.toml` and `uv.lock` are both committed to the repo. Adding a dependency is a deliberate decision, never a convenience — every package here is code a model can execute.
 
