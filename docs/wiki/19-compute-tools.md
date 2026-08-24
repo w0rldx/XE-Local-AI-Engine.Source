@@ -1,8 +1,8 @@
 # Compute Tools — Sandboxed Code Execution for Agents
 
-> Baseline: `test/math-agent-eval` · Reviewed: 2026-08-24 · Code-grounded.
+> Baseline: `feat/math-agent-followups` · Reviewed: 2026-08-25 · Code-grounded.
 
-The **compute tools** subsystem allows governed agents to execute short scripts in a **sandboxed, offline interpreter** for numeric and symbolic computation. The first and only v1 tool is `run_python`, which runs arbitrary Python 3 code with numpy, scipy, and sympy available — no network, no filesystem persistence, no conversation access.
+The **compute tools** subsystem allows governed agents to execute short scripts in a **sandboxed, offline interpreter** for numeric and symbolic computation. The first and only v1 tool is `run_python`, which runs arbitrary Python 3 code with numpy, scipy, and sympy available — no network, no host filesystem, no filesystem persistence, no conversation access.
 
 This is distinct from the **Custom Tools** library (`CustomToolCatalog`), which executes operator-authored, node-local commands through an uncontained host-process executor. Compute tools route through the **process-role sandbox** (`ISandboxRuntimeProvider`), the same containment primitive that supervises AgentHome and Coder commands, and they are held out of the default tool offer entirely — profile-opt-in only.
 
@@ -33,7 +33,8 @@ The `run_python` tool (`ComputeToolDefinition`, `XE-Local-AI-Engine.Client.Appli
 **What it is not:**
 - Not a **data-science environment** — the full scipy/numpy/pandas stack is not provisioned; the closure is deliberately minimal (numpy, scipy, sympy only) to keep provisioning fast and safe.
 - Not a **code-generation tool** — the agent author defines what tools the agent has access to; a tool is never offered speculatively.
-- Not **filesystem persistent** — the jail the script runs in is created per call and deleted when it returns, and the `HOME`/`TMPDIR` scratch it is pointed at lives *inside* that jail, so one call's files are never readable by the next. (A script writing to an *absolute* host path outside the jail is a separate matter: the process provider has no mount layer — see §2.2.)
+- Not **filesystem persistent** — the jail the script runs in is created per call and deleted when it returns, and the `HOME`/`TMPDIR` scratch it is pointed at lives *inside* that jail, so one call's files are never readable by the next.
+- Not able to **see the host filesystem at all** — since the isolated launch mode was wired in, an absolute host path names nothing the script can reach (§2.4). That was not true before: the process provider had no mount layer, and a script could read anything the worker user could.
 
 **Available libraries:**
 - **numpy** — arrays, linear algebra, broadcasting, dtypes.
@@ -44,27 +45,34 @@ No torch, no pandas, no network libraries, no system shell. All three libraries 
 
 ---
 
-## 2. Execution path — process sandbox isolation
+## 2. Execution path — process sandbox, in an isolated mount namespace
 
 `run_python` routes through the **process-role `ISandboxRuntimeProvider`** (`ProcessSandboxRuntimeProvider`, `XE-Local-AI-Engine.Client.Application/Services/Sandbox/`), the same containment primitive that AgentHome and Coder use today. This is *not* Docker, *not* a custom HostProcessExecutor, and it is *not* a lightweight fork of system Python.
+
+Unlike AgentHome and Coder, compute asks that provider for its **opt-in filesystem-isolated launch mode** (`SandboxIsolationMode.Filesystem`) on every call. It is the only caller that does. What that buys, and what it does not, is §2.4.
 
 ### 2.1 Execution flow
 
 1. **Handler validation** (`RunPythonToolHandler.ExecuteAsync`): The node kill-switch `Compute:Enabled` (default `false`) short-circuits; if enabled, the JSON request is deserialized and validated (non-empty, ≤20,000 chars).
 
-2. **Gateway setup** (`ComputeToolGateway.ExecuteAsync`):
-   - Resolves the pinned-venv Python interpreter path (`IComputePythonEnvironment.GetInterpreterPathAsync`).
+2. **Boundary check** (`ComputeToolGateway.ExecuteAsync`, first statement after argument validation): if the sandbox provider does not advertise `SupportsFilesystemIsolation`, the call is **refused** — `run_python rejected: this node cannot isolate the compute sandbox filesystem…` plus an operator-facing log line naming bubblewrap. **The ordering is load-bearing and is asserted by test.** It fires before the interpreter is provisioned, before the node identity is read and before any jail exists: a refusal any later would have downloaded and unpacked a ~220 MB Python closure onto a node that can never run it, and would have had to explain itself from inside a half-built sandbox. This check *replaces* the egress-capability check that used to stand here and subsumes it — see §3.4.
+
+3. **Gateway setup** (`ComputeToolGateway.ExecuteAsync`):
+   - Resolves the pinned-venv Python interpreter and the two trees the sandbox must bind for it (`IComputePythonEnvironment.GetRuntimeAsync`).
    - Acquires the node's identity (OwnerUserId, NodeId) from `IAgentHomeIdentityProvider` (shared with AgentHome).
    - Creates a sandbox with a distinct runtime profile (`"compute-python"`, separate from AgentHome's `"dotnet-agent-home"`), so compute scripts never share a jail with workspace operations. The attach key carries that profile **plus this invocation's id**: the registry attaches *by* the key, so a constant one hands two concurrent `run_python` calls a single live jail — one shared working directory, and the first call to finish tearing it down under the other.
-   - Creates the script's `HOME` and `TMPDIR` **inside that jail** (`<jail>/home` and `<jail>/.tmp`), through the provider's own `ResetDirectoryAsync` rather than a host `mkdir`. Inside is load-bearing: the disk ceiling below is enforced by walking the jail, so a scratch directory anywhere else is space the ceiling does not measure — which is how a script filling `TMPDIR` used to fill the host disk while the watchdog reported nothing. A provider that cannot name its jail root (`SandboxHandle.WorkingRoot` is null — the deterministic fake) gets the call **refused** rather than served with unmetered scratch.
+   - Names `Isolation = SandboxIsolationMode.Filesystem` and the two `ReadOnlyTrees` the interpreter needs. Unlike the ceilings below, isolation is **not a preference a provider may quietly drop**: a provider that cannot deliver it rejects the create request fail-closed, which is what makes asking for it safe.
+   - Creates the script's `HOME` and `TMPDIR` **inside that jail** (`<jail>/home` and `<jail>/.tmp`), through the provider's own `ResetDirectoryAsync` rather than a host `mkdir`. Inside is load-bearing: the disk ceiling below is enforced by walking the jail, so a scratch directory anywhere else is space the ceiling does not measure — which is how a script filling `TMPDIR` used to fill the host disk while the watchdog reported nothing. A provider that cannot name its jail root (`SandboxHandle.WorkingRoot` is null — the deterministic fake) gets the call **refused** rather than served with an unmetered writable tree.
 
-3. **Sandbox execution** (`IAgentSandboxRuntimeProvider.ExecuteAsync`):
+4. **Sandbox execution** (`IAgentSandboxRuntimeProvider.ExecuteAsync`):
    - The Python interpreter is invoked with `-I` (isolated mode: no PYTHONPATH, no user site-packages, no script directory import).
    - The script is passed on stdin with `-` (not written to disk, not exposed in the process table).
    - Execution runs inside the process sandbox with:
-     - **Working directory jail**: the script cannot `cd` outside its assigned directory.
-     - **Environment scrub**: only whitelisted environment variables are inherited; `HOME` and `TMPDIR`/`TMP`/`TEMP` are pointed at the call's own scratch directories inside the jail to prevent library side-effects (e.g. caching to `~/.cache`). They are two directories, not one, so a script clearing its temp files does not wipe its own home.
-     - **Network policy**: empty network namespace — no DNS, no IP stack, no loopback access *to the outside*. **Unconditional and fail-closed**: a host that cannot create one gets the call refused (`run_python rejected: this node cannot run the compute sandbox offline…`) plus an operator-facing log line, because "no network" is what the tool's description promises the model and what the user approved the call on. It is never downgraded to unrestricted.
+     - **Filesystem boundary**: a mount namespace containing a read-only `/usr` (plus whatever legacy roots this host's layout needs), a four-file invented `/etc`, `/dev` and `/proc` remounted read-only, empty `/home`, `/run`, `/var`, the two interpreter trees bound read-only at their own canonical paths, and exactly one writable directory — `/work`, which *is* this call's jail. The host filesystem is not present, and the jail is not reachable at its host pathname either.
+     - **Working directory**: `/work`. There is nothing above it to `cd` to.
+     - **Environment**: `--clearenv` plus an allow-list. `HOME` is `/work/home` and `TMPDIR`/`TMP`/`TEMP` are `/tmp`, which is a *bind of a jail subdirectory* rather than a tmpfs — so a library caching to `~/.cache` or writing through `tempfile` stays inside the tree the disk ceiling walks, and nothing goes to RAM the memory ceiling cannot see. They are two directories, not one, so a script clearing its temp files does not wipe its own home. `PYTHONNOUSERSITE` and `PYTHONDONTWRITEBYTECODE` are set.
+     - **Thread pinning**: `OMP_NUM_THREADS` and its three siblings are pinned to `Compute:ThreadLimit` (default `min(4, cores)`). Unpinned, numpy's and scipy's BLAS sizes its pool from the **host's** core count read out of `/proc` — which is not what `Compute:CpuCount` allows, so it starts a thread per host core and then thrashes inside a fraction of one, with every one of those threads also counting against `PidsLimit`.
+     - **Network policy**: empty network namespace — no DNS, no IP stack, no loopback access *to the outside*. Under the isolated mode this is `bwrap`'s own `--unshare-net`, which the containment probe positively controls with a loopback connect that fails inside while succeeding outside. It is unconditional: there is no code path that runs a script with the operator's network.
      - **Resource ceilings**: configurable CPU cores, resident memory, and PID limits, applied where the host can enforce them (systemd cgroup v2). These stay capability-gated where egress denial does not: they bound *cost*, not reachability, so degrading them is logged rather than fatal.
      - **Jail disk ceiling**: the compute jail carries its OWN ceiling (`Compute:MaxJailDiskBytes`, default 256 MiB) rather than inheriting the node-wide `LocalContainer:MaxJailDiskBytes` (default 512 MiB), which is sized for workspace builds. The gateway passes it as `SandboxCreateRequest.MaxJailDiskBytes` and the provider applies `min(node-wide, per-sandbox)` — **tighten-only**: the node-wide value is the operator's ceiling, so a larger request never widens it, and a per-sandbox value can never re-enable a watchdog the operator disabled. It needs no capability gate for the same reason: a provider without a jail-growth watchdog ignores a field that could only have asked for *less*. Three properties of the number are worth stating exactly:
        - **It bounds OCCUPANCY, not one command's growth.** The watchdog measures everything under the jail root against the occupancy captured when the sandbox ran its *first* command, so a sandbox cannot accumulate an unbounded amount by running command after command, each staying just under the line. A command that starts in an already-over-ceiling jail is terminated at once. Anchoring at the first command (rather than at zero) is what keeps an AgentHome jail — filled by copy-in before any command runs — from being charged for a workspace it did not write.
@@ -73,9 +81,9 @@ No torch, no pandas, no network libraries, no system shell. All three libraries 
      - **Wall-clock timeout**: process tree is killed if execution exceeds the configured ceiling (default 30 seconds).
      - **Output byte caps**: stdout and stderr are each truncated at `MaxOutputBytes` (default 64 KiB) with a truncation marker `…[output truncated]`.
 
-4. **Teardown** (`finally`): The jail is killed, which is what makes the statelessness above real rather than advertised — the jail root is the only place a script can write, scratch included, so one kill reclaims all of it and there is no second directory a cancelled call could leave behind. It runs on failure and cancellation too, since that is when a script is most likely to have left something behind. The provisioned venv sits outside the jail and is never touched, so a fresh jail per call costs a directory create, not a re-provision. Covered by `ComputeSandboxLiveTests.RunPython_CannotSeeWhatAnEarlierCallWrote` (write in call 1, assert absent in call 2).
+5. **Teardown** (`finally`): The jail is killed, which is what makes the statelessness above real rather than advertised — the jail root is the only place a script can write, scratch included, so one kill reclaims all of it and there is no second directory a cancelled call could leave behind. It runs on failure and cancellation too, since that is when a script is most likely to have left something behind. The provisioned venv sits outside the jail and is never touched, so a fresh jail per call costs a directory create, not a re-provision. Covered by `ComputeSandboxLiveTests.RunPython_CannotSeeWhatAnEarlierCallWrote` (write in call 1, assert absent in call 2).
 
-5. **Result formatting** (`ComputeToolGateway.FormatResult`): Exit code, stdout, and stderr are formatted the same way `HostProcessExecutor.FormatResult` does, so all command-shaped tools in the product read uniformly to agents:
+6. **Result formatting** (`ComputeToolGateway.FormatResult`): Exit code, stdout, and stderr are formatted the same way `HostProcessExecutor.FormatResult` does, so all command-shaped tools in the product read uniformly to agents:
 
    ```
    Exit code: 0
@@ -88,7 +96,7 @@ No torch, no pandas, no network libraries, no system shell. All three libraries 
 
 **Docker**: [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) explicitly excludes the chat/inference path from Docker with no fallback. Requiring a container daemon for every chat turn contradicts the product's driver-only footprint, and the containment Docker provides (toolchain supply, language isolation) is not needed here — only resource isolation and network denial, both of which the process sandbox already provides.
 
-**HostProcessExecutor / uncontained host process**: This is what Custom Tools use. The `HostExecutableGuard` denylist blocks bare interpreters because the executor offers zero filesystem boundary and zero network isolation — an operator-chosen path with no confinement is inherently a foot-gun. The process sandbox is *different* — it is a *different execution role* than the Custom Tool host executor, which is precisely why routing through it does not undermine the denylist. An agent can never select the interpreter path (it is the one fixed, digest-pinned venv Python the engine provisions), and it cannot reach the network. Note what this does *not* buy: the process provider has no mount layer, so a script still sees the host filesystem as the worker user — that is why the tool is `WriteExecute`, approval-required, off by default, and never offered to a cloud-hosted model.
+**HostProcessExecutor / uncontained host process**: This is what Custom Tools use. The `HostExecutableGuard` denylist blocks bare interpreters because the executor offers zero filesystem boundary and zero network isolation — an operator-chosen path with no confinement is inherently a foot-gun. The process sandbox is *different* — it is a *different execution role* than the Custom Tool host executor, which is precisely why routing through it does not undermine the denylist. An agent can never select the interpreter path (it is the one fixed, digest-pinned venv Python the engine provisions), it cannot reach the network, and since the isolated mode was wired in it cannot see the host filesystem either. What that still does *not* buy is a kernel-hardened boundary — no seccomp filter, no LSM profile, and the disk ceiling under it is a best-effort occupancy check rather than a quota (§2.4). That is why the tool stays `WriteExecute`, approval-required, off by default, and never offered to a cloud-hosted model.
 
 **System Python via detection / custom wrapper**: [ADR 0005](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md) decided this for Training: "the host's Python is not usable." Fragmentation, version drift, missing or bloated site-packages, no clean uninstall — those problems do not go away for compute tools. The pinned-venv approach (uv binary download, `uv sync` with a repo-committed lockfile) gives every node the *exact same* packages with no operator setup, no version surprises, and a clean teardown (delete the venv directory).
 
@@ -102,11 +110,37 @@ No torch, no pandas, no network libraries, no system shell. All three libraries 
 
 - **Cold-start provisioning**: The first call to `GetInterpreterPathAsync` triggers provisioning if the venv is missing, which takes ~1 minute and ~220 MB for numpy/scipy/sympy on a typical box. Subsequent calls reuse it.
 
-- **Lockdown**: after a successful sync the whole venv tree has its write bits cleared (restored only for a re-provision). Scripts reach it through `sys.executable`, and a writable `site-packages` would let one call drop a module that every later approved call imports — a single approval turned into persistent code execution. **This is defence in depth, not a boundary**: the sandbox child runs under the *same uid* as the engine (`unshare --user --map-current-user`) and this provider has no mount layer, so a deliberate script can `os.chmod` the tree back. It stops accidental and low-effort writes; the real fix is a read-only bind mount in a mount namespace, which would be worth doing for the whole host filesystem rather than this tree alone. Covered by `ComputeSandboxLiveTests.RunPython_CannotWriteIntoTheProvisionedVenv`.
+- **Lockdown**: after a successful sync the whole venv tree has its write bits cleared (restored only for a re-provision). Scripts reach it through `sys.executable`, and a writable `site-packages` would let one call drop a module that every later approved call imports — a single approval turned into persistent code execution. **The write bits are now defence in depth, and the read-only bind mount is the boundary.** They used to be all there was: the sandbox child runs under the *same uid* as the engine, so a deliberate script could `os.chmod` the tree back and write. Inside the mount namespace the ownership is irrelevant — the chmod itself fails, and so does the write, with `EROFS`. The mode bits still matter for what happens *outside* that namespace (the engine's own processes, an operator's shell), which is why they stay. Covered by `ComputeSandboxLiveTests.RunPython_CannotWriteIntoTheProvisionedVenv_EvenAfterChmoddingItBack`, which asserts `EROFS` on `chmod` and on write, for both `site-packages` and the interpreter binary.
 
-- **Cleanup**: The venv directory is never cleaned up automatically — it persists across node restarts, which is the point: it is the expensive part, and it is what a per-call jail teardown must *not* take with it. An operator can delete it manually; the next compute call re-provisions it. Per-call state (the jail, with the `HOME`/`TMPDIR` scratch inside it) is the opposite and is deleted every call — see step 4 of the execution flow.
+- **Legacy scratch sweep**: provisioning deletes `<compute-runtime>/scratch` if it exists, once per process, on the warm path as well as the cold one, and logs that it did. That directory is where the *pre-jail* layout put a script's `HOME`/`TMPDIR`. It was outside the jail the disk watchdog walks and it persisted between calls, so it is both unmetered space and one conversation's files readable by the next — the two holes the in-jail scratch closed. A box upgraded from an older build still has the directory with whatever those calls left in it, so it is swept before the tool can run. A failure to delete is logged and does **not** block the tool: the directory is no longer written to either way.
+
+- **Cleanup**: The venv directory is never cleaned up automatically — it persists across node restarts, which is the point: it is the expensive part, and it is what a per-call jail teardown must *not* take with it. An operator can delete it manually; the next compute call re-provisions it. Per-call state (the jail, with the `HOME`/`TMPDIR` scratch inside it) is the opposite and is deleted every call — see step 5 of the execution flow.
 
 - **Pinning discipline**: `tools/compute/pyproject.toml` and `uv.lock` are both committed to the repo. Adding a dependency is a deliberate decision, never a convenience — every package here is code a model can execute.
+
+### 2.4 The filesystem boundary — what is real, and what is still best-effort
+
+`run_python` is the only caller of the sandbox provider's isolated launch mode. The mechanism itself, its capability probe, its fd-bound mounts and its scope-cgroup kill authority are documented in [Security & Privacy §7.1](12-security-and-privacy.md#71-the-isolated-launch-mode-sandboxisolationmodefilesystem--opt-in-consumed-by-run_python); this section says what it means *for this tool*.
+
+**Real, and enforced by the kernel's mount and namespace machinery — not by application-level path checks:**
+
+| Property | Mechanism | Live assertion |
+|---|---|---|
+| A script cannot **read** the host filesystem | The host filesystem is not in the command's mount namespace. `/usr` is a read-only bind; everything else the script sees is invented, empty, or the jail. | Canaries under `$HOME` and under the node data directory answer `ENOENT` inside while still existing outside. |
+| A script cannot **write** the interpreter it runs on | The venv and the managed-CPython root are `--ro-bind-fd`. `os.chmod` cannot undo a read-only mount. | `chmod` and write, on `site-packages` and on the interpreter binary, all answer `EROFS`. |
+| A script cannot see the **machine's accounts** | `/etc` is four files generated into sealed `memfd`s: `passwd` carries `root` and one invented account, nothing else. | The jail's `/etc/passwd` lists `root,xe`; the operator's own account name is absent. |
+| A script cannot reach the **network** | `bwrap --unshare-net`. | A connect to `1.1.1.1:53` fails; the probe additionally proves a loopback connect fails inside and succeeds outside. |
+| A script cannot see or signal **other processes** | `--unshare-pid`, `--unshare-ipc`, `--unshare-uts`. The workload is pid 2 in its own namespace. | Probe control: a host pid visible outside is absent from the jail's `/proc`. |
+| A script cannot escape via a **nested user namespace** | `--disable-userns --assert-userns-disabled` — bwrap *fails* rather than continuing if the kernel cannot enforce it. | Probe control. |
+| The **jail path itself** is not reachable | The jail is bound at `/work` and never at its host name. | `[ -e '<host jail path>' ]` is false inside; `pwd` is `/work`. |
+
+**Still best-effort, and must not be described as a boundary:**
+
+- **The jail disk ceiling.** `Compute:MaxJailDiskBytes` is enforced by a watchdog that walks the jail every two seconds and sums **visible file** occupancy. An `unlink`-then-write loop holding an open descriptor bypasses it entirely, and even without that trick a script can exceed the line between samples. It is a runaway-detector, not a quota; a real ceiling needs a project quota or a size-bounded mount, and that is a follow-up. What the isolated mode *did* fix is coverage: `/tmp` is a bind of a jail subdirectory rather than a tmpfs, so nothing the script writes escapes the tree the watchdog walks (or lands in RAM the memory ceiling cannot see).
+- **Kernel-level hardening.** There is no seccomp filter and no LSM profile. A kernel LPE is out of scope for this boundary exactly as it is for the default posture; strong isolation remains MXC's job behind the same seam.
+- **What the script prints.** Output is capped, not classified. Anything the script computes reaches the model and the conversation.
+
+**And one thing that is not a boundary question at all:** the two bound trees are chosen narrowly — the venv and the managed-CPython root, never the compute cache root above them, which also holds the uv download cache, the uv binary and the lockfile state marker. A tree list is not enforced by anything except the code that writes it, so widening it is how this boundary would be lost quietly. The live suite asserts that the uv cache beside the bound trees is `ENOENT` inside, which is the tripwire for exactly that mistake.
 
 ---
 
@@ -145,9 +179,16 @@ Seeded agent example: `MathematicianAgentSeeder` (`Services/Agents/Implementatio
 | `MemoryMb` | `int` | `2048` | Resident-memory ceiling for the sandbox, applied where the host can enforce it. |
 | `CpuCount` | `double` | `2` | CPU-core ceiling for the sandbox, applied where the host can enforce it. |
 | `PidsLimit` | `int` | `64` | Process/thread ceiling for the sandbox, applied where the host can enforce it. |
+| `ThreadLimit` | `int` | `min(4, cores)` | What every numeric-library thread-count variable (`OMP_NUM_THREADS`, `OPENBLAS_NUM_THREADS`, `MKL_NUM_THREADS`, `NUMEXPR_NUM_THREADS`) is pinned to inside the sandbox. Pinned because those libraries size their pools from the **host's** core count, not from `CpuCount`; capped at four because linear algebra on this tool's array sizes stops scaling long before a many-core box's core count, and every extra thread also costs against `PidsLimit`. |
 | `MaxJailDiskBytes` | `long` | `268435456` (256 MiB) | How much a script may leave in its own jail — working directory, `HOME` and `TMPDIR` together — before the process tree is killed. Tightens the node-wide `LocalContainer:MaxJailDiskBytes` for the compute jail only; raising it past that value has no effect. |
 
-**Egress denial is not gated at all**: a host that cannot create an empty network namespace has `run_python` refuse every call, since the offline guarantee is the one the model and the approving user were shown. Resource limits remain **capability-gated** — an old system without cgroup v2 or systemd --user runs without the ceilings and says so in the containment log, because they bound cost rather than reachability.
+### 3.4 What is gated, and what refuses
+
+**The filesystem boundary is not gated at all**: a node whose sandbox provider does not advertise `SupportsFilesystemIsolation` has `run_python` refuse every call, before provisioning and before any jail is created (§2.1 step 2). "Sandboxed" is what the tool's description promises the model and what the approving user was shown.
+
+**Egress denial rides on the same refusal.** It used to have its own capability check, on the provider's `SupportsNetworkPolicy` flag — which describes the *separate* `unshare(1)` mechanism the non-isolated chain uses. Under the isolated mode that mechanism is not on the path: the empty network namespace is `bwrap`'s own `--unshare-net`, positively controlled by the probe with a loopback connect. The old check was therefore both redundant and capable of a **false refusal** — a host that isolates perfectly well but whose `unshare(1)` probe failed would have been turned away. It was replaced by the boundary check, which is strictly stronger: the call is still never run with the operator's network, and now never with the operator's filesystem either. `NetworkPolicy.None` is still stated on the create request, as the honest statement of intent and as what a future non-isolating provider would need.
+
+**Resource limits remain capability-gated** — an old system without cgroup v2 or systemd `--user` runs without the ceilings and says so in the containment log, because they bound *cost* rather than reachability. Degrading them costs no advertised guarantee; degrading the boundary would.
 
 **Maintainer rule**: The `Enabled` kill-switch is the single source of truth for "is this node allowed to execute code" — it parallels `AgentHome:Enabled` and is read the same way. Never add a code path that runs Python without checking this flag first.
 
@@ -234,16 +275,27 @@ By default, `run_python` requires approval on every call. The operator can adjus
 ### 7.1 Unit tests
 
 - **Handler**: `RunPythonToolHandlerTests` validates the kill-switch, JSON parsing, request validation (empty/oversized code), and cancellation propagation.
+- **Gateway request shape**: `ComputeToolGatewayTests` pins what the gateway *asks* the sandbox for — `Isolation = Filesystem`, exactly the two read-only trees, the thread limit, its own runtime profile and per-invocation attach key, the per-sandbox disk ceiling — and that the environment carries the **in-sandbox** paths rather than host paths and does *not* restate the thread variables. `ExecuteAsync_WhenTheHostCannotIsolateTheFilesystem_RefusesBeforeProvisioningOrCreatingAJail` pins the refusal ORDERING: it asserts that provisioning was never asked for, that no identity was read and that no jail was created. Moving the check below the provision makes it fail (verified by mutation).
 - **Offer provider**: `LocalToolOfferProviderTests` verifies `run_python` is absent from the default offer, present only when `AllowedToolNames` opts in, and absent from the cloud/no-local-data variant.
 - **Schema compatibility**: `ComputeToolSchemaCompatibilityTests` confirms the parameter schema compiles through the GBNF sanitizer (parity with `LlamaGrammarToolOffer` tests).
 
 ### 7.2 Integration tests
 
-Real-sandbox tests (Linux CI, skip-not-pass on hosts without the sandbox):
+`ComputeSandboxLiveTests` runs the real gateway against the real provider and the real venv. It is opt-in on `XE_COMPUTE_LIVE=1`, and its host gate **skips only when there is no root-owned `bwrap` at all** — once one exists, this host is expected to isolate, and a probe failure is a **failure**, not a skip. A gate that skipped on any probe failure would turn every regression in the chain into a silent green run, which is the failure mode the sandbox live suite was written around.
+
+Boundary assertions (all of them new with the isolated mode; see the §2.4 table for what each proves):
+- `RunPython_CannotReadTheHostFilesystem_NotUnderHomeAndNotUnderTheNodeDataDirectory` — canaries under `$HOME` and under the node data directory are `ENOENT` inside and **still present outside** afterwards, so the denial is invisibility rather than a failed setup. It also probes the uv cache beside the bound trees (the tripwire for a too-wide tree list) and `/etc/shadow`, and asserts the jail's `/etc/passwd` lists `root,xe` with the operator's account name absent.
+- `RunPython_CannotWriteIntoTheProvisionedVenv_EvenAfterChmoddingItBack` — `chmod` and write both `EROFS`, on `site-packages` and on the interpreter binary, followed by a second call proving `import numpy` still works.
+- `RunPython_ImportsNumpyAndScipy_AndRunsARealBlasCall` — `numpy.linalg.eigvalsh` on a 200×200 SPD matrix plus a `scipy.linalg.solve`, checked against the trace identity so a silently wrong BLAS fails rather than passes; and `sys.prefix` is the bound venv, which is what catches exec'ing the managed CPython binary directly instead of the venv's symlink.
+- `RunPython_PointsHomeAndTmpdirAtSeparateWritableDirectoriesInsideTheSandbox` — `cwd` is `/work`, `HOME` is `/work/home`, `TMPDIR` is `/tmp`, `tempfile.gettempdir()` agrees, all three are writable.
+- `RunPython_PinsTheNumericLibraryThreadCount_ToTheConfiguredLimit` — the four thread variables carry `Compute:ThreadLimit` inside the jail.
+- `RunPython_WhenTheProviderCannotIsolate_RefusesWithoutProvisioningOrCreatingAJail` — the refusal path against a provider advertising everything except the boundary.
+
+Pre-existing sandbox assertions, unchanged in intent:
 - Network attempt inside a script is denied (empty netns confirmation).
 - A `while True: pass` script is killed at timeout, reported as timed-out.
 - Output over the byte cap is truncated with the marker.
-- A script that writes past `Compute:MaxJailDiskBytes` is terminated (jail disk watchdog) even when the node-wide `LocalContainer:MaxJailDiskBytes` is far higher — `ComputeSandboxLiveTests.RunPython_WhenTheScriptFillsTheJail_IsKilledAtTheComputeDiskCeiling_NotTheNodeWideOne`. Reaching the same ceiling through `TMPDIR` instead of the working directory is a separate case, because that is where a library writes and it used to be outside the metered jail entirely — `RunPython_WhenTheScriptFillsItsTempDirectory_IsStillKilledAtTheComputeDiskCeiling`, with the child's own view of the layout in `RunPython_PointsHomeAndTmpdirAtSeparateDirectoriesInsideTheJail`.
+- A script that writes past `Compute:MaxJailDiskBytes` is terminated (jail disk watchdog) even when the node-wide `LocalContainer:MaxJailDiskBytes` is far higher — `ComputeSandboxLiveTests.RunPython_WhenTheScriptFillsTheJail_IsKilledAtTheComputeDiskCeiling_NotTheNodeWideOne`. Reaching the same ceiling through `TMPDIR` instead of the working directory is a separate case, because that is where a library writes and it used to be outside the metered jail entirely — `RunPython_WhenTheScriptFillsItsTempDirectory_IsStillKilledAtTheComputeDiskCeiling` — which stays meaningful under the boundary because `/tmp` is a bind of a jail subdirectory rather than a tmpfs.
 - The ceiling's three directions are pinned without the compute stack by `ProcessSandboxRuntimeProviderTests`, all against a real child process: a looser per-sandbox request still stops at the node ceiling; a per-sandbox request does not re-enable a watchdog an operator disabled node-wide; and a second command is stopped in a jail an earlier command already filled, while an attach that tightens the ceiling mid-run leaves the running command alone and binds the next one. `SandboxLifecycleRegistryTests` covers the attach arithmetic itself (stricter lowers, looser and absent do not, concurrent attaches converge on the minimum).
 - `import numpy, scipy, sympy` succeeds (venv provisioning end-to-end).
 
@@ -277,12 +329,14 @@ curl -X POST http://localhost:5000/api/local/v1/agents/invoke \
 |------|------|
 | `Services/Compute/ComputeToolDefinition.cs` | Tool name, description, parameter schema (20K char code ceiling) |
 | `Services/Compute/ComputeRunToolRequest.cs` | Typed request DTO + validator (non-empty, length check) |
-| `Services/Compute/ComputeOptions.cs` | Configuration section (Enabled, timeouts, resource limits) with `ValidateOnStart` |
+| `Services/Compute/ComputeOptions.cs` | Configuration section (Enabled, timeouts, resource limits, thread limit) with `ValidateOnStart` |
 | `Services/Compute/IComputeToolGateway.cs` | Sandbox executor contract |
 | `Services/Compute/Implementation/RunPythonToolHandler.cs` | `IClientLocalToolHandler` bridge; reads kill-switch, deserializes, validates, delegates to gateway |
-| `Services/Compute/Implementation/ComputeToolGateway.cs` | Resolves venv, acquires sandbox, builds/formats `SandboxCommandRequest`, formats result |
-| `Services/Compute/IComputePythonEnvironment.cs` | Venv provisioning contract |
-| `Services/Compute/Implementation/ComputePythonEnvironment.cs` | Resolves/provisions the venv via shared `uv` helper against `tools/compute/uv.lock` |
+| `Services/Compute/Implementation/ComputeToolGateway.cs` | Refuses when the node cannot isolate; resolves venv, acquires an isolated sandbox, builds/formats `SandboxCommandRequest`, formats result |
+| `Services/Compute/IComputePythonEnvironment.cs` | Venv provisioning contract; `ComputePythonRuntime` carries the interpreter plus the trees the sandbox must bind |
+| `Services/Compute/Implementation/ComputePythonEnvironment.cs` | Resolves/provisions the venv via shared `uv` helper against `tools/compute/uv.lock`; names the two read-only trees; sweeps the legacy scratch directory |
+| `Services/Sandbox/SandboxIsolatedPaths.cs` | The provider-neutral in-sandbox paths (`/work`, `/work/home`, `/tmp`) a caller has to name once it opts into isolation |
+| `Services/Sandbox/Implementation/Launch/Isolation/` | The isolated launch chain itself — see [Security & Privacy §7.1](12-security-and-privacy.md#71-the-isolated-launch-mode-sandboxisolationmodefilesystem--opt-in-consumed-by-run_python) |
 | `Services/Chat/Implementation/LocalToolOfferProvider.cs` | Merges compute offer DTO; gates profile-opt-in and cloud-model exclusion |
 | `Services/Agents/Implementation/MathematicianAgentSeeder.cs` | Seeded Mathematician agent with `run_python` in `AllowedToolNames`; seeds only when `Compute:Enabled` is true |
 | `DependencyInjection/Modules/AddNodeComputeExtensions.cs` | DI module; registers handler, gateway, options, environment; mirrors `AddNodeAgentHomeExtensions` |
@@ -305,3 +359,5 @@ curl -X POST http://localhost:5000/api/local/v1/agents/invoke \
 ## Changes from baseline
 
 This page documents the `run_python` compute tool added on branch `test/math-agent-eval` (2026-08-24). It is a first-class agent tool for numeric/symbolic computation, distinct from Custom Tools, gated as profile-opt-in, and routed through the process-role sandbox.
+
+**2026-08-25:** `run_python` was wired onto the sandbox provider's filesystem-isolated launch mode. The tool now refuses on a node that cannot isolate, runs with the host filesystem absent from its mount namespace, and binds only the venv and the managed-CPython root read-only. §2.4 is the new section; §2.2, §2.3 and §3.4 lost claims that were true before the boundary existed ("a script still sees the host filesystem as the worker user", "a deliberate script can `os.chmod` the tree back", the egress-capability gate). The disk watchdog is unchanged and remains best-effort.
