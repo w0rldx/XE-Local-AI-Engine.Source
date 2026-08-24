@@ -774,6 +774,18 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///         the budget belongs to the sandbox, and an earlier command in it has already spent the budget.
     ///     </para>
     ///     <para>
+    ///         <b>It is a best-effort check on VISIBLE FILES, and it is not a quota.</b> What it measures is the sum of
+    ///         the lengths of the files it can currently enumerate under the jail, sampled every two seconds. Three
+    ///         consequences follow and none of them is a bug to be fixed here. Bytes written to a file that is then
+    ///         UNLINKED while the writer keeps its descriptor open are still on disk and are invisible to this walk, so
+    ///         an unlink-then-write loop passes it entirely. A burst written between two ticks is on disk before
+    ///         anything notices. And a sparse or hole-punched file is billed by length rather than by blocks. So this
+    ///         bounds a runaway writer that is not trying to evade it, which is the case it exists for; it does NOT
+    ///         make a claim against a hostile one. A real ceiling needs the filesystem to enforce it — a project quota,
+    ///         or a size-bounded mount with the memory accounted — and that is deliberately a follow-up rather than
+    ///         something this watchdog is quietly presented as.
+    ///     </para>
+    ///     <para>
     ///         It is skipped for an engine-managed trusted host workspace: that directory is the user's own checkout,
     ///         its existing size is not ours to police, and walking a large repository every tick would cost more than
     ///         the control is worth there.
