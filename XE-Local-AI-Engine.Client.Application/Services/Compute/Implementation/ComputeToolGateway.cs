@@ -69,12 +69,17 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
+        // The handler validates this before delegating; stating it here keeps the invariant visible rather than resting
+        // on a null-forgiving operator at the call site.
+        var code = request.Code
+                   ?? throw new ArgumentException("The compute request carries no code.", nameof(request));
+
         try
         {
             var interpreter = await _environment.GetInterpreterPathAsync(cancellationToken).ConfigureAwait(false);
             var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
             var handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity), cancellationToken).ConfigureAwait(false);
-            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(interpreter, request.Code!), cancellationToken)
+            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(interpreter, code), cancellationToken)
                                         .ConfigureAwait(false);
             return FormatResult(result);
         }

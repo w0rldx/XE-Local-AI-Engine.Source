@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 
 /// <summary>
@@ -17,11 +18,14 @@ internal sealed class RunPythonToolHandler : IClientLocalToolHandler
     private readonly bool _computeEnabled;
     private readonly IComputeToolGateway _gateway;
 
-    public RunPythonToolHandler(IConfiguration configuration, IComputeToolGateway gateway)
+    // Reads the kill-switch through the validated options rather than straight off IConfiguration (as
+    // RunInAgentHomeToolHandler does for its own flag), so ComputeOptions.Enabled is the single definition of "is this
+    // node allowed to execute code" and the fail-closed default lives in exactly one place.
+    public RunPythonToolHandler(IOptions<ComputeOptions> options, IComputeToolGateway gateway)
     {
-        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(options);
         _gateway = gateway ?? throw new ArgumentNullException(nameof(gateway));
-        _computeEnabled = configuration.GetValue<bool>("Compute:Enabled");
+        _computeEnabled = options.Value.Enabled;
     }
 
     public string ToolName => ComputeToolDefinition.ToolName;

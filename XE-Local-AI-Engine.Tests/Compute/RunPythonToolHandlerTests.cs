@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Compute;
 
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -102,14 +102,7 @@ public sealed class RunPythonToolHandlerTests
 
     private static RunPythonToolHandler CreateHandler(bool enabled, IComputeToolGateway gateway)
     {
-        var configuration = new ConfigurationBuilder()
-                            .AddInMemoryCollection(new Dictionary<string, string?>
-                            {
-                                ["Compute:Enabled"] = enabled ? "true" : "false"
-                            })
-                            .Build();
-
-        return new RunPythonToolHandler(configuration, gateway);
+        return new RunPythonToolHandler(Options.Create(new ComputeOptions { Enabled = enabled }), gateway);
     }
 
     private sealed class StubGateway : IComputeToolGateway
