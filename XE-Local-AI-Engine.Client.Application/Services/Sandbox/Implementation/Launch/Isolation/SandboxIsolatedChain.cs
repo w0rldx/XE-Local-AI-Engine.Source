@@ -117,20 +117,17 @@ internal static class SandboxIsolatedChain
     /// </summary>
     public const string Hostname = "xe-compute";
 
-    /// <summary>The writable jail's mount point inside the sandbox, and the command's working directory.</summary>
-    public const string WorkPath = "/work";
+    // The three in-sandbox paths are DEFINED by the provider-neutral SandboxIsolatedPaths, not here. A caller that
+    // opts into isolation has to name them as well — its environment and its working directory are expressed in the
+    // sandbox's view rather than the host's — so a second spelling in this file would be the one that drifts.
 
-    // Not a host directory. This is the mount point INSIDE the sandbox's own mount namespace, backed by a 0700
-    // engine-owned jail subdirectory that only this one command can reach: no other process on the box shares that
-    // namespace, so there is no publicly writable directory here to avoid. The name is fixed by every library that
-    // reads TMPDIR, so "use a different directory" is not available.
-    [SuppressMessage("Security Hotspot",
-        "S5443:Using publicly writable directories is security-sensitive",
-        Justification = "In-namespace mount point backed by a private 0700 jail subdirectory, not a host directory.")]
-    private const string TempPath = "/tmp";
+    /// <summary>The writable jail's mount point inside the sandbox, and the command's working directory.</summary>
+    public const string WorkPath = SandboxIsolatedPaths.Work;
+
+    private const string TempPath = SandboxIsolatedPaths.Temp;
 
     /// <summary><c>HOME</c> inside the sandbox: a subdirectory of the jail, so everything it accumulates is metered.</summary>
-    public const string HomePath = "/work/home";
+    public const string HomePath = SandboxIsolatedPaths.Home;
 
     /// <summary><c>PATH</c> inside the sandbox. Only the two system directories the read-only <c>/usr</c> bind provides.</summary>
     public const string SandboxPath = "/usr/bin:/bin";

@@ -39,6 +39,20 @@ public sealed class ComputeOptions
     public int PidsLimit { get; set; } = 64;
 
     /// <summary>
+    ///     What every numeric-library thread-count variable (<c>OMP_NUM_THREADS</c> and its siblings) is pinned to
+    ///     inside the sandbox. Defaults to <c>min(4, processor count)</c>.
+    ///     <para>
+    ///         It is pinned rather than left to the libraries because they size their pools from the HOST's core
+    ///         count, read out of <c>/proc</c>, which is not what <see cref="CpuCount" /> allows: an unpinned BLAS
+    ///         starts a thread per host core and then thrashes inside a fraction of one. The cap at four is the
+    ///         other half — a linear-algebra call on the array sizes this tool sees stops scaling long before a
+    ///         many-core box's core count, and the threads it would start still cost against
+    ///         <see cref="PidsLimit" />.
+    ///     </para>
+    /// </summary>
+    public int ThreadLimit { get; set; } = Math.Min(val1: 4, Environment.ProcessorCount);
+
+    /// <summary>
     ///     How many bytes a single script may write into its own jail before the process tree is terminated. Defaults
     ///     to 256 MiB — far tighter than the node-wide sandbox ceiling, because arithmetic and symbolic algebra write
     ///     almost nothing, so a script filling hundreds of megabytes is a runaway rather than a workload.

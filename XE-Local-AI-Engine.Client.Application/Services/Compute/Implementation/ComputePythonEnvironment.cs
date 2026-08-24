@@ -28,6 +28,17 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     private const string LockfileName = "uv.lock";
     private const string StateFileName = "installed-compute-lock.sha256";
 
+    /// <summary>
+    ///     The script scratch directory of the PRE-JAIL layout. It sat beside the venv under the compute cache root,
+    ///     which is space the jail-occupancy watchdog never walked and which one call could read out of the next. Both
+    ///     holes are closed — the scratch is inside the per-invocation jail now — but a box that ran an older build
+    ///     still has the directory, with whatever those calls left in it. It is swept, once, before the tool can run.
+    /// </summary>
+    private const string LegacyScratchDirectoryName = "scratch";
+
+    /// <summary>The uv-managed CPython root, below the cache root. Named once: the provision writes it and the isolated sandbox binds it.</summary>
+    private const string ManagedPythonDirectoryName = "pythons";
+
     /// <summary>The name the shipped compute project files are linked under in the publish output (see the Client csproj).</summary>
     private const string PublishedScriptsDirectoryName = "compute-scripts";
 
@@ -45,7 +56,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     private readonly SemaphoreSlim _provisionGate = new(1, 1);
     private readonly string _scriptsDirectory;
 
-    private string? _interpreterPath;
+    private ComputePythonRuntime? _runtime;
 
     public ComputePythonEnvironment(HttpClient httpClient, ILogger<ComputePythonEnvironment> logger)
         : this(new UvBinaryAcquirer(httpClient), new LinuxTrainingProcessRunner(), logger, DefaultCacheRoot(), ResolveScriptsDirectory())
@@ -73,9 +84,9 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         _provisionGate.Dispose();
     }
 
-    public async Task<string> GetInterpreterPathAsync(CancellationToken cancellationToken = default)
+    public async Task<ComputePythonRuntime> GetRuntimeAsync(CancellationToken cancellationToken = default)
     {
-        var cached = Volatile.Read(ref _interpreterPath);
+        var cached = Volatile.Read(ref _runtime);
         if (cached is not null)
         {
             return cached;
@@ -92,14 +103,14 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         await _provisionGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            cached = Volatile.Read(ref _interpreterPath);
+            cached = Volatile.Read(ref _runtime);
             if (cached is not null)
             {
                 return cached;
             }
 
             var resolved = await ProvisionAsync(cancellationToken).ConfigureAwait(false);
-            Volatile.Write(ref _interpreterPath, resolved);
+            Volatile.Write(ref _runtime, resolved);
             return resolved;
         }
         catch (Exception exception) when (IsProvisioningFailure(exception, cancellationToken))
@@ -131,7 +142,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
                && !(exception is OperationCanceledException && cancellationToken.IsCancellationRequested);
     }
 
-    private async Task<string> ProvisionAsync(CancellationToken cancellationToken)
+    private async Task<ComputePythonRuntime> ProvisionAsync(CancellationToken cancellationToken)
     {
         var project = Path.Combine(_scriptsDirectory, ProjectFileName);
         var lockfile = Path.Combine(_scriptsDirectory, LockfileName);
@@ -140,17 +151,23 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             throw new ComputeEnvironmentException("The pinned compute runtime lockfile is missing from this installation.");
         }
 
+        // Before anything can run: an older build's scratch directory is state a new call must not inherit, and this
+        // is the last moment at which nothing has been offered yet. Warm and cold path both reach here, and the
+        // cached runtime above means it happens at most once per process.
+        SweepLegacyScratch();
+
         var lockfileSha = await ComputeFileShaAsync(lockfile, cancellationToken).ConfigureAwait(false);
         var venvDirectory = Path.Combine(_cacheRoot, "venv");
-        var interpreter = Path.Combine(venvDirectory, ".venv", "bin", "python");
+        var venvRoot = Path.Combine(venvDirectory, ".venv");
+        var interpreter = Path.Combine(venvRoot, "bin", "python");
         var statePath = Path.Combine(_cacheRoot, StateFileName);
         if (File.Exists(interpreter) && MatchesInstalledLock(statePath, lockfileSha))
         {
             // Re-applied on the warm path too: a venv provisioned by an older build (or left writable by an
             // interrupted run) would otherwise stay writable for the life of the process. This runs at most once per
-            // process — the interpreter path is cached above it.
+            // process — the runtime is cached above it.
             SetTreeWritable(venvDirectory, writable: false);
-            return interpreter;
+            return BuildRuntime(interpreter, venvRoot);
         }
 
         _logger.LogInformation("Provisioning the compute Python runtime from the pinned lockfile.");
@@ -181,7 +198,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
             TrainingRuntimeEnvironment.BuildUvEnvironment(isolatedHome,
                 isolatedTmp,
                 Path.Combine(_cacheRoot, "uv-cache"),
-                Path.Combine(_cacheRoot, "pythons")),
+                Path.Combine(_cacheRoot, ManagedPythonDirectoryName)),
             venvDirectory,
             LogLine,
             SyncTimeout,
@@ -201,7 +218,57 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         await File.WriteAllTextAsync(statePath, lockfileSha, cancellationToken).ConfigureAwait(false);
         TryDeleteDirectory(workDirectory);
         SetTreeWritable(venvDirectory, writable: false);
-        return interpreter;
+        return BuildRuntime(interpreter, venvRoot);
+    }
+
+    /// <summary>
+    ///     Names the interpreter and the two trees an isolated sandbox must bind for it to start.
+    ///     <para>
+    ///         Two, and exactly these two. The venv carries <c>pyvenv.cfg</c> and <c>site-packages</c>; its
+    ///         <c>bin/python</c> is a symlink into the uv-managed CPython root, and every module the interpreter loads
+    ///         before it reads its own configuration lives there — so binding the venv alone produces an interpreter
+    ///         that cannot execute. What is deliberately NOT bound is the directory ABOVE them, the compute cache
+    ///         root: it also holds the uv download cache, the uv binary, the lockfile state marker and (on an
+    ///         un-swept box) the legacy scratch, none of which a script has any business reading, and all of which
+    ///         binding the parent would have handed over for free.
+    ///     </para>
+    ///     <para>
+    ///         The managed-CPython ROOT rather than the one installed version under it: uv addresses the install
+    ///         through a version-alias symlink beside it (<c>cpython-3.13-…</c> → <c>cpython-3.13.15-…</c>), which the
+    ///         venv's own interpreter symlink points at. Bind only the versioned directory and that alias resolves to
+    ///         nothing inside the sandbox.
+    ///     </para>
+    /// </summary>
+    private ComputePythonRuntime BuildRuntime(string interpreter, string venvRoot)
+    {
+        return new ComputePythonRuntime(interpreter, [venvRoot, Path.Combine(_cacheRoot, ManagedPythonDirectoryName)]);
+    }
+
+    /// <summary>
+    ///     Removes the pre-jail scratch directory if this box still has one. Logged at Information because it is a
+    ///     one-off migration an operator may want to see explained, and best-effort because a compute runtime that
+    ///     works is worth more than a directory that is no longer written to — a failure leaves stale files nothing
+    ///     reads rather than blocking the tool.
+    /// </summary>
+    private void SweepLegacyScratch()
+    {
+        var legacy = Path.Combine(_cacheRoot, LegacyScratchDirectoryName);
+        if (!Directory.Exists(legacy))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.Delete(legacy, recursive: true);
+            _logger.LogInformation(
+                "Removed the compute runtime's legacy scratch directory: script scratch now lives inside the per-call jail, and the old one is neither metered by the jail disk ceiling nor discarded when a call ends.");
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            _logger.LogWarning(exception,
+                "The compute runtime's legacy scratch directory could not be removed; it is no longer written to, but files an earlier build left there remain on disk.");
+        }
     }
 
     /// <summary>
@@ -209,13 +276,13 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
     ///     through <c>sys.executable</c>; a writable <c>site-packages</c> lets one call drop a module that every later
     ///     approved call imports, which turns a single approval into persistent code execution.
     ///     <para>
-    ///         <b>This is defence in depth, not a boundary.</b> The sandbox child runs under the SAME uid as the engine
-    ///         (<c>unshare --user --map-current-user</c>) and this provider has no mount layer, so the script owns these
-    ///         files and a deliberate one can <c>os.chmod</c> them back before writing. What it does buy: accidental and
-    ///         low-effort writes fail, and the tree stops being writable by anything that does not specifically set out
-    ///         to defeat it. The real fix is a read-only bind mount in a mount namespace, which needs a mount layer the
-    ///         process provider does not have — and which would be worth doing for the whole host filesystem, not just
-    ///         this tree, since a script can equally trojan the user's dotfiles today.
+    ///         <b>This is defence in depth, and it is no longer the boundary.</b> The boundary is the read-only bind
+    ///         mount: <c>run_python</c> runs under <see cref="XE_Local_AI_Engine.Client.Services.Sandbox.SandboxIsolationMode.Filesystem" />,
+    ///         where this tree is bound <c>--ro-bind-fd</c> inside a mount namespace and an <c>os.chmod</c> followed by
+    ///         a write answers <c>EROFS</c> no matter who owns the inode. The mode bits still matter for what happens
+    ///         OUTSIDE that namespace — the engine's own processes, an operator's shell, and any future caller that
+    ///         provisions without isolating — so they stay cleared. What they no longer have to carry is the promise:
+    ///         before the mount layer existed a deliberate script could chmod the tree back, and the wiki said so.
     ///     </para>
     /// </summary>
     private static void SetTreeWritable(string root, bool writable)

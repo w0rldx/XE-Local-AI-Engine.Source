@@ -7,22 +7,29 @@ using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Gateway behavior against a recording sandbox provider: what it ASKS the sandbox for (its own runtime profile, an
-///     isolated interpreter invocation, egress denial and ceilings only where the provider advertises them) and how it
-///     renders what comes back. The real containment is exercised live in
-///     <see cref="ComputeSandboxLiveTests" />; this suite pins the request shape and the result vocabulary, which is
+///     Gateway behavior against a recording sandbox provider: what it ASKS the sandbox for (its own runtime profile, a
+///     filesystem boundary with exactly two read-only trees, an isolated interpreter invocation, and ceilings only
+///     where the provider advertises them) and how it renders what comes back. The real containment is exercised live
+///     in <see cref="ComputeSandboxLiveTests" />; this suite pins the request shape and the result vocabulary, which is
 ///     what a model actually reads.
 /// </summary>
 public sealed class ComputeToolGatewayTests
 {
+    /// <summary>
+    ///     What a host able to run the tool advertises. The filesystem boundary is the one flag whose absence refuses
+    ///     the call outright, so every test that expects a script to run has to carry it.
+    /// </summary>
+    private const SandboxProviderCapabilities Contained =
+        SandboxProviderCapabilities.SupportsFilesystemIsolation | SandboxProviderCapabilities.SupportsNetworkPolicy;
+
     [Test]
     public async Task ExecuteAsync_RunsTheProvisionedInterpreterOnItsOwnJail_ReadingTheScriptFromStandardInput()
     {
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy
-                                                    | SandboxProviderCapabilities.SupportsResourceLimits);
+        var provider = new RecordingSandboxProvider(Contained | SandboxProviderCapabilities.SupportsResourceLimits);
         var gateway = CreateGateway(provider);
 
         _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
@@ -45,52 +52,81 @@ public sealed class ComputeToolGatewayTests
     }
 
     [Test]
-    public async Task ExecuteAsync_TearsDownEveryWritableSurfaceAfterTheCall()
+    public async Task ExecuteAsync_TearsDownTheJailAfterEveryCall_AndReclaimsTheScratchInsideIt()
     {
-        // The tool advertises itself to the model as stateless. Both places a script can leave a file — the jail it
-        // ran in and the HOME/TMPDIR scratch it was pointed at — must therefore be per call and gone afterwards, or
-        // one conversation's files are readable by the next. One teardown now covers both, because the scratch lives
-        // inside the jail — and the "must not outlive the call" assertions below are unchanged, which is the point.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        // The tool advertises itself to the model as stateless. The jail is the only place a script can write —
+        // its HOME and TMPDIR are directories inside it — so one teardown per call is what makes that true, and a
+        // jail that survived the call would carry one conversation's files into the next.
+        var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
 
         _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        var firstJail = AssertEx.NotNull(provider.LastJailRoot);
         _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(2)" });
+        var secondJail = AssertEx.NotNull(provider.LastJailRoot);
 
         AssertEx.Equal(expected: 2, provider.KilledSandboxIds.Count, "each call must terminate the jail it ran in");
         AssertEx.Equal(expected: 2, provider.CommandRequests.Count);
-
-        var first = provider.CommandRequests[0].Environment!["HOME"];
-        var second = provider.CommandRequests[1].Environment!["HOME"];
-        AssertEx.NotEqual(first, second, "a shared scratch directory would carry one script's files into the next call");
-        AssertEx.False(Directory.Exists(first), "the scratch directory must not outlive the call that used it");
-        AssertEx.False(Directory.Exists(second));
-        AssertEx.NotEqual(first, provider.CommandRequests[0].Environment!["TMPDIR"],
-            "HOME and TMPDIR are separate directories: a script clearing its temp files must not wipe its own home");
+        AssertEx.NotEqual(firstJail, secondJail, "a shared jail would carry one script's files into the next call");
+        AssertEx.False(Directory.Exists(firstJail), "the jail must not outlive the call that ran in it");
+        AssertEx.False(Directory.Exists(secondJail));
+        // Asked for through the provider rather than created behind its back, and asked for on BOTH calls: the two
+        // directories the sandbox presents as HOME and TMPDIR have to exist before the interpreter starts.
+        AssertEx.Equal(expected: 4, provider.ResetDirectories.Count);
+        AssertEx.Contains(provider.ResetDirectories, "home");
+        AssertEx.Contains(provider.ResetDirectories, ".tmp");
     }
 
     [Test]
-    public async Task ExecuteAsync_PointsHomeAndTmpdirInsideTheJailTheDiskCeilingMeters()
+    public async Task ExecuteAsync_PointsHomeAndTmpdirAtTheSandboxsOwnPaths_NotAtHostPaths()
     {
-        // The disk ceiling is enforced by walking the JAIL, so scratch outside it is space the ceiling does not
-        // measure — a script could fill the host disk through TMPDIR while the watchdog reported nothing. This is the
-        // assertion that keeps the two facts (where the scratch is, what the ceiling covers) from drifting apart.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        // Under the filesystem boundary the jail is not present at its host name inside the namespace at all, so a
+        // host path in the environment names nothing the script can reach. The values have to be the SANDBOX's view:
+        // /work/home and /work's sibling /tmp, both backed by the jail the disk ceiling meters.
+        var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
 
         _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
 
         var jailRoot = AssertEx.NotNull(provider.LastJailRoot);
         var environment = AssertEx.NotNull(provider.CommandRequests[0].Environment);
+        AssertEx.Equal(SandboxIsolatedPaths.Home, environment["HOME"]);
+        AssertEx.Equal(SandboxIsolatedPaths.Temp, environment["TMPDIR"]);
+        AssertEx.Equal(environment["TMPDIR"], environment["TMP"]);
+        AssertEx.Equal(environment["TMPDIR"], environment["TEMP"]);
+        AssertEx.NotEqual(environment["HOME"], environment["TMPDIR"],
+            "HOME and TMPDIR are separate directories: a script clearing its temp files must not wipe its own home");
+
         string[] scratchVariables = ["HOME", "TMPDIR", "TMP", "TEMP"];
         foreach (var name in scratchVariables)
         {
-            AssertEx.True(environment[name].StartsWith(jailRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal),
-                $"{name} must name a directory inside the jail, or the jail disk ceiling does not cover what a script writes there");
+            AssertEx.False(environment[name].StartsWith(jailRoot, StringComparison.Ordinal),
+                $"{name} must be the in-sandbox path, not the host path the jail happens to have");
         }
 
-        AssertEx.Equal(environment["TMPDIR"], environment["TMP"]);
-        AssertEx.Equal(environment["TMPDIR"], environment["TEMP"]);
+        AssertEx.Equal("1", environment["PYTHONNOUSERSITE"]);
+        AssertEx.Equal("1", environment["PYTHONDONTWRITEBYTECODE"]);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_LeavesTheThreadCountVariablesToTheSandbox_RatherThanNamingThemTwice()
+    {
+        // The pinning is derived from SandboxCreateRequest.ThreadLimit, which the create request already carries.
+        // Naming the variables here as well would let the tool's environment and the sandbox's CPU ceiling drift
+        // apart in exactly the situation the pinning exists to prevent — and the caller environment is emitted LAST,
+        // so this side would silently win.
+        var provider = new RecordingSandboxProvider(Contained);
+        var gateway = CreateGateway(provider, new ComputeOptions { ThreadLimit = 3 });
+
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+
+        var environment = AssertEx.NotNull(provider.CommandRequests[0].Environment);
+        foreach (var name in SandboxIsolatedChain.ThreadCountVariableNames)
+        {
+            AssertEx.False(environment.ContainsKey(name), $"{name} must come from the sandbox's thread limit, not from the gateway");
+        }
+
+        AssertEx.Equal(expected: 3, AssertEx.NotNull(provider.CreateRequest).ThreadLimit!.Value);
     }
 
     [Test]
@@ -99,7 +135,7 @@ public sealed class ComputeToolGatewayTests
         // Fails closed for the same reason the egress check does. A provider that cannot name the directory its
         // commands run in cannot be handed a scratch path inside it either, and the alternative — putting the scratch
         // back outside the jail — would quietly restore the hole this change closed.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy, namesAJailRoot: false);
+        var provider = new RecordingSandboxProvider(Contained, namesAJailRoot: false);
         var gateway = CreateGateway(provider);
 
         var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
@@ -115,7 +151,7 @@ public sealed class ComputeToolGatewayTests
         // The registry attaches BY the attach key, so a constant one handed two overlapping calls a single live jail:
         // one shared working directory between unrelated conversations, and — now that teardown is per call — whichever
         // finished first killing the jail out from under the other.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
 
         _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
@@ -133,7 +169,7 @@ public sealed class ComputeToolGatewayTests
     {
         // A failed or cancelled run is exactly when a script is most likely to have left something behind, so the
         // teardown cannot sit on the success path.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy)
+        var provider = new RecordingSandboxProvider(Contained)
         {
             Result = Completed(exitCode: 1, standardOutput: string.Empty, standardError: "boom")
         };
@@ -147,8 +183,7 @@ public sealed class ComputeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenTheProviderAdvertisesContainment_RequestsEgressDenialAndCeilings()
     {
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy
-                                                    | SandboxProviderCapabilities.SupportsResourceLimits);
+        var provider = new RecordingSandboxProvider(Contained | SandboxProviderCapabilities.SupportsResourceLimits);
         var gateway = CreateGateway(provider, new ComputeOptions
         {
             MemoryMb = 512,
@@ -172,7 +207,7 @@ public sealed class ComputeToolGatewayTests
         // A script doing arithmetic writes almost nothing, so the node-wide allowance — sized for a workspace build —
         // is the wrong number for this jail. The request may only TIGHTEN it, so no capability gate is needed: a
         // provider that ignores the field is exactly as bounded as it was before.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider, new ComputeOptions { MaxJailDiskBytes = 8L * 1024 * 1024 });
 
         _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
@@ -184,7 +219,7 @@ public sealed class ComputeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WithDefaultOptions_AsksForTheDefaultComputeDiskCeiling()
     {
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
 
         _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
@@ -194,19 +229,66 @@ public sealed class ComputeToolGatewayTests
     }
 
     [Test]
-    public async Task ExecuteAsync_WhenTheHostCannotDenyEgress_RefusesRatherThanRunningOnline()
+    public async Task ExecuteAsync_WhenTheHostCannotIsolateTheFilesystem_RefusesBeforeProvisioningOrCreatingAJail()
     {
-        // "No network" is what the tool's description promises the model and what the user approved the call on, so it
-        // fails CLOSED. Asking for Unrestricted instead handed a model-authored script the operator's network, with no
-        // signal to either of them that the guarantee had lapsed.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsResourceLimits);
-        var gateway = CreateGateway(provider);
+        // "Sandboxed" is what the tool's description promises the model and what the user approved the call on, so it
+        // fails CLOSED — and it fails closed EARLY. The ordering is the assertion: a refusal that arrived after the
+        // provision would have downloaded and unpacked a Python closure onto a node that can never run it, and after
+        // the create it would have built a jail to explain itself from. Move the check below either of them and the
+        // two null assertions here go red.
+        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy
+                                                    | SandboxProviderCapabilities.SupportsResourceLimits);
+        var environment = new StubEnvironment("/provisioned/python");
+        var identity = new StubIdentityProvider();
+        var gateway = CreateGateway(provider, environment: environment, identityProvider: identity);
 
         var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
 
         AssertEx.Contains(rendered, "run_python rejected");
-        AssertEx.Contains(rendered, "offline");
-        AssertEx.Null(provider.CreateRequest, "a host that cannot deny egress must not get as far as creating a jail");
+        AssertEx.Contains(rendered, "isolate");
+        AssertEx.False(environment.Requested, "a host without the boundary must not provision an interpreter it can never run");
+        AssertEx.False(identity.Requested, "nothing about the node's identity is needed to refuse");
+        AssertEx.Null(provider.CreateRequest, "a host that cannot isolate the filesystem must not get as far as creating a jail");
+        AssertEx.Empty(provider.KilledSandboxIds, "there is nothing to tear down when nothing was created");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_AsksForTheFilesystemBoundary_AndBindsOnlyTheTwoInterpreterTrees()
+    {
+        // The boundary is not a preference the provider may drop: a request naming it is rejected fail-closed by a
+        // provider that cannot deliver it, which is what makes asking for it safe. The tree list is the other half —
+        // naming the compute cache root instead of these two would hand the script the uv download cache, the uv
+        // binary and the lockfile state marker along with the interpreter.
+        var provider = new RecordingSandboxProvider(Contained);
+        var gateway = CreateGateway(provider,
+            environment: new StubEnvironment("/provisioned/venv/bin/python", ["/provisioned/venv", "/provisioned/pythons"]));
+
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+
+        var create = AssertEx.NotNull(provider.CreateRequest);
+        AssertEx.Equal(SandboxIsolationMode.Filesystem, create.Isolation);
+        var trees = AssertEx.NotNull(create.ReadOnlyTrees);
+        AssertEx.Equal(expected: 2, trees.Count, "exactly the venv and the managed-CPython root it links into");
+        AssertEx.Contains(trees, "/provisioned/venv");
+        AssertEx.Contains(trees, "/provisioned/pythons");
+        // No working directory is named: the sandbox's single writable tree IS the working directory.
+        AssertEx.Null(AssertEx.NotNull(provider.CommandRequest).WorkingDirectory);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WithDefaultOptions_PinsTheThreadCountBelowTheHostCoreCount()
+    {
+        // The libraries size their pools from the HOST's core count, which is not what the sandbox's CPU quota allows.
+        // The default caps that at four rather than at the box's core count, so a 32-core host does not start 32 BLAS
+        // threads against a two-core ceiling — and every one of them would also count against PidsLimit.
+        var provider = new RecordingSandboxProvider(Contained);
+        var gateway = CreateGateway(provider);
+
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+
+        var threadLimit = AssertEx.NotNull(provider.CreateRequest).ThreadLimit!.Value;
+        AssertEx.Equal(Math.Min(val1: 4, Environment.ProcessorCount), threadLimit);
+        AssertEx.True(threadLimit <= 4, "the default must not scale with the host's core count");
     }
 
     [Test]
@@ -214,7 +296,7 @@ public sealed class ComputeToolGatewayTests
     {
         // Resource ceilings bound COST, not reachability: degrading them is visible in the containment log and costs no
         // advertised guarantee, so they stay capability-gated where egress denial no longer is.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
 
         _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
@@ -227,7 +309,7 @@ public sealed class ComputeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_RendersExitCodeStdoutAndStderr()
     {
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy)
+        var provider = new RecordingSandboxProvider(Contained)
         {
             Result = Completed(exitCode: 1, standardOutput: "4\n", standardError: "boom\n")
         };
@@ -245,7 +327,7 @@ public sealed class ComputeToolGatewayTests
     {
         // A timed-out run comes back Completed=false with exit code -1. Rendering that as a bare "exit_code: -1" would
         // read to a model as a normal failing program, and it would try to debug a script that never finished.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy)
+        var provider = new RecordingSandboxProvider(Contained)
         {
             Result = new SandboxCommandResult
             {
@@ -265,7 +347,7 @@ public sealed class ComputeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenOutputExceedsTheCap_TruncatesWithTheSharedMarker()
     {
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy)
+        var provider = new RecordingSandboxProvider(Contained)
         {
             Result = Completed(exitCode: 0, standardOutput: new string('a', 500), standardError: string.Empty)
         };
@@ -284,7 +366,7 @@ public sealed class ComputeToolGatewayTests
         // The sandbox caps capture at its own 4 MiB ceiling before this gateway ever sees the bytes, so a stream can be
         // short enough to pass our budget and still be incomplete. Dropping the marker there would tell a model it had
         // the whole output.
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy)
+        var provider = new RecordingSandboxProvider(Contained)
         {
             Result = Completed(exitCode: 0, standardOutput: "head", standardError: string.Empty) with
             {
@@ -301,7 +383,7 @@ public sealed class ComputeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenTheEnvironmentCannotBeProvisioned_ReturnsTheModelSafeReasonWithoutTouchingTheSandbox()
     {
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider,
             environment: new StubEnvironment(new ComputeEnvironmentException("The Python compute tool is available on Linux only.")));
 
@@ -314,7 +396,7 @@ public sealed class ComputeToolGatewayTests
     [Test]
     public async Task ExecuteAsync_WhenCancelled_Throws()
     {
-        var provider = new RecordingSandboxProvider(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
         using var cancellationTokenSource = new CancellationTokenSource();
         await cancellationTokenSource.CancelAsync();
@@ -337,10 +419,11 @@ public sealed class ComputeToolGatewayTests
 
     private static ComputeToolGateway CreateGateway(IAgentSandboxRuntimeProvider provider,
         ComputeOptions? options = null,
-        IComputePythonEnvironment? environment = null)
+        IComputePythonEnvironment? environment = null,
+        IAgentHomeIdentityProvider? identityProvider = null)
     {
         return new ComputeToolGateway(provider,
-            new StubIdentityProvider(),
+            identityProvider ?? new StubIdentityProvider(),
             environment ?? new StubEnvironment("/provisioned/python"),
             Options.Create(options ?? new ComputeOptions()),
             NullLogger<ComputeToolGateway>.Instance);
@@ -348,8 +431,12 @@ public sealed class ComputeToolGatewayTests
 
     private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
     {
+        /// <summary>Whether the gateway got as far as needing an identity — the refusal-ordering test reads this.</summary>
+        public bool Requested { get; private set; }
+
         public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
         {
+            Requested = true;
             return Task.FromResult(new AgentHomeOwnerIdentity("owner-1", "node-1"));
         }
     }
@@ -357,22 +444,30 @@ public sealed class ComputeToolGatewayTests
     private sealed class StubEnvironment : IComputePythonEnvironment
     {
         private readonly ComputeEnvironmentException? _failure;
-        private readonly string _interpreter;
+        private readonly ComputePythonRuntime _runtime;
 
-        public StubEnvironment(string interpreter)
+        public StubEnvironment(string interpreter, IReadOnlyList<string>? readOnlyTrees = null)
         {
-            _interpreter = interpreter;
+            _runtime = new ComputePythonRuntime(interpreter, readOnlyTrees ?? ["/provisioned/venv", "/provisioned/pythons"]);
         }
 
         public StubEnvironment(ComputeEnvironmentException failure)
         {
-            _interpreter = string.Empty;
+            _runtime = new ComputePythonRuntime(string.Empty, []);
             _failure = failure;
         }
 
-        public Task<string> GetInterpreterPathAsync(CancellationToken cancellationToken = default)
+        /// <summary>
+        ///     Whether provisioning was ASKED for. It is what the refusal-ordering test asserts on, because the cost
+        ///     the ordering exists to avoid — a venv download onto a node that can never run it — happens here.
+        /// </summary>
+        public bool Requested { get; private set; }
+
+        public Task<ComputePythonRuntime> GetRuntimeAsync(CancellationToken cancellationToken = default)
         {
-            return _failure is not null ? Task.FromException<string>(_failure) : Task.FromResult(_interpreter);
+            Requested = true;
+
+            return _failure is not null ? Task.FromException<ComputePythonRuntime>(_failure) : Task.FromResult(_runtime);
         }
     }
 
@@ -410,6 +505,9 @@ public sealed class ComputeToolGatewayTests
 
         /// <summary>The jail directory handed to the most recent call, so a test can assert what sits under it.</summary>
         public string? LastJailRoot { get; private set; }
+
+        /// <summary>Every sandbox-relative directory the gateway asked to be reset, in call order.</summary>
+        public List<string> ResetDirectories { get; } = [];
 
         public SandboxCommandResult Result { get; init; } = new()
         {
@@ -477,6 +575,7 @@ public sealed class ComputeToolGatewayTests
             // The narrow contract the real providers serve: a known-empty directory under the jail, addressed by a
             // sandbox-relative path. Enough to prove the gateway asks for its scratch through the provider rather than
             // reaching around it to the host filesystem.
+            ResetDirectories.Add(sandboxPath);
             var jail = _jails[handle.SandboxId];
             var resolved = Path.Combine(jail, sandboxPath.TrimStart('/'));
             if (Directory.Exists(resolved))

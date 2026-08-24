@@ -28,19 +28,24 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 ///         state is discarded; the expensive part, the uv-provisioned venv, lives outside the jail and is untouched.
 ///     </para>
 ///     <para>
-///         Egress denial is UNCONDITIONAL and fails the call closed: "no network" is what the tool's description
-///         promises the model and what the user approved the call on, so a host that cannot build an empty network
-///         namespace gets a refusal rather than a script with the operator's network. The resource ceilings stay
-///         capability-gated, because they bound cost rather than reachability — degrading them is visible in the
-///         containment log and costs no guarantee.
+///         The FILESYSTEM BOUNDARY is unconditional and fails the call closed. Every invocation asks for
+///         <see cref="SandboxIsolationMode.Filesystem" />, so the script runs in a mount namespace that does not
+///         contain the host filesystem at all: a read-only <c>/usr</c>, an invented <c>/etc</c>, the two interpreter
+///         trees bound read-only, and one writable directory which is this call's own jail. A node whose sandbox
+///         provider cannot deliver that is REFUSED before anything is provisioned or created — "sandboxed" is what
+///         the tool's description promises the model and what the user approved the call on, and a host that quietly
+///         could not honour it would be the one case where the approval bought nothing.
 ///     </para>
 ///     <para>
-///         What the sandbox does NOT provide is a filesystem boundary: this provider has no mount layer and the child
-///         runs under the SAME uid as the engine (<c>unshare --user --map-current-user</c>), so a script sees, and can
-///         write, everything that user can. The venv is chmod'd read-only after provisioning, which stops accidental
-///         and low-effort writes into <c>site-packages</c>, but a deliberate script can chmod it back — see
-///         <c>ComputePythonEnvironment</c>. That is why the tool is <c>WriteExecute</c>, approval-required, off by
-///         default, and never offered to a cloud-hosted model.
+///         Egress denial rides on the same mechanism: the isolated chain unshares the network namespace
+///         unconditionally, and the containment probe proves it with a loopback connect that fails inside while
+///         succeeding outside. The resource ceilings stay capability-gated, because they bound cost rather than
+///         reachability — degrading them is visible in the containment log and costs no guarantee.
+///     </para>
+///     <para>
+///         What the boundary is NOT is a kernel-hardened one: no seccomp filter, no LSM profile, and the disk ceiling
+///         under it is a best-effort occupancy check rather than a quota. That is why the tool stays
+///         <c>WriteExecute</c>, approval-required, off by default, and never offered to a cloud-hosted model.
 ///     </para>
 /// </remarks>
 internal sealed class ComputeToolGateway : IComputeToolGateway
@@ -63,13 +68,17 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     private const string Marker = "…[output truncated]";
 
     /// <summary>
-    ///     The script's <c>HOME</c>, as a sandbox-relative path under the jail root. Below the jail deliberately: the
-    ///     provider's disk watchdog meters the JAIL, so a scratch directory anywhere else is unmetered space a script
-    ///     can fill while the ceiling it was given reports nothing.
+    ///     The jail subdirectory the sandbox presents as <see cref="SandboxIsolatedPaths.Home" />, named here as the
+    ///     sandbox-relative path the provider's reset operation takes. Below the jail deliberately: the provider's
+    ///     disk watchdog meters the JAIL, so a scratch directory anywhere else is unmetered space a script can fill
+    ///     while the ceiling it was given reports nothing.
     /// </summary>
     private const string HomeDirectoryName = "home";
 
-    /// <summary>The script's <c>TMPDIR</c>/<c>TMP</c>/<c>TEMP</c>, likewise under the jail root and likewise metered.</summary>
+    /// <summary>
+    ///     The jail subdirectory behind <see cref="SandboxIsolatedPaths.Temp" />. A second directory rather than one
+    ///     shared with the home: a script clearing its <c>tempfile</c> leftovers must not wipe its own home.
+    /// </summary>
     private const string TempDirectoryName = ".tmp";
 
     private readonly IComputePythonEnvironment _environment;
@@ -102,16 +111,23 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         var code = request.Code
                    ?? throw new ArgumentException("The compute request carries no code.", nameof(request));
 
-        // Offline is ADVERTISED, so it fails closed. Asking for Unrestricted when the host cannot build an empty
-        // network namespace silently handed a model-authored script the operator's network — the one guarantee the
-        // tool's description makes and the user approved the call on. Refusing is the honest answer; the resource
-        // ceilings below stay capability-gated because they bound cost, not reachability.
-        if (!_provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy))
+        // The boundary is ADVERTISED, so it fails closed — and it fails closed HERE, before the interpreter is
+        // provisioned, before the node identity is read and before a jail exists. A refusal any later would have
+        // downloaded and unpacked a Python closure onto a node that can never run it, and would have had to explain
+        // itself from inside a half-built sandbox.
+        //
+        // This check REPLACES the egress-capability check that stood in this spot, and subsumes it: the isolated
+        // chain's empty network namespace is bwrap's own --unshare-net, which the containment probe positively
+        // controls with a loopback connect, so the separate unshare(1) mechanism the old check tested is no longer on
+        // the path — gating on it would refuse a host that isolates perfectly well. The semantics are unchanged and
+        // strictly stronger: the call is still refused rather than run with the operator's network, and now rather
+        // than run with the operator's filesystem either.
+        if (!_provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation))
         {
             _logger.LogWarning(
-                "run_python refused: the '{Provider}' sandbox provider cannot deny egress on this host, and the tool's offline guarantee is not optional. Install the user-namespace support the sandbox containment probe reports as missing, or leave Compute:Enabled off.",
+                "run_python refused: the '{Provider}' sandbox provider cannot isolate the compute sandbox filesystem on this host, and that boundary is not optional. Install bubblewrap (bwrap) together with the user-namespace support the sandbox containment probe reports as missing, or leave Compute:Enabled off.",
                 _provider.ProviderName);
-            return "run_python rejected: this node cannot run the compute sandbox offline, and the tool never runs with network access.";
+            return "run_python rejected: this node cannot isolate the compute sandbox filesystem, and the tool never runs a script that could read or write the rest of the machine.";
         }
 
         // One id for everything this invocation owns: its jail and its execution. Both are per call, and killing the
@@ -122,22 +138,24 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         SandboxHandle? handle = null;
         try
         {
-            var interpreter = await _environment.GetInterpreterPathAsync(cancellationToken).ConfigureAwait(false);
+            var runtime = await _environment.GetRuntimeAsync(cancellationToken).ConfigureAwait(false);
             var identity = await _identityProvider.GetAsync(cancellationToken).ConfigureAwait(false);
-            handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity, invocationId), cancellationToken).ConfigureAwait(false);
-            if (handle.WorkingRoot is not { } jailRoot)
+            handle = await _provider.CreateOrAttachAsync(BuildCreateRequest(identity, runtime, invocationId), cancellationToken)
+                                    .ConfigureAwait(false);
+            if (string.IsNullOrEmpty(handle.WorkingRoot))
             {
-                // Fails closed for the same reason the egress check does: the alternative is pointing HOME and TMPDIR
-                // somewhere the disk ceiling this call was granted does not measure, which reads as a bounded sandbox
-                // and is not one. No agent-role provider that actually executes anything hits this.
+                // Fails closed for the same reason the boundary check does. The jail is what backs /work inside the
+                // sandbox, so a provider that cannot name it has nowhere to put the script's single writable tree —
+                // and the disk ceiling this call was granted meters that directory and nothing else. No agent-role
+                // provider that actually executes anything hits this.
                 _logger.LogWarning(
-                    "run_python refused: the '{Provider}' sandbox provider reports no jail root, so the script's HOME/TMPDIR scratch cannot be placed inside the directory the disk ceiling meters.",
+                    "run_python refused: the '{Provider}' sandbox provider reports no jail root, so there is no host directory to back the sandbox's writable tree or to meter against the disk ceiling.",
                     _provider.ProviderName);
-                return "run_python rejected: this node's sandbox cannot give the script a scratch directory inside its own jail.";
+                return "run_python rejected: this node's sandbox cannot give the script a working directory of its own.";
             }
 
-            var scratch = await CreateScratchAsync(handle, jailRoot, cancellationToken).ConfigureAwait(false);
-            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(interpreter, code, scratch, invocationId), cancellationToken)
+            await EnsureScratchAsync(handle, cancellationToken).ConfigureAwait(false);
+            var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(runtime.InterpreterPath, code, invocationId), cancellationToken)
                                         .ConfigureAwait(false);
             return FormatResult(result);
         }
@@ -165,20 +183,22 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     }
 
     /// <summary>
-    ///     Materializes the script's HOME and TMPDIR inside the jail, through the provider's own reset operation rather
-    ///     than a host <c>Directory.CreateDirectory</c>: that is the surface that applies the jail's path and symlink
-    ///     guards, and it is the only one that stays correct for a provider whose sandbox paths are not host paths.
+    ///     Materializes the two jail subdirectories the sandbox presents as <c>HOME</c> and <c>TMPDIR</c>, through the
+    ///     provider's own reset operation rather than a host <c>Directory.CreateDirectory</c>: that is the surface
+    ///     that applies the jail's path and symlink guards, and it is the only one that stays correct for a provider
+    ///     whose sandbox paths are not host paths.
     ///     <para>
-    ///         Returns the paths as the CHILD sees them, which is what the environment must carry. For the process
-    ///         provider — the only agent-role provider that runs a real process — the jail is identity-mapped, so those
-    ///         are the same bytes the watchdog walks.
+    ///         Nothing is returned, because under isolation the paths the CHILD sees are fixed — the sandbox's own
+    ///         <see cref="SandboxIsolatedPaths.Home" /> and <see cref="SandboxIsolatedPaths.Temp" />, not host paths
+    ///         at all. What this call still buys is that both directories EXIST and are empty before the command
+    ///         starts, asked for through the provider rather than assumed of whatever a provider's launch path
+    ///         happens to create.
     ///     </para>
     /// </summary>
-    private async Task<ComputeScratchPaths> CreateScratchAsync(SandboxHandle handle, string jailRoot, CancellationToken cancellationToken)
+    private async Task EnsureScratchAsync(SandboxHandle handle, CancellationToken cancellationToken)
     {
         await _provider.ResetDirectoryAsync(handle, HomeDirectoryName, cancellationToken).ConfigureAwait(false);
         await _provider.ResetDirectoryAsync(handle, TempDirectoryName, cancellationToken).ConfigureAwait(false);
-        return new ComputeScratchPaths(Path.Combine(jailRoot, HomeDirectoryName), Path.Combine(jailRoot, TempDirectoryName));
     }
 
     /// <summary>
@@ -207,7 +227,9 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     ///     the whole fix and nothing needs to serialize. Only different-OWNER jails on a node are evicted on create, so
     ///     two calls by the same owner never disturb each other.
     /// </summary>
-    private SandboxCreateRequest BuildCreateRequest(AgentHomeOwnerIdentity identity, string invocationId)
+    private SandboxCreateRequest BuildCreateRequest(AgentHomeOwnerIdentity identity,
+        ComputePythonRuntime runtime,
+        string invocationId)
     {
         var capabilities = _provider.Capabilities;
         return new SandboxCreateRequest
@@ -221,7 +243,18 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
                 ManifestVersion = SandboxGeneration
             },
             RuntimeProfile = RuntimeProfile,
-            // Unconditional: ExecuteAsync already refused the call if this provider cannot honor it.
+            // Unconditional: ExecuteAsync already refused the call if this provider cannot honor it. Unlike the
+            // ceilings below this is not a preference a provider may quietly drop — a request naming it is rejected
+            // fail-closed by a provider that cannot deliver it, which is the whole reason it is safe to ask for.
+            Isolation = SandboxIsolationMode.Filesystem,
+            // The two smallest trees that make the interpreter run, and nothing else. Naming the compute cache root
+            // instead would have been one line shorter and would have handed the script the uv download cache, the
+            // uv binary and the lockfile state marker as well — see ComputePythonEnvironment.BuildRuntime.
+            ReadOnlyTrees = runtime.ReadOnlyTrees,
+            ThreadLimit = _options.ThreadLimit,
+            // Still stated, though the isolated chain's --unshare-net is what enforces it and the registry no longer
+            // consults the separate egress capability for an isolated request. It is the create request's default
+            // anyway, and spelling it keeps the intent legible at the one place a reader looks for it.
             NetworkPolicy = SandboxNetworkPolicy.None,
             // Unconditional too, and for the same reason it needs no capability check: it can only ASK FOR LESS than
             // the node-wide jail ceiling the provider would otherwise apply, so a provider that ignores it is no worse
@@ -239,11 +272,15 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         };
     }
 
-    private SandboxCommandRequest BuildCommandRequest(string interpreter, string code, ComputeScratchPaths scratch, string invocationId)
+    private SandboxCommandRequest BuildCommandRequest(string interpreter, string code, string invocationId)
     {
         return new SandboxCommandRequest
         {
             ExecutionId = "compute-" + invocationId,
+            // The venv's own interpreter, at its host path. Inside the sandbox that path resolves because the venv is
+            // bound read-only AT ITS OWN CANONICAL PATH — which is also why the tree list must never be rewritten to
+            // bind somewhere tidier. No working directory is named: the sandbox's writable tree IS the working
+            // directory, and asking for a subdirectory of it would only give the script one more thing to escape.
             Executable = interpreter,
             // `-I` is isolated mode: no PYTHONPATH, no user site-packages, no script-directory import. It is what keeps
             // the interpreter's import surface the provisioned lockfile closure rather than whatever happens to sit in
@@ -251,34 +288,42 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             // never written to disk and never becomes an argv the process table exposes.
             Arguments = ["-I", "-"],
             StandardInput = code,
-            Environment = BuildEnvironment(scratch),
+            Environment = BuildEnvironment(),
             Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds)
         };
     }
 
     /// <summary>
-    ///     The environment layered over the provider's own allow-list. HOME and TMPDIR are pointed at a compute-owned
-    ///     scratch directory rather than left inherited: the provider identity-maps the filesystem, so an inherited HOME
-    ///     would let a script read and write the operator's <c>~/.config</c> and <c>~/.cache</c> as an ordinary side
-    ///     effect of importing a library, which nothing about running arithmetic needs.
+    ///     The environment the script runs with, expressed in the SANDBOX's view of the filesystem. Every path here is
+    ///     an in-jail path (<see cref="SandboxIsolatedPaths" />), because under isolation a host path names nothing
+    ///     the child can reach — the jail is not even present at its host name inside.
     ///     <para>
-    ///         The directories are per INVOCATION and live INSIDE that invocation's jail. Both halves are load-bearing.
-    ///         Per invocation, because a shared scratch made every cache, dotfile and temp file a script writes
-    ///         readable by the next call — including a call in another conversation. Inside the jail, because the disk
-    ///         ceiling this call was granted is enforced by walking the jail: while the scratch sat beside the venv
-    ///         under the node data directory, a script could fill the host disk through <c>TMPDIR</c> and the watchdog
-    ///         measured nothing. They now cost the same budget as anything else the script writes, and the jail
-    ///         teardown reclaims them.
+    ///         The isolated chain sets the same variables in its own fixed allow-list, and these are emitted after it,
+    ///         so this is a deliberate restatement rather than an oversight. It is worth the duplication: the promise
+    ///         that a script's <c>HOME</c> and <c>TMPDIR</c> are per-invocation, discarded on return and charged to
+    ///         the disk ceiling is THIS tool's promise, made in its description to the model, and a tool should not
+    ///         inherit the thing it promises from a launch chain it does not own. If a provider's view of the jail
+    ///         ever disagrees with the contract, the disagreement surfaces here rather than as a script quietly
+    ///         caching into somewhere unmetered.
+    ///     </para>
+    ///     <para>
+    ///         What is NOT restated is the numeric-library thread pinning. Those variables are derived from
+    ///         <see cref="SandboxCreateRequest.ThreadLimit" />, which the create request already carries, and naming
+    ///         them twice would let the tool's environment and the sandbox's CPU ceiling drift apart in exactly the
+    ///         situation the pinning exists to prevent.
     ///     </para>
     /// </summary>
-    private static IReadOnlyDictionary<string, string> BuildEnvironment(ComputeScratchPaths scratch)
+    private static IReadOnlyDictionary<string, string> BuildEnvironment()
     {
         return new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["HOME"] = scratch.Home,
-            ["TMPDIR"] = scratch.Temp,
-            ["TMP"] = scratch.Temp,
-            ["TEMP"] = scratch.Temp,
+            ["HOME"] = SandboxIsolatedPaths.Home,
+            ["TMPDIR"] = SandboxIsolatedPaths.Temp,
+            ["TMP"] = SandboxIsolatedPaths.Temp,
+            ["TEMP"] = SandboxIsolatedPaths.Temp,
+            // The venv is bound READ-ONLY, so a user-site directory could not be written even if one resolved; the
+            // point of the variable is that the interpreter must not go looking for one it might find bound.
+            ["PYTHONNOUSERSITE"] = "1",
             // Nothing re-reads a __pycache__ across calls (each run is a fresh stdin program), so writing one only
             // litters the jail against the disk watchdog.
             ["PYTHONDONTWRITEBYTECODE"] = "1"
@@ -341,12 +386,4 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
 
         return value[..lastCharIndex];
     }
-
-    /// <summary>
-    ///     The two writable scratch paths one invocation hands its script, as the child sees them. Separate directories
-    ///     rather than one: <c>HOME</c> is where a library drops a dotfile or a cache it may re-read within the call,
-    ///     and <c>TMPDIR</c> is where it drops files it expects to be able to clear — a single directory conflated the
-    ///     two and made a script's own <c>tempfile</c> cleanup look like it had wiped its home.
-    /// </summary>
-    private readonly record struct ComputeScratchPaths(string Home, string Temp);
 }
