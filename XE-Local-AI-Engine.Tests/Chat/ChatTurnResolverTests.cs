@@ -27,7 +27,9 @@ public sealed class ChatTurnResolverTests
 
         var sut = CreateSut(resolver, store, out var orchestrationResolver);
 
-        var resolution = await sut.ResolveAsync(activeModel: null,
+        // An installed GGUF default (the common UI path): the capability head is the active model, so no pin lookup runs
+        // and the only store read that could happen here is the orchestration reload.
+        var resolution = await sut.ResolveAsync(activeModel: "local-gguf",
             requiresInstalledChatModel: false,
             effectiveAgentId: agentId,
             retrievalQuery: null,
@@ -54,7 +56,8 @@ public sealed class ChatTurnResolverTests
 
         var sut = CreateSut(resolver, store, out _);
 
-        _ = await sut.ResolveAsync(activeModel: null,
+        // An installed GGUF default, so the single read this turn makes is the orchestration reload.
+        _ = await sut.ResolveAsync(activeModel: "local-gguf",
             requiresInstalledChatModel: false,
             effectiveAgentId: agentId,
             retrievalQuery: null,
@@ -110,13 +113,105 @@ public sealed class ChatTurnResolverTests
         AssertEx.True(resolution.RequiresInstalledChatModel);
     }
 
-    private static ChatTurnResolver CreateSut(IAgentDefinitionResolver resolver, IAgentDefinitionStore store, out IOrchestrationResolver orchestrationResolver)
+    [Test]
+    public async Task ResolveAsync_WhenNoInstalledChatModelButAgentPinsAModel_ResolvesCapabilitiesFromThePin()
+    {
+        const string pinnedModel = "llama3.1:8b";
+        var agentId = Guid.NewGuid();
+        var store = Substitute.For<IAgentDefinitionStore>();
+        store.GetByIdAsync(agentId, Arg.Any<CancellationToken>()).Returns(CreatePinningDefinition(agentId, pinnedModel));
+
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(null, Arg.Any<CancellationToken>()).Returns(default(ModelCapabilitySnapshot));
+        capabilityResolver.ResolveAsync(pinnedModel, Arg.Any<CancellationToken>())
+                          .Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false));
+
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("persona", [], ModelProfile: pinnedModel, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Agent",
+                    Kind: AgentDefinitionKind.Single));
+
+        var sut = CreateSut(resolver, store, out _, capabilityResolver);
+
+        var resolution = await sut.ResolveAsync(activeModel: null,
+            requiresInstalledChatModel: true,
+            effectiveAgentId: agentId,
+            retrievalQuery: null,
+            userPickedConcreteModel: false,
+            CancellationToken.None);
+
+        // The null active model advertises nothing, but the pin is what actually runs this turn — gating on the null head
+        // would hand the agent resolver supportsTools:false and leave a work session unable to call its own tools.
+        AssertEx.True(resolution.SupportsTools);
+        AssertEx.True(resolution.SupportsThinking);
+        await resolver.Received(1)
+                      .ResolveAsync(agentId, null, null, supportsTools: true, honorModelProfile: true, activeModelIsCloud: false, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ResolveAsync_WhenActiveModelIsInstalledAndAgentPinsAModel_ResolvesCapabilitiesFromTheActiveModel()
+    {
+        const string activeModel = "local-gguf";
+        const string pinnedModel = "llama3.1:8b";
+        var agentId = Guid.NewGuid();
+        var store = Substitute.For<IAgentDefinitionStore>();
+        store.GetByIdAsync(agentId, Arg.Any<CancellationToken>()).Returns(CreatePinningDefinition(agentId, pinnedModel));
+
+        var capabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        capabilityResolver.ResolveAsync(activeModel, Arg.Any<CancellationToken>()).Returns(default(ModelCapabilitySnapshot));
+        capabilityResolver.ResolveAsync(pinnedModel, Arg.Any<CancellationToken>())
+                          .Returns(new ModelCapabilitySnapshot(SupportsThinking: true, SupportsTools: true, IsCloud: false));
+
+        var resolver = Substitute.For<IAgentDefinitionResolver>();
+        resolver.ResolveAsync(Arg.Any<Guid?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns(new ResolvedAgentRuntime("persona", [], ModelProfile: pinnedModel, ReasoningEffort: null, AgentDefinitionVersion: 1, agentId, "Agent",
+                    Kind: AgentDefinitionKind.Single));
+
+        var sut = CreateSut(resolver, store, out _, capabilityResolver);
+
+        var resolution = await sut.ResolveAsync(activeModel,
+            requiresInstalledChatModel: true,
+            effectiveAgentId: agentId,
+            retrievalQuery: null,
+            userPickedConcreteModel: false,
+            CancellationToken.None);
+
+        // With an installed chat model the head stays the ACTIVE model: the pin lookup never runs, so this path is
+        // byte-identical to before the no-GGUF branch existed.
+        AssertEx.False(resolution.SupportsTools);
+        AssertEx.False(resolution.SupportsThinking);
+        await capabilityResolver.Received(1).ResolveAsync(activeModel, Arg.Any<CancellationToken>());
+        await capabilityResolver.DidNotReceive().ResolveAsync(pinnedModel, Arg.Any<CancellationToken>());
+        await store.DidNotReceive().GetByIdAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    private static AgentDefinitionRecord CreatePinningDefinition(Guid id, string pinnedModel)
+    {
+        return new AgentDefinitionRecord(id,
+            "Agent",
+            Description: null,
+            "Persona.",
+            pinnedModel,
+            ReasoningEffort: null,
+            AgentDefinitionKind.Single,
+            [],
+            new Dictionary<string, bool>(),
+            OrchestrationTopologyJson: null,
+            Version: 1,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 10);
+    }
+
+    private static ChatTurnResolver CreateSut(IAgentDefinitionResolver resolver,
+        IAgentDefinitionStore store,
+        out IOrchestrationResolver orchestrationResolver,
+        IModelCapabilityResolver? capabilityResolver = null)
     {
         orchestrationResolver = Substitute.For<IOrchestrationResolver>();
         return new ChatTurnResolver(resolver,
             store,
             orchestrationResolver,
-            Substitute.For<IModelCapabilityResolver>(),
+            capabilityResolver ?? Substitute.For<IModelCapabilityResolver>(),
             NullLogger<ChatTurnResolver>.Instance);
     }
 }
