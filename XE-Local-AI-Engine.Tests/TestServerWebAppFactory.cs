@@ -28,6 +28,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Testing.FakeOllama;
+using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
 /// <summary>
@@ -421,6 +422,14 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
     private void ConfigureTestServices(IServiceCollection services)
     {
         services.RemoveAll<IHostedService>();
+
+        // This fixture's content root is the REAL Client source directory (ResolveClientContentRoot) while the data dir
+        // is a temp GUID dir, so the product NodeDataDirectory would run its first-launch migration and File.Move a
+        // developer's node-settings.json (and the encrypted credential stores) out of the checkout into this host's temp
+        // dir — which teardown then deletes. The fake pins the same Root with no migration.
+        _ = Directory.CreateDirectory(_nodeDataDirectory);
+        services.RemoveAll<INodeDataDirectory>();
+        services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(_nodeDataDirectory));
 
         services.AddDataProtection()
                 .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(_nodeDataDirectory, "dp-keys")));

@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using XE_Local_AI_Engine.Client;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -54,6 +56,41 @@ public sealed class ServiceProviderValidationTests
         }
     }
 
+    [Test]
+    public async Task HostCreation_LeavesTheContentRootNodeSettingsWhereItIs()
+    {
+        // NodeDataDirectory's first-launch migration File.Moves node-settings.json (and the encrypted credential
+        // stores) out of the content root whenever the data dir differs. This class's content root is the REAL Client
+        // source directory, so an unisolated INodeDataDirectory eats the developer's dev-node settings and deletes them
+        // with the temp data dir on teardown. The registration must stay isolated.
+        var contentRoot = TestServerWebAppFactory.ResolveClientContentRoot();
+        var canaryPath = Path.Combine(contentRoot, "node-settings.json");
+
+        // Only ever remove a file this test created — a real dev node's settings must survive untouched.
+        var wroteCanary = !File.Exists(canaryPath);
+        if (wroteCanary)
+        {
+            await File.WriteAllTextAsync(canaryPath, "{}");
+        }
+
+        try
+        {
+            await using (var host = await ValidatedHost.CreateAsync())
+            {
+                AssertEx.NotEqual(contentRoot, host.App.Services.GetRequiredService<INodeDataDirectory>().Root);
+            }
+
+            AssertEx.True(File.Exists(canaryPath), "Building the validated host moved node-settings.json out of the Client content root.");
+        }
+        finally
+        {
+            if (wroteCanary)
+            {
+                File.Delete(canaryPath);
+            }
+        }
+    }
+
     /// <summary>A throwaway host rooted in temp directories, mirroring the fixture's configuration block.</summary>
     private sealed class ValidatedHost : IAsyncDisposable
     {
@@ -77,6 +114,7 @@ public sealed class ServiceProviderValidationTests
             _ = Directory.CreateDirectory(webRoot);
             await File.WriteAllTextAsync(Path.Combine(webRoot, "index.html"), "<!doctype html><html lang=\"en\"><body></body></html>");
             var nodeDataDirectory = Path.Combine(Path.GetTempPath(), $"xe-di-validation-nodedata-{Guid.NewGuid():N}");
+            _ = Directory.CreateDirectory(nodeDataDirectory);
             var sqlitePath = Path.Combine(Path.GetTempPath(), $"xe-di-validation-{Guid.NewGuid():N}.sqlite");
 
             var start = await Program.CreateAppAsync([], new ProgramAppCustomization
@@ -92,9 +130,17 @@ public sealed class ServiceProviderValidationTests
                     ["NodeData:Directory"] = nodeDataDirectory,
                     ["EntityFramework:ServiceProviderCaching"] = "false"
                 },
-                ConfigureBuilder = static builder =>
+                ConfigureBuilder = builder =>
                 {
                     builder.WebHost.UseTestServer();
+
+                    // The content root above is the REAL Client source directory while the data dir is a temp GUID dir,
+                    // so the product NodeDataDirectory would run its first-launch migration and File.Move a developer's
+                    // node-settings.json (and the encrypted credential stores) out of the checkout into that temp dir —
+                    // which teardown then deletes. ValidateOnBuild constructs every singleton, so it happens on every
+                    // run of this class. The fake pins the same Root with no migration.
+                    builder.Services.RemoveAll<INodeDataDirectory>();
+                    builder.Services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(nodeDataDirectory));
 
                     // Runs after every product registration and after the product's own environment-conditional call,
                     // so this is what the container is actually built with.
