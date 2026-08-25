@@ -271,6 +271,9 @@ public static class BenchmarkOutputParts
     public const string OutputKind = "output";
     public const string ReasoningKind = "reasoning";
 
+    public const string ToolCallKind = "tool_call";
+    public const string ToolResultKind = "tool_result";
+
     /// <summary>Appended to the last text part the judge is shown when the answer had to be cut to fit its context.</summary>
     public const string TruncationMarker = "\n\n[truncated: the primary output exceeded the judge context budget]";
 
@@ -325,6 +328,35 @@ public static class BenchmarkOutputParts
         }
 
         return merged;
+    }
+
+    /// <summary>
+    ///     Whether the turn produced no gradable answer, judged from the parts alone. Two shapes, both of which a
+    ///     provider reports as a CLEAN finish:
+    ///     <list type="bullet">
+    ///         <item>the transcript ENDS on a <c>tool_call</c> — the agent asked for a tool and the turn stopped there,
+    ///         so no <c>tool_result</c> and no answer ever followed;</item>
+    ///         <item>the reasoning-stripped text is empty or whitespace — a thinking model spent the whole turn in its
+    ///         scratchpad.</item>
+    ///     </list>
+    ///     Either way the run reports <c>stop</c> or <c>tool_calls</c>, which reads downstream as a finished answer:
+    ///     the judge grades an empty transcript and the ranking seats the score beside runs that actually answered.
+    ///     <para>
+    ///         Pass the COALESCED parts. The live capture appends one part per delta, so the "last part" of a raw
+    ///         capture is whatever fragment arrived last, not the shape of the turn.
+    ///     </para>
+    /// </summary>
+    public static bool IsUnanswered(IReadOnlyList<BenchmarkOutputPart> parts)
+    {
+        ArgumentNullException.ThrowIfNull(parts);
+        if (!parts.Any(static part => string.Equals(part.Kind, OutputKind, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(part.Content)))
+        {
+            return true;
+        }
+
+        // A tool_call as the FINAL part is by construction one no tool_result ever answered: the transcript is in turn
+        // order, so nothing follows it. An earlier unmatched id is a provider quirk, not an unfinished turn.
+        return parts.Count > 0 && string.Equals(parts[^1].Kind, ToolCallKind, StringComparison.Ordinal);
     }
 
     /// <summary>

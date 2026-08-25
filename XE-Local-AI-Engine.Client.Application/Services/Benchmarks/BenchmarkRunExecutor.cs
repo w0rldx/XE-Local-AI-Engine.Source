@@ -133,6 +133,12 @@ public sealed class BenchmarkRunExecutor(
 
             var effectiveContext = admission.EffectiveContextTokens
                                    ?? throw new BenchmarkExecutionException("The effective model context was unavailable.");
+
+            // Coalesced HERE, once: the live stream needs one event per delta, storage needs one part per contiguous
+            // run (see BenchmarkOutputParts), and the stop-reason verdict below has to read the SHAPE of the turn,
+            // which a per-delta capture does not show.
+            var parts = BenchmarkOutputParts.Coalesce(capture.Parts);
+            var stopReason = ResolveStopReason(terminal.FinishReason, parts);
             var durationMs = terminal.GenerationDurationMs ?? 0;
             var throughput = ToThroughput(terminal.Throughput);
 
@@ -161,9 +167,7 @@ public sealed class BenchmarkRunExecutor(
             var persisted = await MarkPrimarySucceededAsync(work,
                     new BenchmarkPrimarySuccessCommand(work.RunId,
                         work.Version,
-                        // Coalesced HERE, at the terminal write, not in the capture: the live stream needs one
-                        // event per delta, storage needs one part per contiguous run (see BenchmarkOutputParts).
-                        BenchmarkExecutionSerialization.SerializeParts(BenchmarkOutputParts.Coalesce(capture.Parts)),
+                        BenchmarkExecutionSerialization.SerializeParts(parts),
                         terminalEvent.Sequence,
                         effectiveContext,
                         durationMs,
@@ -172,7 +176,7 @@ public sealed class BenchmarkRunExecutor(
                         // A generation cut off at the token budget still SUCCEEDS — the measurement is real — but the
                         // run has to carry why it stopped, or the ranking and the judge grade an incomplete answer as
                         // if it were a finished one.
-                        terminal.FinishReason,
+                        stopReason,
                         Throughput: throughput))
                 .ConfigureAwait(false);
             events.PublishReserved(metricsEvent);
@@ -203,6 +207,22 @@ public sealed class BenchmarkRunExecutor(
                 (exception as BenchmarkExecutionException)?.StopReason).ConfigureAwait(false);
         }
     }
+
+    /// <summary>
+    ///     The stop reason to persist: the provider's own token, unless the turn finished cleanly having produced no
+    ///     answer, which is recorded as <see cref="BenchmarkPrimaryStopReasons.Incomplete" />.
+    ///     <para>
+    ///         The provider cannot report this. A turn that stopped on an unanswered tool call reports
+    ///         <c>tool_calls</c>, and a thinking model that spent the whole turn reasoning reports <c>stop</c> — both
+    ///         read downstream as a finished answer, so the judge graded an empty transcript and the ranking seated its
+    ///         score beside runs that actually answered. A <c>length</c> stop keeps its own token: that run IS cut off,
+    ///         and <see cref="BenchmarkPrimaryStopReasons.IsTruncated" /> already excludes and annotates it.
+    ///     </para>
+    /// </summary>
+    internal static string? ResolveStopReason(string? finishReason, IReadOnlyList<BenchmarkOutputPart> parts) =>
+        !BenchmarkPrimaryStopReasons.IsTruncated(finishReason) && BenchmarkOutputParts.IsUnanswered(parts)
+            ? BenchmarkPrimaryStopReasons.Incomplete
+            : finishReason;
 
     // Crosses the layer boundary by hand rather than by a shared type: the throughput measurement is produced in the
     // invocation layer and persisted by the store, and neither may reference the other's contract.
@@ -505,7 +525,7 @@ internal sealed class BenchmarkInvocationCapture : IDisposable
         lock (_gate)
         {
             var requested = payload.Phase == ToolCallLifecyclePhase.Requested;
-            _parts.Add(new BenchmarkOutputPart(requested ? "tool_call" : "tool_result",
+            _parts.Add(new BenchmarkOutputPart(requested ? BenchmarkOutputParts.ToolCallKind : BenchmarkOutputParts.ToolResultKind,
                 ToolCallId: payload.ToolCallId,
                 ToolName: payload.ToolName,
                 Arguments: requested ? payload.Arguments : null,

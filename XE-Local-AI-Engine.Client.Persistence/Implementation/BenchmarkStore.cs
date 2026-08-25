@@ -1472,10 +1472,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     ///     <para>
     ///         Outermost first. A WARM-UP outranks even the operator override: it exists to absorb the first-launch
     ///         cost the runs after it should not pay, so ranking it against them would rank the very thing it controls
-    ///         for. TRUNCATION comes next — before every judge-derived reason, after the operator override: a run cut
-    ///         off at the token budget is a real measurement of an INCOMPLETE answer, so its judge score stays visible
-    ///         but never ranks, while an operator who scored it anyway still wins. Read off the persisted stop reason,
-    ///         never inferred from the status.
+    ///         for. TRUNCATION and the SILENT-INCOMPLETE it sits beside come next — before every judge-derived reason,
+    ///         after the operator override: a run cut off at the token budget, and a run that finished cleanly without
+    ///         emitting an answer at all, are both real measurements of a non-answer, so their judge score stays visible
+    ///         but never ranks, while an operator who scored one anyway still wins. Both are read off the persisted stop
+    ///         reason, never inferred from the status.
     ///     </para>
     /// </summary>
     /// <param name="Rankable">
@@ -1487,8 +1488,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         bool isWarmup,
         string? primaryStopReason)
     {
-        var truncated = !isWarmup && userScore is null && BenchmarkPrimaryStopReasons.IsTruncated(primaryStopReason);
-        if (!isWarmup && !truncated)
+        var unanswered = isWarmup || userScore is not null ? null : UnansweredReason(primaryStopReason);
+        if (!isWarmup && unanswered is null)
         {
             var (score, source) = ComputeQuality(userScore, judge);
             return (judge, score, source, true);
@@ -1496,8 +1497,22 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
         return (judge with
         {
-            RankExclusionReason = isWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : BenchmarkRunJudgeStates.ReasonTruncated
+            RankExclusionReason = isWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : unanswered
         }, null, BenchmarkQualityScoreSources.None, false);
+    }
+
+    /// <summary>
+    ///     The exclusion a stop reason implies for a run nothing else already excludes, or <see langword="null" /> when
+    ///     the run answered.
+    /// </summary>
+    private static string? UnansweredReason(string? primaryStopReason)
+    {
+        if (BenchmarkPrimaryStopReasons.IsTruncated(primaryStopReason))
+        {
+            return BenchmarkRunJudgeStates.ReasonTruncated;
+        }
+
+        return BenchmarkPrimaryStopReasons.IsIncomplete(primaryStopReason) ? BenchmarkRunJudgeStates.ReasonIncomplete : null;
     }
 
     private static BenchmarkRunRecord WithRanking(BenchmarkRunRecord run, BenchmarkProjectRanking ranking) =>

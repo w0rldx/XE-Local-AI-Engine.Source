@@ -94,4 +94,41 @@ public sealed class BenchmarkOutputPartsTests
 
         AssertEx.Equal(expected: 4096, AssertEx.NotNull(graded[0].Content).Length);
     }
+
+    [Test]
+    public void IsUnanswered_SeparatesARealAnswerFromTheTwoSilentShapes()
+    {
+        BenchmarkOutputPart[] answered =
+        [
+            new("reasoning", Content: "thinking"),
+            new("output", Content: "The answer is 42.")
+        ];
+        BenchmarkOutputPart[] reasoningOnly =
+        [
+            new("reasoning", Content: "thinking and thinking and never finishing")
+        ];
+        BenchmarkOutputPart[] blankAnswer =
+        [
+            new("output", Content: "   \n ")
+        ];
+        BenchmarkOutputPart[] danglingToolCall =
+        [
+            new("output", Content: "Let me look that up."),
+            new("tool_call", ToolCallId: "call-1", ToolName: "search", Arguments: "{}")
+        ];
+        BenchmarkOutputPart[] answeredAfterATool =
+        [
+            new("output", Content: "Let me look that up."),
+            new("tool_call", ToolCallId: "call-1", ToolName: "search", Arguments: "{}"),
+            new("tool_result", ToolCallId: "call-1", ToolName: "search", Result: "ok", IsError: false),
+            new("output", Content: "It is 42.")
+        ];
+
+        AssertEx.False(BenchmarkOutputParts.IsUnanswered(answered));
+        AssertEx.True(BenchmarkOutputParts.IsUnanswered(reasoningOnly), "reasoning is not the graded answer");
+        AssertEx.True(BenchmarkOutputParts.IsUnanswered(blankAnswer), "whitespace is not an answer");
+        AssertEx.True(BenchmarkOutputParts.IsUnanswered(danglingToolCall), "a turn that ended asking for a tool never answered");
+        AssertEx.False(BenchmarkOutputParts.IsUnanswered(answeredAfterATool));
+        AssertEx.True(BenchmarkOutputParts.IsUnanswered([]), "an empty transcript is the emptiest answer of all");
+    }
 }

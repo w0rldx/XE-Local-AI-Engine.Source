@@ -392,13 +392,23 @@ public class BenchmarkRunSummaryResponse
     /// <summary>Dense rank within the project, descending. Null when the run is not in the ranked cohort.</summary>
     public int? Rank { get; init; }
 
-    /// <summary>Why this run is not in the project's ranked cohort, or null when it is ranked.</summary>
+    /// <summary>
+    ///     Why this run is not in the project's ranked cohort, or null when it is ranked. One of <c>no-score</c>,
+    ///     <c>judge-pending</c>, <c>judge-failed</c>, <c>judge-cancelled</c>, <c>policy-outdated</c>,
+    ///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>,
+    ///     <c>truncated</c>, <c>incomplete</c>, <c>warmup</c>.
+    /// </summary>
     public string? RankExclusionReason { get; init; }
 
     /// <summary>
     ///     Why the primary generation stopped, verbatim from the provider (<c>stop</c>, <c>length</c>,
     ///     <c>tool_calls</c>, <c>content_filter</c>), or null when none was reported. <c>length</c> means the answer
     ///     was cut off by the token budget — the run still succeeded, but it does not rank.
+    ///     <para>
+    ///         <c>incomplete</c> is the one value the node derives rather than reads: the turn finished cleanly and
+    ///         produced no answer at all — it ended on an unanswered tool call, or emitted only reasoning. It succeeds
+    ///         and does not rank, exactly like <c>length</c>, and carries the <c>incomplete</c> rank-exclusion reason.
+    ///     </para>
     /// </summary>
     public string? PrimaryStopReason { get; init; }
 

@@ -219,6 +219,36 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
     }
 
     [Test]
+    public async Task Rank_ExcludesASilentlyIncompleteRunTheSameWayItExcludesATruncatedOne()
+    {
+        await using var context = await CreateDatabaseAsync("rank-incomplete.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+
+        var complete = await JudgedRunAsync(store, project, revision, score: 70, executionKey: "key-a").ConfigureAwait(false);
+        var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        var incomplete = await JudgedRunAsync(store, refreshed, revision, score: 95, executionKey: "key-a",
+                                       stopReason: BenchmarkPrimaryStopReasons.Incomplete)
+                                   .ConfigureAwait(false);
+
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false);
+
+        var byId = page.Items.ToDictionary(static run => run.Id);
+        AssertEx.Equal<int?>(1, byId[complete].Rank);
+        AssertEx.Null(byId[incomplete].Rank, "A run that answered nothing must not outrank one that answered.");
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonIncomplete, byId[incomplete].Judge!.RankExclusionReason,
+            "The reason must name the absence of an answer, not the judge state, which is perfectly current.");
+        AssertEx.Equal(BenchmarkQualityScoreSources.None, byId[incomplete].QualityScoreSource);
+        AssertEx.Null(byId[incomplete].QualityScore);
+        AssertEx.Equal<int?>(95, byId[incomplete].Judge!.Score, "The score stays visible; it just does not rank.");
+        AssertEx.Equal(BenchmarkPrimaryStatus.Succeeded, byId[incomplete].PrimaryStatus, "A silent run is flagged, never failed.");
+
+        // Same denominator rule as truncation: nothing the operator does can make an absent answer gradable.
+        AssertEx.Equal(expected: 1, AssertEx.NotNull(page.RankCohort).RankedCount);
+        AssertEx.Equal(expected: 1, page.RankCohort!.TotalScored);
+    }
+
+    [Test]
     public async Task Rank_UserScoreStillRanksATruncatedRun()
     {
         await using var context = await CreateDatabaseAsync("rank-truncated-override.sqlite").ConfigureAwait(false);

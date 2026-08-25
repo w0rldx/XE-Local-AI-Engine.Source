@@ -271,6 +271,101 @@ public sealed class BenchmarkRunExecutorTests
     }
 
     [Test]
+    public async Task Execute_WhenTheTurnEmittedOnlyReasoning_PersistsTheIncompleteStopReason()
+    {
+        // The provider reports `stop` here: from its side the turn ended normally. But every token went into the
+        // scratchpad, so the judge would grade an EMPTY transcript and the ranking would seat that score beside runs
+        // that answered. Only the node can see the difference, so only the node can record it.
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        BenchmarkPrimarySuccessCommand? command = null;
+        store.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                 LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
+                 Version = 3
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(async call =>
+              {
+                  var execution = call.Arg<InvocationExecutionContext>();
+                  var invocationId = execution.Package.InvocationId;
+                  _ = await AssertEx.NotNull(execution.GenerationAdmissionPolicy).EvaluateAsync(Admission(invocationId));
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, content: "", 4096, 100, "stop",
+                          thinkingContent: "Let me think about this for a very long time.")));
+              });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+            new BenchmarkCancellationRegistry(), PassthroughSupervisor());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        var persisted = AssertEx.NotNull(command);
+        AssertEx.Equal(BenchmarkPrimaryStopReasons.Incomplete, persisted.PrimaryStopReason,
+            "a turn that emitted only reasoning answered nothing, whatever the provider called it");
+        _ = store.Received(1).MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Execute_WhenTheTurnEndedOnAnUnansweredToolCall_PersistsTheIncompleteStopReason()
+    {
+        // The other silent shape: text, then a tool call, then nothing. The provider reports `tool_calls`, which reads
+        // downstream as a finished answer even though the agent is still waiting for a result that never came.
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        BenchmarkPrimarySuccessCommand? command = null;
+        store.MarkPrimarySucceededAsync(Arg.Do<BenchmarkPrimarySuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                 LastStreamSequence = call.Arg<BenchmarkPrimarySuccessCommand>().LastStreamSequence,
+                 Version = 3
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(async call =>
+              {
+                  var execution = call.Arg<InvocationExecutionContext>();
+                  var invocationId = execution.Package.InvocationId;
+                  _ = await AssertEx.NotNull(execution.GenerationAdmissionPolicy).EvaluateAsync(Admission(invocationId));
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Running, "Let me look that up.")));
+                  dispatcher.ToolCallLifecycleChanged += Raise.EventWith(dispatcher,
+                      new ToolCallLifecycleChangedEventArgs(new ToolCallLifecyclePayload
+                      {
+                          InvocationId = invocationId,
+                          ToolCallId = "call-1",
+                          ToolName = "web_search",
+                          Phase = ToolCallLifecyclePhase.Requested,
+                          Arguments = "{}"
+                      }));
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "Let me look that up.", 4096, 100,
+                          "tool_calls")));
+              });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner,
+            new BenchmarkCancellationRegistry(), PassthroughSupervisor());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        var persisted = AssertEx.NotNull(command);
+        AssertEx.Equal(BenchmarkPrimaryStopReasons.Incomplete, persisted.PrimaryStopReason,
+            "a transcript ending on a tool call nothing answered is not a finished answer");
+    }
+
+    [Test]
     public async Task Execute_UsesTheRunsFrozenGenerationTimeoutAndRecordsATimeoutAsItsStopReason()
     {
         // Live: a 27B reasoning run was cancelled at 307 s under the old pinned 300 s, before it could finish OR reach
@@ -762,19 +857,31 @@ public sealed class BenchmarkRunExecutorTests
         int? totalTokens = null,
         long? durationMs = null,
         string? finishReason = null,
-        InvocationThroughput? throughput = null) =>
+        InvocationThroughput? throughput = null,
+        string thinkingContent = "") =>
         new()
         {
             InvocationId = invocationId,
             ConversationId = Guid.NewGuid(),
             Status = status,
             StreamedContent = content,
+            StreamedThinkingContent = thinkingContent,
             StartedAt = DateTimeOffset.UnixEpoch,
             LastUpdatedAt = DateTimeOffset.UnixEpoch,
             TotalTokens = totalTokens,
             GenerationDurationMs = durationMs,
             FinishReason = finishReason,
             Throughput = throughput
+        };
+
+    private static InvocationGenerationAdmissionContext Admission(Guid invocationId) =>
+        new()
+        {
+            InvocationId = invocationId,
+            RequestedContextTokens = 8192,
+            EffectiveContextTokens = 8192,
+            ModelId = "model.gguf",
+            ProviderName = "llamacpp"
         };
 
     private static InstalledModelSnapshot Installed(string name, char fingerprintCharacter)

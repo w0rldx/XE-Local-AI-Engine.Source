@@ -548,7 +548,7 @@ public sealed record BenchmarkLaunchReceiptCommand(
 ///     Why this run is not in the ranked cohort, or <see langword="null" /> when it is ranked. One of <c>no-score</c>,
 ///     <c>judge-pending</c>, <c>judge-failed</c>, <c>judge-cancelled</c>, <c>policy-outdated</c>,
 ///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>, <c>truncated</c>,
-///     <c>warmup</c>.
+///     <c>incomplete</c>, <c>warmup</c>.
 /// </param>
 public sealed record BenchmarkRunJudgeView(
     string State,
@@ -578,6 +578,14 @@ public static class BenchmarkPrimaryStopReasons
     public const string Timeout = "timeout";
 
     /// <summary>
+    ///     The invocation ended cleanly but produced no answer: the turn stopped on an unanswered tool call, or every
+    ///     token it emitted was reasoning. Node-derived, not a provider token — llama-server reports <c>stop</c> or
+    ///     <c>tool_calls</c> for both shapes, which read as a finished answer everywhere downstream and let a run that
+    ///     answered NOTHING be judged and ranked against runs that did.
+    /// </summary>
+    public const string Incomplete = "incomplete";
+
+    /// <summary>
     ///     Whether the primary generation stopped because it ran out of budget. <see cref="Length" /> is the
     ///     OpenAI-compatible token for BOTH causes llama-server reports it for — <c>n_predict</c> exhausted and the
     ///     context window full (<c>stopped_limit</c>) — and both mean the same thing here: the answer is cut off.
@@ -590,6 +598,14 @@ public static class BenchmarkPrimaryStopReasons
     /// </summary>
     public static bool IsTruncated(string? primaryStopReason) =>
         string.Equals(primaryStopReason, Length, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    ///     Whether the primary generation ended without producing an answer. Same posture as
+    ///     <see cref="IsTruncated" />: one implementation, because ranking and judging live in different assemblies and
+    ///     must agree on exactly which runs carry no gradable answer.
+    /// </summary>
+    public static bool IsIncomplete(string? primaryStopReason) =>
+        string.Equals(primaryStopReason, Incomplete, StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>The <see cref="BenchmarkRunJudgeView.State" /> and <see cref="BenchmarkRunJudgeView.RankExclusionReason" /> vocabularies.</summary>
@@ -620,6 +636,14 @@ public static class BenchmarkRunJudgeStates
     ///     ranked against complete ones, whatever the judge scored it. An operator score still overrides.
     /// </summary>
     public const string ReasonTruncated = "truncated";
+
+    /// <summary>
+    ///     The primary generation finished cleanly but produced no answer at all — it stopped on an unanswered tool
+    ///     call, or emitted only reasoning. Excluded for the same reason as <see cref="ReasonTruncated" /> and with the
+    ///     same operator override: there is nothing for a rubric to grade, so whatever a judge scored it cannot rank
+    ///     against runs that answered.
+    /// </summary>
+    public const string ReasonIncomplete = "incomplete";
 
     /// <summary>
     ///     A warm-up run. It is a real measurement, kept and shown, but it is exactly the first-launch cost the repeats
