@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -249,13 +250,101 @@ public sealed class SandboxIsolationLiveTests
         }
     }
 
+    [Test]
+    public async Task IsolatedCommand_ClaimsItsScope_BeforeTheLaunchThatCreatesIt()
+    {
+        // `systemd-run` creates the transient scope as its first act, and the startup sweep in SandboxOrphanReaper
+        // SIGKILLs every engine-owned scope no marker claims. A marker written after the launch therefore left a
+        // window in which a second worker's sweep could kill a command this one had just started. The claim is now
+        // written first — which is visible here: the first recorded marker names the unit and carries NO pid, because
+        // at that point there is no child to have one.
+        RequireIsolationCapableHost();
+
+        var markerStore = new RecordingMarkerStore();
+        using var provider = CreateProvider(markerStore);
+        var handle = await CreateIsolatedSandboxAsync(provider);
+
+        var result = await RunShellAsync(provider, handle, "sleep 1");
+
+        AssertEx.True(result.Completed, $"the isolated command must complete: {result.StandardError}");
+        AssertEx.True(markerStore.Recorded.Count >= 2, "an isolated launch records a claim and then completes it");
+
+        // The ordering assertion, made against the live user manager at the moment of the claim: the unit the marker
+        // names must not exist yet. A marker written after the launch would find it already loaded — which is exactly
+        // the window in which another worker's sweep could have killed the command.
+        AssertEx.False(markerStore.ScopeWasAlreadyLoadedAtClaim,
+            "the scope must not exist yet when its marker is written; a claim that arrives after systemd-run leaves the sweep a window to kill a live command");
+
+        var claim = markerStore.Recorded[0];
+        AssertEx.Null(claim.ProcessGroupId, "the claim is written before the child exists, so it cannot carry a pid");
+        AssertEx.Null(claim.LeaderStartTicks);
+        var claimedUnit = AssertEx.NotNull(claim.ScopeUnitName);
+        AssertEx.True(SandboxScopeUnit.IsEngineOwned(claimedUnit), "the claim must name the unit the sweep will see");
+
+        var completed = markerStore.Recorded[^1];
+        AssertEx.Equal(claimedUnit, completed.ScopeUnitName, "the completed marker must claim the same unit");
+        AssertEx.True(completed.ProcessGroupId > 0, "the completed marker carries the pid the reaper signals with");
+        AssertEx.Empty(markerStore.Live, "the marker must be gone once the command finishes");
+    }
+
+    [Test]
+    public async Task ARunningCommandsScope_IsListedWithTheAgeTheStartupSweepGatesOn()
+    {
+        // The sweep will not signal a scope whose age the user manager did not report, so a silently broken age query
+        // does not fail loudly — it disables the sweep. Only a live manager can prove the query works: the reference
+        // clock has to be the same CLOCK_MONOTONIC systemd measures ActiveEnterTimestampMonotonic on, and the values
+        // have to be read as microseconds. Either mistake shows up here as an age that is missing or absurd.
+        //
+        // The assertion is about THIS command's unit, taken from the marker it claimed. Every other engine-owned scope
+        // on the manager is another test's, and one of those can be created, run and collected between the list and
+        // the show — which correctly reports no age at all, since there is no longer a unit to report one for.
+        RequireIsolationCapableHost();
+
+        var markerStore = new RecordingMarkerStore();
+        var provider = CreateProvider(markerStore);
+        try
+        {
+            var handle = await CreateIsolatedSandboxAsync(provider);
+
+            var running = RunTimingOutShellAsync(provider, handle, "while true; do sleep 1; done");
+            await AssertEx.EventuallyAsync(() => markerStore.Recorded.Count > 0, TimeSpan.FromSeconds(20), "the command must claim its scope");
+            var unitName = AssertEx.NotNull(markerStore.Recorded[0].ScopeUnitName);
+
+            await AssertEx.EventuallyAsync(() => AgeOf(unitName) is not null,
+                TimeSpan.FromSeconds(20),
+                $"the manager must report how long {unitName} has been active");
+
+            var activeFor = AgeOf(unitName) ?? TimeSpan.MinValue;
+            AssertEx.True(activeFor >= TimeSpan.Zero, "a scope cannot have entered the active state in the future");
+            AssertEx.True(activeFor < TimeSpan.FromMinutes(10),
+                $"the scope was created seconds ago; an age of {activeFor} means the reference clock or the value scale is wrong");
+
+            await provider.KillAsync(handle);
+            _ = await running;
+        }
+        finally
+        {
+            provider.Dispose();
+        }
+    }
+
     // ---- helpers ----
 
     private static int LoadedEngineScopeCount()
     {
+        return LoadedEngineScopeUnits().Count;
+    }
+
+    private static TimeSpan? AgeOf(string unitName)
+    {
+        return LoadedEngineScopeUnits().FirstOrDefault(unit => string.Equals(unit.UnitName, unitName, StringComparison.Ordinal))?.ActiveFor;
+    }
+
+    private static IReadOnlyList<SandboxScopeUnitStatus> LoadedEngineScopeUnits()
+    {
         var isolation = new HostSandboxContainmentProbe().Containment.FilesystemIsolation;
 
-        return SandboxScopeUnitKiller.TryCreate(isolation)?.ListEngineOwnedUnits().Count ?? 0;
+        return SandboxScopeUnitKiller.TryCreate(isolation)?.ListEngineOwnedUnits() ?? [];
     }
 
     private static async Task<SandboxHandle> CreateIsolatedSandboxAsync(ProcessSandboxRuntimeProvider provider,
@@ -302,14 +391,64 @@ public sealed class SandboxIsolationLiveTests
         };
     }
 
-    private static ProcessSandboxRuntimeProvider CreateProvider()
+    private static ProcessSandboxRuntimeProvider CreateProvider(ISandboxMarkerStore? markerStore = null)
     {
         return new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions
             {
                 MaxCopyFileBytes = LocalContainerOptions.DefaultMaxCopyFileBytes,
                 MaxJailDiskBytes = LocalContainerOptions.DefaultMaxJailDiskBytes
             }),
-            TimeProvider.System);
+            TimeProvider.System,
+            logger: null,
+            launcher: null,
+            markerStore);
+    }
+
+    /// <summary>Records every marker STATE the provider writes, in order, so the claim-then-complete sequence is visible.</summary>
+    private sealed class RecordingMarkerStore : ISandboxMarkerStore
+    {
+        private readonly Dictionary<string, SandboxProcessMarker> _live = [];
+
+        public List<SandboxProcessMarker> Recorded { get; } = [];
+
+        public IReadOnlyCollection<string> Live => _live.Keys;
+
+        /// <summary>
+        ///     Whether the scope a pending marker claims was ALREADY loaded on the user manager when the claim was
+        ///     written. This is the ordering seam: it can only be true if the launch that creates the scope ran first.
+        /// </summary>
+        public bool ScopeWasAlreadyLoadedAtClaim { get; private set; }
+
+        public string? Write(SandboxProcessMarker marker)
+        {
+            if (marker.ProcessGroupId is null && marker.ScopeUnitName is { } claimedUnit)
+            {
+                ScopeWasAlreadyLoadedAtClaim |= LoadedEngineScopeUnits()
+                    .Any(unit => string.Equals(unit.UnitName, claimedUnit, StringComparison.Ordinal));
+            }
+
+            var markerId = string.Create(CultureInfo.InvariantCulture, $"marker-{Guid.NewGuid():N}");
+            Recorded.Add(marker);
+            _live[markerId] = marker;
+
+            return markerId;
+        }
+
+        public void Update(string markerId, SandboxProcessMarker marker)
+        {
+            Recorded.Add(marker);
+            _live[markerId] = marker;
+        }
+
+        public void Delete(string markerId)
+        {
+            _ = _live.Remove(markerId);
+        }
+
+        public IReadOnlyList<SandboxMarkerEntry> ReadAll()
+        {
+            return [.. _live.Select(entry => new SandboxMarkerEntry(entry.Key, entry.Value))];
+        }
     }
 
     /// <summary>

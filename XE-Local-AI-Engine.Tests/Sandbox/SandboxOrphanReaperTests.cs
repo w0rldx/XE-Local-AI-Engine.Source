@@ -214,20 +214,117 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         AssertEx.Contains(scopeKiller.Killed, leftoverUnit);
     }
 
+    [Test]
+    public async Task Reap_LeavesAScopeAliveWorkerHasOnlyJustRegistered_Alone()
+    {
+        // THE RACE the pre-registered marker closes. `systemd-run` creates the scope as its first act, so between the
+        // launch and a marker written afterwards there is a window in which a live worker's brand-new scope is on the
+        // manager with nothing claiming it. A second worker starting inside that window used to list it, find no
+        // marker, and SIGKILL a command that had just started running. The provider now registers the marker — pid
+        // still unknown — before the launch, so the sweep sees the claim from the first instant the unit can exist.
+        var launchingUnit = SandboxScopeUnit.Create("compute");
+        var killer = new FakeKiller();
+        killer.Alive.Add(4321);
+        // Old enough that only the marker can save it: the grace window is not what is being tested here.
+        var scopeKiller = new FakeScopeKiller([new SandboxScopeUnitStatus(launchingUnit, TimeSpan.FromHours(1))]);
+        var store = new FakeMarkerStore(PendingMarker(ownerProcessId: 4321, launchingUnit));
+
+        await new SandboxOrphanReaper(store, killer, NullLogger<SandboxOrphanReaper>.Instance, containmentProbe: null, scopeKiller)
+            .StartAsync(CancellationToken.None);
+
+        AssertEx.Empty(scopeKiller.Killed, "a scope a live worker has registered but not yet launched into must never be signalled");
+        AssertEx.Empty(killer.Killed);
+        AssertEx.NotEmpty(store.Remaining, "a live worker's pending marker must be retained");
+    }
+
+    [Test]
+    public async Task Reap_WhenAPendingMarkersOwnerIsDead_KillsTheScopeAndSignalsNoGroupAtAll()
+    {
+        // The other half of the pending state: the worker died between registering the marker and recording the pid.
+        // The scope is the reapable handle and is emptied; the marker's ABSENT pid must not be turned into a target —
+        // kill(-0) would signal the reaper's own process group.
+        var abandonedUnit = SandboxScopeUnit.Create("compute");
+        var killer = new FakeKiller();
+        var scopeKiller = new FakeScopeKiller([abandonedUnit]);
+        var store = new FakeMarkerStore(PendingMarker(ownerProcessId: 9999, abandonedUnit));
+
+        await new SandboxOrphanReaper(store, killer, NullLogger<SandboxOrphanReaper>.Instance, containmentProbe: null, scopeKiller)
+            .StartAsync(CancellationToken.None);
+
+        AssertEx.Contains(scopeKiller.Killed, abandonedUnit);
+        AssertEx.Empty(killer.Killed, "a marker with no recorded pid must never signal a process group");
+        AssertEx.Empty(store.Remaining);
+    }
+
+    [Test]
+    public async Task Reap_WhenAMarkerNamesPgidZero_RefusesToSignalIt()
+    {
+        // Defence against a marker from an older build or a torn write. To kill(2) a pgid of 0 means "my own process
+        // group": signalling it would have the reaper kill the worker it is starting.
+        var killer = new FakeKiller();
+        killer.StartTicks[0] = 1L;
+        var store = new FakeMarkerStore(Marker(pgid: 0, ownerProcessId: 9999, scopeUnitName: null));
+
+        await CreateReaper(store, killer).StartAsync(CancellationToken.None);
+
+        AssertEx.Empty(killer.Killed, "pgid 0 is the reaper's own process group");
+    }
+
+    [Test]
+    public async Task Reap_WhenAnUnreferencedScopeIsYoungerThanTheGrace_LeavesItForTheNextStart()
+    {
+        // Defence in depth behind the marker, for the worker whose marker store is unwritable: its live scopes are
+        // indistinguishable on disk from a previous run's leftovers, and only their age separates them. The two
+        // mistakes are not symmetric — signalling a live command destroys work, skipping an orphan costs it one
+        // RuntimeMaxSec — so a young unreferenced scope is left alone.
+        var youngUnit = SandboxScopeUnit.Create("compute");
+        var killer = new FakeKiller();
+        var scopeKiller = new FakeScopeKiller([new SandboxScopeUnitStatus(youngUnit, TimeSpan.FromSeconds(5))]);
+
+        await new SandboxOrphanReaper(new FakeMarkerStore(), killer, NullLogger<SandboxOrphanReaper>.Instance, containmentProbe: null, scopeKiller)
+            .StartAsync(CancellationToken.None);
+
+        AssertEx.Empty(scopeKiller.Killed, "a scope younger than the grace window may still belong to a worker starting alongside this one");
+    }
+
+    [Test]
+    public async Task Reap_WhenAnUnreferencedScopesAgeIsUnknown_LeavesItAlone()
+    {
+        // An age the user manager did not report is not an age of zero and not an age of infinity. Signalling on an
+        // unmeasured unit would make a parsing failure lethal, so the sweep fails towards leaving processes running.
+        var unmeasuredUnit = SandboxScopeUnit.Create("compute");
+        var killer = new FakeKiller();
+        var scopeKiller = new FakeScopeKiller([new SandboxScopeUnitStatus(unmeasuredUnit, ActiveFor: null)]);
+
+        await new SandboxOrphanReaper(new FakeMarkerStore(), killer, NullLogger<SandboxOrphanReaper>.Instance, containmentProbe: null, scopeKiller)
+            .StartAsync(CancellationToken.None);
+
+        AssertEx.Empty(scopeKiller.Killed, "an unmeasurable age must not authorise an irreversible signal");
+    }
+
     // ---- helpers ----
 
-    private static SandboxProcessMarker Marker(int pgid, int ownerProcessId, string? scopeUnitName)
+    private static SandboxProcessMarker Marker(int? pgid, int ownerProcessId, string? scopeUnitName)
     {
         return new SandboxProcessMarker
         {
             SandboxId = "sandbox",
             ProcessGroupId = pgid,
-            LeaderStartTicks = 1,
+            LeaderStartTicks = pgid is null ? null : 1,
             JailPath = Path.Combine(SandboxPaths.ContainerRoot, "absent"),
             OwnerProcessId = ownerProcessId,
             CreatedAt = DateTimeOffset.UnixEpoch,
             ScopeUnitName = scopeUnitName
         };
+    }
+
+    /// <summary>
+    ///     The marker the provider writes BEFORE it launches an isolated command: it names the scope the launch is
+    ///     about to create and carries no pid, because there is no child yet.
+    /// </summary>
+    private static SandboxProcessMarker PendingMarker(int ownerProcessId, string scopeUnitName)
+    {
+        return Marker(pgid: null, ownerProcessId, scopeUnitName);
     }
 
     private static SandboxOrphanReaper CreateReaper(ISandboxMarkerStore store, ISandboxProcessGroupKiller killer)
@@ -291,9 +388,16 @@ public sealed class SandboxOrphanReaperTests : IDisposable
 
     private sealed class FakeScopeKiller : ISandboxScopeUnitKiller
     {
-        private readonly IReadOnlyList<string> _loaded;
+        private readonly IReadOnlyList<SandboxScopeUnitStatus> _loaded;
 
+        // The default age is well past the sweep's grace, so a test that says nothing about age is asking about
+        // ownership; the tests that are about the grace state their own.
         public FakeScopeKiller(IReadOnlyList<string> loaded)
+            : this([.. loaded.Select(unit => new SandboxScopeUnitStatus(unit, TimeSpan.FromHours(1)))])
+        {
+        }
+
+        public FakeScopeKiller(IReadOnlyList<SandboxScopeUnitStatus> loaded)
         {
             _loaded = loaded;
         }
@@ -307,7 +411,7 @@ public sealed class SandboxOrphanReaperTests : IDisposable
             return Task.CompletedTask;
         }
 
-        public IReadOnlyList<string> ListEngineOwnedUnits()
+        public IReadOnlyList<SandboxScopeUnitStatus> ListEngineOwnedUnits()
         {
             return _loaded;
         }
@@ -334,6 +438,11 @@ public sealed class SandboxOrphanReaperTests : IDisposable
             return id;
         }
 
+        public void Update(string markerId, SandboxProcessMarker marker)
+        {
+            _markers[markerId] = marker;
+        }
+
         public void Delete(string markerId)
         {
             _ = _markers.Remove(markerId);
@@ -350,6 +459,11 @@ public sealed class SandboxOrphanReaperTests : IDisposable
         public string? Write(SandboxProcessMarker marker)
         {
             return null;
+        }
+
+        public void Update(string markerId, SandboxProcessMarker marker)
+        {
+            // Not reached.
         }
 
         public void Delete(string markerId)

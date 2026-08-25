@@ -366,6 +366,13 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         var jailDiskCeiling = ResolveJailDiskCeiling(state);
         var jailOccupancyBaseline = CaptureJailOccupancyBaseline(state, jailDiskCeiling);
 
+        // Claim the scope BEFORE anything can create it. `systemd-run` creates the transient scope as its first act, so
+        // a marker written after the launch left a window — short, but wide open — in which a second worker's startup
+        // sweep listed a scope this worker was in the middle of launching, found no marker claiming it, and SIGKILLed a
+        // command that had just started running. The unit name is generated ahead of the launch precisely so it can be
+        // recorded first; the pid is filled in below, once there is one.
+        var pendingMarkerId = launch.ScopeUnitName is null ? null : PreRegisterProcessMarker(state, launch);
+
         var process = new Process
         {
             StartInfo = startInfo,
@@ -390,6 +397,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             launch.LaunchResources?.Dispose();
             process.Dispose();
+            if (pendingMarkerId is not null)
+            {
+                // Nothing was ever launched, so nothing claims that unit name any more.
+                _markerStore.Delete(pendingMarkerId);
+            }
+
             // The executable could not be launched (not found / not executable). Surface a non-completed result rather
             // than throwing, so the AgentHome run flow records a failed command the same way a non-zero exit does.
             return new SandboxCommandResult
@@ -410,7 +423,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         // Record the live process group so a hard host kill (which skips Dispose/KillAsync entirely) leaves something
         // the next start can reap. Only meaningful when the child really is a group leader — see the marker's own docs
         // for why a non-leader pid must never be used as a group id.
-        var markerId = WriteProcessMarker(state, process, launch);
+        var markerId = CompleteProcessMarker(state, process, launch, pendingMarkerId);
 
         // A per-command source that best-effort cancel (CancelCommandAsync) and sandbox kill (KillAsync) fire. Its
         // firing yields a non-throwing Completed=false result — parity with the fake's CancelCommandAsync — distinct
@@ -662,51 +675,111 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     // ---- containment helpers (launch marker, group kill, jail disk watchdog) ----
 
     /// <summary>
-    ///     Writes the orphan-reaper marker for a just-started child. Returns the marker id, or <see langword="null" />
-    ///     when no marker was written.
+    ///     Registers the orphan-reaper marker for a command that is ABOUT to be launched into a transient scope,
+    ///     claiming the unit name before <c>systemd-run</c> can create it. Returns the marker id, or
+    ///     <see langword="null" /> when the store could not record it.
     ///     <para>
-    ///         A marker is written ONLY when the child was launched under <c>setsid</c>, because the reaper signals with
-    ///         <c>kill(-pgid)</c> and the recorded pid is only a process-group id in that case. Recording a non-leader
-    ///         pid would mean the reaper later signalled whatever group that pid belonged to — in the worst case the
-    ///         worker's own — so the absence of the mechanism must mean the absence of a marker, not a guess.
+    ///         It carries no pid — there is no child yet — which is exactly what makes it safe to write this early: the
+    ///         reaper's group-signalling path refuses a marker without one, so a pending marker can only ever protect
+    ///         the scope, never authorise a kill.
     ///     </para>
     /// </summary>
-    private string? WriteProcessMarker(JailState state, Process process, SandboxLaunchDescriptor launch)
+    private string? PreRegisterProcessMarker(JailState state, SandboxLaunchDescriptor launch)
     {
-        if (!launch.AppliedProcessGroup)
+        return _markerStore.Write(new SandboxProcessMarker
         {
-            return null;
-        }
+            SandboxId = state.Handle.SandboxId,
+            ProcessGroupId = null,
+            LeaderStartTicks = null,
+            ScopeUnitName = launch.ScopeUnitName,
+            JailPath = state.JailRoot,
+            PreserveJail = state.PreserveJailRoot,
+            OwnerProcessId = Environment.ProcessId,
+            CreatedAt = _timeProvider.GetUtcNow()
+        });
+    }
 
-        try
+    /// <summary>
+    ///     Completes the marker for a just-started child: fills in the pid of a pre-registered one, or writes a fresh
+    ///     one for a launch that had no scope to claim. Returns the marker id, or <see langword="null" /> when there is
+    ///     nothing reapable to record.
+    /// </summary>
+    private string? CompleteProcessMarker(JailState state, Process process, SandboxLaunchDescriptor launch, string? pendingMarkerId)
+    {
+        var marker = BuildProcessMarker(state, process, launch);
+        if (marker is null)
         {
-            var processId = process.Id;
-
-            // The pid-reuse guard is only as good as the start time recorded alongside it; without one, skip the marker
-            // rather than record a group id the reaper could not verify before signalling.
-            var startTicks = new LinuxSandboxProcessGroupKiller().GetProcessStartTicks(processId);
-            if (startTicks is null)
+            if (pendingMarkerId is not null)
             {
-                return null;
+                _markerStore.Delete(pendingMarkerId);
             }
 
-            return _markerStore.Write(new SandboxProcessMarker
-            {
-                SandboxId = state.Handle.SandboxId,
-                ProcessGroupId = processId,
-                ScopeUnitName = launch.ScopeUnitName,
-                LeaderStartTicks = startTicks.Value,
-                JailPath = state.JailRoot,
-                PreserveJail = state.PreserveJailRoot,
-                OwnerProcessId = Environment.ProcessId,
-                CreatedAt = _timeProvider.GetUtcNow()
-            });
-        }
-        catch (InvalidOperationException)
-        {
-            // The process exited before its pid could be read — nothing to reap, so nothing to record.
             return null;
         }
+
+        if (pendingMarkerId is null)
+        {
+            return _markerStore.Write(marker);
+        }
+
+        // Keep the pre-registered identity: replacing it with a second file would leave the pending one behind, and
+        // the teardown path below deletes exactly one id.
+        _markerStore.Update(pendingMarkerId, marker);
+
+        return pendingMarkerId;
+    }
+
+    /// <summary>
+    ///     Builds the marker for a just-started child, or <see langword="null" /> when the launch produced nothing the
+    ///     reaper could act on.
+    ///     <para>
+    ///         The pid is recorded ONLY when the child was launched under <c>setsid</c>, because the reaper signals
+    ///         with <c>kill(-pgid)</c> and the pid is only a process-group id in that case. Recording a non-leader pid
+    ///         would mean the reaper later signalled whatever group that pid belonged to — in the worst case the
+    ///         worker's own — so the absence of the mechanism must mean the absence of a pid, not a guess.
+    ///     </para>
+    /// </summary>
+    private SandboxProcessMarker? BuildProcessMarker(JailState state, Process process, SandboxLaunchDescriptor launch)
+    {
+        int? processGroupId = null;
+        long? leaderStartTicks = null;
+
+        if (launch.AppliedProcessGroup)
+        {
+            try
+            {
+                var processId = process.Id;
+
+                // The pid-reuse guard is only as good as the start time recorded alongside it; without one, record no
+                // pid at all rather than a group id the reaper could not verify before signalling.
+                if (new LinuxSandboxProcessGroupKiller().GetProcessStartTicks(processId) is { } startTicks)
+                {
+                    processGroupId = processId;
+                    leaderStartTicks = startTicks;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // The process exited before its pid could be read — nothing to signal, so nothing to record.
+            }
+        }
+
+        if (processGroupId is null && launch.ScopeUnitName is null)
+        {
+            return null;
+        }
+
+        return new SandboxProcessMarker
+        {
+            SandboxId = state.Handle.SandboxId,
+            ProcessGroupId = processGroupId,
+            ScopeUnitName = launch.ScopeUnitName,
+            LeaderStartTicks = leaderStartTicks,
+            JailPath = state.JailRoot,
+            PreserveJail = state.PreserveJailRoot,
+            OwnerProcessId = Environment.ProcessId,
+            CreatedAt = _timeProvider.GetUtcNow()
+        };
     }
 
     /// <summary>

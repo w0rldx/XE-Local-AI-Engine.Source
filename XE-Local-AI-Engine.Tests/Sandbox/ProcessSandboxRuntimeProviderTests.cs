@@ -1404,7 +1404,9 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         AssertEx.NotEmpty(markerStore.Written, "a group-leader launch must record a marker");
         AssertEx.Empty(markerStore.Live, "the marker must be removed once the command finishes");
 
-        var marker = markerStore.Written[0];
+        // The LAST recorded state: an isolated launch pre-registers a pending marker first, and it is the completed
+        // one that has to carry the pid the reaper signals with.
+        var marker = markerStore.Written[^1];
         AssertEx.True(marker.ProcessGroupId > 0);
         AssertEx.True(marker.LeaderStartTicks > 0, "the pid-reuse guard needs a real start time");
         AssertEx.Equal(Environment.ProcessId, marker.OwnerProcessId);
@@ -1443,20 +1445,30 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
     }
 
     /// <summary>
-    ///     A marker store that blocks inside <see cref="Write" />. The provider writes the marker between launching the
-    ///     child and starting the disk watchdog, so this stalls that window on purpose: it makes "the child got to write
-    ///     before the engine measured the jail" a certainty rather than a race, without a test-only seam in the
+    ///     A marker store that blocks while the provider COMPLETES a marker — the call it makes between launching the
+    ///     child and starting the disk watchdog — so this stalls that window on purpose: it makes "the child got to
+    ///     write before the engine measured the jail" a certainty rather than a race, without a test-only seam in the
     ///     provider.
+    ///     <para>
+    ///         The pre-registration that happens BEFORE an isolated launch returns immediately: blocking there would
+    ///         only delay the child's start, which is not the window this test is about.
+    ///     </para>
     /// </summary>
     private sealed class BlockingMarkerStore(TimeSpan delay) : ISandboxMarkerStore
     {
         public string? Write(SandboxProcessMarker marker)
         {
-            // A never-set gate waited on with a timeout: the same block a sleep would give, through an API the repo's
-            // analyzer wall allows.
-            using var gate = new ManualResetEventSlim(initialState: false);
-            _ = gate.Wait(delay);
+            if (marker.ProcessGroupId is not null)
+            {
+                Block();
+            }
+
             return "marker-" + Guid.NewGuid().ToString("N");
+        }
+
+        public void Update(string markerId, SandboxProcessMarker marker)
+        {
+            Block();
         }
 
         public void Delete(string markerId)
@@ -1467,9 +1479,21 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         {
             return [];
         }
+
+        private void Block()
+        {
+            // A never-set gate waited on with a timeout: the same block a sleep would give, through an API the repo's
+            // analyzer wall allows.
+            using var gate = new ManualResetEventSlim(initialState: false);
+            _ = gate.Wait(delay);
+        }
     }
 
-    /// <summary>Records marker writes and deletions so the launch-side bookkeeping can be asserted without touching disk.</summary>
+    /// <summary>
+    ///     Records marker writes, completions and deletions so the launch-side bookkeeping can be asserted without
+    ///     touching disk. <see cref="Written" /> holds every recorded STATE in order, so an isolated launch shows its
+    ///     pending registration followed by the completed marker.
+    /// </summary>
     private sealed class RecordingMarkerStore : ISandboxMarkerStore
     {
         private readonly Dictionary<string, SandboxProcessMarker> _live = [];
@@ -1484,6 +1508,12 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
             Written.Add(marker);
             _live[id] = marker;
             return id;
+        }
+
+        public void Update(string markerId, SandboxProcessMarker marker)
+        {
+            Written.Add(marker);
+            _live[markerId] = marker;
         }
 
         public void Delete(string markerId)

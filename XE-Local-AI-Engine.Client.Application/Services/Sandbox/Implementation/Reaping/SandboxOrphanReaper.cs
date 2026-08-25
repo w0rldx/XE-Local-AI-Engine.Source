@@ -22,6 +22,9 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation
 ///         <item>
 ///             <b>Owner liveness.</b> A marker whose owning worker pid is still alive belongs to a running worker (this
 ///             one, or a second instance) and is skipped entirely — the reaper never touches a live run's children.
+///             This is why the provider PRE-REGISTERS the marker before it starts an isolated command: the scope exists
+///             from the moment <c>systemd-run</c> runs, so a marker written afterwards would leave a window in which
+///             this sweep saw a live command's scope unclaimed.
 ///         </item>
 ///         <item>
 ///             <b>Pid-reuse guard.</b> The kernel may have recycled the recorded process-group id onto an unrelated
@@ -44,6 +47,19 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation
 /// </remarks>
 public sealed class SandboxOrphanReaper : IHostedService
 {
+    /// <summary>
+    ///     How long an engine-owned scope that NO marker claims must have been active before the sweep will signal it.
+    ///     <para>
+    ///         Defence in depth behind the pre-registered marker, for the one case the marker cannot cover: a worker
+    ///         whose marker store is unwritable launches isolated commands that are, on disk, indistinguishable from a
+    ///         previous run's leftovers. A scope that young is far more likely to belong to a worker starting
+    ///         alongside this one than to a run that died, and the two mistakes are not symmetric — signalling a live
+    ///         command destroys work irrecoverably, while skipping a genuine orphan leaves it to its own
+    ///         <c>RuntimeMaxSec</c>.
+    ///     </para>
+    /// </summary>
+    private static readonly TimeSpan UnreferencedScopeGrace = TimeSpan.FromSeconds(30);
+
     private readonly ISandboxContainmentProbe? _containmentProbe;
     private readonly ISandboxProcessGroupKiller _killer;
     private readonly ISandboxScopeUnitKiller? _scopeKillerOverride;
@@ -168,7 +184,7 @@ public sealed class SandboxOrphanReaper : IHostedService
     }
 
     /// <summary>
-    ///     Kills every transient scope this engine owns that no LIVE worker still claims.
+    ///     Kills every transient scope this engine owns that no LIVE worker claims and that is old enough to be one.
     ///     <para>
     ///         A scope with <c>--collect</c> disappears on its own as soon as its cgroup is empty, so anything still
     ///         loaded here has processes in it. The only such scope that legitimately exists at startup belongs to a
@@ -176,6 +192,22 @@ public sealed class SandboxOrphanReaper : IHostedService
     ///         with live owners, and exactly the set skipped here. Everything else is a jail whose supervising engine
     ///         died, and whose <c>RuntimeMaxSec</c> would otherwise be the only thing that ever stopped it.
     ///     </para>
+    ///     <para>
+    ///         <b>Two independent reasons to leave a unit alone</b>, because this signal is irreversible and reaches
+    ///         every process in the cgroup:
+    ///     </para>
+    ///     <list type="number">
+    ///         <item>
+    ///             A live worker's marker names it. The provider pre-registers that marker BEFORE the launch that
+    ///             creates the scope, so a running command's unit is claimed from the instant it can be listed — there
+    ///             is no window in which a live command looks unreferenced.
+    ///         </item>
+    ///         <item>
+    ///             It has been active for at least <see cref="UnreferencedScopeGrace" />, and the manager actually said
+    ///             so. A younger unit — or one whose age could not be measured — belongs to a worker starting
+    ///             alongside this one far more often than to a dead run, and is left to the next start.
+    ///         </item>
+    ///     </list>
     ///     <para>
     ///         The unit-name shape is checked twice — once when listing, once inside the killer — because this is the
     ///         one place the reaper acts on a name it did not read from its own marker file.
@@ -191,15 +223,33 @@ public sealed class SandboxOrphanReaper : IHostedService
         }
 
         var swept = 0;
-        foreach (var unitName in scopeKiller.ListEngineOwnedUnits())
+        foreach (var unit in scopeKiller.ListEngineOwnedUnits())
         {
-            if (liveScopeUnits.Contains(unitName))
+            if (liveScopeUnits.Contains(unit.UnitName))
             {
                 continue;
             }
 
-            _logger.LogInformation("Reaping orphaned sandbox scope {Unit} left by a previous run.", unitName);
-            await scopeKiller.KillAsync(unitName, cancellationToken).ConfigureAwait(false);
+            if (unit.ActiveFor is not { } activeFor)
+            {
+                _logger.LogDebug("Leaving unreferenced sandbox scope {Unit} alone: the user manager did not report how long it has been active.",
+                    unit.UnitName);
+                continue;
+            }
+
+            if (activeFor < UnreferencedScopeGrace)
+            {
+                _logger.LogDebug("Leaving unreferenced sandbox scope {Unit} alone: it has only been active for {ActiveFor}, inside the {Grace} grace a starting worker gets.",
+                    unit.UnitName,
+                    activeFor,
+                    UnreferencedScopeGrace);
+                continue;
+            }
+
+            _logger.LogInformation("Reaping orphaned sandbox scope {Unit}, active for {ActiveFor} and claimed by no live worker.",
+                unit.UnitName,
+                activeFor);
+            await scopeKiller.KillAsync(unit.UnitName, cancellationToken).ConfigureAwait(false);
             swept++;
         }
 
@@ -208,28 +258,47 @@ public sealed class SandboxOrphanReaper : IHostedService
 
     private async Task<bool> TryReapProcessGroupAsync(SandboxProcessMarker marker, CancellationToken cancellationToken)
     {
-        var currentStartTicks = _killer.GetProcessStartTicks(marker.ProcessGroupId);
+        if (marker.ProcessGroupId is not { } processGroupId || marker.LeaderStartTicks is not { } recordedStartTicks)
+        {
+            // A marker pre-registered before its launch, whose owner then died before the pid could be recorded (or a
+            // launch that never produced a signallable group). There is nothing to signal here — the scope kill above
+            // is what covers an isolated workload — and inventing a target would be catastrophic: kill(-0) signals the
+            // REAPER's own process group.
+            return false;
+        }
+
+        if (processGroupId <= 1)
+        {
+            // Belt and braces for a marker that reached disk from an older build or a corrupted write. 0 means "my own
+            // group" to kill(2) and 1 is init; neither is ever a sandbox child.
+            _logger.LogDebug("Skipping sandbox orphan marker from sandbox {SandboxId}: {Pgid} is not a signallable process group.",
+                marker.SandboxId,
+                processGroupId);
+            return false;
+        }
+
+        var currentStartTicks = _killer.GetProcessStartTicks(processGroupId);
         if (currentStartTicks is null)
         {
             // The group leader is already gone — the common case for a short-lived command. Nothing to signal.
             return false;
         }
 
-        if (currentStartTicks != marker.LeaderStartTicks)
+        if (currentStartTicks != recordedStartTicks)
         {
             // The pid was recycled onto an unrelated process. Killing its group would take out something that was never
             // ours, so refuse — the stale marker is simply discarded by the caller.
             _logger.LogDebug("Skipping sandbox orphan pgid {Pgid}: the pid was recycled (start ticks {Actual} != recorded {Recorded}).",
-                marker.ProcessGroupId,
+                processGroupId,
                 currentStartTicks,
-                marker.LeaderStartTicks);
+                recordedStartTicks);
             return false;
         }
 
         _logger.LogInformation("Reaping orphaned sandbox process group {Pgid} from sandbox {SandboxId}.",
-            marker.ProcessGroupId,
+            processGroupId,
             marker.SandboxId);
-        await _killer.KillProcessGroupAsync(marker.ProcessGroupId, cancellationToken).ConfigureAwait(false);
+        await _killer.KillProcessGroupAsync(processGroupId, cancellationToken).ConfigureAwait(false);
         return true;
     }
 

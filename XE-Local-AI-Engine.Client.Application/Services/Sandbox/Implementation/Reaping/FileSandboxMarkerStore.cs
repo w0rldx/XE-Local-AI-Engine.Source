@@ -37,21 +37,49 @@ public sealed class FileSandboxMarkerStore : ISandboxMarkerStore
         ArgumentNullException.ThrowIfNull(marker);
 
         // The pid alone is not unique over time, so the id carries a random suffix; the pid stays in the name purely to
-        // make a stray marker readable at a glance during diagnosis.
+        // make a stray marker readable at a glance during diagnosis. A marker pre-registered before its launch has no
+        // pid yet and says so.
+        var leader = marker.ProcessGroupId is { } processGroupId
+            ? processGroupId.ToString(CultureInfo.InvariantCulture)
+            : "pending";
         var markerId = string.Create(CultureInfo.InvariantCulture,
-            $"{marker.ProcessGroupId}-{Guid.NewGuid():N}");
+            $"{leader}-{Guid.NewGuid():N}");
 
+        return TryPersist(markerId, marker, "Could not write the sandbox process marker; orphan reaping will not cover this child.")
+            ? markerId
+            : null;
+    }
+
+    /// <inheritdoc />
+    public void Update(string markerId, SandboxProcessMarker marker)
+    {
+        ArgumentNullException.ThrowIfNull(marker);
+
+        if (string.IsNullOrWhiteSpace(markerId))
+        {
+            return;
+        }
+
+        // Deliberately a plain overwrite of the same file, and deliberately not conditional on it still existing: the
+        // completed marker is strictly more useful than the pending one it replaces, so re-creating a file a teardown
+        // raced away costs one stale entry the reaper's own gates already make a no-op, while refusing to write would
+        // lose the pid the reaper needs.
+        _ = TryPersist(markerId, marker, "Could not complete the pre-registered sandbox process marker; orphan reaping will fall back to its scope unit.");
+    }
+
+    private bool TryPersist(string markerId, SandboxProcessMarker marker, string failureMessage)
+    {
         try
         {
             Directory.CreateDirectory(_markersRoot);
             File.WriteAllText(Path.Combine(_markersRoot, markerId + ".json"), JsonSerializer.Serialize(marker, SerializerOptions));
-            return markerId;
+            return true;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
         {
             // Marker bookkeeping is a reaping convenience, never a correctness requirement for the command in flight.
-            _logger.LogDebug(exception, "Could not write the sandbox process marker; orphan reaping will not cover this child.");
-            return null;
+            _logger.LogDebug(exception, "{Failure}", failureMessage);
+            return false;
         }
     }
 
