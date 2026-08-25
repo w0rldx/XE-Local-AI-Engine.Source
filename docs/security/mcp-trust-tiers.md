@@ -45,6 +45,25 @@ and both are already on the registration, so nothing new is asked of the operato
 repository. The **working directory is the jail**, not the configured path: the configured path is bound read-only
 because a third-party server has no reason to write into the tree it was installed from.
 
+**Neither tree may cover a sensitive host root.** Both go through one gate
+(`SandboxedMcpStdioTransport.AddBindableTree`), and a tree that **equals or contains** any of the following is
+**refused** — the connection fails, naming the path and the tier, rather than mounting it:
+
+| Denied root | Why |
+|---|---|
+| the operator's home directory | binding it exposes every credential store beneath it |
+| `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.config`, `~/.docker`, `~/.kube` | credential and CLI-token stores; `~/.config` is where gcloud, gh and most others keep theirs |
+| the node data directory (`INodeDataDirectory.Root`) | the node database, its key material, every sandbox jail, the workspace manifests that are deliberately never mounted |
+| the engine's own install directory (`AppContext.BaseDirectory`) | the assemblies doing the sandboxing, and whatever ships beside them |
+| `/root`, `/etc`, `/var`, `/` | never a server's package tree, always somebody's credentials or state |
+
+The rule is **equals-or-ancestor, not "is under"**, and that asymmetry is the design. A tree *beneath* one of these is
+fine: `~/.nvm/versions/node/v22/bin` exposes a node install, while `$HOME` exposes the operator. Refusing every
+subtree of home would make `npx`- and `uvx`-based servers unusable at the default tier, which is how a security
+control gets switched off. Both sides are compared after normalization and link resolution, so a symlink to home, a
+relative segment or a trailing separator cannot walk past the list. The list is code-owned: a denylist a registration
+could edit would be no denylist at all.
+
 **Egress.** `--unshare-net` is unconditional on the isolated chain and is positively controlled by the containment
 probe, so `NetworkPolicy = None` is enforced by the same mechanism `run_python` relies on rather than by the separate
 `unshare(1)` egress path.

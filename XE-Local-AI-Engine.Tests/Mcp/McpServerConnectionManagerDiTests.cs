@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -36,6 +37,7 @@ public sealed class McpServerConnectionManagerDiTests
         // this test has to keep true: a scoped one here would be the same captive-dependency bug the file guards.
         services.AddSingleton<IAgentSandboxRuntimeProvider>(new FakeSandboxRuntimeProvider(TimeProvider.System));
         services.AddSingleton<IAgentHomeIdentityProvider, StubIdentityProvider>();
+        services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(Path.Combine(Path.GetTempPath(), "xe-mcp-di-tests")));
         services.AddSingleton<IMcpClientFactory, McpClientFactory>();
         services.AddSingleton<IMcpServerConnectionManager, McpServerConnectionManager>();
 

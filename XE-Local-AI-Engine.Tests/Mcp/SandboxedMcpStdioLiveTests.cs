@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
 using TUnit.Core.Exceptions;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -44,6 +45,7 @@ public sealed class SandboxedMcpStdioLiveTests
         var transport = new Client.Services.Mcp.Implementation.SandboxedMcpStdioTransport(record,
             provider,
             new StubIdentityProvider(),
+            NodeDataDirectory(),
             NullLoggerFactory.Instance);
 
         using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -77,13 +79,15 @@ public sealed class SandboxedMcpStdioLiveTests
                 // ALSO the assertion that a configured variable survives the chain's --clearenv.
                 Environment = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
-                    ["XE_PROBE_CANARY"] = canary
+                    ["XE_PROBE_CANARY"] = canary,
+                    ["XE_PROBE_INSIDE"] = fixture.MarkerPath
                 }
             };
 
             var transport = new Client.Services.Mcp.Implementation.SandboxedMcpStdioTransport(record,
                 provider,
                 new StubIdentityProvider(),
+                NodeDataDirectory(),
                 NullLoggerFactory.Instance);
 
             using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -95,6 +99,9 @@ public sealed class SandboxedMcpStdioLiveTests
             // The environment variable arrived, so the negative results below are about the boundary rather than about
             // the fixture never having been told what to look for.
             AssertEx.Contains(text, "ENV=OK");
+            // The two halves together are the claim: the server sees the ONE subtree it was given and nothing above
+            // it. Either alone is weak — a jail with no mounts would also report the canary absent.
+            AssertEx.Contains(text, "INSIDE=PRESENT");
             AssertEx.Contains(text, "CANARY=ABSENT");
             // The working directory is the jail, which inside the sandbox is /work and nothing else — the configured
             // WorkingDirectory is bound READ-ONLY rather than being made the cwd.
@@ -109,6 +116,46 @@ public sealed class SandboxedMcpStdioLiveTests
     }
 
     [Test]
+    public async Task SandboxedServer_WithTheHomeDirectoryAsItsWorkingDirectory_IsRefusedBeforeAnyProcessStarts()
+    {
+        // The Critical: this registration is what a settings CRUD create produces at the DEFAULT tier, and it would
+        // have bound the whole home directory — ~/.ssh included — read-only into the jail. Asserted live rather than
+        // only in a unit test because the refusal has to happen on the real path, against a host that CAN isolate, so
+        // it cannot be mistaken for the fail-closed capability refusal.
+        RequireIsolationCapableHost();
+
+        using var fixture = new ShellMcpServerFixture();
+        using var provider = CreateProvider();
+        var record = fixture.ToRecord(McpTrustTier.Sandboxed) with
+        {
+            WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+        };
+        var transport = new Client.Services.Mcp.Implementation.SandboxedMcpStdioTransport(record,
+            provider,
+            new StubIdentityProvider(),
+            NodeDataDirectory(),
+            NullLoggerFactory.Instance);
+
+        using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
+            () => McpClient.CreateAsync(transport, clientOptions: null, NullLoggerFactory.Instance, handshake.Token));
+
+        AssertEx.Contains(exception.Message, "Sandboxed");
+        AssertEx.Contains(exception.Message,
+            Path.TrimEndingDirectorySeparator(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)));
+
+        // Nothing of this server's is left running. A count comparison against a "before" reading would be the
+        // stronger claim and is not available: LoadedEngineScopeCount runs the containment probe, which creates a
+        // transient scope of its own, so the reading moves for reasons that have nothing to do with this connection.
+        // What the refusal being thrown from ResolveReadOnlyTrees does prove — that it happens while the create
+        // request is composed, before any sandbox exists — is pinned by the unit tests, which touch no host at all.
+        await AssertEx.EventuallyAsync(() => LoadedEngineScopeCount() == 0,
+            TimeSpan.FromSeconds(20),
+            "a refused registration must leave no sandbox scope behind");
+    }
+
+    [Test]
     public async Task SandboxedServer_LeavesNoScopeBehind_WhenTheConnectionIsDisposed()
     {
         RequireIsolationCapableHost();
@@ -118,6 +165,7 @@ public sealed class SandboxedMcpStdioLiveTests
         var transport = new Client.Services.Mcp.Implementation.SandboxedMcpStdioTransport(fixture.ToRecord(McpTrustTier.Sandboxed),
             provider,
             new StubIdentityProvider(),
+            NodeDataDirectory(),
             NullLoggerFactory.Instance);
 
         using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -140,6 +188,13 @@ public sealed class SandboxedMcpStdioLiveTests
     {
         var isolation = new HostSandboxContainmentProbe().Containment.FilesystemIsolation;
         return SandboxScopeUnitKiller.TryCreate(isolation)?.ListEngineOwnedUnits().Count ?? 0;
+    }
+
+    private static INodeDataDirectory NodeDataDirectory()
+    {
+        // A throwaway root: what matters here is that the denylist has one to refuse, not what is in it.
+        return new FakeNodeDataDirectory(
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".xe-node-data-live-fixture"));
     }
 
     private static ProcessSandboxRuntimeProvider CreateProvider()
@@ -219,6 +274,11 @@ public sealed class SandboxedMcpStdioLiveTests
                                         else
                                           out="ENV=MISSING"
                                         fi
+                                        # The POSITIVE control. A jail that could read neither file would report
+                                        # CANARY=ABSENT for the wrong reason — because nothing is mounted at all.
+                                        if [ -n "$XE_PROBE_INSIDE" ]; then
+                                          if [ -e "$XE_PROBE_INSIDE" ]; then out="$out INSIDE=PRESENT"; else out="$out INSIDE=ABSENT"; fi
+                                        fi
                                         out="$out CWD=$(pwd)"
                                         # An empty network namespace has no interface but a downed lo, and an empty route
                                         # table. Read them out of the namespace's own procfs rather than trying to connect:
@@ -263,6 +323,8 @@ public sealed class SandboxedMcpStdioLiveTests
             _directory = Directory.CreateDirectory(
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), $".xe-mcp-live-{Guid.NewGuid():N}"));
             ScriptPath = Path.Combine(_directory.FullName, "server.sh");
+            MarkerPath = Path.Combine(_directory.FullName, "inside-the-bound-tree.txt");
+            File.WriteAllText(MarkerPath, "visible");
             File.WriteAllText(ScriptPath, Script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             if (OperatingSystem.IsLinux())
             {
@@ -275,6 +337,9 @@ public sealed class SandboxedMcpStdioLiveTests
         }
 
         public string ScriptPath { get; }
+
+        /// <summary>A file INSIDE the bound working directory, so the probe has a positive control.</summary>
+        public string MarkerPath { get; }
 
         public void Dispose()
         {

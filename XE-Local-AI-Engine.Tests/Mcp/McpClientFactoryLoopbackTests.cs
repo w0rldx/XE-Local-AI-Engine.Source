@@ -126,7 +126,11 @@ public sealed class McpClientFactoryLoopbackTests
             ConnectTimeoutSeconds = 30,
             HttpLoopbackHosts = ["127.0.0.1", "localhost", "::1"]
         });
-        return new McpClientFactory(options, new FakeSandboxRuntimeProvider(TimeProvider.System), new StubIdentityProvider(), NullLoggerFactory.Instance);
+        return new McpClientFactory(options,
+            new FakeSandboxRuntimeProvider(TimeProvider.System),
+            new StubIdentityProvider(),
+            new FakeNodeDataDirectory(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".xe-node-data-fixture")),
+            NullLoggerFactory.Instance);
     }
 
     private static McpServerRecord StdioRecord(Dictionary<string, string> environment)

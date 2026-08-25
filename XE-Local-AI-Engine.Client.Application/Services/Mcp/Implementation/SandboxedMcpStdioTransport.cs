@@ -4,6 +4,7 @@ using System.Threading.Channels;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
@@ -40,51 +41,134 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     /// </summary>
     private const int SandboxGeneration = 1;
 
+    /// <summary>Credential and configuration stores under the operator's home directory.</summary>
+    private static readonly string[] SensitiveHomeSubdirectories =
+    [
+        ".ssh",
+        ".gnupg",
+        ".aws",
+        ".azure",
+        // gcloud, gh, and most CLI credential stores live here.
+        ".config",
+        ".docker",
+        ".kube"
+    ];
+
+    /// <summary>System roots that are never a server's package tree, and always somebody's credentials or state.</summary>
+    private static readonly string[] SensitiveAbsoluteRoots =
+    [
+        "/root",
+        "/etc",
+        "/var",
+        "/"
+    ];
+
+    private static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly INodeDataDirectory _nodeDataDirectory;
     private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly McpServerRecord _record;
 
     public SandboxedMcpStdioTransport(McpServerRecord record,
         IAgentSandboxRuntimeProvider provider,
         IAgentHomeIdentityProvider identityProvider,
+        INodeDataDirectory nodeDataDirectory,
         ILoggerFactory loggerFactory)
     {
         _record = record ?? throw new ArgumentNullException(nameof(record));
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
+        _nodeDataDirectory = nodeDataDirectory ?? throw new ArgumentNullException(nameof(nodeDataDirectory));
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
     }
 
     public string Name => _record.Name;
 
     /// <summary>
+    ///     Host roots a read-only bind must never cover, because binding one hands the sandboxed server the operator's
+    ///     credentials — which is the exact abuse case (threat model AB3) the Sandboxed tier exists to close.
+    ///     <para>
+    ///         <b>The rule is EQUALS-or-ANCESTOR, not "is under".</b> A tree is refused when it IS one of these roots or
+    ///         CONTAINS one; a tree that merely sits beneath one is fine. That asymmetry is the whole design: binding
+    ///         the home directory exposes <c>~/.ssh</c>, while binding <c>~/.nvm/versions/node/vX/bin</c> exposes a
+    ///         node install and nothing else — and refusing the second would make every <c>npx</c>- or <c>uvx</c>-based
+    ///         server unusable at the default tier, which is how a security control gets turned off.
+    ///     </para>
+    ///     <para>
+    ///         Code-owned and engine-composed. It is not configuration: a denylist a registration could edit would be
+    ///         no denylist at all.
+    ///     </para>
+    /// </summary>
+    internal static IReadOnlyList<string> BuildSensitiveHostRoots(string nodeDataRoot)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(nodeDataRoot);
+
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var roots = new List<string>(16);
+
+        // The home directory itself, and each credential store under it by name — the second half is not redundant:
+        // the equals-or-ancestor rule catches `WorkingDirectory = $HOME` through the first entry, and
+        // `WorkingDirectory = ~/.ssh` only through the second.
+        if (!string.IsNullOrEmpty(home))
+        {
+            AddRoot(roots, home);
+            foreach (var relative in SensitiveHomeSubdirectories)
+            {
+                AddRoot(roots, Path.Combine(home, relative));
+            }
+        }
+
+        // The engine's own state: the node database, its key material, every sandbox jail, the workspace manifests
+        // that are deliberately never mounted into any sandbox.
+        AddRoot(roots, nodeDataRoot);
+
+        // The engine's own install directory. A server that could read it could read the assemblies it is being
+        // sandboxed BY, plus whatever sits beside them.
+        AddRoot(roots, AppContext.BaseDirectory);
+
+        foreach (var absolute in SensitiveAbsoluteRoots)
+        {
+            AddRoot(roots, absolute);
+        }
+
+        return roots;
+    }
+
+    /// <summary>
     ///     The read-only host trees a sandboxed server needs to see: where its executable lives, and the working
     ///     directory the operator configured (which is where a stdio server's package files — <c>node_modules</c>, a
     ///     venv, a <c>dist/</c> — actually are).
     ///     <para>
-    ///         Engine-derived from the registration and nothing else. A tree under a mount point the isolated chain
-    ///         owns is dropped rather than passed on: the chain REFUSES such a tree (it would be shadowed rather than
-    ///         visible), and everything under <c>/usr</c> — where a system-installed server binary lives — is already
-    ///         bound read-only by the chain itself, so dropping it loses nothing.
+    ///         Engine-derived from the registration and nothing else, and filtered twice. A tree under a mount point
+    ///         the isolated chain owns is DROPPED: the chain refuses such a tree (it would be shadowed rather than
+    ///         visible), and everything under <c>/usr</c> is already bound read-only by the chain itself, so dropping
+    ///         it loses nothing. A tree that equals or contains a <see cref="BuildSensitiveHostRoots" /> entry is
+    ///         REFUSED — loudly, naming the path and the tier, because that one is an operator mistake with a real
+    ///         consequence and silently dropping it would produce a server that starts and then cannot find its files.
     ///     </para>
     /// </summary>
-    internal static IReadOnlyList<string> ResolveReadOnlyTrees(McpServerRecord record, Func<string, string?> resolveExecutablePath)
+    internal static IReadOnlyList<string> ResolveReadOnlyTrees(McpServerRecord record,
+        Func<string, string?> resolveExecutablePath,
+        IReadOnlyList<string> sensitiveRoots)
     {
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(resolveExecutablePath);
+        ArgumentNullException.ThrowIfNull(sensitiveRoots);
 
         var trees = new List<string>(capacity: 2);
         if (!string.IsNullOrWhiteSpace(record.Command)
             && resolveExecutablePath(record.Command) is { } executablePath
             && Path.GetDirectoryName(executablePath) is { Length: > 0 } executableDirectory)
         {
-            AddBindableTree(trees, executableDirectory);
+            AddBindableTree(trees, executableDirectory, sensitiveRoots, record.Name);
         }
 
         if (!string.IsNullOrWhiteSpace(record.WorkingDirectory))
         {
-            AddBindableTree(trees, record.WorkingDirectory);
+            AddBindableTree(trees, record.WorkingDirectory, sensitiveRoots, record.Name);
         }
 
         return trees;
@@ -135,24 +219,28 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         }
     }
 
-    private static void AddBindableTree(List<string> trees, string path)
+    /// <summary>
+    ///     The single gate every read-only tree passes through — both the resolved command's directory and the
+    ///     configured working directory route here, so the denylist cannot be bypassed by whichever of the two an
+    ///     operator sets.
+    /// </summary>
+    private static void AddBindableTree(List<string> trees, string path, IReadOnlyList<string> sensitiveRoots, string serverName)
     {
-        string canonical;
-        try
-        {
-            // Resolve the link chain: the chain binds the tree at its canonical name, and a symlinked path would
-            // otherwise bind a directory whose contents are somewhere the sandbox cannot see.
-            canonical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-            if (Directory.ResolveLinkTarget(canonical, returnFinalTarget: true) is { } target)
-            {
-                canonical = Path.TrimEndingDirectorySeparator(target.FullName);
-            }
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        if (Canonicalize(path) is not { } canonical)
         {
             // An unreadable or malformed path contributes no tree. The server will fail to start and say so, which is
             // a better diagnosis than a refusal here that names a path the operator typed.
             return;
+        }
+
+        // BEFORE the chain-owned check, deliberately: `/` and `/etc` are denied roots that the chain-owned predicate
+        // would answer for by dropping them silently, and the operator needs the refusal rather than a server that
+        // starts without the tree it asked for.
+        if (sensitiveRoots.FirstOrDefault(root => CoversRoot(canonical, root)) is { } covered)
+        {
+            throw new SandboxCapabilityNotSupportedException(
+                $"The MCP server '{serverName}' is registered at the Sandboxed trust tier and would bind '{canonical}' into its sandbox, which contains the sensitive host path '{covered}'. "
+                + "Point the server's command or working directory at the directory holding its own files instead — a subdirectory is fine, it is the root itself that cannot be bound.");
         }
 
         if (!Directory.Exists(canonical)
@@ -163,6 +251,53 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         }
 
         trees.Add(canonical);
+    }
+
+    /// <summary>
+    ///     Whether binding <paramref name="tree" /> would expose <paramref name="root" /> — true when they are the
+    ///     same directory, or when <paramref name="root" /> lies beneath <paramref name="tree" />.
+    /// </summary>
+    private static bool CoversRoot(string tree, string root)
+    {
+        return string.Equals(tree, root, PathComparison)
+               || root.StartsWith(tree.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, PathComparison);
+    }
+
+    /// <summary>
+    ///     Normalizes a path and resolves its link chain, so a tree and a denied root are compared as the same
+    ///     directory however each was spelled — a symlink to the home directory, a relative segment, a trailing
+    ///     separator. Both sides go through this; comparing a resolved tree against an unresolved root is how a
+    ///     denylist silently stops matching on a host whose <c>$HOME</c> is itself a link.
+    /// </summary>
+    private static string? Canonicalize(string path)
+    {
+        try
+        {
+            var canonical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+
+            // Only resolve the link chain for something that EXISTS. ResolveLinkTarget throws on a missing path, and
+            // swallowing that would drop the entry — which for a DENIED ROOT is a hole rather than a nicety: ~/.aws,
+            // ~/.kube and /root are absent on plenty of hosts, and a denylist that only lists what happens to exist
+            // stops covering the directory the moment before someone creates it.
+            if (Directory.Exists(canonical) && Directory.ResolveLinkTarget(canonical, returnFinalTarget: true) is { } target)
+            {
+                canonical = Path.TrimEndingDirectorySeparator(target.FullName);
+            }
+
+            return canonical;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    private static void AddRoot(List<string> roots, string path)
+    {
+        if (Canonicalize(path) is { } canonical && !roots.Contains(canonical, StringComparer.Ordinal))
+        {
+            roots.Add(canonical);
+        }
     }
 
     private static async ValueTask KillQuietlyAsync(IAgentSandboxRuntimeProvider provider, SandboxHandle handle)
@@ -194,7 +329,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             // Unconditional: ConnectAsync already refused the connection if this provider cannot honour it. Unlike a
             // resource ceiling this is not a preference a provider may quietly drop.
             Isolation = SandboxIsolationMode.Filesystem,
-            ReadOnlyTrees = ResolveReadOnlyTrees(_record, ResolveExecutablePath),
+            ReadOnlyTrees = ResolveReadOnlyTrees(_record, ResolveExecutablePath, BuildSensitiveHostRoots(_nodeDataDirectory.Root)),
             // Stated though the isolated chain's --unshare-net is what enforces it, so the intent is legible at the
             // one place a reader looks for it.
             NetworkPolicy = SandboxNetworkPolicy.None

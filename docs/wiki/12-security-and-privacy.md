@@ -427,6 +427,12 @@ there is no `Remote` tier and why existing rows migrated the way they did, is
   a disposable jail as the working directory, and only the configured environment variables. Its own package tree (the
   resolved command's directory, and the configured working directory when there is one) is bound **read-only**; the
   jail is the only writable surface it has.
+- **Neither bound tree may cover a sensitive host root.** A tree that equals or contains the home directory, a
+  credential store under it (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.config`, `~/.docker`, `~/.kube`), the
+  node data directory, the engine's install directory, `/root`, `/etc`, `/var` or `/` is **refused**, naming the
+  path and the tier. Subtrees of those roots stay bindable — `~/.nvm/…/bin` exposes a node install, `$HOME` exposes
+  the operator — which is what keeps `npx`- and `uvx`-based servers usable at the default tier. Comparison happens
+  on resolved paths at one gate both trees pass through, and the list is code-owned.
 - **It fails closed, and it is visible before it fails.** A host whose backend does not advertise
   `SupportsFilesystemIsolation` — Windows until G12, or a Linux host without bubblewrap — refuses the connection
   before a process exists, with an engine-authored reason that names the tier and is surfaced verbatim rather than
