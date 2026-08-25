@@ -49,6 +49,12 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     // 48 bits of randomness is ample for a per-run temporary directory.
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-dev-rev-" + Guid.NewGuid().ToString("N")[..12]);
 
+    /// <summary>
+    ///     Every sandbox this fixture's Development services asked for, in order. It exists so the egress posture a
+    ///     full attempt actually RAN under can be asserted rather than inferred from the host's capabilities.
+    /// </summary>
+    private readonly List<SandboxCreateRequest> _sandboxCreates = [];
+
     public void Dispose()
     {
         try
@@ -613,6 +619,19 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(expected: 1, outcome.Discovered);
         AssertEx.Equal(expected: 1, outcome.Executed);
         AssertEx.Equal(expected: 1, outcome.Passed);
+
+        // G1's acceptance criterion, asserted on what the run ACTUALLY asked for rather than on what this host can
+        // do. A full attempt against the synthetic solution — coder, then the whole validation gate — completed green
+        // while every agent-facing sandbox it created was denied egress, and the only sandbox that had egress was the
+        // short-lived warm restore.
+        AssertEx.NotEmpty(_sandboxCreates.Where(static request => request.RuntimeProfile == "development-warm"));
+        AssertEx.Empty(_sandboxCreates.Where(static request => request.RuntimeProfile == "development-warm"
+                                                              && request.NetworkPolicy != SandboxNetworkPolicy.Unrestricted));
+
+        var agentFacing = _sandboxCreates.Where(static request => request.RuntimeProfile == "development-local").ToArray();
+        AssertEx.NotEmpty(agentFacing);
+        AssertEx.Empty(agentFacing.Where(static request => request.NetworkPolicy != SandboxNetworkPolicy.None),
+            "this host advertises SupportsNetworkPolicy, so every agent-facing Development sandbox must have been created denied.");
         AssertEx.Equal(expected: 0, outcome.Failed);
 
         // Only the test command carries a result. A build or a whitespace check has none, and must not be given an
@@ -997,8 +1016,9 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         // Registered under the Development ROLE, not the bare contract: per-feature selection (D2) means nothing
         // resolves ISandboxRuntimeProvider any more, so a bare registration here would build a container in which
         // every Development service failed to resolve its sandbox.
-        services.AddSingleton<IDevelopmentSandboxRuntimeProvider>(_ => new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()),
-            TimeProvider.System));
+        services.AddSingleton<IDevelopmentSandboxRuntimeProvider>(_ => new RecordingDevelopmentSandbox(new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()),
+                TimeProvider.System),
+            _sandboxCreates));
         services.AddSingleton<NodeEncryptionSaveChangesInterceptor>();
         services.AddSingleton<NodeEncryptionMaterializationInterceptor>();
         services.AddDbContext<NodeChatDbContext>((serviceProvider, builder) => builder.UseSqlite($"Data Source={databasePath}")
@@ -1125,6 +1145,45 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     private sealed record CommandResult(int ExitCode, string StandardOutput, string StandardError);
+
+    /// <summary>
+    ///     Passes every call through to the real process backend and records the create requests. A decorator rather
+    ///     than a stub on purpose: the point is to observe what a REAL attempt asked for, so replacing the backend
+    ///     would replace the thing under test.
+    /// </summary>
+    private sealed class RecordingDevelopmentSandbox(ProcessSandboxRuntimeProvider inner, List<SandboxCreateRequest> created) : IDevelopmentSandboxRuntimeProvider
+    {
+        public string ProviderName => inner.ProviderName;
+
+        public SandboxProviderCapabilities Capabilities => inner.Capabilities;
+
+        public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
+        {
+            created.Add(request);
+            return inner.CreateOrAttachAsync(request, cancellationToken);
+        }
+
+        public Task<SandboxHandle> ConnectAsync(SandboxAttachKey attachKey, CancellationToken cancellationToken = default) =>
+            inner.ConnectAsync(attachKey, cancellationToken);
+
+        public Task<SandboxCommandResult> ExecuteAsync(SandboxHandle handle, SandboxCommandRequest request, CancellationToken cancellationToken = default) =>
+            inner.ExecuteAsync(handle, request, cancellationToken);
+
+        public Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default) =>
+            inner.CopyIntoAsync(handle, request, cancellationToken);
+
+        public Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default) =>
+            inner.ReadFileAsync(handle, sandboxPath, cancellationToken);
+
+        public Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default) =>
+            inner.CopyOutAsync(handle, request, cancellationToken);
+
+        public Task CancelCommandAsync(SandboxHandle handle, string executionId, CancellationToken cancellationToken = default) =>
+            inner.CancelCommandAsync(handle, executionId, cancellationToken);
+
+        public Task KillAsync(SandboxHandle handle, CancellationToken cancellationToken = default) =>
+            inner.KillAsync(handle, cancellationToken);
+    }
 
     private sealed class UnexpectedCloudContextService : IDevelopmentCloudAttemptContextService
     {
