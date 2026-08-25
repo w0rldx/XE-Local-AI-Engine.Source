@@ -92,6 +92,13 @@ public sealed class GetDevelopmentCapabilityEndpoint(
             // Compute:Enabled is set: this table answers "what would this role be served here", which is exactly the
             // question an operator asks before turning the tool on.
             DevelopmentContractMapper.ToIsolationSummary("run_python", SandboxWorkloads.RunPython, _agentSandboxRuntimeProvider, containment),
+            // A Sandboxed stdio MCP server. Also served by the agent-role provider instance, and also a row of its own
+            // for run_python's reason: it declares SandboxIsolationMode.Filesystem, so its served posture differs from
+            // AgentHome's on the very same backend. It is the row that answers the question an operator has BEFORE
+            // registering a server — on a host that cannot isolate, this row says so, and every Sandboxed registration
+            // will refuse to connect rather than launching on the host. A PrivilegedHost server has no row here
+            // because it declares nothing: it is not a substrate consumer, it is an explicit per-server host grant.
+            DevelopmentContractMapper.ToIsolationSummary("mcp-stdio", SandboxWorkloads.McpStdio, _agentSandboxRuntimeProvider, containment),
             // Either Development declaration is correct here: DevelopmentModeImageToolchain is
             // DevelopmentModeHostToolchain `with` a different workload name and toolchain source, and this projection
             // reads neither — it reads the isolation floor, which is None on both. Passing the host-toolchain constant

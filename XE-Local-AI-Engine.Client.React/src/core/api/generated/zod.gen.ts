@@ -2616,6 +2616,8 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeReque
 
 export const zXeLocalAiEngineClientPersistenceMcpTransportKind = z.enum(["Stdio", "Http"]);
 
+export const zXeLocalAiEngineClientPersistenceMcpTrustTier = z.enum(["Sandboxed", "PrivilegedHost", "BuiltInTrusted"]);
+
 export const zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse = z.object({
 	id: z.guid(),
 	name: z.string(),
@@ -2626,6 +2628,7 @@ export const zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse = z.object({
 	workingDirectory: z.string().nullish(),
 	env: z.record(z.string(), z.string()),
 	url: z.string().nullish(),
+	trustTier: zXeLocalAiEngineClientPersistenceMcpTrustTier,
 	enabled: z.boolean(),
 	version: z
 		.int()
@@ -2644,6 +2647,7 @@ export const zXeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = z.obje
 	workingDirectory: z.string().nullish(),
 	env: z.record(z.string(), z.string()).nullish(),
 	url: z.string().nullish(),
+	trustTier: zXeLocalAiEngineClientPersistenceMcpTrustTier.optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerRequest = z.record(z.string(), z.never());
@@ -2721,6 +2725,7 @@ export const zXeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest = z.obje
 	workingDirectory: z.string().nullish(),
 	env: z.record(z.string(), z.string()).nullish(),
 	url: z.string().nullish(),
+	trustTier: zXeLocalAiEngineClientPersistenceMcpTrustTier.optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse = z.object({

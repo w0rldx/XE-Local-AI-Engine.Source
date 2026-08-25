@@ -292,42 +292,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         var state = _registry.GetAliveState(handle);
         var startedAt = _timeProvider.GetUtcNow();
 
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = request.Executable,
-            WorkingDirectory = ResolveWorkingDirectory(state, request.WorkingDirectory),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            RedirectStandardInput = request.StandardInput is not null,
-            UseShellExecute = false
-        };
-        foreach (var argument in request.Arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        // Start the child from a scrubbed environment: ProcessStartInfo pre-seeds Environment with the FULL parent
-        // (worker) environment, so clear it and repopulate only the allow-listed system/toolchain variables. This is the
-        // load-bearing anti-leak control — a sandbox command must never observe the worker's secret-bearing variables.
-        startInfo.Environment.Clear();
-        foreach (var name in InheritableEnvironmentAllowlist)
-        {
-            var value = Environment.GetEnvironmentVariable(name);
-            if (value is not null)
-            {
-                startInfo.Environment[name] = value;
-            }
-        }
-
-        // Layer the caller's explicit request environment on top of the allow-list (it may override or add keys the
-        // command genuinely needs). The caller is trusted node code composing a fixed command, not the sandboxed child.
-        if (request.Environment is not null)
-        {
-            foreach (var pair in request.Environment)
-            {
-                startInfo.Environment[pair.Key] = pair.Value;
-            }
-        }
+        var startInfo = BuildScrubbedStartInfo(state, request, redirectStandardInput: request.StandardInput is not null);
 
         // Wrap the composed command in the strongest containment this host supports (process group, cgroup ceilings,
         // empty network namespace). This rewrites only FileName/ArgumentList and layers in the wrapper's own
@@ -564,6 +529,154 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             process.Dispose();
             commandCancelSource.Dispose();
         }
+    }
+
+    /// <summary>
+    ///     Composes the child's <see cref="ProcessStartInfo" />: the jail working directory, the argument vector, and
+    ///     the SCRUBBED environment.
+    ///     <para>
+    ///         SECURITY INVARIANT, and the reason this is one function rather than two copies:
+    ///         <see cref="ProcessStartInfo" /> pre-seeds <see cref="ProcessStartInfo.Environment" /> with the FULL
+    ///         parent (worker) environment, which holds cloud API keys, OAuth tokens and the node SQLite key. It is
+    ///         cleared and repopulated from <see cref="InheritableEnvironmentAllowlist" />, then the caller's explicit
+    ///         request environment is layered on top. Both launch paths go through here so neither can drift out of
+    ///         the scrub.
+    ///     </para>
+    /// </summary>
+    private static ProcessStartInfo BuildScrubbedStartInfo(JailState state, SandboxCommandRequest request, bool redirectStandardInput)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = request.Executable,
+            WorkingDirectory = ResolveWorkingDirectory(state, request.WorkingDirectory),
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = redirectStandardInput,
+            UseShellExecute = false
+        };
+        foreach (var argument in request.Arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        startInfo.Environment.Clear();
+        foreach (var name in InheritableEnvironmentAllowlist)
+        {
+            var value = Environment.GetEnvironmentVariable(name);
+            if (value is not null)
+            {
+                startInfo.Environment[name] = value;
+            }
+        }
+
+        // The caller is trusted node code composing a fixed command, not the sandboxed child, so its explicit
+        // variables may override or add to the allow-list.
+        if (request.Environment is not null)
+        {
+            foreach (var pair in request.Environment)
+            {
+                startInfo.Environment[pair.Key] = pair.Value;
+            }
+        }
+
+        return startInfo;
+    }
+
+    /// <inheritdoc cref="ISandboxRuntimeProvider.StartInteractiveAsync" />
+    public Task<ISandboxInteractiveProcess> StartInteractiveAsync(SandboxHandle handle,
+        SandboxCommandRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+        ArgumentNullException.ThrowIfNull(request);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var state = _registry.GetAliveState(handle);
+        var startInfo = BuildScrubbedStartInfo(state, request, redirectStandardInput: true);
+
+        SandboxLaunchDescriptor launch;
+        try
+        {
+            launch = _launcher.Apply(startInfo,
+                state.LaunchPolicy,
+                new SandboxLaunchContext
+                {
+                    JailRoot = state.JailRoot,
+                    // No CommandTimeout: a protocol peer has no per-call deadline, so the scope takes the launcher's
+                    // default ceiling. That ceiling is enforced by the USER MANAGER rather than by the engine, which
+                    // is what bounds this jail if the engine is hard-killed and never runs its own teardown.
+                    CommandEnvironment = request.Environment
+                });
+        }
+        catch (SandboxIsolationUnavailableException exception)
+        {
+            // FAIL CLOSED, and here it THROWS rather than returning a failed-command shape the way ExecuteAsync does.
+            // There is no result object to carry a reason on — the caller asked for a live process — and the one
+            // caller (a Sandboxed stdio MCP server) must see a refusal, never a peer that turned out to be running on
+            // the host filesystem.
+            throw new SandboxCapabilityNotSupportedException(
+                $"The sandbox filesystem boundary could not be established ({exception.Message}); the command was not started.",
+                exception);
+        }
+
+        // Claim the scope BEFORE systemd-run can create it, exactly as the command path does: a marker written after
+        // the launch leaves a window in which a second worker's startup sweep finds an unclaimed scope and kills it.
+        var pendingMarkerId = launch.ScopeUnitName is null ? null : PreRegisterProcessMarker(state, launch);
+
+        var process = new Process
+        {
+            StartInfo = startInfo,
+            EnableRaisingEvents = true
+        };
+
+        try
+        {
+            process.Start();
+        }
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException)
+        {
+            launch.LaunchResources?.Dispose();
+            process.Dispose();
+            if (pendingMarkerId is not null)
+            {
+                _markerStore.Delete(pendingMarkerId);
+            }
+
+            throw new SandboxCapabilityNotSupportedException("The sandbox command could not be launched.", exception);
+        }
+
+        // The chain has been exec'd and the child holds its own copies of every descriptor the argument vector names,
+        // so the engine's copies are released here — one leaked descriptor per bind per server would exhaust the
+        // engine's table over a session.
+        launch.LaunchResources?.Dispose();
+
+        var markerId = CompleteProcessMarker(state, process, launch, pendingMarkerId);
+
+        // Registered in the jail's in-flight set under the execution id, which is what makes KillAsync (and therefore
+        // the whole existing teardown: scope cgroup, process group, tree, jail directory) cover this process without
+        // a second teardown path of its own.
+        var commandCancelSource = new CancellationTokenSource();
+        var inFlight = new InFlightExecution(process, commandCancelSource, launch.ScopeUnitName);
+        if (!state.InFlight.TryAdd(request.ExecutionId, inFlight))
+        {
+            SandboxProcessTree.TreeKill(process);
+            if (markerId is not null)
+            {
+                _markerStore.Delete(markerId);
+            }
+
+            process.Dispose();
+            commandCancelSource.Dispose();
+            throw new InvalidOperationException($"Execution id '{request.ExecutionId}' is already in flight for this sandbox.");
+        }
+
+        // stderr is drained rather than captured. The child blocks on a full pipe if nobody reads it, and a stdio MCP
+        // server that logs to stderr would deadlock mid-protocol; the content is not this layer's to interpret.
+        process.ErrorDataReceived += static (_, _) => { };
+        process.BeginErrorReadLine();
+
+        return Task.FromResult<ISandboxInteractiveProcess>(
+            new InteractiveProcess(this, state, request.ExecutionId, process, launch, markerId, commandCancelSource));
     }
 
     public async Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)
@@ -1014,6 +1127,65 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         }
 
         return total;
+    }
+
+    /// <summary>
+    ///     One live <see cref="ISandboxInteractiveProcess" />: the child's standard streams, plus everything needed to
+    ///     tear it down. Disposal runs the SAME layers <c>ExecuteAsync</c> runs on an abnormal exit — tree-kill, then
+    ///     the scope cgroup and the process group through <see cref="TerminateLaunchAsync" /> — and then removes the
+    ///     in-flight entry and the reaper marker, so a released process leaves nothing for the next startup sweep.
+    /// </summary>
+    private sealed class InteractiveProcess : ISandboxInteractiveProcess
+    {
+        private readonly CancellationTokenSource _cancelSource;
+        private readonly string _executionId;
+        private readonly SandboxLaunchDescriptor _launch;
+        private readonly string? _markerId;
+        private readonly Process _process;
+        private readonly ProcessSandboxRuntimeProvider _provider;
+        private readonly JailState _state;
+        private int _disposed;
+
+        public InteractiveProcess(ProcessSandboxRuntimeProvider provider,
+            JailState state,
+            string executionId,
+            Process process,
+            SandboxLaunchDescriptor launch,
+            string? markerId,
+            CancellationTokenSource cancelSource)
+        {
+            _provider = provider;
+            _state = state;
+            _executionId = executionId;
+            _process = process;
+            _launch = launch;
+            _markerId = markerId;
+            _cancelSource = cancelSource;
+        }
+
+        public Stream StandardInput => _process.StandardInput.BaseStream;
+
+        public Stream StandardOutput => _process.StandardOutput.BaseStream;
+
+        public async ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _disposed, value: 1) != 0)
+            {
+                return;
+            }
+
+            SandboxProcessTree.TreeKill(_process);
+            await _provider.TerminateLaunchAsync(_launch, _process).ConfigureAwait(false);
+
+            _ = _state.InFlight.TryRemove(_executionId, out _);
+            if (_markerId is not null)
+            {
+                _provider._markerStore.Delete(_markerId);
+            }
+
+            _process.Dispose();
+            _cancelSource.Dispose();
+        }
     }
 
     private sealed class NoOpDisposable : IDisposable

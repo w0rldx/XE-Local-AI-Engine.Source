@@ -2137,6 +2137,7 @@ export type XeLocalAiEngineClientEndpointsMcpV1McpServerResponse = {
 		[key: string]: string;
 	};
 	url?: string | null;
+	trustTier: XeLocalAiEngineClientPersistenceMcpTrustTier;
 	enabled: boolean;
 	version: number;
 	createdAtUtc: number;
@@ -2144,6 +2145,8 @@ export type XeLocalAiEngineClientEndpointsMcpV1McpServerResponse = {
 };
 
 export type XeLocalAiEngineClientPersistenceMcpTransportKind = "Stdio" | "Http";
+
+export type XeLocalAiEngineClientPersistenceMcpTrustTier = "Sandboxed" | "PrivilegedHost" | "BuiltInTrusted";
 
 export type XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = {
 	name?: string | null;
@@ -2156,6 +2159,7 @@ export type XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = {
 		[key: string]: string;
 	} | null;
 	url?: string | null;
+	trustTier?: XeLocalAiEngineClientPersistenceMcpTrustTier;
 };
 
 export type XeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerRequest = {
@@ -2241,6 +2245,7 @@ export type XeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest = {
 		[key: string]: string;
 	} | null;
 	url?: string | null;
+	trustTier?: XeLocalAiEngineClientPersistenceMcpTrustTier;
 };
 
 export type XeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse = {

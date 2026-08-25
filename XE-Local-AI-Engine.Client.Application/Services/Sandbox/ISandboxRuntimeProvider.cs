@@ -34,6 +34,25 @@ public interface ISandboxRuntimeProvider
     /// <summary>Execute a command inside the sandbox. Honors <paramref name="cancellationToken" /> and per-command cancellation.</summary>
     Task<SandboxCommandResult> ExecuteAsync(SandboxHandle handle, SandboxCommandRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Start a LONG-LIVED command inside the sandbox and hand back its standard streams, for a caller that speaks
+    ///     a duplex protocol to it rather than reading a result. <see cref="SandboxCommandRequest.StandardInput" /> and
+    ///     <see cref="SandboxCommandRequest.Timeout" /> are ignored: the caller owns stdin, and a protocol peer has no
+    ///     per-call deadline.
+    ///     <para>
+    ///         The default throws, like <see cref="ListFilesAsync" /> and <see cref="SearchTextAsync" />: a provider
+    ///         that has not implemented it must refuse rather than fall back to a host launch, which is the exact
+    ///         degradation the one caller — a <c>Sandboxed</c> stdio MCP server — exists to prevent.
+    ///     </para>
+    /// </summary>
+    Task<ISandboxInteractiveProcess> StartInteractiveAsync(SandboxHandle handle,
+        SandboxCommandRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(handle);
+        throw new SandboxCapabilityNotSupportedException($"The '{ProviderName}' provider cannot host a long-lived interactive command.");
+    }
+
     /// <summary>Copy a file from the host into the sandbox.</summary>
     Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default);
 

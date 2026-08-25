@@ -58,6 +58,7 @@ const stdioServer: McpServerRegistration = {
 	workingDirectory: "/work",
 	env: [{ key: "TOKEN", value: "secret" }],
 	url: null,
+	trustTier: "Sandboxed",
 	enabled: false,
 	version: 1,
 	createdAtUtc: 1000,

@@ -98,6 +98,39 @@ public sealed class McpServerEndpointTests
     }
 
     [Test]
+    public async Task ListServers_MasksEveryEnvironmentValue_AndCarriesTheTrustTier()
+    {
+        // Encryption at rest only helps against someone holding the FILE. Returning the plaintext to anything holding
+        // a session made the column's AEAD decorative, so the response carries the keys and a fixed placeholder.
+        var service = Substitute.For<IMcpServerService>();
+        var record = CreateRecord("Filesystem", enabled: true) with
+        {
+            TrustTier = McpTrustTier.PrivilegedHost,
+            Environment = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["API_TOKEN"] = "the-real-secret"
+            }
+        };
+        service.ListAsync(Arg.Any<CancellationToken>()).Returns([record]);
+        await using var factory = CreateFactory(service);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, ServersRoute);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var raw = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var body = AssertEx.NotNull(JsonSerializer.Deserialize<ListMcpServersResponse>(raw, JsonOptions));
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var item = body.Items.Single();
+        AssertEx.Contains(item.Env.Keys, "API_TOKEN");
+        AssertEx.Equal(McpServerResponse.MaskedEnvironmentValue, item.Env["API_TOKEN"]);
+        AssertEx.Equal(McpTrustTier.PrivilegedHost, item.TrustTier);
+        // Assert on the WIRE, not only on the deserialized shape: the point is that the secret is not in the bytes.
+        AssertEx.False(raw.Contains("the-real-secret", StringComparison.Ordinal),
+            "the stored environment value must not appear anywhere in the response body");
+    }
+
+    [Test]
     public async Task GetServer_WhenMissing_ReturnsNotFound()
     {
         var service = Substitute.For<IMcpServerService>();
@@ -464,6 +497,7 @@ public sealed class McpServerEndpointTests
             WorkingDirectory: null,
             new Dictionary<string, string>(StringComparer.Ordinal),
             Url: null,
+            McpTrustTier.Sandboxed,
             enabled,
             Version: 1,
             CreatedAtUtc: 10,

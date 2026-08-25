@@ -34,6 +34,8 @@ const emptyFormValues: McpServerFormValues = {
 	workingDirectory: "",
 	env: [],
 	url: "",
+	// The secure default. A new stdio server is sandboxed unless the operator deliberately says otherwise.
+	trustTier: "Sandboxed",
 };
 
 function toFormValues(server: McpServerRegistration): McpServerFormValues {
@@ -46,6 +48,7 @@ function toFormValues(server: McpServerRegistration): McpServerFormValues {
 		workingDirectory: server.workingDirectory ?? "",
 		env: server.env.map((entry) => ({ ...entry })),
 		url: server.url ?? "",
+		trustTier: server.trustTier,
 	};
 }
 

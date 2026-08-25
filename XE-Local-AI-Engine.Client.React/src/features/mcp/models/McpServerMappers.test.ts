@@ -32,6 +32,7 @@ function makeStdioResponse(
 		workingDirectory: "/work",
 		env: sampleEnvMap,
 		url: null,
+		trustTier: "Sandboxed",
 		enabled: false,
 		version: 1,
 		createdAtUtc: 1000,
@@ -52,6 +53,7 @@ const stdioForm: McpServerFormValues = {
 		{ key: "  ", value: "dropped-no-key" },
 	],
 	url: "http://127.0.0.1:3001/sse",
+	trustTier: "PrivilegedHost",
 };
 
 const httpForm: McpServerFormValues = {
@@ -63,6 +65,8 @@ const httpForm: McpServerFormValues = {
 	workingDirectory: "/leftover",
 	env: [{ key: "LEFT", value: "over" }],
 	url: "  http://localhost:4000/sse  ",
+	// Deliberately privileged so the mapper's "inert for HTTP" normalization is asserted, not assumed.
+	trustTier: "PrivilegedHost",
 };
 
 describe("toMcpServerRegistration", () => {
