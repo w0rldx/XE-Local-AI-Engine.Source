@@ -128,9 +128,12 @@ describe("DevelopmentConsentGate", () => {
 		// The one sandbox that keeps egress by design, stated rather than left as a surprise.
 		expect(terms).toContain("dependency restore");
 
-		// No ceiling is REQUESTED for these commands on any host, so the old "Linux only" split over-claimed on Linux.
+		// Ceilings ARE requested now (host-toolchain profile), so the notice has to say both halves: what is enforced
+		// where the node can, and that Windows still gets none.
+		expect(terms).toContain("ceilings are requested for these commands wherever this node can enforce them");
 		expect(terms).toContain("bounded only by its timeout and the machine");
 		expect(terms).not.toContain("enforced on Linux only");
+		expect(terms).not.toContain("No CPU, memory or process-count ceiling is requested");
 
 		expect(terms).not.toContain("read-only root filesystem");
 	});
