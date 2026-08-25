@@ -307,6 +307,31 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             return StepOutcome.Settled;
         }
 
+        // The operator's tool-capable allow-list is read LIVE on every offer, so a model that was listed when the
+        // session was created can be gone from the list by the time it takes a step. Nothing downstream would say so:
+        // the step runs, the model receives the offer WITHOUT the four state tools, every update_work_plan call comes
+        // back "Requested function update_work_plan not found", and the session spends its whole step budget writing
+        // nothing. Refuse the step here instead, naming the list and the model, so the run ends where it can be fixed.
+        // A session whose agent definition has been deleted is deliberately NOT judged: the create path could not have
+        // judged it either, and which model that turn resolves is then the send path's decision, not this one's.
+        var toolGate = await turnScope.ServiceProvider.GetRequiredService<WorkSessionToolGate>()
+                                      .InspectAsync(state.Session.AgentDefinitionId, CancellationToken.None)
+                                      .ConfigureAwait(false);
+        if (toolGate is { AgentExists: true, EffectiveModel: not null, IsAllowListed: false })
+        {
+            var refusal = WorkSessionToolGate.AllowListRefusal(toolGate.AgentName, toolGate.EffectiveModel);
+            _logger.LogWarning("Work session {SessionId} step {Step} was not sent: {Reason}", sessionId, step, refusal);
+            _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
+                            WorkSessionVersions.Any,
+                            WorkSessionEventTypes.StepFailed,
+                            WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Failed),
+                            step.ToString(CultureInfo.InvariantCulture)),
+                        CancellationToken.None))
+                .ConfigureAwait(false);
+            await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, refusal).ConfigureAwait(false);
+            return StepOutcome.Settled;
+        }
+
         // Bound what this step will replay BEFORE the send. Every earlier step's state block, answer and reasoning is
         // otherwise re-sent verbatim for the life of the session, and the step's own tool loop — a single knowledge-base
         // read is capped at 50,000 characters — needs that room. Over budget, the older turns fold into the synopsis the

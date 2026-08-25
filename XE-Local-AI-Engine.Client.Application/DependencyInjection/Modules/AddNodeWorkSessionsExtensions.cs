@@ -46,6 +46,11 @@ internal static class AddNodeWorkSessionsExtensions
         // Scoped: it reads the conversation through the scoped chat persistence, from the supervisor's per-turn scope.
         builder.Services.AddScoped<WorkSessionStepContextBound>();
 
+        // Scoped for the same reason: it reads the agent definition through the scoped store. Resolved by the REST
+        // service on create/repoint AND by the supervisor's per-turn scope, so both judge a session's tool gates the
+        // same way.
+        builder.Services.AddScoped<WorkSessionToolGate>();
+
         // One instance serving three roles: the supervisor holds the in-flight runs, so a second instance would answer
         // "not running" to every stop and drive a session twice.
         builder.Services.AddSingleton<WorkSessionExecutionSupervisor>();

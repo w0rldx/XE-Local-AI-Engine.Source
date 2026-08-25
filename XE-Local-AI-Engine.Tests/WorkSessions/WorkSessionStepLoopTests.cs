@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -345,6 +346,59 @@ public sealed class WorkSessionStepLoopTests
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
 
         AssertEx.Equal(expected: 3, (await WorkSessionTestSupport.ReadFindingsAsync(factory.Services, sessionId).ConfigureAwait(false)).Count);
+    }
+
+    [Test]
+    public async Task Loop_WhenTheSessionsModelHasLeftTheToolCapableList_FailsTheStepInsteadOfSendingIt()
+    {
+        // The allow-list is read LIVE on every offer, so an operator edit lands mid-run and the create-time refusal
+        // cannot cover it. Without this guard the step still goes out — with the four state tools missing from the
+        // offer — and the session spends its whole budget on "Requested function update_work_plan not found".
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        var agentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId, agentDefinitionId: agentId).ConfigureAwait(false);
+        await DropTheModelFromTheAllowListAsync(factory.Services).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 0, settled.StepCount, "A step that never ran must not be charged to the budget.");
+        AssertEx.Empty(fake.Requests, "The turn must not be sent at all — a sent one would come back tool-less and look like a model failure.");
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        AssertEx.Contains(events, entry => entry.EventType == WorkSessionEventTypes.StepFailed, "The refusal is recorded as the step failing.");
+        AssertEx.Contains(events,
+            entry => entry.EventType == "SessionStatusChanged"
+                     && entry.Outcome == nameof(AgentWorkSessionStatus.Failed)
+                     && entry.DetailJson?.Contains("tool-capable model list", StringComparison.Ordinal) == true,
+            "The reason has to name the list the operator must edit.");
+    }
+
+    /// <summary>
+    ///     What an operator does in Node Settings while a session is running: the stored allow-list replaces the seeded
+    ///     one outright, so the session's model is simply no longer on it.
+    /// </summary>
+    private static async Task DropTheModelFromTheAllowListAsync(IServiceProvider services)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<INodeSettingsStore>();
+        var stored = await store.LoadAsync().ConfigureAwait(false);
+        await store.SaveAsync(stored with
+            {
+                ToolCapableModels = ["some-other-model"]
+            })
+            .ConfigureAwait(false);
     }
 
     [Test]

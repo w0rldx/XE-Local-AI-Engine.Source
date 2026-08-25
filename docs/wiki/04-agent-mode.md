@@ -795,6 +795,19 @@ cloud-effective agent unless `KnowledgeBase:AllowCloudModelAccess` is set. The k
 is per turn and acts on the *offer*; it says nothing about text a local model already extracted, which
 the state block would otherwise carry off the node on the next step.
 
+Create and repoint also check **both** tool gates, through `WorkSessionToolGate` — one seam shared by the
+service and the supervisor so they cannot judge a session differently. The model's own capability probe
+(`IModelCapabilityResolver`) and the operator's `AgentHome:ToolCapableModels` allow-list
+(`ILocalToolOfferProvider.IsToolCapable`, applied by the offer unconditionally — cloud pins included) are
+different sources and are free to disagree, and checking only the first made the failure silent: create
+succeeded, the step ran with the four state tools missing from its offer, every `update_work_plan` came
+back *"Requested function update\_work\_plan not found"*, and the session spent its whole step budget with
+an empty plan. Each gate has its own refusal, because their fixes differ — a different agent versus one
+line in Node Settings. The allow-list is re-read live per offer, so it can also change mid-run: the
+supervisor re-checks it **before the send** and settles the step `StepFailed` + `Failed` with the same
+sentence rather than sending a turn that cannot work. A session whose agent definition has since been
+deleted is not judged there — create could not have judged it either.
+
 ### 5.6 Settings
 
 | Key | Default | Note |
