@@ -83,9 +83,22 @@ public sealed class GetDevelopmentCapabilityEndpoint(
 
         return
         [
-            DevelopmentContractMapper.ToIsolationSummary("agent-home", _agentSandboxRuntimeProvider, containment),
-            DevelopmentContractMapper.ToIsolationSummary("development", _sandboxRuntimeProvider, containment),
-            DevelopmentContractMapper.ToIsolationSummary("work-session", _workSessionSandboxRuntimeProvider, containment)
+            DevelopmentContractMapper.ToIsolationSummary("agent-home", SandboxWorkloads.AgentHome, _agentSandboxRuntimeProvider, containment),
+            // run_python shares AgentHome's provider instance ON PURPOSE (ComputeToolGateway injects
+            // IAgentSandboxRuntimeProvider), and is still a row of its own: it is the ONE workload in this engine that
+            // declares SandboxIsolationMode.Filesystem, so on a host with a working bubblewrap chain its posture is
+            // materially stronger than AgentHome's on the very same backend. Folding the two together would report the
+            // stronger role's boundary for the weaker one or the weaker one's for the stronger. Reported whether or not
+            // Compute:Enabled is set: this table answers "what would this role be served here", which is exactly the
+            // question an operator asks before turning the tool on.
+            DevelopmentContractMapper.ToIsolationSummary("run_python", SandboxWorkloads.RunPython, _agentSandboxRuntimeProvider, containment),
+            // Either Development declaration is correct here: DevelopmentModeImageToolchain is
+            // DevelopmentModeHostToolchain `with` a different workload name and toolchain source, and this projection
+            // reads neither — it reads the isolation floor, which is None on both. Passing the host-toolchain constant
+            // avoids re-deriving SandboxProviderSelector.ResolveDevelopment's node predicate for an answer that cannot
+            // differ; the resolved PROVIDER, which does differ, is already reported from the instance itself.
+            DevelopmentContractMapper.ToIsolationSummary("development", SandboxWorkloads.DevelopmentModeHostToolchain, _sandboxRuntimeProvider, containment),
+            DevelopmentContractMapper.ToIsolationSummary("work-session", SandboxWorkloads.WorkSession, _workSessionSandboxRuntimeProvider, containment)
         ];
     }
 }

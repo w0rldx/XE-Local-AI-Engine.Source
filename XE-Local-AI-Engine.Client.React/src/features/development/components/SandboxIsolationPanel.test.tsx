@@ -46,10 +46,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("SandboxIsolationPanel", () => {
-	it("reports an unisolated role with the measured reason rather than a generic unavailable", () => {
+	// run_python is the role this case belongs to: it is the one that ASKS for a filesystem boundary, so it is the one
+	// whose "No" carries a measured host reason rather than "the role never requested one".
+	it("reports a requested-but-unavailable boundary with the measured reason rather than a generic unavailable", () => {
 		renderPanel([
 			{
-				role: "agent-home",
+				role: "run_python",
 				provider: "process",
 				backend: "process",
 				level: "None",
@@ -61,13 +63,16 @@ describe("SandboxIsolationPanel", () => {
 			},
 		]);
 
-		expect(screen.getByTestId("sandbox-isolation-level-agent-home").textContent).toBe("None");
-		expect(screen.getByTestId("sandbox-isolation-backend-agent-home").textContent).toBe("process");
-		expect(screen.getByTestId("sandbox-isolation-filesystem-agent-home").textContent).toBe("No");
-		expect(screen.getByTestId("sandbox-isolation-reason-agent-home").textContent).toContain("the host is not Linux");
+		expect(screen.getByTestId("sandbox-isolation-level-run_python").textContent).toBe("None");
+		expect(screen.getByTestId("sandbox-isolation-backend-run_python").textContent).toBe("process");
+		expect(screen.getByTestId("sandbox-isolation-filesystem-run_python").textContent).toBe("No");
+		expect(screen.getByTestId("sandbox-isolation-reason-run_python").textContent).toContain("the host is not Linux");
 	});
 
-	it("renders one row per role and does not collapse them into a single node-wide claim", () => {
+	// This fixture is what the backend actually returns on a Linux host with a working bubblewrap chain — verbatim
+	// shapes from DevelopmentContractMapper.ToIsolationSummary, not invented ones. Two roles share ONE provider
+	// instance and report different postures, which is the whole reason run_python has a row of its own.
+	it("renders one row per role and does not collapse two roles on one provider into one posture", () => {
 		renderPanel([
 			{
 				role: "agent-home",
@@ -77,18 +82,31 @@ describe("SandboxIsolationPanel", () => {
 				filesystemIsolation: false,
 				networkIsolation: true,
 				resourceLimits: true,
-				readOnlyMounts: false,
-				filesystemIsolationUnavailableReason: "bwrap is not installed",
+				readOnlyMounts: true,
+				filesystemIsolationUnavailableReason:
+					"not requested by this role: 'AgentHome' declares an isolation floor of None, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
 			},
 			{
-				role: "development",
-				provider: "docker",
-				backend: "docker",
+				role: "run_python",
+				provider: "process",
+				backend: "bwrap",
 				level: "Isolated",
 				filesystemIsolation: true,
 				networkIsolation: true,
 				resourceLimits: true,
 				readOnlyMounts: true,
+			},
+			{
+				role: "development",
+				provider: "process",
+				backend: "process",
+				level: "Confined",
+				filesystemIsolation: false,
+				networkIsolation: true,
+				resourceLimits: true,
+				readOnlyMounts: true,
+				filesystemIsolationUnavailableReason:
+					"not requested by this role: 'DevelopmentMode (host toolchain)' declares an isolation floor of None, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
 			},
 			{
 				role: "work-session",
@@ -99,23 +117,35 @@ describe("SandboxIsolationPanel", () => {
 				networkIsolation: false,
 				resourceLimits: false,
 				readOnlyMounts: false,
-				filesystemIsolationUnavailableReason: "the deterministic in-memory provider has no mount namespace and never will",
+				filesystemIsolationUnavailableReason:
+					"not requested by this role: 'WorkSession' declares an isolation floor of None, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
 			},
 		]);
 
+		// The regression this fixture pins: Development Mode ran the host toolchain with the worktree mounted while
+		// this table said Filesystem "Yes" and Isolated, because it read the provider's flags instead of the role's.
+		expect(screen.getByTestId("sandbox-isolation-filesystem-development").textContent).toBe("No");
+		expect(screen.getByTestId("sandbox-isolation-level-development").textContent).toBe("Confined");
+		expect(screen.getByTestId("sandbox-isolation-backend-development").textContent).toBe("process");
+
+		// Same provider instance, stronger role: only run_python asks for the boundary, so only run_python has one.
+		expect(screen.getByTestId("sandbox-isolation-provider-run_python").textContent).toBe("process");
+		expect(screen.getByTestId("sandbox-isolation-provider-development").textContent).toBe("process");
+		expect(screen.getByTestId("sandbox-isolation-filesystem-run_python").textContent).toBe("Yes");
+		expect(screen.getByTestId("sandbox-isolation-level-run_python").textContent).toBe("Isolated");
+		expect(screen.getByTestId("sandbox-isolation-backend-run_python").textContent).toBe("bwrap");
+
 		expect(screen.getByTestId("sandbox-isolation-level-agent-home").textContent).toBe("Confined");
-		expect(screen.getByTestId("sandbox-isolation-level-development").textContent).toBe("Isolated");
 		expect(screen.getByTestId("sandbox-isolation-level-work-session").textContent).toBe("None");
 
-		// The mixed-node case the per-role shape exists for: one provider per role, not one posture per node.
-		expect(screen.getByTestId("sandbox-isolation-provider-agent-home").textContent).toBe("process");
-		expect(screen.getByTestId("sandbox-isolation-provider-development").textContent).toBe("docker");
-		expect(screen.getByTestId("sandbox-isolation-readonly-development").textContent).toBe("Yes");
+		// Egress IS denied for these roles wherever the backend advertises it, and the table says so rather than
+		// letting the filesystem column stand for the whole posture.
+		expect(screen.getByTestId("sandbox-isolation-network-development").textContent).toBe("Yes");
 
-		// An isolated role has nothing to explain, so it gets no reason line. The container-served role is the isolated
-		// one here: a hardened container has the host-filesystem boundary the level is derived from, and the process
-		// role on a host without bwrap is the one that has to explain itself.
-		expect(screen.queryByTestId("sandbox-isolation-reason-development")).toBeNull();
+		// A role that HAS the boundary has nothing to explain, so it gets no reason line; a role that lacks it says
+		// which kind of "No" it is.
+		expect(screen.queryByTestId("sandbox-isolation-reason-run_python")).toBeNull();
+		expect(screen.getByTestId("sandbox-isolation-reason-development").textContent).toContain("not requested by this role");
 	});
 
 	it("renders nothing rather than an empty table when the backend reported no roles", () => {

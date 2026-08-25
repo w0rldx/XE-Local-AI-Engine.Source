@@ -16,11 +16,16 @@ interface SandboxIsolationPanelProps {
 /**
  * What each sandbox role on this node is actually isolated by.
  *
- * Reported per role because provider selection is per feature: AgentHome (and with it `run_python`), Development Mode
- * and work sessions each resolve their own provider, and a single node-wide claim would be wrong about at least one of
- * them on a mixed node. The level is derived on the backend from the provider's advertised capabilities — the same
- * flags the fail-closed launch policy gates on — so nothing shown here can claim a boundary the launch path would not
- * enforce.
+ * Reported per role because the posture is per role, on two axes at once. Provider selection is per feature —
+ * AgentHome, Development Mode and work sessions each resolve their own — and the ROLE'S OWN declaration decides what it
+ * asks that provider for, which is why `run_python` gets a row despite sharing AgentHome's provider instance: it is the
+ * one workload that asks for a filesystem boundary, so its row and AgentHome's differ on the same backend. The backend
+ * derives every value as that declaration intersected with the provider's advertised capabilities, so nothing here can
+ * claim a boundary the launch path would not enforce OR one the role never requested.
+ *
+ * A "No" in the Filesystem column therefore has two meanings, and the reason line under the table is where they are
+ * told apart: the role does not ask for a boundary (nothing to fix), or it asks and this host cannot serve one (the
+ * measured probe reason).
  *
  * Every value carries a test id, for the same reason the container-runtime panel's do: a test that only asserted the
  * table rendered would pass against a table full of the wrong answers, on the one surface where that matters most.

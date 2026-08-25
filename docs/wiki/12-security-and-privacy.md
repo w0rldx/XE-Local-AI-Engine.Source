@@ -572,8 +572,13 @@ namespaces, all read back and fail-closed on mismatch) both qualify. That is del
 create-request contract of named read-only host trees, a synthetic `/etc` and a jail-backed `/tmp`. The container
 provider has the property and implements none of that contract, and still refuses the mode on a create request; a
 single flag asked to mean both would either lie to `run_python` or deny a container an isolation level it genuinely
-has. The isolation panel on the Development page reports the **property**, which is why a container-served role reads
-as fully isolated.
+has. The isolation panel on the Development page reports the **property**, and reports it as SERVED — the role's declared
+floor intersected with what the backend advertises. So a container-served role reads as having the boundary only when
+its declaration asks for one, and Development Mode's does not: on this repository's shipped declarations `run_python`
+is the single role whose Filesystem column can read Yes. A panel that read the capability alone claimed a boundary for
+Development Mode on any Linux host with a working bubblewrap chain, which was false in the unsafe direction;
+`DevelopmentContractMapper.ToIsolationSummary` owns the intersection rule and the two different "no boundary" reasons
+(not requested by the role, versus requested and unavailable with the measured probe reason).
 
 Two consequences a security reader should hold on to.
 

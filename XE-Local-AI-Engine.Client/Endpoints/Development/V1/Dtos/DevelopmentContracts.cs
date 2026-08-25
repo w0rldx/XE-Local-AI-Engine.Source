@@ -148,23 +148,42 @@ public sealed record DevelopmentCapabilityResponse(bool Enabled,
 ///         posture. Reporting a single number would have to pick one of them and be wrong about the others.
 ///     </para>
 ///     <para>
-///         Every boolean here is read from the provider's advertised
-///         <c>SandboxProviderCapabilities</c> — the same flags the fail-closed launch policy gates on — so this surface
-///         cannot claim a boundary the launch path would not enforce. Nothing here describes a hardware or VM boundary:
-///         no provider in this tree can prove one, so <see cref="Level" /> deliberately has no term for it.
+///         Every boolean here is the SERVED posture: the role's own ADR 0007 declaration in <c>SandboxWorkloads</c>
+///         intersected with the provider's advertised <c>SandboxProviderCapabilities</c> — the same flags the
+///         fail-closed launch policy gates on. Both halves are load-bearing. Reading the capabilities alone claimed a
+///         filesystem boundary for Development Mode, whose declaration asks for none and which runs the host toolchain
+///         with the worktree mounted; reading the declaration alone would claim a boundary on a host that cannot serve
+///         one. <c>DevelopmentContractMapper.ToIsolationSummary</c> owns the rule. Nothing here describes a hardware or
+///         VM boundary: no provider in this tree can prove one, so <see cref="Level" /> deliberately has no term for
+///         it.
 ///     </para>
 /// </summary>
-/// <param name="Role">The sandbox role: <c>agent-home</c>, <c>development</c>, or <c>work-session</c>.</param>
+/// <param name="Role">
+///     The sandbox role: <c>agent-home</c>, <c>run_python</c>, <c>development</c>, or <c>work-session</c>.
+///     <c>run_python</c> resolves the same provider instance as <c>agent-home</c> and is still reported separately,
+///     because it is the one role that declares a filesystem boundary and its served posture therefore differs on the
+///     same backend.
+/// </param>
 /// <param name="Provider">The provider resolved for that role (<c>fake</c>, <c>process</c>, or <c>docker</c>).</param>
 /// <param name="Backend">The mechanism the boundary is made of: <c>none</c>, <c>process</c>, <c>bwrap</c>, or <c>docker</c>.</param>
 /// <param name="Level">The coarse level derived from the three enforcement axes; <c>DevelopmentContractMapper</c> owns the rule.</param>
-/// <param name="FilesystemIsolation">Whether a command can run with the host filesystem absent from its mount namespace.</param>
-/// <param name="NetworkIsolation">Whether egress can actually be denied.</param>
+/// <param name="FilesystemIsolation">
+///     Whether THIS role's commands run with the host filesystem absent from their mount namespace — the role asks for
+///     the boundary and the provider serves it. A provider that could serve one to a role that never asks reports
+///     <see langword="false" /> here, with the reason saying so.
+/// </param>
+/// <param name="NetworkIsolation">
+///     Whether egress can actually be denied. The capability alone, because every consumer requests
+///     <c>SandboxNetworkPolicy.None</c> per call exactly where it is advertised, so the flag is the served posture.
+/// </param>
 /// <param name="ResourceLimits">Whether memory / PID / CPU ceilings can actually be imposed.</param>
 /// <param name="ReadOnlyMounts">Whether the provider can mount a tree read-only.</param>
 /// <param name="FilesystemIsolationUnavailableReason">
-///     The measured reason the filesystem boundary is unavailable, or null when it is available. Null is never "we do
-///     not know": a role without the boundary always carries a reason.
+///     Why this role has no filesystem boundary, or null when it has one. Two different sentences, and telling them
+///     apart is the operator's whole action: the role does not REQUEST one (nothing to fix — it declares an isolation
+///     floor of <c>None</c>), or it requests one and the host cannot serve it (the measured probe reason — install the
+///     missing mechanism, or leave the tool off). Null is never "we do not know": a role without the boundary always
+///     carries a reason.
 /// </param>
 public sealed record SandboxIsolationSummaryResponse(
     string Role,

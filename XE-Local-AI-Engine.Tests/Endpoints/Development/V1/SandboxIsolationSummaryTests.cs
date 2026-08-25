@@ -17,16 +17,17 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The operator-facing isolation level, derived by <see cref="DevelopmentContractMapper.ToIsolationSummary" />.
 ///     <para>
-///         Every case here drives a REAL provider rather than a hand-written flag set, because the value of this
-///         projection is precisely that it cannot claim a boundary the provider does not advertise. A test that fed the
-///         mapper its own booleans would pass while the providers said something else, which is the one failure this
-///         surface exists to prevent.
+///         Every case here drives a REAL provider rather than a hand-written flag set, and pairs it with a REAL
+///         <see cref="SandboxWorkloads" /> declaration rather than an invented one. Both halves matter: the projection
+///         must not claim a boundary the provider does not advertise, and — the failure this file's newer cases pin —
+///         it must not claim one the ROLE never asked for. A test that fed the mapper its own booleans, or its own
+///         requirements record, would pass while the shipped constants said something else.
 ///     </para>
 /// </summary>
 public sealed class SandboxIsolationSummaryTests
 {
     [Test]
-    public void ToIsolationSummary_WhenTheHostCannotContainAnything_ReportsNoneAndTheMeasuredReason()
+    public void ToIsolationSummary_WhenTheHostCannotContainAnything_ReportsNone()
     {
         const string Reason = "the host is not Linux (the Windows Job Object path is not implemented)";
         var containment = SandboxContainment.None with
@@ -35,7 +36,10 @@ public sealed class SandboxIsolationSummaryTests
         };
         using var provider = CreateProcessProvider(containment);
 
-        var summary = DevelopmentContractMapper.ToIsolationSummary("agent-home", provider, containment);
+        var summary = DevelopmentContractMapper.ToIsolationSummary("agent-home",
+            SandboxWorkloads.AgentHome,
+            provider,
+            containment);
 
         AssertEx.Equal("agent-home", summary.Role);
         AssertEx.Equal(ProcessSandboxRuntimeProvider.Name, summary.Provider);
@@ -46,18 +50,28 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.False(summary.ResourceLimits);
         AssertEx.False(summary.ReadOnlyMounts);
 
-        // The measured reason, not a generic "unavailable": on a Windows host this sentence is the whole explanation an
-        // operator gets for why run_in_agent_home is unisolated.
-        AssertEx.Equal(Reason, summary.FilesystemIsolationUnavailableReason);
+        // AgentHome declares an isolation floor of None, so the honest sentence is that the role never asked — even
+        // on a host that also could not have served it. The probe reason belongs to the role that DOES ask; see
+        // ToIsolationSummary_ForRunPythonOnAHostWithoutABoundary_ReportsTheMeasuredProbeReason.
+        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, "not requested by this role");
+        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, SandboxWorkloads.AgentHome.Workload);
+        AssertEx.False(summary.FilesystemIsolationUnavailableReason?.Contains(Reason, StringComparison.Ordinal) == true);
     }
 
+    /// <summary>
+    ///     <c>run_python</c> is the ONE role that declares <see cref="SandboxIsolationMode.Filesystem" />, so on a host
+    ///     whose bubblewrap chain the probe exercised it is the one role that reaches <c>Isolated</c> over <c>bwrap</c>.
+    /// </summary>
     [Test]
-    public void ToIsolationSummary_WhenEveryMechanismIsActive_ReportsIsolatedOverBwrap()
+    public void ToIsolationSummary_ForRunPythonOnAFullyContainedHost_ReportsIsolatedOverBwrap()
     {
         var containment = FullyContainedHost();
         using var provider = CreateProcessProvider(containment);
 
-        var summary = DevelopmentContractMapper.ToIsolationSummary("development", provider, containment);
+        var summary = DevelopmentContractMapper.ToIsolationSummary("run_python",
+            SandboxWorkloads.RunPython,
+            provider,
+            containment);
 
         AssertEx.Equal("bwrap", summary.Backend);
         AssertEx.Equal("Isolated", summary.Level);
@@ -67,10 +81,72 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.Null(summary.FilesystemIsolationUnavailableReason);
     }
 
+    /// <summary>
+    ///     THE REGRESSION THIS FILE EXISTS FOR SINCE G6b. Live on a Linux box with a working chain, the panel showed
+    ///     role <c>development</c> as filesystem-isolated and <c>Isolated</c> — read straight off the process backend's
+    ///     advertised flags. It is false: <see cref="SandboxWorkloads.DevelopmentModeHostToolchain" /> declares
+    ///     <see cref="SandboxIsolationMode.None" />, and Development Mode runs the host toolchain with the worktree
+    ///     mounted. Same provider, same host, same call as the <c>run_python</c> case above — only the declaration
+    ///     differs, and the served posture differs with it.
+    /// </summary>
+    [Test]
+    public void ToIsolationSummary_ForDevelopmentOnAFullyContainedHost_ReportsConfinedBecauseTheRoleAsksForNoBoundary()
+    {
+        var containment = FullyContainedHost();
+        using var provider = CreateProcessProvider(containment);
+
+        var summary = DevelopmentContractMapper.ToIsolationSummary("development",
+            SandboxWorkloads.DevelopmentModeHostToolchain,
+            provider,
+            containment);
+
+        AssertEx.False(summary.FilesystemIsolation);
+        AssertEx.Equal("process", summary.Backend);
+        AssertEx.Equal("Confined", summary.Level);
+
+        // Egress and ceilings ARE served here, and stay Yes: ResolveAgentFacingNetworkPolicy requests
+        // SandboxNetworkPolicy.None wherever the flag is advertised, which is what this column reports.
+        AssertEx.True(summary.NetworkIsolation);
+        AssertEx.True(summary.ResourceLimits);
+
+        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, "not requested by this role");
+        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason,
+            SandboxWorkloads.DevelopmentModeHostToolchain.Workload);
+    }
+
+    /// <summary>
+    ///     The other side of the reason contract: a role that DOES declare the boundary, on a host that cannot serve
+    ///     it, gets the measured probe sentence rather than "the role did not ask".
+    /// </summary>
+    [Test]
+    public void ToIsolationSummary_ForRunPythonOnAHostWithoutABoundary_ReportsTheMeasuredProbeReason()
+    {
+        const string Reason = "bwrap is not installed";
+        var containment = FullyContainedHost() with
+        {
+            FilesystemIsolation = null,
+            FilesystemIsolationUnavailableReason = Reason
+        };
+        using var provider = CreateProcessProvider(containment);
+
+        var summary = DevelopmentContractMapper.ToIsolationSummary("run_python",
+            SandboxWorkloads.RunPython,
+            provider,
+            containment);
+
+        AssertEx.False(summary.FilesystemIsolation);
+        AssertEx.Equal("Confined", summary.Level);
+        AssertEx.Equal(Reason, summary.FilesystemIsolationUnavailableReason);
+    }
+
+    /// <summary>
+    ///     A real host shape — systemd user scopes and empty network namespaces work, bwrap does not — on the role
+    ///     that asks for no boundary either way. Both reasons apply and the ROLE's wins: an operator told "bwrap is
+    ///     not installed" here would go install it and see this row unchanged.
+    /// </summary>
     [Test]
     public void ToIsolationSummary_WhenOnlySomeMechanismsAreActive_ReportsConfined()
     {
-        // A real host shape: systemd user scopes and empty network namespaces work, but bwrap does not.
         var containment = FullyContainedHost() with
         {
             FilesystemIsolation = null,
@@ -78,35 +154,44 @@ public sealed class SandboxIsolationSummaryTests
         };
         using var provider = CreateProcessProvider(containment);
 
-        var summary = DevelopmentContractMapper.ToIsolationSummary("agent-home", provider, containment);
+        var summary = DevelopmentContractMapper.ToIsolationSummary("agent-home",
+            SandboxWorkloads.AgentHome,
+            provider,
+            containment);
 
         AssertEx.Equal("Confined", summary.Level);
         AssertEx.Equal("process", summary.Backend);
-        AssertEx.Equal("bwrap is not installed", summary.FilesystemIsolationUnavailableReason);
+        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, "not requested by this role");
+        AssertEx.False(summary.FilesystemIsolationUnavailableReason?.Contains("bwrap", StringComparison.Ordinal) == true);
     }
 
     [Test]
-    public async Task ToIsolationSummary_ForTheContainerProviderOnTheDevelopmentRole_ReportsIsolated()
+    public async Task ToIsolationSummary_ForTheContainerProviderOnTheDevelopmentRole_ReportsTheRolesServedPosture()
     {
-        // The fix this test's predecessor asked for landed in the provider, as it said it should. A hardened container
-        // DOES have a filesystem boundary — read-only rootfs, engine-generated mounts only, no host namespaces, every
-        // setting read back and fail-closed on mismatch — and it now advertises
-        // SupportsHostFilesystemBoundary to say so. What it still does not advertise is
-        // SupportsFilesystemIsolation, which means "serves SandboxIsolationMode.Filesystem", the bubblewrap chain's
-        // own create-request contract; this projection reads the property, not that mechanism, which is what its own
-        // FilesystemIsolation contract says ("the host filesystem absent from its mount namespace").
+        // A hardened container DOES have a filesystem boundary — read-only rootfs, engine-generated mounts only, no
+        // host namespaces, every setting read back and fail-closed on mismatch — and advertises
+        // SupportsHostFilesystemBoundary to say so. Having it and being asked for it are different questions, and this
+        // projection answers the second.
         await using var provider = CreateDockerProvider();
 
-        var summary = DevelopmentContractMapper.ToIsolationSummary("development", provider, FullyContainedHost());
+        var summary = DevelopmentContractMapper.ToIsolationSummary("development",
+            SandboxWorkloads.DevelopmentModeImageToolchain,
+            provider,
+            FullyContainedHost());
 
         AssertEx.Equal(DockerSandboxRuntimeProvider.Name, summary.Provider);
         AssertEx.Equal("docker", summary.Backend);
-        AssertEx.Equal("Isolated", summary.Level);
         AssertEx.True(summary.NetworkIsolation);
         AssertEx.True(summary.ResourceLimits);
         AssertEx.True(summary.ReadOnlyMounts);
-        AssertEx.True(summary.FilesystemIsolation);
-        AssertEx.Null(summary.FilesystemIsolationUnavailableReason);
+
+        // The container HAS the property, and the Development declaration still does not ask for it — so the served
+        // posture is Confined with the not-requested reason, not Isolated. The role is what changed, not the backend:
+        // hand this same provider a declaration that asks (run_python's) and it would report the boundary.
+        AssertEx.False(summary.FilesystemIsolation);
+        AssertEx.Equal("Confined", summary.Level);
+        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, "not requested by this role");
+        AssertEx.True(provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsHostFilesystemBoundary));
 
         // The narrower mechanism flag is still absent, and must stay absent: the provider refuses
         // SandboxIsolationMode.Filesystem on a create request, and advertising it would make that refusal a surprise.
@@ -117,14 +202,14 @@ public sealed class SandboxIsolationSummaryTests
     public void ToIsolationSummary_ForTheDeterministicFake_ReportsNoneWhateverTheHostCanDo()
     {
         var summary = DevelopmentContractMapper.ToIsolationSummary("work-session",
+            SandboxWorkloads.WorkSession,
             new FakeSandboxRuntimeProvider(TimeProvider.System),
             FullyContainedHost());
 
         AssertEx.Equal(FakeSandboxRuntimeProvider.Name, summary.Provider);
         AssertEx.Equal("none", summary.Backend);
         AssertEx.Equal("None", summary.Level);
-        AssertEx.Equal("the deterministic in-memory provider has no mount namespace and never will",
-            summary.FilesystemIsolationUnavailableReason);
+        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, "not requested by this role");
     }
 
     private static SandboxContainment FullyContainedHost()
