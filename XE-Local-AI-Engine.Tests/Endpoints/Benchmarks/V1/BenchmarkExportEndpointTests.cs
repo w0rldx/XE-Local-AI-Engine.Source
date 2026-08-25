@@ -167,18 +167,20 @@ public sealed class BenchmarkExportEndpointTests
         AssertEx.Equal("text/csv", response.Content.Headers.ContentType?.MediaType);
         var lines = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         AssertEx.Equal(expected: 2, lines.Length, "One header row and one run row.");
+        // The three repeat-mode columns are APPENDED, never inserted: a consumer that reads this flat export by column
+        // INDEX — which is most of them — would otherwise start reading a sampling seed as a token count.
         AssertEx.Equal("rank,modelGroupKey,model,quant,kvCacheType,flashAttention,backend,placement,contextTokens,status,stopReason,"
-                       + "repeatGroupId,repeatIndex,isWarmup,repeatMode,samplingSeed,samplingTemperature,"
-                       + "totalTokens,tokensPerSecond,ttftMs,promptTokens,promptTokensPerSecond,"
+                       + "repeatGroupId,repeatIndex,isWarmup,totalTokens,tokensPerSecond,ttftMs,promptTokens,promptTokensPerSecond,"
                        + "generationTokens,generationTokensPerSecond,cachedPromptTokens,segmentCount,durationMs,qualityScore,qualityScoreSource,"
-                       + "judgeScore,userScore,rankExclusionReason,launchIdentity,receiptHash",
+                       + "judgeScore,userScore,rankExclusionReason,launchIdentity,receiptHash,"
+                       + "repeatMode,samplingSeed,samplingTemperature",
             lines[0]);
 
         // pp is 123 tokens over 500 ms = 246, tg is 89 over 2000 ms = 44.5. The group key is the base model, so the
         // quant is dropped from it and kept in its own column.
         AssertEx.Equal("1,\"owner/My,Model-GGUF\",\"owner/My,Model-GGUF:Q4_K_M\",Q4_K_M,,,,,4096,succeeded,,"
-                       + "50000000-0000-0000-0000-000000000005,2,false,answerVariance,3,0.7,"
-                       + "512,41.5,180.25,123,246,89,44.5,7,2,12340,73,judge,,,,,",
+                       + "50000000-0000-0000-0000-000000000005,2,false,"
+                       + "512,41.5,180.25,123,246,89,44.5,7,2,12340,73,judge,,,,,,answerVariance,3,0.7",
             lines[1]);
     }
 
@@ -283,11 +285,14 @@ public sealed class BenchmarkExportEndpointTests
         var groupId = Guid.Parse("60000000-0000-0000-0000-000000000006");
 
         // Two measured repeats plus the warm-up they exist to control for. pp is 100 tokens over 500 ms (200/s) and
-        // 100 over 1000 ms (100/s); tg is 50 over 1000 ms (50/s) and 50 over 500 ms (100/s).
+        // 200 over 2000 ms (100/s); tg is 50 over 1000 ms (50/s) and 70 over 700 ms (100/s). The two repeats carry
+        // DIFFERENT token counts on purpose — an answer-variance group answers at different lengths, which is the
+        // whole thing it measures, so the llama-bench row's nPrompt/nGen must be the group mean rather than the
+        // first run's reading.
         ArrangeRuns(context,
-            Grouped(groupId, repeatIndex: 0, warmup: true, ttftMs: 999, promptMs: 10, generationMs: 10),
-            Grouped(groupId, repeatIndex: 1, warmup: false, ttftMs: 100, promptMs: 500, generationMs: 1000),
-            Grouped(groupId, repeatIndex: 2, warmup: false, ttftMs: 200, promptMs: 1000, generationMs: 500));
+            Grouped(groupId, repeatIndex: 0, warmup: true, ttftMs: 999, promptTokens: 9999, promptMs: 10, generationTokens: 9999, generationMs: 10),
+            Grouped(groupId, repeatIndex: 1, warmup: false, ttftMs: 100, promptTokens: 100, promptMs: 500, generationTokens: 50, generationMs: 1000),
+            Grouped(groupId, repeatIndex: 2, warmup: false, ttftMs: 200, promptTokens: 200, promptMs: 2000, generationTokens: 70, generationMs: 700));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
 
@@ -311,17 +316,73 @@ public sealed class BenchmarkExportEndpointTests
         AssertEx.Equal(expected: 150d, group.GetProperty("promptTokensPerSecond").GetProperty("mean").GetDouble());
         AssertEx.Equal(expected: 75d, group.GetProperty("generationTokensPerSecond").GetProperty("mean").GetDouble());
 
+        // The warm-up's wild counts are excluded here too, not just from the rates.
+        AssertEx.Equal(expected: 150d, group.GetProperty("meanPromptTokens").GetDouble());
+        AssertEx.Equal(expected: 60d, group.GetProperty("meanGenerationTokens").GetDouble());
+
         // llama-bench's own shape: a prompt-processing row and a token-generation row, in its field names.
         var rows = document.RootElement.GetProperty("llamaBench");
         AssertEx.Equal(expected: 2, rows.GetArrayLength());
-        AssertEx.Equal(expected: 100, rows[0].GetProperty("nPrompt").GetInt32());
+        AssertEx.Equal(expected: 150, rows[0].GetProperty("nPrompt").GetInt32(), "The group MEAN of 100 and 200, not the first run's 100.");
         AssertEx.Equal(expected: 0, rows[0].GetProperty("nGen").GetInt32());
         AssertEx.Equal(expected: 150d, rows[0].GetProperty("avgTs").GetDouble());
         AssertEx.Equal(expected: 50d, rows[0].GetProperty("stddevTs").GetDouble());
         AssertEx.Equal(expected: 0, rows[1].GetProperty("nPrompt").GetInt32());
-        AssertEx.Equal(expected: 50, rows[1].GetProperty("nGen").GetInt32());
+        AssertEx.Equal(expected: 60, rows[1].GetProperty("nGen").GetInt32(), "The group MEAN of 50 and 70, not the first run's 50.");
         AssertEx.Equal(expected: 75d, rows[1].GetProperty("avgTs").GetDouble());
         AssertEx.Equal(expected: 2, rows[1].GetProperty("samples").GetInt32());
+    }
+
+    [Test]
+    public async Task ExportJson_ReadsTheFrozenSnapshotOncePerGroupRatherThanOncePerRun()
+    {
+        // Deserializing a snapshot RE-HASHES it to validate, and a llama-bench row only ever reads the first run of
+        // its group. Paying that per run made a fifty-run project do fifty verifications to use five answers.
+        await using var context = CreateContext();
+        ArrangeProject(context);
+        var groupId = Guid.Parse("70000000-0000-0000-0000-000000000007");
+        ArrangeRuns(context,
+            Grouped(groupId, repeatIndex: 0, warmup: false, ttftMs: 100, promptTokens: 100, promptMs: 500, generationTokens: 50, generationMs: 1000),
+            Grouped(groupId, repeatIndex: 1, warmup: false, ttftMs: 200, promptTokens: 100, promptMs: 500, generationTokens: 50, generationMs: 1000),
+            Grouped(groupId, repeatIndex: 2, warmup: false, ttftMs: 300, promptTokens: 100, promptMs: 500, generationTokens: 50, generationMs: 1000),
+            Grouped(Guid.Parse("80000000-0000-0000-0000-000000000008"), repeatIndex: 0, warmup: false, ttftMs: 400, promptTokens: 100, promptMs: 500,
+                generationTokens: 50, generationMs: 1000));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(expected: 2, context.Snapshots.Deserialized, "Four runs, two groups: one snapshot read per group.");
+    }
+
+    [Test]
+    public async Task ExportJson_ForARunFrozenWithABudgetTheModelCannotHonour_SaysSoOnTheRun()
+    {
+        // The budget is exported and shown either way, so the run detail is the only place that can say it was never
+        // applied. Read straight off the frozen snapshot rather than a column of its own.
+        await using var context = CreateContext();
+        ArrangeProject(context);
+        ArrangeRuns(context,
+            Run() with
+            {
+                RuntimeSnapshotJson = Encoding.UTF8.GetBytes("{\"primarySampling\":{\"reasoningBudgetTokens\":4096,\"reasoningBudgetEnforceable\":false}}")
+            });
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var run = document.RootElement.GetProperty("runs")[0];
+        AssertEx.Equal(expected: 4096, run.GetProperty("reasoningBudgetTokens").GetInt32());
+        AssertEx.False(run.GetProperty("reasoningBudgetApplicable").GetBoolean(),
+            "A pinned budget the frozen model cannot honour must be reported as inapplicable, not silently dropped.");
+
+        // The snapshot itself stays unexposed — two scalars are lifted out of it, never the payload.
+        AssertEx.False(body.Contains("primarySampling", StringComparison.Ordinal));
     }
 
     [Test]
@@ -347,14 +408,16 @@ public sealed class BenchmarkExportEndpointTests
         int repeatIndex,
         bool warmup,
         double ttftMs,
+        int promptTokens,
         double promptMs,
+        int generationTokens,
         double generationMs) =>
         Run(BenchmarkPrimaryStatus.Succeeded, runId: Guid.NewGuid()) with
         {
             RepeatGroupId = groupId,
             RepeatIndex = repeatIndex,
             IsWarmup = warmup,
-            Throughput = new BenchmarkRunThroughput(ttftMs, PromptTokens: 100, promptMs, GenerationTokens: 50, generationMs, CachedPromptTokens: 0,
+            Throughput = new BenchmarkRunThroughput(ttftMs, promptTokens, promptMs, generationTokens, generationMs, CachedPromptTokens: 0,
                 SegmentCount: 1)
         };
 
@@ -404,6 +467,9 @@ public sealed class BenchmarkExportEndpointTests
     {
         public IBenchmarkStore Store { get; } = Substitute.For<IBenchmarkStore>();
 
+        /// <summary>Counts snapshot reads, which is the only way to see that the export stopped paying for one per run.</summary>
+        public CountingSnapshotFactory Snapshots { get; } = new();
+
         public TestServerWebAppFactory Factory { get; }
 
         public Context() =>
@@ -413,10 +479,35 @@ public sealed class BenchmarkExportEndpointTests
                 {
                     services.RemoveAll<IBenchmarkStore>();
                     services.AddSingleton(Store);
+                    services.RemoveAll<IBenchmarkRuntimeSnapshotFactory>();
+                    services.AddSingleton<IBenchmarkRuntimeSnapshotFactory>(Snapshots);
                 }
             };
 
         public ValueTask DisposeAsync() =>
             Factory.DisposeAsync();
+    }
+
+    /// <summary>
+    ///     Counts <see cref="IBenchmarkRuntimeSnapshotFactory.Deserialize" /> and then refuses, which is what these
+    ///     runs' placeholder payloads do against the real factory anyway — the export logs it and leaves the row's
+    ///     model facts empty. Hand-written rather than substituted: the method takes a <c>ReadOnlySpan</c>, which a
+    ///     mocking proxy cannot record.
+    /// </summary>
+    private sealed class CountingSnapshotFactory : IBenchmarkRuntimeSnapshotFactory
+    {
+        public int Deserialized { get; private set; }
+
+        public BenchmarkRuntimeSnapshotV1 Create(BenchmarkRuntimeSnapshotInput input) =>
+            throw new NotSupportedException();
+
+        public byte[] Serialize(BenchmarkRuntimeSnapshotV1 snapshot) =>
+            throw new NotSupportedException();
+
+        public BenchmarkRuntimeSnapshotV1 Deserialize(ReadOnlySpan<byte> payload)
+        {
+            Deserialized++;
+            throw new BenchmarkSnapshotException("The export test does not model a readable snapshot.");
+        }
     }
 }

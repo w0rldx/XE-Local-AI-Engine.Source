@@ -73,6 +73,35 @@ public sealed class BenchmarkRunEventBufferTests
     }
 
     [Test]
+    public void EvictPlaintext_ForARunEvictedOncePerPhase_OccupiesExactlyOneRetainedSlot()
+    {
+        // A run is evicted twice — once at the end of the primary phase, once at the end of the judge phase — and
+        // BeginActivePhase clears PlaintextEvicted between them. Keying the tombstone queue off that flag enqueued
+        // the same run twice, so a cap of N really retained N/2 runs. Cap of 2 here: two runs must both survive.
+        var buffer = new BenchmarkEventBuffer(Options.Create(new BenchmarkEventBufferOptions
+        {
+            MaxRetainedTerminalRuns = 2
+        }));
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+
+        _ = buffer.Append(first, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: "primary"));
+        buffer.EvictPlaintext(first);
+        buffer.BeginActivePhase(first, persistedSequence: 1);
+        _ = buffer.Append(first, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: "judge"));
+        buffer.EvictPlaintext(first);
+
+        _ = buffer.Append(second, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: "primary"));
+        buffer.EvictPlaintext(second);
+
+        // The tombstone is what turns a late subscriber's replay into a reset rather than into silence, so its
+        // survival is the observable: dropped, the entry is gone and the replay answers ResetRequired false.
+        AssertEx.True(buffer.Replay(first, afterSequence: 0, runVersion: 1).ResetRequired,
+            "The two-phase run must hold ONE slot: enqueued per phase it is pushed out of a two-run cap by the next run.");
+        AssertEx.True(buffer.Replay(second, afterSequence: 0, runVersion: 1).ResetRequired);
+    }
+
+    [Test]
     public void Hub_EventsNeverContainSensitiveSnapshotOrRawErrors()
     {
         var actual = typeof(BenchmarkRunStreamPayload).GetProperties(BindingFlags.Public | BindingFlags.Instance)

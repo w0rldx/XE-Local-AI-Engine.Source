@@ -552,6 +552,17 @@ public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
 {
     public JsonElement? OutputParts { get; init; }
 
+    /// <summary>The thinking budget frozen onto this run, or null when none was pinned.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
+
+    /// <summary>
+    ///     False when a budget WAS pinned and the frozen model cannot honour it — it does not reason, or its chat
+    ///     template renders no reasoning end marker, so llama-server would accept the cap and ignore it. The node
+    ///     therefore does not send one, and this is the only place that says so. Null when no budget was pinned, and
+    ///     on runs frozen before the field existed.
+    /// </summary>
+    public bool? ReasoningBudgetApplicable { get; init; }
+
     /// <summary>The rubric verdict of the current attempt (<c>BenchmarkJudgeResultV2</c>), or null.</summary>
     public JsonElement? JudgeResult { get; init; }
 

@@ -279,9 +279,17 @@ public sealed class BenchmarkRunFreezeService(
                                   .ConfigureAwait(false);
         // The enforceability answer is frozen off the capabilities read ABOVE, not re-resolved at execution: a
         // model swap or a re-detection between freeze and run must not change what a frozen run replays.
+        //
+        // SupportsThinking is half the answer, not a separate question. A model that does not reason at all cannot
+        // have its reasoning capped, and GgufModelCapabilities defaults ReasoningBudgetEnforceable to true — the inert
+        // safe answer for a model nothing was detected about — so freezing that field alone said "enforceable" for
+        // every non-thinking model. The budget then went out on the wire, llama-server accepted it and ignored it
+        // (no think-end tags in the template), and the one thing that would have told the operator — the
+        // ReasoningBudgetSkipLog notice — never fired, because the marker was written rather than skipped.
+        var reasoningBudgetEnforceable = capabilities.SupportsThinking && capabilities.ReasoningBudgetEnforceable;
         var primarySampling = BenchmarkFrozenPolicies.DeterministicSampling(project.MaxOutputTokens,
             project.ReasoningBudgetTokens,
-            project.ReasoningBudgetTokens is null ? null : capabilities.ReasoningBudgetEnforceable);
+            project.ReasoningBudgetTokens is null ? null : reasoningBudgetEnforceable);
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
         // One snapshot per DISTINCT sampling, memoized by seed. Throughput mode has exactly one, so its group is

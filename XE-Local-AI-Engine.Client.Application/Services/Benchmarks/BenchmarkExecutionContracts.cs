@@ -232,10 +232,16 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
             // The entry survives eviction on purpose: emptied of output, it still says "there WAS a stream here and it
             // is gone", which is what turns a late subscriber's replay into a reset rather than into silence. It is
             // also the leak — a node that runs a thousand benchmarks kept a thousand of them — so the tombstones are
-            // capped. Called once per terminal PHASE, and a run has two, so the queue only grows on the first.
-            if (!state.PlaintextEvicted)
+            // capped.
+            //
+            // Queue membership is its OWN flag, not PlaintextEvicted: a run is evicted once per terminal PHASE and has
+            // two, and BeginActivePhase clears PlaintextEvicted between them, so keying off it enqueued the same run
+            // twice and halved the effective cap to ~128 runs. Queued stays set for as long as the id is in the queue,
+            // whatever the run does afterwards.
+            state.PlaintextEvicted = true;
+            if (!state.Queued)
             {
-                state.PlaintextEvicted = true;
+                state.Queued = true;
                 _evicted.Enqueue(runId);
             }
 
@@ -244,10 +250,15 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
                 var oldest = _evicted.Dequeue();
 
                 // Skipped when the run went active again (a judge phase after the primary): its entry belongs to a
-                // live stream now, and dropping it would restart that stream's sequence numbering.
-                if (_runs.TryGetValue(oldest, out var stale) && stale.PlaintextEvicted)
+                // live stream now, and dropping it would restart that stream's sequence numbering. Either way the id
+                // leaves the queue, so a run that is spared here can be enqueued again by its next eviction.
+                if (_runs.TryGetValue(oldest, out var stale))
                 {
-                    _ = _runs.Remove(oldest);
+                    stale.Queued = false;
+                    if (stale.PlaintextEvicted)
+                    {
+                        _ = _runs.Remove(oldest);
+                    }
                 }
             }
         }
@@ -291,6 +302,9 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
         public long LastPublishedSequence { get; set; }
         public int Utf8Bytes { get; set; }
         public bool PlaintextEvicted { get; set; }
+
+        /// <summary>Whether this run's id is currently in the tombstone queue. Owned by the queue, not by a phase.</summary>
+        public bool Queued { get; set; }
         public bool HistoryTruncated { get; set; }
         public LinkedList<BufferedEvent> Events { get; } = [];
     }
@@ -379,6 +393,17 @@ public static class BenchmarkOutputParts
     }
 
     /// <summary>
+    ///     Whether any VISIBLE answer text was emitted — reasoning excluded, whitespace not counted. The narrow half of
+    ///     <see cref="IsUnanswered" />, separate because a run cut off at the token budget is asked only this: did it
+    ///     ever leave the scratchpad?
+    /// </summary>
+    public static bool HasAnswerText(IReadOnlyList<BenchmarkOutputPart> parts)
+    {
+        ArgumentNullException.ThrowIfNull(parts);
+        return parts.Any(static part => string.Equals(part.Kind, OutputKind, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(part.Content));
+    }
+
+    /// <summary>
     ///     Whether the turn produced no gradable answer, judged from the parts alone. Two shapes, both of which a
     ///     provider reports as a CLEAN finish:
     ///     <list type="bullet">
@@ -394,17 +419,6 @@ public static class BenchmarkOutputParts
     ///         capture is whatever fragment arrived last, not the shape of the turn.
     ///     </para>
     /// </summary>
-    /// <summary>
-    ///     Whether any VISIBLE answer text was emitted — reasoning excluded, whitespace not counted. The narrow half of
-    ///     <see cref="IsUnanswered" />, separate because a run cut off at the token budget is asked only this: did it
-    ///     ever leave the scratchpad?
-    /// </summary>
-    public static bool HasAnswerText(IReadOnlyList<BenchmarkOutputPart> parts)
-    {
-        ArgumentNullException.ThrowIfNull(parts);
-        return parts.Any(static part => string.Equals(part.Kind, OutputKind, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(part.Content));
-    }
-
     public static bool IsUnanswered(IReadOnlyList<BenchmarkOutputPart> parts)
     {
         ArgumentNullException.ThrowIfNull(parts);

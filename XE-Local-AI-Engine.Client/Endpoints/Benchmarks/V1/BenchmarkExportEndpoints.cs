@@ -72,6 +72,16 @@ public sealed class BenchmarkExportRepeatGroupResponse
     public BenchmarkRepeatMode RepeatMode { get; init; }
 
     public IReadOnlyList<Guid> RunIds { get; init; } = [];
+
+    /// <summary>Mean prompt tokens across the group, or null when nothing measured them.</summary>
+    public double? MeanPromptTokens { get; init; }
+
+    /// <summary>
+    ///     Mean generated tokens across the group. Worth its own field rather than reading one run: an
+    ///     answer-variance group's repeats answer at different lengths, which is exactly what it measures.
+    /// </summary>
+    public double? MeanGenerationTokens { get; init; }
+
     public required BenchmarkExportSampleStatisticsResponse TtftMs { get; init; }
     public required BenchmarkExportSampleStatisticsResponse PromptTokensPerSecond { get; init; }
     public required BenchmarkExportSampleStatisticsResponse GenerationTokensPerSecond { get; init; }
@@ -103,10 +113,10 @@ public sealed class BenchmarkExportLlamaBenchRowResponse
 
     public int? NGpuLayers { get; init; }
 
-    /// <summary>Prompt tokens the row measures, rounded from the group mean. Zero on a generation row.</summary>
+    /// <summary>Prompt tokens the row measures, rounded from the group MEAN. Zero on a generation row.</summary>
     public int NPrompt { get; init; }
 
-    /// <summary>Generated tokens the row measures, rounded from the group mean. Zero on a prompt row.</summary>
+    /// <summary>Generated tokens the row measures, rounded from the group MEAN. Zero on a prompt row.</summary>
     public int NGen { get; init; }
 
     public double? AvgTs { get; init; }
@@ -168,7 +178,13 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimePr
         var now = _timeProvider.GetUtcNow();
         var (records, rankCohort) = await BenchmarkExportProjection.ListAllForExportAsync(_store, req.ProjectId, ct).ConfigureAwait(false);
         var runs = new List<BenchmarkRunDetailResponse>(records.Count);
-        var facts = new Dictionary<Guid, BenchmarkExportRunFacts>(records.Count);
+
+        // Grouped BEFORE the loop so the facts read below is scoped to the runs that actually need it: LlamaBenchRows
+        // reads one run per group, while ReadFacts deserializes a snapshot and RE-HASHES it to validate. Doing that
+        // for every run of a fifty-run project paid the whole cost fifty times to use it once per group.
+        var groups = BenchmarkExportStatistics.Groups(records);
+        var firstOfGroup = groups.Select(static group => group.RunIds[0]).ToHashSet();
+        var facts = new Dictionary<Guid, BenchmarkExportRunFacts>(groups.Count);
         foreach (var summary in records)
         {
             // The listing projection deliberately never reads the encrypted payload columns, so the transcript and the
@@ -185,10 +201,11 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimePr
             {
                 Rank = summary.Rank
             }).ToDetail(verdict));
-            facts[full.Id] = ReadFacts(full);
+            if (firstOfGroup.Contains(full.Id))
+            {
+                facts[full.Id] = ReadFacts(full);
+            }
         }
-
-        var groups = BenchmarkExportStatistics.Groups(records);
 
         HttpContext.Response.Headers.ContentDisposition = BenchmarkExportProjection.Attachment(project.Name, now, "json");
         await Send.OkAsync(new BenchmarkExportResponse
@@ -266,8 +283,7 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimePr
             }
         }
 
-        return new BenchmarkExportRunFacts(buildCommit, gpuInfo, modelFilename, modelSize, gpuLayers,
-            run.Throughput?.PromptTokens, run.Throughput?.GenerationTokens);
+        return new BenchmarkExportRunFacts(buildCommit, gpuInfo, modelFilename, modelSize, gpuLayers);
     }
 }
 
@@ -341,6 +357,8 @@ internal static class BenchmarkExportStatistics
                            ModelName = ordered[0].PrimaryModelName,
                            RepeatMode = ordered[0].RepeatMode,
                            RunIds = [.. ordered.Select(static run => run.Id)],
+                           MeanPromptTokens = Summarize(ordered.Select(static run => (double?)run.Throughput?.PromptTokens)).Mean,
+                           MeanGenerationTokens = Summarize(ordered.Select(static run => (double?)run.Throughput?.GenerationTokens)).Mean,
                            TtftMs = Summarize(ordered.Select(static run => run.Throughput?.TtftMs)),
                            PromptTokensPerSecond = Summarize(ordered.Select(static run => run.Throughput?.PromptTokensPerSecond)),
                            GenerationTokensPerSecond = Summarize(ordered.Select(static run => run.Throughput?.GenerationTokensPerSecond))
@@ -375,9 +393,14 @@ internal static class BenchmarkExportStatistics
     }
 
     /// <summary>
-    ///     Two rows per group in llama-bench's own shape: a prompt-processing row and a token-generation row. The
-    ///     model and runtime facts come from the group's FIRST run — every run of a group shares one frozen snapshot
-    ///     and one launch, so any of them would answer identically.
+    ///     Two rows per group in llama-bench's own shape: a prompt-processing row and a token-generation row.
+    ///     <para>
+    ///         The model and runtime facts come from the group's FIRST run. An answer-variance group has one snapshot
+    ///         per repeat rather than one shared snapshot — the seed differs — but every fact read here (model file,
+    ///         its size, the GPU-layer count, the runtime build and the host GPUs) comes from the parts that do not,
+    ///         because the whole group is frozen against one launch. The token COUNTS are group means, not the first
+    ///         run's: those genuinely vary across an answer-variance group.
+    ///     </para>
     /// </summary>
     public static IReadOnlyList<BenchmarkExportLlamaBenchRowResponse> LlamaBenchRows(
         IReadOnlyList<BenchmarkExportRepeatGroupResponse> groups,
@@ -389,8 +412,8 @@ internal static class BenchmarkExportStatistics
         foreach (var group in groups)
         {
             var runFacts = facts.TryGetValue(group.RunIds[0], out var found) ? found : BenchmarkExportRunFacts.Empty;
-            rows.Add(Row(group, runFacts, group.PromptTokensPerSecond, nPrompt: Round(runFacts.PromptTokens), nGen: 0));
-            rows.Add(Row(group, runFacts, group.GenerationTokensPerSecond, nPrompt: 0, nGen: Round(runFacts.GenerationTokens)));
+            rows.Add(Row(group, runFacts, group.PromptTokensPerSecond, nPrompt: Round(group.MeanPromptTokens), nGen: 0));
+            rows.Add(Row(group, runFacts, group.GenerationTokensPerSecond, nPrompt: 0, nGen: Round(group.MeanGenerationTokens)));
         }
 
         return rows;
@@ -431,11 +454,9 @@ internal sealed record BenchmarkExportRunFacts(
     string? GpuInfo,
     string? ModelFilename,
     long? ModelSizeBytes,
-    int? GpuLayers,
-    double? PromptTokens,
-    double? GenerationTokens)
+    int? GpuLayers)
 {
-    public static BenchmarkExportRunFacts Empty { get; } = new(null, null, null, null, null, null, null);
+    public static BenchmarkExportRunFacts Empty { get; } = new(null, null, null, null, null);
 }
 
 /// <summary>Shared collection and naming for both export representations.</summary>
@@ -515,10 +536,13 @@ internal static class BenchmarkExportCsv
 {
     private const string Header =
         "rank,modelGroupKey,model,quant,kvCacheType,flashAttention,backend,placement,contextTokens,status,stopReason,"
-        + "repeatGroupId,repeatIndex,isWarmup,repeatMode,samplingSeed,samplingTemperature,"
-        + "totalTokens,tokensPerSecond,ttftMs,promptTokens,promptTokensPerSecond,"
+        + "repeatGroupId,repeatIndex,isWarmup,totalTokens,tokensPerSecond,ttftMs,promptTokens,promptTokensPerSecond,"
         + "generationTokens,generationTokensPerSecond,cachedPromptTokens,segmentCount,durationMs,qualityScore,qualityScoreSource,"
-        + "judgeScore,userScore,rankExclusionReason,launchIdentity,receiptHash";
+        + "judgeScore,userScore,rankExclusionReason,launchIdentity,receiptHash,"
+
+        // APPENDED, never inserted. A CSV consumer that reads by column INDEX — which is most of them, and the whole
+        // reason this export is flat — breaks silently on an inserted column and reads a seed as a token count.
+        + "repeatMode,samplingSeed,samplingTemperature";
 
     public static string Render(IReadOnlyList<BenchmarkRunRecord> runs)
     {
@@ -593,15 +617,6 @@ internal static class BenchmarkExportCsv
                .Append(',')
                .Append(run.IsWarmup ? "true" : "false")
                .Append(',')
-               .Append(Field(JsonNamingPolicy.CamelCase.ConvertName(run.RepeatMode.ToString())))
-               .Append(',')
-
-               // The one input that differs between the runs of an answer-variance group, so a reader can attribute
-               // the spread without decrypting a snapshot.
-               .Append(Field(run.SamplingSeed))
-               .Append(',')
-               .Append(Rate(run.SamplingTemperature))
-               .Append(',')
                .Append(Number(run.TotalTokens))
                .Append(',')
                .Append(Rate(run.TokensPerSecond))
@@ -638,6 +653,15 @@ internal static class BenchmarkExportCsv
                .Append(Field(evidence?.EffectiveLaunchIdentity))
                .Append(',')
                .Append(Field(evidence?.ReceiptHash))
+               .Append(',')
+               .Append(Field(JsonNamingPolicy.CamelCase.ConvertName(run.RepeatMode.ToString())))
+               .Append(',')
+
+               // The one input that differs between the runs of an answer-variance group, so a reader can attribute
+               // the spread without decrypting a snapshot.
+               .Append(Field(run.SamplingSeed))
+               .Append(',')
+               .Append(Rate(run.SamplingTemperature))
                .Append("\r\n");
     }
 

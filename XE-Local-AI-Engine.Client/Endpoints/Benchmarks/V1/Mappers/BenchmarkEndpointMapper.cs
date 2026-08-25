@@ -118,6 +118,7 @@ internal static class BenchmarkEndpointMapper
     /// <param name="verdict">The decrypted rubric verdict of the run's current attempt, or null when it has none.</param>
     public static BenchmarkRunDetailResponse ToDetail(this BenchmarkRunRecord run, BenchmarkJudgeResultV2? verdict = null)
     {
+        var (reasoningBudgetTokens, reasoningBudgetApplicable) = ReadReasoningBudget(run.RuntimeSnapshotJson);
         var detail = new BenchmarkRunDetailResponse
         {
             Id = run.Id,
@@ -163,7 +164,9 @@ internal static class BenchmarkEndpointMapper
             PrimaryCompletedAtUtc = run.PrimaryCompletedAtUtc,
             UpdatedAtUtc = run.UpdatedAtUtc,
             PrimaryLaunchReceipt = ParseJson(run.PrimaryLaunchEvidence?.ReceiptJson),
-            PrimaryEnvironmentFacts = ParseJson(run.PrimaryLaunchEvidence?.EnvironmentFactsJson)
+            PrimaryEnvironmentFacts = ParseJson(run.PrimaryLaunchEvidence?.EnvironmentFactsJson),
+            ReasoningBudgetTokens = reasoningBudgetTokens,
+            ReasoningBudgetApplicable = reasoningBudgetApplicable
         };
         ApplyLaunchEvidence(detail, run);
         return detail;
@@ -287,6 +290,42 @@ internal static class BenchmarkEndpointMapper
                 PromptVersion = policy.PromptVersion,
                 PromptVersionOutdated = policy.PromptVersion != BenchmarkJudgePolicyVersions.PromptVersion
             };
+
+    /// <summary>
+    ///     The two frozen reasoning-budget facts, read straight out of the run's snapshot. Two scalars rather than the
+    ///     snapshot itself: the payload stays unexposed, and this needs no column of its own. A plain parse, NOT the
+    ///     factory's verifying deserialize — this is a display value, and a run whose snapshot no longer validates
+    ///     should still render rather than fail its own detail read. Detail only: the listing projection never loads
+    ///     the snapshot column, so it arrives empty and both facts are null.
+    /// </summary>
+    private static (int? Tokens, bool? Applicable) ReadReasoningBudget(ReadOnlyMemory<byte> snapshotJson)
+    {
+        if (snapshotJson.IsEmpty)
+        {
+            return (null, null);
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(snapshotJson);
+            if (!document.RootElement.TryGetProperty("primarySampling", out var sampling)
+                || !sampling.TryGetProperty("reasoningBudgetTokens", out var tokens)
+                || tokens.ValueKind != JsonValueKind.Number)
+            {
+                return (null, null);
+            }
+
+            // Absent means a run frozen before the field existed; the executor reads that as the inert true, so this
+            // must agree rather than reporting "not applicable" for every legacy run.
+            var applicable = !sampling.TryGetProperty("reasoningBudgetEnforceable", out var enforceable)
+                             || enforceable.ValueKind != JsonValueKind.False;
+            return (tokens.GetInt32(), applicable);
+        }
+        catch (JsonException)
+        {
+            return (null, null);
+        }
+    }
 
     private static JsonElement? ParseJson(ReadOnlyMemory<byte>? payload)
     {
