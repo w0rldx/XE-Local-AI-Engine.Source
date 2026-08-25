@@ -30,6 +30,16 @@ public interface IDockerRuntimeClient : IAsyncDisposable
     /// </summary>
     Task<DockerContainerSettings> InspectContainerAsync(string containerId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Ids of every container — running or stopped — carrying <em>all</em> of <paramref name="labels" />.
+    ///     <para>
+    ///         Filtered daemon-side rather than listed-then-filtered here, because the difference is a security
+    ///         property and not an optimisation: the caller removes what this returns, so a filter applied after the
+    ///         fact would be one more place a foreign container could reach the removal loop.
+    ///     </para>
+    /// </summary>
+    Task<IReadOnlyList<string>> ListContainersAsync(IReadOnlyDictionary<string, string> labels, CancellationToken cancellationToken = default);
+
     /// <summary>Force-remove a container. Best-effort by contract: a container that is already gone is not an error.</summary>
     Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken = default);
 

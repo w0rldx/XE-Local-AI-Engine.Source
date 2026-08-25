@@ -28074,6 +28074,12 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse"
               }
             ]
+          },
+          "isolation": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse"
+            }
           }
         }
       },
@@ -28135,6 +28141,40 @@
           "confirmedAtUtc": {
             "type": "string",
             "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "backend": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "filesystemIsolation": {
+            "type": "boolean"
+          },
+          "networkIsolation": {
+            "type": "boolean"
+          },
+          "resourceLimits": {
+            "type": "boolean"
+          },
+          "readOnlyMounts": {
+            "type": "boolean"
+          },
+          "filesystemIsolationUnavailableReason": {
+            "type": "string",
             "nullable": true
           }
         }

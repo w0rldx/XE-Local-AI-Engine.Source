@@ -20,6 +20,11 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 ///         registered below only when <c>Development:Sandbox:Provider</c> names it; nothing here can hand it to
 ///         AgentHome, which no longer needs a convention to guarantee because the type system does.
 ///     </para>
+///     <para>
+///         Also here: the startup container sweep. It is the container-provider counterpart to
+///         <c>SandboxOrphanReaper</c> (registered by <c>AddNodeAgentHome</c>, and process-provider-only), and it lives
+///         with the rest of the container pieces for the same reason they do.
+///     </para>
 /// </summary>
 internal static class AddNodeContainerSandboxExtensions
 {
@@ -43,6 +48,12 @@ internal static class AddNodeContainerSandboxExtensions
         // even deliberately: it implements IDevelopmentSandboxRuntimeProvider only, so a container requirement
         // silently acquired by a feature that does not need one is a compile error, not a review catch.
         builder.Services.AddSingleton<DockerSandboxRuntimeProvider>();
+
+        // Registered unconditionally, gated at run time. Provider selection is a configuration-bound factory that
+        // nothing here can evaluate — Development:Sandbox:Provider unset means "follow the agent role", which needs
+        // the whole container built — so the sweeper resolves the selector itself and returns without touching the
+        // daemon on a node that did not opt in.
+        builder.Services.AddHostedService<DockerSandboxOrphanSweeper>();
 
         return builder;
     }

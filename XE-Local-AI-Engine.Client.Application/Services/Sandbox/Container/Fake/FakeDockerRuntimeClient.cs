@@ -26,7 +26,7 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
     public FakeDockerRuntimeClient(DockerDaemonEndpoint endpoint, DockerDaemonIdentity? identity = null)
     {
         Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
-        Identity = identity ?? new DockerDaemonIdentity("fake-daemon", "29.6.1", "1.55", "1.40", "linux", endpoint);
+        Identity = identity ?? new DockerDaemonIdentity("fake-daemon", "29.6.1", "1.55", "1.40", "linux", endpoint, IsRootless: false, SupportsSeccomp: true);
     }
 
     /// <summary>
@@ -126,9 +126,40 @@ public sealed class FakeDockerRuntimeClient : IDockerRuntimeClient
         return Task.FromResult(SettingsMutator is null ? conformant : SettingsMutator(conformant));
     }
 
+    /// <summary>
+    ///     Applies the label filter the way the daemon does — every requested label must match — so a test can prove
+    ///     the sweep passes a filter narrow enough to leave a foreign container alone.
+    /// </summary>
+    public Task<IReadOnlyList<string>> ListContainersAsync(IReadOnlyDictionary<string, string> labels,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(labels);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        IReadOnlyList<string> matches =
+        [
+            .. _containers
+               .Where(entry => labels.All(filter => entry.Value.Specification.Labels.TryGetValue(filter.Key, out var value)
+                                                    && string.Equals(value, filter.Value, StringComparison.Ordinal)))
+               .Select(entry => entry.Key)
+               .Order(StringComparer.Ordinal)
+        ];
+
+        return Task.FromResult(matches);
+    }
+
+    /// <summary>When set, <see cref="RemoveContainerAsync" /> throws it instead of removing. Lets a test prove one failed removal does not stop the sweep.</summary>
+    public Func<string, DockerRuntimeException?>? RemovalFailure { get; set; }
+
     public Task RemoveContainerAsync(string containerId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        if (RemovalFailure?.Invoke(containerId) is { } failure)
+        {
+            return Task.FromException(failure);
+        }
+
         _containers.TryRemove(containerId, out _);
         _removed.Enqueue(containerId);
         return Task.CompletedTask;

@@ -413,6 +413,26 @@
 				"viewerLabel": "{{kind}} artifact",
 				"view": "View",
 				"hide": "Hide"
+			},
+			"isolation": {
+				"title": "Sandbox isolation",
+				"intro": "Measured on this host, per sandbox role. A role only claims a boundary its provider advertises and the launch path enforces.",
+				"caption": "Isolation posture of each sandbox role on this node.",
+				"role": "Role",
+				"provider": "Provider",
+				"backend": "Backend",
+				"level": "Level",
+				"filesystem": "Filesystem",
+				"network": "Network",
+				"limits": "Resource limits",
+				"readOnlyMounts": "Read-only mounts",
+				"yes": "Yes",
+				"no": "No",
+				"levels": {
+					"isolated": "Isolated",
+					"confined": "Confined",
+					"none": "None"
+				}
 			}
 		},
 		"knowledgeBase": {

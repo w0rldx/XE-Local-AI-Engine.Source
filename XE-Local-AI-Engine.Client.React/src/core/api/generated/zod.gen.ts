@@ -3746,10 +3746,23 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRun
 	pinnedDaemon: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse.nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse = z.object({
+	role: z.string().optional(),
+	provider: z.string().optional(),
+	backend: z.string().optional(),
+	level: z.string().optional(),
+	filesystemIsolation: z.boolean().optional(),
+	networkIsolation: z.boolean().optional(),
+	resourceLimits: z.boolean().optional(),
+	readOnlyMounts: z.boolean().optional(),
+	filesystemIsolationUnavailableReason: z.string().nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = z.object({
 	enabled: z.boolean().optional(),
 	sandboxProvider: z.string().optional(),
 	containerRuntime: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse.nullish(),
+	isolation: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest = z.object({
