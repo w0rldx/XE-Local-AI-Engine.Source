@@ -8,8 +8,10 @@ import {
 	type McpEnvEntry,
 	type McpServerFormValues,
 	type McpTransportKind,
+	type McpTrustTier,
 	mcpServerFormSchema,
 	mcpTransportKinds,
+	selectableMcpTrustTiers,
 } from "@/features/mcp/models/McpServerModels";
 
 // Imperative handle so the host dialog can place Save in its sticky footer (outside the form body) yet still
@@ -132,6 +134,15 @@ export function McpServerForm({
 		[t],
 	);
 
+	const trustTierData = useMemo(
+		() =>
+			selectableMcpTrustTiers.map((tier) => ({
+				value: tier,
+				label: t(`pages.mcp.form.trustTier.options.${tier}`, tier),
+			})),
+		[t],
+	);
+
 	const isStdio = values.transportKind === "Stdio";
 
 	const handleTransportChange = useCallback(
@@ -140,6 +151,16 @@ export function McpServerForm({
 				return;
 			}
 			updateValues((current) => ({ ...current, transportKind: value as McpTransportKind }));
+		},
+		[updateValues],
+	);
+
+	const handleTrustTierChange = useCallback(
+		(value: string | null) => {
+			if (value === null) {
+				return;
+			}
+			updateValues((current) => ({ ...current, trustTier: value as McpTrustTier }));
 		},
 		[updateValues],
 	);
@@ -272,6 +293,26 @@ export function McpServerForm({
 						}}
 						data-testid="mcp-form-working-directory"
 					/>
+					<Select
+						label={t("pages.mcp.form.trustTier.label", "Trust")}
+						description={t(
+							"pages.mcp.form.trustTier.description",
+							"Sandboxed runs the server with no host filesystem and no network. Privileged host runs it as a normal process on this machine — only for a server that genuinely needs it.",
+						)}
+						data={trustTierData}
+						value={values.trustTier}
+						allowDeselect={false}
+						onChange={handleTrustTierChange}
+						data-testid="mcp-form-trust-tier"
+					/>
+					{values.trustTier === "PrivilegedHost" ? (
+						<Alert color="yellow" variant="light" data-testid="mcp-form-trust-tier-warning">
+							{t(
+								"pages.mcp.form.trustTier.privilegedWarning",
+								"This server will run outside the sandbox, with the same access to your files and network as the engine itself.",
+							)}
+						</Alert>
+					) : null}
 					<McpEnvEditor
 						rows={envRows}
 						errors={errors}

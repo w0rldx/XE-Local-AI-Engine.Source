@@ -2616,36 +2616,6 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeReque
 
 export const zXeLocalAiEngineClientPersistenceMcpTransportKind = z.enum(["Stdio", "Http"]);
 
-export const zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse = z.object({
-	id: z.guid(),
-	name: z.string(),
-	description: z.string().nullish(),
-	transportKind: zXeLocalAiEngineClientPersistenceMcpTransportKind,
-	command: z.string().nullish(),
-	arguments: z.array(z.string()),
-	workingDirectory: z.string().nullish(),
-	env: z.record(z.string(), z.string()),
-	url: z.string().nullish(),
-	enabled: z.boolean(),
-	version: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
-	createdAtUtc: z.int(),
-	updatedAtUtc: z.int(),
-});
-
-export const zXeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = z.object({
-	name: z.string().nullish(),
-	description: z.string().nullish(),
-	transportKind: zXeLocalAiEngineClientPersistenceMcpTransportKind.optional(),
-	command: z.string().nullish(),
-	arguments: z.array(z.string()).nullish(),
-	workingDirectory: z.string().nullish(),
-	env: z.record(z.string(), z.string()).nullish(),
-	url: z.string().nullish(),
-});
-
 export const zXeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientServicesMcpMcpServerApiKeyScope = z.enum(["delegate", "agentic"]);
@@ -2704,23 +2674,8 @@ export const zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogResponse = z.object(
 	tools: z.array(zXeLocalAiEngineClientEndpointsMcpV1ToolCatalogEntryResponse),
 });
 
-export const zXeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse = z.object({
-	items: z.array(zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse),
-});
-
 export const zXeLocalAiEngineClientEndpointsMcpV1SetMcpServerEnabledRequest = z.object({
 	enabled: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest = z.object({
-	name: z.string().nullish(),
-	description: z.string().nullish(),
-	transportKind: zXeLocalAiEngineClientPersistenceMcpTransportKind.optional(),
-	command: z.string().nullish(),
-	arguments: z.array(z.string()).nullish(),
-	workingDirectory: z.string().nullish(),
-	env: z.record(z.string(), z.string()).nullish(),
-	url: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse = z.object({
@@ -5412,6 +5367,56 @@ export const zXeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActio
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
+});
+
+export const zXeLocalAiEngineClientPersistenceMcpTrustTier = z.enum(["Sandboxed", "PrivilegedHost", "BuiltInTrusted"]);
+
+export const zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse = z.object({
+	id: z.guid(),
+	name: z.string(),
+	description: z.string().nullish(),
+	transportKind: zXeLocalAiEngineClientPersistenceMcpTransportKind,
+	command: z.string().nullish(),
+	arguments: z.array(z.string()),
+	workingDirectory: z.string().nullish(),
+	env: z.record(z.string(), z.string()),
+	url: z.string().nullish(),
+	trustTier: zXeLocalAiEngineClientPersistenceMcpTrustTier,
+	enabled: z.boolean(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = z.object({
+	name: z.string().nullish(),
+	description: z.string().nullish(),
+	transportKind: zXeLocalAiEngineClientPersistenceMcpTransportKind.optional(),
+	command: z.string().nullish(),
+	arguments: z.array(z.string()).nullish(),
+	workingDirectory: z.string().nullish(),
+	env: z.record(z.string(), z.string()).nullish(),
+	url: z.string().nullish(),
+	trustTier: zXeLocalAiEngineClientPersistenceMcpTrustTier.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsMcpV1ListMcpServersResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest = z.object({
+	name: z.string().nullish(),
+	description: z.string().nullish(),
+	transportKind: zXeLocalAiEngineClientPersistenceMcpTransportKind.optional(),
+	command: z.string().nullish(),
+	arguments: z.array(z.string()).nullish(),
+	workingDirectory: z.string().nullish(),
+	env: z.record(z.string(), z.string()).nullish(),
+	url: z.string().nullish(),
+	trustTier: zXeLocalAiEngineClientPersistenceMcpTrustTier.optional(),
 });
 
 /**

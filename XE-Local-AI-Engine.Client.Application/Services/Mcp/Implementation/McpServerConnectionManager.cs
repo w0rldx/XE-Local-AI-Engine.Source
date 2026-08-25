@@ -193,7 +193,7 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             client = await _clientFactory.CreateAsync(record, timeoutCts.Token).ConfigureAwait(false);
             var discovered = await client.ListToolsAsync(cancellationToken: timeoutCts.Token).ConfigureAwait(false);
 
-            var tools = BuildRegisteredTools(discovered, slug, _maxToolResultCharacters, _maxInvalidToolCalls, TimeSpan.FromSeconds(_options.ToolCallTimeoutSeconds));
+            var tools = BuildRegisteredTools(discovered, slug, ResolveToolCategory(record), _maxToolResultCharacters, _maxInvalidToolCalls, TimeSpan.FromSeconds(_options.ToolCallTimeoutSeconds));
             return new ConnectResult(new ConnectedServer(client, record.Version, slug, tools), Error: null);
         }
         catch (Exception ex) when (ex is McpException
@@ -239,7 +239,27 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
     ///     offer descriptor (approval ON by default), bounds its server round-trip with the per-call timeout, bounds its
     ///     result with the shared tool-result budget, and wraps the executable in an approval gate.
     /// </summary>
-    private static IReadOnlyList<McpRegisteredTool> BuildRegisteredTools(IList<McpClientTool> discovered, string slug, int maxToolResultCharacters, int maxInvalidToolCalls, TimeSpan toolCallTimeout)
+    /// <summary>
+    ///     The risk class every tool from one server is offered under.
+    ///     <para>
+    ///         <see cref="ToolCategory.Network" /> — "reaches an external/out-of-process surface" — is true of every MCP
+    ///         tool and is the whole story for a loopback HTTP server and for a sandboxed stdio server, neither of which
+    ///         this node grants any host reach. A <see cref="McpTrustTier.PrivilegedHost" /> STDIO server is different in
+    ///         kind: this node launches it as an unconfined child of its own user, so its tools can write files and run
+    ///         commands here. That is <see cref="ToolCategory.WriteExecute" />, and saying so is what lets an operator's
+    ///         node policy tighten the class and what makes the badge in the tool catalog and the category on every audit
+    ///         row truthful. Approval itself is unaffected — every MCP tool is already approval-required and already
+    ///         ineligible for a remembered session approval.
+    ///     </para>
+    /// </summary>
+    private static ToolCategory ResolveToolCategory(McpServerRecord record)
+    {
+        return record is { TransportKind: McpTransportKind.Stdio, TrustTier: McpTrustTier.PrivilegedHost }
+            ? ToolCategory.WriteExecute
+            : ToolCategory.Network;
+    }
+
+    private static IReadOnlyList<McpRegisteredTool> BuildRegisteredTools(IList<McpClientTool> discovered, string slug, ToolCategory category, int maxToolResultCharacters, int maxInvalidToolCalls, TimeSpan toolCallTimeout)
     {
         var registered = new List<McpRegisteredTool>(discovered.Count);
         foreach (var tool in discovered)
@@ -254,8 +274,9 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
                 named.Description,
                 named.JsonSchema.GetRawText(),
                 requiresApproval,
-                // Every MCP tool reaches an external/out-of-process server surface.
-                ToolCategory.Network);
+                // Every MCP tool reaches an external/out-of-process server surface; a PrivilegedHost stdio server also
+                // reaches this host's filesystem and shell. See ResolveToolCategory.
+                category);
 
             // Bound the actual server round-trip with the per-call timeout INNERMOST — below arg-repair and the
             // result budget — so only the SDK call is timed; a stall returns a typed tool-failure result and the run

@@ -61,4 +61,5 @@ public sealed record McpServerInput(
     string? WorkingDirectory,
     IReadOnlyDictionary<string, string> Environment,
     string? Url,
+    McpTrustTier TrustTier,
     bool Enabled);

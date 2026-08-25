@@ -24657,7 +24657,8 @@
           "enabled",
           "version",
           "createdAtUtc",
-          "updatedAtUtc"
+          "updatedAtUtc",
+          "trustTier"
         ],
         "properties": {
           "id": {
@@ -24697,6 +24698,9 @@
           "url": {
             "type": "string",
             "nullable": true
+          },
+          "trustTier": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpTrustTier"
           },
           "enabled": {
             "type": "boolean"
@@ -24765,6 +24769,9 @@
           "url": {
             "type": "string",
             "nullable": true
+          },
+          "trustTier": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpTrustTier"
           }
         }
       },
@@ -25037,6 +25044,9 @@
           "url": {
             "type": "string",
             "nullable": true
+          },
+          "trustTier": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpTrustTier"
           }
         }
       },
@@ -32570,6 +32580,20 @@
             "format": "int32"
           }
         }
+      },
+      "XE_Local_AI_EngineClientPersistenceMcpTrustTier": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Sandboxed",
+          "PrivilegedHost",
+          "BuiltInTrusted"
+        ],
+        "enum": [
+          "Sandboxed",
+          "PrivilegedHost",
+          "BuiltInTrusted"
+        ]
       }
     },
     "securitySchemes": {

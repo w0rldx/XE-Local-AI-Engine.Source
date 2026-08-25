@@ -13,9 +13,10 @@
 | **PrivilegedHost** | Runs as a plain host child, exactly as every stdio server did before this change — the operator's filesystem, the operator's network. Environment is still scrubbed (`InheritEnvironmentVariables = false`). | Explicit per-server operator opt-in on the registration. Never a fallback, never inferred. |
 | **BuiltInTrusted** | Reserved for a transport the engine itself owns. Nothing sets it today. | Engine-owned only: the CRUD surface rejects it, so it cannot be reached from the API or the UI. |
 
-HTTP registrations carry a tier for uniformity but the tier changes nothing about them: an HTTP server is already
-running, this node only opens a socket to it, and the loopback allow-list is the control. They are pinned to
-`PrivilegedHost` and the UI does not offer a choice.
+The tier answers "where does this server's process run", so it is **inert for HTTP**: an HTTP server is already
+running, this node only opens a loopback socket to it, and the allow-list is the control. An HTTP registration is
+normalized to the column default on save and the UI offers no choice — deliberately, so a stored `PrivilegedHost` on a
+row this node never launched can never be read as a grant somebody made.
 
 ## How a `Sandboxed` server is hosted
 
@@ -73,10 +74,11 @@ It is set on the registration, per server, by the operator — a source of autho
 node-wide switch and no inference from the command; a server that needs host access (a browser-driving server, a server
 that manages the operator's own files) is a deliberate decision recorded on the row.
 
-Its tools are **`ToolCategory.WriteExecute`**, not `Network`. Every MCP tool reaches an out-of-process surface, which is
-what `Network` says; a server running unconfined on the host can additionally write files and run commands as the
-engine's user, and the category an operator sees and the node approval policy tightens on should say the stronger of
-the two. `Sandboxed` tools keep `Network`.
+A **stdio** `PrivilegedHost` server's tools are **`ToolCategory.WriteExecute`**, not `Network`. Every MCP tool reaches
+an out-of-process surface, which is what `Network` says; a server this node launched unconfined on the host can
+additionally write files and run commands as the engine's user, and the category an operator sees — and the node
+approval policy tightens on — should say the stronger of the two. Sandboxed stdio tools and every HTTP tool keep
+`Network`, because neither describes a host-write capability this node handed out.
 
 Two properties are already in force for **every** MCP tool and are stated here so they are not re-implemented:
 

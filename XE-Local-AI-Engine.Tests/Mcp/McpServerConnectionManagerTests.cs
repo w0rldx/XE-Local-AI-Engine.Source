@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -55,6 +56,77 @@ public sealed class McpServerConnectionManagerTests
         AssertEx.Equal("mcp__weather__get_forecast", tool.Name);
         AssertEx.True(tool.RequiresApproval, "the per-server tool list defaults to approval-on");
         AssertEx.NotNullOrEmpty(tool.Description);
+    }
+
+    [Test]
+    public async Task RefreshAsync_PrivilegedHostStdioServer_OffersItsToolsAsWriteExecute()
+    {
+        // A PrivilegedHost stdio server is launched by this node as an unconfined child of its own user, so its tools
+        // can write files and run commands here. Network — "reaches an out-of-process surface" — understates that, and
+        // the category is what the operator's badge, the node approval policy and every audit row read.
+        await using var server = await InProcMcpServer.StartAsync("weather",
+            AIFunctionFactory.Create(GetForecast, "get_forecast"));
+        var record = StdioRecord("Weather") with
+        {
+            TrustTier = McpTrustTier.PrivilegedHost
+        };
+        var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
+        await using var manager = CreateManager(registry, new FakeMcpClientFactory((record.Id, server.Client)), record);
+
+        await manager.RefreshAsync();
+
+        var status = manager.GetStatuses().Single(s => s.ServerId == record.Id);
+        AssertEx.True(status.Connected, $"the enabled server must connect (LastError: {status.LastError ?? "none"})");
+
+        var descriptor = registry.GetDescriptors().Single(static d => d.Name == "mcp__weather__get_forecast");
+        AssertEx.Equal(ToolCategory.WriteExecute, descriptor.Category);
+        // The tier raises the CLASS, never lowers the gate: approval is unchanged and the structural pre-wrap stays.
+        AssertEx.True(descriptor.RequiresApproval, "a PrivilegedHost tool still requires approval");
+        AssertEx.True(registry.TryResolve("mcp__weather__get_forecast", out var executable));
+        AssertEx.True(executable is ApprovalRequiredAIFunction, "the executable must still be approval-wrapped");
+    }
+
+    [Test]
+    public async Task RefreshAsync_SandboxedStdioServer_OffersItsToolsAsNetwork()
+    {
+        // The default tier grants no host reach, so Network is the whole story — the same class every MCP tool has
+        // carried since before the tiers existed.
+        await using var server = await InProcMcpServer.StartAsync("weather",
+            AIFunctionFactory.Create(GetForecast, "get_forecast"));
+        var record = StdioRecord("Weather") with
+        {
+            TrustTier = McpTrustTier.Sandboxed
+        };
+        var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
+        await using var manager = CreateManager(registry, new FakeMcpClientFactory((record.Id, server.Client)), record);
+
+        await manager.RefreshAsync();
+
+        var descriptor = registry.GetDescriptors().Single(static d => d.Name == "mcp__weather__get_forecast");
+        AssertEx.Equal(ToolCategory.Network, descriptor.Category);
+    }
+
+    [Test]
+    public async Task RefreshAsync_HttpServer_OffersItsToolsAsNetworkWhateverTheStoredTierSays()
+    {
+        // The tier is inert for HTTP: this node launches nothing, so a stored PrivilegedHost (which the service
+        // normalizes away on write, but which a hand-edited row could still carry) must not raise the class.
+        await using var server = await InProcMcpServer.StartAsync("weather",
+            AIFunctionFactory.Create(GetForecast, "get_forecast"));
+        var record = StdioRecord("Weather") with
+        {
+            TransportKind = McpTransportKind.Http,
+            Command = null,
+            Url = "http://127.0.0.1:8931/sse",
+            TrustTier = McpTrustTier.PrivilegedHost
+        };
+        var registry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
+        await using var manager = CreateManager(registry, new FakeMcpClientFactory((record.Id, server.Client)), record);
+
+        await manager.RefreshAsync();
+
+        var descriptor = registry.GetDescriptors().Single(static d => d.Name == "mcp__weather__get_forecast");
+        AssertEx.Equal(ToolCategory.Network, descriptor.Category);
     }
 
     [Test]
@@ -266,6 +338,7 @@ public sealed class McpServerConnectionManagerTests
             WorkingDirectory: null,
             new Dictionary<string, string>(),
             Url: null,
+            McpTrustTier.PrivilegedHost,
             Enabled: true,
             Version: 1,
             CreatedAtUtc: 0,
