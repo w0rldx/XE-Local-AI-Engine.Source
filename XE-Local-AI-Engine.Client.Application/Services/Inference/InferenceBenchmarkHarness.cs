@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -828,17 +829,15 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         }
     }
 
-    private static double? DeriveRate(string? before, string? after, string tokensMetric, string secondsMetric)
-    {
-        var tokens = Delta(before, after, tokensMetric);
-        var seconds = Delta(before, after, secondsMetric);
-        if (tokens is null || seconds is null || seconds <= 0)
-        {
-            return null;
-        }
-
-        return tokens / seconds;
-    }
+    /// <summary>
+    ///     pp/tg tokens per second from two Prometheus scrapes. The harness never sees llama-server's per-request
+    ///     <c>timings</c> object — it drives the chat client and reads the server's <c>/metrics</c> counters around the
+    ///     call — so only the ARITHMETIC is shared with the benchmark executor's path, through
+    ///     <see cref="TokenThroughput" />; there is no common input to share above it. The counters publish seconds,
+    ///     not milliseconds, which is the one thing that differs between the two derivations.
+    /// </summary>
+    private static double? DeriveRate(string? before, string? after, string tokensMetric, string secondsMetric) =>
+        TokenThroughput.FromSeconds(Delta(before, after, tokensMetric), Delta(before, after, secondsMetric));
 
     private static double? DeriveCacheHitRate(string? baseline, string? afterCold, string? afterWarm)
     {

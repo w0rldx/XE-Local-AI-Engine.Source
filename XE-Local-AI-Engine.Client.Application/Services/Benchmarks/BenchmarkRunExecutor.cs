@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -146,8 +147,7 @@ public sealed class BenchmarkRunExecutor(
             // separately: dividing the turn's total tokens by its wall clock blends prefill into generation, so the same
             // model measured on a long prompt and a short one produced two incomparable numbers. The blended figure
             // remains the fallback for a runtime that reports no timings, so the column never goes empty.
-            var tokensPerSecond = throughput?.GenerationTokensPerSecond
-                                  ?? (terminal.TotalTokens is { } total && durationMs > 0 ? total * 1000d / durationMs : null);
+            var tokensPerSecond = throughput?.GenerationTokensPerSecond ?? TokenThroughput.FromMilliseconds(terminal.TotalTokens, durationMs);
             var metricsEvent = events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.Metrics,
                 new BenchmarkRunStreamPayload(EffectiveContextTokens: effectiveContext,

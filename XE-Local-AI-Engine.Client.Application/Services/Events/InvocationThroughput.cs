@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Events;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+
 /// <summary>
 ///     The separated throughput facts of one completed turn: how long the caller waited for the first token, and how
 ///     the turn's tokens and milliseconds split between prompt processing (pp) and generation (tg). Every member is
@@ -55,11 +57,11 @@ public sealed record InvocationThroughput(
     ///     Decode throughput in tokens per second — the figure <c>llama-bench</c> calls tg. Null unless the provider
     ///     reported both a token count and a decode duration.
     /// </summary>
-    public double? GenerationTokensPerSecond => GenerationTokens is { } tokens && GenerationMs is > 0 ? tokens * 1000d / GenerationMs.Value : null;
+    public double? GenerationTokensPerSecond => TokenThroughput.FromMilliseconds(GenerationTokens, GenerationMs);
 
     /// <summary>
     ///     Prompt-processing throughput in tokens per second — the figure <c>llama-bench</c> calls pp. Null unless the
     ///     provider reported both a token count and a prefill duration.
     /// </summary>
-    public double? PromptTokensPerSecond => PromptTokens is { } tokens && PromptMs is > 0 ? tokens * 1000d / PromptMs.Value : null;
+    public double? PromptTokensPerSecond => TokenThroughput.FromMilliseconds(PromptTokens, PromptMs);
 }

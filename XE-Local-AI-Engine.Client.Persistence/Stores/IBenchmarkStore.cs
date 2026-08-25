@@ -349,10 +349,10 @@ public sealed record BenchmarkRunThroughput(
     int? SegmentCount = null)
 {
     /// <summary>Prompt-processing throughput (pp) in tokens per second, or null when either input is absent.</summary>
-    public double? PromptTokensPerSecond => PromptTokens is { } tokens && PromptMs is > 0 ? tokens * 1000d / PromptMs.Value : null;
+    public double? PromptTokensPerSecond => TokenThroughput.FromMilliseconds(PromptTokens, PromptMs);
 
     /// <summary>Decode throughput (tg) in tokens per second, or null when either input is absent.</summary>
-    public double? GenerationTokensPerSecond => GenerationTokens is { } tokens && GenerationMs is > 0 ? tokens * 1000d / GenerationMs.Value : null;
+    public double? GenerationTokensPerSecond => TokenThroughput.FromMilliseconds(GenerationTokens, GenerationMs);
 }
 
 /// <summary>
