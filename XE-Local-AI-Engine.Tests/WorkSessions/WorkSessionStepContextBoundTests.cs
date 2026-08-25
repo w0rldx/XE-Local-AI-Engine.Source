@@ -380,10 +380,58 @@ public sealed class WorkSessionStepContextBoundTests
         AssertEx.NotEmpty(overBudget.Calls, "A projection one token over the budget must fold.");
     }
 
+    [Test]
+    public async Task ApplyAsync_WithASuppliedModel_CalibratesUnderItRatherThanTheTranscriptModel()
+    {
+        // The supervisor knows which model the UPCOMING step runs on; the transcript only knows the last one. A paused
+        // session repointed to another agent (or an unpinned agent whose node default moved) runs the next step
+        // elsewhere, and calibrating against the previous model folds late - the overflow this bound exists to stop.
+        var store = new TokenEstimatorCalibrationStore();
+        store.RecordObservedUsage(UpcomingModel, estimatedTokens: 10_000, observedInputTokens: 20_000);
+        var correction = store.ResolveObservedCorrection(UpcomingModel);
+        AssertEx.True(correction > 1.0, $"The fixture needs an above-neutral correction to mean anything; measured {correction}.");
+        AssertEx.Equal(1.0, store.ResolveObservedCorrection(SessionModel), "The transcript's model must stay uncalibrated, or the pair below proves nothing.");
+
+        var conversation = Conversation(TranscriptOn(SessionModel));
+        var projected = WorkSessionStepContextBound.Project(conversation, new HeuristicTokenEstimator(store), UpcomingModel);
+        var budget = projected + 1;
+        AssertEx.True(TokenEstimatorCalibrationStore.ApplyObservedCorrection(budget, correction) < projected,
+            "The fixture's budget must straddle the upcoming model's correction.");
+
+        var supplied = await RunBoundAsync(conversation, budget, store, UpcomingModel).ConfigureAwait(false);
+        var transcriptDerived = await RunBoundAsync(conversation, budget, store).ConfigureAwait(false);
+
+        AssertEx.NotEmpty(supplied.Calls, "The supplied model's observed correction must be the one the budget is tightened by.");
+        AssertEx.Empty(transcriptDerived.Calls, "With no supplied model the uncalibrated transcript model applies, and the same budget is not exceeded.");
+    }
+
+    [Test]
+    public async Task ApplyAsync_WithNoSuppliedModel_FallsBackToTheTranscriptModel()
+    {
+        // The fallback still has to work: the agent definition can be gone, or the gate read can have failed, and the
+        // transcript's model is then the best answer available.
+        var store = new TokenEstimatorCalibrationStore();
+        store.SetDivisor(SessionModel, charsPerToken: 2);
+        var estimator = new HeuristicTokenEstimator(store);
+        var conversation = Conversation(TranscriptOn(SessionModel));
+
+        var calibrated = WorkSessionStepContextBound.Project(conversation, estimator, SessionModel);
+        var uncalibrated = WorkSessionStepContextBound.Project(conversation, estimator, UpcomingModel);
+        AssertEx.True(calibrated > uncalibrated, $"The fixture needs the two models to project differently; {calibrated} vs {uncalibrated}.");
+
+        // A budget the uncalibrated projection sits exactly at - so only the transcript model's divisor exceeds it.
+        var fallback = await RunBoundAsync(conversation, uncalibrated, store).ConfigureAwait(false);
+        var supplied = await RunBoundAsync(conversation, uncalibrated, store, UpcomingModel).ConfigureAwait(false);
+
+        AssertEx.NotEmpty(fallback.Calls, "A null supplied model must estimate under the transcript's model, whose divisor puts the projection over the budget.");
+        AssertEx.Empty(supplied.Calls, "Supplying the upcoming model must override the transcript's, leaving the projection at the budget rather than over it.");
+    }
+
     /// <summary>Drives ApplyAsync against one conversation and returns the compaction service it talked to.</summary>
     private static async Task<RecordingCompactionService> RunBoundAsync(NodeChatConversationDto conversation,
         int budgetTokens,
-        TokenEstimatorCalibrationStore store)
+        TokenEstimatorCalibrationStore store,
+        string? effectiveModel = null)
     {
         var persistence = Substitute.For<INodeChatPersistenceService>();
         _ = persistence.GetConversationForTurnAsync(conversation.ConversationId, Arg.Any<CancellationToken>())
@@ -394,11 +442,14 @@ public sealed class WorkSessionStepContextBoundTests
             compaction,
             new HeuristicTokenEstimator(store),
             NullLogger<WorkSessionStepContextBound>.Instance);
-        await sut.ApplyAsync(conversation.ConversationId, budgetTokens).ConfigureAwait(false);
+        await sut.ApplyAsync(conversation.ConversationId, budgetTokens, effectiveModel).ConfigureAwait(false);
         return compaction;
     }
 
     private const string SessionModel = "qwen3.8-27b:Q4_K_M";
+
+    /// <summary>The model a repoint (or a moved node default) puts the NEXT step on - not the one the transcript ran on.</summary>
+    private const string UpcomingModel = "gemma-3-12b:Q5_K_M";
 
     /// <summary>A completed two-message transcript whose assistant turn ran on <paramref name="model" />.</summary>
     private static List<NodeChatPersistedMessageDto> TranscriptOn(string model) =>

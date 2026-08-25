@@ -56,7 +56,21 @@ internal sealed class WorkSessionStepContextBound(
     ///         and has no business retuning a flat policy budget.
     ///     </para>
     /// </summary>
-    public async Task ApplyAsync(Guid conversationId, int budgetTokens, CancellationToken cancellationToken = default)
+    /// <param name="conversationId">The session's owned conversation.</param>
+    /// <param name="budgetTokens">The configured step budget; non-positive disables the bound.</param>
+    /// <param name="effectiveModel">
+    ///     The model the UPCOMING turn will run on, as the supervisor already resolved it for this step
+    ///     (<c>WorkSessionToolGate.InspectAllowListAsync</c>'s verdict). It, not the transcript, is what the estimate
+    ///     and the budget must be calibrated under: a paused session repointed to another agent — or an unpinned agent
+    ///     whose node default model changed — runs the next step on a DIFFERENT model, and the previous model's divisor
+    ///     and correction would fold late on exactly the case the bound exists to prevent. Null (the agent was deleted,
+    ///     or the gate could not be read) falls back to the transcript's model.
+    /// </param>
+    /// <param name="cancellationToken">Cancels the reads; the compaction itself is the caller's own token.</param>
+    public async Task ApplyAsync(Guid conversationId,
+        int budgetTokens,
+        string? effectiveModel = null,
+        CancellationToken cancellationToken = default)
     {
         if (budgetTokens <= 0)
         {
@@ -69,7 +83,7 @@ internal sealed class WorkSessionStepContextBound(
             return;
         }
 
-        var modelName = ResolveTranscriptModel(conversation);
+        var modelName = effectiveModel ?? ResolveTranscriptModel(conversation);
         var projected = Project(conversation, _estimator, modelName);
         var effectiveBudget = TokenEstimatorCalibrationStore.ApplyObservedCorrection(budgetTokens, _estimator.ResolveObservedCorrection(modelName));
         if (projected <= effectiveBudget)
@@ -111,10 +125,10 @@ internal sealed class WorkSessionStepContextBound(
     /// <param name="estimator">The same estimator the context budgeters measure with.</param>
     /// <param name="modelName">
     ///     The model the coming step will run on, so the estimate uses that model's calibrated divisor rather than the
-    ///     uncalibrated chars/4 default. Null resolves it from the transcript — the model the LAST completed assistant
-    ///     message actually ran on, which is the model the next step runs on unless the operator has changed it since.
-    ///     That keeps the resolution local: nothing upstream of here knows the effective model either (a session step
-    ///     sends with no model, and the send path resolves the node default / the bound agent's pin).
+    ///     uncalibrated chars/4 default. The supervisor supplies it from the tool gate's verdict for THIS step. Null
+    ///     falls back to the transcript — the model the LAST completed assistant message ran on — which is right only
+    ///     while nothing has repointed the session or moved the node default since, and is therefore a fallback for
+    ///     when no upcoming model is resolvable rather than the primary source.
     /// </param>
     internal static int Project(NodeChatConversationDto conversation, ITokenEstimator estimator, string? modelName = null)
     {
@@ -154,9 +168,11 @@ internal sealed class WorkSessionStepContextBound(
     }
 
     /// <summary>
-    ///     The model the most recent completed assistant message ran on, or null when the session has not answered yet
-    ///     (the first step, where the transcript is short enough that the divisor cannot matter). Read from the whole
-    ///     message list rather than the selected path: a variant that was not chosen still ran on the same model.
+    ///     FALLBACK only: the model the most recent completed assistant message ran on, or null when the session has
+    ///     not answered yet (the first step, where the transcript is short enough that the divisor cannot matter). Read
+    ///     from the whole message list rather than the selected path: a variant that was not chosen still ran on the
+    ///     same model. It describes the model the LAST turn used, which is not necessarily the next one's — see the
+    ///     <c>effectiveModel</c> parameter on <see cref="ApplyAsync" />.
     /// </summary>
     private static string? ResolveTranscriptModel(NodeChatConversationDto conversation)
     {

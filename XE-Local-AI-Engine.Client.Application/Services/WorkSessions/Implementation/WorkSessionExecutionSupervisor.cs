@@ -371,8 +371,13 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         // otherwise re-sent verbatim for the life of the session, and the step's own tool loop — a single knowledge-base
         // read is capped at 50,000 characters — needs that room. Over budget, the older turns fold into the synopsis the
         // send path splices. Nothing durable is lost: the state block below is rebuilt from the database every step.
+        //
+        // The gate verdict above already resolved which model THIS step will run on, so hand it over: calibration is
+        // per-model, and a session repointed while paused (or an unpinned agent whose node default moved) would
+        // otherwise be measured under the model the LAST step ran on. Null when the agent was deleted or the gate read
+        // failed, which is exactly when the bound's transcript fallback is the best answer available.
         await turnScope.ServiceProvider.GetRequiredService<WorkSessionStepContextBound>()
-                       .ApplyAsync(state.Session.ConversationId, _options.StepContextBudgetTokens, CancellationToken.None)
+                       .ApplyAsync(state.Session.ConversationId, _options.StepContextBudgetTokens, toolGate?.EffectiveModel, CancellationToken.None)
                        .ConfigureAwait(false);
 
         // Published BEFORE the send, not after. By the time a step terminalizes, the invocation resume registry has
