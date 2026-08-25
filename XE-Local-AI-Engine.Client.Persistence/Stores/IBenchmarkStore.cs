@@ -292,7 +292,10 @@ public sealed record BenchmarkStartRunCommand(
     Guid? RepeatGroupId = null,
     int? RepeatIndex = null,
     bool IsWarmup = false,
-    int? InvocationTimeoutSeconds = null);
+    int? InvocationTimeoutSeconds = null,
+    BenchmarkRepeatMode RepeatMode = BenchmarkRepeatMode.Throughput,
+    string? SamplingSeed = null,
+    double? SamplingTemperature = null);
 
 /// <summary>
 ///     Application-owned dependency guard executed by <see cref="IBenchmarkStore.StartRunAsync" /> inside the same
@@ -487,7 +490,10 @@ public sealed record BenchmarkRunRecord(
     Guid? RepeatGroupId = null,
     int? RepeatIndex = null,
     bool IsWarmup = false,
-    int? InvocationTimeoutSeconds = null);
+    int? InvocationTimeoutSeconds = null,
+    BenchmarkRepeatMode RepeatMode = BenchmarkRepeatMode.Throughput,
+    string? SamplingSeed = null,
+    double? SamplingTemperature = null);
 
 /// <summary>
 ///     What freeze decided one phase of a run would launch with, before anything was spawned. Compared against the

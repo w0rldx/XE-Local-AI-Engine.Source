@@ -200,6 +200,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 RepeatGroupId = command.RepeatGroupId,
                 RepeatIndex = command.RepeatIndex,
                 IsWarmup = command.IsWarmup,
+                RepeatMode = command.RepeatMode,
+                SamplingSeed = command.SamplingSeed,
+                SamplingTemperature = command.SamplingTemperature,
                 Version = 1,
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now
@@ -364,7 +367,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                           entity.SegmentCount),
                                   entity.RepeatGroupId,
                                   entity.RepeatIndex,
-                                  entity.IsWarmup))
+                                  entity.IsWarmup,
+
+                                  // Positional, including the generation timeout the listing used to leave defaulted:
+                                  // an expression tree cannot take an out-of-position named argument.
+                                  entity.InvocationTimeoutSeconds,
+                                  entity.RepeatMode,
+                                  entity.SamplingSeed,
+                                  entity.SamplingTemperature))
                               .ToArrayAsync(cancellationToken)
                               .ConfigureAwait(false);
 
@@ -2012,7 +2022,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             RepeatGroupId: entity.RepeatGroupId,
             RepeatIndex: entity.RepeatIndex,
             IsWarmup: entity.IsWarmup,
-            InvocationTimeoutSeconds: entity.InvocationTimeoutSeconds);
+            InvocationTimeoutSeconds: entity.InvocationTimeoutSeconds,
+            RepeatMode: entity.RepeatMode,
+            SamplingSeed: entity.SamplingSeed,
+            SamplingTemperature: entity.SamplingTemperature);
 
     private static BenchmarkRunLaunchIntent? ToIntent(string? variant,
         string? kvCacheType,

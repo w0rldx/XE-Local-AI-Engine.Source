@@ -68,6 +68,75 @@ public sealed class BenchmarkRunFreezeServiceTests
     }
 
     [Test]
+    public async Task Start_InThroughputMode_FreezesOneSamplingAndRecordsItOnEveryRun()
+    {
+        var harness = new FreezeHarness();
+
+        _ = await harness.StartAsync(repeatCount: 3, BenchmarkRepeatMode.Throughput);
+
+        // The default must stay exactly what it was: one snapshot, temperature 0, one seed. Anything else would make
+        // every existing repeat group a different measurement than the one it recorded.
+        AssertEx.Equal(expected: 1, harness.SnapshotsCreated, "A throughput group is one freeze, shared.");
+        AssertEx.True(harness.Commands.TrueForAll(static command => command.RepeatMode == BenchmarkRepeatMode.Throughput));
+        AssertEx.True(harness.Commands.TrueForAll(static command => string.Equals(command.SamplingSeed, "0", StringComparison.Ordinal)),
+            "One fixed seed across the group is what makes the answer identical.");
+        AssertEx.True(harness.Commands.TrueForAll(static command => command.SamplingTemperature is 0d));
+        AssertEx.True(harness.SnapshotInputs.TrueForAll(static input => input.PrimarySampling.Temperature is 0f));
+    }
+
+    [Test]
+    public async Task Start_InAnswerVarianceMode_AdvancesOnlyTheSeedAcrossOneSharedLaunch()
+    {
+        var harness = new FreezeHarness();
+
+        var runs = await harness.StartAsync(repeatCount: 3, BenchmarkRepeatMode.AnswerVariance, temperature: 0.9f);
+
+        AssertEx.Equal(expected: 3, runs.Count);
+        AssertEx.True(harness.Commands.Select(static command => command.SamplingSeed).SequenceEqual(["1", "2", "3"], StringComparer.Ordinal),
+            "Each repeat advances the seed off the base, so the runs differ in exactly one input.");
+        AssertEx.True(harness.Commands.TrueForAll(static command => command.RepeatMode == BenchmarkRepeatMode.AnswerVariance));
+        AssertEx.True(harness.Commands.TrueForAll(static command => Math.Abs((command.SamplingTemperature ?? 0d) - 0.9d) < 0.0001d),
+            "Every run of the group samples at the requested temperature.");
+
+        // The seed and the temperature are SAMPLING. If either reached the launch arguments, the runs of one group
+        // would carry different launch identities and stop being comparable as a launch — which is the whole point of
+        // freezing a group together.
+        AssertEx.Equal(expected: 3, harness.SnapshotsCreated, "A distinct seed is a distinct frozen sampling.");
+        AssertEx.True(harness.SnapshotInputs.TrueForAll(input => input.PrimaryRuntime == harness.SnapshotInputs[0].PrimaryRuntime),
+            "Nothing about the launch may differ across an answer-variance group.");
+        var launchIdentities = harness.Commands.Select(static command => command.PrimaryLaunchIntent?.IntendedLaunchIdentity).Distinct(StringComparer.Ordinal);
+        AssertEx.Equal(expected: 1, launchIdentities.Count(), "One group, one launch identity.");
+    }
+
+    [Test]
+    public async Task Start_InAnswerVarianceModeWithNoTemperature_TakesTheDefault()
+    {
+        var harness = new FreezeHarness();
+
+        _ = await harness.StartAsync(repeatCount: 1, BenchmarkRepeatMode.AnswerVariance);
+
+        AssertEx.True(Math.Abs((AssertEx.NotNull(harness.Command).SamplingTemperature ?? 0d) - BenchmarkRunFreezeService.DefaultAnswerVarianceTemperature)
+                      < 0.0001d,
+            "An omitted temperature takes the everyday default rather than falling back to the deterministic 0.");
+    }
+
+    [Test]
+    [Arguments(0f)]
+    [Arguments(-1f)]
+    [Arguments(2.5f)]
+    public async Task Start_InAnswerVarianceModeWithAnImpossibleTemperature_IsRejectedBeforeAnythingIsFrozen(float temperature)
+    {
+        var harness = new FreezeHarness();
+
+        // Zero would silently be a throughput group wearing an answer-variance label.
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(async () =>
+            await harness.StartAsync(repeatCount: 2, BenchmarkRepeatMode.AnswerVariance, temperature));
+
+        AssertEx.Equal(expected: 0, harness.SnapshotsCreated);
+        AssertEx.Equal(expected: 0, harness.StoreCalls);
+    }
+
+    [Test]
     public async Task Start_ForAPlainSingleRun_LeavesTheRepeatColumnsNull()
     {
         var harness = new FreezeHarness();
@@ -407,6 +476,7 @@ public sealed class BenchmarkRunFreezeServiceTests
             snapshots.Create(Arg.Do<BenchmarkRuntimeSnapshotInput>(input =>
                      {
                          SnapshotInput = input;
+                         SnapshotInputs.Add(input);
                          SnapshotsCreated++;
                      }))
                      .Returns(call => CreateRuntimeSnapshot(call.Arg<BenchmarkRuntimeSnapshotInput>()));
@@ -446,11 +516,19 @@ public sealed class BenchmarkRunFreezeServiceTests
         public int SnapshotsCreated { get; private set; }
         public BenchmarkRuntimeSnapshotInput? SnapshotInput { get; private set; }
 
+        /// <summary>Every snapshot the freeze created, in order — an answer-variance group is several.</summary>
+        public List<BenchmarkRuntimeSnapshotInput> SnapshotInputs { get; } = [];
+
         public async Task<BenchmarkRunRecord> StartAsync(string? kvCacheType = null) =>
-            (await _service.StartAsync(_project.Id, _primaryModel, _project.Version, kvCacheType).ConfigureAwait(false))[0];
+            (await _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, kvCacheType))
+                           .ConfigureAwait(false))[0];
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, bool warmup) =>
-            _service.StartAsync(_project.Id, _primaryModel, _project.Version, kvCacheType: null, repeatCount, warmup);
+            _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, KvCacheType: null, repeatCount, warmup));
+
+        public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, BenchmarkRepeatMode mode, float? temperature = null) =>
+            _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, KvCacheType: null, repeatCount,
+                Warmup: false, mode, temperature));
 
         private static BenchmarkProjectRecord Project(Guid id,
             Guid agentId,

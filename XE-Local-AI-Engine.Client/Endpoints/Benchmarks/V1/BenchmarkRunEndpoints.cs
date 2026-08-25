@@ -100,8 +100,14 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
         {
             // The FIRST run of the group is the response: it is the one that starts, so it is the one an operator's
             // live pane should open on. The rest are reachable through its repeatGroupId.
-            var created = await _runs.StartAsync(req.ProjectId, req.ModelName, req.ExpectedProjectVersion, kvCacheType, req.RepeatCount,
-                                         req.Warmup, ct)
+            var created = await _runs.StartAsync(new BenchmarkRunStartRequest(req.ProjectId,
+                                             req.ModelName,
+                                             req.ExpectedProjectVersion,
+                                             kvCacheType,
+                                             req.RepeatCount,
+                                             req.Warmup,
+                                             req.RepeatMode,
+                                             req.AnswerVarianceTemperature), ct)
                                      .ConfigureAwait(false);
             await Send.ResultAsync(Results.Accepted(value: created[0].ToDetail())).ConfigureAwait(false);
         }
@@ -179,9 +185,15 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunFreezeService ru
 
             try
             {
-                var created = await _runs.StartAsync(req.ProjectId, item.ModelName, expectedVersion, kvCacheType, req.RepeatCount,
-                                             req.Warmup, ct)
-                                         .ConfigureAwait(false);
+                var created = await _runs.StartAsync(new BenchmarkRunStartRequest(req.ProjectId,
+                                                 item.ModelName,
+                                                 expectedVersion,
+                                                 kvCacheType,
+                                                 req.RepeatCount,
+                                                 req.Warmup,
+                                                 req.RepeatMode,
+                                                 req.AnswerVarianceTemperature), ct)
+                                             .ConfigureAwait(false);
                 expectedVersion += created.Count;
                 started.Add(new StartedBenchmarkRunBatchItemResponse
                 {

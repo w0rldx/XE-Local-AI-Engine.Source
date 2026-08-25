@@ -255,7 +255,8 @@ internal static class BenchmarkExportCsv
 {
     private const string Header =
         "rank,modelGroupKey,model,quant,kvCacheType,flashAttention,backend,placement,contextTokens,status,stopReason,"
-        + "repeatGroupId,repeatIndex,isWarmup,totalTokens,tokensPerSecond,ttftMs,promptTokens,promptTokensPerSecond,"
+        + "repeatGroupId,repeatIndex,isWarmup,repeatMode,samplingSeed,samplingTemperature,"
+        + "totalTokens,tokensPerSecond,ttftMs,promptTokens,promptTokensPerSecond,"
         + "generationTokens,generationTokensPerSecond,cachedPromptTokens,segmentCount,durationMs,qualityScore,qualityScoreSource,"
         + "judgeScore,userScore,rankExclusionReason,launchIdentity,receiptHash";
 
@@ -331,6 +332,15 @@ internal static class BenchmarkExportCsv
                .Append(Number(run.RepeatIndex))
                .Append(',')
                .Append(run.IsWarmup ? "true" : "false")
+               .Append(',')
+               .Append(Field(JsonNamingPolicy.CamelCase.ConvertName(run.RepeatMode.ToString())))
+               .Append(',')
+
+               // The one input that differs between the runs of an answer-variance group, so a reader can attribute
+               // the spread without decrypting a snapshot.
+               .Append(Field(run.SamplingSeed))
+               .Append(',')
+               .Append(Rate(run.SamplingTemperature))
                .Append(',')
                .Append(Number(run.TotalTokens))
                .Append(',')

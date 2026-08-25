@@ -159,6 +159,16 @@ public sealed class StartBenchmarkRunRequest
 
     /// <summary>Enqueue one extra run first, flagged as a warm-up: never ranked, never in a group's statistics.</summary>
     public bool Warmup { get; init; }
+
+    /// <summary>
+    ///     What the repeats measure. <c>Throughput</c> (the default) freezes temperature 0 and one seed, so every
+    ///     repeat answers identically and only the machine varies. <c>AnswerVariance</c> advances the seed per repeat
+    ///     at <see cref="AnswerVarianceTemperature" />, so the spread of answers is the measurement.
+    /// </summary>
+    public BenchmarkRepeatMode RepeatMode { get; init; }
+
+    /// <summary>The temperature an <c>AnswerVariance</c> group samples at; omitted takes 0.7. Range above 0 to 2.</summary>
+    public float? AnswerVarianceTemperature { get; init; }
 }
 
 /// <summary>One cell of the launch matrix: a model, optionally pinned to a KV-cache type.</summary>
@@ -189,6 +199,12 @@ public sealed class StartBenchmarkRunBatchRequest
 
     /// <summary>Prepend a warm-up run to every item's group.</summary>
     public bool Warmup { get; init; }
+
+    /// <inheritdoc cref="StartBenchmarkRunRequest.RepeatMode" />
+    public BenchmarkRepeatMode RepeatMode { get; init; }
+
+    /// <inheritdoc cref="StartBenchmarkRunRequest.AnswerVarianceTemperature" />
+    public float? AnswerVarianceTemperature { get; init; }
 }
 
 /// <summary>One matrix cell the node accepted, with the runs it enqueued in queue order.</summary>
@@ -440,6 +456,18 @@ public class BenchmarkRunSummaryResponse
 
     /// <summary>A warm-up run: shown, but never ranked and never counted in a group's statistics.</summary>
     public bool IsWarmup { get; init; }
+
+    /// <summary>What this run's repeat group measures — throughput jitter, or the spread of answers.</summary>
+    public BenchmarkRepeatMode RepeatMode { get; init; }
+
+    /// <summary>
+    ///     The seed this run was frozen with, as a string (a seed is an unconstrained 64-bit value). Null on runs
+    ///     frozen before it was recorded. In an answer-variance group it is the ONE input that differs between runs.
+    /// </summary>
+    public string? SamplingSeed { get; init; }
+
+    /// <summary>The temperature this run was frozen with, or null on a run frozen before it was recorded.</summary>
+    public double? SamplingTemperature { get; init; }
 
     public int? EffectiveContextTokens { get; init; }
     public long? DurationMs { get; init; }
