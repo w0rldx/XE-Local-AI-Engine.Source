@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
 ///     Owns the MCP client connections and keeps the MCP tool registry in sync with the enabled registrations. Each
@@ -195,6 +196,16 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
 
             var tools = BuildRegisteredTools(discovered, slug, ResolveToolCategory(record), _maxToolResultCharacters, _maxInvalidToolCalls, TimeSpan.FromSeconds(_options.ToolCallTimeoutSeconds));
             return new ConnectResult(new ConnectedServer(client, record.Version, slug, tools), Error: null);
+        }
+        catch (SandboxCapabilityNotSupportedException ex)
+        {
+            // The ONE connection failure that is not redacted. Every other message here can echo a command path or a
+            // URL, so it is clamped to a generic reason; this one is engine-authored, names no host path and no
+            // secret, and is the whole point of the Sandboxed tier failing closed — an operator who is told only "the
+            // connection failed" cannot tell "this node cannot sandbox" from "your server is broken".
+            _logger.LogWarning(ex, "MCP server {ServerId} could not be started under its trust tier; it will contribute no tools.", record.Id);
+            await DisposePartialClientAsync(client, record.Version, slug).ConfigureAwait(false);
+            return new ConnectResult(Server: null, ex.Message);
         }
         catch (Exception ex) when (ex is McpException
                                        or HttpRequestException
