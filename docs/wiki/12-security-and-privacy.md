@@ -482,6 +482,17 @@ socket is root-equivalent on Linux is additional privilege even where the contai
 none can honour the declaration the call throws `SandboxCapabilityNotSupportedException` naming the unmet axis. There
 is no fallback and no downgrade.
 
+The **isolation floor is a property, not a mechanism**: at its `Filesystem` value it asks that the host filesystem be
+absent from the sandbox's view, and it is satisfied by any backend advertising `SupportsHostFilesystemBoundary` — the
+bubblewrap chain (probe-exercised) and a hardened container (read-only rootfs, engine-generated mounts, no host
+namespaces, all read back and fail-closed on mismatch) both qualify. That is deliberately **not** the same flag as
+`SupportsFilesystemIsolation`, which means the narrower "serves `SandboxIsolationMode.Filesystem`" — a specific
+create-request contract of named read-only host trees, a synthetic `/etc` and a jail-backed `/tmp`. The container
+provider has the property and implements none of that contract, and still refuses the mode on a create request; a
+single flag asked to mean both would either lie to `run_python` or deny a container an isolation level it genuinely
+has. The isolation panel on the Development page reports the **property**, which is why a container-served role reads
+as fully isolated.
+
 Two consequences a security reader should hold on to.
 
 - **The strongest guarantee in the previous design is weakened in kind, deliberately.** "Docker cannot be wired into

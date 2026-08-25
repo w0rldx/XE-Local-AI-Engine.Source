@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
@@ -184,6 +185,25 @@ public sealed class SandboxRequirementsSelectionTests
             () => SandboxProviderCapabilities.None));
     }
 
+    /// <summary>
+    ///     The floor is the PROPERTY, so a backend with the host-filesystem boundary clears it even though it does not
+    ///     serve <see cref="SandboxIsolationMode.Filesystem" />'s create-request contract. What keeps <c>run_python</c>
+    ///     off the container backend is the toolchain axis, not this one — asserted here so a later reader does not
+    ///     "restore" the floor check to the narrower mechanism flag and think nothing changed.
+    /// </summary>
+    [Test]
+    public void FindUnmetAxis_WhenOnlyTheBoundaryIsAdvertised_TheIsolationFloorIsStillMet()
+    {
+        AssertEx.Null(SandboxProviderSelector.FindUnmetAxis(SandboxWorkloads.RunPython,
+            SandboxToolchainSource.HostToolchain,
+            () => SandboxProviderCapabilities.SupportsHostFilesystemBoundary));
+
+        AssertEx.Equal("toolchain source (HostToolchain)",
+            SandboxProviderSelector.FindUnmetAxis(SandboxWorkloads.RunPython,
+                SandboxToolchainSource.EngineApprovedImage,
+                () => SandboxProviderCapabilities.SupportsHostFilesystemBoundary));
+    }
+
     [Test]
     public void FindUnmetAxis_WhenTheIsolationFloorIsUnmet_NamesIt()
     {
@@ -194,17 +214,21 @@ public sealed class SandboxRequirementsSelectionTests
     }
 
     /// <summary>
-    ///     <c>run_python</c> declares both a filesystem floor and no egress, and a backend that advertises filesystem
-    ///     isolation satisfies both — the isolated chain's own <c>--unshare-net</c> is what enforces the second, so
+    ///     <c>run_python</c> declares both a filesystem floor and no egress, and a backend that has the filesystem
+    ///     boundary satisfies both — the isolated chain's own <c>--unshare-net</c> is what enforces the second, so
     ///     gating on the separate egress mechanism would refuse a host that isolates perfectly well. This mirrors the
     ///     reasoning already written into <c>ComputeToolGateway.ExecuteAsync</c>.
+    ///     <para>
+    ///         Both filesystem flags are supplied because that is what the process backend really advertises: one
+    ///         probe result sets them together. The floor is checked against the boundary flag alone.
+    ///     </para>
     /// </summary>
     [Test]
     public void FindUnmetAxis_WhenIsolationIsAdvertised_DoesNotAlsoRequireTheSeparateEgressCapability()
     {
         AssertEx.Null(SandboxProviderSelector.FindUnmetAxis(SandboxWorkloads.RunPython,
             SandboxToolchainSource.HostToolchain,
-            () => SandboxProviderCapabilities.SupportsFilesystemIsolation));
+            () => SandboxProviderCapabilities.SupportsFilesystemIsolation | SandboxProviderCapabilities.SupportsHostFilesystemBoundary));
     }
 
     [Test]
@@ -284,6 +308,7 @@ public sealed class SandboxRequirementsSelectionTests
         services.AddOptions<LocalContainerOptions>().Bind(configuration.GetSection(LocalContainerOptions.SectionName));
         services.AddOptions<ContainerSandboxOptions>().Bind(configuration.GetSection(ContainerSandboxOptions.SectionName));
         services.AddSingleton(Substitute.For<IDockerRuntimeClientFactory>());
+        services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(Path.Combine(Path.GetTempPath(), "xe-selection-tests")));
         services.AddSingleton<FakeSandboxRuntimeProvider>();
         services.AddSingleton<ProcessSandboxRuntimeProvider>();
         if (registerContainerBackend)

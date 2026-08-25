@@ -147,7 +147,14 @@ internal static class DevelopmentContractMapper
         ArgumentNullException.ThrowIfNull(containment);
 
         var capabilities = provider.Capabilities;
-        var filesystem = capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation);
+        // The PROPERTY flag, not SupportsFilesystemIsolation. This surface answers "can a command here see the host
+        // filesystem", and a hardened container cannot — read-only rootfs, engine-generated mounts only, no host
+        // namespaces, all read back and fail-closed on mismatch. SupportsFilesystemIsolation means something narrower:
+        // "serves SandboxIsolationMode.Filesystem", the bubblewrap chain's own create-request contract, which the
+        // container provider refuses. Reading that flag here reported a container role as merely Confined, which
+        // understated the boundary rather than overstating it — but a report that is wrong in the safe direction is
+        // still wrong, and an operator reading "Confined" would go looking for a hardening step that is already done.
+        var filesystem = capabilities.HasFlag(SandboxProviderCapabilities.SupportsHostFilesystemBoundary);
         var network = capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy);
         var limits = capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits);
         var enforced = (filesystem ? 1 : 0) + (network ? 1 : 0) + (limits ? 1 : 0);
@@ -189,6 +196,8 @@ internal static class DevelopmentContractMapper
                    ?? "the supervised process sandbox did not advertise a filesystem boundary on this host";
         }
 
+        // The container provider no longer reaches here: it advertises the boundary, so this projection reports no
+        // reason for it. The generic arm stays for a backend added later that advertises neither.
         return string.Equals(providerName, FakeSandboxRuntimeProvider.Name, StringComparison.Ordinal)
             ? "the deterministic in-memory provider has no mount namespace and never will"
             : $"the '{providerName}' sandbox provider does not advertise a filesystem boundary";

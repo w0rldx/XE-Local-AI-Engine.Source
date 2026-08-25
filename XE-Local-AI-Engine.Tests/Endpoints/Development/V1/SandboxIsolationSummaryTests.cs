@@ -86,27 +86,31 @@ public sealed class SandboxIsolationSummaryTests
     }
 
     [Test]
-    public async Task ToIsolationSummary_ForTheContainerProviderOnTheDevelopmentRole_ReportsConfinedNotIsolated()
+    public async Task ToIsolationSummary_ForTheContainerProviderOnTheDevelopmentRole_ReportsIsolated()
     {
-        // The container provider advertises egress denial, ceilings and read-only mounts, but NOT a filesystem
-        // boundary — so this projection must not award it the top level. Inventing the flag here would be exactly the
-        // dishonesty SupportsFilesystemIsolation exists to prevent; the fix belongs in the provider.
+        // The fix this test's predecessor asked for landed in the provider, as it said it should. A hardened container
+        // DOES have a filesystem boundary — read-only rootfs, engine-generated mounts only, no host namespaces, every
+        // setting read back and fail-closed on mismatch — and it now advertises
+        // SupportsHostFilesystemBoundary to say so. What it still does not advertise is
+        // SupportsFilesystemIsolation, which means "serves SandboxIsolationMode.Filesystem", the bubblewrap chain's
+        // own create-request contract; this projection reads the property, not that mechanism, which is what its own
+        // FilesystemIsolation contract says ("the host filesystem absent from its mount namespace").
         await using var provider = CreateDockerProvider();
 
         var summary = DevelopmentContractMapper.ToIsolationSummary("development", provider, FullyContainedHost());
 
         AssertEx.Equal(DockerSandboxRuntimeProvider.Name, summary.Provider);
         AssertEx.Equal("docker", summary.Backend);
-        AssertEx.Equal("Confined", summary.Level);
+        AssertEx.Equal("Isolated", summary.Level);
         AssertEx.True(summary.NetworkIsolation);
         AssertEx.True(summary.ResourceLimits);
         AssertEx.True(summary.ReadOnlyMounts);
-        AssertEx.False(summary.FilesystemIsolation);
+        AssertEx.True(summary.FilesystemIsolation);
+        AssertEx.Null(summary.FilesystemIsolationUnavailableReason);
 
-        // The host bwrap measurement is the process provider's business and nobody else's, so a container role never
-        // borrows its reason.
-        AssertEx.Equal("the 'docker' sandbox provider does not advertise a filesystem boundary",
-            summary.FilesystemIsolationUnavailableReason);
+        // The narrower mechanism flag is still absent, and must stay absent: the provider refuses
+        // SandboxIsolationMode.Filesystem on a create request, and advertising it would make that refusal a surprise.
+        AssertEx.False(provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation));
     }
 
     [Test]
@@ -165,8 +169,11 @@ public sealed class SandboxIsolationSummaryTests
 
     private static DockerSandboxRuntimeProvider CreateDockerProvider()
     {
+        // The node data directory is only ever read when a container is created; this projection reads Capabilities,
+        // which contacts nothing and touches no path, so a name that is never resolved is the honest argument here.
         return new DockerSandboxRuntimeProvider(new StaticOptionsMonitor<ContainerSandboxOptions>(DockerSandboxHardeningTests.Options()),
             new StubClientFactory(),
+            new FakeNodeDataDirectory(Path.Combine(Path.GetTempPath(), "xe-isolation-summary-tests")),
             TimeProvider.System,
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
     }

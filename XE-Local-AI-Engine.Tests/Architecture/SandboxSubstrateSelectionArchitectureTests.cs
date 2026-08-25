@@ -4,6 +4,7 @@ using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
@@ -52,7 +53,8 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
                                                    | SandboxProviderCapabilities.SuppliesHostToolchain
                                                    | SandboxProviderCapabilities.SupportsResourceLimits
                                                    | SandboxProviderCapabilities.SupportsNetworkPolicy
-                                                   | SandboxProviderCapabilities.SupportsFilesystemIsolation,
+                                                   | SandboxProviderCapabilities.SupportsFilesystemIsolation
+                                                   | SandboxProviderCapabilities.SupportsHostFilesystemBoundary,
             [DockerSandboxRuntimeProvider.Name] = SandboxProviderCapabilities.SupportsCopyInto
                                                   | SandboxProviderCapabilities.SupportsCopyOut
                                                   | SandboxProviderCapabilities.SupportsReadOnlyMounts
@@ -63,6 +65,7 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
                                                   | SandboxProviderCapabilities.SupportsKill
                                                   | SandboxProviderCapabilities.SupportsTrustedHostWorkspace
                                                   | SandboxProviderCapabilities.SuppliesImageToolchain
+                                                  | SandboxProviderCapabilities.SupportsHostFilesystemBoundary
         };
 
     /// <summary>
@@ -82,8 +85,10 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
             // Coder creates no sandbox: it attaches to AgentHome's, so it must resolve the same backend.
             [nameof(SandboxWorkloads.Coder)] = ["fake", "process"],
             [nameof(SandboxWorkloads.WorkSession)] = ["fake", "process"],
-            // run_python is the one workload with a filesystem floor, and the fake cannot supply one — so unlike every
-            // other row, the deterministic backend is excluded here and the refusal is the feature.
+            // run_python is the one workload with a filesystem floor, and the fake has no mount namespace — so unlike
+            // every other row the deterministic backend is excluded here and the refusal is the feature. The container
+            // backend clears that floor (it advertises SupportsHostFilesystemBoundary) and is still excluded, on the
+            // toolchain axis alone: compute runs an engine-provisioned host interpreter and never asks for an image.
             [nameof(SandboxWorkloads.RunPython)] = ["process"],
             [nameof(SandboxWorkloads.DevelopmentModeHostToolchain)] = ["fake", "process"],
             // The ONLY row a container backend appears in, and the only declaration that names an image toolchain.
@@ -195,6 +200,7 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
         services.AddOptions<LocalContainerOptions>().Bind(configuration.GetSection(LocalContainerOptions.SectionName));
         services.AddOptions<ContainerSandboxOptions>().Bind(configuration.GetSection(ContainerSandboxOptions.SectionName));
         services.AddSingleton(Substitute.For<IDockerRuntimeClientFactory>());
+        services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(Path.Combine(Path.GetTempPath(), "xe-substrate-arch-tests")));
         services.AddSingleton<FakeSandboxRuntimeProvider>();
         services.AddSingleton<ProcessSandboxRuntimeProvider>();
         services.AddSingleton<DockerSandboxRuntimeProvider>();

@@ -261,7 +261,12 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
             if (containment.SupportsFilesystemIsolation)
             {
-                capabilities |= SandboxProviderCapabilities.SupportsFilesystemIsolation;
+                // Both flags, from one probe result, because on this backend they are one fact: the bubblewrap chain
+                // the probe exercises is BOTH the SandboxIsolationMode.Filesystem contract and the way the host
+                // filesystem stops being visible. They are separate flags because the container backend has the second
+                // without the first, not because this one can have either alone.
+                capabilities |= SandboxProviderCapabilities.SupportsFilesystemIsolation
+                                | SandboxProviderCapabilities.SupportsHostFilesystemBoundary;
             }
 
             return capabilities;

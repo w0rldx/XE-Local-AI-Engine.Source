@@ -33,8 +33,16 @@ public sealed record SandboxRequirements
     public required SandboxToolchainSource Toolchain { get; init; }
 
     /// <summary>
-    ///     The WEAKEST filesystem separation this workload will accept. There is deliberately no default value: a
-    ///     declaration that omits it does not compile.
+    ///     The WEAKEST filesystem separation this workload will accept, as a PROPERTY: at
+    ///     <see cref="SandboxIsolationMode.Filesystem" />, the host filesystem must be absent from the sandbox's view.
+    ///     It does not name a mechanism, and is satisfied by any backend advertising
+    ///     <see cref="SandboxProviderCapabilities.SupportsHostFilesystemBoundary" /> — the bubblewrap chain and a
+    ///     hardened container both qualify. A workload that needs one mechanism's specific create-request contract
+    ///     asks for it per call on <see cref="SandboxCreateRequest.Isolation" />, which is refused fail-closed by a
+    ///     backend that does not implement it.
+    ///     <para>
+    ///         There is deliberately no default value: a declaration that omits it does not compile.
+    ///     </para>
     ///     <para>
     ///         That is the second of the three mechanisms ADR 0007 Decision 4 uses to replace the compile-time guard.
     ///         A defaulted field would let a new consumer inherit the weakest posture by saying nothing, which is

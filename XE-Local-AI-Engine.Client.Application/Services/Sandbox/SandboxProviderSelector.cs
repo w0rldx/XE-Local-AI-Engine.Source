@@ -191,8 +191,13 @@ internal static class SandboxProviderSelector
             return $"toolchain source ({requirements.Toolchain})";
         }
 
+        // The FLOOR is the property — the host filesystem absent from the sandbox's view — so it is checked against
+        // SupportsHostFilesystemBoundary, not against SupportsFilesystemIsolation. The latter names one mechanism's
+        // create-request contract, and gating the floor on it would refuse the container backend an isolation level it
+        // genuinely provides. Which mechanism a workload also needs is a per-call matter for SandboxCreateRequest,
+        // where run_python asks for the bwrap contract by name and is refused fail-closed without it.
         if (requirements.IsolationFloor == SandboxIsolationMode.Filesystem
-            && !capabilities().HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation))
+            && !capabilities().HasFlag(SandboxProviderCapabilities.SupportsHostFilesystemBoundary))
         {
             return $"isolation floor ({requirements.IsolationFloor})";
         }
