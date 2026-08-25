@@ -4406,6 +4406,8 @@
 			"events": {
 				"empty": "In dieser Sitzung ist noch nichts passiert.",
 				"meta": "Schritt {{step}} · #{{sequence}}",
+				"consumption": "{{calls}}/{{cap}} Provider-Aufrufe · {{tools}} Tool-Aufrufe · ~{{tokens}} geschätzte Eingabe-Tokens",
+				"consumptionReported": "{{tokens}} gemeldet",
 				"showDetail": "Details anzeigen",
 				"hideDetail": "Details ausblenden",
 				"loadMore": "Mehr laden",
