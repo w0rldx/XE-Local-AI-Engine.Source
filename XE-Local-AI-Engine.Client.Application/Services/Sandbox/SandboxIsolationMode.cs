@@ -18,6 +18,14 @@ public enum SandboxIsolationMode
     ///     minimal <c>/etc</c>, explicitly named read-only trees, and one writable directory. A provider that does not
     ///     advertise <see cref="SandboxProviderCapabilities.SupportsFilesystemIsolation" /> REJECTS this fail-closed
     ///     rather than serving a weaker sandbox — the point of asking for it is to be told when it is not there.
+    ///     <para>
+    ///         On a CREATE REQUEST this names that whole contract, mechanism included, which is why a container
+    ///         provider refuses it despite having the boundary: it implements no <see cref="SandboxCreateRequest.ReadOnlyTrees" /> binding,
+    ///         no synthetic <c>/etc</c> and no jail-backed <c>/tmp</c>. As a
+    ///         <see cref="SandboxRequirements.IsolationFloor" /> it names only the PROPERTY — the host filesystem
+    ///         absent from the sandbox's view — and is checked against
+    ///         <see cref="SandboxProviderCapabilities.SupportsHostFilesystemBoundary" /> instead.
+    ///     </para>
     /// </summary>
     Filesystem = 1
 }

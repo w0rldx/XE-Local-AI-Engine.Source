@@ -121,7 +121,17 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         | SandboxProviderCapabilities.SupportsCommandCancellation
         | SandboxProviderCapabilities.SupportsAttach
         | SandboxProviderCapabilities.SupportsKill
-        | SandboxProviderCapabilities.SupportsTrustedHostWorkspace;
+        | SandboxProviderCapabilities.SupportsTrustedHostWorkspace
+        // The reason this backend exists (ADR 0004 Context): a confinement mechanism restricts what a process may
+        // touch, but the process still runs against the HOST's SDKs. This one does not — and it cannot offer the
+        // host's toolchain either, which is why the two flags are exclusive rather than additive.
+        | SandboxProviderCapabilities.SuppliesImageToolchain
+        // The host filesystem is absent from this sandbox by construction — read-only rootfs, engine-generated mounts
+        // only, no host namespaces — and every create reads those settings back and fails closed on any mismatch, so a
+        // container that does not have the property is never handed to a caller. Note what is deliberately NOT here:
+        // SupportsFilesystemIsolation, which means "serves SandboxIsolationMode.Filesystem", a different contract this
+        // provider still refuses below.
+        | SandboxProviderCapabilities.SupportsHostFilesystemBoundary;
 
     public async ValueTask DisposeAsync()
     {

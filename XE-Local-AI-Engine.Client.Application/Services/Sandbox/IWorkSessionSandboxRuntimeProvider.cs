@@ -9,10 +9,10 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 ///         is a per-feature property of the type system rather than of a registration someone has to keep correct.
 ///     </para>
 ///     <para>
-///         It reuses <see cref="IAgentSandboxRuntimeProvider" />'s implementations — the deterministic fake and the
-///         jailed process provider — and, like that role, structurally cannot receive the container provider: ADR 0004
-///         permits Docker for Development Mode execution only, so <c>DockerSandboxRuntimeProvider</c> does not implement
-///         this interface and wiring it here would be a compile error rather than a review catch.
+///         It declares <see cref="SandboxWorkloads.WorkSession" />, which is AgentHome's declaration, so it resolves
+///         the same backend and the same instance. Like that role it cannot receive a container backend: the
+///         declaration names <see cref="SandboxToolchainSource.HostToolchain" />, no container backend supplies one,
+///         and <c>DockerSandboxRuntimeProvider</c> does not implement this interface either.
 ///     </para>
 /// </summary>
 public interface IWorkSessionSandboxRuntimeProvider : ISandboxRuntimeProvider;
