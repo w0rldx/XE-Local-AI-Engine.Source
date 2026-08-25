@@ -132,7 +132,7 @@ Obtain independent global-pressure evidence for AMD/Intel while preserving llama
 
 **Current XE behavior**
 
-`HardwareProfiler` obtains NVIDIA total/free bytes via `nvidia-smi`. Linux AMD/Intel returns unknown VRAM; the Windows non-NVIDIA DXGI seam is also deferred (`XE-Local-AI-Engine.Providers.Capabilities/Implementation/HardwareProfiler.cs:110-140,197-206,302-321`). Unknown VRAM forces `GpuAccelAvailable=false`. The runtime audit separately calls `--list-devices`, and the optimizer already records global-free and llama.cpp process-budget readings independently (`XE-Local-AI-Engine.Client.Application/Services/Inference/InferenceProfileService.cs:305-317`). The context allocator requires stable host evidence before consuming the process budget (`XE-Local-AI-Engine.Client.Application/Services/Capacity/ProcessContextAllocationResolver.cs:417-474`). This separation is load-bearing: under WDDM, XE measured 492 MiB globally free while llama.cpp reported a 29,697 MiB process residency budget (`docs/agent-knowledge.md:311-314,775-781`).
+`HardwareProfiler` obtains NVIDIA total/free bytes via `nvidia-smi`. Linux AMD/Intel returns unknown VRAM; the Windows non-NVIDIA DXGI seam is also deferred (`XE-Local-AI-Engine.Providers.Capabilities/Implementation/HardwareProfiler.cs:110-140,197-206,302-321`). Unknown VRAM forces `GpuAccelAvailable=false`. The runtime audit separately calls `--list-devices`, and the optimizer already records global-free and llama.cpp process-budget readings independently (`XE-Local-AI-Engine.Client.Application/Services/Inference/InferenceProfileService.cs:305-317`). The context allocator requires stable host evidence before consuming the process budget (`XE-Local-AI-Engine.Client.Application/Services/Capacity/ProcessContextAllocationResolver.cs:417-474`). This separation is load-bearing: under WDDM, XE measured 492 MiB globally free while llama.cpp reported a 29,697 MiB process residency budget ([WSL2 hardware and VRAM readers](../agent-knowledge-evidence.md#wsl2-hardware-and-vram-readers)).
 
 **Proposed change**
 
@@ -476,7 +476,7 @@ Every normal spawn must continue to emit `--no-warmup --parallel 1`; do not benc
 
 **Evidence**
 
-Current upstream replaces mmap/mlock flags with `--load-mode`; `auto` normally chooses mmap, while mlock prevents paging and consumes real resident RAM. See [server loading options](https://github.com/ggml-org/llama.cpp/blob/9558fa44c92746a58dd07ad1bf0c889715b938a6/tools/server/README.md). XE's measured 45-110s launch warmup history and the paid-for spawn/load invariants are documented at `docs/agent-knowledge.md:743-758`; they outweigh a generic upstream default for the normal spawn path.
+Current upstream replaces mmap/mlock flags with `--load-mode`; `auto` normally chooses mmap, while mlock prevents paging and consumes real resident RAM. See [server loading options](https://github.com/ggml-org/llama.cpp/blob/9558fa44c92746a58dd07ad1bf0c889715b938a6/tools/server/README.md). XE's measured 45-110s launch warmup history is preserved under [large-model launch warmup timing](../agent-knowledge-evidence.md#large-model-launch-warmup-timing); together with the paid-for spawn/load invariants, it outweighs a generic upstream default for the normal spawn path.
 
 **Expected benefit**
 
