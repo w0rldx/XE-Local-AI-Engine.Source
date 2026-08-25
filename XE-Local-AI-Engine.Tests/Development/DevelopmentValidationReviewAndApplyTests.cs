@@ -622,16 +622,22 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
 
         // G1's acceptance criterion, asserted on what the run ACTUALLY asked for rather than on what this host can
         // do. A full attempt against the synthetic solution — coder, then the whole validation gate — completed green
-        // while every agent-facing sandbox it created was denied egress, and the only sandbox that had egress was the
-        // short-lived warm restore.
+        // while every agent-facing sandbox it created carried the posture this backend can actually serve, and the
+        // only sandbox that had egress by design was the short-lived warm restore. The agent-facing posture is
+        // capability-gated (Option B), so it is computed from the same backend the fixture wired rather than assumed.
         AssertEx.NotEmpty(_sandboxCreates.Where(static request => request.RuntimeProfile == "development-warm"));
         AssertEx.Empty(_sandboxCreates.Where(static request => request.RuntimeProfile == "development-warm"
                                                                && request.NetworkPolicy != SandboxNetworkPolicy.Unrestricted));
 
+        using var backend = new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()), TimeProvider.System);
+        var expectedAgentFacingPolicy = backend.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy)
+            ? SandboxNetworkPolicy.None
+            : SandboxNetworkPolicy.Unrestricted;
+
         var agentFacing = _sandboxCreates.Where(static request => request.RuntimeProfile == "development-local").ToArray();
         AssertEx.NotEmpty(agentFacing);
-        AssertEx.Empty(agentFacing.Where(static request => request.NetworkPolicy != SandboxNetworkPolicy.None),
-            "this host advertises SupportsNetworkPolicy, so every agent-facing Development sandbox must have been created denied.");
+        AssertEx.Empty(agentFacing.Where(request => request.NetworkPolicy != expectedAgentFacingPolicy),
+            "the backend's advertised SupportsNetworkPolicy decides the posture: None where it can deny egress, Unrestricted where it cannot (Option B).");
         AssertEx.Equal(expected: 0, outcome.Failed);
 
         // Only the test command carries a result. A build or a whitespace check has none, and must not be given an
