@@ -72,23 +72,23 @@ describe("SandboxIsolationPanel", () => {
 			{
 				role: "agent-home",
 				provider: "process",
-				backend: "bwrap",
-				level: "Isolated",
-				filesystemIsolation: true,
+				backend: "process",
+				level: "Confined",
+				filesystemIsolation: false,
 				networkIsolation: true,
 				resourceLimits: true,
 				readOnlyMounts: false,
+				filesystemIsolationUnavailableReason: "bwrap is not installed",
 			},
 			{
 				role: "development",
 				provider: "docker",
 				backend: "docker",
-				level: "Confined",
-				filesystemIsolation: false,
+				level: "Isolated",
+				filesystemIsolation: true,
 				networkIsolation: true,
 				resourceLimits: true,
 				readOnlyMounts: true,
-				filesystemIsolationUnavailableReason: "the 'docker' sandbox provider does not advertise a filesystem boundary",
 			},
 			{
 				role: "work-session",
@@ -103,8 +103,8 @@ describe("SandboxIsolationPanel", () => {
 			},
 		]);
 
-		expect(screen.getByTestId("sandbox-isolation-level-agent-home").textContent).toBe("Isolated");
-		expect(screen.getByTestId("sandbox-isolation-level-development").textContent).toBe("Confined");
+		expect(screen.getByTestId("sandbox-isolation-level-agent-home").textContent).toBe("Confined");
+		expect(screen.getByTestId("sandbox-isolation-level-development").textContent).toBe("Isolated");
 		expect(screen.getByTestId("sandbox-isolation-level-work-session").textContent).toBe("None");
 
 		// The mixed-node case the per-role shape exists for: one provider per role, not one posture per node.
@@ -112,8 +112,10 @@ describe("SandboxIsolationPanel", () => {
 		expect(screen.getByTestId("sandbox-isolation-provider-development").textContent).toBe("docker");
 		expect(screen.getByTestId("sandbox-isolation-readonly-development").textContent).toBe("Yes");
 
-		// An isolated role has nothing to explain, so it gets no reason line.
-		expect(screen.queryByTestId("sandbox-isolation-reason-agent-home")).toBeNull();
+		// An isolated role has nothing to explain, so it gets no reason line. The container-served role is the isolated
+		// one here: a hardened container has the host-filesystem boundary the level is derived from, and the process
+		// role on a host without bwrap is the one that has to explain itself.
+		expect(screen.queryByTestId("sandbox-isolation-reason-development")).toBeNull();
 	});
 
 	it("renders nothing rather than an empty table when the backend reported no roles", () => {
