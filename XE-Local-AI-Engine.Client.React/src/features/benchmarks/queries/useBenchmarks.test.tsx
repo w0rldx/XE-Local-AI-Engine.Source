@@ -154,25 +154,33 @@ describe("benchmark queries over the real client", () => {
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		expect(observedUrl).toContain("page=1");
-		expect(observedUrl).toContain("pageSize=100");
+		expect(observedUrl).toContain("pageSize=200");
 	});
 
-	// A matrix launch can create more runs than one page holds. `loadMore` asks for a BIGGER first page rather than a
-	// second one, because the node ranks project-wide and returns the page already ordered — appending a second page
-	// would leave the table ranking a list assembled from two reads.
-	it("grows the page on demand and reports how many runs the project has", async () => {
-		const observedPageSizes: string[] = [];
+	// A matrix launch can create more runs than one page holds, and the node REFUSES a pageSize above 200 with a 400
+	// (`ListBenchmarkRunsEndpoint`). So the pages are appended rather than one page grown — safe because the ranking is
+	// project-wide and the pages are contiguous slices of that one order. The 400 route is the regression guard: a
+	// hook that grew the page instead would fail its third read on any project with more than 400 runs.
+	it("appends further pages instead of asking for a page the node refuses", async () => {
+		const totalCount = 450;
+		const observed: string[] = [];
 		server.use(
 			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), ({ request }) => {
-				const pageSize = Number(new URL(request.url).searchParams.get("pageSize") ?? 0);
-				observedPageSizes.push(String(pageSize));
+				const params = new URL(request.url).searchParams;
+				const page = Number(params.get("page") ?? 1);
+				const pageSize = Number(params.get("pageSize") ?? 0);
+				observed.push(`${page}/${pageSize}`);
+				if (pageSize > 200) {
+					return HttpResponse.json({ errors: { pageSize: ["pageSize must be between 1 and 200."] } }, { status: 400 });
+				}
+				const offset = (page - 1) * pageSize;
 				return HttpResponse.json({
-					items: Array.from({ length: Math.min(pageSize, 150) }, (_, index) =>
-						runRow({ id: `bbbbbbbb-0000-4000-8000-${String(index).padStart(12, "0")}` }),
+					items: Array.from({ length: Math.max(0, Math.min(pageSize, totalCount - offset)) }, (_, index) =>
+						runRow({ id: `bbbbbbbb-0000-4000-8000-${String(offset + index).padStart(12, "0")}` }),
 					),
-					page: 1,
+					page,
 					pageSize,
-					totalCount: 150,
+					totalCount,
 					rankCohort: { rankedCount: 0, totalScored: 0 },
 				});
 			}),
@@ -181,13 +189,37 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useBenchmarkRuns(projectId), { wrapper });
 
-		await waitFor(() => expect(result.current.data?.items).toHaveLength(100));
-		expect(result.current.data?.totalCount).toBe(150);
+		await waitFor(() => expect(result.current.data?.items).toHaveLength(200));
+		expect(result.current.data?.totalCount).toBe(totalCount);
 
-		act(() => result.current.loadMore());
+		act(() => {
+			result.current.loadMore();
+		});
+		await waitFor(() => expect(result.current.data?.items).toHaveLength(400));
 
-		await waitFor(() => expect(result.current.data?.items).toHaveLength(150));
-		expect(observedPageSizes).toEqual(["100", "200"]);
+		act(() => {
+			result.current.loadMore();
+		});
+		await waitFor(() => expect(result.current.data?.items).toHaveLength(450));
+
+		expect(observed).toEqual(["1/200", "2/200", "3/200"]);
+		expect(result.current.isError).toBe(false);
+		// Every id survives the concatenation: an appended page must not re-serve rows the previous one already had.
+		expect(new Set(result.current.data?.items.map((run) => run.id)).size).toBe(450);
+	});
+
+	it("stops offering more once every run is loaded", async () => {
+		server.use(
+			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), () =>
+				HttpResponse.json({ items: [runRow()], page: 1, pageSize: 200, totalCount: 1, rankCohort: { rankedCount: 0, totalScored: 0 } }),
+			),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useBenchmarkRuns(projectId), { wrapper });
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+		expect(result.current.hasNextPage).toBe(false);
 	});
 
 	// The eligible-model read is context-aware: a requested context narrows the candidates server-side.

@@ -1,5 +1,4 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
 	cancelBenchmarkRun,
@@ -57,19 +56,17 @@ import { isJudgeActive } from "@/features/benchmarks/models/BenchmarkModels";
 const benchmarkQueryKeys = {
 	projects: ["benchmarks", "projects"] as const,
 	project: (id: string) => ["benchmarks", "projects", id] as const,
-	// `runs` is the invalidation PREFIX; the cached entry carries the page size, which "load more" changes.
 	runs: (projectId: string) => ["benchmarks", "projects", projectId, "runs"] as const,
-	runsPage: (projectId: string, pageSize: number) => ["benchmarks", "projects", projectId, "runs", pageSize] as const,
 	run: (id: string) => ["benchmarks", "runs", id] as const,
 	models: (contextTokens?: number) => ["benchmarks", "eligible-models", contextTokens] as const,
 	rubricPresets: ["benchmarks", "rubric-presets"] as const,
 };
 
 const activeRunPollIntervalMs = 2_000;
-/** How many runs one page holds. A matrix launch can create more than this, so the page grows on demand. */
-const benchmarkRunsPageSize = 100;
+/** The largest page the node serves: `ListBenchmarkRunsEndpoint` answers 400 above it, so this is a ceiling, not a taste. */
+const benchmarkRunsPageSize = 200;
 
-/** The ranked page of one project: the rows plus what the ranking was computed against. */
+/** The ranked runs of one project loaded so far: the rows plus what the ranking was computed against. */
 export interface BenchmarkRunList {
 	items: BenchmarkRunSummary[];
 	cohort: BenchmarkRankCohort;
@@ -115,28 +112,30 @@ export function useBenchmarkProject(projectId: string | null) {
 }
 
 /**
- * The runs of one project, ranked. "Load more" grows the SINGLE page rather than appending a second one: the node ranks
- * project-wide and returns the page already ordered, so one bigger request keeps the ranking, the grouping and the
- * repeat statistics computed over one consistent list — where an infinite query would re-fetch every page on each
- * two-second poll to arrive at the same rows.
+ * The runs of one project, ranked, one page of 200 at a time. The node caps `pageSize` at 200 and a matrix launch can
+ * make hundreds of runs, so the pages are appended rather than one page grown — and appending is safe here because the
+ * ranking is computed project-wide by the node and the pages are contiguous slices of that one order, so the
+ * concatenation is the same list the node would return in one go.
+ *
+ * The cost is that the two-second poll re-reads every loaded page, not just the first. That is one request per 200
+ * runs, and the alternative is showing the operator half of a 400-run matrix.
  */
 export function useBenchmarkRuns(projectId: string | null) {
-	const [pageSize, setPageSize] = useState(benchmarkRunsPageSize);
-	// A different project starts over at one page; its rows are not the ones the operator asked to see more of.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: resetting is the effect, the size itself is not an input.
-	useEffect(() => setPageSize(benchmarkRunsPageSize), [projectId]);
-	const query = useQuery<BenchmarkRunList>({
-		queryKey: benchmarkQueryKeys.runsPage(projectId ?? "", pageSize),
+	const query = useInfiniteQuery({
+		queryKey: benchmarkQueryKeys.runs(projectId ?? ""),
 		enabled: Boolean(projectId),
-		// Growing the page changes the key, so without this the table would unmount into its loading state on every
-		// "load more" — the rows in hand stay on screen while the bigger page is read.
-		placeholderData: keepPreviousData,
-		refetchInterval: (query) => (hasActiveRun(query.state.data) ? activeRunPollIntervalMs : false),
-		queryFn: async ({ signal }) => {
+		initialPageParam: 1,
+		getNextPageParam: (lastPage: BenchmarkRunList, pages: BenchmarkRunList[]) => {
+			const loaded = pages.reduce((count, page) => count + page.items.length, 0);
+			// The empty-page guard is what stops a "load more" loop if the node ever reports a total it cannot serve.
+			return lastPage.items.length > 0 && loaded < lastPage.totalCount ? pages.length + 1 : undefined;
+		},
+		refetchInterval: (query) => (query.state.data?.pages.some(hasActiveRun) ? activeRunPollIntervalMs : false),
+		queryFn: async ({ pageParam, signal }): Promise<BenchmarkRunList> => {
 			const { data } = await callWithResponseValidation(
 				listBenchmarkRuns({
 					path: { projectId: projectId as string },
-					query: { page: 1, pageSize, includeUnscored: true },
+					query: { page: pageParam, pageSize: benchmarkRunsPageSize, includeUnscored: true },
 					signal,
 					throwOnError: true,
 				}),
@@ -147,9 +146,15 @@ export function useBenchmarkRuns(projectId: string | null) {
 				totalCount: data.totalCount ?? (data.items ?? []).length,
 			};
 		},
+		// Flattened here so every consumer keeps seeing one ranked list and never the page machinery.
+		select: (data) => ({
+			items: data.pages.flatMap((page) => page.items),
+			cohort: (data.pages[0] as BenchmarkRunList).cohort,
+			totalCount: (data.pages[0] as BenchmarkRunList).totalCount,
+		}),
 	});
-	const loadMore = useCallback(() => setPageSize((size) => size + benchmarkRunsPageSize), []);
-	return { ...query, loadMore };
+	// The promise is the caller's to ignore: a failed page read is already reported as the query's error state.
+	return { ...query, loadMore: query.fetchNextPage };
 }
 
 export function useBenchmarkRun(runId: string) {
