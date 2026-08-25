@@ -4513,6 +4513,12 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailRespon
 	zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse.and(
 		z.object({
 			outputParts: z.unknown().optional(),
+			reasoningBudgetTokens: z
+				.int()
+				.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+				.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+				.nullish(),
+			reasoningBudgetApplicable: z.boolean().nullish(),
 			judgeResult: z.unknown().optional(),
 			primaryErrorMessage: z.string().nullish(),
 			startedAtUtc: z.int().nullish(),
@@ -4538,6 +4544,8 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGro
 	modelName: z.string(),
 	repeatMode: zXeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode.optional(),
 	runIds: z.array(z.guid()).optional(),
+	meanPromptTokens: z.number().nullish(),
+	meanGenerationTokens: z.number().nullish(),
 	ttftMs: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse,
 	promptTokensPerSecond: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse,
 	generationTokensPerSecond: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse,

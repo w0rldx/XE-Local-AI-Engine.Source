@@ -29838,6 +29838,15 @@
               "outputParts": {
                 "nullable": true
               },
+              "reasoningBudgetTokens": {
+                "type": "integer",
+                "format": "int32",
+                "nullable": true
+              },
+              "reasoningBudgetApplicable": {
+                "type": "boolean",
+                "nullable": true
+              },
               "judgeResult": {
                 "nullable": true
               },
@@ -30233,6 +30242,16 @@
               "type": "string",
               "format": "guid"
             }
+          },
+          "meanPromptTokens": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "meanGenerationTokens": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
           },
           "ttftMs": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse"

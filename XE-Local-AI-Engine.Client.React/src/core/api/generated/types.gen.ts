@@ -3665,6 +3665,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortRespons
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse =
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse & {
 		outputParts?: unknown;
+		reasoningBudgetTokens?: number | null;
+		reasoningBudgetApplicable?: boolean | null;
 		judgeResult?: unknown;
 		primaryErrorMessage?: string | null;
 		startedAtUtc?: number | null;
@@ -3764,6 +3766,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGroup
 	modelName: string;
 	repeatMode?: XeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode;
 	runIds?: Array<string>;
+	meanPromptTokens?: number | null;
+	meanGenerationTokens?: number | null;
 	ttftMs: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse;
 	promptTokensPerSecond: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse;
 	generationTokensPerSecond: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse;
