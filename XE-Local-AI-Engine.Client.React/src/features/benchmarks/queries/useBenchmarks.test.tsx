@@ -209,6 +209,41 @@ describe("benchmark queries over the real client", () => {
 		expect(new Set(result.current.data?.items.map((run) => run.id)).size).toBe(450);
 	});
 
+	// The store pages by OFFSET over a newest-first order, and the poll refetches every loaded page. A run started
+	// while two pages are loaded shifts every row down one, so page 2 re-serves the row that just left page 1. Without
+	// the dedupe that is a repeated React key and one genuine run hidden behind its own copy.
+	it("keeps one row per run when a new run shifts the pages apart", async () => {
+		const id = (index: number) => `bbbbbbbb-0000-4000-8000-${String(index).padStart(12, "0")}`;
+		server.use(
+			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), ({ request }) => {
+				const page = Number(new URL(request.url).searchParams.get("page") ?? 1);
+				// Page 2 starts at the LAST id of page 1: exactly the one-row overlap a concurrent launch produces.
+				const ids = page === 1 ? [id(1), id(2)] : [id(2), id(3)];
+				return HttpResponse.json({
+					items: ids.map((runId) => runRow({ id: runId })),
+					page,
+					pageSize: 2,
+					totalCount: 4,
+					rankCohort: { rankedCount: 0, totalScored: 0 },
+				});
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useBenchmarkRuns(projectId), { wrapper });
+
+		await waitFor(() => expect(result.current.data?.items).toHaveLength(2));
+
+		act(() => {
+			result.current.loadMore();
+		});
+
+		await waitFor(() => expect(result.current.data?.items).toHaveLength(3));
+		const ids = result.current.data?.items.map((run) => run.id) ?? [];
+		expect(new Set(ids).size).toBe(ids.length);
+		expect(ids).toEqual([id(1), id(2), id(3)]);
+	});
+
 	it("stops offering more once every run is loaded", async () => {
 		server.use(
 			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), () =>

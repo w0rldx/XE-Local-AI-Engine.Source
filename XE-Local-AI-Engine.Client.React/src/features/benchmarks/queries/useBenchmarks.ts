@@ -147,9 +147,13 @@ export function useBenchmarkRuns(projectId: string | null) {
 				totalCount: data.totalCount ?? (data.items ?? []).length,
 			};
 		},
-		// Flattened here so every consumer keeps seeing one ranked list and never the page machinery.
+		// Flattened here so every consumer keeps seeing one ranked list and never the page machinery. Deduplicated by
+		// id, first occurrence winning: the store pages by OFFSET over a newest-first order, so a run started while two
+		// pages are loaded shifts every row down one and the next page re-serves the row that just left the previous
+		// one. Un-deduplicated that is a repeated React key and one real run hidden behind its own copy.
+		// ponytail: keyset paging on (createdAtUtc, id) would remove the overlap itself rather than absorb it.
 		select: (data) => ({
-			items: data.pages.flatMap((page) => page.items),
+			items: [...new Map(data.pages.flatMap((page) => page.items).map((run) => [run.id, run])).values()],
 			cohort: (data.pages[0] as BenchmarkRunList).cohort,
 			totalCount: (data.pages[0] as BenchmarkRunList).totalCount,
 		}),
