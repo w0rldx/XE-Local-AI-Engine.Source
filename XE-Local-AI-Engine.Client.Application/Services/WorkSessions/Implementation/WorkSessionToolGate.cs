@@ -18,7 +18,8 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///         different facts, so they are different values rather than a shared <see langword="false" />.
 ///     </para>
 /// </summary>
-internal readonly record struct WorkSessionToolGateVerdict(bool AgentExists,
+internal readonly record struct WorkSessionToolGateVerdict(
+    bool AgentExists,
     string AgentName,
     string? EffectiveModel,
     bool? SupportsTools,

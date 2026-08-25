@@ -91,7 +91,10 @@ public sealed class ProviderCallBudgetTests
     public void CaptureConsumption_WhenTheCapTrips_CountsOnlyTheAdmittedRounds()
     {
         using var cap = ProviderCallBudget.BeginCallCapScope(maxProviderCalls: 2);
-        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { MaxProviderCallsPerInvocation = 50 }))
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   MaxProviderCallsPerInvocation = 50
+               }))
         {
             var budget = ProviderCallBudget.Current!;
             budget.RegisterProviderRound(estimatedInputTokens: 100);
@@ -130,7 +133,10 @@ public sealed class ProviderCallBudgetTests
             // Deliberately empty: the nested scope exists only to be disposed.
         }
 
-        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { MaxProviderCallsPerInvocation = 50 }))
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   MaxProviderCallsPerInvocation = 50
+               }))
         {
             var budget = ProviderCallBudget.Current!;
             budget.RegisterProviderRound(estimatedInputTokens: 1);
@@ -177,7 +183,10 @@ public sealed class ProviderCallBudgetTests
     /// <summary>Stands in for one invocation: the runner seeds a scope, the pipeline registers rounds and tool calls.</summary>
     private static void RunOneTurn()
     {
-        using var scope = ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { MaxProviderCallsPerInvocation = 50 });
+        using var scope = ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+        {
+            MaxProviderCallsPerInvocation = 50
+        });
         var budget = ProviderCallBudget.Current!;
         budget.RegisterProviderRound(estimatedInputTokens: 1_000);
         budget.RecordToolCallCompleted(TimeSpan.FromMilliseconds(5), resultBytes: 128, failed: false);

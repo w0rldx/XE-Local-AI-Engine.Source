@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.Chat;
 
 using System.Runtime.CompilerServices;
-using Microsoft.Extensions.AI;
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
@@ -430,15 +430,15 @@ public sealed class ProviderCallBudgetChatClientTests
             services: null);
 
         _ = await agent.RunAsync([new ChatMessage(ChatRole.User, "hi")],
-                session: null,
-                new ChatClientAgentRunOptions
-                {
-                    ChatOptions = new ChatOptions
-                    {
-                        ModelId = ModelId
-                    }
-                })
-            .ConfigureAwait(false);
+                           session: null,
+                           new ChatClientAgentRunOptions
+                           {
+                               ChatOptions = new ChatOptions
+                               {
+                                   ModelId = ModelId
+                               }
+                           })
+                       .ConfigureAwait(false);
 
         AssertEx.Equal(ModelId, inner.ReceivedOptions.Single()?.ModelId);
     }
@@ -606,11 +606,11 @@ public sealed class ProviderCallBudgetChatClientTests
                }))
         {
             _ = await sut.GetResponseAsync(LongRound(),
-                    new ChatOptions
-                    {
-                        ModelId = ModelId
-                    })
-                .ConfigureAwait(false);
+                             new ChatOptions
+                             {
+                                 ModelId = ModelId
+                             })
+                         .ConfigureAwait(false);
         }
 
         return inner.ReceivedMessageSets.Single().Count;

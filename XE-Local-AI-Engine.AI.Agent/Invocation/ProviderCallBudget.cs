@@ -421,7 +421,8 @@ public sealed class ProviderCallCapScope : IDisposable
 ///     each of which got its own budget and its own ceiling. Reported so nobody reads a summed call count as a
 ///     breached cap.
 /// </param>
-public sealed record ProviderCallConsumption(int ProviderCalls,
+public sealed record ProviderCallConsumption(
+    int ProviderCalls,
     long EstimatedInputTokens,
     int ToolCallsCompleted,
     int ProviderCallCap,

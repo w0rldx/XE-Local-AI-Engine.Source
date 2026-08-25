@@ -4,8 +4,8 @@
   <!--
     Local Debug builds skip analyzer EXECUTION. Release does not.
 
-    Directory.Build.props sets AnalysisMode=All + EnforceCodeStyleInBuild=true and adds SonarAnalyzer to every
-    project (plus Meziantou + BannedApiAnalyzers to production ones). That rule density is applied to ~350k lines
+    Directory.Build.props sets AnalysisMode=All + EnforceCodeStyleInBuild=true and adds Analyzer to every
+    project (Meziantou + BannedApiAnalyzers to production ones). That rule density is applied to ~350k lines
     including XE-Local-AI-Engine.Tests, and analyzer execution dominates Csc time on a build of that shape — a
     cost the inner dev loop pays on every iteration for feedback that the gate does not actually depend on.
 

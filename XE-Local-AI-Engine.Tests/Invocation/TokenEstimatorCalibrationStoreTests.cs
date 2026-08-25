@@ -170,7 +170,15 @@ public sealed class TokenEstimatorCalibrationStoreTests
     {
         // The byte-identical guarantee, asserted rather than assumed: an uncalibrated model gets exactly the window
         // every existing budgeter fixture is built on.
-        foreach (var window in new[] { 0, -1, 1, 4_096, 65_536, 1_000_000 })
+        foreach (var window in new[]
+                 {
+                     0,
+                     -1,
+                     1,
+                     4_096,
+                     65_536,
+                     1_000_000
+                 })
         {
             AssertEx.Equal(TokenEstimatorCalibrationStore.ApplySafetyMargin(window),
                 TokenEstimatorCalibrationStore.ApplyEstimateMargins(window, TokenEstimatorCalibrationStore.NeutralObservedCorrection));
@@ -227,7 +235,12 @@ public sealed class TokenEstimatorCalibrationStoreTests
         // The flat-budget path carries NO safety factor: that reserve exists to stop an estimate overshooting a
         // launched context window, and a policy number like StepContextBudgetTokens has no window to overshoot.
         // Applying the factor here would silently retune the policy by 15%.
-        foreach (var budget in new[] { 1, 12_000, 65_536 })
+        foreach (var budget in new[]
+                 {
+                     1,
+                     12_000,
+                     65_536
+                 })
         {
             AssertEx.Equal(budget, TokenEstimatorCalibrationStore.ApplyObservedCorrection(budget, TokenEstimatorCalibrationStore.NeutralObservedCorrection));
         }
@@ -254,7 +267,14 @@ public sealed class TokenEstimatorCalibrationStoreTests
     {
         // The window path is defined as the flat path applied to the margined window; pinning that keeps the two from
         // drifting apart if either is retuned.
-        foreach (var correction in new[] { 1.0, 1.12, 1.5, 0.7, 5.0 })
+        foreach (var correction in new[]
+                 {
+                     1.0,
+                     1.12,
+                     1.5,
+                     0.7,
+                     5.0
+                 })
         {
             AssertEx.Equal(TokenEstimatorCalibrationStore.ApplyObservedCorrection(TokenEstimatorCalibrationStore.ApplySafetyMargin(65_536), correction),
                 TokenEstimatorCalibrationStore.ApplyEstimateMargins(65_536, correction));

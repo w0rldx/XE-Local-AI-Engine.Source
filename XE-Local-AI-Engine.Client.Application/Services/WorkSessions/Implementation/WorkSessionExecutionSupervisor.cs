@@ -597,12 +597,12 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     private async Task AppendStepEndedAsync(Guid sessionId, int step, string outcome, string? detailJson)
     {
         _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
-                        WorkSessionVersions.Any,
-                        WorkSessionEventTypes.StepEnded,
-                        WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Ended),
-                        outcome,
-                        detailJson),
-                    CancellationToken.None))
+                    WorkSessionVersions.Any,
+                    WorkSessionEventTypes.StepEnded,
+                    WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Ended),
+                    outcome,
+                    detailJson),
+                CancellationToken.None))
             .ConfigureAwait(false);
     }
 

@@ -410,10 +410,10 @@ public sealed class WorkSessionStepLoopTests
         var store = scope.ServiceProvider.GetRequiredService<INodeSettingsStore>();
         var stored = await store.LoadAsync().ConfigureAwait(false);
         await store.SaveAsync(stored with
-            {
-                ToolCapableModels = models
-            })
-            .ConfigureAwait(false);
+                   {
+                       ToolCapableModels = models
+                   })
+                   .ConfigureAwait(false);
     }
 
     /// <summary>
