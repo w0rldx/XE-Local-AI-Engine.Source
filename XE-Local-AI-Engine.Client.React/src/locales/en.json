@@ -4032,7 +4032,8 @@
 				"answerVarianceTemperature": "Temperature",
 				"answerVarianceTemperatureHelp": "Above 0, at most {{max}}. Seeds vary per repeat.",
 				"samplingTemperature": "Temperature",
-				"samplingSeed": "Seed"
+				"samplingSeed": "Seed",
+				"reasoningBudgetNotApplicable": "not applied — model has no thinking mode"
 			},
 			"matrix": {
 				"open": "Batch runs…",

@@ -162,6 +162,20 @@ export function BenchmarkRunPane({
 					<Text size="sm">
 						{t("pages.benchmarks.run.samplingSeed", "Seed")}: <b>{run.samplingSeed ?? "—"}</b>
 					</Text>
+					{run.reasoningBudgetTokens === null ? null : (
+						<Text size="sm">
+							{t("pages.benchmarks.project.reasoningBudget", "Reasoning budget (tokens)")}:{" "}
+							<b>{run.reasoningBudgetTokens}</b>
+							{/* A budget the runtime never applied is why the run can look as if it did nothing. Saying so
+							    beats letting the operator raise a number that was never read. */}
+							{run.reasoningBudgetApplicable === false ? (
+								<Text span={true} c="dimmed" data-testid="benchmark-run-budget-not-applicable">
+									{" "}
+									{t("pages.benchmarks.run.reasoningBudgetNotApplicable", "not applied — model has no thinking mode")}
+								</Text>
+							) : null}
+						</Text>
+					)}
 				</Group>
 				<ThroughputBreakdown run={run} />
 				<Group gap="xs" c={isConnected ? "green" : "dimmed"}>

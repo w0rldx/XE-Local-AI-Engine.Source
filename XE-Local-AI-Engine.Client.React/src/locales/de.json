@@ -4032,7 +4032,8 @@
 				"answerVarianceTemperature": "Temperatur",
 				"answerVarianceTemperatureHelp": "Über 0, höchstens {{max}}. Seeds variieren je Wiederholung.",
 				"samplingTemperature": "Temperatur",
-				"samplingSeed": "Seed"
+				"samplingSeed": "Seed",
+				"reasoningBudgetNotApplicable": "nicht angewendet — Modell hat keinen Denkmodus"
 			},
 			"matrix": {
 				"open": "Mehrere Läufe…",

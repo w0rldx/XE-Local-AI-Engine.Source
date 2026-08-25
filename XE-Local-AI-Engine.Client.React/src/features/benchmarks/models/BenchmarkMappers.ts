@@ -229,6 +229,8 @@ export function toBenchmarkRunDetail(value: RunDetailResponse): BenchmarkRunDeta
 		primaryErrorMessage: value.primaryErrorMessage ?? null,
 		startedAtUtc: value.startedAtUtc ?? null,
 		primaryCompletedAtUtc: value.primaryCompletedAtUtc ?? null,
+		reasoningBudgetTokens: value.reasoningBudgetTokens ?? null,
+		reasoningBudgetApplicable: value.reasoningBudgetApplicable ?? null,
 	};
 }
 

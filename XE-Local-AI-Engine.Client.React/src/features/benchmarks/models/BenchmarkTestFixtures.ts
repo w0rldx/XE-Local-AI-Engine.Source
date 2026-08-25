@@ -69,6 +69,8 @@ export function benchmarkRunDetailFixture(overrides: Partial<BenchmarkRunDetail>
 		primaryErrorMessage: null,
 		startedAtUtc: 1,
 		primaryCompletedAtUtc: 2,
+		reasoningBudgetTokens: null,
+		reasoningBudgetApplicable: null,
 		...overrides,
 	};
 }

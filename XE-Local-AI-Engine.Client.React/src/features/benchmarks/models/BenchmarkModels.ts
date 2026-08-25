@@ -400,6 +400,13 @@ export interface BenchmarkRunDetail extends BenchmarkRunSummary {
 	primaryErrorMessage: string | null;
 	startedAtUtc: number | null;
 	primaryCompletedAtUtc: number | null;
+	/** The budget this run was frozen with, or null when the project pinned none. */
+	reasoningBudgetTokens: number | null;
+	/**
+	 * Whether the model could actually honour it. False = the run carries a budget the runtime never applied (no
+	 * thinking mode), which is why the run can look as if the budget did nothing; null for a legacy row.
+	 */
+	reasoningBudgetApplicable: boolean | null;
 }
 
 /** Everything a write needs to address one run under optimistic concurrency. A detail or a summary row satisfies it. */

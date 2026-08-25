@@ -152,4 +152,19 @@ describe("BenchmarkRunPane", () => {
 		expect(line).toContain("0.7");
 		expect(line).toContain("4242");
 	});
+
+	// A budget the runtime never applied is exactly why a run can look as if the budget did nothing. Without the note
+	// the operator's next move is to raise a number that was never read.
+	it("says when the frozen reasoning budget was never applied", () => {
+		renderPane(run({ reasoningBudgetTokens: 2048, reasoningBudgetApplicable: false }));
+
+		expect(screen.getByTestId("benchmark-run-budget-not-applicable").textContent).toContain("no thinking mode");
+	});
+
+	it("shows the budget alone when the model honoured it", () => {
+		renderPane(run({ reasoningBudgetTokens: 2048, reasoningBudgetApplicable: true }));
+
+		expect(screen.getByTestId("benchmark-run-sampling").textContent).toContain("2048");
+		expect(screen.queryByTestId("benchmark-run-budget-not-applicable")).toBeNull();
+	});
 });
