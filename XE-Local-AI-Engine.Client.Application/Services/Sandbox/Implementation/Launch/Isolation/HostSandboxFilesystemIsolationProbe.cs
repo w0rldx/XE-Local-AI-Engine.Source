@@ -119,7 +119,11 @@ internal static class HostSandboxFilesystemIsolationProbe
             return Unavailable("the probe's own loopback listener could not be reached from the host, so egress denial could not be positively controlled");
         }
 
-        var script = BuildProbeScript(scratch, listener.Port, bash);
+        var script = BuildProbeScript(scratch.HomeCanaryPath,
+            scratch.SiblingCanaryPath,
+            Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR"),
+            listener.Port,
+            bash);
         using var launch = SandboxIsolationLaunch.Create(isolation,
             new SandboxIsolationLaunchRequest
             {
@@ -210,24 +214,40 @@ internal static class HostSandboxFilesystemIsolationProbe
     ///     The inner assertions, as one POSIX shell script printing <c>KEY=VALUE</c> lines. It is a script rather than
     ///     a series of commands because each control has to run inside the SAME sandbox instance — a fresh chain per
     ///     assertion would multiply the probe's cost by fifteen and would not be measuring one jail.
+    ///     <para>
+    ///         Every host PATH the script names is interpolated through <see cref="Quote" />, never pasted between
+    ///         two apostrophes. Those paths are host data — a home directory, the sandbox container root, an
+    ///         <c>XDG_RUNTIME_DIR</c> — and a single apostrophe anywhere in one of them closes the quote the script
+    ///         text opened, which turns the remainder of that line into shell syntax the probe never intended and
+    ///         makes it report a perfectly capable host unable to isolate.
+    ///     </para>
+    ///     <para>
+    ///         The paths are taken as parameters rather than read from <see cref="ProbeScratch" /> and the environment
+    ///         so that the rendering — the part that has to survive a hostile path — can be asserted without creating
+    ///         a jail or running a chain.
+    ///     </para>
     /// </summary>
-    private static string BuildProbeScript(ProbeScratch scratch, int listenerPort, string? bash)
+    internal static string BuildProbeScript(string homeCanaryPath,
+        string siblingCanaryPath,
+        string? runtimeDirectory,
+        int listenerPort,
+        string? bash)
     {
-        var busPath = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is { Length: > 0 } runtimeDirectory
-            ? $"{runtimeDirectory}/bus"
-            : "/run/user/0/bus";
+        var busPath = Quote(runtimeDirectory is { Length: > 0 } directory
+            ? $"{directory}/bus"
+            : "/run/user/0/bus");
 
         var loopback = bash is null
             // Without bash there is no way to attempt a connect from a shell, so the control falls back to proving the
             // network namespace is empty: a fresh netns has no sockets at all, so /proc/net/tcp holds only its header.
             ? "if [ \"$(wc -l < /proc/net/tcp)\" = \"1\" ]; then echo LOOPBACK=DENIED; else echo LOOPBACK=REACHED; fi"
             : string.Create(CultureInfo.InvariantCulture,
-                $"if {bash} -c 'exec 3<>/dev/tcp/127.0.0.1/{listenerPort}' 2>/dev/null; then echo LOOPBACK=REACHED; else echo LOOPBACK=DENIED; fi");
+                $"if {Quote(bash)} -c 'exec 3<>/dev/tcp/127.0.0.1/{listenerPort}' 2>/dev/null; then echo LOOPBACK=REACHED; else echo LOOPBACK=DENIED; fi");
 
         var builder = new StringBuilder();
         builder.Append(CultureInfo.InvariantCulture, $"echo \"PID=$$\"\n");
-        builder.Append(CultureInfo.InvariantCulture, $"if [ -e '{scratch.HomeCanaryPath}' ]; then echo HOMECANARY=PRESENT; else echo HOMECANARY=ABSENT; fi\n");
-        builder.Append(CultureInfo.InvariantCulture, $"if [ -e '{scratch.SiblingCanaryPath}' ]; then echo SIBLINGCANARY=PRESENT; else echo SIBLINGCANARY=ABSENT; fi\n");
+        builder.Append(CultureInfo.InvariantCulture, $"if [ -e {Quote(homeCanaryPath)} ]; then echo HOMECANARY=PRESENT; else echo HOMECANARY=ABSENT; fi\n");
+        builder.Append(CultureInfo.InvariantCulture, $"if [ -e {Quote(siblingCanaryPath)} ]; then echo SIBLINGCANARY=PRESENT; else echo SIBLINGCANARY=ABSENT; fi\n");
         builder.Append(CultureInfo.InvariantCulture, $"if [ -e '/proc/{Environment.ProcessId}' ]; then echo HOSTPID=VISIBLE; else echo HOSTPID=INVISIBLE; fi\n");
         builder.Append("if echo ok > /work/xe-probe.txt 2>/dev/null; then echo WORKWRITE=OK; else echo WORKWRITE=DENIED; fi\n");
         builder.Append("if echo ok > /tmp/xe-probe.txt 2>/dev/null; then echo TMPWRITE=OK; else echo TMPWRITE=DENIED; fi\n");
@@ -246,12 +266,23 @@ internal static class HostSandboxFilesystemIsolationProbe
         builder.Append("echo \"PASSWD=$(grep -c . /etc/passwd)\"\n");
         builder.Append("if [ -d /run ]; then echo RUN=YES; else echo RUN=NO; fi\n");
         builder.Append("echo \"RUNENTRIES=$(ls -A /run | wc -l)\"\n");
-        builder.Append(CultureInfo.InvariantCulture, $"if [ -e '{busPath}' ]; then echo BUS=PRESENT; else echo BUS=ABSENT; fi\n");
+        builder.Append(CultureInfo.InvariantCulture, $"if [ -e {busPath} ]; then echo BUS=PRESENT; else echo BUS=ABSENT; fi\n");
         builder.Append("if [ -e /run/docker.sock ]; then echo DOCKER=PRESENT; else echo DOCKER=ABSENT; fi\n");
         builder.Append(loopback).Append('\n');
         builder.Append("echo DONE=1\n");
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    ///     Renders <paramref name="value" /> as ONE POSIX shell word: wrapped in single quotes, with every embedded
+    ///     apostrophe closed, escaped and reopened as <c>'\''</c>. That is the only quoting form a POSIX shell reads
+    ///     literally with no exceptions — no expansion, no escape processing — so a path containing a quote, a space,
+    ///     a dollar sign or a backtick reaches <c>[ -e … ]</c> as itself.
+    /// </summary>
+    private static string Quote(string value)
+    {
+        return string.Concat("'", value.Replace("'", @"'\''", StringComparison.Ordinal), "'");
     }
 
     private static (int ExitCode, string Output) RunChain(IReadOnlyList<string> chain, IReadOnlyDictionary<string, string> userBusEnvironment)

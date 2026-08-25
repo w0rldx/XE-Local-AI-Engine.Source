@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Sandbox;
 
+using System.Diagnostics;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
@@ -149,6 +150,87 @@ public sealed class SandboxFilesystemIsolationContractTests
         AssertEx.True(SandboxIsolatedChain.CanBindReadOnlyTree("/opt/xe/venv"));
 
         await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task ProbeScript_QuotesEveryHostPath_SoAnApostropheCannotEndTheQuote()
+    {
+        // The paths the probe script names are HOST data: the engine user's home, the sandbox container root, the
+        // XDG_RUNTIME_DIR. Pasted between two apostrophes, one apostrophe inside any of them closes the quote the
+        // script text opened and the rest of that line becomes shell syntax — the chain then fails and the probe
+        // reports a perfectly capable host as unable to isolate.
+        var script = HostSandboxFilesystemIsolationProbe.BuildProbeScript("/home/o'brien/xe probe/.canary",
+            "/tmp/xe'sandboxes/canary file",
+            "/run/user/1000'x",
+            listenerPort: 4242,
+            "/usr/bin/bash");
+
+        AssertEx.Contains(script, @"if [ -e '/home/o'\''brien/xe probe/.canary' ]; then echo HOMECANARY=PRESENT;");
+        AssertEx.Contains(script, @"if [ -e '/tmp/xe'\''sandboxes/canary file' ]; then echo SIBLINGCANARY=PRESENT;");
+        AssertEx.Contains(script, @"if [ -e '/run/user/1000'\''x/bus' ]; then echo BUS=PRESENT;");
+        AssertEx.False(script.Contains("[ -e '/home/o'brien", StringComparison.Ordinal),
+            "an apostrophe must never reach the script as itself");
+
+        await Task.CompletedTask;
+    }
+
+    [Test]
+    public async Task ProbeScript_WithAHostilePath_IsAcceptedByTheShell_AndStillFindsTheFile()
+    {
+        // Two halves, because either alone would pass on a broken renderer: `sh -n` proves the script PARSES (a
+        // dangling quote makes the whole script a syntax error), and running the canary line against a real file whose
+        // name carries an apostrophe and a space proves the quoting preserved the path rather than merely escaping it
+        // into something else.
+        if (!OperatingSystem.IsLinux())
+        {
+            throw new TUnit.Core.Exceptions.SkipTestException("the probe script is POSIX shell, checked with the host's /bin/sh");
+        }
+
+        var directory = Path.Combine(Path.GetTempPath(), $"xe'probe {Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var canary = Path.Combine(directory, "it's a canary");
+            await File.WriteAllTextAsync(canary, "host");
+            var script = HostSandboxFilesystemIsolationProbe.BuildProbeScript(canary,
+                Path.Combine(directory, "absent'file"),
+                directory,
+                listenerPort: 4242,
+                bash: null);
+
+            AssertEx.Equal(expected: 0, RunShell(["-n", "-c", script]).ExitCode, "the rendered script must parse");
+
+            var homeLine = script.Split('\n').First(line => line.Contains("HOMECANARY", StringComparison.Ordinal));
+            var sibling = script.Split('\n').First(line => line.Contains("SIBLINGCANARY", StringComparison.Ordinal));
+
+            AssertEx.Equal("HOMECANARY=PRESENT", RunShell(["-c", homeLine]).Output.Trim());
+            AssertEx.Equal("SIBLINGCANARY=ABSENT", RunShell(["-c", sibling]).Output.Trim());
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    private static (int ExitCode, string Output) RunShell(IReadOnlyList<string> arguments)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "/bin/sh",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(startInfo)!;
+        var output = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+
+        return (process.ExitCode, output);
     }
 
     private static SandboxCreateRequest IsolatedRequest()
