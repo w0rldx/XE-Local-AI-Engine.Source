@@ -69,25 +69,36 @@ internal sealed class DevelopmentValidationRunner : IDevelopmentValidationRunner
             var profile = DevelopmentCommandProfileCatalog.ResolveStored(snapshot.CommandProfileJson);
             var session = await _workspaceProvider.PrepareAsync(snapshot, repository, cancellationToken).ConfigureAwait(false);
             var evidence = await _evidence.ResolveCurrentAsync(taskId, session, cancellationToken).ConfigureAwait(false);
-            var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), profile);
 
-            // The validation run had no overall deadline of its own: it was bounded only by each command's timeout,
-            // which before per-command budgets existed was the whole attempt cap per command. A four-command profile
-            // could therefore run for four times the cap it was supposed to respect.
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(Math.Min(snapshot.MaxDurationSeconds ?? _options.MaxAttemptDurationSeconds,
-                _options.MaxAttemptDurationSeconds)));
-
-            foreach (var commandId in profile.ValidationCommandIds)
+            // BEFORE the command loop, and before the tools that would run it exist. A dependency-manifest change
+            // cannot be resolved by an attempt whose sandbox has no egress, so running restore/build/test to watch
+            // them fail would spend the whole attempt budget arriving at a less specific answer than the one already
+            // known. Zero command evidence is the honest report of a gate that deliberately ran nothing.
+            var verdict = DevelopmentDependencyManifestPolicy.Evaluate(evidence.Current);
+            IReadOnlyList<DevelopmentCommandEvidence> commands = [];
+            if (verdict is null)
             {
-                _ = await tools.RunCommandAsync(commandId, timeout.Token).ConfigureAwait(false);
-            }
+                var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_options), profile);
 
-            var protectedRoots = DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session);
-            var commands = tools.CommandEvidence
+                // The validation run had no overall deadline of its own: it was bounded only by each command's timeout,
+                // which before per-command budgets existed was the whole attempt cap per command. A four-command profile
+                // could therefore run for four times the cap it was supposed to respect.
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeout.CancelAfter(TimeSpan.FromSeconds(Math.Min(snapshot.MaxDurationSeconds ?? _options.MaxAttemptDurationSeconds,
+                    _options.MaxAttemptDurationSeconds)));
+
+                foreach (var commandId in profile.ValidationCommandIds)
+                {
+                    _ = await tools.RunCommandAsync(commandId, timeout.Token).ConfigureAwait(false);
+                }
+
+                var protectedRoots = DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session);
+                commands = tools.CommandEvidence
                                 .Select(command => DevelopmentArtifactSanitizer.Sanitize(command, protectedRoots))
                                 .ToArray();
-            var verdict = DevelopmentValidationVerdict.Evaluate(profile, commands);
+                verdict = DevelopmentValidationVerdict.Evaluate(profile, commands);
+            }
+
             var passed = verdict.Passed;
             var profileDigest = profile.ComputeDigest();
             var report = new DevelopmentValidationReport(passed,

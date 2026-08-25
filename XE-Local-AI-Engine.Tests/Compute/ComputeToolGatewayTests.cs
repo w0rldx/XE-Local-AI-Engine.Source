@@ -36,6 +36,13 @@ public sealed class ComputeToolGatewayTests
 
         var create = AssertEx.NotNull(provider.CreateRequest);
         AssertEx.Equal(ComputeToolGateway.RuntimeProfile, create.RuntimeProfile);
+
+        // Asserted against the DECLARATION rather than a literal, so this create site and SandboxWorkloads.RunPython
+        // cannot drift apart: run_python is the ONE workload that asks for ceilings, and the operator-facing isolation
+        // summary reports declaration-AND-capability as its "Resource limits" column. This provider advertises the
+        // capability, so the request must carry them; the sibling tests using `Contained` alone do not, and the
+        // gateway's own capability gate is what makes those null.
+        AssertEx.Equal(SandboxWorkloads.RunPython.RequestsResourceLimits, create.ResourceLimits is not null);
         // The attach key carries the profile plus this invocation's id (see the concurrency test below); the profile
         // PREFIX is what keeps the jail keyed apart from AgentHome's.
         AssertEx.True(create.AttachKey.RuntimeProfile.StartsWith(ComputeToolGateway.RuntimeProfile, StringComparison.Ordinal),
@@ -426,6 +433,7 @@ public sealed class ComputeToolGatewayTests
             identityProvider ?? new StubIdentityProvider(),
             environment ?? new StubEnvironment("/provisioned/python"),
             Options.Create(options ?? new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             NullLogger<ComputeToolGateway>.Instance);
     }
 

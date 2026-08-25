@@ -28,12 +28,15 @@ interface DevelopmentConsentGateProps {
  * restriction, while on Linux the same code path enforces real containment. Saying only one of those would be
  * inaccurate on half the installs, so the notice says both and names which is which.
  *
- * What is NOT conditioned on the provider is egress. DevelopmentWorkspaceProvider.PrepareAsync requests
- * SandboxNetworkPolicy.Unrestricted on every provider — a recorded deferral, because `dotnet restore` needs the network
- * until the dependency-manifest work lands — and the container provider maps that to Docker's default bridge, which is
- * a private namespace with NAT egress. So a container run is contained in filesystem and capability terms and still
- * reaches the internet. The container branch states that itself rather than inheriting the process branch's sentence,
- * because the one thing an operator would reasonably infer from "container" is the thing that is not true.
+ * Egress is conditioned on the same thing the backend conditions it on. Since G1 the sandbox the agent's work runs in
+ * asks for SandboxNetworkPolicy.None wherever the backend advertises SupportsNetworkPolicy
+ * (DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy) — which is Linux with a working `unshare` probe, and
+ * the container provider — and Unrestricted where it does not, because a backend fails a confinement request it cannot
+ * honour CLOSED and an unconditional denial would remove Development Mode from Windows rather than harden it. The one
+ * sandbox that keeps egress by design is the engine's own warm restore against the BASE COMMIT, which runs before the
+ * agent has written anything. So this copy says "denied where this node can enforce it", names the exception, and
+ * points at the Sandbox isolation panel for which of the two was actually served — it must not promise denial, and it
+ * must not repeat the pre-G1 claim that nothing restricts what a command can reach.
  *
  * Rendered as a gate rather than an overlay on a live page: an operator who has not read it should not be able to
  * start an attempt behind it.
@@ -107,7 +110,7 @@ export function DevelopmentConsentGate({ children }: DevelopmentConsentGateProps
 							<List.Item>
 								{t(
 									"pages.development.consent.containerNetwork",
-									"The network is not part of that containment. The container has outbound network access, and nothing restricts what it can reach — dependency restore needs it.",
+									"Egress is denied for the sandbox the agent works in: the container provider can enforce it. Only the engine's own dependency restore, run against your base commit before the agent starts, is given the network.",
 								)}
 							</List.Item>
 						</>
@@ -122,13 +125,13 @@ export function DevelopmentConsentGate({ children }: DevelopmentConsentGateProps
 							<List.Item>
 								{t(
 									"pages.development.consent.processNetwork",
-									"They have network access, and nothing restricts what they can reach.",
+									"Egress is denied for the sandbox the agent works in wherever this node can enforce it — Linux with a working sandbox network probe, or a container provider. Where it cannot, such as Windows, those commands reach the network unrestricted. Only the engine's own dependency restore, run against your base commit before the agent starts, is given the network. The Sandbox isolation panel reports which posture this node served.",
 								)}
 							</List.Item>
 							<List.Item>
 								{t(
 									"pages.development.consent.processLimits",
-									"CPU, memory and process-count limits are enforced on Linux only. On Windows there are none, so a runaway command is bounded only by the machine.",
+									"CPU, memory and process-count ceilings are requested for these commands wherever this node can enforce them (the isolation panel shows whether it does): all logical cores, 75% of memory with a 4 GB floor, and 4096 processes by default, and an operator can override them. Where the host cannot impose them — Windows — no ceiling applies and a runaway command is bounded only by its timeout and the machine.",
 								)}
 							</List.Item>
 						</>

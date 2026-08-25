@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -172,6 +173,9 @@ public sealed class SandboxProviderRegistrationTests
         builder.Configuration.AddInMemoryCollection(configurationValues);
         // Supplied by other AddNode* modules in the real host; the two sandbox modules do not register it themselves.
         builder.Services.TryAddSingleton(TimeProvider.System);
+        // Same story: AddNodeCoreOptions registers this in the real host, and the container provider derives its
+        // install id from it. Constructing the provider only hashes the path — it creates nothing on disk.
+        builder.Services.TryAddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(Path.Combine(Path.GetTempPath(), "xe-registration-tests")));
         builder.AddNodeAgentHome(builder.Configuration);
         builder.AddNodeContainerSandbox(builder.Configuration);
         return new TestHost(builder.Build());

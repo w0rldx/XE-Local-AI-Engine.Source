@@ -22,12 +22,60 @@ internal static class DevelopmentCommandProfileCatalog
     public const string GenericGit = "generic-git";
 
     /// <summary>
-    ///     Bumped whenever the command set, argument vectors, timeouts or protected paths of any profile below change.
+    ///     Bumped whenever the command set, argument vectors, timeouts or protected paths of any profile below change
+    ///     — and equally whenever <see cref="DependencyManifestPaths" /> gains or loses a rule, because that set is a
+    ///     gate applied to every attempt run under a profile this catalog issued.
     ///     A stored profile whose <c>(ProfileId, ProfileVersion)</c> still resolves here but whose canonical content no
     ///     longer matches is rejected rather than silently re-interpreted — see
     ///     <see cref="ResolveStored" />.
     /// </summary>
-    public const string CurrentVersion = "v1";
+    public const string CurrentVersion = "v2";
+
+    /// <summary>
+    ///     The files whose content decides what <c>restore</c> resolves. A change to any of them fails deterministic
+    ///     validation with <see cref="DevelopmentValidationFailureCodes.DependencyManifestChanged" /> — see
+    ///     <see cref="DevelopmentDependencyManifestPolicy" /> for why that is a verdict rather than a security
+    ///     exception.
+    ///     <para>
+    ///         It lives HERE, beside <see cref="DefaultProtectedPaths" /> and under
+    ///         <see cref="CurrentVersion" />'s rule, rather than in the policy class: the set is the whole of the
+    ///         control, and a control versioned by a mechanism of its own would be a second thing to keep in step with
+    ///         the profile a project was created under. It is deliberately NOT a field of
+    ///         <see cref="DevelopmentCommandProfile" /> — it is code-owned and identical for every profile, so putting
+    ///         it in the canonical digest would invalidate every stored profile to say nothing new.
+    ///     </para>
+    ///     <para>
+    ///         <c>Directory.Build.props</c> and <c>Directory.Build.targets</c> are included on the operator's 2026-08-25
+    ///         ruling. They are <em>build</em> configuration rather than dependency manifests, but either can carry a
+    ///         <c>PackageReference</c>, and excluding them would leave exactly the bypass the rule exists to close.
+    ///         Note this is a different shape from <c>EnsureBuildConfigurationBarrier</c>, which bounds MSBuild's
+    ///         upward search to configuration from <em>above</em> the workspace.
+    ///     </para>
+    ///     <para>
+    ///         The set is the control, so a packaging system missing from it is a hole rather than a gap in coverage.
+    ///         Adding one is a source change here plus a <see cref="CurrentVersion" /> bump.
+    ///     </para>
+    /// </summary>
+    public static readonly string[] DependencyManifestPaths =
+    [
+        "**/*.csproj",
+        "**/Directory.Packages.props",
+        "**/Directory.Build.props",
+        "**/Directory.Build.targets",
+        "**/packages.lock.json",
+        "**/global.json",
+        "**/NuGet.config",
+        "**/package.json",
+        "**/package-lock.json",
+        "**/pnpm-lock.yaml",
+        "**/yarn.lock",
+        "**/Cargo.toml",
+        "**/Cargo.lock",
+        "**/requirements*.txt",
+        "**/pyproject.toml",
+        "**/uv.lock",
+        "**/poetry.lock"
+    ];
 
     /// <summary>
     ///     Paths the agent may create but may not modify or delete once they existed at <c>BaseCommit</c> — the

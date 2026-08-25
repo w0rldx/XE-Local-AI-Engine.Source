@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Mcp.V1;
 
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 
 /// <summary>
 ///     Create request for an MCP server registration. The editable fields mirror <see cref="McpServerInput" /> minus
@@ -24,6 +25,14 @@ public sealed class CreateMcpServerRequest
     public IReadOnlyDictionary<string, string>? Env { get; init; }
 
     public string? Url { get; init; }
+
+    /// <summary>
+    ///     How much of this node the server is trusted with; see <c>docs/security/mcp-trust-tiers.md</c>. Defaults to
+    ///     <see cref="McpTrustTier.Sandboxed" />, which is what an omitted value must mean. <c>BuiltInTrusted</c> is
+    ///     rejected — it names an engine-owned transport, not a registration. Ignored for an HTTP registration, which
+    ///     launches no process.
+    /// </summary>
+    public McpTrustTier TrustTier { get; init; } = McpTrustTier.Sandboxed;
 }
 
 /// <summary>Update request for an MCP server. The id travels in the route; the body carries the new field values (no enabled).</summary>
@@ -46,6 +55,14 @@ public sealed class UpdateMcpServerRequest
     public IReadOnlyDictionary<string, string>? Env { get; init; }
 
     public string? Url { get; init; }
+
+    /// <summary>
+    ///     How much of this node the server is trusted with; see <c>docs/security/mcp-trust-tiers.md</c>. Defaults to
+    ///     <see cref="McpTrustTier.Sandboxed" />, which is what an omitted value must mean. <c>BuiltInTrusted</c> is
+    ///     rejected — it names an engine-owned transport, not a registration. Ignored for an HTTP registration, which
+    ///     launches no process.
+    /// </summary>
+    public McpTrustTier TrustTier { get; init; } = McpTrustTier.Sandboxed;
 }
 
 public sealed class GetMcpServerRequest
@@ -72,12 +89,23 @@ public sealed class SetMcpServerEnabledRequest
 }
 
 /// <summary>
-///     Wire projection of a stored MCP server registration. <see cref="TransportKind" /> serializes as the string
-///     "Stdio"/"Http" via the globally registered <c>JsonStringEnumConverter</c>; the remaining fields serialize
-///     camelCase. The secret-bearing fields (description, arguments, env) are returned decrypted.
+///     Wire projection of a stored MCP server registration. <see cref="TransportKind" /> and <see cref="TrustTier" />
+///     serialize as their string names ("Stdio"/"Http", "Sandboxed"/"PrivilegedHost"/"BuiltInTrusted") via the
+///     globally registered <c>JsonStringEnumConverter</c>; the remaining fields serialize camelCase.
+///     <para>
+///         Description and arguments are returned decrypted — they are operator-authored text the settings form has to
+///         round-trip. <see cref="Env" /> is NOT: it is returned masked, because an environment map is where a stdio
+///         server's API keys live and there is no editing reason to read one back.
+///     </para>
 /// </summary>
 public sealed class McpServerResponse
 {
+    /// <summary>
+    ///     The placeholder every <see cref="Env" /> value carries. An update that sends it back for a key keeps that
+    ///     key's stored value, which is what lets the settings form round-trip an environment it was never shown.
+    /// </summary>
+    public const string MaskedEnvironmentValue = McpEnvironmentMask.Value;
+
     public required Guid Id { get; init; }
 
     public required string Name { get; init; }
@@ -92,9 +120,17 @@ public sealed class McpServerResponse
 
     public string? WorkingDirectory { get; init; }
 
+    /// <summary>
+    ///     The configured environment variable NAMES, each carrying <see cref="MaskedEnvironmentValue" /> in place of
+    ///     its value. A stdio server's environment is where its API keys live; it is encrypted at rest and never
+    ///     travels back out of the node. Sending a masked value back on an update keeps the stored one.
+    /// </summary>
     public required IReadOnlyDictionary<string, string> Env { get; init; }
 
     public string? Url { get; init; }
+
+    /// <summary>How much of this node the server is trusted with; see <c>docs/security/mcp-trust-tiers.md</c>.</summary>
+    public required McpTrustTier TrustTier { get; init; }
 
     public required bool Enabled { get; init; }
 

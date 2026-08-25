@@ -69,6 +69,28 @@ internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightServi
             };
         }
 
+        // The engine's own asset, checked before any daemon is contacted: the specification cannot be built without
+        // it, so a broken build would otherwise surface as a failed container create rather than as a preflight that
+        // names the cause. Reading it is a one-off — the profile is cached after the first call.
+        try
+        {
+            _ = DockerSeccompProfile.SecurityOption;
+        }
+        catch (DockerRuntimeException exception)
+        {
+            _logger.LogError(exception, "Development Mode cannot read its embedded seccomp profile.");
+
+            return new DockerDaemonPreflight
+            {
+                Status = DockerDaemonPreflightStatus.NotConfigured,
+                Message = "Development Mode ships a seccomp profile that every sandbox container is created under, and this build "
+                          + $"cannot read it: {exception.Message} Without it a container's system-call confinement cannot be "
+                          + "established — a container created with no seccomp option reads back identically to one on a daemon with "
+                          + "seccomp switched off — so Development Mode stays unavailable rather than running your code under "
+                          + "confinement it cannot prove. Reinstall XE-Local-AI-Engine; this is a packaging fault, not a setting."
+            };
+        }
+
         var endpoint = DockerDaemonEndpointResolver.Resolve(options);
         var pinned = await _attestationStore.ReadAsync(cancellationToken).ConfigureAwait(false);
 
@@ -105,6 +127,24 @@ internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightServi
                           + $"serving API {Describe(identity.ApiVersion)}. Development Mode needs API {minimumApiVersion} or newer, "
                           + "because below that it cannot read back every isolation setting it applies — and it refuses to run your "
                           + "code in a container it cannot prove is confined. Upgrade Docker Engine, then reload this page.",
+                Endpoint = endpoint,
+                ObservedDaemon = identity,
+                PinnedDaemon = pinned
+            };
+        }
+
+        if (!identity.SupportsSeccomp)
+        {
+            return new DockerDaemonPreflight
+            {
+                Status = DockerDaemonPreflightStatus.ProbeFailed,
+                Message = $"The container runtime at {endpoint.Display} does not report seccomp support, so Development Mode cannot "
+                          + "confine the system calls your build and test commands may make. This is checked here rather than at "
+                          + "container creation because it cannot be checked there: such a daemon still accepts a seccomp profile and "
+                          + "still reports it back on the container, while applying nothing. Either the daemon was started with seccomp "
+                          + "disabled (check 'docker info' — a working daemon lists 'seccomp' under Security Options) or this kernel "
+                          + "was built without CONFIG_SECCOMP. Development Mode stays unavailable until it is available; it does not "
+                          + "fall back to an unconfined container.",
                 Endpoint = endpoint,
                 ObservedDaemon = identity,
                 PinnedDaemon = pinned

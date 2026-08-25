@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -10,6 +11,14 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IDevelopmentStore
 {
     private const string StartupOperationPhase = "StartupInterrupted";
+
+    /// <summary>
+    ///     The operation phase of the workspace-secret finding. A phase of its own, rather than
+    ///     <see cref="DevelopmentOperationPhases.Completed" />, because the idempotency key is
+    ///     <c>(project, operation, phase)</c> and the operation id here IS the attempt id — sharing the phase with a
+    ///     state transition would make one of them silently return the other's result.
+    /// </summary>
+    private const string WorkspaceSecretsOperationPhase = "WorkspaceSecretsDetected";
 
     private static readonly IReadOnlyDictionary<DevelopmentTaskStatus, HashSet<DevelopmentTaskStatus>> LegalTaskTransitions =
         new Dictionary<DevelopmentTaskStatus, HashSet<DevelopmentTaskStatus>>
@@ -634,6 +643,48 @@ public sealed class DevelopmentStore(NodeChatDbContext dbContext, TimeProvider t
                     version: 1,
                     command.ArtifactId,
                     detailJson: null,
+                    cancellationToken).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<DevelopmentOperationResult> RecordWorkspaceSecretsAsync(Guid taskId,
+        Guid attemptId,
+        IReadOnlyList<string> repositoryRelativePaths,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(repositoryRelativePaths);
+        if (repositoryRelativePaths.Count == 0)
+        {
+            throw new ArgumentException("A workspace-secret event must name at least one path.", nameof(repositoryRelativePaths));
+        }
+
+        var projectId = await ProjectIdForTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+
+        // Keyed on the ATTEMPT id rather than a fresh operation id, which is what makes it idempotent: a task's
+        // workspace is prepared once by the coder and again by validation, and the same finding recorded twice would
+        // read as two separate discoveries.
+        return await ExecuteOperationAsync(projectId,
+            attemptId,
+            WorkspaceSecretsOperationPhase,
+            async () =>
+            {
+                if (!await _dbContext.DevelopmentAttempts.AnyAsync(entity => entity.Id == attemptId && entity.TaskId == taskId, cancellationToken).ConfigureAwait(false))
+                {
+                    throw new KeyNotFoundException($"Development attempt '{attemptId}' was not found on the task.");
+                }
+
+                return await AddEventAsync(projectId,
+                    taskId,
+                    attemptId,
+                    attemptId,
+                    WorkspaceSecretsOperationPhase,
+                    "WorkspaceSecretsDetected",
+                    "Detected",
+                    repositoryRelativePaths.Count.ToString(CultureInfo.InvariantCulture),
+                    version: 1,
+                    artifactId: null,
+                    JsonSerializer.SerializeToUtf8Bytes(repositoryRelativePaths),
                     cancellationToken).ConfigureAwait(false);
             },
             cancellationToken).ConfigureAwait(false);

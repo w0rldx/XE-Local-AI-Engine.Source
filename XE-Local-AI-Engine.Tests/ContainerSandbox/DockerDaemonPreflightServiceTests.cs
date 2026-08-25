@@ -234,6 +234,43 @@ public sealed class DockerDaemonPreflightServiceTests
         AssertEx.Contains(preflight.Message, "this node's configuration");
     }
 
+    [Test]
+    public async Task InspectAsync_WhenTheDaemonDoesNotReportSeccomp_RefusesAndSaysWhatToCheck()
+    {
+        // Checked here because it cannot be checked at create time: such a daemon still accepts a seccomp profile and
+        // still reports it back on the container while applying nothing, so the read-back is indistinguishable from a
+        // confining daemon's. `docker info`'s security options are the only place the difference is visible.
+        var (service, client, store) = CreateService();
+        client.Identity = client.Identity with
+        {
+            SupportsSeccomp = false
+        };
+
+        var preflight = await service.InspectAsync();
+
+        AssertEx.Equal(DockerDaemonPreflightStatus.ProbeFailed, preflight.Status);
+        AssertEx.False(preflight.Ready);
+        AssertEx.Contains(preflight.Message, "seccomp");
+        AssertEx.Contains(preflight.Message, "docker info");
+        AssertEx.Contains(preflight.Message, "does not fall back");
+        // Refused rather than pinned: a daemon this node will not use must not become the daemon it approved.
+        AssertEx.Null(await store.ReadAsync());
+    }
+
+    [Test]
+    public void SeccompProfile_IsPresentInThisBuildAndNamesARealProfile()
+    {
+        // The other half of the preflight's asset check. Its failure branch cannot be reached from a test — the
+        // profile is an embedded resource, so "missing" means a broken build rather than a state a test can create —
+        // so what is asserted is the success side: this build really carries a profile, and the predicate the
+        // read-back uses really accepts it.
+        var option = DockerSandboxHardeningTests.Specification()
+                                                .SecurityOptions
+                                                .First(entry => entry.StartsWith("seccomp=", StringComparison.Ordinal));
+
+        AssertEx.Contains(option, "SCMP_ACT_ERRNO");
+    }
+
     private static (IDockerDaemonPreflightService Service, FakeDockerRuntimeClient Client, InMemoryAttestationStore Store) CreateService(ContainerSandboxOptions? options = null)
     {
         var resolved = options ?? DockerSandboxHardeningTests.Options() with
@@ -242,7 +279,7 @@ public sealed class DockerDaemonPreflightServiceTests
         };
         var endpoint = new DockerDaemonEndpoint(new Uri("unix:///fake.sock"), DockerDaemonEndpointSource.Configuration);
         var client = new FakeDockerRuntimeClient(endpoint,
-            new DockerDaemonIdentity("daemon-alpha", "29.6.1", "1.55", "1.40", "linux", endpoint));
+            new DockerDaemonIdentity("daemon-alpha", "29.6.1", "1.55", "1.40", "linux", endpoint, IsRootless: false, SupportsSeccomp: true));
         var store = new InMemoryAttestationStore();
 
         var service = new DockerDaemonPreflightService(new StaticOptionsMonitor<ContainerSandboxOptions>(resolved),

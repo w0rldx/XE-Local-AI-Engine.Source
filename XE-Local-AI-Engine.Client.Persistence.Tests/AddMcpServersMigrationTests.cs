@@ -55,6 +55,9 @@ public sealed class AddMcpServersMigrationTests : IDisposable
             "working_directory",
             "env",
             "url",
+            // Added by AddMcpServerTrustTier. Defaulted to 0 (Sandboxed), so every pre-existing registration
+            // migrates INTO the sandbox boundary rather than being grandfathered outside it.
+            "trust_tier",
             "enabled",
             "version",
             "created_at_utc",

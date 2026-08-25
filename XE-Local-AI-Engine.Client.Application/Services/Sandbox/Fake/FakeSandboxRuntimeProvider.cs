@@ -60,7 +60,11 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         | SandboxProviderCapabilities.SupportsCommandCancellation
         | SandboxProviderCapabilities.SupportsAttach
         | SandboxProviderCapabilities.SupportsKill
-        | SandboxProviderCapabilities.SupportsTrustedHostWorkspace;
+        | SandboxProviderCapabilities.SupportsTrustedHostWorkspace
+        // Deterministic and command-free, so the toolchain it "supplies" is the host's by default: the fake stands in
+        // for the process backend, never for a container, and a workload declaring an image-backed toolchain must not
+        // resolve to it just because it is the least privileged thing registered.
+        | SandboxProviderCapabilities.SuppliesHostToolchain;
 
     // ---- ISandboxRuntimeProvider ----
 

@@ -357,6 +357,142 @@ public sealed class McpServerServiceTests
         return new McpServerService(store, manager, options, NullLogger<McpServerService>.Instance);
     }
 
+    [Test]
+    public async Task CreateAsync_WithBuiltInTrustedTier_ThrowsValidation()
+    {
+        // BuiltInTrusted names a transport the ENGINE owns. Accepting it here would let anything holding a session
+        // label a third-party executable as engine-owned, so it is refused rather than silently downgraded.
+        var service = CreateService(out var store, out _);
+        var input = CreateStdioInput() with
+        {
+            TrustTier = McpTrustTier.BuiltInTrusted
+        };
+
+        await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
+        await store.DidNotReceive().AddAsync(Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateAsync_WithUndefinedTrustTier_ThrowsValidation()
+    {
+        var service = CreateService(out var store, out _);
+        var input = CreateStdioInput() with
+        {
+            TrustTier = (McpTrustTier)99
+        };
+
+        await AssertEx.ThrowsAsync<McpServerValidationException>(() => service.CreateAsync(input)).ConfigureAwait(false);
+        await store.DidNotReceive().AddAsync(Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>()).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateAsync_WithHttpTransport_NormalizesThePrivilegedTierAway()
+    {
+        // The tier answers "where does this server's process run", and an HTTP registration launches nothing. A row
+        // persisted as PrivilegedHost would read as a host grant somebody made.
+        var service = CreateService(out var store, out _);
+        var input = CreateHttpInput("http://127.0.0.1:8931/sse") with
+        {
+            TrustTier = McpTrustTier.PrivilegedHost
+        };
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
+        store.AddAsync(Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>())
+             .Returns(callInfo => CreateRecord((McpServerInput)callInfo[0]!, enabled: false));
+
+        _ = await service.CreateAsync(input).ConfigureAwait(false);
+
+        await store.Received(1)
+                   .AddAsync(Arg.Is<McpServerInput>(stored => stored.TrustTier == McpTrustTier.Sandboxed), Arg.Any<CancellationToken>())
+                   .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task CreateAsync_WithStdioPrivilegedHostTier_PersistsItVerbatim()
+    {
+        var service = CreateService(out var store, out _);
+        var input = CreateStdioInput() with
+        {
+            TrustTier = McpTrustTier.PrivilegedHost
+        };
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([]);
+        store.AddAsync(Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>())
+             .Returns(callInfo => CreateRecord((McpServerInput)callInfo[0]!, enabled: false));
+
+        _ = await service.CreateAsync(input).ConfigureAwait(false);
+
+        await store.Received(1)
+                   .AddAsync(Arg.Is<McpServerInput>(stored => stored.TrustTier == McpTrustTier.PrivilegedHost), Arg.Any<CancellationToken>())
+                   .ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task UpdateAsync_WithMaskedEnvironmentValue_KeepsTheStoredSecret()
+    {
+        // The API never returns an environment VALUE, so a form that round-trips what it was shown submits the mask.
+        // Writing the mask through would replace the secret with a placeholder and silently break the server.
+        var service = CreateService(out var store, out _);
+        var id = Guid.NewGuid();
+        var existing = CreateRecord(CreateStdioInput(), enabled: false) with
+        {
+            Id = id,
+            Environment = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["API_TOKEN"] = "the-real-secret",
+                ["ROTATED"] = "old"
+            }
+        };
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([existing]);
+        store.UpdateAsync(id, Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>())
+             .Returns(callInfo => existing with
+             {
+                 Environment = ((McpServerInput)callInfo[1]!).Environment
+             });
+
+        var requestInput = CreateStdioInput() with
+        {
+            Environment = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["API_TOKEN"] = McpEnvironmentMask.Value,
+                ["ROTATED"] = "new",
+                ["ADDED"] = McpEnvironmentMask.Value
+            }
+        };
+
+        var result = await service.UpdateAsync(id, requestInput).ConfigureAwait(false);
+
+        AssertEx.Equal("the-real-secret", result!.Environment["API_TOKEN"]);
+        AssertEx.Equal("new", result.Environment["ROTATED"]);
+        // A masked value under a key with nothing stored is a NEW key whose value the caller typed. Inventing an
+        // empty string for it would be a guess, so it is kept verbatim.
+        AssertEx.Equal(McpEnvironmentMask.Value, result.Environment["ADDED"]);
+    }
+
+    [Test]
+    public async Task UpdateAsync_WithATierChange_PersistsTheNewTier()
+    {
+        var service = CreateService(out var store, out _);
+        var id = Guid.NewGuid();
+        var existing = CreateRecord(CreateStdioInput(), enabled: false) with
+        {
+            Id = id
+        };
+        store.GetByIdAsync(id, Arg.Any<CancellationToken>()).Returns(existing);
+        store.ListAsync(Arg.Any<CancellationToken>()).Returns([existing]);
+        store.UpdateAsync(id, Arg.Any<McpServerInput>(), Arg.Any<CancellationToken>())
+             .Returns(callInfo => existing with
+             {
+                 TrustTier = ((McpServerInput)callInfo[1]!).TrustTier
+             });
+
+        var result = await service.UpdateAsync(id, CreateStdioInput() with
+        {
+            TrustTier = McpTrustTier.PrivilegedHost
+        }).ConfigureAwait(false);
+
+        AssertEx.Equal(McpTrustTier.PrivilegedHost, result!.TrustTier);
+    }
+
     private static McpServerInput CreateStdioInput(string name = "Filesystem",
         string? command = "npx",
         bool enabled = false)
@@ -369,6 +505,7 @@ public sealed class McpServerServiceTests
             WorkingDirectory: null,
             new Dictionary<string, string>(StringComparer.Ordinal),
             Url: null,
+            McpTrustTier.Sandboxed,
             enabled);
     }
 
@@ -382,6 +519,7 @@ public sealed class McpServerServiceTests
             WorkingDirectory: null,
             new Dictionary<string, string>(StringComparer.Ordinal),
             url,
+            McpTrustTier.Sandboxed,
             enabled);
     }
 
@@ -396,6 +534,7 @@ public sealed class McpServerServiceTests
             input.WorkingDirectory,
             input.Environment,
             input.Url,
+            input.TrustTier,
             enabled,
             Version: 1,
             CreatedAtUtc: 10,

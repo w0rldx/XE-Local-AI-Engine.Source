@@ -3,16 +3,22 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 /// <summary>
 ///     The sandbox an <b>AgentHome</b> run executes in — and, by attachment, the one Coder reads through.
 ///     <para>
-///         Adds no members. It exists to make provider selection <em>per feature</em> a property of
-///         the type system rather than of a registration someone has to keep correct: a feature that asks for this
-///         interface is structurally unable to receive the Development Mode role's provider, and vice versa. The bare
-///         <see cref="ISandboxRuntimeProvider" /> is deliberately NOT registered in DI, so there is no "whichever
-///         provider happened to win" service left to inject by accident.
+///         Adds no members. It names the ROLE, not the backend: under ADR 0007 it is registered as a factory that
+///         resolves <see cref="SandboxWorkloads.AgentHome" /> through <c>SandboxProviderSelector</c>, so what a
+///         consumer of this interface receives is whichever registered backend can honour that declaration with the
+///         least additional privilege. The bare <see cref="ISandboxRuntimeProvider" /> is still deliberately NOT
+///         registered in DI, so there is no "whichever provider happened to win" service left to inject by accident.
 ///     </para>
 ///     <para>
-///         Concretely, this is what stops a container requirement from silently spreading. ADR 0004 permits Docker for
-///         Development Mode execution only; <c>DockerSandboxRuntimeProvider</c> therefore implements the Development
-///         role and NOT this one, which makes registering it for AgentHome a compile error rather than a review catch.
+///         What stops a container requirement from silently spreading is no longer this interface alone. ADR 0007
+///         Decision 4 replaces the single absent <c>implements</c> clause with three mechanisms: the AgentHome
+///         declaration names <see cref="SandboxToolchainSource.HostToolchain" />, which no container backend supplies,
+///         so minimal-satisfying resolution can never reach one; the declaration's isolation floor has no default, so
+///         a new consumer cannot inherit the weakest posture by saying nothing; and
+///         <c>SandboxSubstrateSelectionArchitectureTests</c> enumerates every declaration and asserts the exact set of
+///         backends allowed to serve it. That last one is an honest reduction — a compile error cannot be skipped and
+///         a test can — so <c>DockerSandboxRuntimeProvider</c> also still does not implement this interface, which
+///         keeps the old compile error standing behind the new checks rather than in place of them.
 ///     </para>
 ///     <para>
 ///         The implementations that can serve this role are the deterministic fake and the jailed process provider,

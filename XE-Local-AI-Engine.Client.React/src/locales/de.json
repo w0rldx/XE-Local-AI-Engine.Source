@@ -311,10 +311,10 @@
 				"title": "Bevor Sie den Entwicklungsmodus nutzen",
 				"intro": "Im Entwicklungsmodus darf ein Modell Dateien in einem verwalteten Arbeitsverzeichnis ändern, und die Build-, Test- und Lint-Befehle Ihres Repositorys werden auf diesem Rechner ausgeführt. Lesen Sie dies einmal, bevor Sie beginnen.",
 				"container": "Auf diesem Knoten laufen diese Befehle in einem Container: schreibgeschütztes Root-Dateisystem, alle Capabilities entzogen, keine Host-Namespaces, und eingebunden sind nur das verwaltete Arbeitsverzeichnis und die Laufzeitverzeichnisse.",
-				"containerNetwork": "Das Netzwerk gehört nicht zu dieser Abschottung. Der Container hat ausgehenden Netzwerkzugriff, und nichts schränkt ein, was er erreichen kann — das Auflösen von Abhängigkeiten benötigt ihn.",
+				"containerNetwork": "Für die Sandbox, in der der Agent arbeitet, ist ausgehender Netzwerkverkehr gesperrt: Der Container-Provider kann das durchsetzen. Nur das Auflösen der Abhängigkeiten durch die Engine selbst, ausgeführt gegen Ihren Basis-Commit noch bevor der Agent startet, erhält Netzwerkzugriff.",
 				"processUser": "Auf diesem Knoten laufen diese Befehle unter dem angemeldeten Benutzerkonto, das die Engine ausführt — mit dessen Zugriff auf Ihre Dateien, nicht nur auf das Repository.",
-				"processNetwork": "Sie haben Netzwerkzugriff, und nichts schränkt ein, was sie erreichen können.",
-				"processLimits": "Grenzen für CPU, Arbeitsspeicher und Prozessanzahl werden nur unter Linux durchgesetzt. Unter Windows gibt es keine — ein außer Kontrolle geratener Befehl wird dort nur durch den Rechner selbst begrenzt.",
+				"processNetwork": "Für die Sandbox, in der der Agent arbeitet, ist ausgehender Netzwerkverkehr überall dort gesperrt, wo dieser Knoten das durchsetzen kann — unter Linux mit funktionierender Sandbox-Netzwerkprüfung oder mit einem Container-Provider. Wo das nicht möglich ist, etwa unter Windows, erreichen diese Befehle das Netzwerk uneingeschränkt. Nur das Auflösen der Abhängigkeiten durch die Engine selbst, ausgeführt gegen Ihren Basis-Commit noch bevor der Agent startet, erhält Netzwerkzugriff. Die Übersicht zur Sandbox-Isolation zeigt, welche Haltung dieser Knoten tatsächlich bereitgestellt hat.",
+				"processLimits": "Für diese Befehle werden Grenzen für CPU, Arbeitsspeicher und Prozessanzahl angefordert, sofern dieser Node sie durchsetzen kann (das Isolations-Panel zeigt, ob er es tut): standardmäßig alle logischen Kerne, 75 % des Arbeitsspeichers mit 4 GB als Untergrenze und 4096 Prozesse; ein Betreiber kann sie überschreiben. Wo der Host sie nicht durchsetzen kann — Windows — gilt keine Grenze, und ein außer Kontrolle geratener Befehl wird nur durch sein Zeitlimit und den Rechner selbst begrenzt.",
 				"trust": "Registrieren Sie nur Repositories, denen Sie vertrauen. Repository-Code wird in jedem Fall ausgeführt.",
 				"disclosureNote": "Dieser Hinweis ist eine Offenlegung, kein Schutz. Ihre Bestätigung wird nur in diesem Browser gespeichert und ändert nichts daran, was ein Entwicklungslauf tun darf.",
 				"checkbox": "Ich habe verstanden, was der Entwicklungsmodus auf diesem Rechner ausführt.",
@@ -413,6 +413,28 @@
 				"viewerLabel": "Artefakt {{kind}}",
 				"view": "Anzeigen",
 				"hide": "Ausblenden"
+			},
+			"isolation": {
+				"title": "Sandbox-Isolierung",
+				"intro": "Auf diesem Host gemessen, pro Sandbox-Rolle. Eine Rolle beansprucht nur eine Grenze, die ihr Provider ausweist und der Startpfad durchsetzt.",
+				"caption": "Isolationsstatus jeder Sandbox-Rolle auf diesem Node.",
+				"role": "Rolle",
+				"provider": "Provider",
+				"backend": "Backend",
+				"level": "Stufe",
+				"filesystem": "Dateisystem",
+				"network": "Netzwerk",
+				"limits": "Ressourcenlimits",
+				"readOnlyMounts": "Schreibgeschützte Mounts",
+				"yes": "Ja",
+				"no": "Nein",
+				"egressRequired": "erforderlich",
+				"egressWhereAvailable": "wo verfügbar",
+				"levels": {
+					"isolated": "Isoliert",
+					"confined": "Eingeschränkt",
+					"none": "Keine"
+				}
 			}
 		},
 		"knowledgeBase": {
@@ -2700,10 +2722,12 @@
 					"name": "Name",
 					"transport": "Transport",
 					"target": "Ziel",
+					"trust": "Vertrauen",
 					"enabled": "Aktiviert",
 					"version": "Version",
 					"actions": "Aktionen"
 				},
+				"trustNotApplicable": "n. z.",
 				"title": "Registrierte Server"
 			},
 			"editor": {
@@ -2728,6 +2752,16 @@
 						"Http": "HTTP"
 					}
 				},
+				"trustTier": {
+					"label": "Vertrauen",
+					"description": "Sandboxed startet den Server ohne Host-Dateisystem und ohne Netzwerk. Privilegierter Host startet ihn als normalen Prozess auf diesem Rechner — nur für einen Server, der das wirklich braucht.",
+					"privilegedWarning": "Dieser Server läuft außerhalb der Sandbox, mit demselben Zugriff auf Ihre Dateien und Ihr Netzwerk wie die Engine selbst.",
+					"options": {
+						"Sandboxed": "Sandbox",
+						"PrivilegedHost": "Privilegierter Host",
+						"BuiltInTrusted": "Integriert"
+					}
+				},
 				"command": {
 					"label": "Befehl",
 					"placeholder": "/usr/bin/my-mcp-server"
@@ -2747,6 +2781,7 @@
 					"empty": "Keine Umgebungsvariablen.",
 					"keyPlaceholder": "KEY",
 					"valuePlaceholder": "Wert",
+					"maskedPlaceholder": "unverändert — neuen Wert eingeben, um ihn zu ersetzen",
 					"remove": "Variable entfernen"
 				},
 				"url": {

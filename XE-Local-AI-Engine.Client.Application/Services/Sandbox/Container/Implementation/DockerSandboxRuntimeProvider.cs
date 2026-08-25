@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     The <c>docker</c> sandbox <see cref="ISandboxRuntimeProvider" />: a container per sandbox, created under the
@@ -71,6 +72,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     private const string WorkspaceProbePrefix = ".xe-sandbox-mapping-probe-";
 
     private readonly IDockerRuntimeClientFactory _clientFactory;
+    private readonly string _installId;
     private readonly ILogger<DockerSandboxRuntimeProvider> _logger;
     private readonly IOptionsMonitor<ContainerSandboxOptions> _options;
     private readonly ConcurrentDictionary<string, SandboxState> _sandboxes = new(StringComparer.Ordinal);
@@ -80,13 +82,16 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
 
     public DockerSandboxRuntimeProvider(IOptionsMonitor<ContainerSandboxOptions> options,
         IDockerRuntimeClientFactory clientFactory,
+        INodeDataDirectory nodeDataDirectory,
         TimeProvider timeProvider,
         ILogger<DockerSandboxRuntimeProvider> logger)
     {
+        ArgumentNullException.ThrowIfNull(nodeDataDirectory);
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _installId = BuildInstallId(nodeDataDirectory.Root);
     }
 
     public string ProviderName => Name;
@@ -116,7 +121,17 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         | SandboxProviderCapabilities.SupportsCommandCancellation
         | SandboxProviderCapabilities.SupportsAttach
         | SandboxProviderCapabilities.SupportsKill
-        | SandboxProviderCapabilities.SupportsTrustedHostWorkspace;
+        | SandboxProviderCapabilities.SupportsTrustedHostWorkspace
+        // The reason this backend exists (ADR 0004 Context): a confinement mechanism restricts what a process may
+        // touch, but the process still runs against the HOST's SDKs. This one does not — and it cannot offer the
+        // host's toolchain either, which is why the two flags are exclusive rather than additive.
+        | SandboxProviderCapabilities.SuppliesImageToolchain
+        // The host filesystem is absent from this sandbox by construction — read-only rootfs, engine-generated mounts
+        // only, no host namespaces — and every create reads those settings back and fails closed on any mismatch, so a
+        // container that does not have the property is never handed to a caller. Note what is deliberately NOT here:
+        // SupportsFilesystemIsolation, which means "serves SandboxIsolationMode.Filesystem", a different contract this
+        // provider still refuses below.
+        | SandboxProviderCapabilities.SupportsHostFilesystemBoundary;
 
     public async ValueTask DisposeAsync()
     {
@@ -644,6 +659,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
                 identity,
                 "xe-dev-" + sandboxId,
                 sandboxId,
+                _installId,
                 bindMounts,
                 // Honored, not ignored. This provider advertises SupportsResourceLimits, so a caller's ceiling must be
                 // the ceiling that gets applied — and because it is baked into the specification, the read-back
@@ -758,6 +774,15 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     /// </summary>
     private static string ResolveMountTarget(SandboxMount mount, ContainerSandboxOptions options, string workspaceRoot)
     {
+        // The one shape derivation cannot express: a mount whose SOURCE is engine-generated content outside the
+        // workspace but whose TARGET is a path inside it — shadowing a committed credential without touching the real
+        // file. ResolveContainerPath still rejects every '..' escape, so a caller cannot name a target outside the
+        // workspace mount this way.
+        if (mount.TargetIsWorkspaceRelative)
+        {
+            return DockerSandboxPaths.ResolveContainerPath(options.WorkspaceMountTarget, mount.SandboxPath);
+        }
+
         var hostPath = Path.GetFullPath(mount.HostPath);
         var workspacePrefix = Path.TrimEndingDirectorySeparator(workspaceRoot) + Path.DirectorySeparatorChar;
         if (!hostPath.StartsWith(workspacePrefix, StringComparison.Ordinal))
@@ -935,6 +960,113 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
         {
             await state.Client.DisposeAsync().ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    ///     Removes every container this INSTALLATION created that no live sandbox references. Best-effort and
+    ///     idempotent: a removal that fails is logged and the sweep continues, and a second run over an already-swept
+    ///     daemon finds nothing.
+    ///     <para>
+    ///         The leak it collects is the one the in-memory registry cannot: <see cref="DisposeAsync" /> and
+    ///         <see cref="KillAsync" /> remove containers on a graceful shutdown or an explicit kill, but a hard host
+    ///         kill runs neither, and the container is then referenced only by a dictionary that died with the
+    ///         process. Nothing else reaps it — <c>SandboxOrphanReaper</c> reads on-disk markers written by the
+    ///         process provider and knows nothing about containers. It also unblocks the next create: a leaked
+    ///         container still owns its <c>xe-dev-&lt;sandboxId&gt;</c> name, and the same attach key would collide
+    ///         with it forever.
+    ///     </para>
+    ///     <para>
+    ///         <b>What it will not touch.</b> The daemon-side filter is <see cref="DockerSandboxHardening.OwnerLabel" />
+    ///         AND <see cref="DockerSandboxHardening.InstallLabel" />, so a container belonging to another XE
+    ///         installation on the same daemon — or to anything else at all — is never a candidate, and a container
+    ///         from a build that predates the install label is left alone rather than guessed about. The engine
+    ///         creates no networks and no volumes (every container is created on <c>none</c> or the default bridge,
+    ///         and its removal already takes anonymous volumes with it), so there is nothing else of ours to sweep.
+    ///     </para>
+    /// </summary>
+    /// <returns>How many containers were removed.</returns>
+    internal async Task<int> SweepOrphanedContainersAsync(CancellationToken cancellationToken = default)
+    {
+        var endpoint = DockerDaemonEndpointResolver.Resolve(_options.CurrentValue);
+        var client = _clientFactory.Create(endpoint);
+
+        try
+        {
+            var live = _sandboxes.Values.Select(static state => state.ContainerId).ToHashSet(StringComparer.Ordinal);
+            var owned = await client.ListContainersAsync(BuildOwnershipFilter(), cancellationToken).ConfigureAwait(false);
+            var removed = 0;
+
+            foreach (var containerId in owned)
+            {
+                if (live.Contains(containerId))
+                {
+                    // This process is using it. Only reachable if the sweep is ever run after start; at startup the
+                    // registry is empty by construction.
+                    continue;
+                }
+
+                try
+                {
+                    await client.RemoveContainerAsync(containerId, cancellationToken).ConfigureAwait(false);
+                    removed++;
+                    _logger.LogInformation("Removed orphaned Development Mode container {ContainerId} left by a previous run.", containerId);
+                }
+                catch (DockerRuntimeException exception)
+                {
+                    // One container that will not go is not a reason to leave the rest. Logged at error because a
+                    // container the engine cannot remove is a leak an operator has to clear by hand.
+                    _logger.LogError(exception, "Failed to remove orphaned Development Mode container {ContainerId}.", containerId);
+                }
+            }
+
+            return removed;
+        }
+        finally
+        {
+            await client.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>The label set that identifies a container as belonging to THIS installation's Development Mode.</summary>
+    private IReadOnlyDictionary<string, string> BuildOwnershipFilter()
+    {
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [DockerSandboxHardening.OwnerLabel] = DockerSandboxHardening.OwnerLabelValue,
+            [DockerSandboxHardening.InstallLabel] = _installId
+        };
+    }
+
+    /// <summary>
+    ///     The id that distinguishes this engine installation's containers from another's on the same daemon.
+    ///     <para>
+    ///         Derived from the node data directory, because that is the only identity available at startup that is
+    ///         both stable across restarts and different per installation: the daemon attestation is per node but
+    ///         lives inside this directory, and the sandbox id is a hash over an attach key that does not exist yet.
+    ///         Hashed rather than used raw for the same reason <see cref="BuildSandboxId" /> hashes: the path
+    ///         routinely contains the operator's account name, and a container label is readable by anyone who can
+    ///         list containers on that daemon.
+    ///     </para>
+    ///     <para>
+    ///         Two installations sharing one node data directory would share an id and sweep each other's containers.
+    ///         That configuration is already excluded — the node database, the attestation and the process provider's
+    ///         jail root all assume a single owner of this directory — so it is not defended against here beyond
+    ///         being written down.
+    ///     </para>
+    /// </summary>
+    internal static string BuildInstallId(string nodeDataRoot)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(nodeDataRoot);
+
+        var canonical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(nodeDataRoot));
+        if (OperatingSystem.IsWindows())
+        {
+            // A Windows path is case-insensitive, so two spellings of one directory must not produce two ids. Upper
+            // rather than lower only because CA1308 says so; the value is hashed either way and never displayed.
+            canonical = canonical.ToUpperInvariant();
+        }
+
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(canonical)))[..32];
     }
 
     /// <summary>
