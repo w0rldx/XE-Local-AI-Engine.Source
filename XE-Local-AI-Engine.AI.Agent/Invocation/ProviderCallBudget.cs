@@ -295,7 +295,6 @@ public sealed class ProviderCallBudget
             AmbientBudget.Value = _previous;
         }
     }
-
 }
 
 /// <summary>
@@ -304,9 +303,12 @@ public sealed class ProviderCallBudget
 ///     an outer turn, and — the part that makes a step's spend observable — collects the budgets that were created
 ///     under it so the seeding caller can read back what the run consumed.
 ///     <para>
-///         More than one budget can attach: a run that spawns a sub-agent invocation seeds a second scope, and the cap
-///         applies to each of them separately. <see cref="CaptureConsumption" /> therefore SUMS, which is the honest
-///         answer to "what did this step spend" even though it can exceed <see cref="MaxProviderCalls" /> in that case.
+///         More than one budget can attach: a run that spawns a sub-agent invocation seeds a second scope, and
+///         <see cref="MaxProviderCalls" /> then bounds EACH of them separately rather than their total.
+///         <see cref="CaptureConsumption" /> sums, because the honest answer to "what did this step spend" is the
+///         total — but it also reports <see cref="ProviderCallConsumption.AttachedBudgets" />, precisely so a reader
+///         never divides a summed call count by a per-budget ceiling. Eighteen calls across two budgets is two runs
+///         that each stayed under ten, not one run that breached it.
 ///     </para>
 /// </summary>
 public sealed class ProviderCallCapScope : IDisposable
@@ -314,6 +316,7 @@ public sealed class ProviderCallCapScope : IDisposable
     private readonly ProviderCallCapScope? _previous;
     private readonly Lock _gate = new();
     private readonly List<ProviderCallBudget> _budgets = [];
+    private bool _disposed;
 
     internal ProviderCallCapScope(int maxProviderCalls, ProviderCallCapScope? previous)
     {
@@ -328,9 +331,10 @@ public sealed class ProviderCallCapScope : IDisposable
     ///     What the budgets created under this scope have consumed so far, or <see langword="null" /> when none was
     ///     created (nothing ran, or the run never seeded a budget). Content-free counts only — safe to persist.
     ///     <para>
-    ///         Read it AFTER the run has landed. Reading it mid-run answers with a moving target, and a run stopped
-    ///         through the cancellation registry may still be unwinding, so a cancelled step's numbers are a race
-    ///         rather than a measurement.
+    ///         Read it AFTER the run has landed but BEFORE the scope is disposed. Reading it mid-run answers with a
+    ///         moving target, and a run stopped through the cancellation registry may still be unwinding, so a
+    ///         cancelled step's numbers are a race rather than a measurement. Disposal drops the collected budgets, so
+    ///         a read afterwards answers <see langword="null" /> like a scope nothing ever ran under.
     ///     </para>
     /// </summary>
     public ProviderCallConsumption? CaptureConsumption()
@@ -356,18 +360,44 @@ public sealed class ProviderCallCapScope : IDisposable
             toolCallsCompleted += snapshot.ToolCallsCompleted;
         }
 
-        return new ProviderCallConsumption(providerCalls, estimatedInputTokens, toolCallsCompleted, MaxProviderCalls);
+        return new ProviderCallConsumption(providerCalls, estimatedInputTokens, toolCallsCompleted, MaxProviderCalls, budgets.Length);
     }
 
+    /// <summary>
+    ///     Restores the ambient cap this scope replaced and releases the budgets it collected, so a long-lived caller
+    ///     does not pin one run's counters for the life of the process. Idempotent.
+    /// </summary>
     public void Dispose()
     {
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            _budgets.Clear();
+        }
+
         ProviderCallBudget.RestoreCallCap(_previous);
     }
 
+    /// <summary>
+    ///     Registers a budget created under this scope. A late attach — a run still unwinding after the caller stopped
+    ///     watching, which is exactly how a cancelled step ends — is IGNORED rather than throwing: this is a telemetry
+    ///     sink, and faulting a run that is already on its way out to protect a measurement nobody will read would
+    ///     trade a real turn for a number.
+    /// </summary>
     internal void Attach(ProviderCallBudget budget)
     {
         lock (_gate)
         {
+            if (_disposed)
+            {
+                return;
+            }
+
             _budgets.Add(budget);
         }
     }
@@ -378,11 +408,23 @@ public sealed class ProviderCallCapScope : IDisposable
 ///     results, paths or schemas. Small enough to persist on an event row, which is what the work-session supervisor
 ///     does with it so a per-step cap can be sized from recorded data rather than guessed.
 /// </summary>
-/// <param name="ProviderCalls">Raw provider rounds that were admitted (the rejected one that tripped a ceiling is not counted).</param>
+/// <param name="ProviderCalls">Raw provider rounds that were admitted (the rejected one that tripped a ceiling is not counted), summed over every attached budget.</param>
 /// <param name="EstimatedInputTokens">Estimated input tokens across those rounds — an estimate from the character profile, not the provider's count.</param>
 /// <param name="ToolCallsCompleted">Tool invocations that returned, successfully or not.</param>
-/// <param name="ProviderCallCap">The per-run ceiling the caller seeded, so a reader can size the numerator against it.</param>
-public sealed record ProviderCallConsumption(int ProviderCalls, long EstimatedInputTokens, int ToolCallsCompleted, int ProviderCallCap);
+/// <param name="ProviderCallCap">
+///     The ceiling the caller seeded. It bounds EACH attached budget, not their sum, so it is only a denominator for
+///     <paramref name="ProviderCalls" /> while <paramref name="AttachedBudgets" /> is 1.
+/// </param>
+/// <param name="AttachedBudgets">
+///     How many invocations ran under the scope — 1 for an ordinary run, more when it spawned sub-agent invocations,
+///     each of which got its own budget and its own ceiling. Reported so nobody reads a summed call count as a
+///     breached cap.
+/// </param>
+public sealed record ProviderCallConsumption(int ProviderCalls,
+    long EstimatedInputTokens,
+    int ToolCallsCompleted,
+    int ProviderCallCap,
+    int AttachedBudgets);
 
 /// <summary>
 ///     Immutable, content-free aggregate of the expensive work performed during one root agent invocation. It contains

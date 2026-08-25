@@ -427,7 +427,7 @@ internal sealed class WorkSessionService : IWorkSessionService
             throw new WorkSessionValidationException("This node has no chat model a work session could run on. Install one, or pin a model on the agent.");
         }
 
-        if (!verdict.SupportsTools)
+        if (verdict.SupportsTools is false)
         {
             throw new WorkSessionValidationException(
                 $"'{verdict.AgentName}' runs on a model that cannot call tools, so it could never record a task or a finding. Pick an agent on a tool-capable model.");

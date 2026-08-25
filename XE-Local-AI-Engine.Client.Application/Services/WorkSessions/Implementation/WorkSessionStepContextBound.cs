@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 
 /// <summary>
 ///     Bounds the transcript one work-session step replays.
@@ -44,6 +45,15 @@ internal sealed class WorkSessionStepContextBound(INodeChatPersistenceService pe
     ///     <paramref name="budgetTokens" /> estimated tokens. A non-positive budget disables the bound; every compaction
     ///     no-op (no local model to summarize with, nothing new to fold) is non-fatal — the step still runs, and the
     ///     provider-round budgeters remain the backstop they always were.
+    ///     <para>
+    ///         The projection and the budget are held in ONE arithmetic: the model is resolved once and used both for
+    ///         the estimate's divisor and for the observed correction the budget is divided by. Correcting only the
+    ///         estimate would compare calibrated tokens against an uncalibrated number and fold late on exactly the
+    ///         models calibration exists to protect. Tighten-only and neutral until a round has been recorded, so an
+    ///         uncalibrated session compares against the configured budget unchanged. Note this uses the correction
+    ///         ALONE — <see cref="TokenEstimatorCalibrationStore.EstimateSafetyFactor" /> is a context-window reserve
+    ///         and has no business retuning a flat policy budget.
+    ///     </para>
     /// </summary>
     public async Task ApplyAsync(Guid conversationId, int budgetTokens, CancellationToken cancellationToken = default)
     {
@@ -58,18 +68,21 @@ internal sealed class WorkSessionStepContextBound(INodeChatPersistenceService pe
             return;
         }
 
-        var projected = Project(conversation, _estimator);
-        if (projected <= budgetTokens)
+        var modelName = ResolveTranscriptModel(conversation);
+        var projected = Project(conversation, _estimator, modelName);
+        var effectiveBudget = TokenEstimatorCalibrationStore.ApplyObservedCorrection(budgetTokens, _estimator.ResolveObservedCorrection(modelName));
+        if (projected <= effectiveBudget)
         {
             return;
         }
 
         var result = await _compaction.CompactAsync(conversationId, requestedModel: null, SessionKeepVerbatim, cancellationToken).ConfigureAwait(false);
         _logger.LogInformation(
-            "Work session conversation {ConversationId} projected ~{Projected} replayed token(s) against a step budget of {Budget}; forced compaction reported {Outcome} after folding {Folded} message(s).",
+            "Work session conversation {ConversationId} projected ~{Projected} replayed token(s) against a step budget of {Budget} (effective {EffectiveBudget} after this model's observed correction); forced compaction reported {Outcome} after folding {Folded} message(s).",
             conversationId,
             projected,
             budgetTokens,
+            effectiveBudget,
             result.Outcome,
             result.MessagesFolded);
     }

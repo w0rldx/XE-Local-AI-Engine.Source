@@ -84,6 +84,7 @@ public sealed class ProviderCallBudgetTests
         AssertEx.Equal(expected: 4_500L, consumption.EstimatedInputTokens);
         AssertEx.Equal(expected: 2, consumption.ToolCallsCompleted);
         AssertEx.Equal(expected: 10, consumption.ProviderCallCap, "The cap rides along so a reader can size the calls against it.");
+        AssertEx.Equal(expected: 1, consumption.AttachedBudgets, "One invocation ran, so the calls ARE a ratio against the cap.");
     }
 
     [Test]
@@ -116,6 +117,8 @@ public sealed class ProviderCallBudgetTests
         AssertEx.Equal(expected: 6, consumption.ProviderCalls);
         AssertEx.Equal(expected: 9_000L, consumption.EstimatedInputTokens);
         AssertEx.Equal(expected: 4, consumption.ToolCallsCompleted);
+        AssertEx.Equal(expected: 2, consumption.AttachedBudgets, "Six calls against a cap of ten is two runs of three, not one run of six — the count is what says so.");
+        AssertEx.Equal(expected: 10, consumption.ProviderCallCap, "The cap is unchanged: it bounds each budget, not their sum.");
     }
 
     [Test]
@@ -136,6 +139,39 @@ public sealed class ProviderCallBudgetTests
         }
 
         AssertEx.Equal(expected: 3, AssertEx.NotNull(outer.CaptureConsumption()).ProviderCalls, "The outer cap of three, not the nested cap of one, is what bounded the run.");
+    }
+
+    [Test]
+    public void Attach_AfterTheScopeIsDisposed_IsIgnoredRatherThanThrowing()
+    {
+        // Reached for real when a run outlives the caller that seeded the scope: disposal restores the ambient value
+        // for the DISPOSING flow only, so an invocation still unwinding on its own async context — which is precisely
+        // how a cancelled step ends — holds the disposed scope and seeds a budget into it. Faulting that run to
+        // protect a measurement nobody will read would trade a real turn for a number.
+        var cap = ProviderCallBudget.BeginCallCapScope(maxProviderCalls: 10);
+        ProviderCallBudget budget;
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions()))
+        {
+            budget = ProviderCallBudget.Current!;
+        }
+
+        cap.Dispose();
+        cap.Attach(budget);
+
+        AssertEx.Null(cap.CaptureConsumption(), "A disposed scope collects nothing, so it reports nothing.");
+    }
+
+    [Test]
+    public void Dispose_ReleasesTheCollectedBudgetsAndIsIdempotent()
+    {
+        var cap = ProviderCallBudget.BeginCallCapScope(maxProviderCalls: 10);
+        RunOneTurn();
+        AssertEx.NotNull(cap.CaptureConsumption(), "Read it BEFORE disposing — that is the contract the supervisor keeps.");
+
+        cap.Dispose();
+        cap.Dispose();
+
+        AssertEx.Null(cap.CaptureConsumption(), "Disposal drops the budgets so a long-lived caller cannot pin one run's counters.");
     }
 
     /// <summary>Stands in for one invocation: the runner seeds a scope, the pipeline registers rounds and tool calls.</summary>

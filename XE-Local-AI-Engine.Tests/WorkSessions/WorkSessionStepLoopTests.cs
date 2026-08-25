@@ -349,17 +349,22 @@ public sealed class WorkSessionStepLoopTests
     }
 
     [Test]
-    public async Task Loop_WhenTheSessionsModelHasLeftTheToolCapableList_FailsTheStepInsteadOfSendingIt()
+    public async Task Loop_WhenTheSessionsModelHasLeftTheToolCapableList_PausesTheStepInsteadOfSendingIt_AndResumeWorksOnceItIsBack()
     {
         // The allow-list is read LIVE on every offer, so an operator edit lands mid-run and the create-time refusal
         // cannot cover it. Without this guard the step still goes out — with the four state tools missing from the
         // offer — and the session spends its whole budget on "Requested function update_work_plan not found".
+        //
+        // PAUSED rather than Failed is the load-bearing half: the refusal tells the operator to list the model, and
+        // Resume accepts only Paused/Interrupted, so a Failed session could not be restarted after they did it. The
+        // second act of this test is exactly that round trip.
         var sessionId = Guid.NewGuid();
         var publisher = new RecordingWorkSessionEventPublisher();
         FakeNodeChatStreamService? stream = null;
         await using var factory = new TestServerWebAppFactory
         {
-            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            // One step per run, so the resumed run sends its turn and pauses on the budget instead of looping to 25.
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1")),
             ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
                 services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
                 publisher)
@@ -367,38 +372,76 @@ public sealed class WorkSessionStepLoopTests
 
         var agentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId, agentDefinitionId: agentId).ConfigureAwait(false);
-        await DropTheModelFromTheAllowListAsync(factory.Services).ConfigureAwait(false);
+        await SetAllowListAsync(factory.Services, "some-other-model").ConfigureAwait(false);
         var fake = ResolveStream(factory, ref stream);
 
         AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
-        var settled = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+        var refused = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
 
-        AssertEx.Equal(expected: 0, settled.StepCount, "A step that never ran must not be charged to the budget.");
+        AssertEx.Equal(expected: 0, refused.StepCount, "A step that never ran must not be charged to the budget.");
         AssertEx.Empty(fake.Requests, "The turn must not be sent at all — a sent one would come back tool-less and look like a model failure.");
 
         var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
-        AssertEx.Contains(events, entry => entry.EventType == WorkSessionEventTypes.StepFailed, "The refusal is recorded as the step failing.");
+        AssertEx.Contains(events,
+            entry => entry.EventType == WorkSessionEventTypes.StepEnded && entry.Outcome == "ToolGate",
+            "The row names the gate that stopped the step; a StepFailed row on a paused session would read as a contradiction.");
+        AssertEx.False(events.Any(entry => entry.EventType == WorkSessionEventTypes.StepFailed), "Nothing failed here.");
         AssertEx.Contains(events,
             entry => entry.EventType == "SessionStatusChanged"
-                     && entry.Outcome == nameof(AgentWorkSessionStatus.Failed)
+                     && entry.Outcome == nameof(AgentWorkSessionStatus.Paused)
                      && entry.DetailJson?.Contains("tool-capable model list", StringComparison.Ordinal) == true,
             "The reason has to name the list the operator must edit.");
+
+        // The operator does what the refusal asked, then presses Resume.
+        await SetAllowListAsync(factory.Services, "tool-capable-model").ConfigureAwait(false);
+        await ResumeWhenTheNodeCanAdmitAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var resumed = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, resumed.StepCount, "The resumed run takes the step the gate had stopped.");
+        AssertEx.Equal(expected: 1, fake.Requests.Count, "And this time the turn is actually sent.");
+        AssertEx.Contains(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false),
+            entry => entry.EventType == WorkSessionEventTypes.StepStarted);
     }
 
     /// <summary>
-    ///     What an operator does in Node Settings while a session is running: the stored allow-list replaces the seeded
-    ///     one outright, so the session's model is simply no longer on it.
+    ///     What an operator does in Node Settings: the stored allow-list replaces the seeded one outright, so the
+    ///     session's model is either on it or it is not.
     /// </summary>
-    private static async Task DropTheModelFromTheAllowListAsync(IServiceProvider services)
+    private static async Task SetAllowListAsync(IServiceProvider services, params string[] models)
     {
         await using var scope = services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<INodeSettingsStore>();
         var stored = await store.LoadAsync().ConfigureAwait(false);
         await store.SaveAsync(stored with
             {
-                ToolCapableModels = ["some-other-model"]
+                ToolCapableModels = models
             })
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Resumes through the REST service, retrying the admission race. The settled run releases the node's one slot
+    ///     in its <c>finally</c>, which lands AFTER the status row it settled — so a resume issued the instant the test
+    ///     sees <c>Paused</c> can legitimately lose the race and be refused. That is real behaviour, not a defect, and
+    ///     an operator clicking Resume hits the same window; retrying is what makes the assertion about the GATE rather
+    ///     than about timing.
+    /// </summary>
+    private static async Task ResumeWhenTheNodeCanAdmitAsync(IServiceProvider services, Guid sessionId)
+    {
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(30);
+        while (true)
+        {
+            await using var scope = services.CreateAsyncScope();
+            try
+            {
+                _ = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ResumeAsync(sessionId).ConfigureAwait(false);
+                return;
+            }
+            catch (WorkSessionInvalidTransitionException) when (DateTimeOffset.UtcNow < deadline)
+            {
+                await Task.Delay(25).ConfigureAwait(false);
+            }
+        }
     }
 
     [Test]
@@ -435,6 +478,7 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.Equal(expected: 4_500L, consumption.EstimatedInputTokens);
         AssertEx.Equal(expected: 2, consumption.ToolCallsCompleted);
         AssertEx.Equal(expected: 6, consumption.ProviderCallCap, "The cap the step was seeded with rides along, so the calls can be sized against it.");
+        AssertEx.Equal(expected: 1, consumption.AttachedBudgets, "One invocation ran, which is what makes the calls a ratio against the cap.");
     }
 
     [Test]

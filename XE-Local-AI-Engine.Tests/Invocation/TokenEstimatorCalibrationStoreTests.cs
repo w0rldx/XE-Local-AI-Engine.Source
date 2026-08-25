@@ -26,22 +26,57 @@ public sealed class TokenEstimatorCalibrationStoreTests
     }
 
     [Test]
-    public void RecordObservedUsage_FirstSample_SeedsTheRatioWithoutSmoothing()
+    public void RecordObservedUsage_FirstSample_FoldsFromNeutralRatherThanBeingTakenRaw()
     {
         var store = new TokenEstimatorCalibrationStore();
 
         // The live 2026-08-24 shape: the budgeters believed 64,512 where the server counted 72,343 — ~12% optimistic.
         store.RecordObservedUsage(Model, estimatedTokens: 64_512, observedInputTokens: 72_343);
 
-        // Seeded, not blended: there is no prior to blend with, and starting at 0.2 of the truth would leave the first
-        // several rounds of a model still measuring against a window it has already been shown does not hold.
-        AssertClose(72_343d / 64_512d, store.ResolveObservedCorrection(Model));
+        // Folded from neutral, NOT taken raw. Taking the first sample raw would apply it at an effective alpha of 1.0,
+        // which is the one case where a single round redefines the window instead of nudging it — and at the upper
+        // bound that means an instant cut to 42.5% of the launched window on one anomalous round.
+        const double alpha = TokenEstimatorCalibrationStore.ObservedCorrectionSmoothingFactor;
+        var sample = 72_343d / 64_512d;
+        AssertClose(((1 - alpha) * TokenEstimatorCalibrationStore.NeutralObservedCorrection) + (alpha * sample),
+            store.ResolveObservedCorrection(Model));
+    }
+
+    [Test]
+    public void RecordObservedUsage_OneAnomalousRound_CannotPinTheCorrectionToTheBound()
+    {
+        var store = new TokenEstimatorCalibrationStore();
+
+        // The regression this seeding exists to prevent: a single absurd round used to land the correction on 2.0
+        // outright and take ~10 rounds to decay out of it, quietly halving every window in between.
+        store.RecordObservedUsage(Model, estimatedTokens: 10_000, observedInputTokens: 10_000_000);
+
+        var correction = store.ResolveObservedCorrection(Model);
+        AssertEx.True(correction < 1.25,
+            $"One anomalous round must nudge rather than redefine; measured {correction}.");
+    }
+
+    [Test]
+    public void RecordObservedUsage_RepeatedSamples_ConvergeTowardTheObservedRatio()
+    {
+        var store = new TokenEstimatorCalibrationStore();
+
+        // Smoothing must delay the truth, not refuse it: a model that really does cost 12% more than estimated has to
+        // arrive there, or the whole channel is a no-op with extra steps.
+        for (var round = 0; round < 40; round++)
+        {
+            store.RecordObservedUsage(Model, estimatedTokens: 10_000, observedInputTokens: 11_200);
+        }
+
+        AssertClose(1.12, store.ResolveObservedCorrection(Model), tolerance: 1e-3);
     }
 
     [Test]
     public void RecordObservedUsage_SubsequentSamples_BlendWithTheConfiguredSmoothingFactor()
     {
         var store = new TokenEstimatorCalibrationStore();
+        // A first sample of exactly 1.0 folds from neutral to neutral, so the prior entering the second fold is 1.0
+        // and the expectation below reads as the plain one-step blend it is.
         store.RecordObservedUsage(Model, estimatedTokens: 1_000, observedInputTokens: 1_000);
 
         store.RecordObservedUsage(Model, estimatedTokens: 1_000, observedInputTokens: 1_200);
@@ -56,10 +91,12 @@ public sealed class TokenEstimatorCalibrationStoreTests
         var store = new TokenEstimatorCalibrationStore();
 
         // A provider that billed a whole cached conversation against one round, or reported a count for something
-        // other than this prompt. One such report must not be able to halve the effective window.
+        // other than this prompt. The SAMPLE is clamped to the bound before it is folded, which is what this asserts:
+        // an unclamped 40.0 folded from neutral would blend to 8.8 and then clamp to 2.0, so landing on the
+        // fold-of-the-bound instead is the proof that the clamp happened on the sample.
         store.RecordObservedUsage(Model, estimatedTokens: 1_000, observedInputTokens: 40_000);
 
-        AssertClose(TokenEstimatorCalibrationStore.MaximumObservedCorrection, store.ResolveObservedCorrection(Model));
+        AssertClose(Fold(TokenEstimatorCalibrationStore.MaximumObservedCorrection), store.ResolveObservedCorrection(Model));
     }
 
     [Test]
@@ -69,7 +106,7 @@ public sealed class TokenEstimatorCalibrationStoreTests
 
         store.RecordObservedUsage(Model, estimatedTokens: 10_000, observedInputTokens: 100);
 
-        AssertClose(TokenEstimatorCalibrationStore.MinimumObservedCorrection, store.ResolveObservedCorrection(Model));
+        AssertClose(Fold(TokenEstimatorCalibrationStore.MinimumObservedCorrection), store.ResolveObservedCorrection(Model));
     }
 
     [Test]
@@ -184,8 +221,55 @@ public sealed class TokenEstimatorCalibrationStoreTests
             TokenEstimatorCalibrationStore.ApplyEstimateMargins(65_536, observedCorrection: 1_000));
     }
 
-    private static void AssertClose(double expected, double actual)
+    [Test]
+    public void ApplyObservedCorrection_AtNeutral_ReturnsTheBudgetUnchanged()
     {
-        AssertEx.True(Math.Abs(expected - actual) < 1e-9, $"Expected a correction of {expected}; measured {actual}.");
+        // The flat-budget path carries NO safety factor: that reserve exists to stop an estimate overshooting a
+        // launched context window, and a policy number like StepContextBudgetTokens has no window to overshoot.
+        // Applying the factor here would silently retune the policy by 15%.
+        foreach (var budget in new[] { 1, 12_000, 65_536 })
+        {
+            AssertEx.Equal(budget, TokenEstimatorCalibrationStore.ApplyObservedCorrection(budget, TokenEstimatorCalibrationStore.NeutralObservedCorrection));
+        }
+    }
+
+    [Test]
+    public void ApplyObservedCorrection_WhenTheEstimatorRunsOptimistic_TightensTheBudget()
+    {
+        AssertEx.Equal((int)(12_000 / 1.5), TokenEstimatorCalibrationStore.ApplyObservedCorrection(12_000, observedCorrection: 1.5));
+    }
+
+    [Test]
+    public void ApplyObservedCorrection_IsTightenOnlyAndBounded()
+    {
+        AssertEx.Equal(expected: 12_000, TokenEstimatorCalibrationStore.ApplyObservedCorrection(12_000, observedCorrection: 0.6));
+        AssertEx.Equal(expected: 12_000, TokenEstimatorCalibrationStore.ApplyObservedCorrection(12_000, double.NaN));
+        AssertEx.Equal((int)(12_000 / TokenEstimatorCalibrationStore.MaximumObservedCorrection),
+            TokenEstimatorCalibrationStore.ApplyObservedCorrection(12_000, observedCorrection: 1_000));
+        AssertEx.Equal(expected: 0, TokenEstimatorCalibrationStore.ApplyObservedCorrection(budgetTokens: 0, observedCorrection: 1.5));
+    }
+
+    [Test]
+    public void ApplyEstimateMargins_IsTheSafetyMarginComposedWithTheObservedCorrection()
+    {
+        // The window path is defined as the flat path applied to the margined window; pinning that keeps the two from
+        // drifting apart if either is retuned.
+        foreach (var correction in new[] { 1.0, 1.12, 1.5, 0.7, 5.0 })
+        {
+            AssertEx.Equal(TokenEstimatorCalibrationStore.ApplyObservedCorrection(TokenEstimatorCalibrationStore.ApplySafetyMargin(65_536), correction),
+                TokenEstimatorCalibrationStore.ApplyEstimateMargins(65_536, correction));
+        }
+    }
+
+    /// <summary>One smoothing step from neutral — what a single recorded sample is worth.</summary>
+    private static double Fold(double sample)
+    {
+        const double alpha = TokenEstimatorCalibrationStore.ObservedCorrectionSmoothingFactor;
+        return ((1 - alpha) * TokenEstimatorCalibrationStore.NeutralObservedCorrection) + (alpha * sample);
+    }
+
+    private static void AssertClose(double expected, double actual, double tolerance = 1e-9)
+    {
+        AssertEx.True(Math.Abs(expected - actual) < tolerance, $"Expected a correction of {expected}; measured {actual}.");
     }
 }

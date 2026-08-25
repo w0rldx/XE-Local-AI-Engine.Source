@@ -21,10 +21,11 @@ internal static class WorkSessionEventTypes
     ///     (<c>WorkSessionStepConsumptionDetail</c>) — which is why it is written for EVERY such step and not only for
     ///     the clipped ones: a record that exists only when a bound trips measures the bound rather than the work.
     ///     <para>
-    ///         The outcome tells the two apart. <c>Completed</c> is an ordinary step. Anything else names the bound
-    ///         that stopped it — today only <c>ProviderCallBudget</c>, the per-step provider-call cap. Either way this
-    ///         is NOT a failure: the session stays runnable and the next step resumes from the state block, so it must
-    ///         never be written as <see cref="StepFailed" />.
+    ///         The outcome tells them apart. <c>Completed</c> is an ordinary step. Anything else names what stopped it:
+    ///         <c>ProviderCallBudget</c>, the per-step provider-call cap, or <c>ToolGate</c>, the allow-list check that
+    ///         refuses a step BEFORE it is sent (the only outcome whose row carries no consumption detail — nothing
+    ///         ran). None of them is a failure: the session stays runnable and the step resumes from the state block,
+    ///         so none may ever be written as <see cref="StepFailed" />.
     ///     </para>
     ///     <para>
     ///         A step stopped through the cancellation registry — paused, cancelled, an expired park, a blown deadline
@@ -51,4 +52,11 @@ internal static class WorkSessionStepPhases
     public const string Failed = "failed";
     public const string Ended = "ended";
     public const string ParkExpired = "park-expired";
+
+    /// <summary>
+    ///     A step the tool gate stopped before it was sent. Its own phase, not <see cref="Ended" />: that step is
+    ///     retried after the operator fixes the allow-list, and sharing the phase would let idempotency swallow the
+    ///     real row the retried step writes when it actually runs.
+    /// </summary>
+    public const string ToolGate = "tool-gate";
 }

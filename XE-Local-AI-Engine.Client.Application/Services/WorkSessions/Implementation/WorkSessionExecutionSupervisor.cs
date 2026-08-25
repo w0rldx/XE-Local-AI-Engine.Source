@@ -48,6 +48,13 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     private const string StepCompletedOutcome = "Completed";
 
     /// <summary>
+    ///     The <see cref="WorkSessionEventTypes.StepEnded" /> outcome for a step that was never sent because the node's
+    ///     tool-capable allow-list no longer admits the session's model. It carries no consumption detail, deliberately:
+    ///     nothing ran, and an empty record would read as a step that cost nothing rather than one that never happened.
+    /// </summary>
+    private const string ToolGateOutcome = "ToolGate";
+
+    /// <summary>
     ///     Web defaults, so the consumption record reaches the browser in the same camelCase convention as every other
     ///     JSON payload the session surface carries.
     /// </summary>
@@ -306,24 +313,55 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         // session was created can be gone from the list by the time it takes a step. Nothing downstream would say so:
         // the step runs, the model receives the offer WITHOUT the four state tools, every update_work_plan call comes
         // back "Requested function update_work_plan not found", and the session spends its whole step budget writing
-        // nothing. Refuse the step here instead, naming the list and the model, so the run ends where it can be fixed.
-        // A session whose agent definition has been deleted is deliberately NOT judged: the create path could not have
-        // judged it either, and which model that turn resolves is then the send path's decision, not this one's.
-        var toolGate = await turnScope.ServiceProvider.GetRequiredService<WorkSessionToolGate>()
-                                      .InspectAsync(state.Session.AgentDefinitionId, CancellationToken.None)
-                                      .ConfigureAwait(false);
-        if (toolGate is { AgentExists: true, EffectiveModel: not null, IsAllowListed: false })
+        // nothing. Stop the step here instead, naming the list and the model.
+        //
+        // Only the allow-list is asked (InspectAllowListAsync): the capability probe the create boundary also runs can
+        // be a provider round-trip, and this guard would not read its answer. A session whose agent definition has been
+        // deleted is deliberately NOT judged either — the create path could not have judged it, and which model that
+        // turn resolves is then the send path's decision, not this one's.
+        WorkSessionToolGateVerdict? toolGate = null;
+        try
         {
-            var refusal = WorkSessionToolGate.AllowListRefusal(toolGate.AgentName, toolGate.EffectiveModel);
+            toolGate = await turnScope.ServiceProvider.GetRequiredService<WorkSessionToolGate>()
+                                      .InspectAllowListAsync(state.Session.AgentDefinitionId, CancellationToken.None)
+                                      .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException or KeyNotFoundException)
+        {
+            // Fail OPEN, and the asymmetry is the point: gate 4 is ENFORCED by the offer, not by this guard. The tools
+            // are withheld with or without it, so all a failed check costs is the legible pause — whereas failing
+            // closed would turn a transient store hiccup into a stopped session on a check that is advisory by
+            // construction. The worst case is one ordinary step that goes out tool-less, which the next step re-checks
+            // and which MaxStepsPerRun still bounds.
+            _logger.LogWarning(exception,
+                "Could not check the tool-capable allow-list for work session {SessionId} before step {Step}; taking the step anyway.",
+                sessionId,
+                step);
+        }
+
+        if (toolGate is { AgentExists: true, EffectiveModel: not null, IsAllowListed: false } refused)
+        {
+            var refusal = WorkSessionToolGate.AllowListRefusal(refused.AgentName, refused.EffectiveModel);
             _logger.LogWarning("Work session {SessionId} step {Step} was not sent: {Reason}", sessionId, step, refusal);
+
+            // PAUSED, not Failed, and that is what makes the refusal's own advice actionable: Resume accepts only
+            // Paused/Interrupted and a repoint only Draft/Paused/Interrupted, so a Failed session could not be started
+            // again after the operator did exactly what the message asked. Checkpoint first, then the status — the same
+            // order, and for the same reason, as the step-budget pause.
+            //
+            // The row is StepEnded with an outcome naming the gate, never StepFailed: nothing failed, and a paused
+            // session carrying a failure row reads as a contradiction. Its own phase keeps the operation id distinct
+            // from the Ended row the retried step writes when it really does run, which idempotency would otherwise
+            // swallow.
             _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
                             WorkSessionVersions.Any,
-                            WorkSessionEventTypes.StepFailed,
-                            WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Failed),
-                            step.ToString(CultureInfo.InvariantCulture)),
+                            WorkSessionEventTypes.StepEnded,
+                            WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.ToolGate),
+                            ToolGateOutcome),
                         CancellationToken.None))
                 .ConfigureAwait(false);
-            await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, refusal).ConfigureAwait(false);
+            await CheckpointAsync(sessionId).ConfigureAwait(false);
+            await SettleAsync(sessionId, AgentWorkSessionStatus.Paused, refusal).ConfigureAwait(false);
             return StepOutcome.Settled;
         }
 
@@ -590,7 +628,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         return JsonSerializer.Serialize(new WorkSessionStepConsumptionDetail(consumption.ProviderCalls,
                 consumption.EstimatedInputTokens,
                 consumption.ToolCallsCompleted,
-                consumption.ProviderCallCap),
+                consumption.ProviderCallCap,
+                consumption.AttachedBudgets),
             ConsumptionJsonOptions);
     }
 

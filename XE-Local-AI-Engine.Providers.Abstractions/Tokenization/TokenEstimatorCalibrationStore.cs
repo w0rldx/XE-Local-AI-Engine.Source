@@ -76,15 +76,34 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
     /// </summary>
     public static int ApplyEstimateMargins(int windowTokens, double observedCorrection)
     {
-        var margined = ApplySafetyMargin(windowTokens);
-        if (margined <= 0
-            || !double.IsFinite(observedCorrection)
-            || observedCorrection <= NeutralObservedCorrection)
+        return ApplyObservedCorrection(ApplySafetyMargin(windowTokens), observedCorrection);
+    }
+
+    /// <summary>
+    ///     The observed correction alone, applied to a FLAT token budget that is not a context window — the work-session
+    ///     step-context budget being the one such caller. Same tighten-only rule and same bound as
+    ///     <see cref="ApplyEstimateMargins" />, deliberately WITHOUT <see cref="EstimateSafetyFactor" />: that factor
+    ///     reserves headroom inside a launched context window against an estimate that may overshoot it, and a flat
+    ///     budget chosen as a policy number has no window to overshoot. Applying it there would silently retune the
+    ///     policy by 15%.
+    ///     <para>
+    ///         Divides the BUDGET rather than scaling the estimate, for the same reason the window path does: it keeps
+    ///         every token number the caller carries, and every test asserting one, in estimator units.
+    ///     </para>
+    /// </summary>
+    public static int ApplyObservedCorrection(int budgetTokens, double observedCorrection)
+    {
+        if (budgetTokens <= 0)
         {
-            return margined;
+            return 0;
         }
 
-        var corrected = margined / Math.Min(observedCorrection, MaximumObservedCorrection);
+        if (!double.IsFinite(observedCorrection) || observedCorrection <= NeutralObservedCorrection)
+        {
+            return budgetTokens;
+        }
+
+        var corrected = budgetTokens / Math.Min(observedCorrection, MaximumObservedCorrection);
         return corrected <= 0 ? 0 : (int)corrected;
     }
 
@@ -118,9 +137,16 @@ public sealed class TokenEstimatorCalibrationStore : ITokenEstimatorCalibrationS
 
         var sample = Math.Clamp((double)observedInputTokens / estimatedTokens, MinimumObservedCorrection, MaximumObservedCorrection);
 
+        // The FIRST sample folds from neutral rather than being taken raw, so no single round can ever move the window
+        // by more than the smoothing factor allows. Taking it raw looks tempting — there is no prior to blend with, and
+        // it reaches a genuinely optimistic model's true ratio in one round instead of ten — but it means one anomalous
+        // round at the 2.0 bound pins the correction there outright, cutting the effective window to 42.5% of the
+        // launched one and taking ~10 rounds to decay back. That is the failure this smoothing exists to prevent, and
+        // the flat EstimateSafetyFactor already covers the rounds before the EMA has converged.
+        //
         // AddOrUpdate's update delegate re-reads the current value on each CAS retry, so the fold is applied to the
         // value it actually replaces even under concurrent rounds of the same model.
-        _ = _observedCorrections.AddOrUpdate(modelName, sample, (_, prior) => Fold(prior, sample));
+        _ = _observedCorrections.AddOrUpdate(modelName, Fold(NeutralObservedCorrection, sample), (_, prior) => Fold(prior, sample));
     }
 
     /// <inheritdoc />

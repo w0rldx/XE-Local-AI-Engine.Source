@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -338,6 +340,66 @@ public sealed class WorkSessionStepContextBoundTests
         var plain = WorkSessionStepContextBound.Project(Conversation([Message(sequence: 0, "user", new string('a', 4_000))]), new HeuristicTokenEstimator());
 
         AssertEx.Equal(plain, firstStep);
+    }
+
+    [Test]
+    public async Task ApplyAsync_WhenTheModelIsObservedToCostMoreThanEstimated_FoldsEarlier()
+    {
+        // The projection already estimates under the model's calibrated divisor. If the BUDGET it is compared against
+        // stays uncalibrated, the two sides are in different arithmetic and the bound folds late on exactly the models
+        // calibration exists to protect. Same transcript, same configured budget - only the correction differs.
+        var store = new TokenEstimatorCalibrationStore();
+        store.RecordObservedUsage(SessionModel, estimatedTokens: 10_000, observedInputTokens: 20_000);
+        var correction = store.ResolveObservedCorrection(SessionModel);
+        AssertEx.True(correction > 1.0, $"The fixture needs an above-neutral correction to mean anything; measured {correction}.");
+
+        var conversation = Conversation(TranscriptOn(SessionModel));
+        var projected = WorkSessionStepContextBound.Project(conversation, new HeuristicTokenEstimator(store), SessionModel);
+
+        // A budget that the projection fits under uncalibrated, but not once the correction tightens it.
+        var budget = projected + 1;
+        AssertEx.True(TokenEstimatorCalibrationStore.ApplyObservedCorrection(budget, correction) < projected,
+            "The fixture's budget must straddle the correction, or the pair below proves nothing.");
+
+        var calibrated = await RunBoundAsync(conversation, budget, store).ConfigureAwait(false);
+        var neutral = await RunBoundAsync(conversation, budget, new TokenEstimatorCalibrationStore()).ConfigureAwait(false);
+
+        AssertEx.NotEmpty(calibrated.Calls, "An over-budget projection under the model's observed correction must fold.");
+        AssertEx.Empty(neutral.Calls, "The same transcript and budget must NOT fold when nothing has been observed for the model.");
+    }
+
+    [Test]
+    public async Task ApplyAsync_WithNoObservedCorrection_ComparesAgainstTheConfiguredBudgetUnchanged()
+    {
+        // The byte-identical guarantee for the flat budget: no safety factor is applied here, so an uncalibrated
+        // session compares against exactly the number the operator configured.
+        var conversation = Conversation(TranscriptOn(SessionModel));
+        var store = new TokenEstimatorCalibrationStore();
+        var projected = WorkSessionStepContextBound.Project(conversation, new HeuristicTokenEstimator(store), SessionModel);
+
+        var atBudget = await RunBoundAsync(conversation, projected, store).ConfigureAwait(false);
+        var overBudget = await RunBoundAsync(conversation, projected - 1, store).ConfigureAwait(false);
+
+        AssertEx.Empty(atBudget.Calls, "A projection exactly at the budget is not over it.");
+        AssertEx.NotEmpty(overBudget.Calls, "A projection one token over the budget must fold.");
+    }
+
+    /// <summary>Drives ApplyAsync against one conversation and returns the compaction service it talked to.</summary>
+    private static async Task<RecordingCompactionService> RunBoundAsync(NodeChatConversationDto conversation,
+        int budgetTokens,
+        TokenEstimatorCalibrationStore store)
+    {
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        _ = persistence.GetConversationForTurnAsync(conversation.ConversationId, Arg.Any<CancellationToken>())
+                       .Returns(Task.FromResult<NodeChatConversationDto?>(conversation));
+        var compaction = new RecordingCompactionService();
+
+        var sut = new WorkSessionStepContextBound(persistence,
+            compaction,
+            new HeuristicTokenEstimator(store),
+            NullLogger<WorkSessionStepContextBound>.Instance);
+        await sut.ApplyAsync(conversation.ConversationId, budgetTokens).ConfigureAwait(false);
+        return compaction;
     }
 
     private const string SessionModel = "qwen3.8-27b:Q4_K_M";
