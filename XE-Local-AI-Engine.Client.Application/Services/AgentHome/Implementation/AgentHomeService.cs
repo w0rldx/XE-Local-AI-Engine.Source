@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using System.Globalization;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -48,6 +49,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             ["dotnet-agent-home"] = new("dotnet", ["--version"])
         };
 
+    private readonly ComputeOptions _ceilingDefaults;
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly IAgentHomeExecutionLeaseManager _leaseManager;
     private readonly IAgentHomeWorkspaceIsolation _isolation;
@@ -57,6 +59,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     private readonly AgentHomeOptions _options;
     private readonly IAgentHomePatchService _patchService;
     private readonly IAgentSandboxRuntimeProvider _provider;
+    private readonly SandboxOptions _sandboxOptions;
     private readonly INodeRuntimeSettings _runtimeSettings;
     private readonly IConversationUploadedFileStore _uploadedFileStore;
 
@@ -75,6 +78,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         IAgentHomeMemoryProposalService memoryProposalService,
         IServiceScopeFactory scopeFactory,
         IOptions<AgentHomeOptions> options,
+        IOptions<SandboxOptions> sandboxOptions,
+        IOptions<ComputeOptions> ceilingDefaults,
         INodeRuntimeSettings runtimeSettings,
         IConversationUploadedFileStore uploadedFileStore,
         TimeProvider timeProvider,
@@ -91,6 +96,10 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        ArgumentNullException.ThrowIfNull(sandboxOptions);
+        _sandboxOptions = sandboxOptions.Value;
+        ArgumentNullException.ThrowIfNull(ceilingDefaults);
+        _ceilingDefaults = ceilingDefaults.Value;
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _uploadedFileStore = uploadedFileStore ?? throw new ArgumentNullException(nameof(uploadedFileStore));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -178,8 +187,17 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             // request it cannot honor, so asking for None on a host without user namespaces (or on Windows, where the
             // mechanism is not implemented) would not harden AgentHome — it would stop it running at all. Asking for
             // exactly what the provider advertises keeps the guarantee real where it exists and keeps AgentHome working
-            // where it does not, with the degradation visible in the sandbox containment log rather than silent.
-            NetworkPolicy = ResolveNetworkPolicy()
+            // where it does not, with the degradation visible in the sandbox containment log rather than silent. A node
+            // that wants the refusal instead sets AgentHome:Sandbox:RequireEgressDenial, which SandboxEgressPolicy
+            // turns into a fail-closed refusal naming that key.
+            NetworkPolicy = SandboxEgressPolicy.Resolve(_provider.Capabilities,
+                _sandboxOptions.RequireEgressDenial,
+                SandboxEgressPolicy.AgentOptionKey,
+                SandboxWorkloads.AgentHome.Workload),
+
+            // The node's ceilings wherever the backend can impose them, derived through the one helper every create
+            // site shares so this request cannot disagree with SandboxWorkloads.AgentHome's declaration.
+            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.AgentHome, _provider.Capabilities, _ceilingDefaults)
         };
         var handle = await _provider.CreateOrAttachAsync(createRequest, prepareToken).ConfigureAwait(false);
 
@@ -642,21 +660,6 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         return ProfileCommands.TryGetValue(runtimeProfile, out var descriptor)
             ? descriptor
             : throw new AgentHomeRequestRejectedException($"no command descriptor is registered for runtime profile '{runtimeProfile}'.");
-    }
-
-    /// <summary>
-    ///     The egress posture to request for the AgentHome sandbox: <see cref="SandboxNetworkPolicy.None" /> where the
-    ///     provider advertises real network confinement, otherwise <see cref="SandboxNetworkPolicy.Unrestricted" />.
-    ///     <para>
-    ///         <see cref="AgentHomeManifestService" /> derives the manifest's <c>policy.json</c> network posture from
-    ///         this SAME capability flag, so the manifest cannot claim a posture the run did not actually get.
-    ///     </para>
-    /// </summary>
-    private SandboxNetworkPolicy ResolveNetworkPolicy()
-    {
-        return _provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy)
-            ? SandboxNetworkPolicy.None
-            : SandboxNetworkPolicy.Unrestricted;
     }
 
     private static bool HasCopiedWorkspace(IReadOnlyList<SelectedFolderSnapshot> snapshots)

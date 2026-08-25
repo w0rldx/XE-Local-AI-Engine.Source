@@ -6,6 +6,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -262,6 +263,8 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
                 Resolver,
                 WorkspaceService,
                 Options.Create(new AgentHomeOptions()),
+                Options.Create(new SandboxOptions()),
+                Options.Create(new ComputeOptions()),
                 Logger);
         }
 

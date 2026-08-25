@@ -428,6 +428,8 @@
 				"readOnlyMounts": "Read-only mounts",
 				"yes": "Yes",
 				"no": "No",
+				"egressRequired": "required",
+				"egressWhereAvailable": "where available",
 				"levels": {
 					"isolated": "Isolated",
 					"confined": "Confined",

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
@@ -142,24 +143,67 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
     ///     The same enumeration, for the axis the operator-facing isolation summary reports as SERVED. Ceilings are a
     ///     PREFERENCE on the create request — a backend may drop them, and one that is never asked applies none — so
     ///     "the host can impose ceilings" and "this role is given ceilings" are different facts, and only the second is
-    ///     worth reporting. Exactly one workload asks.
+    ///     worth reporting.
     ///     <para>
-    ///         The other half of the guarantee is not here, because it cannot be: this file constructs no consumer. Each
-    ///         create site's own test asserts its <c>SandboxCreateRequest.ResourceLimits</c> agrees with its constant —
-    ///         <c>ComputeToolGatewayTests</c>, <c>DevelopmentWarmRestoreTests</c>, <c>AgentHomeServiceTests</c> — so a
-    ///         site that starts or stops asking without moving the declaration fails there.
+    ///         EVERY declaration asks now. <c>run_python</c> was the only one until 2026-08-25, and the follow-up that
+    ///         changed it is the reason this test asserts the whole set rather than a count: a declaration that stops
+    ///         asking is a role that silently becomes unbounded, which is exactly the state the isolation panel was
+    ///         built to make visible, and it must not be reachable by deleting one line.
     ///     </para>
     /// </summary>
     [Test]
-    public void OnlyRunPython_DeclaresThatItAsksForResourceCeilings()
+    public void EveryDeclaration_AsksForResourceCeilings()
     {
-        var declaring = EnumerateDeclarations()
-                        .Where(static declaration => declaration.Requirements.RequestsResourceLimits)
-                        .Select(static declaration => declaration.Name)
-                        .ToArray();
+        var silent = EnumerateDeclarations()
+                     .Where(static declaration => !declaration.Requirements.RequestsResourceLimits)
+                     .Select(static declaration => declaration.Name)
+                     .ToArray();
 
-        AssertEx.Equal(1, declaring.Length, $"Expected exactly one declaration asking for ceilings; found: {string.Join(", ", declaring)}.");
-        AssertEx.Equal(nameof(SandboxWorkloads.RunPython), declaring[0]);
+        AssertEx.Equal(0,
+            silent.Length,
+            "Every sandbox workload asks for the node's CPU / memory / process-count ceilings wherever the backend can "
+            + $"impose them. These declare that they do not, so nothing bounds a runaway command in them: {string.Join(", ", silent)}. "
+            + "Making a role unbounded is an operator decision, not an implementation detail.");
+    }
+
+    /// <summary>
+    ///     The half of the ceilings guarantee that used to be unreachable from this file, because it constructs no
+    ///     consumer: every create site now derives its <c>SandboxCreateRequest.ResourceLimits</c> from
+    ///     <see cref="SandboxResourceCeilings.Resolve" /> WITH ITS OWN DECLARATION, so "the request agrees with the
+    ///     declaration" is a property of one pure function rather than of five call sites. This asserts that function
+    ///     over every declaration and both sides of the capability gate; each site's own test then asserts it calls it.
+    /// </summary>
+    [Test]
+    public void ResourceCeilings_AreDerivedFromTheDeclarationAndTheCapability()
+    {
+        var nodeDefaults = new ComputeOptions();
+
+        foreach (var (name, requirements) in EnumerateDeclarations())
+        {
+            foreach (var (backend, _) in SandboxProviderSelector.BackendRanking)
+            {
+                var capabilities = MaximumCapabilities[backend];
+                var ceilings = SandboxResourceCeilings.Resolve(requirements, capabilities, nodeDefaults);
+                var expected = requirements.RequestsResourceLimits
+                               && capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits);
+
+                AssertEx.Equal(expected,
+                    ceilings is not null,
+                    $"SandboxWorkloads.{name} on '{backend}': a role gets ceilings exactly when it declares that it asks "
+                    + "AND the backend advertises that it can impose them.");
+
+                if (ceilings is null)
+                {
+                    continue;
+                }
+
+                // One set of numbers for every role, by the 2026-08-25 ruling. A per-role fork would be a second
+                // source of truth for a question the operator configures once.
+                AssertEx.Equal(nodeDefaults.CpuCount, ceilings.CpuCount);
+                AssertEx.Equal(nodeDefaults.MemoryMb, ceilings.MemoryMb);
+                AssertEx.Equal(nodeDefaults.PidsLimit, ceilings.PidsLimit);
+            }
+        }
     }
 
     /// <summary>

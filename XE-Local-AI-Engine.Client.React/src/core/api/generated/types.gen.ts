@@ -3145,6 +3145,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryRe
 	level?: string;
 	filesystemIsolation?: boolean;
 	networkIsolation?: boolean;
+	networkIsolationRequired?: boolean;
 	resourceLimits?: boolean;
 	readOnlyMounts?: boolean;
 	filesystemIsolationUnavailableReason?: string | null;

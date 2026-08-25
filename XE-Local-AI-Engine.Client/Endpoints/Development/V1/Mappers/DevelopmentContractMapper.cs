@@ -150,7 +150,10 @@ internal static class DevelopmentContractMapper
     ///                 <c>DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy</c> (G1c Option B), and
     ///                 <c>ComputeToolGateway.BuildCreateRequest</c> unconditionally. So the flag IS the served posture
     ///                 here, and reading the floor instead would report egress as unrestricted on a node that denies
-    ///                 it.
+    ///                 it. <see cref="SandboxIsolationSummaryResponse.NetworkIsolationRequired" /> carries the OTHER
+    ///                 half — whether denial is a precondition on this node or a best-effort tightening — because
+    ///                 "denied here" and "must be denied here" are the two facts an operator acts on differently, and
+    ///                 one boolean cannot say both.
     ///             </description>
     ///         </item>
     ///         <item>
@@ -161,10 +164,10 @@ internal static class DevelopmentContractMapper
     ///                 Network, because ceilings are the opposite kind of axis:
     ///                 <see cref="SandboxCreateRequest.ResourceLimits" /> is a PREFERENCE a backend may drop, and
     ///                 <c>SandboxLifecycleRegistry.BuildLaunchPolicy</c> applies a scope ceiling only when the create
-    ///                 request carries one. <c>run_python</c> is the single create site that passes any
-    ///                 (<c>ComputeToolGateway.BuildCreateRequest</c>); AgentHome, Coder, work sessions and Development
-    ///                 Mode pass none, so on those roles the host's ability to impose a ceiling is a capability nothing
-    ///                 exercises.
+    ///                 request carries one. Every executing role asks today, through the one
+    ///                 <see cref="SandboxResourceCeilings" /> derivation, so on a host with no ceiling mechanism this
+    ///                 column is No for all of them with the measured probe reason — which is a different sentence from
+    ///                 the "not requested by this role" one it used to carry, and a different operator action.
     ///             </description>
     ///         </item>
     ///     </list>
@@ -194,10 +197,15 @@ internal static class DevelopmentContractMapper
     /// </param>
     /// <param name="provider">The provider actually resolved for that role.</param>
     /// <param name="containment">The host containment measurement, for the probe reason.</param>
+    /// <param name="nodeRequiresEgressDenial">
+    ///     This role's section's <c>RequireEgressDenial</c> switch. Defaulted to <see langword="false" /> — the shipped
+    ///     posture — so a caller that does not set the switch reports exactly what it reported before it existed.
+    /// </param>
     public static SandboxIsolationSummaryResponse ToIsolationSummary(string role,
         SandboxRequirements requirements,
         ISandboxRuntimeProvider provider,
-        SandboxContainment containment)
+        SandboxContainment containment,
+        bool nodeRequiresEgressDenial = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(role);
         ArgumentNullException.ThrowIfNull(requirements);
@@ -209,6 +217,7 @@ internal static class DevelopmentContractMapper
         var boundaryAdvertised = capabilities.HasFlag(SandboxProviderCapabilities.SupportsHostFilesystemBoundary);
         var filesystem = boundaryRequested && boundaryAdvertised;
         var network = capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy);
+        var networkRequired = SandboxEgressPolicy.IsRequired(requirements, nodeRequiresEgressDenial);
         var limitsAdvertised = capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits);
         var limits = requirements.RequestsResourceLimits && limitsAdvertised;
         var enforced = (filesystem ? 1 : 0) + (network ? 1 : 0) + (limits ? 1 : 0);
@@ -234,6 +243,7 @@ internal static class DevelopmentContractMapper
             },
             filesystem,
             network,
+            networkRequired,
             limits,
             capabilities.HasFlag(SandboxProviderCapabilities.SupportsReadOnlyMounts),
             filesystem ? null : boundaryReason,

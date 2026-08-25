@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
@@ -229,6 +230,8 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             memoryProposalService,
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             options,
+            Options.Create(new SandboxOptions()),
+            Options.Create(new ComputeOptions()),
             runtimeSettings,
             new FakeConversationUploadedFileStore(),
             clock,

@@ -32,4 +32,29 @@ public sealed class DevelopmentSandboxOptions
     ///     </para>
     /// </summary>
     public string? Provider { get; set; }
+
+    /// <summary>
+    ///     Whether Development Mode's AGENT-FACING sandbox may run at all on a backend that cannot deny egress. Off by
+    ///     default — the 2026-08-25 ruling's Option B, under which the attempt asks for
+    ///     <see cref="SandboxNetworkPolicy.None" /> wherever the backend advertises it and still runs where it cannot,
+    ///     because the shipped configuration resolves a Windows node (and any Linux node whose <c>unshare</c> probe
+    ///     failed) to the process backend. Setting it makes denial a precondition on this node: such a node refuses to
+    ///     prepare the workspace with <see cref="SandboxCapabilityNotSupportedException" /> naming this key rather than
+    ///     running the attempt with the host's network.
+    ///     <para>
+    ///         <b>The warm-restore sandbox is exempt by design, and this key does not reach it.</b> That short-lived
+    ///         second sandbox is the one that FILLS the package cache from the base commit, so denying its egress would
+    ///         populate nothing and turn every later <c>--no-restore</c> build into a confusing failure. Its content is
+    ///         the operator's own base commit and the agent has written nothing when it runs — see
+    ///         <c>DevelopmentWorkspaceProvider.EnsureWarmRestoreAsync</c> for the clean-tracked-tree gate that keeps
+    ///         that true.
+    ///     </para>
+    ///     <para>
+    ///         Separate from <see cref="SandboxOptions.RequireEgressDenial" /> for the reason the two <c>Provider</c>
+    ///         keys are separate: the two select for different features and a node may reasonably require denial for one
+    ///         and not the other. The semantics are identical, and <see cref="SandboxEgressPolicy" /> is the one place
+    ///         either is acted on.
+    ///     </para>
+    /// </summary>
+    public bool RequireEgressDenial { get; set; }
 }

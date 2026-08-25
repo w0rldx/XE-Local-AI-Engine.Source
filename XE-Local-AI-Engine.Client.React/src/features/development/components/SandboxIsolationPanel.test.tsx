@@ -57,6 +57,7 @@ describe("SandboxIsolationPanel", () => {
 				level: "None",
 				filesystemIsolation: false,
 				networkIsolation: false,
+				networkIsolationRequired: true,
 				resourceLimits: false,
 				readOnlyMounts: false,
 				filesystemIsolationUnavailableReason: "the host is not Linux (the Windows Job Object path is not implemented)",
@@ -64,6 +65,10 @@ describe("SandboxIsolationPanel", () => {
 		]);
 
 		expect(screen.getByTestId("sandbox-isolation-level-run_python").textContent).toBe("None");
+
+		// The combination that means the role will REFUSE TO START on this node rather than run unconfined: denial is
+		// a precondition and this host cannot deliver it.
+		expect(screen.getByTestId("sandbox-isolation-network-run_python").textContent).toBe("No (required)");
 		expect(screen.getByTestId("sandbox-isolation-backend-run_python").textContent).toBe("process");
 		expect(screen.getByTestId("sandbox-isolation-filesystem-run_python").textContent).toBe("No");
 		expect(screen.getByTestId("sandbox-isolation-reason-run_python").textContent).toContain("the host is not Linux");
@@ -81,12 +86,11 @@ describe("SandboxIsolationPanel", () => {
 				level: "Confined",
 				filesystemIsolation: false,
 				networkIsolation: true,
-				resourceLimits: false,
+				networkIsolationRequired: false,
+				resourceLimits: true,
 				readOnlyMounts: true,
 				filesystemIsolationUnavailableReason:
 					"not requested by this role: 'AgentHome' declares no filesystem boundary, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
-				resourceLimitsUnavailableReason:
-					"not requested by this role: 'AgentHome' declares no CPU, memory or process-count ceilings, so a runaway command is bounded only by its timeout and the machine",
 			},
 			{
 				role: "run_python",
@@ -95,6 +99,7 @@ describe("SandboxIsolationPanel", () => {
 				level: "Isolated",
 				filesystemIsolation: true,
 				networkIsolation: true,
+				networkIsolationRequired: true,
 				resourceLimits: true,
 				readOnlyMounts: true,
 			},
@@ -105,12 +110,11 @@ describe("SandboxIsolationPanel", () => {
 				level: "Confined",
 				filesystemIsolation: false,
 				networkIsolation: true,
+				networkIsolationRequired: false,
 				readOnlyMounts: true,
-				resourceLimits: false,
+				resourceLimits: true,
 				filesystemIsolationUnavailableReason:
 					"not requested by this role: 'DevelopmentMode (host toolchain)' declares no filesystem boundary, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
-				resourceLimitsUnavailableReason:
-					"not requested by this role: 'DevelopmentMode (host toolchain)' declares no CPU, memory or process-count ceilings, so a runaway command is bounded only by its timeout and the machine",
 			},
 			{
 				role: "work-session",
@@ -119,12 +123,12 @@ describe("SandboxIsolationPanel", () => {
 				level: "None",
 				filesystemIsolation: false,
 				networkIsolation: false,
+				networkIsolationRequired: false,
 				resourceLimits: false,
 				readOnlyMounts: false,
 				filesystemIsolationUnavailableReason:
 					"not requested by this role: 'WorkSession' declares no filesystem boundary, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
-				resourceLimitsUnavailableReason:
-					"not requested by this role: 'WorkSession' declares no CPU, memory or process-count ceilings, so a runaway command is bounded only by its timeout and the machine",
+				resourceLimitsUnavailableReason: "the 'fake' sandbox provider does not advertise resource ceilings",
 			},
 		]);
 
@@ -145,22 +149,31 @@ describe("SandboxIsolationPanel", () => {
 		expect(screen.getByTestId("sandbox-isolation-level-work-session").textContent).toBe("None");
 
 		// Egress IS denied for these roles wherever the backend advertises it, and the table says so rather than
-		// letting the filesystem column stand for the whole posture.
-		expect(screen.getByTestId("sandbox-isolation-network-development").textContent).toBe("Yes");
+		// letting the filesystem column stand for the whole posture. The qualifier is the other half of the sentence:
+		// this node did not set Development:Sandbox:RequireEgressDenial, so denial is best-effort here and a host that
+		// could not deny would still run the attempt.
+		expect(screen.getByTestId("sandbox-isolation-network-development").textContent).toBe("Yes (where available)");
+
+		// run_python needs no switch: its own declaration will not accept egress, so denial is a precondition and the
+		// panel says so on the same host, in the same table, next to the role for which it is not.
+		expect(screen.getByTestId("sandbox-isolation-network-run_python").textContent).toBe("Yes (required)");
 
 		// A role that HAS the boundary has nothing to explain, so it gets no reason line; a role that lacks it says
 		// which kind of "No" it is.
 		expect(screen.queryByTestId("sandbox-isolation-reason-run_python")).toBeNull();
 		expect(screen.getByTestId("sandbox-isolation-reason-development").textContent).toContain("not requested by this role");
 
-		// The second axis the panel used to report as advertised rather than served: this host CAN impose ceilings, and
-		// Development Mode asks for none, so the column is No and the reason says which kind of No it is.
-		expect(screen.getByTestId("sandbox-isolation-limits-development").textContent).toBe("No");
-		expect(screen.getByTestId("sandbox-isolation-limits-reason-development").textContent).toContain(
-			"bounded only by its timeout and the machine",
-		);
+		// The second axis, and the follow-up that changed it: every executing role asks for the node's ceilings now, so
+		// on a host that can impose them Development Mode is bounded and carries no reason at all. A role on a backend
+		// that cannot impose them still says which kind of No it is — the host's, not the role's.
+		expect(screen.getByTestId("sandbox-isolation-limits-development").textContent).toBe("Yes");
+		expect(screen.queryByTestId("sandbox-isolation-limits-reason-development")).toBeNull();
 		expect(screen.getByTestId("sandbox-isolation-limits-run_python").textContent).toBe("Yes");
 		expect(screen.queryByTestId("sandbox-isolation-limits-reason-run_python")).toBeNull();
+		expect(screen.getByTestId("sandbox-isolation-limits-work-session").textContent).toBe("No");
+		expect(screen.getByTestId("sandbox-isolation-limits-reason-work-session").textContent).toContain(
+			"does not advertise resource ceilings",
+		);
 	});
 
 	it("renders nothing rather than an empty table when the backend reported no roles", () => {

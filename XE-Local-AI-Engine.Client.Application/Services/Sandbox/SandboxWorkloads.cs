@@ -35,9 +35,10 @@ public static class SandboxWorkloads
         Toolchain = SandboxToolchainSource.HostToolchain,
         IsolationFloor = SandboxIsolationMode.None,
         NetworkFloor = SandboxNetworkPolicy.Unrestricted,
-        // AgentHome passes no SandboxCreateRequest.ResourceLimits, so nothing bounds CPU, memory or process count for
-        // its runs beyond the command timeout and the machine.
-        RequestsResourceLimits = false,
+        // AgentHome asks for the node's ceilings wherever the backend advertises SupportsResourceLimits — see
+        // SandboxResourceCeilings, which every create site derives them through. It runs model-directed host commands,
+        // so a runaway one must cost a bounded amount of the machine rather than a timeout's worth of all of it.
+        RequestsResourceLimits = true,
         Persistence = SandboxPersistence.Disposable
     };
 
@@ -111,11 +112,13 @@ public static class SandboxWorkloads
         Toolchain = SandboxToolchainSource.HostToolchain,
         IsolationFloor = SandboxIsolationMode.None,
         NetworkFloor = SandboxNetworkPolicy.Unrestricted,
-        // DevelopmentWorkspaceProvider passes no ResourceLimits on either sandbox it creates, so a repository's own
-        // build, test or lint command is bounded only by its timeout and the machine. Stated here rather than left
-        // implicit because the isolation summary reports it, and an operator reading "Resource limits: Yes" off the
-        // host's capability would believe a ceiling exists. Changing this is an operator decision, not a mapping fix.
-        RequestsResourceLimits = false,
+        // BOTH sandboxes DevelopmentWorkspaceProvider creates ask for the node's ceilings wherever the backend
+        // advertises them, through the same SandboxResourceCeilings derivation every other role uses. Development is
+        // the role those numbers fit worst — they are sized for a two-second run_python call, and a `dotnet build`
+        // needs materially more memory and more than 64 TASKS (systemd's TasksMax counts threads); the measurement and
+        // the operator decision it implies are recorded on SandboxResourceCeilings. Asking and being bounded too
+        // tightly is at least visible in the isolation summary; asking for nothing was not.
+        RequestsResourceLimits = true,
         Persistence = SandboxPersistence.PreservedTrustedHostWorkspace
     };
 

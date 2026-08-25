@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 
@@ -13,6 +14,7 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 /// </summary>
 internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecutionSessionFactory
 {
+    private readonly ComputeOptions _ceilingDefaults;
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly IAgentHomeWorkspaceIsolation _isolation;
     private readonly IAgentHomeExecutionLeaseManager _leaseManager;
@@ -20,6 +22,7 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
     private readonly IAgentHomeManifestService _manifestService;
     private readonly AgentHomeOptions _options;
     private readonly IAgentSandboxRuntimeProvider _provider;
+    private readonly SandboxOptions _sandboxOptions;
     private readonly ISelectedFolderResolver _resolver;
     private readonly IAgentHomeWorkspaceService _workspaceService;
 
@@ -31,6 +34,8 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
         ISelectedFolderResolver resolver,
         IAgentHomeWorkspaceService workspaceService,
         IOptions<AgentHomeOptions> options,
+        IOptions<SandboxOptions> sandboxOptions,
+        IOptions<ComputeOptions> ceilingDefaults,
         ILogger<McpWorkspaceExecutionSessionFactory> logger)
     {
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
@@ -41,6 +46,8 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
         _resolver = resolver ?? throw new ArgumentNullException(nameof(resolver));
         _workspaceService = workspaceService ?? throw new ArgumentNullException(nameof(workspaceService));
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
+        _sandboxOptions = (sandboxOptions ?? throw new ArgumentNullException(nameof(sandboxOptions))).Value;
+        _ceilingDefaults = (ceilingDefaults ?? throw new ArgumentNullException(nameof(ceilingDefaults))).Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -78,9 +85,15 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
                 {
                     AttachKey = attachKey,
                     RuntimeProfile = _options.DefaultRuntimeProfile,
-                    NetworkPolicy = _provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy)
-                        ? SandboxNetworkPolicy.None
-                        : SandboxNetworkPolicy.Unrestricted
+                    // The same two decisions AgentHome's own create site makes, through the same two helpers rather
+                    // than re-derived here: this jail is AgentHome's substrate under a different lease holder, and a
+                    // work session that quietly resolved a different posture would be the drift those helpers exist to
+                    // stop. It is constrained by the AgentHome section, so it reads that section's switch.
+                    NetworkPolicy = SandboxEgressPolicy.Resolve(_provider.Capabilities,
+                        _sandboxOptions.RequireEgressDenial,
+                        SandboxEgressPolicy.AgentOptionKey,
+                        SandboxWorkloads.WorkSession.Workload),
+                    ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.WorkSession, _provider.Capabilities, _ceilingDefaults)
                 },
                 cancellationToken).ConfigureAwait(false);
 

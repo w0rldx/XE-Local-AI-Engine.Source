@@ -7,6 +7,7 @@ using NSubstitute;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
@@ -73,6 +74,62 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
 
         AssertEx.Equal(expected: 1, sandbox.Created.Count);
         AssertEx.Equal(SandboxNetworkPolicy.Unrestricted, sandbox.Created[0].NetworkPolicy);
+    }
+
+    /// <summary>
+    ///     Option A, the half the <c>Development:Sandbox:RequireEgressDenial</c> switch adds: on a backend that CAN
+    ///     deny, setting it changes nothing at all — the request was already <see cref="SandboxNetworkPolicy.None" />.
+    ///     Asserted so that turning the switch on is known to be a no-op on a capable node rather than assumed to be.
+    /// </summary>
+    [Test]
+    public async Task PrepareAsync_WhenDenialIsRequiredAndTheBackendCanDeny_StillRequestsNoEgress()
+    {
+        var sandbox = new CapabilitySandbox(SandboxProviderCapabilities.SupportsTrustedHostWorkspace
+                                            | SandboxProviderCapabilities.SupportsNetworkPolicy
+                                            | SandboxProviderCapabilities.SupportsKill);
+
+        _ = await PrepareAsync(sandbox, requireEgressDenial: true).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, sandbox.Created.Count);
+        AssertEx.Equal(SandboxNetworkPolicy.None, sandbox.Created[0].NetworkPolicy);
+    }
+
+    /// <summary>
+    ///     The fail-closed case, and the reason the switch exists: a node that requires denial and cannot deny gets a
+    ///     refusal instead of an attempt with the host's network. The message must name the KEY — the backend's own
+    ///     fail-closed rejection would name the missing mechanism and could not name the setting that made it
+    ///     mandatory, and the setting is the only half an operator can act on.
+    /// </summary>
+    [Test]
+    public async Task PrepareAsync_WhenDenialIsRequiredAndTheBackendCannotDeny_RefusesNamingTheOption()
+    {
+        var sandbox = new CapabilitySandbox(SandboxProviderCapabilities.SupportsTrustedHostWorkspace
+                                            | SandboxProviderCapabilities.SupportsKill);
+
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(async () =>
+            await PrepareAsync(sandbox, requireEgressDenial: true).ConfigureAwait(false)).ConfigureAwait(false);
+
+        AssertEx.Contains(exception.Message, SandboxEgressPolicy.DevelopmentOptionKey);
+        AssertEx.Contains(exception.Message, SandboxWorkloads.DevelopmentModeHostToolchain.Workload);
+        AssertEx.Equal(expected: 0, sandbox.Created.Count, "the refusal must land BEFORE a sandbox is created.");
+    }
+
+    /// <summary>
+    ///     The ceilings half of the same create site: the request carries exactly what the shared derivation yields
+    ///     for the Development declaration on this backend, so the site cannot drift from the constant.
+    /// </summary>
+    [Test]
+    public async Task PrepareAsync_RequestsTheNodeCeilingsTheDeclarationAndTheBackendImply()
+    {
+        var sandbox = new CapabilitySandbox(SandboxProviderCapabilities.SupportsTrustedHostWorkspace
+                                            | SandboxProviderCapabilities.SupportsNetworkPolicy
+                                            | SandboxProviderCapabilities.SupportsResourceLimits
+                                            | SandboxProviderCapabilities.SupportsKill);
+
+        _ = await PrepareAsync(sandbox).ConfigureAwait(false);
+
+        AssertEx.Equal(SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain, sandbox.Capabilities, new ComputeOptions()),
+            sandbox.Created[0].ResourceLimits);
     }
 
     /// <summary>
@@ -237,6 +294,17 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
             },
             RuntimeProfile = networkPolicy == SandboxNetworkPolicy.None ? "development-local" : "development-warm",
             NetworkPolicy = networkPolicy,
+
+            // The node's ceilings, through the same derivation DevelopmentWorkspaceProvider uses, so the live run
+            // below exercises the production create-request SHAPE rather than a weaker one. It matters: on this box
+            // the process backend really does wrap the child in a systemd scope carrying MemoryMax + MemorySwapMax=0
+            // and TasksMax, and those numbers are sized for a two-second run_python call. The synthetic solution fits
+            // inside them; a large repository's Release build does not — see SandboxResourceCeilings for the
+            // measurement. Passing them here is what makes that difference discoverable from the test suite instead of
+            // from a user's first failed attempt.
+            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
+                sandbox.Capabilities,
+                new ComputeOptions()),
             TrustedHostWorkspace = new SandboxTrustedHostWorkspace
             {
                 RootPath = worktree
@@ -282,7 +350,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         }
     }
 
-    private async Task<DevelopmentWorkspaceSession> PrepareAsync(CapabilitySandbox sandbox)
+    private async Task<DevelopmentWorkspaceSession> PrepareAsync(CapabilitySandbox sandbox, bool requireEgressDenial = false)
     {
         Directory.CreateDirectory(_root);
         var repository = Path.Combine(_root, "repo-" + Guid.NewGuid().ToString("N")[..8]);
@@ -298,7 +366,16 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         Directory.CreateDirectory(data);
         var identity = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository));
         var snapshot = Snapshot(identity);
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, Substitute.For<IDevelopmentStore>());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data),
+            sandbox,
+            Options.Create(OptionsValue()),
+            TimeProvider.System,
+            Substitute.For<IDevelopmentStore>(),
+            exclusions: null,
+            Options.Create(new DevelopmentSandboxOptions
+            {
+                RequireEgressDenial = requireEgressDenial
+            }));
         return await provider.PrepareAsync(snapshot,
                 new DevelopmentRepositoryBinding(snapshot.ProjectId,
                     snapshot.SelectedFolderId!.Value,

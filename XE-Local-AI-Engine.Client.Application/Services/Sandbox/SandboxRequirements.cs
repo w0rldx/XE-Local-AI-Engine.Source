@@ -59,10 +59,19 @@ public sealed record SandboxRequirements
     ///     <para>
     ///         The distinction is load-bearing for AgentHome, which requests <see cref="SandboxNetworkPolicy.None" />
     ///         wherever the backend advertises it and <see cref="SandboxNetworkPolicy.Unrestricted" /> where it does
-    ///         not (<c>AgentHomeService.ResolveNetworkPolicy</c>). Declaring <see cref="SandboxNetworkPolicy.None" />
+    ///         not (<see cref="SandboxEgressPolicy" />). Declaring <see cref="SandboxNetworkPolicy.None" />
     ///         as a floor there would not harden AgentHome; it would refuse to start it on Windows, where the
     ///         mechanism is not implemented at all. So AgentHome's floor is
     ///         <see cref="SandboxNetworkPolicy.Unrestricted" /> and its per-call tightening is unchanged.
+    ///     </para>
+    ///     <para>
+    ///         A node that WANTS the refusal sets its section's <c>RequireEgressDenial</c> switch
+    ///         (<see cref="SandboxOptions.RequireEgressDenial" />,
+    ///         <see cref="DevelopmentSandboxOptions.RequireEgressDenial" />). That switch deliberately does not move
+    ///         this floor: a floor of <see cref="SandboxNetworkPolicy.None" /> refuses at DI resolution with a
+    ///         selection error, while the switch refuses at create time with a message naming the switch itself, which
+    ///         is the difference between "this node cannot run the feature" and "this node was configured to require
+    ///         denial".
     ///     </para>
     /// </summary>
     public required SandboxNetworkPolicy NetworkFloor { get; init; }
@@ -77,12 +86,11 @@ public sealed record SandboxRequirements
     ///     </para>
     ///     <para>
     ///         It exists because the operator-facing isolation summary reports the SERVED posture, and "the host can
-    ///         impose ceilings" and "this role is given ceilings" are different facts. Only <c>run_python</c> asks
-    ///         (<c>ComputeToolGateway.BuildCreateRequest</c>, itself capability-gated); AgentHome, Coder, work sessions
-    ///         and Development Mode pass no <see cref="SandboxCreateRequest.ResourceLimits" /> at all, so reading the
-    ///         provider's flag alone told an operator those roles were bounded when nothing bounds them.
-    ///         <c>SandboxSubstrateSelectionArchitectureTests</c> enumerates this, and each create site's own test
-    ///         asserts its request agrees with the constant, so the two cannot drift.
+    ///         impose ceilings" and "this role is given ceilings" are different facts. Every executing role asks today,
+    ///         and every one of them derives the ceiling through <see cref="SandboxResourceCeilings" /> from one set of
+    ///         node numbers — a role cannot pass ceilings its declaration does not claim, because the derivation takes
+    ///         the declaration. <c>SandboxSubstrateSelectionArchitectureTests</c> enumerates both halves, and each
+    ///         create site's own test asserts its request agrees with the constant, so the two cannot drift.
     ///     </para>
     ///     <para>
     ///         Required, for <see cref="IsolationFloor" />'s reason: a defaulted value would let a new consumer say

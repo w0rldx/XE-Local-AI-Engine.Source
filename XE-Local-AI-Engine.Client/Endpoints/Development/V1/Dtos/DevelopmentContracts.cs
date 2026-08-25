@@ -176,6 +176,15 @@ public sealed record DevelopmentCapabilityResponse(bool Enabled,
 ///     Whether egress can actually be denied. The capability alone, because every consumer requests
 ///     <c>SandboxNetworkPolicy.None</c> per call exactly where it is advertised, so the flag is the served posture.
 /// </param>
+/// <param name="NetworkIsolationRequired">
+///     Whether denial is a PRECONDITION for this role on this node rather than a best-effort tightening — the
+///     difference between "required" and "where available" in the panel, and it is the operator's whole action on the
+///     <c>RequireEgressDenial</c> switches. True when the role's own declaration will not accept egress
+///     (<c>run_python</c>), or when the node set the switch for the role's section
+///     (<c>AgentHome:Sandbox:RequireEgressDenial</c>, <c>Development:Sandbox:RequireEgressDenial</c>). Required AND
+///     <see cref="NetworkIsolation" /> false is the one combination that means the role will REFUSE TO START here:
+///     the create site fails closed rather than serving the host's network.
+/// </param>
 /// <param name="ResourceLimits">
 ///     Whether memory / PID / CPU ceilings are actually imposed on THIS role — the host can impose them and the role
 ///     asks for them. <c>SandboxCreateRequest.ResourceLimits</c> is a preference a backend may drop, and a role that
@@ -201,6 +210,7 @@ public sealed record SandboxIsolationSummaryResponse(
     string Level,
     bool FilesystemIsolation,
     bool NetworkIsolation,
+    bool NetworkIsolationRequired,
     bool ResourceLimits,
     bool ReadOnlyMounts,
     string? FilesystemIsolationUnavailableReason,

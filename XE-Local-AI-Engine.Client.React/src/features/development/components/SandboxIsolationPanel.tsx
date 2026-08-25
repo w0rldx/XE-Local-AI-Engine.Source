@@ -27,6 +27,12 @@ interface SandboxIsolationPanelProps {
  * are where they are told apart: the role does not ask (nothing to fix here — whether it should ask is an operator
  * decision), or it asks and this host cannot serve it (the measured probe reason).
  *
+ * The Network column carries a second word for the same reason. "Yes (where available)" is a best-effort tightening —
+ * this host can deny egress, and a host that could not would still run the role. "required" means the node has made
+ * denial a precondition (its `RequireEgressDenial` switch, or a role like `run_python` whose own declaration will not
+ * accept egress), so "No (required)" is the one combination that says the role will REFUSE TO START here rather than
+ * run with the host's network.
+ *
  * Every value carries a test id, for the same reason the container-runtime panel's do: a test that only asserted the
  * table rendered would pass against a table full of the wrong answers, on the one surface where that matters most.
  */
@@ -101,7 +107,13 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 								<Table.Td data-testid={`sandbox-isolation-filesystem-${role.role}`}>
 									{yesNo(t, role.filesystemIsolation)}
 								</Table.Td>
-								<Table.Td data-testid={`sandbox-isolation-network-${role.role}`}>{yesNo(t, role.networkIsolation)}</Table.Td>
+								<Table.Td data-testid={`sandbox-isolation-network-${role.role}`}>
+									{`${yesNo(t, role.networkIsolation)} (${
+										role.networkIsolationRequired === true
+											? t("pages.development.isolation.egressRequired", "required")
+											: t("pages.development.isolation.egressWhereAvailable", "where available")
+									})`}
+								</Table.Td>
 								<Table.Td data-testid={`sandbox-isolation-limits-${role.role}`}>{yesNo(t, role.resourceLimits)}</Table.Td>
 								<Table.Td data-testid={`sandbox-isolation-readonly-${role.role}`}>{yesNo(t, role.readOnlyMounts)}</Table.Td>
 							</Table.Tr>

@@ -261,14 +261,11 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             // off than before. A script doing arithmetic writes almost nothing, and inheriting the node-wide number let
             // one runaway `open(..., "w")` loop consume the whole allowance a workspace run is sized for.
             MaxJailDiskBytes = _options.MaxJailDiskBytes,
-            ResourceLimits = capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits)
-                ? new SandboxResourceLimits
-                {
-                    CpuCount = _options.CpuCount,
-                    MemoryMb = _options.MemoryMb,
-                    PidsLimit = _options.PidsLimit
-                }
-                : null
+            // The node's ceilings, through the helper every sandbox create site now shares. This site used to derive
+            // them inline and was the ONLY one that asked; the numbers are still Compute's own, and they are now every
+            // role's, so raising them here raises them for AgentHome and Development Mode too. See
+            // SandboxResourceCeilings for that trade and for what the defaults cost a build.
+            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.RunPython, capabilities, _options)
         };
     }
 
