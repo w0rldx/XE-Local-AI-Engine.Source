@@ -58,6 +58,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
     private readonly IAgentHomeMemoryProposalService _memoryProposalService;
     private readonly AgentHomeOptions _options;
     private readonly IAgentHomePatchService _patchService;
+    private readonly LocalContainerOptions _nodeOptions;
     private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly SandboxOptions _sandboxOptions;
     private readonly INodeRuntimeSettings _runtimeSettings;
@@ -80,6 +81,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         IOptions<AgentHomeOptions> options,
         IOptions<SandboxOptions> sandboxOptions,
         IOptions<ComputeOptions> ceilingDefaults,
+        IOptions<LocalContainerOptions> nodeOptions,
         INodeRuntimeSettings runtimeSettings,
         IConversationUploadedFileStore uploadedFileStore,
         TimeProvider timeProvider,
@@ -100,6 +102,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         _sandboxOptions = sandboxOptions.Value;
         ArgumentNullException.ThrowIfNull(ceilingDefaults);
         _ceilingDefaults = ceilingDefaults.Value;
+        ArgumentNullException.ThrowIfNull(nodeOptions);
+        _nodeOptions = nodeOptions.Value;
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _uploadedFileStore = uploadedFileStore ?? throw new ArgumentNullException(nameof(uploadedFileStore));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -197,7 +201,7 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
 
             // The node's ceilings wherever the backend can impose them, derived through the one helper every create
             // site shares so this request cannot disagree with SandboxWorkloads.AgentHome's declaration.
-            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.AgentHome, _provider.Capabilities, _ceilingDefaults)
+            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.AgentHome, _provider.Capabilities, _ceilingDefaults, _nodeOptions)
         };
         var handle = await _provider.CreateOrAttachAsync(createRequest, prepareToken).ConfigureAwait(false);
 

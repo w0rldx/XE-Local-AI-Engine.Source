@@ -124,7 +124,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             SelectedFolderIds = []
         });
 
-        AssertEx.Equal(SandboxResourceCeilings.Resolve(SandboxWorkloads.AgentHome, provider.Capabilities, new ComputeOptions()),
+        AssertEx.Equal(SandboxResourceCeilings.Resolve(SandboxWorkloads.AgentHome, provider.Capabilities, new ComputeOptions(), new LocalContainerOptions()),
             AssertEx.NotNull(provider.LastCreate).ResourceLimits);
     }
 
@@ -1035,7 +1035,8 @@ public sealed class AgentHomeServiceTests : IDisposable
         IAgentHomeExecutionLeaseManager? leaseManager = null,
         IAgentHomeManifestService? manifestOverride = null,
         SandboxOptions? sandboxOptions = null,
-        ComputeOptions? ceilingDefaults = null)
+        ComputeOptions? ceilingDefaults = null,
+        LocalContainerOptions? nodeOptions = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
         _tempRoots.Add(root);
@@ -1084,6 +1085,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             options,
             Options.Create(sandboxOptions ?? new SandboxOptions()),
             Options.Create(ceilingDefaults ?? new ComputeOptions()),
+            Options.Create(nodeOptions ?? new LocalContainerOptions()),
             runtimeSettings,
             uploadedFileStore ?? new FakeConversationUploadedFileStore(),
             clock,

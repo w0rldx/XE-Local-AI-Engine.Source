@@ -70,7 +70,8 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
         // runs the repository's own restore and is exactly as capable of a runaway as the attempt.
         var expectedCeilings = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
             sandbox.Capabilities,
-            new ComputeOptions());
+            new ComputeOptions(),
+            new LocalContainerOptions());
         AssertEx.Equal(expectedCeilings, warm.ResourceLimits);
         AssertEx.Equal(expectedCeilings, agentFacing.ResourceLimits);
 

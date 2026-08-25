@@ -84,6 +84,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
     private readonly IComputePythonEnvironment _environment;
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly ILogger<ComputeToolGateway> _logger;
+    private readonly LocalContainerOptions _nodeOptions;
     private readonly ComputeOptions _options;
     private readonly IAgentSandboxRuntimeProvider _provider;
 
@@ -91,6 +92,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         IAgentHomeIdentityProvider identityProvider,
         IComputePythonEnvironment environment,
         IOptions<ComputeOptions> options,
+        IOptions<LocalContainerOptions> nodeOptions,
         ILogger<ComputeToolGateway> logger)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
@@ -98,6 +100,8 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         _environment = environment ?? throw new ArgumentNullException(nameof(environment));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        ArgumentNullException.ThrowIfNull(nodeOptions);
+        _nodeOptions = nodeOptions.Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -265,7 +269,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             // them inline and was the ONLY one that asked; the numbers are still Compute's own, and they are now every
             // role's, so raising them here raises them for AgentHome and Development Mode too. See
             // SandboxResourceCeilings for that trade and for what the defaults cost a build.
-            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.RunPython, capabilities, _options)
+            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.RunPython, capabilities, _options, _nodeOptions)
         };
     }
 

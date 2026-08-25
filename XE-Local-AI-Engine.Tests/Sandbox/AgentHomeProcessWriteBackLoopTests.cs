@@ -232,6 +232,7 @@ public sealed class AgentHomeProcessWriteBackLoopTests : IDisposable
             options,
             Options.Create(new SandboxOptions()),
             Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             runtimeSettings,
             new FakeConversationUploadedFileStore(),
             clock,

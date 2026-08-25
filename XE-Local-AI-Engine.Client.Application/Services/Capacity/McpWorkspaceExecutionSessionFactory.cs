@@ -21,6 +21,7 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
     private readonly ILogger<McpWorkspaceExecutionSessionFactory> _logger;
     private readonly IAgentHomeManifestService _manifestService;
     private readonly AgentHomeOptions _options;
+    private readonly LocalContainerOptions _nodeOptions;
     private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly SandboxOptions _sandboxOptions;
     private readonly ISelectedFolderResolver _resolver;
@@ -36,6 +37,7 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
         IOptions<AgentHomeOptions> options,
         IOptions<SandboxOptions> sandboxOptions,
         IOptions<ComputeOptions> ceilingDefaults,
+        IOptions<LocalContainerOptions> nodeOptions,
         ILogger<McpWorkspaceExecutionSessionFactory> logger)
     {
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
@@ -48,6 +50,7 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
         _options = (options ?? throw new ArgumentNullException(nameof(options))).Value;
         _sandboxOptions = (sandboxOptions ?? throw new ArgumentNullException(nameof(sandboxOptions))).Value;
         _ceilingDefaults = (ceilingDefaults ?? throw new ArgumentNullException(nameof(ceilingDefaults))).Value;
+        _nodeOptions = (nodeOptions ?? throw new ArgumentNullException(nameof(nodeOptions))).Value;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -93,7 +96,7 @@ internal sealed class McpWorkspaceExecutionSessionFactory : IMcpWorkspaceExecuti
                         _sandboxOptions.RequireEgressDenial,
                         SandboxEgressPolicy.AgentOptionKey,
                         SandboxWorkloads.WorkSession.Workload),
-                    ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.WorkSession, _provider.Capabilities, _ceilingDefaults)
+                    ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.WorkSession, _provider.Capabilities, _ceilingDefaults, _nodeOptions)
                 },
                 cancellationToken).ConfigureAwait(false);
 

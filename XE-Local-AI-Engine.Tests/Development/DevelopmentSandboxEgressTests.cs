@@ -128,7 +128,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
 
         _ = await PrepareAsync(sandbox).ConfigureAwait(false);
 
-        AssertEx.Equal(SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain, sandbox.Capabilities, new ComputeOptions()),
+        AssertEx.Equal(SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain, sandbox.Capabilities, new ComputeOptions(), new LocalContainerOptions()),
             sandbox.Created[0].ResourceLimits);
     }
 
@@ -304,7 +304,8 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
             // from a user's first failed attempt.
             ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
                 sandbox.Capabilities,
-                new ComputeOptions()),
+                new ComputeOptions(),
+                new LocalContainerOptions()),
             TrustedHostWorkspace = new SandboxTrustedHostWorkspace
             {
                 RootPath = worktree

@@ -539,6 +539,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
             new StubIdentityProvider(),
             environment,
             Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             NullLogger<ComputeToolGateway>.Instance);
 
         var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
@@ -555,6 +556,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
             new StubIdentityProvider(),
             _environment,
             Options.Create(options ?? new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             NullLogger<ComputeToolGateway>.Instance);
     }
 

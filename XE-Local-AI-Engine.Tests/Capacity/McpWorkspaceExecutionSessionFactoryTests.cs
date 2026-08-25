@@ -265,6 +265,7 @@ public sealed class McpWorkspaceExecutionSessionFactoryTests
                 Options.Create(new AgentHomeOptions()),
                 Options.Create(new SandboxOptions()),
                 Options.Create(new ComputeOptions()),
+                Options.Create(new LocalContainerOptions()),
                 Logger);
         }
 

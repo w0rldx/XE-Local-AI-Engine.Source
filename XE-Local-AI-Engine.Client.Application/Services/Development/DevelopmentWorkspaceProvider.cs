@@ -104,6 +104,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ];
 
     private readonly ComputeOptions _ceilingDefaults;
+    private readonly LocalContainerOptions _nodeOptions;
     private readonly INodeDataDirectory _dataDirectory;
     private readonly ISensitiveFileExclusionService _exclusions;
     private readonly DevelopmentOptions _options;
@@ -119,7 +120,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         IDevelopmentStore store,
         ISensitiveFileExclusionService? exclusions = null,
         IOptions<DevelopmentSandboxOptions>? sandboxOptions = null,
-        IOptions<ComputeOptions>? ceilingDefaults = null)
+        IOptions<ComputeOptions>? ceilingDefaults = null,
+        IOptions<LocalContainerOptions>? nodeOptions = null)
     {
         _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
         _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
@@ -139,6 +141,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         // node's own ceilings.
         _sandboxOptions = (sandboxOptions ?? Options.Create(new DevelopmentSandboxOptions())).Value;
         _ceilingDefaults = (ceilingDefaults ?? Options.Create(new ComputeOptions())).Value;
+        _nodeOptions = (nodeOptions ?? Options.Create(new LocalContainerOptions())).Value;
     }
 
     public async Task<DevelopmentWorkspaceSession> PrepareAsync(DevelopmentExecutionSnapshot snapshot,
@@ -327,7 +330,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             // run_python call and a `dotnet build` needs materially more of both memory and tasks.
             ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
                 _sandbox.Capabilities,
-                _ceilingDefaults)
+                _ceilingDefaults,
+                _nodeOptions)
         }, cancellationToken).ConfigureAwait(false);
 
         return new DevelopmentWorkspaceSession(snapshot.ProjectId,
@@ -516,7 +520,8 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             // exactly as capable of a runaway as the attempt is.
             ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
                 _sandbox.Capabilities,
-                _ceilingDefaults)
+                _ceilingDefaults,
+                _nodeOptions)
         }, cancellationToken).ConfigureAwait(false);
 
         try

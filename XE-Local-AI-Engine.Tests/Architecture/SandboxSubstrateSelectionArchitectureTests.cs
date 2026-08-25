@@ -168,28 +168,36 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
 
     /// <summary>
     ///     The half of the ceilings guarantee that used to be unreachable from this file, because it constructs no
-    ///     consumer: every create site now derives its <c>SandboxCreateRequest.ResourceLimits</c> from
+    ///     consumer: every create site derives its <c>SandboxCreateRequest.ResourceLimits</c> from
     ///     <see cref="SandboxResourceCeilings.Resolve" /> WITH ITS OWN DECLARATION, so "the request agrees with the
     ///     declaration" is a property of one pure function rather than of five call sites. This asserts that function
     ///     over every declaration and both sides of the capability gate; each site's own test then asserts it calls it.
+    ///     <para>
+    ///         It also asserts WHICH set each declaration gets, which is the half that matters since 2026-08-25: a
+    ///         toolchain role handed <c>run_python</c>'s numbers does not build slowly, it fails
+    ///         (<see cref="SandboxToolchainLimits" />), and nothing else in the tree would catch the profile being
+    ///         changed on one constant.
+    ///     </para>
     /// </summary>
     [Test]
-    public void ResourceCeilings_AreDerivedFromTheDeclarationAndTheCapability()
+    public void ResourceCeilings_AreTheProfileTheDeclarationNamesAndTheCapabilityAllows()
     {
-        var nodeDefaults = new ComputeOptions();
+        var computeDefaults = new ComputeOptions();
+        var nodeDefaults = new LocalContainerOptions();
+        var expectedToolchain = SandboxResourceCeilings.ResolveToolchain(nodeDefaults.ToolchainLimits);
 
         foreach (var (name, requirements) in EnumerateDeclarations())
         {
             foreach (var (backend, _) in SandboxProviderSelector.BackendRanking)
             {
                 var capabilities = MaximumCapabilities[backend];
-                var ceilings = SandboxResourceCeilings.Resolve(requirements, capabilities, nodeDefaults);
+                var ceilings = SandboxResourceCeilings.Resolve(requirements, capabilities, computeDefaults, nodeDefaults);
                 var expected = requirements.RequestsResourceLimits
                                && capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits);
 
                 AssertEx.Equal(expected,
                     ceilings is not null,
-                    $"SandboxWorkloads.{name} on '{backend}': a role gets ceilings exactly when it declares that it asks "
+                    $"SandboxWorkloads.{name} on '{backend}': a role gets ceilings exactly when it declares a profile "
                     + "AND the backend advertises that it can impose them.");
 
                 if (ceilings is null)
@@ -197,13 +205,82 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
                     continue;
                 }
 
-                // One set of numbers for every role, by the 2026-08-25 ruling. A per-role fork would be a second
-                // source of truth for a question the operator configures once.
-                AssertEx.Equal(nodeDefaults.CpuCount, ceilings.CpuCount);
-                AssertEx.Equal(nodeDefaults.MemoryMb, ceilings.MemoryMb);
-                AssertEx.Equal(nodeDefaults.PidsLimit, ceilings.PidsLimit);
+                var wanted = requirements.Ceilings switch
+                {
+                    SandboxCeilingProfile.ComputeTool => new SandboxResourceLimits
+                    {
+                        CpuCount = computeDefaults.CpuCount,
+                        MemoryMb = computeDefaults.MemoryMb,
+                        PidsLimit = computeDefaults.PidsLimit
+                    },
+                    SandboxCeilingProfile.HostToolchain => expectedToolchain,
+                    _ => null
+                };
+
+                AssertEx.Equal(wanted,
+                    ceilings,
+                    $"SandboxWorkloads.{name} declares {requirements.Ceilings} and must be given exactly that profile's "
+                    + "numbers. Moving a toolchain role onto the compute profile is how a `dotnet build` starts being "
+                    + "OOM-killed on every attempt.");
             }
         }
+    }
+
+    /// <summary>
+    ///     Exactly one workload is on the tight compute profile, and it is the one that runs model-written scripts.
+    ///     Widening that set is a decision — the profile carries a 2 GB / 64-task ceiling that no real toolchain
+    ///     survives — so it fails here rather than in a user's first failed attempt.
+    /// </summary>
+    [Test]
+    public void OnlyRunPython_IsOnTheComputeCeilingProfile()
+    {
+        var compute = EnumerateDeclarations()
+                      .Where(static declaration => declaration.Requirements.Ceilings == SandboxCeilingProfile.ComputeTool)
+                      .Select(static declaration => declaration.Name)
+                      .ToArray();
+
+        AssertEx.Equal(1, compute.Length, $"Expected exactly one compute-profile declaration; found: {string.Join(", ", compute)}.");
+        AssertEx.Equal(nameof(SandboxWorkloads.RunPython), compute[0]);
+    }
+
+    /// <summary>
+    ///     The derived host-toolchain defaults, as a pure function of the two host facts — so the formula is pinned
+    ///     without needing a machine of any particular shape.
+    /// </summary>
+    [Test]
+    [Arguments(16, 64L * 1024 * 1024 * 1024, 16, 49152)]
+    [Arguments(4, 4L * 1024 * 1024 * 1024, 4, 4096)]
+    [Arguments(2, 2L * 1024 * 1024 * 1024, 2, 2048)]
+    [Arguments(1, 0L, 1, SandboxToolchainLimits.DefaultMemoryFloorMb)]
+    public void ToolchainDefaults_AreDerivedFromTheHost(int processors, long physicalBytes, double expectedCpu, int expectedMemoryMb)
+    {
+        var derived = SandboxResourceCeilings.DeriveToolchainDefaults(processors, physicalBytes);
+
+        AssertEx.Equal(expectedCpu, derived.CpuCount);
+
+        // 75% of RAM, floored at 4096 MB so a small machine still gets a workable build ceiling, and capped at
+        // physical RAM so that floor cannot promise memory the host does not have.
+        AssertEx.Equal(expectedMemoryMb, derived.MemoryMb);
+        AssertEx.Equal(SandboxToolchainLimits.DefaultPidsLimit, derived.PidsLimit);
+    }
+
+    /// <summary>
+    ///     The effective toolchain ceilings on THIS host: unset configuration derives from the machine, and whatever it
+    ///     derives must itself clear the floors the operator-facing validator enforces. A host whose derived default
+    ///     would have been rejected as an override is a formula that promises a ceiling no build could meet.
+    /// </summary>
+    [Test]
+    public void ToolchainDefaults_OnThisHost_ClearTheFloorsTheValidatorEnforces()
+    {
+        var effective = SandboxResourceCeilings.ResolveToolchain(new SandboxToolchainLimits());
+
+        AssertEx.Equal(SandboxResourceCeilings.DeriveToolchainDefaults(Environment.ProcessorCount,
+                GC.GetGCMemoryInfo().TotalAvailableMemoryBytes),
+            effective,
+            "unset configuration must be exactly the host derivation, not a second set of literals.");
+        AssertEx.True(effective.CpuCount >= 1, $"derived CpuCount was {effective.CpuCount}.");
+        AssertEx.True(effective.MemoryMb >= SandboxToolchainLimits.MinimumMemoryMb, $"derived MemoryMb was {effective.MemoryMb}.");
+        AssertEx.True(effective.PidsLimit >= SandboxToolchainLimits.MinimumPidsLimit, $"derived PidsLimit was {effective.PidsLimit}.");
     }
 
     /// <summary>

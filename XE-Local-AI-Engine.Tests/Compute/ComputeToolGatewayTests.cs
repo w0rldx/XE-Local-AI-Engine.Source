@@ -433,6 +433,7 @@ public sealed class ComputeToolGatewayTests
             identityProvider ?? new StubIdentityProvider(),
             environment ?? new StubEnvironment("/provisioned/python"),
             Options.Create(options ?? new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             NullLogger<ComputeToolGateway>.Instance);
     }
 
