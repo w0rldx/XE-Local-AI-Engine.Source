@@ -145,6 +145,18 @@
              Link="compute-scripts/%(RecursiveDir)%(Filename)%(Extension)"
              CopyToPublishDirectory="PreserveNewest"
              CopyToOutputDirectory="Never"/>
+    <!-- The wikitext-2-raw test split the quant-fidelity axis scores perplexity over, and its CC BY-SA 3.0 licence.
+         Same repo-root reasoning as the two includes above: without the explicit Content the file does not ship and
+         a packaged build has no corpus to measure against. BenchmarkFidelityCorpus.Resolve walks up to
+         tools/benchmark/corpus/ when the published copy is absent. -->
+    <Content Include="$(MSBuildProjectDirectory)/../tools/benchmark/corpus/**"
+             Link="benchmark-corpus/%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToPublishDirectory="PreserveNewest"
+             CopyToOutputDirectory="Never"/>
+    <Content Include="$(MSBuildProjectDirectory)/../third-party/data/**"
+             Link="licenses/data/%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToPublishDirectory="PreserveNewest"
+             CopyToOutputDirectory="Never"/>
   </ItemGroup>
 
   <Target Name="ValidateDotNetRuntimeLicenseAssets"

@@ -8,6 +8,7 @@ import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import {
 	applicationInfo,
 	type IThirdPartyPackage,
+	bundledDataLegalDocuments,
 	runtimeLegalDocuments,
 	thirdPartyPackages,
 } from "@/features/about/data/AboutData";
@@ -176,6 +177,16 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 								{t("pages.about.runtimeTerms", "Platform .NET component terms")}
 							</Text>
 							{runtimeLegalDocuments.map((document) => (
+								<Anchor key={document.href} href={document.href} target="_blank" rel="noopener noreferrer" size="sm">
+									{document.name}
+								</Anchor>
+							))}
+						</Stack>
+						<Stack gap={2}>
+							<Text size="sm" fw={600}>
+								{t("pages.about.bundledDataTerms", "Bundled data terms")}
+							</Text>
+							{bundledDataLegalDocuments.map((document) => (
 								<Anchor key={document.href} href={document.href} target="_blank" rel="noopener noreferrer" size="sm">
 									{document.name}
 								</Anchor>

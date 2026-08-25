@@ -60,6 +60,15 @@ const windowsApphostLegalDocuments: readonly IRuntimeLegalDocument[] = [
 	{ name: ".NET Windows apphost third-party notices", href: "/licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt" },
 ];
 
+/**
+ * Data assets bundled with the app rather than pulled in as a package, so the generated package list cannot
+ * describe them. Currently the wikitext-2 corpus the quant-fidelity benchmark scores perplexity over, which is
+ * derived from Wikipedia and therefore CC BY-SA 3.0 — an attribution the licence requires us to carry.
+ */
+export const bundledDataLegalDocuments: readonly IRuntimeLegalDocument[] = [
+	{ name: "WikiText-2 benchmark corpus (CC BY-SA 3.0)", href: "/licenses/data/WIKITEXT-2-LICENSE.txt" },
+];
+
 /** Terms copied byte-for-byte for the platform-specific Microsoft components in the published payload. */
 export function runtimeLegalDocumentsForUserAgent(userAgent: string): readonly IRuntimeLegalDocument[] {
 	return userAgent.includes("Windows")
