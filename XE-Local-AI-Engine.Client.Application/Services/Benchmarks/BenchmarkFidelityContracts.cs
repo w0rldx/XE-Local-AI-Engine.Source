@@ -53,6 +53,18 @@ public static class BenchmarkFidelityPolicy
     /// </summary>
     public const long KldFreeSpaceHeadroomBytes = 10L * 1024 * 1024 * 1024;
 
+    /// <summary>
+    ///     The vocabulary the disk estimate assumes. The registry does not record a model's <c>n_vocab</c>, and the
+    ///     estimate exists to REFUSE a write that will not fit, so it assumes the largest vocabulary among the
+    ///     families this app runs (Gemma-3's 262 144) rather than a typical one: an over-estimate costs an operator a
+    ///     refusal they can override by freeing space, an under-estimate costs them a full disk.
+    ///     <para>
+    ///         ponytail: a fixed ceiling instead of reading n_vocab out of the GGUF header. Read the header if the
+    ///         over-estimate ever refuses a write that would in fact have fit.
+    ///     </para>
+    /// </summary>
+    public const int DefaultVocabSize = 262_144;
+
     public static int ClampChunks(int? chunks) =>
         chunks is not { } value ? DefaultChunks : Math.Clamp(value, MinimumChunks, MaximumChunks);
 
@@ -186,3 +198,16 @@ public static class BenchmarkFidelityCorpus
 ///     compared when they scored the same bytes.
 /// </param>
 public sealed record BenchmarkFidelityCorpusFile(string Path, string Sha256, string CorpusId);
+
+/// <summary>
+///     Whether a run's KL-divergence numbers may be shown. Their own vocabulary rather than a boolean, because
+///     "never measured" and "measured against something else" are different answers and the UI says different things.
+/// </summary>
+public static class BenchmarkFidelityKldStates
+{
+    public const string None = "none";
+    public const string Ok = "ok";
+
+    /// <summary>Measured, but not against what the project now expects. A badge is rendered, never a number.</summary>
+    public const string Stale = "kld-stale";
+}

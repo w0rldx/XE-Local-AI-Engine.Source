@@ -229,6 +229,20 @@ public interface IBenchmarkStore
     /// <summary>One judge attempt by id, payloads included, or null when it is gone.</summary>
     Task<BenchmarkJudgeAttemptRecord?> GetJudgeAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default);
 
+    Task<BenchmarkFidelityAttemptRecord?> GetFidelityAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default);
+
+    /// <summary>Every fidelity attempt of a run, newest sequence first — the audit trail behind the projection.</summary>
+    Task<IReadOnlyList<BenchmarkFidelityAttemptRecord>> ListFidelityAttemptsAsync(Guid runId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The base-logit digests a queued or running fidelity attempt is about to read. Cache eviction must not
+    ///     delete a file a measurement is on its way to using.
+    /// </summary>
+    Task<IReadOnlySet<string>> ListLiveFidelityDigestsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether any fidelity work item is queued or running — the guard on clearing the base cache.</summary>
+    Task<bool> HasLiveFidelityWorkAsync(CancellationToken cancellationToken = default);
+
     /// <summary>One judge policy revision by id, payload included, or null when it is gone.</summary>
     Task<BenchmarkJudgePolicyRevisionRecord?> GetJudgePolicyRevisionAsync(Guid revisionId, CancellationToken cancellationToken = default);
 
@@ -296,7 +310,12 @@ public sealed record BenchmarkProjectInput(
     Guid AgentDefinitionId,
     int? MaxOutputTokens = null,
     int? InvocationTimeoutSeconds = null,
-    int? ReasoningBudgetTokens = null);
+    int? ReasoningBudgetTokens = null,
+    bool FidelityEnabled = false,
+    bool FidelityKldEnabled = false,
+    int? FidelityChunks = null,
+    string? FidelityKldBaseModelName = null,
+    string? FidelityKldBaseFingerprint = null);
 
 /// <summary>
 ///     The judge half of a project write, applied in the project's own transaction. A <see langword="null" /> instance
@@ -504,7 +523,12 @@ public sealed record BenchmarkProjectRecord(
     long UpdatedAtUtc,
     int? MaxOutputTokens = null,
     int? InvocationTimeoutSeconds = null,
-    int? ReasoningBudgetTokens = null);
+    int? ReasoningBudgetTokens = null,
+    bool FidelityEnabled = false,
+    bool FidelityKldEnabled = false,
+    int? FidelityChunks = null,
+    string? FidelityKldBaseModelName = null,
+    string? FidelityKldBaseFingerprint = null);
 
 /// <param name="Judge">
 ///     The derived judge view. Everything judge-related is now attempt-owned: a run is judged many times, so nothing
@@ -548,7 +572,51 @@ public sealed record BenchmarkRunRecord(
     int? InvocationTimeoutSeconds = null,
     BenchmarkRepeatMode RepeatMode = BenchmarkRepeatMode.Throughput,
     string? SamplingSeed = null,
-    double? SamplingTemperature = null);
+    double? SamplingTemperature = null,
+    BenchmarkRunFidelity? Fidelity = null);
+
+/// <summary>
+///     A run's quant-fidelity projection: a copy of the latest succeeded measurement. Display only — perplexity and
+///     KL divergence are never ranking inputs, and a KLD figure is shown only while
+///     <paramref name="KldBaseLogitsDigest" /> equals the digest the project's current settings recompute.
+/// </summary>
+public sealed record BenchmarkRunFidelity(
+    string? Status,
+    Guid? AttemptId,
+    double? PerplexityMean,
+    double? PerplexityStdErr,
+    int? PerplexityChunks,
+    int? PerplexityContextTokens,
+    string? PerplexityCorpusId,
+    double? KldMean,
+    double? KldP99,
+    double? TopTokenAgreement,
+    string? KldBaseFingerprint,
+    string? KldBaseLogitsDigest,
+    string? ErrorMessage);
+
+/// <summary>One immutable fidelity measurement of one run, as the attempt-history read serves it.</summary>
+public sealed record BenchmarkFidelityAttemptRecord(
+    Guid Id,
+    Guid RunId,
+    int Sequence,
+    string Kind,
+    BenchmarkJudgeAttemptStatus Status,
+    double? PerplexityMean,
+    double? PerplexityStdErr,
+    int? PerplexityChunks,
+    int? PerplexityContextTokens,
+    string? CorpusId,
+    double? KldMean,
+    double? KldP99,
+    double? TopTokenAgreement,
+    string? BaseModelName,
+    string? BaseModelContentFingerprint,
+    string? BaseLogitsDigest,
+    string? ErrorMessage,
+    long EnqueuedAtUtc,
+    long? StartedAtUtc,
+    long? CompletedAtUtc);
 
 /// <summary>
 ///     What freeze decided one phase of a run would launch with, before anything was spawned. Compared against the

@@ -266,6 +266,13 @@ public static class LocalApiRoutes
         // change, and doing so re-judges every run, so it never rides along on the project PUT.
         public const string ProjectJudge = "benchmarks/projects/{projectId}/judge";
         public const string ProjectRejudge = "benchmarks/projects/{projectId}/rejudge";
+
+        // Quant fidelity is a display-only axis measured by its own work kind, so it gets its own sub-resources
+        // rather than flags on the run or project routes.
+        public const string ProjectKldEstimate = "benchmarks/projects/{projectId}/fidelity/kld-estimate";
+        public const string ProjectFidelityCache = "benchmarks/projects/{projectId}/fidelity/cache";
+        public const string RunFidelity = "benchmarks/runs/{runId}/fidelity";
+        public const string RunFidelityAttempts = "benchmarks/runs/{runId}/fidelity/attempts";
         public const string RubricPresets = "benchmarks/rubric-presets";
         public const string EligibleAgents = "benchmarks/eligible-agents";
         public const string EligibleModels = "benchmarks/eligible-models";

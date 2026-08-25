@@ -40,6 +40,7 @@ import {
 	cancelTrainingDataset,
 	cancelTrainingRun,
 	cancelWorkSession,
+	clearBenchmarkFidelityCache,
 	clearBenchmarkRunScore,
 	clearCloudSettings,
 	codexLogin,
@@ -136,6 +137,7 @@ import {
 	getAppUpdateStatus,
 	getBaseArtifact,
 	getBaseArtifactLicense,
+	getBenchmarkKldDiskEstimate,
 	getBenchmarkProject,
 	getBenchmarkRubricPresets,
 	getBenchmarkRun,
@@ -212,6 +214,7 @@ import {
 	listAgentPlaybookActions,
 	listAgentTemplates,
 	listBaseArtifacts,
+	listBenchmarkFidelityAttempts,
 	listBenchmarkProjects,
 	listBenchmarkRuns,
 	listComparisons,
@@ -317,6 +320,7 @@ import {
 	setNodeChatSelectedPath,
 	startBenchmarkRun,
 	startBenchmarkRunBatch,
+	startBenchmarkRunFidelity,
 	startCudaBuild,
 	startDevelopmentNextAction,
 	startGgufDownload,
@@ -421,6 +425,9 @@ import type {
 	CancelWorkSessionData,
 	CancelWorkSessionError,
 	CancelWorkSessionResponse,
+	ClearBenchmarkFidelityCacheData,
+	ClearBenchmarkFidelityCacheError,
+	ClearBenchmarkFidelityCacheResponse,
 	ClearBenchmarkRunScoreData,
 	ClearBenchmarkRunScoreError,
 	ClearBenchmarkRunScoreResponse,
@@ -655,6 +662,9 @@ import type {
 	GetBaseArtifactLicenseError,
 	GetBaseArtifactLicenseResponse,
 	GetBaseArtifactResponse,
+	GetBenchmarkKldDiskEstimateData,
+	GetBenchmarkKldDiskEstimateError,
+	GetBenchmarkKldDiskEstimateResponse,
 	GetBenchmarkProjectData,
 	GetBenchmarkProjectError,
 	GetBenchmarkProjectResponse,
@@ -816,6 +826,9 @@ import type {
 	ListAgentTemplatesResponse,
 	ListBaseArtifactsData,
 	ListBaseArtifactsResponse,
+	ListBenchmarkFidelityAttemptsData,
+	ListBenchmarkFidelityAttemptsError,
+	ListBenchmarkFidelityAttemptsResponse,
 	ListBenchmarkProjectsData,
 	ListBenchmarkProjectsResponse,
 	ListBenchmarkRunsData,
@@ -1063,6 +1076,9 @@ import type {
 	StartBenchmarkRunBatchResponse,
 	StartBenchmarkRunData,
 	StartBenchmarkRunError,
+	StartBenchmarkRunFidelityData,
+	StartBenchmarkRunFidelityError,
+	StartBenchmarkRunFidelityResponse,
 	StartBenchmarkRunResponse,
 	StartCudaBuildData,
 	StartCudaBuildError,
@@ -7078,6 +7094,98 @@ export const exportBenchmarkProjectCsvOptions = (options: Options<ExportBenchmar
 		},
 		queryKey: exportBenchmarkProjectCsvQueryKey(options),
 	});
+
+export const getBenchmarkKldDiskEstimateQueryKey = (options: Options<GetBenchmarkKldDiskEstimateData>) =>
+	createQueryKey("getBenchmarkKldDiskEstimate", options);
+
+export const getBenchmarkKldDiskEstimateOptions = (options: Options<GetBenchmarkKldDiskEstimateData>) =>
+	queryOptions<
+		GetBenchmarkKldDiskEstimateResponse,
+		AxiosError<GetBenchmarkKldDiskEstimateError>,
+		GetBenchmarkKldDiskEstimateResponse,
+		ReturnType<typeof getBenchmarkKldDiskEstimateQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getBenchmarkKldDiskEstimate({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getBenchmarkKldDiskEstimateQueryKey(options),
+	});
+
+export const startBenchmarkRunFidelityMutation = (
+	options?: Partial<Options<StartBenchmarkRunFidelityData>>,
+): UseMutationOptions<
+	StartBenchmarkRunFidelityResponse,
+	AxiosError<StartBenchmarkRunFidelityError>,
+	Options<StartBenchmarkRunFidelityData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartBenchmarkRunFidelityResponse,
+		AxiosError<StartBenchmarkRunFidelityError>,
+		Options<StartBenchmarkRunFidelityData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startBenchmarkRunFidelity({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listBenchmarkFidelityAttemptsQueryKey = (options: Options<ListBenchmarkFidelityAttemptsData>) =>
+	createQueryKey("listBenchmarkFidelityAttempts", options);
+
+export const listBenchmarkFidelityAttemptsOptions = (options: Options<ListBenchmarkFidelityAttemptsData>) =>
+	queryOptions<
+		ListBenchmarkFidelityAttemptsResponse,
+		AxiosError<ListBenchmarkFidelityAttemptsError>,
+		ListBenchmarkFidelityAttemptsResponse,
+		ReturnType<typeof listBenchmarkFidelityAttemptsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listBenchmarkFidelityAttempts({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listBenchmarkFidelityAttemptsQueryKey(options),
+	});
+
+export const clearBenchmarkFidelityCacheMutation = (
+	options?: Partial<Options<ClearBenchmarkFidelityCacheData>>,
+): UseMutationOptions<
+	ClearBenchmarkFidelityCacheResponse,
+	AxiosError<ClearBenchmarkFidelityCacheError>,
+	Options<ClearBenchmarkFidelityCacheData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ClearBenchmarkFidelityCacheResponse,
+		AxiosError<ClearBenchmarkFidelityCacheError>,
+		Options<ClearBenchmarkFidelityCacheData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await clearBenchmarkFidelityCache({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const listBenchmarkProjectsQueryKey = (options?: Options<ListBenchmarkProjectsData>) =>
 	createQueryKey("listBenchmarkProjects", options);

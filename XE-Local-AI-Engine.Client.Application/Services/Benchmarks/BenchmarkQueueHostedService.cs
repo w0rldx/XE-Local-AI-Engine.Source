@@ -58,6 +58,11 @@ public sealed class BenchmarkQueueHostedService(
                                                     .ExecuteAsync(work, stoppingToken)
                                                     .ConfigureAwait(false);
                                 break;
+                            case BenchmarkWorkKind.Fidelity:
+                                await executionScope.ServiceProvider.GetRequiredService<IBenchmarkFidelityExecutor>()
+                                                    .ExecuteAsync(work, stoppingToken)
+                                                    .ConfigureAwait(false);
+                                break;
                             default:
                                 await TerminalizeUnsupportedAsync(executionScope.ServiceProvider, work, stoppingToken).ConfigureAwait(false);
                                 break;

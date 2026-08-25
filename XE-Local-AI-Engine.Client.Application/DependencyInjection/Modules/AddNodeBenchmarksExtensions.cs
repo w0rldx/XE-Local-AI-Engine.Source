@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 
 internal static class AddNodeBenchmarksExtensions
 {
@@ -35,6 +36,10 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddSingleton(BenchmarkAdmissionRetry.Default);
         builder.Services.AddScoped<IBenchmarkRunExecutor, BenchmarkRunExecutor>();
         builder.Services.AddScoped<IBenchmarkJudgeExecutor, BenchmarkJudgeExecutor>();
+        builder.Services.AddScoped<IBenchmarkFidelityExecutor, BenchmarkFidelityExecutor>();
+        builder.Services.AddSingleton<IBenchmarkPerplexityRunner, BenchmarkPerplexityRunner>();
+        builder.Services.AddOptions<BenchmarkKldCacheOptions>().BindConfiguration(BenchmarkKldCacheOptions.SectionName);
+        builder.Services.AddSingleton(static services => new BenchmarkKldBaseCache(services.GetRequiredService<IFreeSpaceProbe>()));
         builder.Services.AddHostedService<BenchmarkQueueHostedService>();
         return builder;
     }

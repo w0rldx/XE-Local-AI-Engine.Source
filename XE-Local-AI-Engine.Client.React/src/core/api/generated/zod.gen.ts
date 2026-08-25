@@ -4419,6 +4419,30 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunJudgeRespons
 	criteria: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeCriterionScoreResponse).nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse = z.object({
+	status: z.string(),
+	attemptId: z.guid().nullish(),
+	perplexityMean: z.number().nullish(),
+	perplexityStdErr: z.number().nullish(),
+	perplexityChunks: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	perplexityContextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	perplexityCorpusId: z.string().nullish(),
+	kldState: z.string(),
+	kldMean: z.number().nullish(),
+	kldP99: z.number().nullish(),
+	topTokenAgreement: z.number().nullish(),
+	kldBaseFingerprint: z.string().nullish(),
+	errorMessage: z.string().nullish(),
+});
+
 export const zXeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode = z.enum(["Throughput", "AnswerVariance"]);
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse = z.object({
@@ -4436,6 +4460,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespo
 		.optional(),
 	primaryStatus: zXeLocalAiEngineClientPersistenceEntitiesBenchmarkPrimaryStatus.optional(),
 	judge: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunJudgeResponse,
+	fidelity: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse.nullish(),
 	qualityScore: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -4617,6 +4642,73 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse 
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1GetKldDiskEstimateResponse = z.object({
+	estimatedBytes: z.int().optional(),
+	freeDiskBytes: z.int().optional(),
+	cachedBytes: z.int().optional(),
+	chunks: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	contextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	vocabSize: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	formula: z.string(),
+	fitsOnDisk: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1GetKldDiskEstimateRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartRunFidelityRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse = z.object({
+	id: z.guid().optional(),
+	sequence: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	kind: z.string(),
+	status: z.string(),
+	perplexityMean: z.number().nullish(),
+	perplexityStdErr: z.number().nullish(),
+	perplexityChunks: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	perplexityContextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	corpusId: z.string().nullish(),
+	kldMean: z.number().nullish(),
+	kldP99: z.number().nullish(),
+	topTokenAgreement: z.number().nullish(),
+	baseModelName: z.string().nullish(),
+	baseModelContentFingerprint: z.string().nullish(),
+	baseLogitsDigest: z.string().nullish(),
+	errorMessage: z.string().nullish(),
+	enqueuedAtUtc: z.int().optional(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse = z.object({
 	id: z.guid().optional(),
@@ -7808,6 +7900,51 @@ export const zExportBenchmarkProjectCsvPath = z.object({
  * Success
  */
 export const zExportBenchmarkProjectCsvResponse = z.string();
+
+export const zGetBenchmarkKldDiskEstimatePath = z.object({
+	projectId: z.guid(),
+});
+
+export const zGetBenchmarkKldDiskEstimateQuery = z.object({
+	chunks: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zGetBenchmarkKldDiskEstimateResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1GetKldDiskEstimateResponse;
+
+export const zStartBenchmarkRunFidelityPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zStartBenchmarkRunFidelityResponse = z.void();
+
+export const zListBenchmarkFidelityAttemptsPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zListBenchmarkFidelityAttemptsResponse =
+	zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse;
+
+export const zClearBenchmarkFidelityCachePath = z.object({
+	projectId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zClearBenchmarkFidelityCacheResponse = z.void();
 
 /**
  * Success

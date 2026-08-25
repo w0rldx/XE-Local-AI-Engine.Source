@@ -222,6 +222,22 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 Version = 1,
                 EnqueuedAtUtc = now
             });
+
+            // One fidelity item per measured CELL, not per repeat. Perplexity is deterministic given the same weights
+            // and the same arguments, so N repeats of one cell would produce N identical numbers at N times the cost.
+            // A warm-up is never measured at all — it exists to absorb first-launch costs, not to be compared.
+            if (project.FidelityEnabled && !run.IsWarmup && run.RepeatIndex is null or 1)
+            {
+                _ = await AppendFidelityWorkAsync(run, project.FidelityKldEnabled ? FidelityKindKld : FidelityKindPerplexity, now, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            else if (project.FidelityEnabled)
+            {
+                // Recorded rather than left null: "this cell's repeats are covered by repeat 1" and "fidelity was
+                // never asked for" are different facts, and the UI shows a different thing for each.
+                run.FidelityStatus = "skipped";
+            }
+
             runs.Add(run);
         }
 
@@ -757,6 +773,41 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
     }
+
+    public async Task<BenchmarkFidelityAttemptRecord?> GetFidelityAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default)
+    {
+        var attempt = await _dbContext.BenchmarkFidelityAttempts.AsNoTracking()
+                                      .SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken)
+                                      .ConfigureAwait(false);
+        return attempt is null ? null : ToRecord(attempt);
+    }
+
+    public async Task<IReadOnlyList<BenchmarkFidelityAttemptRecord>> ListFidelityAttemptsAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        var attempts = await _dbContext.BenchmarkFidelityAttempts.AsNoTracking()
+                                       .Where(entity => entity.RunId == runId)
+                                       .OrderByDescending(entity => entity.Sequence)
+                                       .ToListAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+        return [.. attempts.Select(ToRecord)];
+    }
+
+    public async Task<IReadOnlySet<string>> ListLiveFidelityDigestsAsync(CancellationToken cancellationToken = default)
+    {
+        var digests = await _dbContext.BenchmarkFidelityAttempts.AsNoTracking()
+                                      .Where(entity => (entity.Status == BenchmarkJudgeAttemptStatus.Queued || entity.Status == BenchmarkJudgeAttemptStatus.Running)
+                                                       && entity.BaseLogitsDigest != null)
+                                      .Select(entity => entity.BaseLogitsDigest!)
+                                      .ToListAsync(cancellationToken)
+                                      .ConfigureAwait(false);
+        return digests.ToHashSet(StringComparer.Ordinal);
+    }
+
+    public Task<bool> HasLiveFidelityWorkAsync(CancellationToken cancellationToken = default) =>
+        _dbContext.BenchmarkWorkItems.AsNoTracking()
+                  .AnyAsync(entity => entity.Kind == BenchmarkWorkKind.Fidelity
+                                      && (entity.Status == BenchmarkWorkStatus.Queued || entity.Status == BenchmarkWorkStatus.Running),
+                      cancellationToken);
 
     public async Task<Guid> EnqueueFidelityAsync(Guid runId, string kind, CancellationToken cancellationToken = default)
     {
@@ -2343,7 +2394,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         new(entity.Id, entity.Name, entity.CoreTaskJson.ToArray(), entity.ContextTokens, entity.AgentDefinitionId,
             entity.CurrentJudgePolicyRevisionId is not null, entity.CurrentJudgePolicyRevisionId, frozen,
             entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.MaxOutputTokens, entity.InvocationTimeoutSeconds,
-            entity.ReasoningBudgetTokens);
+            entity.ReasoningBudgetTokens, entity.FidelityEnabled, entity.FidelityKldEnabled, entity.FidelityChunks,
+            entity.FidelityKldBaseModelName, entity.FidelityKldBaseFingerprint);
 
     // One place writes the six throughput columns, so the success path and the cancel-reset path can never disagree
     // about which of them a run carries.
@@ -2390,7 +2442,35 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             InvocationTimeoutSeconds: entity.InvocationTimeoutSeconds,
             RepeatMode: entity.RepeatMode,
             SamplingSeed: entity.SamplingSeed,
-            SamplingTemperature: entity.SamplingTemperature);
+            SamplingTemperature: entity.SamplingTemperature,
+            Fidelity: ToFidelity(entity));
+
+    /// <summary>
+    ///     Null when nothing has ever been measured, so the API says "no measurement" rather than a projection of
+    ///     thirteen nulls that a reader has to interpret.
+    /// </summary>
+    private static BenchmarkRunFidelity? ToFidelity(BenchmarkRun entity) =>
+        entity.FidelityStatus is null
+            ? null
+            : new BenchmarkRunFidelity(entity.FidelityStatus,
+                entity.FidelityAttemptId,
+                entity.PerplexityMean,
+                entity.PerplexityStdErr,
+                entity.PerplexityChunks,
+                entity.PerplexityContextTokens,
+                entity.PerplexityCorpusId,
+                entity.KldMean,
+                entity.KldP99,
+                entity.TopTokenAgreement,
+                entity.KldBaseFingerprint,
+                entity.KldBaseLogitsDigest,
+                entity.FidelityErrorMessage);
+
+    private static BenchmarkFidelityAttemptRecord ToRecord(BenchmarkFidelityAttempt entity) =>
+        new(entity.Id, entity.RunId, entity.Sequence, entity.Kind, entity.Status, entity.PerplexityMean, entity.PerplexityStdErr,
+            entity.PerplexityChunks, entity.PerplexityContextTokens, entity.CorpusId, entity.KldMean, entity.KldP99,
+            entity.TopTokenAgreement, entity.BaseModelName, entity.BaseModelContentFingerprint, entity.BaseLogitsDigest,
+            entity.ErrorMessage, entity.EnqueuedAtUtc, entity.StartedAtUtc, entity.CompletedAtUtc);
 
     private static BenchmarkRunLaunchIntent? ToIntent(string? variant,
         string? kvCacheType,

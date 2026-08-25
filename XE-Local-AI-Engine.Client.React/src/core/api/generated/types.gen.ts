@@ -3706,6 +3706,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	requestedContextTokens?: number;
 	primaryStatus?: XeLocalAiEngineClientPersistenceEntitiesBenchmarkPrimaryStatus;
 	judge: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunJudgeResponse;
+	fidelity?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse | null;
 	qualityScore?: number | null;
 	qualityScoreSource: string;
 	rank?: number | null;
@@ -3779,6 +3780,22 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeCriterionSco
 	rationale: string;
 };
 
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse = {
+	status: string;
+	attemptId?: string | null;
+	perplexityMean?: number | null;
+	perplexityStdErr?: number | null;
+	perplexityChunks?: number | null;
+	perplexityContextTokens?: number | null;
+	perplexityCorpusId?: string | null;
+	kldState: string;
+	kldMean?: number | null;
+	kldP99?: number | null;
+	topTokenAgreement?: number | null;
+	kldBaseFingerprint?: string | null;
+	errorMessage?: string | null;
+};
+
 export type XeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode = "Throughput" | "AnswerVariance";
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGroupResponse = {
@@ -3816,6 +3833,55 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchR
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1GetKldDiskEstimateResponse = {
+	estimatedBytes?: number;
+	freeDiskBytes?: number;
+	cachedBytes?: number;
+	chunks?: number;
+	contextTokens?: number;
+	vocabSize?: number;
+	formula: string;
+	fitsOnDisk?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1GetKldDiskEstimateRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1StartRunFidelityRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse = {
+	id?: string;
+	sequence?: number;
+	kind: string;
+	status: string;
+	perplexityMean?: number | null;
+	perplexityStdErr?: number | null;
+	perplexityChunks?: number | null;
+	perplexityContextTokens?: number | null;
+	corpusId?: string | null;
+	kldMean?: number | null;
+	kldP99?: number | null;
+	topTokenAgreement?: number | null;
+	baseModelName?: string | null;
+	baseModelContentFingerprint?: string | null;
+	baseLogitsDigest?: string | null;
+	errorMessage?: string | null;
+	enqueuedAtUtc?: number;
+	startedAtUtc?: number | null;
+	completedAtUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsRequest = {
 	[key: string]: never;
 };
 
@@ -13100,6 +13166,153 @@ export type ExportBenchmarkProjectCsvResponses = {
 };
 
 export type ExportBenchmarkProjectCsvResponse = ExportBenchmarkProjectCsvResponses[keyof ExportBenchmarkProjectCsvResponses];
+
+export type GetBenchmarkKldDiskEstimateData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: {
+		chunks?: number | null;
+	};
+	url: "/api/local/v1/benchmarks/projects/{projectId}/fidelity/kld-estimate";
+};
+
+export type GetBenchmarkKldDiskEstimateErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type GetBenchmarkKldDiskEstimateError = GetBenchmarkKldDiskEstimateErrors[keyof GetBenchmarkKldDiskEstimateErrors];
+
+export type GetBenchmarkKldDiskEstimateResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1GetKldDiskEstimateResponse;
+};
+
+export type GetBenchmarkKldDiskEstimateResponse =
+	GetBenchmarkKldDiskEstimateResponses[keyof GetBenchmarkKldDiskEstimateResponses];
+
+export type StartBenchmarkRunFidelityData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/runs/{runId}/fidelity";
+};
+
+export type StartBenchmarkRunFidelityErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type StartBenchmarkRunFidelityError = StartBenchmarkRunFidelityErrors[keyof StartBenchmarkRunFidelityErrors];
+
+export type StartBenchmarkRunFidelityResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type StartBenchmarkRunFidelityResponse = StartBenchmarkRunFidelityResponses[keyof StartBenchmarkRunFidelityResponses];
+
+export type ListBenchmarkFidelityAttemptsData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/runs/{runId}/fidelity/attempts";
+};
+
+export type ListBenchmarkFidelityAttemptsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ListBenchmarkFidelityAttemptsError = ListBenchmarkFidelityAttemptsErrors[keyof ListBenchmarkFidelityAttemptsErrors];
+
+export type ListBenchmarkFidelityAttemptsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse;
+};
+
+export type ListBenchmarkFidelityAttemptsResponse =
+	ListBenchmarkFidelityAttemptsResponses[keyof ListBenchmarkFidelityAttemptsResponses];
+
+export type ClearBenchmarkFidelityCacheData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/fidelity/cache";
+};
+
+export type ClearBenchmarkFidelityCacheErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ClearBenchmarkFidelityCacheError = ClearBenchmarkFidelityCacheErrors[keyof ClearBenchmarkFidelityCacheErrors];
+
+export type ClearBenchmarkFidelityCacheResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type ClearBenchmarkFidelityCacheResponse =
+	ClearBenchmarkFidelityCacheResponses[keyof ClearBenchmarkFidelityCacheResponses];
 
 export type ListBenchmarkProjectsData = {
 	body?: never;

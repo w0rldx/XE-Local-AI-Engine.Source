@@ -13987,6 +13987,241 @@
         ]
       }
     },
+    "/api/local/v1/benchmarks/projects/{projectId}/fidelity/kld-estimate": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "getBenchmarkKldDiskEstimate",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "chunks",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1GetKldDiskEstimateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/runs/{runId}/fidelity": {
+      "post": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "startBenchmarkRunFidelity",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/runs/{runId}/fidelity/attempts": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "listBenchmarkFidelityAttempts",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/projects/{projectId}/fidelity/cache": {
+      "delete": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "clearBenchmarkFidelityCache",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/benchmarks/projects": {
       "get": {
         "tags": [
@@ -29993,6 +30228,14 @@
           "judge": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunJudgeResponse"
           },
+          "fidelity": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse"
+              }
+            ]
+          },
           "qualityScore": {
             "type": "integer",
             "format": "int32",
@@ -30274,6 +30517,74 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "kldState"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "attemptId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "perplexityMean": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "perplexityStdErr": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "perplexityChunks": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "perplexityContextTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "perplexityCorpusId": {
+            "type": "string",
+            "nullable": true
+          },
+          "kldState": {
+            "type": "string"
+          },
+          "kldMean": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "kldP99": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "topTokenAgreement": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "kldBaseFingerprint": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "XE_Local_AI_EngineClientPersistenceEntitiesBenchmarkRepeatMode": {
         "type": "string",
         "description": "",
@@ -30423,6 +30734,159 @@
         }
       },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1GetKldDiskEstimateResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "formula"
+        ],
+        "properties": {
+          "estimatedBytes": {
+            "type": "integer"
+          },
+          "freeDiskBytes": {
+            "type": "integer"
+          },
+          "cachedBytes": {
+            "type": "integer"
+          },
+          "chunks": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "contextTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "vocabSize": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "formula": {
+            "type": "string"
+          },
+          "fitsOnDisk": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1GetKldDiskEstimateRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1StartRunFidelityRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "perplexityMean": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "perplexityStdErr": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "perplexityChunks": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "perplexityContextTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "corpusId": {
+            "type": "string",
+            "nullable": true
+          },
+          "kldMean": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "kldP99": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "topTokenAgreement": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "baseModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "baseModelContentFingerprint": {
+            "type": "string",
+            "nullable": true
+          },
+          "baseLogitsDigest": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "enqueuedAtUtc": {
+            "type": "integer"
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "completedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsRequest": {
         "type": "object",
         "additionalProperties": false
       },
