@@ -185,6 +185,7 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "model", 4, null, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>()).Returns(Runs());
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
@@ -212,6 +213,7 @@ public sealed class BenchmarkEndpointTests
             IsWarmup = true
         };
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "model", 4, null, 3, true),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>()).Returns(Runs(first, Run(), Run()));
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
@@ -238,8 +240,10 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "model-a", 4, null, 2, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>()).Returns(Runs(Run(), Run()));
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "model-b", 6, BenchmarkKvCacheType.Q8_0, 2, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>())
                .Returns(Runs(Run(), Run()));
         using var client = context.Factory.CreateClient();
@@ -279,7 +283,72 @@ public sealed class BenchmarkEndpointTests
         // Each cell's two inserts bump the project version by two, so the SECOND cell must present version 6. Getting
         // this wrong turns every batch past the first item into a version conflict.
         _ = context.RunFreeze.Received(1).StartAsync(new BenchmarkRunStartRequest(ProjectId, "model-b", 6, BenchmarkKvCacheType.Q8_0, 2, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task StartRunBatch_SharesOneFreezeScopeAcrossEveryCell()
+    {
+        // The scope is what makes a matrix affordable: one llama-server capability probe for the request instead of
+        // one per cell, and one verification per distinct model instead of one per cell. A per-cell scope would be
+        // the old behaviour wearing a new type.
+        await using var context = CreateContext();
+        var scopes = new List<BenchmarkFreezeScope?>();
+        context.RunFreeze.StartAsync(Arg.Any<BenchmarkRunStartRequest>(),
+                     Arg.Do<BenchmarkFreezeScope?>(scopes.Add),
+                     Arg.Any<CancellationToken>())
+               .Returns(Runs());
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch", BatchBody("model-a", "model-b"));
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(expected: 2, scopes.Count);
+        AssertEx.NotNull(scopes[0], "A batch must hand the freeze a scope, never leave each cell to build its own.");
+        AssertEx.True(ReferenceEquals(scopes[0], scopes[1]), "Every cell of one request must share the SAME scope.");
+    }
+
+    [Test]
+    public async Task StartRunBatch_WhenTheTimeBudgetRunsOut_AnswersWithWhatStartedAndNamesTheRest()
+    {
+        // The freeze is synchronous per cell by design — no background job — so without a budget a large matrix over
+        // cold models holds the connection until something times out and the operator cannot tell which cells started.
+        // Started at the real clock, not at the provider's own epoch: the host mints this request's token off the
+        // SAME TimeProvider, and a token issued in 2026-01-01 is long expired by the time it is validated.
+        var clock = new ManualTimeProvider(DateTimeOffset.UtcNow);
+        await using var context = CreateContext(clock);
+        context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "model-a", 4, null, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
+                     Arg.Any<CancellationToken>())
+               .Returns(_ =>
+               {
+                   clock.Advance(TimeSpan.FromMinutes(2));
+                   return Runs();
+               });
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
+            BatchBody("model-a", "model-b", "model-c"));
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 1, document.RootElement.GetProperty("started").GetArrayLength(), "The cell that ran must keep its run ids.");
+        var rejected = document.RootElement.GetProperty("rejected");
+        AssertEx.Equal(expected: 2, rejected.GetArrayLength());
+        AssertEx.Equal(BenchmarkErrorCode.BatchTimeBudget.ToString(), rejected[0].GetProperty("code").GetString());
+        AssertEx.Equal("model-b", rejected[0].GetProperty("modelName").GetString(), "A skipped cell is named, so it can be resubmitted.");
+        AssertEx.Equal("model-c", rejected[1].GetProperty("modelName").GetString());
+        AssertEx.Equal(expected: 5L, document.RootElement.GetProperty("projectVersion").GetInt64(),
+            "The version the resubmission has to present is the one the started cell left behind.");
+
+        // Nothing after the budget may be frozen: the point is to stop working, not to report differently.
+        _ = context.RunFreeze.DidNotReceive().StartAsync(Arg.Is<BenchmarkRunStartRequest>(value => value.PrimaryModelName == "model-b"),
+            Arg.Any<BenchmarkFreezeScope?>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -287,9 +356,11 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "bad-model", 4, null, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>())
                .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new BenchmarkEligibilityException("The selected primary model is not eligible."));
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "good-model", 4, null, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>()).Returns(Runs());
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
@@ -329,6 +400,7 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "model-a", 4, null, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>())
                .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new BenchmarkConflictException("VersionConflict"));
         using var client = context.Factory.CreateClient();
@@ -357,6 +429,7 @@ public sealed class BenchmarkEndpointTests
             "The resource version changed. Refresh and retry.");
         _ = context.RunFreeze.DidNotReceive().StartAsync(Arg.Is<BenchmarkRunStartRequest>(request => request.ProjectId == ProjectId
                                                         && request.PrimaryModelName == "model-b"),
+            Arg.Any<BenchmarkFreezeScope?>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -365,8 +438,10 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "model-a", 4, null, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>()).Returns(Runs());
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "model-b", 5, null, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>())
                .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new BenchmarkConflictException("VersionConflict"));
         using var client = context.Factory.CreateClient();
@@ -413,6 +488,7 @@ public sealed class BenchmarkEndpointTests
         // The batch stops at the conflict rather than hammering the freeze with cells that would all fail the same way.
         _ = context.RunFreeze.DidNotReceive().StartAsync(Arg.Is<BenchmarkRunStartRequest>(request => request.ProjectId == ProjectId
                                                         && request.PrimaryModelName == "model-c"),
+            Arg.Any<BenchmarkFreezeScope?>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -421,6 +497,7 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "model-b", 4, null, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>()).Returns(Runs());
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
@@ -453,6 +530,7 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Equal(BenchmarkErrorCode.InvalidRequest.ToString(), rejected[0].GetProperty("code").GetString());
         _ = context.RunFreeze.DidNotReceive().StartAsync(Arg.Is<BenchmarkRunStartRequest>(request => request.ProjectId == ProjectId
                                                         && request.PrimaryModelName == "   "),
+            Arg.Any<BenchmarkFreezeScope?>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -470,7 +548,7 @@ public sealed class BenchmarkEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        _ = context.RunFreeze.DidNotReceiveWithAnyArgs().StartAsync(default!, default);
+        _ = context.RunFreeze.DidNotReceiveWithAnyArgs().StartAsync(default!, default, default);
     }
 
     [Test]
@@ -478,6 +556,7 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "model", 4, BenchmarkKvCacheType.Q8_0, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>()).Returns(Runs());
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs",
@@ -491,6 +570,7 @@ public sealed class BenchmarkEndpointTests
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
         _ = context.RunFreeze.Received(1).StartAsync(new BenchmarkRunStartRequest(ProjectId, "model", 4, BenchmarkKvCacheType.Q8_0, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>());
     }
 
@@ -510,7 +590,7 @@ public sealed class BenchmarkEndpointTests
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
         AssertProblem(response, body, HttpStatusCode.BadRequest, BenchmarkErrorCode.InvalidRequest, "The requested KV-cache type is not supported.");
-        _ = context.RunFreeze.DidNotReceiveWithAnyArgs().StartAsync(default!, default);
+        _ = context.RunFreeze.DidNotReceiveWithAnyArgs().StartAsync(default!, default, default);
     }
 
     [Test]
@@ -518,6 +598,7 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "model", 4, BenchmarkKvCacheType.Q4_0, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>())
                .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new BenchmarkUnsupportedKvCacheTypeException("A q4_0 KV cache needs a GPU llama.cpp build."));
         using var client = context.Factory.CreateClient();
@@ -544,6 +625,7 @@ public sealed class BenchmarkEndpointTests
         // every cell after it instead of rejecting one.
         await using var context = CreateContext();
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "model", 4, null, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
                      Arg.Any<CancellationToken>())
                .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ =>
                    throw new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry."));
@@ -1169,8 +1251,21 @@ public sealed class BenchmarkEndpointTests
         AssertEx.Equal("cohort-key", cohort.GetProperty("executionKey").GetString());
     }
 
-    private static Context CreateContext() =>
-        new();
+    private static object BatchBody(params string[] modelNames) =>
+        new
+        {
+            expectedProjectVersion = 4,
+            repeatCount = 1,
+            warmup = false,
+            items = modelNames.Select(static modelName => new
+            {
+                modelName,
+                kvCacheType = (string?)null
+            }).ToArray()
+        };
+
+    private static Context CreateContext(ManualTimeProvider? clock = null) =>
+        new(clock);
 
     private sealed class Context : IAsyncDisposable
     {
@@ -1182,12 +1277,18 @@ public sealed class BenchmarkEndpointTests
 
         public TestServerWebAppFactory Factory { get; }
 
-        public Context()
+        public Context(ManualTimeProvider? clock = null)
         {
             Factory = new TestServerWebAppFactory
             {
                 ConfigureAdditionalTestServices = services =>
                 {
+                    if (clock is not null)
+                    {
+                        services.RemoveAll<TimeProvider>();
+                        services.AddSingleton<TimeProvider>(clock);
+                    }
+
                     services.RemoveAll<IBenchmarkStore>();
                     services.RemoveAll<IBenchmarkProjectService>();
                     services.RemoveAll<IBenchmarkRunFreezeService>();

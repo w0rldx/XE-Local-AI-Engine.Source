@@ -9,6 +9,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     One launch request: a project, a model, and how many measured runs to enqueue against them.
@@ -45,6 +47,73 @@ public sealed record BenchmarkRunStartRequest(
     BenchmarkRepeatMode RepeatMode = BenchmarkRepeatMode.Throughput,
     float? AnswerVarianceTemperature = null);
 
+/// <summary>
+///     Work one launch REQUEST does once and every cell of it would otherwise repeat: the llama-server capability
+///     probe, the variant it settles on, and the verified installed-model lease per model name. A batch of ten cells
+///     used to run ten probes and ten full re-verifications of the same files, serially, before the endpoint answered.
+///     <para>
+///         Holding the leases for the request's lifetime is deliberate, not just cheaper: a model that changed halfway
+///         through a matrix would give the later cells a different snapshot from the earlier ones, which is exactly the
+///         variable a matrix exists to hold still. One probe for the same reason — asking twice can straddle a runtime
+///         swap and freeze two different answers into one batch.
+///     </para>
+///     <para>
+///         Not thread-safe: one scope belongs to one request, which processes its cells in order.
+///     </para>
+/// </summary>
+public sealed class BenchmarkFreezeScope : IAsyncDisposable
+{
+    private readonly Dictionary<string, IBenchmarkInstalledModelLease> _leases = new(StringComparer.OrdinalIgnoreCase);
+    private bool _inspected;
+    private LlamaServerLaunchCapabilities? _capabilities;
+    private GpuVariant? _variant;
+
+    /// <summary>How many times the binary was actually inspected. Test-only seam.</summary>
+    internal int Inspections { get; private set; }
+
+    /// <summary>How many models were actually verified. Test-only seam.</summary>
+    internal int Verifications { get; private set; }
+
+    public async ValueTask DisposeAsync()
+    {
+        foreach (var lease in _leases.Values.Reverse())
+        {
+            await lease.DisposeAsync().ConfigureAwait(false);
+        }
+
+        _leases.Clear();
+    }
+
+    internal async Task<(LlamaServerLaunchCapabilities? Capabilities, GpuVariant Variant)> InspectAsync(IBenchmarkPhaseLaunchResolver resolver,
+        CancellationToken cancellationToken)
+    {
+        if (!_inspected)
+        {
+            _capabilities = await resolver.InspectAsync(cancellationToken).ConfigureAwait(false);
+            _variant = await resolver.SelectVariantAsync(_capabilities, cancellationToken).ConfigureAwait(false);
+            _inspected = true;
+            Inspections++;
+        }
+
+        return (_capabilities, _variant!.Value);
+    }
+
+    internal async Task<IBenchmarkInstalledModelLease> AcquireAsync(string modelName,
+        Func<string, CancellationToken, Task<IBenchmarkInstalledModelLease>> acquire,
+        CancellationToken cancellationToken)
+    {
+        if (_leases.TryGetValue(modelName, out var cached))
+        {
+            return cached;
+        }
+
+        var lease = await acquire(modelName, cancellationToken).ConfigureAwait(false);
+        _leases[modelName] = lease;
+        Verifications++;
+        return lease;
+    }
+}
+
 public interface IBenchmarkRunFreezeService
 {
     /// <returns>
@@ -64,7 +133,14 @@ public interface IBenchmarkRunFreezeService
     ///         <c>LaunchIdentity</c>.
     ///     </para>
     /// </remarks>
-    Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkRunStartRequest request, CancellationToken cancellationToken = default);
+    /// <param name="scope">
+    ///     Work shared across one launch REQUEST — the capability probe and the verified model leases. Null makes the
+    ///     call self-contained, which is what a single-run launch wants; a batch passes one scope through every cell so
+    ///     the probe runs once and each distinct model is verified once. The caller owns the scope's lifetime.
+    /// </param>
+    Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkRunStartRequest request,
+        BenchmarkFreezeScope? scope = null,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class BenchmarkRunFreezeService(
@@ -119,7 +195,9 @@ public sealed class BenchmarkRunFreezeService(
     /// <summary>The ceiling the chat sampling UI already enforces.</summary>
     public const float MaxAnswerVarianceTemperature = 2f;
 
-    public async Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkRunStartRequest request, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkRunStartRequest request,
+        BenchmarkFreezeScope? scope = null,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         var primaryModelName = request.PrimaryModelName;
@@ -152,139 +230,130 @@ public sealed class BenchmarkRunFreezeService(
 
         var warmup = request.Warmup;
         var expectedProjectVersion = request.ExpectedProjectVersion;
-        var leases = new Dictionary<string, IBenchmarkInstalledModelLease>(StringComparer.OrdinalIgnoreCase);
-        try
+
+        // A scope of our own when the caller passed none, so the single-run path keeps behaving exactly as it did:
+        // acquire, freeze, release. A caller-supplied scope outlives this call and is NOT disposed here.
+        await using var ownedScope = scope is null ? new BenchmarkFreezeScope() : null;
+        var freezeScope = scope ?? ownedScope!;
+        var trimmedPrimary = primaryModelName.Trim();
+        var primary = (await freezeScope.AcquireAsync(trimmedPrimary, AcquireVerifiedAsync, cancellationToken).ConfigureAwait(false)).Snapshot;
+        BenchmarkModelEligibility.Validate(primary, "primary");
+
+        // The judge is no longer part of the freeze: its runtime is resolved per attempt, against the policy
+        // revision that attempt is judged under, so a judge change never re-freezes a run.
+        var definition = await _agentDefinitions.GetByIdAsync(project.AgentDefinitionId, cancellationToken).ConfigureAwait(false);
+        if (definition is null || definition.Kind != AgentDefinitionKind.Single)
         {
-            var trimmedPrimary = primaryModelName.Trim();
-            leases.Add(trimmedPrimary, await AcquireVerifiedAsync(trimmedPrimary, cancellationToken).ConfigureAwait(false));
-            var primary = leases[trimmedPrimary].Snapshot;
-            BenchmarkModelEligibility.Validate(primary, "primary");
+            throw new BenchmarkEligibilityException("The selected Single agent definition no longer exists.");
+        }
 
-            // The judge is no longer part of the freeze: its runtime is resolved per attempt, against the policy
-            // revision that attempt is judged under, so a judge change never re-freezes a run.
-            var definition = await _agentDefinitions.GetByIdAsync(project.AgentDefinitionId, cancellationToken).ConfigureAwait(false);
-            if (definition is null || definition.Kind != AgentDefinitionKind.Single)
-            {
-                throw new BenchmarkEligibilityException("The selected Single agent definition no longer exists.");
-            }
+        var exactCoreTask = BenchmarkProjectService.DecodeCoreTask(project.CoreTaskJson.Span);
+        var capabilities = await _modelCapabilities.TryResolveAsync(primary.ModelName, cancellationToken).ConfigureAwait(false)
+                           ?? throw new BenchmarkEligibilityException("The selected primary model capabilities are unavailable.");
 
-            var exactCoreTask = BenchmarkProjectService.DecodeCoreTask(project.CoreTaskJson.Span);
-            var capabilities = await _modelCapabilities.TryResolveAsync(primary.ModelName, cancellationToken).ConfigureAwait(false)
-                               ?? throw new BenchmarkEligibilityException("The selected primary model capabilities are unavailable.");
-
-            var resolved = await _agentResolver.ResolveAsync(project.AgentDefinitionId,
+        var resolved = await _agentResolver.ResolveAsync(project.AgentDefinitionId,
+                                               primaryModelName,
+                                               exactCoreTask,
+                                               capabilities.SupportsTools,
+                                               honorModelProfile: false,
+                                               activeModelIsCloud: false,
+                                               cancellationToken)
+                                           .ConfigureAwait(false)
+                       ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
+        var eligible = _eligibilityPolicy.Apply(resolved);
+        var dependencySet = await _dependencies.CaptureAsync(project.AgentDefinitionId,
+                                                   eligible,
                                                    primaryModelName,
-                                                   exactCoreTask,
-                                                   capabilities.SupportsTools,
-                                                   honorModelProfile: false,
-                                                   activeModelIsCloud: false,
+                                                   judgeModelName: null,
                                                    cancellationToken)
-                                               .ConfigureAwait(false)
-                           ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
-            var eligible = _eligibilityPolicy.Apply(resolved);
-            var dependencySet = await _dependencies.CaptureAsync(project.AgentDefinitionId,
-                                                       eligible,
-                                                       primaryModelName,
-                                                       judgeModelName: null,
-                                                       cancellationToken)
-                                                   .ConfigureAwait(false);
-            var primarySnapshot = BenchmarkInstalledModelSnapshotMapper.ToSnapshot(primary);
+                                               .ConfigureAwait(false);
+        var primarySnapshot = BenchmarkInstalledModelSnapshotMapper.ToSnapshot(primary);
 
-            // One capability read per freeze: the primary and the judge launch the same binary, and asking twice could
-            // straddle a runtime swap and freeze two different answers into one run.
-            var binaryCapabilities = await _launchResolver.InspectAsync(cancellationToken).ConfigureAwait(false);
+        // One capability read per REQUEST: the primary and the judge launch the same binary, asking twice could
+        // straddle a runtime swap and freeze two different answers into one batch, and the variant is taken from
+        // the same inspection that produced the capabilities so a second selection cannot disagree with the
+        // manifest whose digest we record.
+        var (binaryCapabilities, variant) = await freezeScope.InspectAsync(_launchResolver, cancellationToken).ConfigureAwait(false);
+        var primaryLaunch = await _launchResolver
+                                  .ResolveAsync(primary.ModelName, project.ContextTokens, requestedKvCacheType, binaryCapabilities, variant, cancellationToken)
+                                  .ConfigureAwait(false);
+        // The enforceability answer is frozen off the capabilities read ABOVE, not re-resolved at execution: a
+        // model swap or a re-detection between freeze and run must not change what a frozen run replays.
+        var primarySampling = BenchmarkFrozenPolicies.DeterministicSampling(project.MaxOutputTokens,
+            project.ReasoningBudgetTokens,
+            project.ReasoningBudgetTokens is null ? null : capabilities.ReasoningBudgetEnforceable);
+        var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
-            // ONE variant for the freeze, taken from the inspection that produced the capabilities: a second selection
-            // could disagree with the manifest whose digest we record.
-            var variant = await _launchResolver.SelectVariantAsync(binaryCapabilities, cancellationToken).ConfigureAwait(false);
-            var primaryLaunch = await _launchResolver
-                                      .ResolveAsync(primary.ModelName, project.ContextTokens, requestedKvCacheType, binaryCapabilities, variant, cancellationToken)
-                                      .ConfigureAwait(false);
-            // The enforceability answer is frozen off the capabilities read ABOVE, not re-resolved at execution: a
-            // model swap or a re-detection between freeze and run must not change what a frozen run replays.
-            var primarySampling = BenchmarkFrozenPolicies.DeterministicSampling(project.MaxOutputTokens,
-                project.ReasoningBudgetTokens,
-                project.ReasoningBudgetTokens is null ? null : capabilities.ReasoningBudgetEnforceable);
-            var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+        // One snapshot per DISTINCT sampling, memoized by seed. Throughput mode has exactly one, so its group is
+        // byte-for-byte the single shared payload it has always been; answer-variance mode gets one per repeat,
+        // differing ONLY in the seed. Everything a launch is built from is identical either way, which is what
+        // keeps a group's runs sharing one LaunchIdentity.
+        var serializedSnapshots = new Dictionary<string, byte[]>(StringComparer.Ordinal);
 
-            // One snapshot per DISTINCT sampling, memoized by seed. Throughput mode has exactly one, so its group is
-            // byte-for-byte the single shared payload it has always been; answer-variance mode gets one per repeat,
-            // differing ONLY in the seed. Everything a launch is built from is identical either way, which is what
-            // keeps a group's runs sharing one LaunchIdentity.
-            var serializedSnapshots = new Dictionary<string, byte[]>(StringComparer.Ordinal);
-
-            byte[] SnapshotFor(BenchmarkSamplingSnapshotV1 sampling)
-            {
-                if (serializedSnapshots.TryGetValue(sampling.SeedValue ?? string.Empty, out var cached))
-                {
-                    return cached;
-                }
-
-                var created = _snapshots.Serialize(_snapshots.Create(new BenchmarkRuntimeSnapshotInput(project.Id,
-                    definition.Id,
-                    definition.Version,
-                    exactCoreTask,
-                    project.ContextTokens,
-                    eligible,
-                    primaryLaunch.Runtime,
-                    sampling,
-                    primarySnapshot,
-                    dependencySet,
-                    GetApplicationVersion(),
-                    createdAtUtc)));
-                serializedSnapshots[sampling.SeedValue ?? string.Empty] = created;
-                return created;
-            }
-
-            var guard = new FreezeCommitGuard(_dependencies, dependencySet, project.AgentDefinitionId, eligible, primaryModelName,
-                judgeModelName: null);
-
-            // A group only exists when there is something to group: a plain single run keeps NULL in all three columns
-            // so nothing about the old shape changes for it.
-            var isGroup = repeatCount > 1 || warmup;
-            var repeatGroupId = isGroup ? Guid.NewGuid() : (Guid?)null;
-
-            // The work queue is FIFO by queue sequence, so building the commands in this order is what makes the
-            // repeats run back-to-back — warm-up first, then 1..N — rather than interleaved with whatever else is
-            // queued. The whole group goes in through ONE store call: a per-run insert, each chaining its
-            // compare-and-swap on its predecessor, let a concurrent writer land mid-group, so the caller got a
-            // conflict and no ids while the runs already inserted stayed queued and ran anyway.
-            var commands = RepeatIndexes(repeatCount, warmup)
-                           .Select(repeatIndex => SamplingFor(primarySampling, request.RepeatMode, temperature, repeatIndex))
-                           .Select(sampling => new BenchmarkStartRunCommand(Guid.NewGuid(),
-                               project.Id,
-                               expectedProjectVersion,
-                               SnapshotFor(sampling.Sampling),
-                               primary.ModelName,
-                               primary.Origin,
-                               primary.ModelContentFingerprint,
-                               eligible.AgentName,
-                               eligible.AgentDefinitionVersion,
-                               project.ContextTokens,
-                               guard,
-                               primaryLaunch.Intent,
-                               repeatGroupId,
-                               isGroup ? sampling.RepeatIndex : null,
-                               warmup && sampling.RepeatIndex == 0,
-                               // Copied onto the run, not read from the project at execution: a run replays with the
-                               // budget it was started under, exactly like its context and its output budget.
-                               project.InvocationTimeoutSeconds,
-                               request.RepeatMode,
-                               sampling.Sampling.SeedValue,
-                               sampling.Sampling.Temperature))
-                           .ToArray();
-            var runs = await _benchmarkStore.StartRunsAsync(commands, expectedProjectVersion, cancellationToken).ConfigureAwait(false);
-
-            _queueSignal?.Wake();
-            return runs;
-        }
-        finally
+        byte[] SnapshotFor(BenchmarkSamplingSnapshotV1 sampling)
         {
-            foreach (var lease in leases.Values.Reverse())
+            if (serializedSnapshots.TryGetValue(sampling.SeedValue ?? string.Empty, out var cached))
             {
-                await lease.DisposeAsync().ConfigureAwait(false);
+                return cached;
             }
+
+            var created = _snapshots.Serialize(_snapshots.Create(new BenchmarkRuntimeSnapshotInput(project.Id,
+                definition.Id,
+                definition.Version,
+                exactCoreTask,
+                project.ContextTokens,
+                eligible,
+                primaryLaunch.Runtime,
+                sampling,
+                primarySnapshot,
+                dependencySet,
+                GetApplicationVersion(),
+                createdAtUtc)));
+            serializedSnapshots[sampling.SeedValue ?? string.Empty] = created;
+            return created;
         }
+
+        var guard = new FreezeCommitGuard(_dependencies, dependencySet, project.AgentDefinitionId, eligible, primaryModelName,
+            judgeModelName: null);
+
+        // A group only exists when there is something to group: a plain single run keeps NULL in all three columns
+        // so nothing about the old shape changes for it.
+        var isGroup = repeatCount > 1 || warmup;
+        var repeatGroupId = isGroup ? Guid.NewGuid() : (Guid?)null;
+
+        // The work queue is FIFO by queue sequence, so building the commands in this order is what makes the
+        // repeats run back-to-back — warm-up first, then 1..N — rather than interleaved with whatever else is
+        // queued. The whole group goes in through ONE store call: a per-run insert, each chaining its
+        // compare-and-swap on its predecessor, let a concurrent writer land mid-group, so the caller got a
+        // conflict and no ids while the runs already inserted stayed queued and ran anyway.
+        var commands = RepeatIndexes(repeatCount, warmup)
+                       .Select(repeatIndex => SamplingFor(primarySampling, request.RepeatMode, temperature, repeatIndex))
+                       .Select(sampling => new BenchmarkStartRunCommand(Guid.NewGuid(),
+                           project.Id,
+                           expectedProjectVersion,
+                           SnapshotFor(sampling.Sampling),
+                           primary.ModelName,
+                           primary.Origin,
+                           primary.ModelContentFingerprint,
+                           eligible.AgentName,
+                           eligible.AgentDefinitionVersion,
+                           project.ContextTokens,
+                           guard,
+                           primaryLaunch.Intent,
+                           repeatGroupId,
+                           isGroup ? sampling.RepeatIndex : null,
+                           warmup && sampling.RepeatIndex == 0,
+                           // Copied onto the run, not read from the project at execution: a run replays with the
+                           // budget it was started under, exactly like its context and its output budget.
+                           project.InvocationTimeoutSeconds,
+                           request.RepeatMode,
+                           sampling.Sampling.SeedValue,
+                           sampling.Sampling.Temperature))
+                       .ToArray();
+        var runs = await _benchmarkStore.StartRunsAsync(commands, expectedProjectVersion, cancellationToken).ConfigureAwait(false);
+
+        _queueSignal?.Wake();
+        return runs;
     }
 
     /// <summary>

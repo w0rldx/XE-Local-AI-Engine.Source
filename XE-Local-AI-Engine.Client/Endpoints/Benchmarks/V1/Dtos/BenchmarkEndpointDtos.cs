@@ -28,7 +28,13 @@ public enum BenchmarkErrorCode
     PrimaryNotSucceeded,
 
     /// <summary>Batch only: the cell never reached the freeze because an earlier cell stopped the batch.</summary>
-    NotAttempted
+    NotAttempted,
+
+    /// <summary>
+    ///     Batch only: the request's time budget ran out before this cell was frozen. Nothing is wrong with the cell —
+    ///     resubmit it, with the project version the response reports.
+    /// </summary>
+    BatchTimeBudget
 }
 
 public class BenchmarkProjectMutationRequest

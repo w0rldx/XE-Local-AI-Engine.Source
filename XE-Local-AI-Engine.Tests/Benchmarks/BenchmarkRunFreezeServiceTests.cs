@@ -137,6 +137,37 @@ public sealed class BenchmarkRunFreezeServiceTests
     }
 
     [Test]
+    public async Task Start_WithASharedScope_ProbesTheBinaryOnceAndVerifiesEachModelOnce()
+    {
+        // What a batch actually pays for: every cell used to run its own llama-server capability probe and its own
+        // full re-verification of the same model files, serially, before the endpoint answered.
+        var harness = new FreezeHarness();
+        await using var scope = new BenchmarkFreezeScope();
+
+        _ = await harness.StartAsync(scope);
+        _ = await harness.StartAsync(scope);
+
+        _ = harness.LaunchInspector.Received(1).InspectAsync(Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 1, harness.LeaseProvider.Acquired.Count, "The same model must be verified once per request, not once per cell.");
+        AssertEx.Equal(expected: 2, harness.StoreCalls, "Both cells still start.");
+    }
+
+    [Test]
+    public async Task Start_WithNoScope_StaysSelfContained()
+    {
+        // The single-run path must keep behaving exactly as it did: acquire, freeze, release. A scope leaking across
+        // calls would hold a model's read lease open long after the request that took it had answered.
+        var harness = new FreezeHarness();
+
+        _ = await harness.StartAsync();
+        _ = await harness.StartAsync();
+
+        _ = harness.LaunchInspector.Received(2).InspectAsync(Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 2, harness.LeaseProvider.Acquired.Count);
+        AssertEx.True(harness.LeaseProvider.Leases.TrueForAll(static lease => lease.Disposed), "A self-contained freeze releases every lease it took.");
+    }
+
+    [Test]
     public async Task Start_ForAPlainSingleRun_LeavesTheRepeatColumnsNull()
     {
         var harness = new FreezeHarness();
@@ -482,6 +513,7 @@ public sealed class BenchmarkRunFreezeServiceTests
                      .Returns(call => CreateRuntimeSnapshot(call.Arg<BenchmarkRuntimeSnapshotInput>()));
             snapshots.Serialize(Arg.Any<BenchmarkRuntimeSnapshotV1>()).Returns([1, 2, 3]);
 
+            LaunchInspector = Inspector(inspectedVariant ?? variant, probeSucceeded, supportsQuantizedKv, inspectionFails);
             _service = new BenchmarkRunFreezeService(store,
                 definitions,
                 Resolver,
@@ -492,7 +524,7 @@ public sealed class BenchmarkRunFreezeServiceTests
                 snapshots,
                 new BenchmarkPhaseLaunchResolver(Profiles(profile),
                     Variants(variant),
-                    Inspector(inspectedVariant ?? variant, probeSucceeded, supportsQuantizedKv, inspectionFails),
+                    LaunchInspector,
                     FallbackStore(optimizedConfigDisabled),
                     LaunchPolicy()),
                 TimeProvider.System,
@@ -502,6 +534,9 @@ public sealed class BenchmarkRunFreezeServiceTests
         public Guid AgentId { get; }
         public IAgentDefinitionResolver Resolver { get; }
         public RecordingLeaseProvider LeaseProvider { get; }
+
+        /// <summary>The llama-server probe, so a test can count how many times a request actually inspected it.</summary>
+        public ILlamaServerLaunchCapabilityInspector LaunchInspector { get; }
         public BenchmarkStartRunCommand? Command { get; private set; }
 
         /// <summary>Every insert in order — a repeat group is several, and their ORDER is the contract.</summary>
@@ -525,6 +560,9 @@ public sealed class BenchmarkRunFreezeServiceTests
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, bool warmup) =>
             _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, KvCacheType: null, repeatCount, warmup));
+
+        public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkFreezeScope scope) =>
+            _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version), scope);
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, BenchmarkRepeatMode mode, float? temperature = null) =>
             _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, KvCacheType: null, repeatCount,
