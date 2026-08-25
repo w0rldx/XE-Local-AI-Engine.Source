@@ -95,21 +95,24 @@ public sealed class BenchmarkProjectService(
             throw new BenchmarkConflictException("VersionConflict");
         }
 
+        var current = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
+
         // Changing the judge invalidates every score already given under the old one. The operator confirms that
         // explicitly rather than discovering a silently re-scored project.
         //
-        // Asked BEFORE the policy is built, because building it takes the VERIFYING model lease, which re-hashes every
-        // member file: a 22 GB judge made this refusal take 57 s to say no. Consequence of the order, and the reason
-        // it is not free: re-saving an UNCHANGED judge on a project with runs now asks for the confirmation too,
-        // instead of verifying the model to discover the hash matched. Confirming it stays a no-op — the hash compare
-        // below still returns without activating anything.
+        // Both answers are given BEFORE the policy is built, because building it takes the VERIFYING model lease,
+        // which re-hashes every member file: a 22 GB judge made this refusal take 57 s to say no.
         if (draft is not null && !confirmRejudge && await _benchmarkStore.CountRunsAsync(projectId, cancellationToken).ConfigureAwait(false) > 0)
         {
+            if (MatchesCurrentPolicy(draft, current))
+            {
+                return new BenchmarkJudgePolicyChange(project, [], current!.CohortGeneration);
+            }
+
             throw new BenchmarkConflictException("RejudgeRequired");
         }
 
         var policy = draft is null ? null : await BuildPolicyAsync(draft, cancellationToken).ConfigureAwait(false);
-        var current = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
         if (policy is null)
         {
             if (current is null)
@@ -281,6 +284,52 @@ public sealed class BenchmarkProjectService(
     ///     Builds the hashable policy from the operator's draft: the judge model's identity as installed right now, the
     ///     deterministic sampling every judging replays, and the rubric.
     /// </summary>
+    /// <summary>
+    ///     Whether a draft would rebuild the policy the project already carries, decided WITHOUT verifying the model.
+    ///     Everything a policy hashes over is here except the model's content fingerprint and member hashes, which only
+    ///     the verifying lease can produce — so the stored identity is reused for those and the model NAME is compared
+    ///     on its own. The comparison is the real canonicalizer, not a field-by-field re-implementation: a member added
+    ///     to the policy is then covered here the moment it enters the hash.
+    ///     <para>
+    ///         Ceiling, and the honest outcome: a judge model whose FILE changed on disk under an unchanged name reads
+    ///         as unchanged here, so the re-save is a no-op instead of a re-judge. The verifying path still detects it
+    ///         the next time the policy is actually built — the same answer, one save later.
+    ///     </para>
+    /// </summary>
+    private static bool MatchesCurrentPolicy(BenchmarkJudgePolicyDraft draft, BenchmarkJudgePolicyRevisionRecord? current)
+    {
+        if (current?.PolicyJson is null)
+        {
+            return false;
+        }
+
+        BenchmarkJudgePolicyV1 stored;
+        try
+        {
+            stored = BenchmarkJudgeSerialization.DeserializePolicy(current.PolicyJson.Value.Span);
+        }
+        catch (Exception exception) when (exception is BenchmarkSnapshotException or BenchmarkJudgePolicyValidationException)
+        {
+            // A revision that cannot be read or no longer validates cannot be shown to match anything; it falls
+            // through to the confirmation, and the verifying path decides.
+            return false;
+        }
+
+        if (!string.Equals(stored.Model.ModelName, draft.ModelName?.Trim(), StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var candidate = new BenchmarkJudgePolicyV1(stored.Model,
+            draft.ContextTokens,
+            BenchmarkJudgePolicyVersions.PromptVersion,
+            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
+            draft.Rubric ?? BenchmarkJudgeRubricDefaults.Default(),
+            NormalizeReferenceAnswer(draft.ReferenceAnswer));
+        return string.Equals(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(candidate), current.PolicyHash, StringComparison.Ordinal);
+    }
+
     private async Task<BenchmarkJudgePolicyV1> BuildPolicyAsync(BenchmarkJudgePolicyDraft draft, CancellationToken cancellationToken)
     {
         var modelName = draft.ModelName?.Trim();
