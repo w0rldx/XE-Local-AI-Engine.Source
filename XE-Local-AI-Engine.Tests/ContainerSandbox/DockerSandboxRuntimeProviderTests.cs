@@ -692,6 +692,7 @@ public sealed class DockerSandboxRuntimeProviderTests
 
         var provider = new DockerSandboxRuntimeProvider(new StaticOptionsMonitor<ContainerSandboxOptions>(DockerSandboxHardeningTests.Options()),
             new StubDockerRuntimeClientFactory(client),
+            new FakeNodeDataDirectory(workspace),
             new FixedTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
 

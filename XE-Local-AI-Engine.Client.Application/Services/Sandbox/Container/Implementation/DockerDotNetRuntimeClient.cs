@@ -68,7 +68,8 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
                 version.MinAPIVersion ?? string.Empty,
                 version.Os ?? string.Empty,
                 Endpoint,
-                IsRootless(info));
+                IsRootless(info),
+                HasSecurityOption(info, "seccomp"));
         }
         catch (Exception exception) when (exception is not DockerRuntimeException and not OperationCanceledException)
         {
@@ -175,6 +176,40 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
                 IpcMode = hostConfig.IpcMode ?? string.Empty,
                 UtsMode = hostConfig.UTSMode ?? string.Empty
             };
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            throw Classify(exception);
+        }
+    }
+
+    public async Task<IReadOnlyList<string>> ListContainersAsync(IReadOnlyDictionary<string, string> labels,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(labels);
+
+        if (labels.Count == 0)
+        {
+            // An empty filter would list every container on the daemon, and the caller removes what this returns.
+            throw new ArgumentException("Listing containers without a label filter is refused: the result is used to remove containers.",
+                nameof(labels));
+        }
+
+        try
+        {
+            var parameters = new ContainersListParameters
+            {
+                // Stopped containers too: an engine killed mid-run leaves an exited container behind that still holds
+                // its name, so a sweep that only saw running ones would leave the next create failing on the conflict.
+                All = true,
+                Filters = new Dictionary<string, IDictionary<string, bool>>(StringComparer.Ordinal)
+                {
+                    ["label"] = labels.ToDictionary(pair => pair.Key + "=" + pair.Value, _ => true, StringComparer.Ordinal)
+                }
+            };
+
+            var listed = await _client.Containers.ListContainersAsync(parameters, cancellationToken).ConfigureAwait(false);
+            return [.. listed.Select(container => container.ID)];
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -305,16 +340,22 @@ internal sealed class DockerDotNetRuntimeClient : IDockerRuntimeClient
         stream.CloseWrite();
     }
 
-    /// <summary>
-    ///     Whether the daemon runs rootless, read off the same <c>SecurityOptions</c> list <c>docker info</c> prints.
-    ///     Matched on the <c>name=</c> key rather than on the whole entry, because the daemon renders these as
-    ///     comma-separated key/value groups (<c>name=seccomp,profile=builtin</c>) and only the name is stable.
-    /// </summary>
+    /// <summary>Whether the daemon runs rootless, read off the same <c>SecurityOptions</c> list <c>docker info</c> prints.</summary>
     private static bool IsRootless(SystemInfoResponse info)
+    {
+        return HasSecurityOption(info, "rootless");
+    }
+
+    /// <summary>
+    ///     Whether <c>docker info</c> lists <paramref name="name" /> among the daemon's security options. Matched on
+    ///     the <c>name=</c> key rather than on the whole entry, because the daemon renders these as comma-separated
+    ///     key/value groups (<c>name=seccomp,profile=builtin</c>) and only the name is stable.
+    /// </summary>
+    private static bool HasSecurityOption(SystemInfoResponse info, string name)
     {
         return info.SecurityOptions?.Any(option => option
                                                    .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                                                   .Any(part => part.Equals("name=rootless", StringComparison.OrdinalIgnoreCase)))
+                                                   .Any(part => part.Equals("name=" + name, StringComparison.OrdinalIgnoreCase)))
                ?? false;
     }
 

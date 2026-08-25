@@ -20,6 +20,14 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 ///     Reported rather than acted on here — it is an input to the identity decision, and the probe that follows
 ///     container creation is what actually proves the mapping.
 /// </param>
+/// <param name="SupportsSeccomp">
+///     Whether the daemon reported <c>name=seccomp</c> among its security options. Load-bearing rather than
+///     informational: a daemon with seccomp compiled out or disabled still ACCEPTS a <c>seccomp=</c> option and still
+///     records it in the container's <c>HostConfig</c>, so the create-time read-back cannot tell such a daemon from a
+///     confining one. This flag is the only place that difference is visible, which is why the preflight refuses a
+///     daemon that does not report it rather than creating a container whose confinement it cannot establish. It
+///     defaults to <see langword="false" /> for that reason: an identity that never said is not evidence of support.
+/// </param>
 public sealed record DockerDaemonIdentity(
     string DaemonId,
     string ServerVersion,
@@ -27,4 +35,5 @@ public sealed record DockerDaemonIdentity(
     string MinimumApiVersion,
     string OperatingSystem,
     DockerDaemonEndpoint Endpoint,
-    bool IsRootless = false);
+    bool IsRootless = false,
+    bool SupportsSeccomp = false);
