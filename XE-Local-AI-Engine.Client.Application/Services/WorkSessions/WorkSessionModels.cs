@@ -73,6 +73,18 @@ public sealed record WorkSessionCheckpointDto(Guid Id,
     string StateJson,
     long CreatedUtc);
 
+/// <param name="DetailJson">
+///     The event's payload, opaque to this layer and shaped by whatever wrote the row — a caller parses it only after
+///     matching on <paramref name="EventType" />, and must tolerate a shape it does not know.
+///     <para>
+///         Two shapes are defined today. <c>CompletionRequested</c> carries <c>{ "summary": string }</c>.
+///         <c>StepEnded</c> and <c>StepFailed</c> carry the step's content-free consumption record —
+///         <see cref="WorkSessionStepConsumptionDetail" />, i.e.
+///         <c>{ "providerCalls": int, "estimatedInputTokens": long, "toolCallsCompleted": int, "providerCallCap": int,
+///         "usageInputTokens": int?, "usageOutputTokens": int? }</c>, with the two usage members absent when the
+///         provider reported no counts. It is null on a step that made no provider round at all.
+///     </para>
+/// </param>
 public sealed record WorkSessionEventDto(Guid Id,
     long Sequence,
     int Step,
@@ -81,6 +93,24 @@ public sealed record WorkSessionEventDto(Guid Id,
     string? Outcome,
     long OccurredUtc,
     Guid? OperationId);
+
+/// <summary>
+///     What one step spent, recorded on its <c>StepEnded</c> / <c>StepFailed</c> row so the per-step provider-call cap
+///     can be sized from what steps actually consume rather than from a guess. Counts only — no prompts, model output,
+///     tool names, arguments or results — so it is safe to persist and to show.
+/// </summary>
+/// <param name="ProviderCalls">Raw provider rounds the step admitted. Against <paramref name="ProviderCallCap" /> this is the number that matters.</param>
+/// <param name="EstimatedInputTokens">Estimated input tokens summed over those rounds, from the character profile rather than the provider.</param>
+/// <param name="ToolCallsCompleted">Tool invocations that returned during the step, successfully or not.</param>
+/// <param name="ProviderCallCap">The cap the step was seeded with (<c>WorkSessions:MaxProviderCallsPerStep</c>), so a reader can size one against the other.</param>
+/// <param name="UsageInputTokens">The provider's own input-token count for the turn, when it reported one. Kept beside the estimate because the estimate runs low.</param>
+/// <param name="UsageOutputTokens">The provider's own output-token count for the turn, when it reported one.</param>
+public sealed record WorkSessionStepConsumptionDetail(int ProviderCalls,
+    long EstimatedInputTokens,
+    int ToolCallsCompleted,
+    int ProviderCallCap,
+    int? UsageInputTokens,
+    int? UsageOutputTokens);
 
 /// <summary>
 ///     An artifact's bytes as text. <see cref="IsBase64" /> is set for a media type the node cannot hand over as UTF-8,

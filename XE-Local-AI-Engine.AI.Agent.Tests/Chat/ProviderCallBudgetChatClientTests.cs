@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.AI.Agent.Tests.Chat;
 
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
@@ -397,6 +398,273 @@ public sealed class ProviderCallBudgetChatClientTests
             $"Expected provider-round elapsed time to include consumer backpressure; measured {snapshot.ProviderRoundElapsedMs:0.###} ms.");
     }
 
+    [Test]
+    public async Task ChatClientAgent_ForwardsTheTurnsModelIdDownToTheBudgetBoundary()
+    {
+        // FOLLOWUPS #5 suspected options.ModelId was null at this hop for a llama.cpp turn — which would have meant the
+        // calibrated divisor never applied during the two recorded overflows, a cheaper root cause than any of this.
+        // It is NOT null. InvocationAgentFactory sets ChatOptions.ModelId = definition.ModelId on the per-turn run
+        // options, and MAF's ChatClientAgent CLONES those options and never clears ModelId (Microsoft.Agents.AI 1.17.0,
+        // CreateConfiguredChatOptions merges the agent-level options INTO the clone and only fills ModelId when the
+        // clone's is null). That agent hop is the only non-obvious link, so it is the one pinned here. The value that
+        // arrives is also the exact string ModelRoutingLocalChatClient keys the deferred llama.cpp client on, which is
+        // the string DeferredLlamaServerChatClient hands the calibration scheduler — so the divisor lookup and the
+        // /tokenize write share a key by construction.
+        using var inner = new CapturingChatClient();
+        using var budgeted = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
+        var agent = new ChatClientAgent(budgeted,
+            instructions: null,
+            name: "xe-worker",
+            description: null,
+            tools: null,
+            loggerFactory: NullLoggerFactory.Instance,
+            services: null);
+
+        _ = await agent.RunAsync([new ChatMessage(ChatRole.User, "hi")],
+                session: null,
+                new ChatClientAgentRunOptions
+                {
+                    ChatOptions = new ChatOptions
+                    {
+                        ModelId = ModelId
+                    }
+                })
+            .ConfigureAwait(false);
+
+        AssertEx.Equal(ModelId, inner.ReceivedOptions.Single()?.ModelId);
+    }
+
+    [Test]
+    public async Task ApplyBudget_WhenTheModelIsObservedToCostMoreThanEstimated_TrimsTheRoundEarlier()
+    {
+        // Identical history, identical window, identical estimator arithmetic. The only difference is that real rounds
+        // of this model have been observed to cost half again what the char heuristic predicts, so the window the
+        // estimate is measured against shrinks and more of the round's history goes before it is sent — instead of the
+        // round reaching llama.cpp and coming back as an exceed_context_size_error the budgeter believed impossible.
+        var neutral = new TokenEstimatorCalibrationStore();
+        var calibrated = new TokenEstimatorCalibrationStore();
+        calibrated.RecordObservedUsage(ModelId, estimatedTokens: 10_000, observedInputTokens: 15_000);
+
+        var neutralDelivered = await DeliverLongRoundAsync(neutral).ConfigureAwait(false);
+        var calibratedDelivered = await DeliverLongRoundAsync(calibrated).ConfigureAwait(false);
+
+        AssertEx.True(calibratedDelivered < neutralDelivered,
+            $"A model observed to cost more than estimated must trim earlier; delivered {calibratedDelivered} message(s) against {neutralDelivered} uncalibrated.");
+    }
+
+    [Test]
+    public async Task GetResponseAsync_WithAmbientBudget_RecordsTheRoundsObservedInputTokens()
+    {
+        var store = new RecordingCalibrationStore();
+        using var inner = new CapturingChatClient
+        {
+            ResponseUsage = new UsageDetails
+            {
+                InputTokenCount = 1_500
+            }
+        };
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance, store);
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   DefaultContextTokens = 1_000_000,
+                   ReservedOutputTokenFloor = 0
+               }))
+        {
+            _ = await sut.GetResponseAsync(LongRound(), LargeWindowOptions()).ConfigureAwait(false);
+        }
+
+        // This hop is the only place holding both numbers for the SAME request: the estimate it just computed for the
+        // message set it sent, and the provider's own count for that set.
+        var observation = store.Observations.Single();
+        AssertEx.Equal(ModelId, observation.ModelName);
+        AssertEx.Equal(expected: 1_500L, observation.ObservedInputTokens);
+        AssertEx.True(observation.EstimatedTokens > 0, "The recorded estimate must be the round's own estimated input, not zero.");
+    }
+
+    [Test]
+    public async Task GetStreamingResponseAsync_WithAmbientBudget_RecordsTheTerminalUsageChunk()
+    {
+        var store = new RecordingCalibrationStore();
+        using var inner = new CapturingChatClient
+        {
+            ResponseUsage = new UsageDetails
+            {
+                InputTokenCount = 2_048
+            }
+        };
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance, store);
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   DefaultContextTokens = 1_000_000,
+                   ReservedOutputTokenFloor = 0
+               }))
+        {
+            await foreach (var update in sut.GetStreamingResponseAsync(LongRound(), LargeWindowOptions()).ConfigureAwait(false))
+            {
+                GC.KeepAlive(update);
+            }
+        }
+
+        var observation = store.Observations.Single();
+        AssertEx.Equal(ModelId, observation.ModelName);
+        AssertEx.Equal(expected: 2_048L, observation.ObservedInputTokens);
+    }
+
+    [Test]
+    public async Task GetResponseAsync_WithoutAmbientBudget_RecordsNothing()
+    {
+        var store = new RecordingCalibrationStore();
+        using var inner = new CapturingChatClient
+        {
+            ResponseUsage = new UsageDetails
+            {
+                InputTokenCount = 1_500
+            }
+        };
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance, store);
+
+        // The eval / preview-workflow runners drive the shared client with no scope. They are a pass-through, and a
+        // pass-through has no estimate to pair the usage with, so they must teach the calibration nothing.
+        _ = await sut.GetResponseAsync(LongRound(), LargeWindowOptions()).ConfigureAwait(false);
+
+        AssertEx.Empty(store.Observations);
+    }
+
+    [Test]
+    public async Task GetResponseAsync_WhenTheProviderReportsNoUsage_RecordsNothing()
+    {
+        var store = new RecordingCalibrationStore();
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance, store);
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   DefaultContextTokens = 1_000_000,
+                   ReservedOutputTokenFloor = 0
+               }))
+        {
+            _ = await sut.GetResponseAsync(LongRound(), LargeWindowOptions()).ConfigureAwait(false);
+        }
+
+        AssertEx.Empty(store.Observations);
+    }
+
+    [Test]
+    public async Task GetResponseAsync_WithNoModelId_RecordsNothing()
+    {
+        var store = new RecordingCalibrationStore();
+        using var inner = new CapturingChatClient
+        {
+            ResponseUsage = new UsageDetails
+            {
+                InputTokenCount = 1_500
+            }
+        };
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance, store);
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   DefaultContextTokens = 1_000_000,
+                   ReservedOutputTokenFloor = 0
+               }))
+        {
+            _ = await sut.GetResponseAsync(LongRound(), new ChatOptions()).ConfigureAwait(false);
+        }
+
+        // Calibration is per model. An unnamed round is sent, but it belongs to no key and teaches nothing.
+        AssertEx.Empty(store.Observations);
+    }
+
+    private const string ModelId = "qwen3.8-27b:Q4_K_M";
+
+    /// <summary>
+    ///     Runs one long round through the boundary against <paramref name="store" /> and returns how many messages
+    ///     actually reached the provider. The window is deliberately just under the round's estimate so the trim depth
+    ///     is what the effective window decides.
+    /// </summary>
+    private static async Task<int> DeliverLongRoundAsync(ITokenEstimatorCalibrationStore store)
+    {
+        using var inner = new CapturingChatClient();
+        using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance, store);
+
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   DefaultContextTokens = 1_400,
+                   ReservedOutputTokenFloor = 0,
+                   RecentMessagesToKeep = 2
+               }))
+        {
+            _ = await sut.GetResponseAsync(LongRound(),
+                    new ChatOptions
+                    {
+                        ModelId = ModelId
+                    })
+                .ConfigureAwait(false);
+        }
+
+        return inner.ReceivedMessageSets.Single().Count;
+    }
+
+    /// <summary>Twelve plain user messages of ~100 estimated tokens each — a round large enough to be worth trimming.</summary>
+    private static List<ChatMessage> LongRound()
+    {
+        var messages = new List<ChatMessage>(12);
+        for (var index = 0; index < 12; index++)
+        {
+            messages.Add(new ChatMessage(ChatRole.User, new string((char)('a' + index), 400)));
+        }
+
+        return messages;
+    }
+
+    private static ChatOptions LargeWindowOptions()
+    {
+        return new ChatOptions
+        {
+            ModelId = ModelId,
+            AdditionalProperties = new AdditionalPropertiesDictionary
+            {
+                ["num_ctx"] = 1_000_000
+            }
+        };
+    }
+
+    private sealed record ObservedUsageWrite(string ModelName, long EstimatedTokens, long ObservedInputTokens);
+
+    /// <summary>
+    ///     A real store that also records every observation written to it, so a test can assert the exact triple the
+    ///     boundary paired rather than only the correction it produced.
+    /// </summary>
+    private sealed class RecordingCalibrationStore : ITokenEstimatorCalibrationStore
+    {
+        private readonly TokenEstimatorCalibrationStore _inner = new();
+
+        public List<ObservedUsageWrite> Observations { get; } = [];
+
+        public int ResolveDivisor(string? modelName)
+        {
+            return _inner.ResolveDivisor(modelName);
+        }
+
+        public void SetDivisor(string modelName, int charsPerToken)
+        {
+            _inner.SetDivisor(modelName, charsPerToken);
+        }
+
+        public void RecordObservedUsage(string modelName, long estimatedTokens, long observedInputTokens)
+        {
+            Observations.Add(new ObservedUsageWrite(modelName, estimatedTokens, observedInputTokens));
+            _inner.RecordObservedUsage(modelName, estimatedTokens, observedInputTokens);
+        }
+
+        public double ResolveObservedCorrection(string? modelName)
+        {
+            return _inner.ResolveObservedCorrection(modelName);
+        }
+    }
+
     private static IList<AITool> ManyTools(int count)
     {
         var tools = new List<AITool>(count);
@@ -469,11 +737,21 @@ public sealed class ProviderCallBudgetChatClientTests
 
         public List<ChatOptions?> ReceivedOptions { get; } = [];
 
+        /// <summary>
+        ///     Terminal usage this fake reports for every round: on the response for the sync path, and as a
+        ///     <see cref="UsageContent" /> on a final streamed update, which is the shape llama.cpp actually sends.
+        ///     Null (the default) leaves every pre-existing fixture reporting no usage at all.
+        /// </summary>
+        public UsageDetails? ResponseUsage { get; set; }
+
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
             ReceivedMessageSets.Add([.. messages]);
             ReceivedOptions.Add(options);
-            return Task.FromResult(new ChatResponse());
+            return Task.FromResult(new ChatResponse
+            {
+                Usage = ResponseUsage
+            });
         }
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
@@ -484,7 +762,10 @@ public sealed class ProviderCallBudgetChatClientTests
             ReceivedMessageSets.Add([.. messages]);
             ReceivedOptions.Add(options);
             await Task.Yield();
-            yield break;
+            if (ResponseUsage is { } usage)
+            {
+                yield return new ChatResponseUpdate(ChatRole.Assistant, (IList<AIContent>)[new UsageContent(usage)]);
+            }
         }
 
         public object? GetService(Type serviceType, object? serviceKey = null)

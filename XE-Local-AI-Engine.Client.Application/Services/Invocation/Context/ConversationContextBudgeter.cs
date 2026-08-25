@@ -64,10 +64,16 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
         // outer estimate over-counts slightly by framing each tool as its own System message — the safe direction).
         var divisor = _estimator.ResolveDivisor(modelName);
         var fixedOverhead = EstimateFixedOverhead(systemPrompt, toolDefinitions, divisor);
-        // Same safety margin the inner provider-round budgeter applies, for the same reason and from the same constant:
-        // the shared char heuristic under-counts on markdown and JSON, and an under-count at the window edge is a
-        // provider rejection rather than a trim. Comparison only.
-        var effectiveBudget = Math.Max(TokenEstimatorCalibrationStore.ApplySafetyMargin(contextTokenCapacity) - reservedOutputTokens - fixedOverhead, 0);
+        // Same margins the inner provider-round budgeter applies, for the same reason and from the same constants: the
+        // shared char heuristic under-counts on markdown and JSON, and an under-count at the window edge is a provider
+        // rejection rather than a trim. The flat safety factor covers the first round of an unknown model; the observed
+        // correction is what real rounds of THIS model have since taught (tighten-only, neutral until then, so a model
+        // nothing has been recorded for is byte-identical to before). Comparison only.
+        var observedCorrection = _estimator.ResolveObservedCorrection(modelName);
+        var effectiveBudget = Math.Max(TokenEstimatorCalibrationStore.ApplyEstimateMargins(contextTokenCapacity, observedCorrection)
+                                       - reservedOutputTokens
+                                       - fixedOverhead,
+            0);
         var estimatedBefore = _estimator.EstimateTokensWithDivisor(messages, divisor);
 
         if (messages.Count == 0 || estimatedBefore <= effectiveBudget)

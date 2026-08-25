@@ -58,12 +58,14 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        var (budgeted, budgetedOptions) = ApplyBudget(messages, options);
+        var round = ApplyBudget(messages, options);
         var budget = ProviderCallBudget.Current;
         var startedTimestamp = Stopwatch.GetTimestamp();
         try
         {
-            return await base.GetResponseAsync(budgeted, budgetedOptions, cancellationToken).ConfigureAwait(false);
+            var response = await base.GetResponseAsync(round.Messages, round.Options, cancellationToken).ConfigureAwait(false);
+            RecordObservedUsage(round, response.Usage?.InputTokenCount);
+            return response;
         }
         finally
         {
@@ -78,13 +80,28 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
     {
         // Budget (and enforce the cumulative ceiling) BEFORE the first chunk is pulled, so a ceiling breach fails the
         // round up front rather than after streaming begins.
-        var (budgeted, budgetedOptions) = ApplyBudget(messages, options);
+        var round = ApplyBudget(messages, options);
         var budget = ProviderCallBudget.Current;
         var startedTimestamp = Stopwatch.GetTimestamp();
+
+        // Terminal usage arrives as a UsageContent on one of the streamed updates (llama.cpp reports it on the final
+        // chunk). Last one wins, matching the invocation runner's own reading of the same signal.
+        long? observedInputTokens = null;
         try
         {
-            await foreach (var update in base.GetStreamingResponseAsync(budgeted, budgetedOptions, cancellationToken).ConfigureAwait(false))
+            await foreach (var update in base.GetStreamingResponseAsync(round.Messages, round.Options, cancellationToken).ConfigureAwait(false))
             {
+                if (update.Contents is { Count: > 0 } contents)
+                {
+                    foreach (var content in contents)
+                    {
+                        if (content is UsageContent usage && usage.Details.InputTokenCount is { } inputTokens)
+                        {
+                            observedInputTokens = inputTokens;
+                        }
+                    }
+                }
+
                 yield return update;
             }
         }
@@ -93,22 +110,51 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
             // A streamed call is pull-based: include the complete enumerator lifetime, including any consumer
             // backpressure while the provider request remains open. This is provider-round elapsed time, not CPU time.
             budget?.RecordProviderRoundElapsed(Stopwatch.GetElapsedTime(startedTimestamp));
+
+            // Recorded here rather than after the loop so an abandoned or faulted enumeration still contributes the
+            // usage it did report; a round that reported none contributes nothing.
+            RecordObservedUsage(round, observedInputTokens);
         }
+    }
+
+    /// <summary>
+    ///     Feeds one real round back into the estimator's per-model calibration: what the provider counted for the
+    ///     prompt, against what this hop estimated for the very message set it sent. This is the only place in the
+    ///     process that holds both numbers for the SAME request — the invocation runner sees a turn's last usage
+    ///     without the per-round estimate that produced it, and the outer conversation budgeter never sees usage at
+    ///     all.
+    ///     <para>
+    ///         Only budgeted rounds carry a model name (see <see cref="ApplyBudget" />), so the eval / preview
+    ///         pass-through paths record nothing, and neither do the summarizer and the other side calls that build
+    ///         their own per-run client instead of routing through this pipeline. The store applies its own minimum
+    ///         sample size and bounds; everything here is a null check.
+    ///     </para>
+    /// </summary>
+    private void RecordObservedUsage(in BudgetedRound round, long? observedInputTokens)
+    {
+        if (round.ModelName is not { } modelName || observedInputTokens is not { } observed || observed <= 0)
+        {
+            return;
+        }
+
+        _calibrationStore.RecordObservedUsage(modelName, round.EstimatedInputTokens, observed);
     }
 
     /// <summary>
     ///     Applies the per-round input budget and registers the round against the cumulative ceilings. Returns the
     ///     (possibly reduced) message list to send, plus the options to send with it — the same instance unless the
     ///     reasoning budget had to be narrowed against the room this round's input actually leaves (see
-    ///     <see cref="NarrowReasoningBudget" />). A pass-through (returns both inputs unchanged) when no ambient budget
-    ///     scope is present. Throws <see cref="ProviderCallBudgetExceededException" /> when a cumulative ceiling trips.
+    ///     <see cref="NarrowReasoningBudget" />) — plus what <see cref="RecordObservedUsage" /> needs to feed this
+    ///     round's outcome back into calibration. A pass-through (returns both inputs unchanged, and no model name, so
+    ///     nothing is recorded) when no ambient budget scope is present. Throws
+    ///     <see cref="ProviderCallBudgetExceededException" /> when a cumulative ceiling trips.
     /// </summary>
-    private (IEnumerable<ChatMessage> Messages, ChatOptions? Options) ApplyBudget(IEnumerable<ChatMessage> messages, ChatOptions? options)
+    private BudgetedRound ApplyBudget(IEnumerable<ChatMessage> messages, ChatOptions? options)
     {
         var budget = ProviderCallBudget.Current;
         if (budget is null)
         {
-            return (messages, options);
+            return new BudgetedRound(messages, options, ModelName: null, EstimatedInputTokens: 0);
         }
 
         var budgetOptions = budget.Options;
@@ -119,9 +165,14 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
 
         // Measure against TokenEstimatorCalibrationStore.EstimateSafetyFactor of the window, not the whole of it: the
         // char heuristic under-counts by roughly a tenth on markdown and JSON, and an under-count at the window edge is
-        // a provider rejection rather than a trim. Comparison only — nothing else here knows about the margin.
-        var effectiveWindow = Math.Max(TokenEstimatorCalibrationStore.ApplySafetyMargin(window) - reserved, 0);
-        var charsPerToken = _calibrationStore.ResolveDivisor(options?.ModelId);
+        // a provider rejection rather than a trim. On top of that flat factor, divide by whatever real rounds of THIS
+        // model have since shown the residual optimism to be (tighten-only; exactly neutral until a round has been
+        // recorded, so an uncalibrated model is byte-identical to before). Comparison only — nothing else here knows
+        // about either margin.
+        var modelId = options?.ModelId;
+        var observedCorrection = _calibrationStore.ResolveObservedCorrection(modelId);
+        var effectiveWindow = Math.Max(TokenEstimatorCalibrationStore.ApplyEstimateMargins(window, observedCorrection) - reserved, 0);
+        var charsPerToken = _calibrationStore.ResolveDivisor(modelId);
         // Instructions AND the tool definitions (name + description + JSON schema) are fixed per-round input the model
         // never sees as a droppable message but which still counts against the window — folding both into the overhead
         // stops a tool-heavy agent from under-estimating and rounding an over-window request through.
@@ -181,8 +232,18 @@ internal sealed class ProviderCallBudgetChatClient : DelegatingChatClient
             throw;
         }
 
-        return (result.Messages, NarrowReasoningBudget(options, window, result.EstimatedTokensAfter));
+        return new BudgetedRound(result.Messages,
+            NarrowReasoningBudget(options, window, result.EstimatedTokensAfter),
+            // Only a named model can be calibrated; an unnamed round is sent but teaches nothing.
+            string.IsNullOrWhiteSpace(modelId) ? null : modelId,
+            result.EstimatedTokensAfter);
     }
+
+    /// <summary>
+    ///     One budgeted provider round: what to send, what to send it with, and the (model, estimated input tokens)
+    ///     pair the response's reported usage is compared against once the round comes back.
+    /// </summary>
+    private readonly record struct BudgetedRound(IEnumerable<ChatMessage> Messages, ChatOptions? Options, string? ModelName, int EstimatedInputTokens);
 
     /// <summary>
     ///     Narrows the llama.cpp thinking-budget marker to the room THIS round's input actually leaves, when the turn

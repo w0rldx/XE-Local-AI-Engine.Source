@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -39,6 +40,23 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 {
     /// <summary>How long a stop waits for the loop to land before answering. A stuck provider must not hang the caller.</summary>
     private static readonly TimeSpan StopGrace = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    ///     The <see cref="WorkSessionEventTypes.StepEnded" /> outcome for a step whose turn simply finished — as opposed
+    ///     to <c>nameof(ProviderCallBudget)</c>, which names the bound that stopped it. Both rows carry the same
+    ///     consumption detail; the outcome is what tells a reader whether the step was clipped.
+    /// </summary>
+    private const string StepCompletedOutcome = "Completed";
+
+    /// <summary>
+    ///     Web defaults, so the consumption record reaches the browser in the same camelCase convention as every other
+    ///     JSON payload the session surface carries. Nulls are dropped: usage is provider-reported and often absent, and
+    ///     an absent key reads better on the event row than a null one.
+    /// </summary>
+    private static readonly JsonSerializerOptions ConsumptionJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
 
     /// <summary>
     ///     The admission gate. A slot is taken before the run is registered and released in the run's finally, so the
@@ -350,7 +368,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             run.Correlation = null;
         }
 
-        return await SettleStepAsync(run, guard, sessionId, step, stepsThisRun, started.Sequence, terminal).ConfigureAwait(false);
+        return await SettleStepAsync(run, guard, sessionId, step, stepsThisRun, started.Sequence, terminal, callBudget).ConfigureAwait(false);
     }
 
     /// <summary>Drains one step's stream to its terminal, mapping parks onto the session status as they happen.</summary>
@@ -411,9 +429,16 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         int step,
         int stepsThisRun,
         long stepStartedSequence,
-        ChatStreamEvent terminalEvent)
+        ChatStreamEvent terminalEvent,
+        ProviderCallCapScope? callBudget)
     {
         var terminal = terminalEvent.Type;
+
+        // What the step actually spent, captured once now that the enumeration has landed and the run's own budget has
+        // stopped moving. It rides on whichever terminal row this step writes, because the cap it is measured against
+        // is a guess until there are recorded steps to size it from.
+        var consumption = ComposeStepConsumptionDetail(callBudget, terminalEvent);
+        var endedRecorded = false;
 
         // A step that spent its provider-call cap is BOUNDED, not broken: the tools it ran are already persisted and
         // the next step resumes from the state block. Recognised by the budget's own fixed, path-free terminal messages,
@@ -427,13 +452,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 || string.Equals(terminalEvent.Error, ProviderCallBudget.CeilingExceededMessage, StringComparison.Ordinal)))
         {
             _logger.LogInformation("Work session {SessionId} step {Step} reached its provider-call budget; ending the step and continuing.", sessionId, step);
-            _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
-                            WorkSessionVersions.Any,
-                            WorkSessionEventTypes.StepEnded,
-                            WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Ended),
-                            nameof(ProviderCallBudget)),
-                        CancellationToken.None))
-                .ConfigureAwait(false);
+            await AppendStepEndedAsync(sessionId, step, nameof(ProviderCallBudget), consumption).ConfigureAwait(false);
+            endedRecorded = true;
             terminal = ChatStreamEventTypes.AssistantCompleted;
         }
 
@@ -450,7 +470,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                                 WorkSessionVersions.Any,
                                 WorkSessionEventTypes.StepFailed,
                                 WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Failed),
-                                step.ToString(CultureInfo.InvariantCulture)),
+                                step.ToString(CultureInfo.InvariantCulture),
+                                consumption),
                             CancellationToken.None))
                     .ConfigureAwait(false);
                 await CheckpointAsync(sessionId).ConfigureAwait(false);
@@ -462,6 +483,14 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 
             default:
                 break;
+        }
+
+        // An ordinary step records its spend too, not only the one that tripped the cap — a record that only ever reads
+        // "10/10" measures the bound rather than the work, and sizing the cap needs the steps that stayed under it.
+        // Written BEFORE AdvanceStepAsync so the row lands on the step it describes rather than on the next one.
+        if (!endedRecorded)
+        {
+            await AppendStepEndedAsync(sessionId, step, StepCompletedOutcome, consumption).ConfigureAwait(false);
         }
 
         var summary = await WithStoreAsync(store => ReadCompletionSummaryAsync(store, sessionId, stepStartedSequence)).ConfigureAwait(false);
@@ -493,6 +522,52 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         // A stop that landed while this step was finishing is handled by the loop condition, so the run settles through
         // one path instead of two.
         return StepOutcome.Continue;
+    }
+
+    /// <summary>
+    ///     Appends the step's <see cref="WorkSessionEventTypes.StepEnded" /> row. The operation id is derived from the
+    ///     step and its phase, so the two callers here can never write two rows for one step: whichever runs second is
+    ///     swallowed by the store's idempotency.
+    /// </summary>
+    private async Task AppendStepEndedAsync(Guid sessionId, int step, string outcome, string? detailJson)
+    {
+        _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
+                        WorkSessionVersions.Any,
+                        WorkSessionEventTypes.StepEnded,
+                        WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Ended),
+                        outcome,
+                        detailJson),
+                    CancellationToken.None))
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Serializes what one step consumed into the shape described on
+    ///     <see cref="WorkSessionEventDto.DetailJson" />, or <see langword="null" /> when nothing ran under a cap scope
+    ///     (no budget was created, so there is nothing to report — an empty record would read as "this step was free").
+    ///     <para>
+    ///         The counts come off the cap scope the step itself seeded, which is the only readable seam: the run's
+    ///         ambient <see cref="ProviderCallBudget" /> is written INSIDE the send path and an
+    ///         <see cref="AsyncLocal{T}" /> write does not flow back out, so <c>ProviderCallBudget.Current</c> is null
+    ///         again by the time the enumeration returns. The usage pair is the provider's own count off the terminal
+    ///         event, kept beside the estimate deliberately: the estimator runs ~12 % low on this corpus, and a row
+    ///         carrying both is what makes that visible instead of assumed.
+    ///     </para>
+    /// </summary>
+    private static string? ComposeStepConsumptionDetail(ProviderCallCapScope? capScope, ChatStreamEvent? terminalEvent = null)
+    {
+        if (capScope?.CaptureConsumption() is not { } consumption)
+        {
+            return null;
+        }
+
+        return JsonSerializer.Serialize(new WorkSessionStepConsumptionDetail(consumption.ProviderCalls,
+                consumption.EstimatedInputTokens,
+                consumption.ToolCallsCompleted,
+                consumption.ProviderCallCap,
+                terminalEvent?.InputTokens,
+                terminalEvent?.OutputTokens),
+            ConsumptionJsonOptions);
     }
 
     /// <summary>

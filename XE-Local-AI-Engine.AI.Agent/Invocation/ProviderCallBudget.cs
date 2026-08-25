@@ -41,7 +41,13 @@ public sealed class ProviderCallBudget
     // own scope from the node options, so an outer caller cannot pass a per-run cap by seeding a budget itself — its
     // scope is immediately replaced. A work-session step is that caller: one step made 14 tool calls on 2026-08-24 and
     // the re-sent results overran the window from inside the loop, which no cross-step bound can reach.
-    private static readonly AsyncLocal<int?> AmbientMaxProviderCalls = new();
+    //
+    // The slot holds the caller's scope OBJECT rather than a bare int, which is what makes the consumption readable
+    // back on the caller's side. An AsyncLocal write inside the run never propagates OUT to the caller, so
+    // `Current` is null again by the time the caller's await returns; a mutable object the caller seeded BEFORE the
+    // run is shared by reference, so the budget the run creates can register itself into it and the caller can read
+    // the counters afterwards without any new plumbing through the send path.
+    private static readonly AsyncLocal<ProviderCallCapScope?> AmbientCallCap = new();
 
     private readonly int _maxProviderCalls;
     // True when the ambient per-step cap, not the configured invocation ceiling, is what _maxProviderCalls holds —
@@ -75,8 +81,8 @@ public sealed class ProviderCallBudget
         Options = options;
         // "<=" not "<": a step cap seeded at exactly the invocation ceiling is still the caller's per-step bound, and its
         // trip must read as a spent step, not a runaway loop.
-        _callCapTightened = AmbientMaxProviderCalls.Value is { } ambient && ambient <= options.MaxProviderCallsPerInvocation;
-        _maxProviderCalls = _callCapTightened ? AmbientMaxProviderCalls.Value!.Value : options.MaxProviderCallsPerInvocation;
+        _callCapTightened = AmbientCallCap.Value is { } ambient && ambient.MaxProviderCalls <= options.MaxProviderCallsPerInvocation;
+        _maxProviderCalls = _callCapTightened ? AmbientCallCap.Value!.MaxProviderCalls : options.MaxProviderCallsPerInvocation;
         _maxCumulativeInputTokens = options.MaxCumulativeInputTokens;
         _startedTimestamp = startedTimestamp;
     }
@@ -113,7 +119,11 @@ public sealed class ProviderCallBudget
         ArgumentNullException.ThrowIfNull(options);
 
         var previous = AmbientBudget.Value;
-        AmbientBudget.Value = new ProviderCallBudget(options, startedTimestamp);
+        var budget = new ProviderCallBudget(options, startedTimestamp);
+        AmbientBudget.Value = budget;
+        // Registered AFTER construction rather than from the constructor, so a half-built instance is never published
+        // to a caller that could read it from another thread.
+        AmbientCallCap.Value?.Attach(budget);
         return new Scope(previous);
     }
 
@@ -122,14 +132,21 @@ public sealed class ProviderCallBudget
     ///     current async flow, and returns a disposable restoring the prior value. Seed it BEFORE the run begins — the
     ///     runner creates its own scope from the node options, so this is the only way an outer caller can cap one run.
     ///     <b>Tighten-only</b>: a value at or above the configured ceiling is ignored, so no caller can raise it.
+    ///     <para>
+    ///         The returned handle is also how the caller MEASURES what the run spent: every budget created inside the
+    ///         scope registers itself, so <see cref="ProviderCallCapScope.CaptureConsumption" /> answers with the
+    ///         content-free counts once the run has landed. That is the only readable seam — the run's own ambient
+    ///         budget is invisible from out here, because an <see cref="AsyncLocal{T}" /> written inside the run does
+    ///         not flow back to its caller.
+    ///     </para>
     /// </summary>
-    public static IDisposable BeginCallCapScope(int maxProviderCalls)
+    public static ProviderCallCapScope BeginCallCapScope(int maxProviderCalls)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxProviderCalls);
 
-        var previous = AmbientMaxProviderCalls.Value;
-        AmbientMaxProviderCalls.Value = maxProviderCalls;
-        return new CallCapScope(previous);
+        var scope = new ProviderCallCapScope(maxProviderCalls, AmbientCallCap.Value);
+        AmbientCallCap.Value = scope;
+        return scope;
     }
 
     /// <summary>
@@ -233,6 +250,12 @@ public sealed class ProviderCallBudget
             AgentHandoffs: Volatile.Read(ref _agentHandoffs));
     }
 
+    /// <summary>Restores the ambient call cap a <see cref="ProviderCallCapScope" /> replaced, on its dispose.</summary>
+    internal static void RestoreCallCap(ProviderCallCapScope? previous)
+    {
+        AmbientCallCap.Value = previous;
+    }
+
     private static long ToMicroseconds(TimeSpan duration)
     {
         return duration <= TimeSpan.Zero ? 0 : (long)Math.Min(long.MaxValue, duration.TotalMicroseconds);
@@ -273,22 +296,93 @@ public sealed class ProviderCallBudget
         }
     }
 
-    // Restores the prior ambient call cap when disposed, so a nested seed cannot leak into an outer turn.
-    private sealed class CallCapScope : IDisposable
-    {
-        private readonly int? _previous;
+}
 
-        public CallCapScope(int? previous)
+/// <summary>
+///     The handle <see cref="ProviderCallBudget.BeginCallCapScope" /> returns: it tightens the call ceiling for every
+///     budget created inside the scope, restores the prior ambient cap when disposed so a nested seed cannot leak into
+///     an outer turn, and — the part that makes a step's spend observable — collects the budgets that were created
+///     under it so the seeding caller can read back what the run consumed.
+///     <para>
+///         More than one budget can attach: a run that spawns a sub-agent invocation seeds a second scope, and the cap
+///         applies to each of them separately. <see cref="CaptureConsumption" /> therefore SUMS, which is the honest
+///         answer to "what did this step spend" even though it can exceed <see cref="MaxProviderCalls" /> in that case.
+///     </para>
+/// </summary>
+public sealed class ProviderCallCapScope : IDisposable
+{
+    private readonly ProviderCallCapScope? _previous;
+    private readonly Lock _gate = new();
+    private readonly List<ProviderCallBudget> _budgets = [];
+
+    internal ProviderCallCapScope(int maxProviderCalls, ProviderCallCapScope? previous)
+    {
+        MaxProviderCalls = maxProviderCalls;
+        _previous = previous;
+    }
+
+    /// <summary>The per-scope call ceiling this handle seeded. Tighten-only against the configured invocation ceiling.</summary>
+    public int MaxProviderCalls { get; }
+
+    /// <summary>
+    ///     What the budgets created under this scope have consumed so far, or <see langword="null" /> when none was
+    ///     created (nothing ran, or the run never seeded a budget). Content-free counts only — safe to persist.
+    ///     <para>
+    ///         Read it AFTER the run has landed. Reading it mid-run answers with a moving target, and a run stopped
+    ///         through the cancellation registry may still be unwinding, so a cancelled step's numbers are a race
+    ///         rather than a measurement.
+    ///     </para>
+    /// </summary>
+    public ProviderCallConsumption? CaptureConsumption()
+    {
+        ProviderCallBudget[] budgets;
+        lock (_gate)
         {
-            _previous = previous;
+            if (_budgets.Count == 0)
+            {
+                return null;
+            }
+
+            budgets = [.. _budgets];
         }
 
-        public void Dispose()
+        var providerCalls = 0;
+        var estimatedInputTokens = 0L;
+        var toolCallsCompleted = 0;
+        foreach (var snapshot in budgets.Select(static budget => budget.CaptureEfficiencySnapshot()))
         {
-            AmbientMaxProviderCalls.Value = _previous;
+            providerCalls += snapshot.ProviderCalls;
+            estimatedInputTokens += snapshot.EstimatedInputTokens;
+            toolCallsCompleted += snapshot.ToolCallsCompleted;
+        }
+
+        return new ProviderCallConsumption(providerCalls, estimatedInputTokens, toolCallsCompleted, MaxProviderCalls);
+    }
+
+    public void Dispose()
+    {
+        ProviderCallBudget.RestoreCallCap(_previous);
+    }
+
+    internal void Attach(ProviderCallBudget budget)
+    {
+        lock (_gate)
+        {
+            _budgets.Add(budget);
         }
     }
 }
+
+/// <summary>
+///     What one caller-capped run consumed, in counts only — never prompts, model output, tool identities, arguments,
+///     results, paths or schemas. Small enough to persist on an event row, which is what the work-session supervisor
+///     does with it so a per-step cap can be sized from recorded data rather than guessed.
+/// </summary>
+/// <param name="ProviderCalls">Raw provider rounds that were admitted (the rejected one that tripped a ceiling is not counted).</param>
+/// <param name="EstimatedInputTokens">Estimated input tokens across those rounds — an estimate from the character profile, not the provider's count.</param>
+/// <param name="ToolCallsCompleted">Tool invocations that returned, successfully or not.</param>
+/// <param name="ProviderCallCap">The per-run ceiling the caller seeded, so a reader can size the numerator against it.</param>
+public sealed record ProviderCallConsumption(int ProviderCalls, long EstimatedInputTokens, int ToolCallsCompleted, int ProviderCallCap);
 
 /// <summary>
 ///     Immutable, content-free aggregate of the expensive work performed during one root agent invocation. It contains
