@@ -621,6 +621,41 @@ const isPrimaryTerminal = (status: BenchmarkPrimaryStatus): boolean => !isPrimar
 export const isRunTerminal = (run: BenchmarkRunSummary): boolean =>
 	isPrimaryTerminal(run.primaryStatus) && !isJudgeActive(run.judge.state);
 
+/** How far a matrix launch has got. `done` counts every terminal run, of which `failed` is the unhappy part. */
+export interface BenchmarkBatchProgress {
+	total: number;
+	done: number;
+	running: number;
+	queued: number;
+	failed: number;
+}
+
+/**
+ * What a batch launch has achieved, read off the runs the list already holds. A started run the loaded page does not
+ * carry yet counts as queued rather than disappearing, so `done + running + queued` always equals the number of runs
+ * the node said it started — a progress line that silently shrank its own denominator would be worse than none.
+ */
+export function benchmarkBatchProgress(
+	runs: readonly BenchmarkRunSummary[],
+	startedRunIds: readonly string[],
+): BenchmarkBatchProgress {
+	const progress: BenchmarkBatchProgress = { total: startedRunIds.length, done: 0, running: 0, queued: 0, failed: 0 };
+	for (const runId of startedRunIds) {
+		const run = runs.find((candidate) => candidate.id === runId);
+		if (!run || run.primaryStatus === "Queued") {
+			progress.queued += 1;
+		} else if (isPrimaryActive(run.primaryStatus)) {
+			progress.running += 1;
+		} else {
+			progress.done += 1;
+			if (run.primaryStatus !== "Succeeded") {
+				progress.failed += 1;
+			}
+		}
+	}
+	return progress;
+}
+
 /**
  * The first thing the node's `BenchmarkJudgePolicyValidator` would reject, mirrored client-side so the operator is not
  * told about a bad criterion by a round-trip. `index` names the offending criterion, or -1 for a rubric-level issue.

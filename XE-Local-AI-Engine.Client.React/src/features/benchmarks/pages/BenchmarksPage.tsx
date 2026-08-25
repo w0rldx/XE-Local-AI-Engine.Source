@@ -35,6 +35,7 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
+import { BenchmarkBatchProgressAlert } from "@/features/benchmarks/components/BenchmarkBatchProgressAlert";
 import { BenchmarkExportButtons } from "@/features/benchmarks/components/BenchmarkExportButtons";
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import type { BenchmarkMatrixSelection } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
@@ -45,6 +46,7 @@ import { BenchmarkRunsTable } from "@/features/benchmarks/components/BenchmarkRu
 import { benchmarkJudgeFamilyOverlap } from "@/features/benchmarks/models/BenchmarkJudgeFamily";
 import type { BenchmarkKvCacheType, BenchmarkProjectDraft, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import {
+	benchmarkBatchProgress,
 	benchmarkErrorCode,
 	benchmarkKvCacheTypes,
 	isUnsupportedKvCacheTypeError,
@@ -105,6 +107,9 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
 	const [matrixOpen, setMatrixOpen] = useState(false);
 	const [matrixRejections, setMatrixRejections] = useState<BenchmarkBatchRejection[]>([]);
+	// The runs the last matrix launch started, kept with the project they belong to: another project's table has none
+	// of them, and a progress line reading "0 of 12 done" there would be a lie rather than a stale number.
+	const [batchLaunch, setBatchLaunch] = useState<{ projectId: string; runIds: string[] } | null>(null);
 	const projectQuery = useBenchmarkProject(selectedProjectId);
 	const runsQuery = useBenchmarkRuns(selectedProjectId);
 	const modelsQuery = useEligibleBenchmarkModels(projectQuery.data?.contextTokens);
@@ -120,6 +125,10 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const startRun = useStartBenchmarkRun();
 	const startBatch = useStartBenchmarkRunBatch();
 	const runs = useMemo(() => runsQuery.data?.items ?? [], [runsQuery.data]);
+	const batchProgress = useMemo(
+		() => (batchLaunch && batchLaunch.projectId === selectedProjectId ? benchmarkBatchProgress(runs, batchLaunch.runIds) : null),
+		[batchLaunch, selectedProjectId, runs],
+	);
 
 	useEffect(() => {
 		if (!selectedProjectId && projectsQuery.data?.[0]) {
@@ -330,6 +339,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 			{
 				onSuccess: (result) => {
 					setMatrixRejections(result.rejected);
+					setBatchLaunch(result.startedRunIds.length > 0 ? { projectId: detail.id, runIds: result.startedRunIds } : null);
 					if (result.startedRunIds[0]) {
 						selectRun(result.startedRunIds[0]);
 					}
@@ -565,6 +575,11 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										{t("pages.benchmarks.matrix.open", "Batch runs…")}
 									</Button>
 								</Group>
+								{/* Gone on its own once every started run is terminal — a progress line with nothing left to
+								    report is just clutter the operator has to close. */}
+								{batchProgress && batchProgress.done < batchProgress.total ? (
+									<BenchmarkBatchProgressAlert progress={batchProgress} onDismiss={() => setBatchLaunch(null)} />
+								) : null}
 							</Stack>
 						) : !projectQuery.isLoading ? (
 							<Text c="dimmed">{t("pages.benchmarks.project.select", "Select a benchmark project.")}</Text>

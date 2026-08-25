@@ -5,6 +5,7 @@ import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import { RESPONSE_VALIDATION_PROBLEM_TITLE } from "@/core/api/ResponseValidation";
 import {
 	applyBenchmarkEvent,
+	benchmarkBatchProgress,
 	type BenchmarkOutputPart,
 	benchmarkRankExclusionReasons,
 	benchmarkRunEventSchema,
@@ -13,6 +14,8 @@ import {
 	toBenchmarkRankExclusionReason,
 	toChatMessageParts,
 } from "@/features/benchmarks/models/BenchmarkModels";
+import type { BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
+import { benchmarkRunSummaryFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
 
 describe("benchmark output mapping", () => {
 	it("accumulates output and reasoning deltas without duplicating adjacent parts", () => {
@@ -85,5 +88,43 @@ describe("isBenchmarkRunTruncated", () => {
 	it("keeps truncated in the exhaustive rank-exclusion vocabulary", () => {
 		expect(benchmarkRankExclusionReasons).toContain("truncated");
 		expect(toBenchmarkRankExclusionReason("truncated")).toBe("truncated");
+	});
+});
+
+describe("benchmark batch progress", () => {
+	const run = (id: string, primaryStatus: BenchmarkRunSummary["primaryStatus"]) =>
+		benchmarkRunSummaryFixture({ id, primaryStatus });
+
+	it("counts a launch's runs by what they are doing, cancelled and failed alike", () => {
+		const runs = [
+			run("a", "Succeeded"),
+			run("b", "Failed"),
+			run("c", "Cancelled"),
+			run("d", "Running"),
+			run("e", "CancelRequested"),
+			run("f", "Queued"),
+			run("unrelated", "Succeeded"),
+		];
+
+		expect(benchmarkBatchProgress(runs, ["a", "b", "c", "d", "e", "f"])).toEqual({
+			total: 6,
+			done: 3,
+			running: 2,
+			queued: 1,
+			failed: 2,
+		});
+	});
+
+	// The table shows one page; a started run below the fold must not shrink the denominator it is counted against.
+	it("counts a started run the loaded page does not carry as queued", () => {
+		const progress = benchmarkBatchProgress([run("a", "Succeeded")], ["a", "not-loaded"]);
+
+		expect(progress).toEqual({ total: 2, done: 1, running: 0, queued: 1, failed: 0 });
+	});
+
+	it("reads a finished batch as fully done", () => {
+		const progress = benchmarkBatchProgress([run("a", "Succeeded"), run("b", "Failed")], ["a", "b"]);
+
+		expect(progress.done).toBe(progress.total);
 	});
 });

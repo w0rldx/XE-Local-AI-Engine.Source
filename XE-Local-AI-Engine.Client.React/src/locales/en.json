@@ -4028,7 +4028,8 @@
 				"warmupHelp": "Adds one extra run per combination that is never ranked and never counted in the spread.",
 				"summary": "{{cells}} combinations × {{perCell}} runs = {{total}} runs",
 				"rejected": "{{count}} combinations were not started",
-				"start": "Start {{count}} runs"
+				"start": "Start {{count}} runs",
+				"progress": "Batch: {{done}} of {{total}} done ({{running}} running, {{queued}} queued, {{failed}} failed)"
 			},
 			"metrics": {
 				"duration": "Duration",

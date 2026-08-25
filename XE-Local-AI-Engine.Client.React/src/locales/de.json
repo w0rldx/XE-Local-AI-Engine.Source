@@ -4028,7 +4028,8 @@
 				"warmupHelp": "Fügt je Kombination einen zusätzlichen Lauf hinzu, der nie gewertet und nie in die Streuung eingerechnet wird.",
 				"summary": "{{cells}} Kombinationen × {{perCell}} Läufe = {{total}} Läufe",
 				"rejected": "{{count}} Kombinationen wurden nicht gestartet",
-				"start": "{{count}} Läufe starten"
+				"start": "{{count}} Läufe starten",
+				"progress": "Stapel: {{done}} von {{total}} fertig ({{running}} laufend, {{queued}} wartend, {{failed}} fehlgeschlagen)"
 			},
 			"metrics": {
 				"duration": "Dauer",
