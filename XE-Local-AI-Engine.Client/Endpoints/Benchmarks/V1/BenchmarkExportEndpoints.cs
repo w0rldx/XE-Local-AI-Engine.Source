@@ -7,8 +7,11 @@ using System.Text.Json;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>The agent identity a project's runs were frozen against, read from the runs themselves.</summary>
 public sealed class BenchmarkExportAgentResponse
@@ -39,6 +42,83 @@ public sealed class BenchmarkExportProjectResponse
 }
 
 /// <summary>
+///     The spread of one measured quantity across a repeat group. Population standard deviation, not sample: the runs
+///     ARE the population — this is every measurement that was taken, not a draw from a larger set — and the sample
+///     form would report a spread for a group of one it cannot know.
+/// </summary>
+public sealed class BenchmarkExportSampleStatisticsResponse
+{
+    public int SampleCount { get; init; }
+    public double? Mean { get; init; }
+    public double? StdDev { get; init; }
+
+    /// <summary>Every reading the statistics were derived from, in run order — a reader may want its own summary.</summary>
+    public IReadOnlyList<double> Samples { get; init; } = [];
+}
+
+/// <summary>
+///     One repeat group's raw throughput samples plus their summary. A group is the runs of one
+///     <c>repeatGroupId</c>, or a single ungrouped run on its own; warm-ups are excluded, which is the entire reason
+///     they exist.
+/// </summary>
+public sealed class BenchmarkExportRepeatGroupResponse
+{
+    /// <summary>Null for a run that was launched on its own rather than as part of a group.</summary>
+    public Guid? RepeatGroupId { get; init; }
+
+    public required string ModelName { get; init; }
+
+    /// <summary>What the group measured — <c>Throughput</c> or <c>AnswerVariance</c>.</summary>
+    public BenchmarkRepeatMode RepeatMode { get; init; }
+
+    public IReadOnlyList<Guid> RunIds { get; init; } = [];
+    public required BenchmarkExportSampleStatisticsResponse TtftMs { get; init; }
+    public required BenchmarkExportSampleStatisticsResponse PromptTokensPerSecond { get; init; }
+    public required BenchmarkExportSampleStatisticsResponse GenerationTokensPerSecond { get; init; }
+}
+
+/// <summary>
+///     One row shaped like a <c>llama-bench -o json</c> record, for the fields this node has an equivalent of. It is a
+///     TRANSLATION, not a claim of comparability: llama-bench times a fixed synthetic prompt inside one process, while
+///     these numbers come from a real agent turn against a freshly launched server, so the two are the same units and
+///     not the same experiment. Fields llama-bench carries and this node does not observe are omitted rather than
+///     invented.
+/// </summary>
+/// <remarks>
+///     Two rows per group, mirroring llama-bench's own shape: a prompt-processing row (<c>nGen</c> 0) and a
+///     token-generation row (<c>nPrompt</c> 0).
+/// </remarks>
+public sealed class BenchmarkExportLlamaBenchRowResponse
+{
+    /// <summary>llama.cpp's <c>build_commit</c> — the installed runtime's source commit, or its version when built from a release.</summary>
+    public string? BuildCommit { get; init; }
+
+    /// <summary>llama.cpp's <c>gpu_info</c> — the enumerated device names, joined, or null when none was captured.</summary>
+    public string? GpuInfo { get; init; }
+
+    public string? ModelFilename { get; init; }
+
+    /// <summary>Bytes of the model's weight members, as the frozen snapshot recorded them.</summary>
+    public long? ModelSize { get; init; }
+
+    public int? NGpuLayers { get; init; }
+
+    /// <summary>Prompt tokens the row measures, rounded from the group mean. Zero on a generation row.</summary>
+    public int NPrompt { get; init; }
+
+    /// <summary>Generated tokens the row measures, rounded from the group mean. Zero on a prompt row.</summary>
+    public int NGen { get; init; }
+
+    public double? AvgTs { get; init; }
+    public double? StddevTs { get; init; }
+    public int Samples { get; init; }
+    public Guid? RepeatGroupId { get; init; }
+
+    /// <summary>This node's own model name for the row, which llama-bench has no field for.</summary>
+    public required string ModelName { get; init; }
+}
+
+/// <summary>
 ///     One project's complete benchmark record: every run at full detail (transcript and judge verdict included), the
 ///     project and judge configuration they were produced under, and what the ranking was computed against.
 /// </summary>
@@ -49,6 +129,12 @@ public sealed class BenchmarkExportResponse
     public required BenchmarkExportProjectResponse Project { get; init; }
     public required BenchmarkRankCohortResponse RankCohort { get; init; }
     public IReadOnlyList<BenchmarkRunDetailResponse> Runs { get; init; } = [];
+
+    /// <summary>Per repeat group: the raw throughput readings and their spread. Empty when no run measured anything.</summary>
+    public IReadOnlyList<BenchmarkExportRepeatGroupResponse> RepeatGroups { get; init; } = [];
+
+    /// <summary>The same measurements translated into <c>llama-bench -o json</c> field names.</summary>
+    public IReadOnlyList<BenchmarkExportLlamaBenchRowResponse> LlamaBench { get; init; } = [];
 }
 
 /// <summary>
@@ -57,11 +143,12 @@ public sealed class BenchmarkExportResponse
 ///     SAME shape <c>GET benchmarks/runs/{runId}</c> returns, reused verbatim rather than reshaped, so an export and a
 ///     live read of one run can never disagree.
 /// </summary>
-public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimeProvider timeProvider)
+public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimeProvider timeProvider, IBenchmarkRuntimeSnapshotFactory snapshots)
     : Endpoint<BenchmarkProjectRouteRequest, BenchmarkExportResponse>
 {
     private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    private readonly IBenchmarkRuntimeSnapshotFactory _snapshots = snapshots ?? throw new ArgumentNullException(nameof(snapshots));
 
     public override void Configure()
     {
@@ -81,6 +168,7 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimePr
         var now = _timeProvider.GetUtcNow();
         var (records, rankCohort) = await BenchmarkExportProjection.ListAllForExportAsync(_store, req.ProjectId, ct).ConfigureAwait(false);
         var runs = new List<BenchmarkRunDetailResponse>(records.Count);
+        var facts = new Dictionary<Guid, BenchmarkExportRunFacts>(records.Count);
         foreach (var summary in records)
         {
             // The listing projection deliberately never reads the encrypted payload columns, so the transcript and the
@@ -97,7 +185,10 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimePr
             {
                 Rank = summary.Rank
             }).ToDetail(verdict));
+            facts[full.Id] = ReadFacts(full);
         }
+
+        var groups = BenchmarkExportStatistics.Groups(records);
 
         HttpContext.Response.Headers.ContentDisposition = BenchmarkExportProjection.Attachment(project.Name, now, "json");
         await Send.OkAsync(new BenchmarkExportResponse
@@ -122,9 +213,61 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimePr
                           Judge = await BenchmarkJudgePolicyProjection.ReadAsync(_store, project.Id, ct).ConfigureAwait(false)
                       },
                       RankCohort = BenchmarkExportProjection.ToResponse(rankCohort),
-                      Runs = runs
+                      Runs = runs,
+                      RepeatGroups = groups,
+                      LlamaBench = BenchmarkExportStatistics.LlamaBenchRows(groups, facts)
                   }, ct)
                   .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The model and runtime facts a llama-bench row needs, read from one run's frozen snapshot and its environment
+    ///     capture. Non-throwing by contract: a payload that cannot be read leaves the row's fields empty rather than
+    ///     failing the whole export — a corrupt receipt on one run must not cost the operator every other run's data.
+    /// </summary>
+    private BenchmarkExportRunFacts ReadFacts(BenchmarkRunRecord run)
+    {
+        string? modelFilename = null;
+        long? modelSize = null;
+        int? gpuLayers = null;
+        try
+        {
+            var snapshot = _snapshots.Deserialize(run.RuntimeSnapshotJson.Span);
+            var weights = snapshot.PrimaryModel.Members
+                                  .Where(static member => member.Role == InstalledModelPhysicalMemberRole.Weight)
+                                  .ToArray();
+            modelFilename = snapshot.PrimaryModel.SourceFileName ?? weights.FirstOrDefault()?.RelativePath;
+            modelSize = weights.Length == 0 ? null : weights.Sum(static member => member.SizeBytes);
+            gpuLayers = snapshot.PrimaryRuntime.GpuLayers;
+        }
+        catch (Exception exception) when (exception is BenchmarkSnapshotException or JsonException)
+        {
+            Logger.LogWarning(exception, "Benchmark export: run {RunId} carries a snapshot that could not be read.", run.Id);
+        }
+
+        string? buildCommit = null;
+        string? gpuInfo = null;
+        if (run.PrimaryLaunchEvidence?.EnvironmentFactsJson is { } environmentJson && !environmentJson.IsEmpty)
+        {
+            try
+            {
+                var environment = BenchmarkCanonicalJson.Deserialize<RuntimeEnvironmentFactsV1>(environmentJson.Span);
+
+                // llama-bench's build_commit is the source revision. A runtime installed from a release has none, so
+                // the version it reported stands in — the field means "which build produced these numbers".
+                buildCommit = environment?.LlamaRuntime?.SourceCommit ?? environment?.LlamaRuntime?.Version;
+                gpuInfo = environment?.Hardware?.Gpus is { Count: > 0 } gpus
+                    ? string.Join(", ", gpus.Select(static gpu => gpu.Name))
+                    : null;
+            }
+            catch (JsonException exception)
+            {
+                Logger.LogWarning(exception, "Benchmark export: run {RunId} carries environment facts that could not be read.", run.Id);
+            }
+        }
+
+        return new BenchmarkExportRunFacts(buildCommit, gpuInfo, modelFilename, modelSize, gpuLayers,
+            run.Throughput?.PromptTokens, run.Throughput?.GenerationTokens);
     }
 }
 
@@ -168,10 +311,141 @@ public sealed class ExportBenchmarkProjectCsvEndpoint(IBenchmarkStore store, Tim
     }
 }
 
+/// <summary>
+///     Groups a project's runs into their repeat groups and summarizes the throughput each one measured, then
+///     translates the same numbers into <c>llama-bench -o json</c> field names.
+/// </summary>
+/// <remarks>
+///     Everything here is derived from columns the listing already carries plus the run's own frozen snapshot and
+///     environment capture. Nothing is measured here and nothing is inferred: a run that reported no timings
+///     contributes no sample, and a group with no samples reports a null mean rather than a zero.
+/// </remarks>
+internal static class BenchmarkExportStatistics
+{
+    /// <summary>
+    ///     One entry per repeat group, plus one per ungrouped run. Warm-ups are dropped — absorbing the first-launch
+    ///     cost is their whole job, and averaging them back in would put the cost right back into the numbers the
+    ///     repeats after them exist to isolate.
+    /// </summary>
+    public static IReadOnlyList<BenchmarkExportRepeatGroupResponse> Groups(IReadOnlyList<BenchmarkRunRecord> runs)
+    {
+        ArgumentNullException.ThrowIfNull(runs);
+        return runs.Where(static run => !run.IsWarmup && run.Throughput is not null)
+                   .GroupBy(static run => run.RepeatGroupId ?? run.Id)
+                   .Select(static group =>
+                   {
+                       var ordered = group.OrderBy(static run => run.RepeatIndex ?? 0).ThenBy(static run => run.CreatedAtUtc).ToArray();
+                       return new BenchmarkExportRepeatGroupResponse
+                       {
+                           RepeatGroupId = ordered[0].RepeatGroupId,
+                           ModelName = ordered[0].PrimaryModelName,
+                           RepeatMode = ordered[0].RepeatMode,
+                           RunIds = [.. ordered.Select(static run => run.Id)],
+                           TtftMs = Summarize(ordered.Select(static run => run.Throughput?.TtftMs)),
+                           PromptTokensPerSecond = Summarize(ordered.Select(static run => run.Throughput?.PromptTokensPerSecond)),
+                           GenerationTokensPerSecond = Summarize(ordered.Select(static run => run.Throughput?.GenerationTokensPerSecond))
+                       };
+                   })
+                   .ToArray();
+    }
+
+    /// <summary>
+    ///     Mean and POPULATION standard deviation. The runs are the population — this is every measurement that was
+    ///     taken, not a draw from a larger set — and the sample form would divide by zero on the single run that is by
+    ///     far the commonest group size.
+    /// </summary>
+    public static BenchmarkExportSampleStatisticsResponse Summarize(IEnumerable<double?> values)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        var samples = values.Where(static value => value is not null).Select(static value => value!.Value).ToArray();
+        if (samples.Length == 0)
+        {
+            return new BenchmarkExportSampleStatisticsResponse();
+        }
+
+        var mean = samples.Average();
+        var variance = samples.Sum(sample => (sample - mean) * (sample - mean)) / samples.Length;
+        return new BenchmarkExportSampleStatisticsResponse
+        {
+            SampleCount = samples.Length,
+            Mean = mean,
+            StdDev = Math.Sqrt(variance),
+            Samples = samples
+        };
+    }
+
+    /// <summary>
+    ///     Two rows per group in llama-bench's own shape: a prompt-processing row and a token-generation row. The
+    ///     model and runtime facts come from the group's FIRST run — every run of a group shares one frozen snapshot
+    ///     and one launch, so any of them would answer identically.
+    /// </summary>
+    public static IReadOnlyList<BenchmarkExportLlamaBenchRowResponse> LlamaBenchRows(
+        IReadOnlyList<BenchmarkExportRepeatGroupResponse> groups,
+        IReadOnlyDictionary<Guid, BenchmarkExportRunFacts> facts)
+    {
+        ArgumentNullException.ThrowIfNull(groups);
+        ArgumentNullException.ThrowIfNull(facts);
+        var rows = new List<BenchmarkExportLlamaBenchRowResponse>(groups.Count * 2);
+        foreach (var group in groups)
+        {
+            var runFacts = facts.TryGetValue(group.RunIds[0], out var found) ? found : BenchmarkExportRunFacts.Empty;
+            rows.Add(Row(group, runFacts, group.PromptTokensPerSecond, nPrompt: Round(runFacts.PromptTokens), nGen: 0));
+            rows.Add(Row(group, runFacts, group.GenerationTokensPerSecond, nPrompt: 0, nGen: Round(runFacts.GenerationTokens)));
+        }
+
+        return rows;
+    }
+
+    private static BenchmarkExportLlamaBenchRowResponse Row(BenchmarkExportRepeatGroupResponse group,
+        BenchmarkExportRunFacts facts,
+        BenchmarkExportSampleStatisticsResponse statistics,
+        int nPrompt,
+        int nGen) =>
+        new()
+        {
+            BuildCommit = facts.BuildCommit,
+            GpuInfo = facts.GpuInfo,
+            ModelFilename = facts.ModelFilename,
+            ModelSize = facts.ModelSizeBytes,
+            NGpuLayers = facts.GpuLayers,
+            NPrompt = nPrompt,
+            NGen = nGen,
+            AvgTs = statistics.Mean,
+            StddevTs = statistics.StdDev,
+            Samples = statistics.SampleCount,
+            RepeatGroupId = group.RepeatGroupId,
+            ModelName = group.ModelName
+        };
+
+    private static int Round(double? value) =>
+        value is { } number && number > 0 ? (int)Math.Round(number, MidpointRounding.AwayFromZero) : 0;
+}
+
+/// <summary>
+///     The model and runtime facts one run's llama-bench row needs, read from its frozen snapshot and its environment
+///     capture. Every member is optional: a run frozen before a field existed, or one whose spawn never reached
+///     readiness, simply omits it.
+/// </summary>
+internal sealed record BenchmarkExportRunFacts(
+    string? BuildCommit,
+    string? GpuInfo,
+    string? ModelFilename,
+    long? ModelSizeBytes,
+    int? GpuLayers,
+    double? PromptTokens,
+    double? GenerationTokens)
+{
+    public static BenchmarkExportRunFacts Empty { get; } = new(null, null, null, null, null, null, null);
+}
+
 /// <summary>Shared collection and naming for both export representations.</summary>
 internal static class BenchmarkExportProjection
 {
-    public const int SchemaVersion = 1;
+    /// <summary>
+    ///     2 since the export gained <c>repeatGroups</c> and <c>llamaBench</c>. Additive — every v1 member is present
+    ///     and unchanged — but a consumer that keys off the version needs to see that there is more to read.
+    /// </summary>
+    public const int SchemaVersion = 2;
 
     private const int MaxSlugLength = 40;
 

@@ -45,6 +45,13 @@ public static class BenchmarkCanonicalJson
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
+    /// <summary>
+    ///     Reads a document this class wrote back into its record. Same options, so the camel-case enum NAMES it
+    ///     emitted bind again — the default converter would reject them as non-numeric.
+    /// </summary>
+    public static T? Deserialize<T>(ReadOnlySpan<byte> canonicalJson) =>
+        JsonSerializer.Deserialize<T>(canonicalJson, SerializerOptions);
+
     /// <summary>The lowercase-hex SHA-256 of an already-canonical JSON document.</summary>
     public static string Hash(string canonicalJson)
     {
