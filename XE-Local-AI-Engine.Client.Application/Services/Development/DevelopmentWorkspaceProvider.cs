@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
@@ -102,10 +103,13 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         new("Directory.Solution.props", "<Project>\n  <!-- Bounds MSBuild's upward search to the managed Development workspace below. -->\n</Project>\n")
     ];
 
+    private readonly ComputeOptions _ceilingDefaults;
+    private readonly LocalContainerOptions _nodeOptions;
     private readonly INodeDataDirectory _dataDirectory;
     private readonly ISensitiveFileExclusionService _exclusions;
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
+    private readonly DevelopmentSandboxOptions _sandboxOptions;
     private readonly IDevelopmentStore _store;
     private readonly TimeProvider _timeProvider;
 
@@ -114,7 +118,10 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         IOptions<DevelopmentOptions> options,
         TimeProvider timeProvider,
         IDevelopmentStore store,
-        ISensitiveFileExclusionService? exclusions = null)
+        ISensitiveFileExclusionService? exclusions = null,
+        IOptions<DevelopmentSandboxOptions>? sandboxOptions = null,
+        IOptions<ComputeOptions>? ceilingDefaults = null,
+        IOptions<LocalContainerOptions>? nodeOptions = null)
     {
         _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
         _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
@@ -127,6 +134,14 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         // gate and AgentHome's copy filter. Defaulted rather than required so a directly constructed provider behaves
         // exactly as the DI-resolved one does; there is only ever one implementation.
         _exclusions = exclusions ?? new SensitiveFileExclusionService();
+
+        // Defaulted for the same reason `exclusions` is: a directly constructed provider must behave exactly as the
+        // DI-resolved one, and both of these are bound unconditionally, so the fallbacks are the shipped values rather
+        // than a second configuration path. The safe posture is also the default one — RequireEgressDenial off, and the
+        // node's own ceilings.
+        _sandboxOptions = (sandboxOptions ?? Options.Create(new DevelopmentSandboxOptions())).Value;
+        _ceilingDefaults = (ceilingDefaults ?? Options.Create(new ComputeOptions())).Value;
+        _nodeOptions = (nodeOptions ?? Options.Create(new LocalContainerOptions())).Value;
     }
 
     public async Task<DevelopmentWorkspaceSession> PrepareAsync(DevelopmentExecutionSnapshot snapshot,
@@ -307,7 +322,16 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             {
                 RootPath = worktreePath
             },
-            Mounts = BuildMounts(runtimePath, worktreePath, secrets)
+            Mounts = BuildMounts(runtimePath, worktreePath, secrets),
+
+            // The node's ceilings wherever the backend can impose them, through the helper every create site shares so
+            // this request cannot disagree with the Development declaration. Read
+            // SandboxResourceCeilings before raising or lowering them: the node defaults are sized for a two-second
+            // run_python call and a `dotnet build` needs materially more of both memory and tasks.
+            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
+                _sandbox.Capabilities,
+                _ceilingDefaults,
+                _nodeOptions)
         }, cancellationToken).ConfigureAwait(false);
 
         return new DevelopmentWorkspaceSession(snapshot.ProjectId,
@@ -376,18 +400,23 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///         configuration resolves those nodes to the process backend. The honest consequence is that on such a node
     ///         the attempt still has egress. What makes that acceptable rather than silent is G6: the Development
     ///         status surface reports the posture the provider actually SERVED, so an operator can see which of the two
-    ///         they got. Making denial mandatory per node is the recorded follow-up.
+    ///         they got. A node that wants Option A instead sets
+    ///         <see cref="DevelopmentSandboxOptions.RequireEgressDenial" />: denial then becomes a precondition, and a
+    ///         node that cannot deny refuses the attempt with a message naming that key rather than running it with the
+    ///         host's network. The warm-restore sandbox is exempt from that switch by design — see the create request in
+    ///         <see cref="EnsureWarmRestoreAsync" />.
     ///     </para>
     ///     <para>
-    ///         This mirrors <c>AgentHomeService.ResolveNetworkPolicy</c> deliberately, down to reading the same
-    ///         capability flag. Two consumers deciding the same question two ways is how one of them silently stops
-    ///         matching what the backend can serve.
+    ///         The decision itself is not made here: <see cref="SandboxEgressPolicy" /> is the one place AgentHome, work
+    ///         sessions and this consumer all read, down to the same capability flag. Three consumers deciding the same
+    ///         question three ways is how one of them silently stops matching what the backend can serve.
     ///     </para>
     /// </summary>
     private SandboxNetworkPolicy ResolveAgentFacingNetworkPolicy() =>
-        (_sandbox.Capabilities & SandboxProviderCapabilities.SupportsNetworkPolicy) != SandboxProviderCapabilities.None
-            ? SandboxNetworkPolicy.None
-            : SandboxNetworkPolicy.Unrestricted;
+        SandboxEgressPolicy.Resolve(_sandbox.Capabilities,
+            _sandboxOptions.RequireEgressDenial,
+            SandboxEgressPolicy.DevelopmentOptionKey,
+            SandboxWorkloads.DevelopmentModeHostToolchain.Workload);
 
     /// <summary>
     ///     Populates the per-task package cache from the BASE COMMIT's dependency manifests, in a second short-lived
@@ -470,6 +499,13 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             // The one sandbox in Development Mode that still asks for egress, and the reason the agent-facing one no
             // longer has to. Unconditional rather than capability-gated: a warm that silently ran without network
             // would populate nothing and turn every later build into a confusing failure.
+            //
+            // EXEMPT FROM Development:Sandbox:RequireEgressDenial BY DESIGN, and this is the one place that exemption
+            // is implemented. That switch makes denial a precondition for the AGENT-FACING sandbox; applying it here
+            // would deny the network to the very restore whose job is to fill the cache from the base commit, so a
+            // node that set the switch would populate nothing and fail every later --no-restore build. What keeps the
+            // exemption sound is that this sandbox never runs agent-written content: EnsureWarmRestoreAsync refuses
+            // outright unless the worktree still matches the base commit.
             NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
             TrustedHostWorkspace = new SandboxTrustedHostWorkspace
             {
@@ -478,7 +514,14 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
             // The SAME mount set as the agent-facing sandbox. A warm that wrote its cache anywhere else would warm
             // nothing the attempt can read.
-            Mounts = BuildMounts(runtimePath, worktreePath, detectedSecrets)
+            Mounts = BuildMounts(runtimePath, worktreePath, detectedSecrets),
+
+            // The SAME ceilings as the agent-facing sandbox too: the warm runs the repository's own restore, so it is
+            // exactly as capable of a runaway as the attempt is.
+            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
+                _sandbox.Capabilities,
+                _ceilingDefaults,
+                _nodeOptions)
         }, cancellationToken).ConfigureAwait(false);
 
         try

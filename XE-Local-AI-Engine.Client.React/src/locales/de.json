@@ -428,6 +428,8 @@
 				"readOnlyMounts": "Schreibgeschützte Mounts",
 				"yes": "Ja",
 				"no": "Nein",
+				"egressRequired": "erforderlich",
+				"egressWhereAvailable": "wo verfügbar",
 				"levels": {
 					"isolated": "Isoliert",
 					"confined": "Eingeschränkt",

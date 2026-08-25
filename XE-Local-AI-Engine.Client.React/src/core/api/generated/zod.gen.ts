@@ -3758,6 +3758,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummary
 	level: z.string().optional(),
 	filesystemIsolation: z.boolean().optional(),
 	networkIsolation: z.boolean().optional(),
+	networkIsolationRequired: z.boolean().optional(),
 	resourceLimits: z.boolean().optional(),
 	readOnlyMounts: z.boolean().optional(),
 	filesystemIsolationUnavailableReason: z.string().nullish(),

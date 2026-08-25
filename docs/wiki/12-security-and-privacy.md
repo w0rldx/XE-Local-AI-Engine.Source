@@ -371,7 +371,7 @@ The **capability-honesty invariant** runs in both directions off that one record
 - `BuildLaunchPolicy` (called by `CreateOrAttachAsync`) **fail-closed rejects** any `SandboxCreateRequest` asking for something the host cannot serve, with `SandboxCapabilityNotSupportedException`, rather than silently returning a sandbox weaker than requested. It rejects on three counts: `NetworkPolicy.Restricted` at all (no allow-list mechanism exists), a denial request when `SupportsNetworkIsolation` is false, and resource limits when `SupportsResourceLimits` is false.
 - Each `…UnavailableReason` carries the measured reason, so a degraded host logs *why* and a live-gated test skips with a reason instead of passing silently.
 
-> **Do not read that fail-closed gate as a guarantee for Development Mode — on the process provider it never fires, so Development Mode DEGRADES rather than failing closed.** The gate can only reject what is *asked for*, and `DevelopmentWorkspaceProvider` asks for nothing the process provider cannot serve on any host: the agent-facing sandbox's `NetworkPolicy` is **capability-gated** (`None` where the backend advertises `SupportsNetworkPolicy`, `Unrestricted` otherwise — see the egress paragraph below), **no** `ResourceLimits` at all, and the read-only `.git/config` and credential-shadow mounts only from a provider that advertises `SupportsReadOnlyMounts`. The consequence is platform-dependent and must not be stated once for both:
+> **Do not read that fail-closed gate as a guarantee for Development Mode — on a default-configured node it never fires on the process provider, so Development Mode DEGRADES rather than failing closed.** The gate can only reject what is *asked for*, and by default `DevelopmentWorkspaceProvider` asks for nothing the process provider cannot serve on any host: the agent-facing sandbox's `NetworkPolicy` is **capability-gated** (`None` where the backend advertises `SupportsNetworkPolicy`, `Unrestricted` otherwise — see the egress paragraph below), its `ResourceLimits` are likewise capability-gated (`SandboxResourceCeilings` returns none where `SupportsResourceLimits` is absent), and the read-only `.git/config` and credential-shadow mounts come only from a provider that advertises `SupportsReadOnlyMounts`. **An operator can turn the degradation into a refusal for egress**, per node, with `Development:Sandbox:RequireEgressDenial` (or `AgentHome:Sandbox:RequireEgressDenial` for AgentHome, Coder and work sessions): denial then becomes a precondition and a node that cannot deny refuses to prepare, naming the key. Both default to off. The consequence is platform-dependent and must not be stated once for both:
 >
 > - **On Linux**, the process provider does enforce real containment where the probes succeed — process-group launch, `systemd-run --user` ceilings, and `unshare` network isolation are each independently available, and AgentHome takes the empty-namespace path.
 > - **On Windows** (and any host where every probe fails), the record is `SandboxContainment.None`. Development Mode's generated source, MSBuild targets, source generators and tests then execute **as the signed-in user, with full host network access and no resource ceiling** — the supervised-execution guarantees above (fixed executables, working-directory jail, scrubbed environment, timeouts, output caps) still apply, but there is no OS-level containment underneath them. A container-configured node is the only path that changes this.
@@ -480,11 +480,18 @@ them on any backend the shipped configuration resolves. **Network access is no l
 G1 the agent-facing sandbox asks for egress denial wherever the backend advertises it, and reaches the network
 unrestricted only where it does not — see
 [Development Mode egress](#development-mode-egress-two-sandboxes-one-of-them-denied) for the two-sandbox design and
-the capability gate. **No CPU, memory or process-count ceiling is requested for these commands at all**
-(`DevelopmentWorkspaceProvider` passes no `ResourceLimits` on either sandbox it creates, and
-`SandboxWorkloads.DevelopmentModeHostToolchain.RequestsResourceLimits` states that), so the host's ability to impose
-one is a capability this workload does not exercise — which is why the isolation panel's Resource-limits column reads
-**No** for this role on a host that could impose ceilings. `run_python` is the only workload that asks. The Process
+the capability gate. **CPU, memory and process-count ceilings ARE requested for these commands** — since 2026-08-25
+both sandboxes `DevelopmentWorkspaceProvider` creates carry the host-toolchain profile
+(`SandboxWorkloads.DevelopmentModeHostToolchain.Ceilings`), applied wherever the backend advertises
+`SupportsResourceLimits` and reported by the isolation panel as served. The numbers are **not** `run_python`'s, and
+that split is measured rather than argued: under the compute profile's 2 CPU / 2048 MB / 64 tasks this repository's
+own Release build failed outright with 15 errors ("Resource temporarily unavailable" starting `csc`, "Failed to create
+CoreCLR"), and under the 2048 MB ceiling alone it was SIGKILLed mid-build printing no summary, while 8192 MB completed
+it in 33.6 s. Toolchain roles therefore read `LocalContainer:ToolchainLimits`, whose unset members derive from the
+host — all logical cores, 75% of physical RAM floored at 4096 MB and capped at physical RAM, and 4096 tasks — and
+whose overrides are floored by `LocalContainerOptionsValidator` (memory 1024 MB, PIDs 256) because on Linux these
+become `MemoryMax` with swap denied and a thread-counting `TasksMax`, where a too-small ceiling kills every attempt
+rather than bounding it. The Process
 sandbox and Agent Home are application-level path, byte, environment, and lifecycle controls; neither is an OS
 security boundary. Do not describe the selected folder as a kernel-enforced filesystem allow-list.
 
@@ -629,9 +636,11 @@ Development Mode on any Linux host with a working bubblewrap chain, which was fa
 (not requested by the role, versus requested and unavailable with the measured probe reason). The Resource-limits
 column follows the same rule for the same reason: `SandboxCreateRequest.ResourceLimits` is a preference a backend may
 drop, `SandboxLifecycleRegistry.BuildLaunchPolicy` applies a scope ceiling only when the request carries one, and
-`SandboxRequirements.RequestsResourceLimits` is where each workload states whether it asks —
-`SandboxSubstrateSelectionArchitectureTests` asserts exactly one does, and each create site's own test asserts its
-request agrees with its constant.
+`SandboxRequirements.Ceilings` is where each workload states WHICH profile it asks for —
+`SandboxCeilingProfile.ComputeTool` for `run_python`'s tight script-sized numbers, `HostToolchain` for every role that
+runs a real compiler. `SandboxSubstrateSelectionArchitectureTests` asserts every declaration names a profile, that
+exactly one is on the compute profile, and that `SandboxResourceCeilings.Resolve` hands each declaration exactly that
+profile's numbers; each create site's own test asserts its request agrees with its constant.
 
 Two consequences a security reader should hold on to.
 

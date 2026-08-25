@@ -27,4 +27,26 @@ public sealed class SandboxOptions
     ///     DI. Null/blank means "unset" — fail-loud in Production, deterministic fake otherwise.
     /// </summary>
     public string? Provider { get; set; }
+
+    /// <summary>
+    ///     Whether the AgentHome, Coder and work-session sandboxes may run at all on a backend that cannot deny egress.
+    ///     Off by default, which is the 2026-08-25 operator ruling's Option B: these roles ask for
+    ///     <see cref="SandboxNetworkPolicy.None" /> wherever the backend advertises it and keep running where it cannot
+    ///     be enforced, with the served posture visible in the isolation table the Development capability surface
+    ///     reports.
+    ///     <para>
+    ///         Setting it makes denial a PRECONDITION (Option A): a node whose backend does not advertise network
+    ///         confinement — Windows, or a Linux host whose user-namespace probe failed — refuses to prepare the sandbox
+    ///         with <see cref="SandboxCapabilityNotSupportedException" /> naming this key, instead of serving one with
+    ///         the host's network. <see cref="SandboxEgressPolicy" /> is the single decision site;
+    ///         <see cref="DevelopmentSandboxOptions.RequireEgressDenial" /> is the same switch for Development Mode, and
+    ///         the two are separate for the reason the two <c>Provider</c> keys are.
+    ///     </para>
+    ///     <para>
+    ///         Operator configuration, deliberately not a stored node setting an API caller or a model can write: it can
+    ///         only ever TIGHTEN what runs on this node, and a tightening switch something inside the node could clear
+    ///         would not be one.
+    ///     </para>
+    /// </summary>
+    public bool RequireEgressDenial { get; set; }
 }

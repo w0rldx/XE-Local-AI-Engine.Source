@@ -28191,6 +28191,9 @@
           "networkIsolation": {
             "type": "boolean"
           },
+          "networkIsolationRequired": {
+            "type": "boolean"
+          },
           "resourceLimits": {
             "type": "boolean"
           },

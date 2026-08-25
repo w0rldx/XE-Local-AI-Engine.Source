@@ -35,9 +35,11 @@ public static class SandboxWorkloads
         Toolchain = SandboxToolchainSource.HostToolchain,
         IsolationFloor = SandboxIsolationMode.None,
         NetworkFloor = SandboxNetworkPolicy.Unrestricted,
-        // AgentHome passes no SandboxCreateRequest.ResourceLimits, so nothing bounds CPU, memory or process count for
-        // its runs beyond the command timeout and the machine.
-        RequestsResourceLimits = false,
+        // The host-toolchain ceilings (LocalContainer:ToolchainLimits), wherever the backend advertises
+        // SupportsResourceLimits. AgentHome runs model-directed host commands including a real `dotnet`, so it needs a
+        // build-sized ceiling, not run_python's script-sized one — and it needs one at all, because otherwise a runaway
+        // command costs a timeout's worth of the whole machine.
+        Ceilings = SandboxCeilingProfile.HostToolchain,
         Persistence = SandboxPersistence.Disposable
     };
 
@@ -78,10 +80,10 @@ public static class SandboxWorkloads
         Toolchain = SandboxToolchainSource.HostToolchain,
         IsolationFloor = SandboxIsolationMode.Filesystem,
         NetworkFloor = SandboxNetworkPolicy.None,
-        // The one workload that asks. ComputeToolGateway.BuildCreateRequest passes Compute's configured CpuCount,
-        // MemoryMb and PidsLimit wherever the backend advertises SupportsResourceLimits — a script is arbitrary
-        // model-supplied code, so a runaway loop must cost a bounded amount of the machine.
-        RequestsResourceLimits = true,
+        // The one workload on Compute's own, deliberately tight numbers: a script is arbitrary model-supplied code
+        // that runs for a second or two, so a runaway loop must cost very little. The toolchain roles are on a separate
+        // and much larger set — see SandboxCeilingProfile for why one set could not serve both.
+        Ceilings = SandboxCeilingProfile.ComputeTool,
         Persistence = SandboxPersistence.Disposable
     };
 
@@ -115,10 +117,12 @@ public static class SandboxWorkloads
         Toolchain = SandboxToolchainSource.HostToolchain,
         IsolationFloor = SandboxIsolationMode.Filesystem,
         NetworkFloor = SandboxNetworkPolicy.None,
-        // No ceilings today, and stated rather than left implicit because the isolation summary reports it: an MCP
-        // server is a long-lived process the operator chose to run, not a model-supplied script, so the run_python
-        // argument for bounding CPU and memory does not carry over unchanged. Starting to ask is an operator decision.
-        RequestsResourceLimits = false,
+        // The host-toolchain ceilings, not run_python's: an MCP server is a long-lived host-toolchain child, and it is
+        // the one workload here running a program the OPERATOR installed from a README rather than a fixed binary the
+        // engine chose. That is the same reason it declares a filesystem floor — a runaway or hostile server should
+        // cost a bounded amount of the machine, and the toolchain profile is generous enough that no legitimate server
+        // notices it. run_python's script-sized set would strangle a language server on its first index.
+        Ceilings = SandboxCeilingProfile.HostToolchain,
         Persistence = SandboxPersistence.Disposable
     };
 
@@ -148,11 +152,10 @@ public static class SandboxWorkloads
         Toolchain = SandboxToolchainSource.HostToolchain,
         IsolationFloor = SandboxIsolationMode.None,
         NetworkFloor = SandboxNetworkPolicy.Unrestricted,
-        // DevelopmentWorkspaceProvider passes no ResourceLimits on either sandbox it creates, so a repository's own
-        // build, test or lint command is bounded only by its timeout and the machine. Stated here rather than left
-        // implicit because the isolation summary reports it, and an operator reading "Resource limits: Yes" off the
-        // host's capability would believe a ceiling exists. Changing this is an operator decision, not a mapping fix.
-        RequestsResourceLimits = false,
+        // BOTH sandboxes DevelopmentWorkspaceProvider creates ask for the host-toolchain ceilings wherever the backend
+        // advertises them. This is the role whose measurement produced the two-profile split: under run_python's
+        // numbers a real `dotnet build` does not merely run slowly, it fails — see SandboxToolchainLimits.
+        Ceilings = SandboxCeilingProfile.HostToolchain,
         Persistence = SandboxPersistence.PreservedTrustedHostWorkspace
     };
 

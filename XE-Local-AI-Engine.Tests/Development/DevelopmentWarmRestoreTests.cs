@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -64,13 +65,15 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
         AssertEx.NotEqual(warm.AttachKey, agentFacing.AttachKey);
         AssertEx.Equal(SandboxNetworkPolicy.Unrestricted, warm.NetworkPolicy);
 
-        // The ceilings axis, asserted against the DECLARATION rather than against a literal, so the two cannot drift.
-        // SandboxCreateRequest.ResourceLimits is a preference a backend may drop and one that is never asked applies
-        // none, so this is what the Development row's "Resource limits" column reports as served
-        // (DevelopmentContractMapper.ToIsolationSummary). Starting to ask is an operator decision; moving the constant
-        // without moving this line, or the reverse, is a bug.
-        AssertEx.Equal(SandboxWorkloads.DevelopmentModeHostToolchain.RequestsResourceLimits, warm.ResourceLimits is not null);
-        AssertEx.Equal(SandboxWorkloads.DevelopmentModeHostToolchain.RequestsResourceLimits, agentFacing.ResourceLimits is not null);
+        // The ceilings axis, asserted through the SHARED derivation rather than against a literal, so a create site
+        // cannot disagree with its declaration or with the node's numbers. Both sandboxes are asserted: the warm one
+        // runs the repository's own restore and is exactly as capable of a runaway as the attempt.
+        var expectedCeilings = SandboxResourceCeilings.Resolve(SandboxWorkloads.DevelopmentModeHostToolchain,
+            sandbox.Capabilities,
+            new ComputeOptions(),
+            new LocalContainerOptions());
+        AssertEx.Equal(expectedCeilings, warm.ResourceLimits);
+        AssertEx.Equal(expectedCeilings, agentFacing.ResourceLimits);
 
         // The same mount set, or the warm writes its cache somewhere the attempt cannot read.
         AssertEx.Equal(string.Join('|', (agentFacing.Mounts ?? []).Select(static mount => mount.HostPath + "=>" + mount.SandboxPath)),

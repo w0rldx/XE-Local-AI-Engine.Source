@@ -57,8 +57,58 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, SandboxWorkloads.AgentHome.Workload);
         AssertEx.False(summary.FilesystemIsolationUnavailableReason?.Contains(Reason, StringComparison.Ordinal) == true);
 
-        // Same rule on the ceilings axis: AgentHome asks for none, so that is what its "No" means.
-        AssertEx.Contains(summary.ResourceLimitsUnavailableReason, "not requested by this role");
+        // The ceilings axis reads the other way round now that every executing role asks: AgentHome DOES request
+        // them, so its "No" here is the host's, and the sentence is the measured probe reason rather than
+        // "not requested". Telling those two apart is the whole point of the pair.
+        AssertEx.True(SandboxWorkloads.AgentHome.RequestsResourceLimits);
+        AssertEx.False(summary.ResourceLimitsUnavailableReason?.Contains("not requested by this role", StringComparison.Ordinal) == true);
+        AssertEx.Contains(summary.ResourceLimitsUnavailableReason, "did not advertise resource ceilings");
+
+        // Egress is neither served nor required on this node: the switch is off, so denial is a best-effort
+        // tightening the host cannot honour, not a precondition that would refuse the run.
+        AssertEx.False(summary.NetworkIsolationRequired);
+    }
+
+    /// <summary>
+    ///     The <c>RequireEgressDenial</c> switch is what the panel renders as "required" rather than "where available",
+    ///     and it changes NOTHING else about the row — the served columns still report what the host can do. On this
+    ///     host that combination (required and not served) is exactly the node whose AgentHome runs will refuse to
+    ///     prepare, which is the state an operator most needs to be able to read off the table.
+    /// </summary>
+    [Test]
+    public void ToIsolationSummary_WhenTheNodeRequiresEgressDenial_ReportsItAsRequiredEvenWhereUnserved()
+    {
+        var containment = SandboxContainment.None;
+        using var provider = CreateProcessProvider(containment);
+
+        var served = DevelopmentContractMapper.ToIsolationSummary("agent-home",
+            SandboxWorkloads.AgentHome,
+            provider,
+            containment,
+            nodeRequiresEgressDenial: true);
+
+        AssertEx.True(served.NetworkIsolationRequired);
+        AssertEx.False(served.NetworkIsolation);
+    }
+
+    /// <summary>
+    ///     <c>run_python</c> needs no switch: its own declaration will not accept egress, so denial is a precondition
+    ///     for it on every node. Derived from <see cref="SandboxRequirements.NetworkFloor" /> rather than restated, so
+    ///     a role that stops declaring the floor stops being reported as requiring it.
+    /// </summary>
+    [Test]
+    public void ToIsolationSummary_ForRunPython_ReportsEgressDenialRequiredWithoutTheSwitch()
+    {
+        var containment = FullyContainedHost();
+        using var provider = CreateProcessProvider(containment);
+
+        var summary = DevelopmentContractMapper.ToIsolationSummary("run_python",
+            SandboxWorkloads.RunPython,
+            provider,
+            containment);
+
+        AssertEx.True(summary.NetworkIsolationRequired);
+        AssertEx.False(SandboxWorkloads.AgentHome.NetworkFloor == SandboxWorkloads.RunPython.NetworkFloor);
     }
 
     /// <summary>
@@ -86,11 +136,12 @@ public sealed class SandboxIsolationSummaryTests
     }
 
     [Test]
-    public void ToIsolationSummary_ForMcpStdioOnAFullyContainedHost_ReportsIsolatedButUnbounded()
+    public void ToIsolationSummary_ForMcpStdioOnAFullyContainedHost_ReportsIsolatedAndBounded()
     {
-        // A Sandboxed stdio MCP server declares the same filesystem floor run_python does, so its boundary is the same
-        // — but it asks for NO ceilings, and the panel has to say so rather than reading them off a host that could
-        // impose them. Same provider, same host, same call as the run_python case: only the declaration differs.
+        // A Sandboxed stdio MCP server declares the same filesystem floor run_python does, so its boundary is the
+        // same — and since the 2026-08-25 ceilings ruling it is bounded too, on the HOST-TOOLCHAIN profile rather than
+        // run_python's: it is a long-lived operator-installed program, so it needs a build-sized ceiling, not a
+        // script-sized one that would strangle a language server on its first index.
         var containment = FullyContainedHost();
         using var provider = CreateProcessProvider(containment);
 
@@ -105,9 +156,13 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.True(summary.NetworkIsolation);
         AssertEx.Null(summary.FilesystemIsolationUnavailableReason);
 
-        AssertEx.False(summary.ResourceLimits, "an MCP server is given no CPU, memory or process-count ceiling.");
-        AssertEx.Contains(summary.ResourceLimitsUnavailableReason, "not requested by this role");
-        AssertEx.Contains(summary.ResourceLimitsUnavailableReason, SandboxWorkloads.McpStdio.Workload);
+        AssertEx.Equal(SandboxCeilingProfile.HostToolchain, SandboxWorkloads.McpStdio.Ceilings);
+        AssertEx.True(summary.ResourceLimits);
+        AssertEx.Null(summary.ResourceLimitsUnavailableReason);
+
+        // Denial is a precondition here without any node switch: the declaration's own network floor refuses egress,
+        // which is what the panel renders as "required" rather than "where available".
+        AssertEx.True(summary.NetworkIsolationRequired);
     }
 
     [Test]
@@ -160,11 +215,14 @@ public sealed class SandboxIsolationSummaryTests
         // wherever the flag is advertised, which is what that column reports.
         AssertEx.True(summary.NetworkIsolation);
 
-        // Ceilings are NOT, on the same host that can impose them: DevelopmentWorkspaceProvider passes no
-        // SandboxCreateRequest.ResourceLimits on either sandbox it creates, so nothing bounds a repository's build.
-        AssertEx.False(summary.ResourceLimits);
-        AssertEx.Contains(summary.ResourceLimitsUnavailableReason, "not requested by this role");
-        AssertEx.Contains(summary.ResourceLimitsUnavailableReason, "bounded only by its timeout and the machine");
+        // Ceilings ARE served now: both sandboxes DevelopmentWorkspaceProvider creates ask for the node's numbers
+        // through SandboxResourceCeilings, and this host can impose them. The row therefore carries no reason at all,
+        // which is the only state that means "actually bounded".
+        AssertEx.True(summary.ResourceLimits);
+        AssertEx.Null(summary.ResourceLimitsUnavailableReason);
+
+        // Denial is served but not REQUIRED with the switch off — the distinction the panel spells out.
+        AssertEx.False(summary.NetworkIsolationRequired);
 
         AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, "not requested by this role");
         AssertEx.Contains(summary.FilesystemIsolationUnavailableReason,
@@ -241,10 +299,11 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.True(summary.NetworkIsolation);
         AssertEx.True(summary.ReadOnlyMounts);
 
-        // The container can impose ceilings and Development Mode asks for none, so this column is No there too — the
-        // served rule does not change when the backend gets stronger.
-        AssertEx.False(summary.ResourceLimits);
-        AssertEx.Contains(summary.ResourceLimitsUnavailableReason, "not requested by this role");
+        // The container can impose ceilings and Development Mode asks for them, so this column is Yes here — and it
+        // is the intersection that decides, not the backend's strength alone: hand the same declaration a backend
+        // without the flag and it reads No with the host's reason.
+        AssertEx.True(summary.ResourceLimits);
+        AssertEx.Null(summary.ResourceLimitsUnavailableReason);
 
         // The container HAS the property, and the Development declaration still does not ask for it — so the served
         // posture is Confined with the not-requested reason, not Isolated. The role is what changed, not the backend:

@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 SCRIPT = Path(__file__).parents[1] / "generate_backend_license_corpus.py"
+REPOSITORY_ROOT = Path(__file__).parents[3]
 sys.path.insert(0, str(SCRIPT.parent))
 SPEC = importlib.util.spec_from_file_location("generate_backend_license_corpus", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None
@@ -90,6 +91,12 @@ class BackendLicenseCorpusTests(unittest.TestCase):
             text_path = upstream / filename
             text_path.write_text(contents, encoding="utf-8")
             self.write_provenance(upstream / f"{filename}.source.txt", text_path)
+        assets = self.license_root / "assets"
+        assets.mkdir()
+        for source_path, _ in (asset["notice"] for asset in MODULE.EMBEDDED_ASSETS):
+            text_path = self.license_root / source_path
+            text_path.write_text(f"synthetic {source_path.name}\n", encoding="utf-8")
+            self.write_provenance(self.license_root / f"{source_path.as_posix()}.source.txt", text_path)
         self.manifest = self.write_json(
             "dotnet-tools.json",
             {"tools": {"nuget-license": {"version": "4.0.14", "commands": ["nuget-license"]}}},
@@ -366,6 +373,67 @@ class BackendLicenseCorpusTests(unittest.TestCase):
         (self.license_root / "nuget/standard/MIT.txt").write_text("tampered\n")
         with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
             self.generate(baseline, output_name="tampered")
+
+    def test_lists_embedded_non_nuget_assets_with_their_terms_and_provenance(self) -> None:
+        """The corpus is generated from NuGet metadata, so an asset vendored into our own source is invisible to it.
+
+        Nothing here is discoverable: if this stops being emitted, the payload ships a third-party file with no
+        attribution and every other check still passes.
+        """
+        output = self.generate([package("Alpha", "1.0.0"), package("Zeta", "2.0.0")], output_name="assets")
+        payload = json.loads((output / "backend-components.json").read_text())
+
+        self.assertEqual(len(MODULE.EMBEDDED_ASSETS), len(payload["embeddedAssets"]))
+        seccomp = next(entry for entry in payload["embeddedAssets"] if "seccomp" in entry["name"])
+        self.assertEqual("Apache-2.0", seccomp["licenseExpression"])
+        self.assertEqual("seccomp/v0.2.3", seccomp["version"])
+        self.assertEqual("836ae4d37ef2ec995c77c99fc55f5b5f3af3a897", seccomp["sourceCommit"])
+        self.assertEqual(
+            "536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74",
+            seccomp["sha256"],
+        )
+        self.assertEqual({"license", "notice"}, {term["role"] for term in seccomp["licenseFiles"]})
+
+        # Every listed term is really in the payload, at the stated path and the stated hash.
+        for term in seccomp["licenseFiles"]:
+            copied = output / term["path"]
+            self.assertTrue(copied.is_file(), term["path"])
+            self.assertEqual(term["sha256"], hashlib.sha256(copied.read_bytes()).hexdigest())
+
+        notices = (output / "THIRD-PARTY-NOTICES.md").read_text()
+        self.assertIn("Embedded third-party assets", notices)
+        self.assertIn("836ae4d37ef2ec995c77c99fc55f5b5f3af3a897", notices)
+        self.assertIn("536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74", notices)
+
+    def test_embedded_asset_attribution_matches_the_bytes_checked_into_this_repository(self) -> None:
+        """The half that makes the attribution honest rather than merely present.
+
+        Run against the REAL third-party tree and the REAL source tree: the curated notice must match its own
+        provenance hash, and the vendored file must still hash to what the attribution claims. Copy a newer upstream
+        profile in without updating the notice and this fails, which is the only way a stated commit and SHA-256 can
+        be kept from describing a file that no longer exists.
+        """
+        with tempfile.TemporaryDirectory() as staging:
+            assets = MODULE.build_embedded_assets(REPOSITORY_ROOT / "third-party", REPOSITORY_ROOT, Path(staging))
+
+        self.assertEqual(len(MODULE.EMBEDDED_ASSETS), len(assets))
+        for asset in MODULE.EMBEDDED_ASSETS:
+            vendored = REPOSITORY_ROOT / asset["repositoryPath"]
+            self.assertTrue(vendored.is_file(), asset["repositoryPath"])
+            self.assertEqual(asset["sha256"], hashlib.sha256(vendored.read_bytes()).hexdigest())
+
+    def test_fails_closed_when_an_embedded_asset_no_longer_matches_its_attribution(self) -> None:
+        asset = MODULE.EMBEDDED_ASSETS[0]
+        with tempfile.TemporaryDirectory() as fake_repository, tempfile.TemporaryDirectory() as staging:
+            vendored = Path(fake_repository) / asset["repositoryPath"]
+            vendored.parent.mkdir(parents=True, exist_ok=True)
+            vendored.write_bytes(b"a newer upstream profile nobody re-attributed\n")
+            with self.assertRaisesRegex(ValueError, "attribution claims"):
+                MODULE.build_embedded_assets(self.license_root, Path(fake_repository), Path(staging))
+
+            vendored.unlink()
+            with self.assertRaisesRegex(ValueError, "missing from the source tree"):
+                MODULE.build_embedded_assets(self.license_root, Path(fake_repository), Path(staging))
 
 
 if __name__ == "__main__":

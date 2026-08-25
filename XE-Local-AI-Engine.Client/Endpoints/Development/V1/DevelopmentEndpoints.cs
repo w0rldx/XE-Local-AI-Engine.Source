@@ -36,6 +36,8 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 /// </summary>
 public sealed class GetDevelopmentCapabilityEndpoint(
     IOptions<DevelopmentOptions> options,
+    IOptions<SandboxOptions> agentSandboxOptions,
+    IOptions<DevelopmentSandboxOptions> developmentSandboxOptions,
     IDevelopmentSandboxRuntimeProvider sandboxRuntimeProvider,
     IAgentSandboxRuntimeProvider agentSandboxRuntimeProvider,
     IWorkSessionSandboxRuntimeProvider workSessionSandboxRuntimeProvider,
@@ -43,6 +45,8 @@ public sealed class GetDevelopmentCapabilityEndpoint(
     IDockerDaemonPreflightService dockerDaemonPreflight) : EndpointWithoutRequest<DevelopmentCapabilityResponse>
 {
     private readonly IOptions<DevelopmentOptions> _options = options ?? throw new ArgumentNullException(nameof(options));
+    private readonly IOptions<SandboxOptions> _agentSandboxOptions = agentSandboxOptions ?? throw new ArgumentNullException(nameof(agentSandboxOptions));
+    private readonly IOptions<DevelopmentSandboxOptions> _developmentSandboxOptions = developmentSandboxOptions ?? throw new ArgumentNullException(nameof(developmentSandboxOptions));
     private readonly IDevelopmentSandboxRuntimeProvider _sandboxRuntimeProvider = sandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(sandboxRuntimeProvider));
     private readonly IAgentSandboxRuntimeProvider _agentSandboxRuntimeProvider = agentSandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(agentSandboxRuntimeProvider));
     private readonly IWorkSessionSandboxRuntimeProvider _workSessionSandboxRuntimeProvider = workSessionSandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(workSessionSandboxRuntimeProvider));
@@ -80,10 +84,14 @@ public sealed class GetDevelopmentCapabilityEndpoint(
     private IReadOnlyList<SandboxIsolationSummaryResponse> BuildIsolationSummary()
     {
         var containment = _containmentProbe.Containment;
+        // Each role reads the switch of the section that CONSTRAINS it, which is the same split the provider keys
+        // already have: Development Mode has its own, and AgentHome / run_python / work sessions share AgentHome's.
+        var agentRequiresDenial = _agentSandboxOptions.Value.RequireEgressDenial;
+        var developmentRequiresDenial = _developmentSandboxOptions.Value.RequireEgressDenial;
 
         return
         [
-            DevelopmentContractMapper.ToIsolationSummary("agent-home", SandboxWorkloads.AgentHome, _agentSandboxRuntimeProvider, containment),
+            DevelopmentContractMapper.ToIsolationSummary("agent-home", SandboxWorkloads.AgentHome, _agentSandboxRuntimeProvider, containment, agentRequiresDenial),
             // run_python shares AgentHome's provider instance ON PURPOSE (ComputeToolGateway injects
             // IAgentSandboxRuntimeProvider), and is still a row of its own: it is the ONE workload in this engine that
             // declares SandboxIsolationMode.Filesystem, so on a host with a working bubblewrap chain its posture is
@@ -91,21 +99,21 @@ public sealed class GetDevelopmentCapabilityEndpoint(
             // stronger role's boundary for the weaker one or the weaker one's for the stronger. Reported whether or not
             // Compute:Enabled is set: this table answers "what would this role be served here", which is exactly the
             // question an operator asks before turning the tool on.
-            DevelopmentContractMapper.ToIsolationSummary("run_python", SandboxWorkloads.RunPython, _agentSandboxRuntimeProvider, containment),
+            DevelopmentContractMapper.ToIsolationSummary("run_python", SandboxWorkloads.RunPython, _agentSandboxRuntimeProvider, containment, agentRequiresDenial),
             // A Sandboxed stdio MCP server. Also served by the agent-role provider instance, and also a row of its own
             // for run_python's reason: it declares SandboxIsolationMode.Filesystem, so its served posture differs from
             // AgentHome's on the very same backend. It is the row that answers the question an operator has BEFORE
             // registering a server — on a host that cannot isolate, this row says so, and every Sandboxed registration
             // will refuse to connect rather than launching on the host. A PrivilegedHost server has no row here
             // because it declares nothing: it is not a substrate consumer, it is an explicit per-server host grant.
-            DevelopmentContractMapper.ToIsolationSummary("mcp-stdio", SandboxWorkloads.McpStdio, _agentSandboxRuntimeProvider, containment),
+            DevelopmentContractMapper.ToIsolationSummary("mcp-stdio", SandboxWorkloads.McpStdio, _agentSandboxRuntimeProvider, containment, agentRequiresDenial),
             // Either Development declaration is correct here: DevelopmentModeImageToolchain is
             // DevelopmentModeHostToolchain `with` a different workload name and toolchain source, and this projection
             // reads neither — it reads the isolation floor, which is None on both. Passing the host-toolchain constant
             // avoids re-deriving SandboxProviderSelector.ResolveDevelopment's node predicate for an answer that cannot
             // differ; the resolved PROVIDER, which does differ, is already reported from the instance itself.
-            DevelopmentContractMapper.ToIsolationSummary("development", SandboxWorkloads.DevelopmentModeHostToolchain, _sandboxRuntimeProvider, containment),
-            DevelopmentContractMapper.ToIsolationSummary("work-session", SandboxWorkloads.WorkSession, _workSessionSandboxRuntimeProvider, containment)
+            DevelopmentContractMapper.ToIsolationSummary("development", SandboxWorkloads.DevelopmentModeHostToolchain, _sandboxRuntimeProvider, containment, developmentRequiresDenial),
+            DevelopmentContractMapper.ToIsolationSummary("work-session", SandboxWorkloads.WorkSession, _workSessionSandboxRuntimeProvider, containment, agentRequiresDenial)
         ];
     }
 }

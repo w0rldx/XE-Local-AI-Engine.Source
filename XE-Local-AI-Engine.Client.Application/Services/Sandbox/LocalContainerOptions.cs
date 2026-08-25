@@ -1,10 +1,16 @@
 namespace XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
-///     Process-sandbox byte-budget configuration, bound from the <c>LocalContainer</c> section and consumed by
-///     <c>ProcessSandboxRuntimeProvider</c>. The two values cover the two directions data enters the jail, which are
-///     genuinely different controls: <see cref="MaxCopyFileBytes" /> bounds what the ENGINE copies in from the host,
-///     and <see cref="MaxJailDiskBytes" /> bounds what the sandboxed CHILD writes for itself.
+///     The node-wide sandbox ceilings, bound from the <c>LocalContainer</c> section. The byte budgets cover the two
+///     directions data enters the jail, which are genuinely different controls: <see cref="MaxCopyFileBytes" /> bounds
+///     what the ENGINE copies in from the host, and <see cref="MaxJailDiskBytes" /> bounds what the sandboxed CHILD
+///     writes for itself. <see cref="ToolchainLimits" /> bounds what it may consume while doing so.
+///     <para>
+///         This is the section a node-wide sandbox ceiling belongs in, and the reason
+///         <see cref="ToolchainLimits" /> lives here rather than in either per-feature sandbox section: AgentHome,
+///         work sessions and Development Mode all read it, and <c>AgentHome:Sandbox</c> / <c>Development:Sandbox</c>
+///         would have had to mirror it and then drift.
+///     </para>
 /// </summary>
 public sealed record LocalContainerOptions
 {
@@ -31,4 +37,12 @@ public sealed record LocalContainerOptions
     ///     </para>
     /// </summary>
     public long MaxJailDiskBytes { get; init; } = DefaultMaxJailDiskBytes;
+
+    /// <summary>
+    ///     CPU / memory / process-count ceilings for every workload that runs a real toolchain — AgentHome, Coder, work
+    ///     sessions and Development Mode. Each member is optional and each unset one is derived from this host at
+    ///     startup; see <see cref="SandboxToolchainLimits" /> for the derivation and for the measurement that made
+    ///     these separate from <c>run_python</c>'s.
+    /// </summary>
+    public SandboxToolchainLimits ToolchainLimits { get; init; } = new();
 }
