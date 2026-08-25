@@ -4,13 +4,13 @@ using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>

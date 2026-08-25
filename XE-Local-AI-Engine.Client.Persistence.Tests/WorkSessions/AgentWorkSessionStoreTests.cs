@@ -94,26 +94,26 @@ public sealed class AgentWorkSessionStoreTests
             var store = WorkSessionTestFixture.StoreFor(writeContext);
             var created = await WorkSessionTestFixture.SeedAsync(store, sessionId).ConfigureAwait(false);
             var added = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                    created.Version,
-                    Guid.NewGuid(),
-                    AgentWorkSessionTaskOrigin.Agent,
-                    [
-                        new WorkPlanTaskChange(first, WorkPlanTaskOperation.Add, Title: "Survey sources"),
-                        new WorkPlanTaskChange(second, WorkPlanTaskOperation.Add, Title: "Draft findings"),
-                        new WorkPlanTaskChange(third, WorkPlanTaskOperation.Add, Title: "Abandoned branch")
-                    ]))
-                .ConfigureAwait(false);
+                                       created.Version,
+                                       Guid.NewGuid(),
+                                       AgentWorkSessionTaskOrigin.Agent,
+                                       [
+                                           new WorkPlanTaskChange(first, WorkPlanTaskOperation.Add, Title: "Survey sources"),
+                                           new WorkPlanTaskChange(second, WorkPlanTaskOperation.Add, Title: "Draft findings"),
+                                           new WorkPlanTaskChange(third, WorkPlanTaskOperation.Add, Title: "Abandoned branch")
+                                       ]))
+                                   .ConfigureAwait(false);
 
             _ = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                    added.Version,
-                    Guid.NewGuid(),
-                    AgentWorkSessionTaskOrigin.Agent,
-                    [
-                        new WorkPlanTaskChange(first, WorkPlanTaskOperation.Complete),
-                        new WorkPlanTaskChange(second, WorkPlanTaskOperation.Update, Title: "Draft the findings section", Status: AgentWorkSessionTaskStatus.Active),
-                        new WorkPlanTaskChange(third, WorkPlanTaskOperation.Drop, BlockedReason: "Superseded by the second task.")
-                    ]))
-                .ConfigureAwait(false);
+                               added.Version,
+                               Guid.NewGuid(),
+                               AgentWorkSessionTaskOrigin.Agent,
+                               [
+                                   new WorkPlanTaskChange(first, WorkPlanTaskOperation.Complete),
+                                   new WorkPlanTaskChange(second, WorkPlanTaskOperation.Update, Title: "Draft the findings section", Status: AgentWorkSessionTaskStatus.Active),
+                                   new WorkPlanTaskChange(third, WorkPlanTaskOperation.Drop, BlockedReason: "Superseded by the second task.")
+                               ]))
+                           .ConfigureAwait(false);
         }
 
         await using (var readContext = fixture.CreateContext())
@@ -167,29 +167,29 @@ public sealed class AgentWorkSessionStoreTests
             var store = WorkSessionTestFixture.StoreFor(writeContext);
             var created = await WorkSessionTestFixture.SeedAsync(store, sessionId).ConfigureAwait(false);
             var withFirst = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                    firstFinding,
-                    created.Version,
-                    Guid.NewGuid(),
-                    AgentWorkSessionFindingKind.Finding,
-                    text,
-                    SourceRef: "kb://doc/1"))
-                .ConfigureAwait(false);
+                                           firstFinding,
+                                           created.Version,
+                                           Guid.NewGuid(),
+                                           AgentWorkSessionFindingKind.Finding,
+                                           text,
+                                           SourceRef: "kb://doc/1"))
+                                       .ConfigureAwait(false);
             var withSecond = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                    secondFinding,
-                    withFirst.Version,
-                    Guid.NewGuid(),
-                    AgentWorkSessionFindingKind.Decision,
-                    "Chose the newer source.",
-                    SupersedesFindingId: firstFinding))
-                .ConfigureAwait(false);
+                                            secondFinding,
+                                            withFirst.Version,
+                                            Guid.NewGuid(),
+                                            AgentWorkSessionFindingKind.Decision,
+                                            "Chose the newer source.",
+                                            SupersedesFindingId: firstFinding))
+                                        .ConfigureAwait(false);
             _ = await store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand(sessionId,
-                    checkpointId,
-                    withSecond.Version,
-                    Guid.NewGuid(),
-                    Step: 0,
-                    Summary: null,
-                    state))
-                .ConfigureAwait(false);
+                               checkpointId,
+                               withSecond.Version,
+                               Guid.NewGuid(),
+                               Step: 0,
+                               Summary: null,
+                               state))
+                           .ConfigureAwait(false);
         }
 
         await using (var readContext = fixture.CreateContext())

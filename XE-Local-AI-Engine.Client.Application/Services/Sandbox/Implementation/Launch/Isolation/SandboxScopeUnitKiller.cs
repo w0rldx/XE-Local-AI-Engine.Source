@@ -182,7 +182,12 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
             return durations;
         }
 
-        var arguments = new List<string>(unitNames.Count + 3) { "show", "--property=Id", "--property=ActiveEnterTimestampMonotonic" };
+        var arguments = new List<string>(unitNames.Count + 3)
+        {
+            "show",
+            "--property=Id",
+            "--property=ActiveEnterTimestampMonotonic"
+        };
         arguments.AddRange(unitNames);
 
         using var process = TryStart(arguments);

@@ -9,7 +9,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>
 ///     Everything one step needs to know about its session, loaded once.
 /// </summary>
-internal sealed record WorkSessionState(AgentWorkSessionSnapshot Session,
+internal sealed record WorkSessionState(
+    AgentWorkSessionSnapshot Session,
     IReadOnlyList<WorkSessionTaskSnapshot> Tasks,
     IReadOnlyList<WorkSessionFindingSnapshot> Findings,
     IReadOnlyList<WorkSessionArtifactSnapshot> Artifacts,

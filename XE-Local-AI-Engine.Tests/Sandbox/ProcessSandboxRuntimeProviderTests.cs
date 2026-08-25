@@ -936,7 +936,10 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         }
 
         using var provider = CreateProvider(maxJailDiskBytes: 512L * 1024 * 1024);
-        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 4L * 1024 * 1024 });
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with
+        {
+            MaxJailDiskBytes = 4L * 1024 * 1024
+        });
 
         var result = await provider.ExecuteAsync(handle, FillJailCommand("disk-tighten"));
 
@@ -959,7 +962,10 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         }
 
         using var provider = CreateProvider(maxJailDiskBytes: 4L * 1024 * 1024);
-        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 8L * 1024 * 1024 * 1024 });
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with
+        {
+            MaxJailDiskBytes = 8L * 1024 * 1024 * 1024
+        });
 
         var result = await provider.ExecuteAsync(handle, FillJailCommand("disk-loosen"));
 
@@ -1049,7 +1055,10 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         }
 
         using var provider = CreateProvider(maxJailDiskBytes: 0);
-        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 1L * 1024 * 1024 });
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with
+        {
+            MaxJailDiskBytes = 1L * 1024 * 1024
+        });
 
         // Well past the 1 MiB the sandbox asked for, and running long enough for several watchdog ticks to have fired.
         var result = await provider.ExecuteAsync(handle,
@@ -1073,14 +1082,20 @@ public sealed class ProcessSandboxRuntimeProviderTests : IDisposable
         }
 
         using var provider = CreateProvider(maxJailDiskBytes: 512L * 1024 * 1024);
-        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 32L * 1024 * 1024 });
+        var handle = await provider.CreateOrAttachAsync(CreateRequest(Key()) with
+        {
+            MaxJailDiskBytes = 32L * 1024 * 1024
+        });
 
         var running = provider.ExecuteAsync(handle,
             JailShellCommand("disk-snapshot", "dd if=/dev/zero of=fill.bin bs=1M count=8 2>/dev/null; sleep 5"));
 
         // Long enough for the command to be well inside its run, short enough that several watchdog ticks still follow.
         await Task.Delay(TimeSpan.FromMilliseconds(500));
-        _ = await provider.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 1L * 1024 * 1024 });
+        _ = await provider.CreateOrAttachAsync(CreateRequest(Key()) with
+        {
+            MaxJailDiskBytes = 1L * 1024 * 1024
+        });
 
         var result = await running;
         AssertEx.True(result.Completed, "a command already running must be judged by the ceiling it started under");

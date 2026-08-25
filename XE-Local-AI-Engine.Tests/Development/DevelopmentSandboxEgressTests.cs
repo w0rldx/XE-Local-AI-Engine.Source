@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Diagnostics;
+using System.Net.Sockets;
 using System.Text;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -247,12 +248,12 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
     {
         try
         {
-            using var client = new System.Net.Sockets.TcpClient();
+            using var client = new TcpClient();
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(8));
             await client.ConnectAsync("api.nuget.org", 443, timeout.Token).ConfigureAwait(false);
             return true;
         }
-        catch (Exception exception) when (exception is System.Net.Sockets.SocketException or OperationCanceledException)
+        catch (Exception exception) when (exception is SocketException or OperationCanceledException)
         {
             return false;
         }
@@ -378,12 +379,12 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
                 RequireEgressDenial = requireEgressDenial
             }));
         return await provider.PrepareAsync(snapshot,
-                new DevelopmentRepositoryBinding(snapshot.ProjectId,
-                    snapshot.SelectedFolderId!.Value,
-                    "repository",
-                    repository,
-                    identity))
-            .ConfigureAwait(false);
+                                 new DevelopmentRepositoryBinding(snapshot.ProjectId,
+                                     snapshot.SelectedFolderId!.Value,
+                                     "repository",
+                                     repository,
+                                     identity))
+                             .ConfigureAwait(false);
     }
 
     private static async Task CloneDetachedAsync(string repository, string worktree)

@@ -6,8 +6,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
-using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
@@ -980,8 +980,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             {
                 if (run.IsFaulted)
                 {
-                    throw new InvalidOperationException(
-                        $"A run faulted before {count} command(s) were in flight.",
+                    throw new InvalidOperationException($"A run faulted before {count} command(s) were in flight.",
                         run.Exception);
                 }
             }
@@ -1098,7 +1097,8 @@ public sealed class AgentHomeServiceTests : IDisposable
     ///     The fake, with the two capability flags this file's posture tests need under the test's control. Wrapping
     ///     rather than reimplementing keeps every other behaviour the production fake's.
     /// </summary>
-    private sealed class CapabilityOverridingProvider(FakeSandboxRuntimeProvider inner,
+    private sealed class CapabilityOverridingProvider(
+        FakeSandboxRuntimeProvider inner,
         bool canDenyEgress,
         bool canLimitResources = false) : IAgentSandboxRuntimeProvider
     {

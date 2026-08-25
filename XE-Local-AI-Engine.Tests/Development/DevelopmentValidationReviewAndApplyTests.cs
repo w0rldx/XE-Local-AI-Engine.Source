@@ -626,7 +626,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         // short-lived warm restore.
         AssertEx.NotEmpty(_sandboxCreates.Where(static request => request.RuntimeProfile == "development-warm"));
         AssertEx.Empty(_sandboxCreates.Where(static request => request.RuntimeProfile == "development-warm"
-                                                              && request.NetworkPolicy != SandboxNetworkPolicy.Unrestricted));
+                                                               && request.NetworkPolicy != SandboxNetworkPolicy.Unrestricted));
 
         var agentFacing = _sandboxCreates.Where(static request => request.RuntimeProfile == "development-local").ToArray();
         AssertEx.NotEmpty(agentFacing);

@@ -20,7 +20,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         the card looks like from the supervisor's side.
 ///     </para>
 /// </summary>
-internal sealed record StepScript(IReadOnlyList<string> EventTypes,
+internal sealed record StepScript(
+    IReadOnlyList<string> EventTypes,
     Func<IServiceProvider, Guid, Task>? DuringTurn = null,
     bool Park = false,
     bool ParkThenContinue = false,
@@ -69,7 +70,8 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
     }
 
     private async IAsyncEnumerable<ChatStreamEvent> SendCoreAsync(NodeChatStreamRequest request,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        [EnumeratorCancellation]
+        CancellationToken cancellationToken = default)
     {
         lock (_recordGate)
         {
@@ -247,8 +249,7 @@ internal static class WorkSessionTestSupport
             }
 
             await Task.Delay(25).ConfigureAwait(false);
-        }
-        while (DateTimeOffset.UtcNow < deadline);
+        } while (DateTimeOffset.UtcNow < deadline);
 
         throw new AssertionException($"Work session {sessionId} was {session.Status}, not {expected}, before the timeout.");
     }

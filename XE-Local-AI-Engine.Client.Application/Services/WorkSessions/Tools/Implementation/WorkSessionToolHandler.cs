@@ -194,8 +194,7 @@ internal abstract class WorkSessionToolHandler<TRequest> : IClientLocalToolHandl
         CancellationToken cancellationToken);
 
     /// <summary>The sentence handed back when the arguments would not read as this tool's shape.</summary>
-    protected string InvalidArguments =>
-        $"{ToolName} arguments were not valid JSON for this tool. Send exactly this shape and no other keys: {ExampleArguments}";
+    protected string InvalidArguments => $"{ToolName} arguments were not valid JSON for this tool. Send exactly this shape and no other keys: {ExampleArguments}";
 
     protected string Exceeded(string argumentName, int maximumLength) =>
         $"{ToolName} argument '{argumentName}' exceeded the maximum length of {maximumLength} characters.";

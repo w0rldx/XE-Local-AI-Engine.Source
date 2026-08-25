@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
+using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -7,7 +8,6 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
-using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
@@ -245,14 +245,14 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
             TimeProvider.System,
             store);
         var session = await provider.PrepareAsync(snapshot,
-                new DevelopmentRepositoryBinding(snapshot.ProjectId, snapshot.SelectedFolderId!.Value, "repository", repository, identity))
-            .ConfigureAwait(false);
+                                        new DevelopmentRepositoryBinding(snapshot.ProjectId, snapshot.SelectedFolderId!.Value, "repository", repository, identity))
+                                    .ConfigureAwait(false);
         return (session, store);
     }
 
     private static async Task<string> ReadGitOutputAsync(string workingDirectory, params string[] arguments)
     {
-        var startInfo = new System.Diagnostics.ProcessStartInfo
+        var startInfo = new ProcessStartInfo
         {
             FileName = "git",
             WorkingDirectory = workingDirectory,
@@ -265,7 +265,7 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
             startInfo.ArgumentList.Add(argument);
         }
 
-        using var process = new System.Diagnostics.Process
+        using var process = new Process
         {
             StartInfo = startInfo
         };

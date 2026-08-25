@@ -75,7 +75,10 @@ public sealed class SandboxIsolatedChainTests
     [Test]
     public async Task Render_OmitsTheThreadPinning_ForNoLegacyRoot_AndAlwaysPinsEveryThreadVariable()
     {
-        var chain = SandboxIsolatedChain.Render(UsrMergedInputs() with { ThreadLimit = 4 }, "/bin/sh", []);
+        var chain = SandboxIsolatedChain.Render(UsrMergedInputs() with
+        {
+            ThreadLimit = 4
+        }, "/bin/sh", []);
 
         foreach (var name in SandboxIsolatedChain.ThreadCountVariableNames)
         {
@@ -113,7 +116,10 @@ public sealed class SandboxIsolatedChainTests
     [Test]
     public async Task Render_ChdirsIntoTheRequestedSubdirectoryOfTheJail()
     {
-        var chain = SandboxIsolatedChain.Render(UsrMergedInputs() with { WorkingDirectory = "/work/project" }, "/bin/sh", []);
+        var chain = SandboxIsolatedChain.Render(UsrMergedInputs() with
+        {
+            WorkingDirectory = "/work/project"
+        }, "/bin/sh", []);
 
         AssertEx.True(IndexOfSequence(chain, ["--chdir", "/work/project"]) >= 0, "the requested working directory must be the sandbox one");
         AssertEx.False(IndexOfSequence(chain, ["--chdir", "/work"]) >= 0, "the default working directory must not also be emitted");
@@ -124,7 +130,13 @@ public sealed class SandboxIsolatedChainTests
     [Test]
     public async Task Render_OmitsMemorySwapMax_WhenNoMemoryCeilingWasAskedFor()
     {
-        var chain = SandboxIsolatedChain.Render(UsrMergedInputs() with { ResourceLimits = new SandboxResourceLimits { PidsLimit = 8 } },
+        var chain = SandboxIsolatedChain.Render(UsrMergedInputs() with
+            {
+                ResourceLimits = new SandboxResourceLimits
+                {
+                    PidsLimit = 8
+                }
+            },
             "/bin/sh",
             []);
 
@@ -222,7 +234,12 @@ public sealed class SandboxIsolatedChainTests
             HostsDescriptor = 13,
             JailDescriptor = 20,
             JailTempDescriptor = 21,
-            ResourceLimits = new SandboxResourceLimits { MemoryMb = 2048, PidsLimit = 64, CpuCount = 2 },
+            ResourceLimits = new SandboxResourceLimits
+            {
+                MemoryMb = 2048,
+                PidsLimit = 64,
+                CpuCount = 2
+            },
             ThreadLimit = 2
         };
     }

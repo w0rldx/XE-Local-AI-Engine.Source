@@ -35,13 +35,41 @@ public sealed class AddAgentWorkSessionsMigrationTests
         }
 
         var sessionColumns = await probe.ColumnsAsync("agent_work_sessions").ConfigureAwait(false);
-        foreach (var column in new[] { "id", "title", "objective", "kind", "agent_definition_id", "conversation_id", "status", "current_task_id", "step_count", "last_checkpoint_id", "last_sequence", "config_version", "created_at_utc", "updated_at_utc", "version" })
+        foreach (var column in new[]
+                 {
+                     "id",
+                     "title",
+                     "objective",
+                     "kind",
+                     "agent_definition_id",
+                     "conversation_id",
+                     "status",
+                     "current_task_id",
+                     "step_count",
+                     "last_checkpoint_id",
+                     "last_sequence",
+                     "config_version",
+                     "created_at_utc",
+                     "updated_at_utc",
+                     "version"
+                 })
         {
             AssertEx.True(sessionColumns.Contains(column), $"agent_work_sessions must carry '{column}'.");
         }
 
         var eventColumns = await probe.ColumnsAsync("agent_work_session_events").ConfigureAwait(false);
-        foreach (var column in new[] { "id", "session_id", "sequence", "step", "event_type", "detail_json", "operation_id", "outcome", "occurred_at_utc" })
+        foreach (var column in new[]
+                 {
+                     "id",
+                     "session_id",
+                     "sequence",
+                     "step",
+                     "event_type",
+                     "detail_json",
+                     "operation_id",
+                     "outcome",
+                     "occurred_at_utc"
+                 })
         {
             AssertEx.True(eventColumns.Contains(column), $"agent_work_session_events must carry '{column}'.");
         }

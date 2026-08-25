@@ -65,11 +65,10 @@ public static class SandboxEgressPolicy
         }
 
         return required
-            ? throw new SandboxCapabilityNotSupportedException(
-                $"'{optionKey}' is set, so the '{workload}' sandbox may only run with egress denied — but the resolved sandbox "
-                + "backend does not advertise network confinement on this host, so it cannot deny it. Install the missing "
-                + $"mechanism (on Linux, the user-namespace support the sandbox containment probe reports as unavailable), or clear '{optionKey}' "
-                + "to accept that this role runs with the host's network.")
+            ? throw new SandboxCapabilityNotSupportedException($"'{optionKey}' is set, so the '{workload}' sandbox may only run with egress denied — but the resolved sandbox "
+                                                               + "backend does not advertise network confinement on this host, so it cannot deny it. Install the missing "
+                                                               + $"mechanism (on Linux, the user-namespace support the sandbox containment probe reports as unavailable), or clear '{optionKey}' "
+                                                               + "to accept that this role runs with the host's network.")
             : SandboxNetworkPolicy.Unrestricted;
     }
 

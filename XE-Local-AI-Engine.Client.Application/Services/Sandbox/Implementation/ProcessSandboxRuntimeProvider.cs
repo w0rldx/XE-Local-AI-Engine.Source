@@ -614,8 +614,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
             // There is no result object to carry a reason on — the caller asked for a live process — and the one
             // caller (a Sandboxed stdio MCP server) must see a refusal, never a peer that turned out to be running on
             // the host filesystem.
-            throw new SandboxCapabilityNotSupportedException(
-                $"The sandbox filesystem boundary could not be established ({exception.Message}); the command was not started.",
+            throw new SandboxCapabilityNotSupportedException($"The sandbox filesystem boundary could not be established ({exception.Message}); the command was not started.",
                 exception);
         }
 
@@ -675,8 +674,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         process.ErrorDataReceived += static (_, _) => { };
         process.BeginErrorReadLine();
 
-        return Task.FromResult<ISandboxInteractiveProcess>(
-            new InteractiveProcess(this, state, request.ExecutionId, process, launch, markerId, commandCancelSource));
+        return Task.FromResult<ISandboxInteractiveProcess>(new InteractiveProcess(this, state, request.ExecutionId, process, launch, markerId, commandCancelSource));
     }
 
     public async Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)
@@ -1059,16 +1057,14 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
                     var occupancy = MeasureDirectoryBytes(jailRoot, baseline + ceiling);
                     if (occupancy - baseline > ceiling)
                     {
-                        _logger.LogWarning(
-                            "Sandbox command exceeded the jail disk ceiling of {Ceiling} bytes (jail occupancy {Occupancy} bytes over a baseline of {Baseline}); terminating it.",
+                        _logger.LogWarning("Sandbox command exceeded the jail disk ceiling of {Ceiling} bytes (jail occupancy {Occupancy} bytes over a baseline of {Baseline}); terminating it.",
                             ceiling,
                             occupancy,
                             baseline);
                         await diskCapSource.CancelAsync().ConfigureAwait(false);
                         return;
                     }
-                }
-                while (await timer.WaitForNextTickAsync(watchdogSource.Token).ConfigureAwait(false));
+                } while (await timer.WaitForNextTickAsync(watchdogSource.Token).ConfigureAwait(false));
             }
             catch (OperationCanceledException)
             {

@@ -13,7 +13,8 @@ using static NodeChatPersistenceSql;
 ///     archive/delete plus the conversation-scoped origin and selected-path accessors. Shares the single
 ///     <see cref="NodeChatPersistenceWriter" /> so the per-conversation write-key serialization is preserved.
 /// </summary>
-internal sealed class NodeChatConversationCommands(NodeChatPersistenceWriter writer,
+internal sealed class NodeChatConversationCommands(
+    NodeChatPersistenceWriter writer,
     IConversationUploadedFileStore? uploadedFileStore,
     IWorkSessionArtifactBlobStore? workSessionArtifactBlobStore)
 {

@@ -102,7 +102,10 @@ public sealed class RunPythonToolHandlerTests
 
     private static RunPythonToolHandler CreateHandler(bool enabled, IComputeToolGateway gateway)
     {
-        return new RunPythonToolHandler(Options.Create(new ComputeOptions { Enabled = enabled }), gateway);
+        return new RunPythonToolHandler(Options.Create(new ComputeOptions
+        {
+            Enabled = enabled
+        }), gateway);
     }
 
     private sealed class StubGateway : IComputeToolGateway

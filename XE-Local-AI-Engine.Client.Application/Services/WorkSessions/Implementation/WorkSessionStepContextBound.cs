@@ -22,7 +22,8 @@ using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 ///         the raw transcript is the expendable half.
 ///     </para>
 /// </summary>
-internal sealed class WorkSessionStepContextBound(INodeChatPersistenceService persistence,
+internal sealed class WorkSessionStepContextBound(
+    INodeChatPersistenceService persistence,
     IConversationCompactionService compaction,
     ITokenEstimator estimator,
     ILogger<WorkSessionStepContextBound> logger)

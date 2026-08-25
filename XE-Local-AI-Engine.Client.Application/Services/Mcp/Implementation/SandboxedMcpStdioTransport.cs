@@ -1,15 +1,15 @@
 namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 
 using System.Threading.Channels;
+using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Providers.Abstractions;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     The <see cref="IClientTransport" /> for a <see cref="McpTrustTier.Sandboxed" /> stdio MCP server: it launches
@@ -68,8 +68,7 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         "/"
     ];
 
-    private static StringComparison PathComparison =>
-        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+    private static StringComparison PathComparison => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     private readonly ComputeOptions _ceilingDefaults;
     private readonly IAgentHomeIdentityProvider _identityProvider;
@@ -370,7 +369,11 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     /// </summary>
     private static void AddRoot(List<string> roots, string path)
     {
-        foreach (var candidate in new[] { Canonicalize(path), TryLexical(path) })
+        foreach (var candidate in new[]
+                 {
+                     Canonicalize(path),
+                     TryLexical(path)
+                 })
         {
             if (candidate is { } value && !roots.Contains(value, StringComparer.Ordinal))
             {

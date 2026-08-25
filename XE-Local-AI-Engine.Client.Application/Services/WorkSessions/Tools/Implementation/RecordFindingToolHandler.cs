@@ -11,7 +11,8 @@ internal sealed record RecordFindingRequest(string? Kind, string? Text, string? 
 ///     into a later step's state block, which is why the composer fences it as untrusted data — <c>sourceRef</c> in
 ///     particular invites pasting verbatim tool output.
 /// </summary>
-internal sealed class RecordFindingToolHandler(IServiceScopeFactory scopeFactory,
+internal sealed class RecordFindingToolHandler(
+    IServiceScopeFactory scopeFactory,
     IOptions<WorkSessionOptions> options,
     IWorkSessionEventPublisher publisher,
     ILogger<RecordFindingToolHandler> logger) : WorkSessionToolHandler<RecordFindingRequest>(scopeFactory, options, publisher, logger)
@@ -75,16 +76,16 @@ internal sealed class RecordFindingToolHandler(IServiceScopeFactory scopeFactory
 
         var findingId = Guid.NewGuid();
         var result = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(session.Id,
-                    findingId,
-                    session.Version,
-                    WorkSessionOperationId.For(session.Id, session.StepCount, $"finding:{findingId:N}"),
-                    Enum.Parse<AgentWorkSessionFindingKind>(request.Kind!),
-                    request.Text!,
-                    taskId,
-                    string.IsNullOrWhiteSpace(request.SourceRef) ? null : request.SourceRef,
-                    supersedesId),
-                cancellationToken)
-            .ConfigureAwait(false);
+                                        findingId,
+                                        session.Version,
+                                        WorkSessionOperationId.For(session.Id, session.StepCount, $"finding:{findingId:N}"),
+                                        Enum.Parse<AgentWorkSessionFindingKind>(request.Kind!),
+                                        request.Text!,
+                                        taskId,
+                                        string.IsNullOrWhiteSpace(request.SourceRef) ? null : request.SourceRef,
+                                        supersedesId),
+                                    cancellationToken)
+                                .ConfigureAwait(false);
 
         return new WorkSessionToolOutcome($"Recorded a {request.Kind} on this work session.", result.Sequence, WorkSessionChangeKind.Finding);
     }

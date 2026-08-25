@@ -4,15 +4,17 @@ using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 using TUnit.Core.Exceptions;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -43,7 +45,7 @@ public sealed class SandboxedMcpStdioLiveTests
         using var fixture = new ShellMcpServerFixture();
         using var provider = CreateProvider();
         var record = fixture.ToRecord(McpTrustTier.Sandboxed);
-        var transport = new Client.Services.Mcp.Implementation.SandboxedMcpStdioTransport(record,
+        var transport = new SandboxedMcpStdioTransport(record,
             provider,
             new StubIdentityProvider(),
             NodeDataDirectory(),
@@ -87,7 +89,7 @@ public sealed class SandboxedMcpStdioLiveTests
                 }
             };
 
-            var transport = new Client.Services.Mcp.Implementation.SandboxedMcpStdioTransport(record,
+            var transport = new SandboxedMcpStdioTransport(record,
                 provider,
                 new StubIdentityProvider(),
                 NodeDataDirectory(),
@@ -99,7 +101,7 @@ public sealed class SandboxedMcpStdioLiveTests
             await using var client = await McpClient.CreateAsync(transport, clientOptions: null, NullLoggerFactory.Instance, handshake.Token);
 
             var result = await client.CallToolAsync("probe", cancellationToken: handshake.Token);
-            var text = string.Join("\n", result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().Select(static block => block.Text));
+            var text = string.Join("\n", result.Content.OfType<TextContentBlock>().Select(static block => block.Text));
 
             // The environment variable arrived, so the negative results below are about the boundary rather than about
             // the fixture never having been told what to look for.
@@ -135,7 +137,7 @@ public sealed class SandboxedMcpStdioLiveTests
         {
             WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
         };
-        var transport = new Client.Services.Mcp.Implementation.SandboxedMcpStdioTransport(record,
+        var transport = new SandboxedMcpStdioTransport(record,
             provider,
             new StubIdentityProvider(),
             NodeDataDirectory(),
@@ -145,8 +147,7 @@ public sealed class SandboxedMcpStdioLiveTests
 
         using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
-        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(
-            () => McpClient.CreateAsync(transport, clientOptions: null, NullLoggerFactory.Instance, handshake.Token));
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => McpClient.CreateAsync(transport, clientOptions: null, NullLoggerFactory.Instance, handshake.Token));
 
         AssertEx.Contains(exception.Message, "Sandboxed");
         AssertEx.Contains(exception.Message,
@@ -169,7 +170,7 @@ public sealed class SandboxedMcpStdioLiveTests
 
         using var fixture = new ShellMcpServerFixture();
         using var provider = CreateProvider();
-        var transport = new Client.Services.Mcp.Implementation.SandboxedMcpStdioTransport(fixture.ToRecord(McpTrustTier.Sandboxed),
+        var transport = new SandboxedMcpStdioTransport(fixture.ToRecord(McpTrustTier.Sandboxed),
             provider,
             new StubIdentityProvider(),
             NodeDataDirectory(),
@@ -202,8 +203,7 @@ public sealed class SandboxedMcpStdioLiveTests
     private static INodeDataDirectory NodeDataDirectory()
     {
         // A throwaway root: what matters here is that the denylist has one to refuse, not what is in it.
-        return new FakeNodeDataDirectory(
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".xe-node-data-live-fixture"));
+        return new FakeNodeDataDirectory(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".xe-node-data-live-fixture"));
     }
 
     private static ProcessSandboxRuntimeProvider CreateProvider()
@@ -329,8 +329,7 @@ public sealed class SandboxedMcpStdioLiveTests
 
         public ShellMcpServerFixture()
         {
-            _directory = Directory.CreateDirectory(
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), $".xe-mcp-live-{Guid.NewGuid():N}"));
+            _directory = Directory.CreateDirectory(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), $".xe-mcp-live-{Guid.NewGuid():N}"));
             ScriptPath = Path.Combine(_directory.FullName, "server.sh");
             MarkerPath = Path.Combine(_directory.FullName, "inside-the-bound-tree.txt");
             File.WriteAllText(MarkerPath, "visible");

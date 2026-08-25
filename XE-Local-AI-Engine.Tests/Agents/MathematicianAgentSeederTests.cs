@@ -106,7 +106,10 @@ public sealed class MathematicianAgentSeederTests
     private static MathematicianAgentSeeder CreateSeeder(IServiceScopeFactory scopeFactory, bool computeEnabled)
     {
         return new MathematicianAgentSeeder(scopeFactory,
-            Options.Create(new ComputeOptions { Enabled = computeEnabled }),
+            Options.Create(new ComputeOptions
+            {
+                Enabled = computeEnabled
+            }),
             NullLogger<MathematicianAgentSeeder>.Instance);
     }
 }

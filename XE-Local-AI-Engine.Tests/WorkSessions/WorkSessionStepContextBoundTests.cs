@@ -31,8 +31,7 @@ public sealed class WorkSessionStepContextBoundTests
         {
             AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1"),
                 ("WorkSessions:StepContextBudgetTokens", "200")),
-            ConfigureAdditionalTestServices = WithFakes(services => stream = new FakeNodeChatStreamService(
-                    services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
+            ConfigureAdditionalTestServices = WithFakes(services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
                     services,
                     sessionId),
                 publisher,
@@ -66,8 +65,7 @@ public sealed class WorkSessionStepContextBoundTests
         {
             AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1"),
                 ("WorkSessions:StepContextBudgetTokens", "100000")),
-            ConfigureAdditionalTestServices = WithFakes(services => stream = new FakeNodeChatStreamService(
-                    services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
+            ConfigureAdditionalTestServices = WithFakes(services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
                     services,
                     sessionId),
                 publisher,
@@ -102,8 +100,7 @@ public sealed class WorkSessionStepContextBoundTests
         {
             AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1"),
                 ("WorkSessions:StepContextBudgetTokens", "200")),
-            ConfigureAdditionalTestServices = WithFakes(services => stream = new FakeNodeChatStreamService(
-                    services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
+            ConfigureAdditionalTestServices = WithFakes(services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
                     services,
                     sessionId),
                 publisher,
@@ -261,8 +258,7 @@ public sealed class WorkSessionStepContextBoundTests
 
         var whole = WorkSessionStepContextBound.Project(Conversation(messages), estimator);
         var covered = WorkSessionStepContextBound.Project(Conversation(messages, "SYNOPSIS", coversToSequence: 1), estimator);
-        var withoutReasoning = WorkSessionStepContextBound.Project(
-            Conversation([messages[0], Message(sequence: 1, "assistant", new string('b', 400)), messages[2]]),
+        var withoutReasoning = WorkSessionStepContextBound.Project(Conversation([messages[0], Message(sequence: 1, "assistant", new string('b', 400)), messages[2]]),
             estimator);
 
         AssertEx.True(whole > 1_800, $"~8,800 characters of history should project well past 1,800 tokens, projected {whole}.");
@@ -315,18 +311,18 @@ public sealed class WorkSessionStepContextBoundTests
             var messageId = Guid.NewGuid();
             var requestId = Guid.NewGuid();
             _ = await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId,
-                        Guid.NewGuid(),
-                        new string('u', contentChars),
-                        CreatedAtUtc: turn))
-                .ConfigureAwait(false);
+                                     Guid.NewGuid(),
+                                     new string('u', contentChars),
+                                     CreatedAtUtc: turn))
+                                 .ConfigureAwait(false);
             _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, CreatedAtUtc: turn))
                                  .ConfigureAwait(false);
             _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(new NodeChatMessageCorrelation(conversationId, messageId, requestId),
-                        NodeChatMessageStatusValues.Completed,
-                        UpdatedAtUtc: turn,
-                        new string('a', contentChars),
-                        new string('r', contentChars)))
-                .ConfigureAwait(false);
+                                     NodeChatMessageStatusValues.Completed,
+                                     UpdatedAtUtc: turn,
+                                     new string('a', contentChars),
+                                     new string('r', contentChars)))
+                                 .ConfigureAwait(false);
         }
     }
 
@@ -336,21 +332,21 @@ public sealed class WorkSessionStepContextBoundTests
         await using var scope = services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         _ = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                    WorkSessionVersions.Any,
-                    Guid.NewGuid(),
-                    AgentWorkSessionTaskOrigin.Agent,
-                    [
-                        new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Title: "Read the runtime wiki", Status: AgentWorkSessionTaskStatus.Active),
-                        new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Title: "Still open after folding", Status: AgentWorkSessionTaskStatus.Planned)
-                    ]))
-            .ConfigureAwait(false);
+                           WorkSessionVersions.Any,
+                           Guid.NewGuid(),
+                           AgentWorkSessionTaskOrigin.Agent,
+                           [
+                               new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Title: "Read the runtime wiki", Status: AgentWorkSessionTaskStatus.Active),
+                               new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Title: "Still open after folding", Status: AgentWorkSessionTaskStatus.Planned)
+                           ]))
+                       .ConfigureAwait(false);
         _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                    Guid.NewGuid(),
-                    WorkSessionVersions.Any,
-                    Guid.NewGuid(),
-                    AgentWorkSessionFindingKind.Finding,
-                    "llama.cpp is the default runtime"))
-            .ConfigureAwait(false);
+                           Guid.NewGuid(),
+                           WorkSessionVersions.Any,
+                           Guid.NewGuid(),
+                           AgentWorkSessionFindingKind.Finding,
+                           "llama.cpp is the default runtime"))
+                       .ConfigureAwait(false);
     }
 
     private static NodeChatConversationDto Conversation(IReadOnlyList<NodeChatPersistedMessageDto> messages, string? summary = null, int? coversToSequence = null) =>

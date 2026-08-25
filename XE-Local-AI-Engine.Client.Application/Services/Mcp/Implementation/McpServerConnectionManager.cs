@@ -270,7 +270,8 @@ internal sealed class McpServerConnectionManager : IMcpServerConnectionManager, 
             : ToolCategory.Network;
     }
 
-    private static IReadOnlyList<McpRegisteredTool> BuildRegisteredTools(IList<McpClientTool> discovered, string slug, ToolCategory category, int maxToolResultCharacters, int maxInvalidToolCalls, TimeSpan toolCallTimeout)
+    private static IReadOnlyList<McpRegisteredTool> BuildRegisteredTools(IList<McpClientTool> discovered, string slug, ToolCategory category, int maxToolResultCharacters, int maxInvalidToolCalls,
+        TimeSpan toolCallTimeout)
     {
         var registered = new List<McpRegisteredTool>(discovered.Count);
         foreach (var tool in discovered)

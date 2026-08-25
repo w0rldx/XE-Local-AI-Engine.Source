@@ -28,10 +28,9 @@ public sealed class WorkSessionOptionsValidator : IValidateOptions<WorkSessionOp
         var pendingToolCallAgeSeconds = pendingToolCallAgeMinutes * 60;
         return options.MaxParkedSeconds < pendingToolCallAgeSeconds
             ? ValidateOptionsResult.Success
-            : ValidateOptionsResult.Fail(
-                $"WorkSessions:MaxParkedSeconds ({options.MaxParkedSeconds}) must stay under WorkerNode:MaxPendingToolCallAgeMinutes "
-                + $"({pendingToolCallAgeMinutes} minutes = {pendingToolCallAgeSeconds} seconds), so a park expires before the node "
-                + "expires the tool call it is parked on. Lower WorkSessions:MaxParkedSeconds (default 300) or raise "
-                + "WorkerNode:MaxPendingToolCallAgeMinutes.");
+            : ValidateOptionsResult.Fail($"WorkSessions:MaxParkedSeconds ({options.MaxParkedSeconds}) must stay under WorkerNode:MaxPendingToolCallAgeMinutes "
+                                         + $"({pendingToolCallAgeMinutes} minutes = {pendingToolCallAgeSeconds} seconds), so a park expires before the node "
+                                         + "expires the tool call it is parked on. Lower WorkSessions:MaxParkedSeconds (default 300) or raise "
+                                         + "WorkerNode:MaxPendingToolCallAgeMinutes.");
     }
 }

@@ -50,14 +50,20 @@ public static class SandboxWorkloads
     ///     backend — or the same backend as a second instance — would answer "no workspace available" to every coder
     ///     tool. Sharing the declaration is what makes sharing the resolution correct.
     /// </summary>
-    public static readonly SandboxRequirements Coder = AgentHome with { Workload = "Coder" };
+    public static readonly SandboxRequirements Coder = AgentHome with
+    {
+        Workload = "Coder"
+    };
 
     /// <summary>
     ///     Work sessions have no v1 consumer — none of the four state tools needs a jail. The declaration exists so the
     ///     role it serves resolves like the others rather than by a special case, and it is AgentHome's because that is
     ///     the substrate a session tool would execute on the day one needs to.
     /// </summary>
-    public static readonly SandboxRequirements WorkSession = AgentHome with { Workload = "WorkSession" };
+    public static readonly SandboxRequirements WorkSession = AgentHome with
+    {
+        Workload = "WorkSession"
+    };
 
     /// <summary>
     ///     <c>run_python</c> is the one workload that declares a filesystem boundary, and it is not optional: the whole

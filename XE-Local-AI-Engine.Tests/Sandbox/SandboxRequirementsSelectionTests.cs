@@ -4,12 +4,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -234,7 +234,10 @@ public sealed class SandboxRequirementsSelectionTests
     [Test]
     public void FindUnmetAxis_WhenTheNetworkFloorIsUnmetWithoutAnIsolationFloor_NamesIt()
     {
-        var requirements = SandboxWorkloads.AgentHome with { NetworkFloor = SandboxNetworkPolicy.None };
+        var requirements = SandboxWorkloads.AgentHome with
+        {
+            NetworkFloor = SandboxNetworkPolicy.None
+        };
 
         AssertEx.Equal("network posture (None)",
             SandboxProviderSelector.FindUnmetAxis(requirements, SandboxToolchainSource.HostToolchain, () => SandboxProviderCapabilities.None));
@@ -256,7 +259,10 @@ public sealed class SandboxRequirementsSelectionTests
     [Test]
     public void FindUnmetAxis_IgnoresTheDiskCeiling()
     {
-        var requirements = SandboxWorkloads.AgentHome with { MaxDiskBytes = 1 };
+        var requirements = SandboxWorkloads.AgentHome with
+        {
+            MaxDiskBytes = 1
+        };
 
         AssertEx.Null(SandboxProviderSelector.FindUnmetAxis(requirements,
             SandboxToolchainSource.HostToolchain,

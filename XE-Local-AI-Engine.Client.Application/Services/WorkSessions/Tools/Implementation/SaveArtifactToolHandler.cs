@@ -17,7 +17,8 @@ internal sealed record SaveArtifactRequest(string? Name, string? MediaType, stri
 ///         store's business — it hands back the superseded id and this handler sweeps those bytes after the commit.
 ///     </para>
 /// </summary>
-internal sealed class SaveArtifactToolHandler(IServiceScopeFactory scopeFactory,
+internal sealed class SaveArtifactToolHandler(
+    IServiceScopeFactory scopeFactory,
     IOptions<WorkSessionOptions> options,
     IWorkSessionEventPublisher publisher,
     IWorkSessionArtifactBlobStore blobStore,
@@ -98,17 +99,17 @@ internal sealed class SaveArtifactToolHandler(IServiceScopeFactory scopeFactory,
         var artifactId = Guid.NewGuid();
         var written = await _blobStore.WriteAsync(session.Id, artifactId, content, cancellationToken).ConfigureAwait(false);
         var result = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand(session.Id,
-                    artifactId,
-                    session.Version,
-                    WorkSessionOperationId.For(session.Id, session.StepCount, $"artifact:{artifactId:N}"),
-                    Enum.Parse<AgentWorkSessionArtifactKind>(request.Kind!),
-                    request.Name!,
-                    request.MediaType!,
-                    written.ContentHash,
-                    written.ByteCount,
-                    written.OpaqueReference),
-                cancellationToken)
-            .ConfigureAwait(false);
+                                        artifactId,
+                                        session.Version,
+                                        WorkSessionOperationId.For(session.Id, session.StepCount, $"artifact:{artifactId:N}"),
+                                        Enum.Parse<AgentWorkSessionArtifactKind>(request.Kind!),
+                                        request.Name!,
+                                        request.MediaType!,
+                                        written.ContentHash,
+                                        written.ByteCount,
+                                        written.OpaqueReference),
+                                    cancellationToken)
+                                .ConfigureAwait(false);
 
         if (result.SupersededArtifactId is { } supersededId)
         {

@@ -84,8 +84,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     ///     A hint, not a reservation — the slot can be taken between this read and the caller's start. The authority is
     ///     <see cref="TryStart" />, which <c>WorkSessionService.BeginAsync</c> re-checks.
     /// </summary>
-    public bool HasCapacity =>
-        _options.Enabled && !_shutdown.IsCancellationRequested && _admission.CurrentCount > 0;
+    public bool HasCapacity => _options.Enabled && !_shutdown.IsCancellationRequested && _admission.CurrentCount > 0;
 
     public bool TryStart(Guid sessionId)
     {
@@ -235,7 +234,10 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                         CancellationToken.None))
                     .ConfigureAwait(false);
                 await _publisher.PublishAsync(sessionId, moved.LastSequence, WorkSessionChangeKind.Status, CancellationToken.None).ConfigureAwait(false);
-                state = state with { Session = moved };
+                state = state with
+                {
+                    Session = moved
+                };
             }
 
             var outcome = await RunStepAsync(run, state, stepsThisRun).ConfigureAwait(false);
@@ -301,11 +303,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         // dropped its entry, so a client told about the step only then re-attaches to an empty stream and never sees the
         // turn go live.
         var started = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
-                        WorkSessionVersions.Any,
-                        WorkSessionEventTypes.StepStarted,
-                        WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Started),
-                        step.ToString(CultureInfo.InvariantCulture)),
-                    CancellationToken.None))
+                    WorkSessionVersions.Any,
+                    WorkSessionEventTypes.StepStarted,
+                    WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Started),
+                    step.ToString(CultureInfo.InvariantCulture)),
+                CancellationToken.None))
             .ConfigureAwait(false);
         await _publisher.PublishAsync(sessionId, started.Sequence, WorkSessionChangeKind.Step, CancellationToken.None).ConfigureAwait(false);
 
@@ -428,11 +430,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         {
             _logger.LogInformation("Work session {SessionId} step {Step} reached its provider-call budget; ending the step and continuing.", sessionId, step);
             _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
-                            WorkSessionVersions.Any,
-                            WorkSessionEventTypes.StepEnded,
-                            WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Ended),
-                            nameof(ProviderCallBudget)),
-                        CancellationToken.None))
+                        WorkSessionVersions.Any,
+                        WorkSessionEventTypes.StepEnded,
+                        WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Ended),
+                        nameof(ProviderCallBudget)),
+                    CancellationToken.None))
                 .ConfigureAwait(false);
             terminal = ChatStreamEventTypes.AssistantCompleted;
         }
@@ -447,11 +449,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 
             case ChatStreamEventTypes.AssistantFailed:
                 _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
-                                WorkSessionVersions.Any,
-                                WorkSessionEventTypes.StepFailed,
-                                WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Failed),
-                                step.ToString(CultureInfo.InvariantCulture)),
-                            CancellationToken.None))
+                            WorkSessionVersions.Any,
+                            WorkSessionEventTypes.StepFailed,
+                            WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.Failed),
+                            step.ToString(CultureInfo.InvariantCulture)),
+                        CancellationToken.None))
                     .ConfigureAwait(false);
                 await CheckpointAsync(sessionId).ConfigureAwait(false);
                 await SettleAsync(sessionId, AgentWorkSessionStatus.Failed, "A work session step failed.").ConfigureAwait(false);
@@ -515,11 +517,11 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         {
             reason = "The work session was paused because a prompt went unanswered.";
             _ = await WithStoreAsync(store => store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
-                                WorkSessionVersions.Any,
-                                WorkSessionEventTypes.ParkTimedOut,
-                                WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.ParkExpired),
-                                guard.ParkedToolName),
-                            CancellationToken.None))
+                        WorkSessionVersions.Any,
+                        WorkSessionEventTypes.ParkTimedOut,
+                        WorkSessionOperationId.For(sessionId, step, WorkSessionStepPhases.ParkExpired),
+                        guard.ParkedToolName),
+                    CancellationToken.None))
                 .ConfigureAwait(false);
 
             // Recorded as a finding, not only as an event, so the next step's state block re-asks it. The park itself is
@@ -527,12 +529,12 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             // durable, and it is written BEFORE the status so a crash in between cannot lose it.
             var findingId = Guid.NewGuid();
             _ = await WithStoreAsync(store => store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                                findingId,
-                                WorkSessionVersions.Any,
-                                WorkSessionOperationId.For(sessionId, step, $"park-question:{findingId:N}"),
-                                AgentWorkSessionFindingKind.OpenQuestion,
-                                ParkedQuestionText(guard.ParkedToolName)),
-                            CancellationToken.None))
+                        findingId,
+                        WorkSessionVersions.Any,
+                        WorkSessionOperationId.For(sessionId, step, $"park-question:{findingId:N}"),
+                        AgentWorkSessionFindingKind.OpenQuestion,
+                        ParkedQuestionText(guard.ParkedToolName)),
+                    CancellationToken.None))
                 .ConfigureAwait(false);
         }
         else if (guard.DeadlineExpired)
@@ -620,9 +622,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     {
         try
         {
-            var settled = await WithStoreAsync(store => store.TransitionStatusAsync(
-                        new TransitionWorkSessionStatusCommand(sessionId, WorkSessionVersions.Any, target, CurrentTaskId: null, reason),
-                        CancellationToken.None))
+            var settled = await WithStoreAsync(store => store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, WorkSessionVersions.Any, target, CurrentTaskId: null, reason),
+                    CancellationToken.None))
                 .ConfigureAwait(false);
             await _publisher.PublishAsync(sessionId, settled.LastSequence, WorkSessionChangeKind.Status, CancellationToken.None).ConfigureAwait(false);
         }

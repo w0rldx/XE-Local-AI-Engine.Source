@@ -18,27 +18,27 @@ public sealed class AgentWorkSessionSequenceTests
 
         var created = await WorkSessionTestFixture.SeedAsync(store, sessionId).ConfigureAwait(false);
         var planned = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                created.Version,
-                Guid.NewGuid(),
-                AgentWorkSessionTaskOrigin.Agent,
-                [new WorkPlanTaskChange(taskId, WorkPlanTaskOperation.Add, Title: "Only task")]))
-            .ConfigureAwait(false);
+                                     created.Version,
+                                     Guid.NewGuid(),
+                                     AgentWorkSessionTaskOrigin.Agent,
+                                     [new WorkPlanTaskChange(taskId, WorkPlanTaskOperation.Add, Title: "Only task")]))
+                                 .ConfigureAwait(false);
         var found = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                Guid.NewGuid(),
-                planned.Version,
-                Guid.NewGuid(),
-                AgentWorkSessionFindingKind.Evidence,
-                "Evidence."))
-            .ConfigureAwait(false);
+                                   Guid.NewGuid(),
+                                   planned.Version,
+                                   Guid.NewGuid(),
+                                   AgentWorkSessionFindingKind.Evidence,
+                                   "Evidence."))
+                               .ConfigureAwait(false);
         var stepped = await store.AdvanceStepAsync(sessionId, found.Version).ConfigureAwait(false);
         var checkpointed = await store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand(sessionId,
-                Guid.NewGuid(),
-                stepped.Version,
-                Guid.NewGuid(),
-                stepped.Step,
-                "Summary.",
-                "{}"))
-            .ConfigureAwait(false);
+                                          Guid.NewGuid(),
+                                          stepped.Version,
+                                          Guid.NewGuid(),
+                                          stepped.Step,
+                                          "Summary.",
+                                          "{}"))
+                                      .ConfigureAwait(false);
 
         AssertEx.True(created.LastSequence < planned.Sequence, "The plan event must follow the create event.");
         AssertEx.True(planned.Sequence < found.Sequence, "The finding event must follow the plan event.");
@@ -64,25 +64,25 @@ public sealed class AgentWorkSessionSequenceTests
 
         var created = await WorkSessionTestFixture.SeedAsync(store, sessionId).ConfigureAwait(false);
         var planned = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                created.Version,
-                Guid.NewGuid(),
-                AgentWorkSessionTaskOrigin.Agent,
-                [
-                    new WorkPlanTaskChange(firstTask, WorkPlanTaskOperation.Add, Title: "First"),
-                    new WorkPlanTaskChange(secondTask, WorkPlanTaskOperation.Add, Title: "Second")
-                ]))
-            .ConfigureAwait(false);
+                                     created.Version,
+                                     Guid.NewGuid(),
+                                     AgentWorkSessionTaskOrigin.Agent,
+                                     [
+                                         new WorkPlanTaskChange(firstTask, WorkPlanTaskOperation.Add, Title: "First"),
+                                         new WorkPlanTaskChange(secondTask, WorkPlanTaskOperation.Add, Title: "Second")
+                                     ]))
+                                 .ConfigureAwait(false);
 
         var beforeUpdate = await store.ListTasksAsync(sessionId).ConfigureAwait(false);
         var displayOrder = beforeUpdate.Select(task => task.Id).ToArray();
         var watermark = planned.Sequence;
 
         _ = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                planned.Version,
-                Guid.NewGuid(),
-                AgentWorkSessionTaskOrigin.Agent,
-                [new WorkPlanTaskChange(firstTask, WorkPlanTaskOperation.Update, Status: AgentWorkSessionTaskStatus.Active)]))
-            .ConfigureAwait(false);
+                           planned.Version,
+                           Guid.NewGuid(),
+                           AgentWorkSessionTaskOrigin.Agent,
+                           [new WorkPlanTaskChange(firstTask, WorkPlanTaskOperation.Update, Status: AgentWorkSessionTaskStatus.Active)]))
+                       .ConfigureAwait(false);
 
         // The re-stamp is what makes ?sinceSeq= replay updates, not only inserts.
         var changed = await store.ListTasksAsync(sessionId, watermark).ConfigureAwait(false);
@@ -125,21 +125,21 @@ public sealed class AgentWorkSessionSequenceTests
 
         var created = await WorkSessionTestFixture.SeedAsync(store, sessionId).ConfigureAwait(false);
         var first = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                Guid.NewGuid(),
-                created.Version,
-                operationId,
-                AgentWorkSessionFindingKind.Finding,
-                "Recorded once."))
-            .ConfigureAwait(false);
+                                   Guid.NewGuid(),
+                                   created.Version,
+                                   operationId,
+                                   AgentWorkSessionFindingKind.Finding,
+                                   "Recorded once."))
+                               .ConfigureAwait(false);
 
         // A replayed step re-derives the same operation id; the store must short-circuit it query-first.
         var replay = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                Guid.NewGuid(),
-                created.Version,
-                operationId,
-                AgentWorkSessionFindingKind.Finding,
-                "Recorded twice."))
-            .ConfigureAwait(false);
+                                    Guid.NewGuid(),
+                                    created.Version,
+                                    operationId,
+                                    AgentWorkSessionFindingKind.Finding,
+                                    "Recorded twice."))
+                                .ConfigureAwait(false);
 
         AssertEx.Equal(first.Sequence, replay.Sequence);
         AssertEx.Equal(expected: 1, (await store.ListFindingsAsync(sessionId).ConfigureAwait(false)).Count);
@@ -165,19 +165,19 @@ public sealed class AgentWorkSessionSequenceTests
 
         // A tool handler writes content with the version it read...
         var finding = await toolStore.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                Guid.NewGuid(),
-                created.Version,
-                Guid.NewGuid(),
-                AgentWorkSessionFindingKind.Finding,
-                "Written from the tool scope."))
-            .ConfigureAwait(false);
+                                         Guid.NewGuid(),
+                                         created.Version,
+                                         Guid.NewGuid(),
+                                         AgentWorkSessionFindingKind.Finding,
+                                         "Written from the tool scope."))
+                                     .ConfigureAwait(false);
 
         // ...while the supervisor moves the status from its own scope, holding a version that is already stale. The
         // sentinel is what keeps that legal: a status-only write has no lost update to protect against.
         var transitioned = await supervisorStore.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId,
-                WorkSessionVersions.Any,
-                AgentWorkSessionStatus.Running))
-            .ConfigureAwait(false);
+                                                    WorkSessionVersions.Any,
+                                                    AgentWorkSessionStatus.Running))
+                                                .ConfigureAwait(false);
 
         AssertEx.Equal(AgentWorkSessionStatus.Running, transitioned.Status);
         AssertEx.True(transitioned.Version > finding.Version, "Each committed writer must advance the session version.");

@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 
 /// <summary>The outcome of one filesystem-isolation measurement: the ingredients, or the reason there are none.</summary>
@@ -253,7 +254,8 @@ internal static class HostSandboxFilesystemIsolationProbe
         builder.Append("if echo ok > /tmp/xe-probe.txt 2>/dev/null; then echo TMPWRITE=OK; else echo TMPWRITE=DENIED; fi\n");
         // /dev is expected to answer EROFS specifically: that is what a remounted-read-only mount says, and it
         // distinguishes "the remount worked" from "the path happened not to exist".
-        builder.Append("DEVERR=$(touch /dev/xe-probe 2>&1); if [ -e /dev/xe-probe ]; then echo DEVCREATE=OK; else case \"$DEVERR\" in *\"Read-only\"*) echo DEVCREATE=EROFS;; *) echo DEVCREATE=REFUSED;; esac; fi\n");
+        builder.Append(
+            "DEVERR=$(touch /dev/xe-probe 2>&1); if [ -e /dev/xe-probe ]; then echo DEVCREATE=OK; else case \"$DEVERR\" in *\"Read-only\"*) echo DEVCREATE=EROFS;; *) echo DEVCREATE=REFUSED;; esac; fi\n");
         // procfs refuses creation with ENOENT rather than EROFS — it has no directory to create in — so the control is
         // "refused", not "read-only". Measured on this host; asserting EROFS here would fail on a working sandbox.
         builder.Append("if touch /proc/xe-probe 2>/dev/null; then echo PROCCREATE=OK; else echo PROCCREATE=REFUSED; fi\n");
@@ -468,11 +470,11 @@ internal static class HostSandboxFilesystemIsolationProbe
         }
     }
 
-    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "geteuid")]
-    [System.Runtime.InteropServices.DefaultDllImportSearchPaths(System.Runtime.InteropServices.DllImportSearchPath.SafeDirectories)]
+    [DllImport("libc", EntryPoint = "geteuid")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
     private static extern uint geteuid();
 
-    [System.Runtime.InteropServices.DllImport("libc", EntryPoint = "getegid")]
-    [System.Runtime.InteropServices.DefaultDllImportSearchPaths(System.Runtime.InteropServices.DllImportSearchPath.SafeDirectories)]
+    [DllImport("libc", EntryPoint = "getegid")]
+    [DefaultDllImportSearchPaths(DllImportSearchPath.SafeDirectories)]
     private static extern uint getegid();
 }

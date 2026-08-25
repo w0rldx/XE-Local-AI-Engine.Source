@@ -389,7 +389,8 @@ internal sealed class OrchestrationResolver : IOrchestrationResolver
     ///     effective model's provider locality (<see cref="IsCloud" />). All are resolved during the async participant
     ///     load so the synchronous <see cref="ToSpecParticipant" /> stays query-free.
     /// </summary>
-    private sealed record ResolvedParticipant(AgentDefinitionRecord Definition,
+    private sealed record ResolvedParticipant(
+        AgentDefinitionRecord Definition,
         string ResolvedInstructions,
         bool SupportsThinking,
         bool IsCloud,

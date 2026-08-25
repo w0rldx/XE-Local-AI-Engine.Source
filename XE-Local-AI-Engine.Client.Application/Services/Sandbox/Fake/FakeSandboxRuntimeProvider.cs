@@ -80,8 +80,7 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
         // that bug in every test that used it.
         if (request.Isolation == SandboxIsolationMode.Filesystem)
         {
-            throw new SandboxCapabilityNotSupportedException(
-                "The fake sandbox provider has no mount namespace and cannot honor SandboxIsolationMode.Filesystem.");
+            throw new SandboxCapabilityNotSupportedException("The fake sandbox provider has no mount namespace and cannot honor SandboxIsolationMode.Filesystem.");
         }
 
         lock (_sync)

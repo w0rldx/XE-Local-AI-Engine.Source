@@ -156,14 +156,14 @@ public sealed class DockerSandboxOrphanSweepTests
     private static async Task<string> SeedContainerAsync(FakeDockerRuntimeClient client, IReadOnlyDictionary<string, string> labels)
     {
         var specification = DockerSandboxHardening.BuildSpecification(DockerSandboxHardeningTests.Options(),
-            new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
-            "someone-elses-container",
-            "sandbox-x",
-            "install-x",
-            [DockerSandboxHardeningTests.Mount()]) with
-        {
-            Labels = labels
-        };
+                new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
+                "someone-elses-container",
+                "sandbox-x",
+                "install-x",
+                [DockerSandboxHardeningTests.Mount()]) with
+            {
+                Labels = labels
+            };
 
         return await client.CreateContainerAsync(specification);
     }

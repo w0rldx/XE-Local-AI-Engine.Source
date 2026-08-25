@@ -264,6 +264,7 @@ public interface IDevelopmentStore
     Task<DevelopmentOperationResult> RecordApplyStartedAsync(Guid operationId, DevelopmentApprovedApplySubject subject, CancellationToken cancellationToken = default);
     Task<DevelopmentOperationResult> CompleteApplyAsync(Guid operationId, DevelopmentApprovedApplySubject subject, CancellationToken cancellationToken = default);
     Task<DevelopmentOperationResult> BlockApplyAsync(Guid operationId, DevelopmentApprovedApplySubject subject, string sanitizedReason, CancellationToken cancellationToken = default);
+
     /// <summary>
     ///     Records that the managed workspace for <paramref name="attemptId" /> carries COMMITTED files whose names
     ///     mark them as credential-bearing, as an operator-visible event. Non-blocking: the attempt proceeds.

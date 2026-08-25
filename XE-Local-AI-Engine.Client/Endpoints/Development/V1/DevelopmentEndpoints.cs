@@ -49,7 +49,10 @@ public sealed class GetDevelopmentCapabilityEndpoint(
     private readonly IOptions<DevelopmentSandboxOptions> _developmentSandboxOptions = developmentSandboxOptions ?? throw new ArgumentNullException(nameof(developmentSandboxOptions));
     private readonly IDevelopmentSandboxRuntimeProvider _sandboxRuntimeProvider = sandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(sandboxRuntimeProvider));
     private readonly IAgentSandboxRuntimeProvider _agentSandboxRuntimeProvider = agentSandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(agentSandboxRuntimeProvider));
-    private readonly IWorkSessionSandboxRuntimeProvider _workSessionSandboxRuntimeProvider = workSessionSandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(workSessionSandboxRuntimeProvider));
+
+    private readonly IWorkSessionSandboxRuntimeProvider _workSessionSandboxRuntimeProvider =
+        workSessionSandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(workSessionSandboxRuntimeProvider));
+
     private readonly ISandboxContainmentProbe _containmentProbe = containmentProbe ?? throw new ArgumentNullException(nameof(containmentProbe));
     private readonly IDockerDaemonPreflightService _dockerDaemonPreflight = dockerDaemonPreflight ?? throw new ArgumentNullException(nameof(dockerDaemonPreflight));
 
@@ -98,8 +101,8 @@ public sealed class GetDevelopmentCapabilityEndpoint(
         {
             FilesystemIsolation = false,
             FilesystemIsolationUnavailableReason =
-                "this account has no home directory (HOME is unset), so the Sandboxed trust tier cannot tell a server's package tree from the operator's credential stores and refuses every connection. "
-                + "Run the engine as an account with a home directory, or move each server to the Privileged host tier deliberately."
+            "this account has no home directory (HOME is unset), so the Sandboxed trust tier cannot tell a server's package tree from the operator's credential stores and refuses every connection. "
+            + "Run the engine as an account with a home directory, or move each server to the Privileged host tier deliberately."
         };
     }
 
@@ -128,8 +131,7 @@ public sealed class GetDevelopmentCapabilityEndpoint(
             // registering a server — on a host that cannot isolate, this row says so, and every Sandboxed registration
             // will refuse to connect rather than launching on the host. A PrivilegedHost server has no row here
             // because it declares nothing: it is not a substrate consumer, it is an explicit per-server host grant.
-            WithHomeDirectoryCaveat(
-                DevelopmentContractMapper.ToIsolationSummary("mcp-stdio", SandboxWorkloads.McpStdio, _agentSandboxRuntimeProvider, containment, agentRequiresDenial)),
+            WithHomeDirectoryCaveat(DevelopmentContractMapper.ToIsolationSummary("mcp-stdio", SandboxWorkloads.McpStdio, _agentSandboxRuntimeProvider, containment, agentRequiresDenial)),
             // Either Development declaration is correct here: DevelopmentModeImageToolchain is
             // DevelopmentModeHostToolchain `with` a different workload name and toolchain source, and this projection
             // reads neither — it reads the isolation floor, which is None on both. Passing the host-toolchain constant

@@ -146,7 +146,8 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // category the enum has. Labelling them ReadLocal to keep them out of a category-based operator policy would
         // hide the write from the layer whose job is to see it — at the cost that tightening WriteExecute in
         // NodeToolApprovalPolicy makes every recorded finding need a click.
-        _workSessionOfferDtos = [.. WorkSessionToolCatalog.Descriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))];
+        _workSessionOfferDtos =
+            [.. WorkSessionToolCatalog.Descriptors.Select(static descriptor => ToOfferDto(descriptor.Name, descriptor.ParameterSchema, descriptor.RequiresApproval, descriptor.Category))];
 
         // Precompute the capability-gated variant once: the built-ins minus run_in_agent_home, the coder/knowledge tools
         // and ask_user, returned when the active model is not tool-capable. Those tools are offered only to a

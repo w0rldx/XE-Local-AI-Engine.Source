@@ -234,9 +234,8 @@ internal static class SandboxProviderSelector
     {
         if (constraint is not null && !Array.Exists(ByAscendingPrivilege, backend => backend.Matches(constraint)))
         {
-            throw new InvalidOperationException(
-                $"Unknown sandbox provider '{constraint}' configured at '{constraintKey}'. Known backends: "
-                + string.Join(", ", ByAscendingPrivilege.Select(static backend => backend.Name)) + ".");
+            throw new InvalidOperationException($"Unknown sandbox provider '{constraint}' configured at '{constraintKey}'. Known backends: "
+                                                + string.Join(", ", ByAscendingPrivilege.Select(static backend => backend.Name)) + ".");
         }
 
         var rejected = new List<string>(ByAscendingPrivilege.Length);
@@ -278,14 +277,13 @@ internal static class SandboxProviderSelector
             return role;
         }
 
-        throw new SandboxCapabilityNotSupportedException(
-            $"No registered sandbox backend can serve the '{requirements.Workload}' workload. It declares "
-            + $"toolchain={requirements.Toolchain}, isolation floor={requirements.IsolationFloor}, "
-            + $"network floor={requirements.NetworkFloor}, persistence={requirements.Persistence}. "
-            + (constraint is null
-                ? $"Rejected: {FormatRejections(rejected)}."
-                : $"'{constraintKey}' constrains the candidate set to '{constraint}', and {FormatRejections(rejected)}. "
-                  + "Clear that key, or set it to a backend that can serve this workload."));
+        throw new SandboxCapabilityNotSupportedException($"No registered sandbox backend can serve the '{requirements.Workload}' workload. It declares "
+                                                         + $"toolchain={requirements.Toolchain}, isolation floor={requirements.IsolationFloor}, "
+                                                         + $"network floor={requirements.NetworkFloor}, persistence={requirements.Persistence}. "
+                                                         + (constraint is null
+                                                             ? $"Rejected: {FormatRejections(rejected)}."
+                                                             : $"'{constraintKey}' constrains the candidate set to '{constraint}', and {FormatRejections(rejected)}. "
+                                                               + "Clear that key, or set it to a backend that can serve this workload."));
     }
 
     private static string FormatRejections(List<string> rejected)
@@ -341,7 +339,8 @@ internal static class SandboxProviderSelector
     ///     probe a backend it is about to reject on that axis; <c>SandboxSubstrateSelectionArchitectureTests</c>
     ///     asserts the two never drift.
     /// </summary>
-    private sealed record SandboxBackend(string Name,
+    private sealed record SandboxBackend(
+        string Name,
         SandboxToolchainSource Toolchain,
         Func<IServiceProvider, ISandboxRuntimeProvider?> Locate)
     {

@@ -323,9 +323,12 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
                 CreatedAt = DateTimeOffset.UnixEpoch,
                 ManifestVersion = request.AttachKey.ManifestVersion,
                 WorkingRoot = root,
-                Mounts = [.. (request.Mounts ?? []).Select(static mount => new SandboxMountBinding(Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath)),
-                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath)),
-                    mount.ReadOnly))]
+                Mounts =
+                [
+                    .. (request.Mounts ?? []).Select(static mount => new SandboxMountBinding(Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath)),
+                        Path.TrimEndingDirectorySeparator(Path.GetFullPath(mount.HostPath)),
+                        mount.ReadOnly))
+                ]
             });
         }
 

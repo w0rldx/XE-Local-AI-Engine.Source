@@ -80,7 +80,8 @@ public sealed class PostWorkSessionMessageRequest
 ///         watermark a hub subscriber replays from.
 ///     </para>
 /// </summary>
-public sealed record WorkSessionResponse(Guid Id,
+public sealed record WorkSessionResponse(
+    Guid Id,
     string Title,
     string Objective,
     string Kind,
@@ -101,7 +102,8 @@ public sealed record WorkSessionResponse(Guid Id,
 ///     objective, and the service's list projection does not read one, so a shared record would have to invent
 ///     values the node never loaded.
 /// </summary>
-public sealed record WorkSessionSummaryResponse(Guid Id,
+public sealed record WorkSessionSummaryResponse(
+    Guid Id,
     string Title,
     string Kind,
     string Status,
@@ -109,7 +111,8 @@ public sealed record WorkSessionSummaryResponse(Guid Id,
     int StepCount,
     long UpdatedAtUtc);
 
-public sealed record WorkSessionTaskResponse(Guid Id,
+public sealed record WorkSessionTaskResponse(
+    Guid Id,
     Guid? ParentTaskId,
     long Sequence,
     string Title,
@@ -120,7 +123,8 @@ public sealed record WorkSessionTaskResponse(Guid Id,
     int CreatedStep,
     int UpdatedStep);
 
-public sealed record WorkSessionFindingResponse(Guid Id,
+public sealed record WorkSessionFindingResponse(
+    Guid Id,
     Guid? TaskId,
     long Sequence,
     string Kind,
@@ -133,7 +137,8 @@ public sealed record WorkSessionFindingResponse(Guid Id,
 ///     An artifact's metadata. There is deliberately no member for the blob path the node stores it under: it is a
 ///     host path, it is of no use to a client, and a response is the one place it could leak from.
 /// </summary>
-public sealed record WorkSessionArtifactResponse(Guid Id,
+public sealed record WorkSessionArtifactResponse(
+    Guid Id,
     long Sequence,
     string Kind,
     string Name,
@@ -147,7 +152,8 @@ public sealed record WorkSessionArtifactResponse(Guid Id,
 ///     A checkpoint. <see cref="Summary" /> is null on a node with no local model to summarize with — the structured
 ///     <see cref="StateJson" /> is the part the resume path actually depends on.
 /// </summary>
-public sealed record WorkSessionCheckpointResponse(Guid Id,
+public sealed record WorkSessionCheckpointResponse(
+    Guid Id,
     long Sequence,
     int Step,
     string? Summary,
@@ -158,7 +164,8 @@ public sealed record WorkSessionCheckpointResponse(Guid Id,
 ///     One journal entry. <see cref="OperationId" /> is the tool call the entry belongs to when it has one, so a client
 ///     can group a step's rows by the operation that produced them; it is null for entries no single tool call owns.
 /// </summary>
-public sealed record WorkSessionEventResponse(Guid Id,
+public sealed record WorkSessionEventResponse(
+    Guid Id,
     long Sequence,
     int Step,
     string EventType,

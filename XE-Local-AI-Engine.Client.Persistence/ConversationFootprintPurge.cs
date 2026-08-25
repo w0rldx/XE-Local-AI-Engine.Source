@@ -64,9 +64,9 @@ public static class ConversationFootprintPurge
         // work-sessions/artifacts/{sessionId:N}/, so this row purge leaves them behind exactly as it leaves upload blobs
         // behind. The caller owns that teardown, the way DeleteAllForConversationAsync handles uploads.
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_session_events WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
-                [conversationId],
-                cancellationToken)
-            .ConfigureAwait(false);
+                           [conversationId],
+                           cancellationToken)
+                       .ConfigureAwait(false);
         await dbContext.Database
                        .ExecuteSqlRawAsync("DELETE FROM agent_work_session_checkpoints WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
                            [conversationId],
@@ -83,9 +83,9 @@ public static class ConversationFootprintPurge
                            cancellationToken)
                        .ConfigureAwait(false);
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_session_tasks WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
-                [conversationId],
-                cancellationToken)
-            .ConfigureAwait(false);
+                           [conversationId],
+                           cancellationToken)
+                       .ConfigureAwait(false);
 
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_sessions WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM conversations WHERE conversation_id = {0};", [conversationId], cancellationToken).ConfigureAwait(false);

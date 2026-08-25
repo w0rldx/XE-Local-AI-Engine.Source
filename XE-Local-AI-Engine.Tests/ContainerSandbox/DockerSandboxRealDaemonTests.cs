@@ -833,7 +833,7 @@ public sealed class DockerSandboxRealDaemonTests
         }
 
         throw Unavailable("no usable Docker daemon. Tried " + string.Join(" | ", attempts)
-                          + " Start Docker, or point DOCKER_HOST at a daemon this user can open, and re-run.");
+                                                            + " Start Docker, or point DOCKER_HOST at a daemon this user can open, and re-run.");
     }
 
     /// <summary>

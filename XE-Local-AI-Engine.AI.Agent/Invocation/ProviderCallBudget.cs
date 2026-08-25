@@ -44,6 +44,7 @@ public sealed class ProviderCallBudget
     private static readonly AsyncLocal<int?> AmbientMaxProviderCalls = new();
 
     private readonly int _maxProviderCalls;
+
     // True when the ambient per-step cap, not the configured invocation ceiling, is what _maxProviderCalls holds —
     // the one bit that tells a spent step bound apart from a runaway loop when the call count trips.
     private readonly bool _callCapTightened;

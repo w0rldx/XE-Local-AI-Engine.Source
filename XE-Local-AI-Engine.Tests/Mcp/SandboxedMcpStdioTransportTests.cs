@@ -1,19 +1,19 @@
 namespace XE_Local_AI_Engine.Tests.Mcp;
 
+using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using System.Globalization;
 using ModelContextProtocol.Client;
 using NSubstitute;
 using TUnit.Core.Exceptions;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
-using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -223,8 +223,7 @@ public sealed class SandboxedMcpStdioTransportTests
             WorkingDirectory = denied
         };
 
-        var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(
-            () => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots()),
+        var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots()),
             $"binding '{denied}' would hand the server the operator's credentials.");
 
         AssertEx.Contains(exception.Message, "Sandboxed");
@@ -242,8 +241,7 @@ public sealed class SandboxedMcpStdioTransportTests
             WorkingDirectory = NodeDataRoot
         };
 
-        var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(
-            () => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots()));
+        var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots()));
 
         AssertEx.Contains(exception.Message, Path.TrimEndingDirectorySeparator(NodeDataRoot));
     }
@@ -261,8 +259,7 @@ public sealed class SandboxedMcpStdioTransportTests
             WorkingDirectory = absolute
         };
 
-        _ = AssertEx.Throws<SandboxCapabilityNotSupportedException>(
-            () => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots()),
+        _ = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots()),
             $"'{absolute}' is never a server's package tree.");
     }
 
@@ -315,8 +312,7 @@ public sealed class SandboxedMcpStdioTransportTests
                 WorkingDirectory = link
             };
 
-            var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(
-                () => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots()));
+            var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots()));
 
             // The message names the RESOLVED path, which is the one that would have been mounted.
             AssertEx.Contains(exception.Message,
@@ -341,8 +337,7 @@ public sealed class SandboxedMcpStdioTransportTests
             WorkingDirectory = null
         };
 
-        var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(
-            () => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, _ => Path.Combine(home, "npx"), SensitiveRoots()));
+        var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, _ => Path.Combine(home, "npx"), SensitiveRoots()));
 
         AssertEx.Contains(exception.Message, Path.TrimEndingDirectorySeparator(home));
     }
@@ -372,10 +367,12 @@ public sealed class SandboxedMcpStdioTransportTests
 
             // This fixture's own tree stands in for a home directory: what is under test is ANCESTOR resolution, not
             // which roots are on the list.
-            var roots = new[] { Path.Combine(account.FullName, ".ssh") };
+            var roots = new[]
+            {
+                Path.Combine(account.FullName, ".ssh")
+            };
 
-            var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(
-                () => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, roots),
+            var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, roots),
                 "a tree reached through a symlinked ANCESTOR must resolve to its real location before the comparison.");
 
             AssertEx.Contains(exception.Message, account.FullName);
@@ -451,8 +448,7 @@ public sealed class SandboxedMcpStdioTransportTests
         // Every credential entry is derived from home, so a host that cannot name one would get a list with the whole
         // credential half missing — still present, still checked, and still letting /home/someone through. A tier that
         // cannot enforce its own control refuses instead.
-        var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(
-            () => SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, static () => string.Empty));
+        var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(() => SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, static () => string.Empty));
 
         AssertEx.Contains(exception.Message, "home directory");
         AssertEx.Contains(exception.Message, "Privileged host");
@@ -463,7 +459,13 @@ public sealed class SandboxedMcpStdioTransportTests
     {
         var roots = SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, static () => "/srv/accounts/xe");
 
-        foreach (var expected in new[] { "/srv/accounts/xe", "/srv/accounts/xe/.ssh", "/srv/accounts/xe/.aws", "/srv/accounts/xe/.kube" })
+        foreach (var expected in new[]
+                 {
+                     "/srv/accounts/xe",
+                     "/srv/accounts/xe/.ssh",
+                     "/srv/accounts/xe/.aws",
+                     "/srv/accounts/xe/.kube"
+                 })
         {
             AssertEx.Contains(roots, expected);
         }

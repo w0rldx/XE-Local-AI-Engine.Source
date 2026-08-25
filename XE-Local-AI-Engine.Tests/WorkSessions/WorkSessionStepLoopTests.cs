@@ -198,13 +198,11 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.Equal(expected: 1, settled.StepCount, "An answered park still finishes its step.");
 
         var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
-        var waiting = AssertEx.NotNull(
-            events.FirstOrDefault(entry => entry.EventType == "SessionStatusChanged" && entry.Outcome == nameof(AgentWorkSessionStatus.WaitingForApproval)),
+        var waiting = AssertEx.NotNull(events.FirstOrDefault(entry => entry.EventType == "SessionStatusChanged" && entry.Outcome == nameof(AgentWorkSessionStatus.WaitingForApproval)),
             "The approval request has to show as WaitingForApproval while it is pending.");
-        var running = AssertEx.NotNull(
-            events.FirstOrDefault(entry => entry.EventType == "SessionStatusChanged"
-                                           && entry.Outcome == nameof(AgentWorkSessionStatus.Running)
-                                           && entry.Sequence > waiting.Sequence),
+        var running = AssertEx.NotNull(events.FirstOrDefault(entry => entry.EventType == "SessionStatusChanged"
+                                                                      && entry.Outcome == nameof(AgentWorkSessionStatus.Running)
+                                                                      && entry.Sequence > waiting.Sequence),
             "The next delta must move the session back to Running.");
         AssertEx.True(running.Sequence > waiting.Sequence);
 
@@ -280,8 +278,7 @@ public sealed class WorkSessionStepLoopTests
         FakeNodeChatStreamService? stream = null;
         await using var factory = new TestServerWebAppFactory
         {
-            AdditionalConfiguration = WorkSessionTestSupport.Configuration(
-                ("WorkSessions:MaxConcurrentSessions", "3"),
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxConcurrentSessions", "3"),
                 ("WorkSessions:MaxParkedSeconds", "599")),
             ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
                 services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionIds[0]),
@@ -354,15 +351,15 @@ public sealed class WorkSessionStepLoopTests
         await using var scope = services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId,
-                    WorkSessionVersions.Any,
-                    WorkSessionEventTypes.CompletionRequested,
-                    Guid.NewGuid(),
-                    Outcome: null,
-                    JsonSerializer.Serialize(new
-                    {
-                        summary = "Every task is done and the findings tell the whole story."
-                    })))
-            .ConfigureAwait(false);
+                           WorkSessionVersions.Any,
+                           WorkSessionEventTypes.CompletionRequested,
+                           Guid.NewGuid(),
+                           Outcome: null,
+                           JsonSerializer.Serialize(new
+                           {
+                               summary = "Every task is done and the findings tell the whole story."
+                           })))
+                       .ConfigureAwait(false);
     }
 
     private static async Task RecordFindingsDuringTheTurnAsync(IServiceProvider services, Guid sessionId)
@@ -373,12 +370,12 @@ public sealed class WorkSessionStepLoopTests
         {
             var session = await store.GetAsync(sessionId).ConfigureAwait(false);
             _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                        Guid.NewGuid(),
-                        session.Version,
-                        Guid.NewGuid(),
-                        AgentWorkSessionFindingKind.Finding,
-                        $"Finding {index}."))
-                .ConfigureAwait(false);
+                               Guid.NewGuid(),
+                               session.Version,
+                               Guid.NewGuid(),
+                               AgentWorkSessionFindingKind.Finding,
+                               $"Finding {index}."))
+                           .ConfigureAwait(false);
         }
     }
 }

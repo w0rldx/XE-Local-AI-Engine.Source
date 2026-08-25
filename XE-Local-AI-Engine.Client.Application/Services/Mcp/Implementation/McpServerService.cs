@@ -227,7 +227,10 @@ internal sealed class McpServerService(
     private static McpServerInput NormalizeTrustTier(McpServerInput input)
     {
         return input.TransportKind == McpTransportKind.Http
-            ? input with { TrustTier = McpTrustTier.Sandboxed }
+            ? input with
+            {
+                TrustTier = McpTrustTier.Sandboxed
+            }
             : input;
     }
 

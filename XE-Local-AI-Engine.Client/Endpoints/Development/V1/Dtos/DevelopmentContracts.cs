@@ -135,7 +135,8 @@ public sealed class ReconnectDevelopmentRepositoryRequest
 ///     The isolation posture of every sandbox role on this node, container provider or not. Additive: a consumer that
 ///     only reads the three axes above is unaffected.
 /// </param>
-public sealed record DevelopmentCapabilityResponse(bool Enabled,
+public sealed record DevelopmentCapabilityResponse(
+    bool Enabled,
     string SandboxProvider,
     DevelopmentContainerRuntimeResponse? ContainerRuntime,
     IReadOnlyList<SandboxIsolationSummaryResponse> Isolation);

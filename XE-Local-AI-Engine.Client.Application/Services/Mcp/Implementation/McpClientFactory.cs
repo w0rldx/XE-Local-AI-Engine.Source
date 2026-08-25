@@ -3,10 +3,10 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Builds the transport for a registration and connects an <see cref="McpClient" />.
