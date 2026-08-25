@@ -179,6 +179,35 @@ public sealed class BenchmarkExecutionPrimitivesTests
         _ = store.DidNotReceive().CancelAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public void QueueOptionsValidator_AcceptsThePositiveBoundedIntervalAndRejectsEverythingElse()
+    {
+        var validator = new BenchmarkQueueOptionsValidator();
+
+        AssertEx.True(validator.Validate(name: null, new BenchmarkQueueOptions()).Succeeded, "the default poll interval must validate");
+        AssertEx.True(validator.Validate(name: null,
+                                    new BenchmarkQueueOptions
+                                    {
+                                        PollInterval = BenchmarkQueueOptions.MaxPollInterval
+                                    })
+                               .Succeeded,
+            "the ceiling itself is a legal interval");
+        AssertEx.True(validator.Validate(name: null,
+                                    new BenchmarkQueueOptions
+                                    {
+                                        PollInterval = TimeSpan.Zero
+                                    })
+                               .Failed,
+            "a zero interval would spin the queue");
+        AssertEx.True(validator.Validate(name: null,
+                                    new BenchmarkQueueOptions
+                                    {
+                                        PollInterval = BenchmarkQueueOptions.MaxPollInterval + TimeSpan.FromSeconds(1)
+                                    })
+                               .Failed,
+            "an interval past the ceiling would strand queued work");
+    }
+
     private static InvocationGenerationAdmissionContext Context(int? effective) =>
         new()
         {
