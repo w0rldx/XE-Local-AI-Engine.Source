@@ -174,6 +174,65 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                       .ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     G1(b), asserted as the SHAPE of the failure rather than only its wording. A dependency-manifest change is a
+    ///     verdict: the task returns to <c>InProgress</c> carrying <c>dependency_manifest_changed</c>, the report
+    ///     records it, and the attempt is NOT aborted as a security violation the way the test-write policy aborts.
+    ///     The distinction is the point — "delete the failing test" is an attack, "add a package" is a legitimate task
+    ///     this version cannot serve, and an agent can only retry usefully if it can tell which one it hit.
+    /// </summary>
+    [Test]
+    public async Task Validation_WhenTheAttemptChangesADependencyManifest_ReturnsToInProgressWithTheSpecificCode()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        await using var provider = await BuildProviderAsync(new WritingCoderModel("<Project />\n", "Directory.Packages.props"),
+                new ApprovingReviewerModel())
+            .ConfigureAwait(false);
+        await using var scope = provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
+        var seed = Seed(repository);
+        var repositoryBinding = Binding(seed, repository);
+
+        _ = await coordinator.CreateProjectAsync(seed).ConfigureAwait(false);
+        var ready = await coordinator.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                         Guid.NewGuid(),
+                                         DevelopmentTaskStatus.Ready,
+                                         ExpectedTaskVersion: 1))
+                                     .ConfigureAwait(false);
+        var coderAttemptId = Guid.NewGuid();
+        _ = await coordinator.StartAttemptAsync(new DevelopmentStartAttemptCommand(seed.TaskId,
+                                 coderAttemptId,
+                                 Guid.NewGuid(),
+                                 DevelopmentAttemptRole.Coder,
+                                 "coder-local",
+                                 "local",
+                                 ready.Version))
+                             .ConfigureAwait(false);
+
+        // The coder attempt itself succeeds: writing a manifest is not a security violation, so it produces evidence
+        // and the gate is what refuses it.
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentCoderAttemptRunner>()
+                       .RunAsync(coderAttemptId, repositoryBinding)
+                       .ConfigureAwait(false);
+
+        var validation = await scope.ServiceProvider.GetRequiredService<IDevelopmentValidationRunner>()
+                                    .RunAsync(seed.TaskId, repositoryBinding)
+                                    .ConfigureAwait(false);
+
+        AssertEx.False(validation.Passed);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, validation.TaskStatus);
+        var report = await ReadValidationReportAsync(scope.ServiceProvider, validation.ArtifactId, seed.TaskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentValidationFailureCodes.DependencyManifestChanged, report.FailureCode);
+        AssertEx.Contains(AssertEx.NotNull(report.FailureDetail), "Directory.Packages.props", StringComparison.Ordinal);
+
+        // The gate deliberately ran nothing: the answer was known before the first command, and an attempt with no
+        // egress cannot resolve the change anyway.
+        AssertEx.Empty(report.Commands);
+        var task = await store.GetTaskAsync(seed.TaskId).ConfigureAwait(false);
+        AssertEx.Equal(DevelopmentTaskStatus.InProgress, task.Status);
+    }
+
     [Test]
     public async Task Validation_WhenAnotherCoderAttemptIsRunning_RejectsWithoutChangingTaskState()
     {
