@@ -24654,11 +24654,11 @@
           "transportKind",
           "arguments",
           "env",
+          "trustTier",
           "enabled",
           "version",
           "createdAtUtc",
-          "updatedAtUtc",
-          "trustTier"
+          "updatedAtUtc"
         ],
         "properties": {
           "id": {
@@ -24727,6 +24727,20 @@
         "enum": [
           "Stdio",
           "Http"
+        ]
+      },
+      "XE_Local_AI_EngineClientPersistenceMcpTrustTier": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Sandboxed",
+          "PrivilegedHost",
+          "BuiltInTrusted"
+        ],
+        "enum": [
+          "Sandboxed",
+          "PrivilegedHost",
+          "BuiltInTrusted"
         ]
       },
       "XE_Local_AI_EngineClientEndpointsMcpV1CreateMcpServerRequest": {
@@ -32580,20 +32594,6 @@
             "format": "int32"
           }
         }
-      },
-      "XE_Local_AI_EngineClientPersistenceMcpTrustTier": {
-        "type": "string",
-        "description": "",
-        "x-enumNames": [
-          "Sandboxed",
-          "PrivilegedHost",
-          "BuiltInTrusted"
-        ],
-        "enum": [
-          "Sandboxed",
-          "PrivilegedHost",
-          "BuiltInTrusted"
-        ]
       }
     },
     "securitySchemes": {

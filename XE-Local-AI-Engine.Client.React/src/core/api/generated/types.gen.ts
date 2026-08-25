@@ -2146,6 +2146,8 @@ export type XeLocalAiEngineClientEndpointsMcpV1McpServerResponse = {
 
 export type XeLocalAiEngineClientPersistenceMcpTransportKind = "Stdio" | "Http";
 
+export type XeLocalAiEngineClientPersistenceMcpTrustTier = "Sandboxed" | "PrivilegedHost" | "BuiltInTrusted";
+
 export type XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = {
 	name?: string | null;
 	description?: string | null;
@@ -4459,8 +4461,6 @@ export type XeLocalAiEngineClientEndpointsAgentsV1UpdateSuggestedPlaybookActionR
 	scope?: string | null;
 	priority?: number;
 };
-
-export type XeLocalAiEngineClientPersistenceMcpTrustTier = "Sandboxed" | "PrivilegedHost" | "BuiltInTrusted";
 
 export type ListWorkspacesData = {
 	body?: never;

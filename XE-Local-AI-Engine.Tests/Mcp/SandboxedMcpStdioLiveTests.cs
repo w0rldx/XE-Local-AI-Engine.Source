@@ -264,8 +264,14 @@ public sealed class SandboxedMcpStdioLiveTests
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), $".xe-mcp-live-{Guid.NewGuid():N}"));
             ScriptPath = Path.Combine(_directory.FullName, "server.sh");
             File.WriteAllText(ScriptPath, Script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-            File.SetUnixFileMode(ScriptPath,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+            if (OperatingSystem.IsLinux())
+            {
+                // The chain's descriptor opener refuses a group- or world-writable component, and the script has to be
+                // executable by the sandbox's own uid. Guarded rather than unconditional because the mode concept does
+                // not exist on Windows — where these tests skip before the fixture is ever constructed.
+                File.SetUnixFileMode(ScriptPath,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+            }
         }
 
         public string ScriptPath { get; }

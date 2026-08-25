@@ -543,7 +543,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///         the scrub.
     ///     </para>
     /// </summary>
-    private ProcessStartInfo BuildScrubbedStartInfo(JailState state, SandboxCommandRequest request, bool redirectStandardInput)
+    private static ProcessStartInfo BuildScrubbedStartInfo(JailState state, SandboxCommandRequest request, bool redirectStandardInput)
     {
         var startInfo = new ProcessStartInfo
         {
