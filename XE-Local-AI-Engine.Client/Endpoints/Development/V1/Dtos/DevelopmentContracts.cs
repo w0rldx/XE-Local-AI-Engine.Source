@@ -159,10 +159,11 @@ public sealed record DevelopmentCapabilityResponse(bool Enabled,
 ///     </para>
 /// </summary>
 /// <param name="Role">
-///     The sandbox role: <c>agent-home</c>, <c>run_python</c>, <c>development</c>, or <c>work-session</c>.
-///     <c>run_python</c> resolves the same provider instance as <c>agent-home</c> and is still reported separately,
-///     because it is the one role that declares a filesystem boundary and its served posture therefore differs on the
-///     same backend.
+///     The sandbox role: <c>agent-home</c>, <c>run_python</c>, <c>mcp-stdio</c>, <c>development</c>, or
+///     <c>work-session</c>. <c>run_python</c> and <c>mcp-stdio</c> resolve the same provider instance as
+///     <c>agent-home</c> and are still reported separately, because they are the roles that declare a filesystem
+///     boundary and their served posture therefore differs on the same backend. <c>mcp-stdio</c> covers a
+///     <c>Sandboxed</c> stdio MCP server only; a <c>PrivilegedHost</c> one declares no requirements and has no row.
 /// </param>
 /// <param name="Provider">The provider resolved for that role (<c>fake</c>, <c>process</c>, or <c>docker</c>).</param>
 /// <param name="Backend">The mechanism the boundary is made of: <c>none</c>, <c>process</c>, <c>bwrap</c>, or <c>docker</c>.</param>

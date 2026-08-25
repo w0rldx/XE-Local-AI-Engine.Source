@@ -21,6 +21,7 @@ internal sealed class McpServerService(
         ArgumentNullException.ThrowIfNull(input);
 
         Validate(input);
+        input = NormalizeTrustTier(input);
         await EnsureNameAvailableAsync(input.Name, excludeId: null, cancellationToken).ConfigureAwait(false);
 
         try
@@ -40,6 +41,7 @@ internal sealed class McpServerService(
         ArgumentNullException.ThrowIfNull(input);
 
         Validate(input);
+        input = NormalizeTrustTier(input);
 
         var existing = await _store.GetByIdAsync(id, cancellationToken).ConfigureAwait(false);
         if (existing is null)
@@ -50,9 +52,12 @@ internal sealed class McpServerService(
         await EnsureNameAvailableAsync(input.Name, id, cancellationToken).ConfigureAwait(false);
 
         // A PUT edit never flips the enabled state — that is the dedicated SetEnabledAsync action — so carry the current
-        // enabled flag through to the store regardless of what the request body claims.
+        // enabled flag through to the store regardless of what the request body claims. Environment values the caller
+        // sent back masked are restored from the stored record: the API never returns a value, so a form that
+        // round-trips what it was shown must not overwrite a secret with the placeholder it was shown instead.
         var edit = input with
         {
+            Environment = RestoreMaskedEnvironment(input.Environment, existing.Environment),
             Enabled = existing.Enabled
         };
 
@@ -160,6 +165,19 @@ internal sealed class McpServerService(
             throw new McpServerValidationException($"Transport '{input.TransportKind}' is not a valid MCP transport.");
         }
 
+        if (!Enum.IsDefined(input.TrustTier))
+        {
+            throw new McpServerValidationException($"Trust tier '{input.TrustTier}' is not a valid MCP trust tier.");
+        }
+
+        if (input.TrustTier == McpTrustTier.BuiltInTrusted)
+        {
+            // BuiltInTrusted names a transport the ENGINE owns. Nothing registered through this surface is one, and
+            // accepting the value here would let an operator (or anything holding a session) label a third-party
+            // executable as engine-owned. Refused rather than silently downgraded, so the attempt is visible.
+            throw new McpServerValidationException("Trust tier 'BuiltInTrusted' is reserved for engine-owned MCP transports and cannot be assigned to a registration.");
+        }
+
         switch (input.TransportKind)
         {
             case McpTransportKind.Stdio:
@@ -177,6 +195,40 @@ internal sealed class McpServerService(
             default:
                 throw new McpServerValidationException($"Transport '{input.TransportKind}' is not supported.");
         }
+    }
+
+    /// <summary>
+    ///     Replaces every environment value the caller sent as <see cref="McpEnvironmentMask.Value" /> with the value
+    ///     already stored under that key. A key that carries the mask and has no stored value keeps the mask verbatim —
+    ///     it is a new key whose value the caller genuinely typed, and inventing an empty string for it would be a
+    ///     guess.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> RestoreMaskedEnvironment(IReadOnlyDictionary<string, string> incoming,
+        IReadOnlyDictionary<string, string> stored)
+    {
+        var restored = new Dictionary<string, string>(incoming.Count, StringComparer.Ordinal);
+        foreach (var (key, value) in incoming)
+        {
+            restored[key] = string.Equals(value, McpEnvironmentMask.Value, StringComparison.Ordinal)
+                            && stored.TryGetValue(key, out var storedValue)
+                ? storedValue
+                : value;
+        }
+
+        return restored;
+    }
+
+    /// <summary>
+    ///     The tier answers "where does this server's PROCESS run", so it is inert for HTTP — this node launches
+    ///     nothing for an HTTP registration, it opens a loopback socket to a server that is already running. An HTTP
+    ///     row is therefore stored at the column default rather than at whatever the request carried, so a persisted
+    ///     <see cref="McpTrustTier.PrivilegedHost" /> can never be read as a host grant somebody actually made.
+    /// </summary>
+    private static McpServerInput NormalizeTrustTier(McpServerInput input)
+    {
+        return input.TransportKind == McpTransportKind.Http
+            ? input with { TrustTier = McpTrustTier.Sandboxed }
+            : input;
     }
 
     private void ValidateHttpUrl(string? url)

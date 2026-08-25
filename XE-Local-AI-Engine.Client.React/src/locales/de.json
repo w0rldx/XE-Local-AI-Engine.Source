@@ -2722,10 +2722,12 @@
 					"name": "Name",
 					"transport": "Transport",
 					"target": "Ziel",
+					"trust": "Vertrauen",
 					"enabled": "Aktiviert",
 					"version": "Version",
 					"actions": "Aktionen"
 				},
+				"trustNotApplicable": "n. z.",
 				"title": "Registrierte Server"
 			},
 			"editor": {
@@ -2748,6 +2750,16 @@
 					"options": {
 						"Stdio": "Stdio",
 						"Http": "HTTP"
+					}
+				},
+				"trustTier": {
+					"label": "Vertrauen",
+					"description": "Sandboxed startet den Server ohne Host-Dateisystem und ohne Netzwerk. Privilegierter Host startet ihn als normalen Prozess auf diesem Rechner — nur für einen Server, der das wirklich braucht.",
+					"privilegedWarning": "Dieser Server läuft außerhalb der Sandbox, mit demselben Zugriff auf Ihre Dateien und Ihr Netzwerk wie die Engine selbst.",
+					"options": {
+						"Sandboxed": "Sandbox",
+						"PrivilegedHost": "Privilegierter Host",
+						"BuiltInTrusted": "Integriert"
 					}
 				},
 				"command": {

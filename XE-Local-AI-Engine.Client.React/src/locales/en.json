@@ -2722,10 +2722,12 @@
 					"name": "Name",
 					"transport": "Transport",
 					"target": "Target",
+					"trust": "Trust",
 					"enabled": "Enabled",
 					"version": "Version",
 					"actions": "Actions"
 				},
+				"trustNotApplicable": "n/a",
 				"title": "Registered servers"
 			},
 			"editor": {
@@ -2748,6 +2750,16 @@
 					"options": {
 						"Stdio": "Stdio",
 						"Http": "HTTP"
+					}
+				},
+				"trustTier": {
+					"label": "Trust",
+					"description": "Sandboxed runs the server with no host filesystem and no network. Privileged host runs it as a normal process on this machine — only for a server that genuinely needs it.",
+					"privilegedWarning": "This server will run outside the sandbox, with the same access to your files and network as the engine itself.",
+					"options": {
+						"Sandboxed": "Sandboxed",
+						"PrivilegedHost": "Privileged host",
+						"BuiltInTrusted": "Built-in"
 					}
 				},
 				"command": {

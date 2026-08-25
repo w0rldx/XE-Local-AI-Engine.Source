@@ -301,6 +301,47 @@ public sealed class McpServerStoreTests : IDisposable
     }
 
     [Test]
+    public async Task AddAsync_DefaultsToTheSandboxedTier_AndRoundTripsAChangedOne()
+    {
+        // The tier is structural and plaintext — the sandbox backend selector reads it before any key is available —
+        // and changing it relaunches the server, so it is connection-affecting and bumps Version.
+        var databasePath = GetDatabasePath("trust-tier.sqlite");
+        using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
+        var clock = new MutableTimeProvider(5_000);
+
+        await using var context = CreateContext(databasePath, keyHolder);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new McpServerStore(context, clock);
+
+        var added = await store.AddAsync(CreateStdioInput());
+        AssertEx.Equal(McpTrustTier.Sandboxed, added.TrustTier);
+        AssertEx.Equal(expected: 1, added.Version);
+
+        clock.Advance(10);
+        var promoted = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateStdioInput() with
+            {
+                TrustTier = McpTrustTier.PrivilegedHost
+            }),
+            "Update should find the server.");
+
+        AssertEx.Equal(McpTrustTier.PrivilegedHost, promoted.TrustTier);
+        AssertEx.Equal(expected: 2, promoted.Version);
+
+        var reread = AssertEx.NotNull(await store.GetByIdAsync(added.Id), "The server should still be readable.");
+        AssertEx.Equal(McpTrustTier.PrivilegedHost, reread.TrustTier);
+
+        // A re-save at the same tier is not a change, so it must not over-invalidate resume.
+        clock.Advance(10);
+        var unchanged = AssertEx.NotNull(await store.UpdateAsync(added.Id, CreateStdioInput() with
+            {
+                TrustTier = McpTrustTier.PrivilegedHost
+            }),
+            "Update should find the server.");
+        AssertEx.Equal(expected: 2, unchanged.Version);
+    }
+
+    [Test]
     public async Task UpdateAsync_WhenIdMissing_ReturnsNull()
     {
         var databasePath = GetDatabasePath("update-missing.sqlite");
@@ -515,6 +556,7 @@ public sealed class McpServerStoreTests : IDisposable
                 ["API_TOKEN"] = "s3cr3t"
             },
             Url: null,
+            McpTrustTier.Sandboxed,
             Enabled: false);
     }
 
@@ -528,6 +570,7 @@ public sealed class McpServerStoreTests : IDisposable
             WorkingDirectory: null,
             new Dictionary<string, string>(),
             LoopbackSseUrl,
+            McpTrustTier.Sandboxed,
             Enabled: false);
     }
 

@@ -135,6 +135,59 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.Null(summary.ResourceLimitsUnavailableReason);
     }
 
+    [Test]
+    public void ToIsolationSummary_ForMcpStdioOnAFullyContainedHost_ReportsIsolatedAndBounded()
+    {
+        // A Sandboxed stdio MCP server declares the same filesystem floor run_python does, so its boundary is the
+        // same — and since the 2026-08-25 ceilings ruling it is bounded too, on the HOST-TOOLCHAIN profile rather than
+        // run_python's: it is a long-lived operator-installed program, so it needs a build-sized ceiling, not a
+        // script-sized one that would strangle a language server on its first index.
+        var containment = FullyContainedHost();
+        using var provider = CreateProcessProvider(containment);
+
+        var summary = DevelopmentContractMapper.ToIsolationSummary("mcp-stdio",
+            SandboxWorkloads.McpStdio,
+            provider,
+            containment);
+
+        AssertEx.Equal("mcp-stdio", summary.Role);
+        AssertEx.Equal("bwrap", summary.Backend);
+        AssertEx.True(summary.FilesystemIsolation);
+        AssertEx.True(summary.NetworkIsolation);
+        AssertEx.Null(summary.FilesystemIsolationUnavailableReason);
+
+        AssertEx.Equal(SandboxCeilingProfile.HostToolchain, SandboxWorkloads.McpStdio.Ceilings);
+        AssertEx.True(summary.ResourceLimits);
+        AssertEx.Null(summary.ResourceLimitsUnavailableReason);
+
+        // Denial is a precondition here without any node switch: the declaration's own network floor refuses egress,
+        // which is what the panel renders as "required" rather than "where available".
+        AssertEx.True(summary.NetworkIsolationRequired);
+    }
+
+    [Test]
+    public void ToIsolationSummary_ForMcpStdioOnAHostWithoutABoundary_ReportsTheMeasuredProbeReason()
+    {
+        // The row an operator reads BEFORE registering a server. On this host every Sandboxed registration will refuse
+        // to connect, and the panel has to say why ahead of the first failed connection rather than only after it.
+        const string Reason = "the host is not Linux (the Windows Job Object path is not implemented)";
+        var containment = SandboxContainment.None with
+        {
+            FilesystemIsolationUnavailableReason = Reason
+        };
+        using var provider = CreateProcessProvider(containment);
+
+        var summary = DevelopmentContractMapper.ToIsolationSummary("mcp-stdio",
+            SandboxWorkloads.McpStdio,
+            provider,
+            containment);
+
+        AssertEx.False(summary.FilesystemIsolation);
+        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, Reason);
+        AssertEx.False(summary.FilesystemIsolationUnavailableReason?.Contains("not requested by this role", StringComparison.Ordinal) == true,
+            "this role DOES ask, so the honest sentence is the measured host reason, not 'it never asked'.");
+    }
+
     /// <summary>
     ///     THE REGRESSION THIS FILE EXISTS FOR SINCE G6b. Live on a Linux box with a working chain, the panel showed
     ///     role <c>development</c> as filesystem-isolated and <c>Isolated</c> — read straight off the process backend's

@@ -7,6 +7,9 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
+using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -27,6 +30,12 @@ public sealed class McpServerConnectionManagerDiTests
         // The store is Scoped (DbContext-backed in production). A singleton that captured it would fail validation.
         services.AddScoped<IMcpServerStore, StubMcpServerStore>();
         services.AddSingleton<IMcpToolRegistry, McpToolRegistry>();
+
+        // The factory routes a Sandboxed stdio server through the substrate, so it takes the agent-role sandbox
+        // provider and the owner/node identity its jail is keyed on. Both are SINGLETONS in the host, which is what
+        // this test has to keep true: a scoped one here would be the same captive-dependency bug the file guards.
+        services.AddSingleton<IAgentSandboxRuntimeProvider>(new FakeSandboxRuntimeProvider(TimeProvider.System));
+        services.AddSingleton<IAgentHomeIdentityProvider, StubIdentityProvider>();
         services.AddSingleton<IMcpClientFactory, McpClientFactory>();
         services.AddSingleton<IMcpServerConnectionManager, McpServerConnectionManager>();
 
@@ -81,6 +90,14 @@ public sealed class McpServerConnectionManagerDiTests
         public Task<IReadOnlyList<McpServerRecord>> ListEnabledAsync(CancellationToken cancellationToken = default)
         {
             throw new NotSupportedException();
+        }
+    }
+
+    private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
+    {
+        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentHomeOwnerIdentity("owner", "node"));
         }
     }
 }

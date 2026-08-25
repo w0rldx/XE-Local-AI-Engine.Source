@@ -88,6 +88,45 @@ public static class SandboxWorkloads
     };
 
     /// <summary>
+    ///     An outbound stdio MCP server at the <c>Sandboxed</c> trust tier — an operator-configured third-party
+    ///     executable this node launches and speaks JSON-RPC to over its stdin/stdout.
+    ///     <para>
+    ///         <b>The isolation floor is not optional, and that is the whole point of the tier.</b> Everything else in
+    ///         this file that names <see cref="SandboxToolchainSource.HostToolchain" /> runs either a fixed binary the
+    ///         engine chose or code a model wrote under an approval gate; this runs a program the operator installed
+    ///         from a README. The threat model's AB3 is exactly that program reading <c>~/.ssh</c> and the node
+    ///         database on its first tool call, and the only control that path had was an environment scrub, which
+    ///         does not touch the filesystem. So the floor states the property — the host filesystem absent from the
+    ///         sandbox's view — and a backend that cannot supply it refuses the connection rather than serving the
+    ///         launch that Phase 2 exists to stop.
+    ///     </para>
+    ///     <para>
+    ///         The network floor is <see cref="SandboxNetworkPolicy.None" /> for the same reason and with the same
+    ///         consequence. It costs nothing extra to enforce: the isolated chain carries its own empty network
+    ///         namespace, so a host that can meet the isolation floor already meets this one.
+    ///     </para>
+    ///     <para>
+    ///         A <c>PrivilegedHost</c> server declares NOTHING here, deliberately: it is not a substrate consumer at
+    ///         all, it is the pre-Phase-2 host launch kept as an explicit, per-server operator grant. See
+    ///         <c>docs/security/mcp-trust-tiers.md</c>.
+    ///     </para>
+    /// </summary>
+    public static readonly SandboxRequirements McpStdio = new()
+    {
+        Workload = "McpStdio (sandboxed)",
+        Toolchain = SandboxToolchainSource.HostToolchain,
+        IsolationFloor = SandboxIsolationMode.Filesystem,
+        NetworkFloor = SandboxNetworkPolicy.None,
+        // The host-toolchain ceilings, not run_python's: an MCP server is a long-lived host-toolchain child, and it is
+        // the one workload here running a program the OPERATOR installed from a README rather than a fixed binary the
+        // engine chose. That is the same reason it declares a filesystem floor — a runaway or hostile server should
+        // cost a bounded amount of the machine, and the toolchain profile is generous enough that no legitimate server
+        // notices it. run_python's script-sized set would strangle a language server on its first index.
+        Ceilings = SandboxCeilingProfile.HostToolchain,
+        Persistence = SandboxPersistence.Disposable
+    };
+
+    /// <summary>
     ///     Development Mode on a node that has NOT been given a container image: the host's toolchain and the worktree
     ///     preserved across kill/restart.
     ///     <para>

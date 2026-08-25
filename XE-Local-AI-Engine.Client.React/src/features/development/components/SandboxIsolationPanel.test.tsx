@@ -104,6 +104,21 @@ describe("SandboxIsolationPanel", () => {
 				readOnlyMounts: true,
 			},
 			{
+				role: "mcp-stdio",
+				provider: "process",
+				backend: "bwrap",
+				level: "Isolated",
+				filesystemIsolation: true,
+				networkIsolation: true,
+				// Denial is a precondition from the declaration's own network floor, with no node switch set — the
+				// distinction the Network column spells out next to the roles for which it is best-effort.
+				networkIsolationRequired: true,
+				// Bounded on the HOST-TOOLCHAIN profile: an operator-installed server is a long-lived toolchain child,
+				// so it gets a build-sized ceiling rather than run_python's script-sized one.
+				resourceLimits: true,
+				readOnlyMounts: true,
+			},
+			{
 				role: "development",
 				provider: "process",
 				backend: "process",
@@ -144,6 +159,14 @@ describe("SandboxIsolationPanel", () => {
 		expect(screen.getByTestId("sandbox-isolation-filesystem-run_python").textContent).toBe("Yes");
 		expect(screen.getByTestId("sandbox-isolation-level-run_python").textContent).toBe("Isolated");
 		expect(screen.getByTestId("sandbox-isolation-backend-run_python").textContent).toBe("bwrap");
+
+		// Two roles on one provider, both isolated, differing on the ceilings axis alone.
+		expect(screen.getByTestId("sandbox-isolation-filesystem-mcp-stdio").textContent).toBe("Yes");
+		expect(screen.getByTestId("sandbox-isolation-level-mcp-stdio").textContent).toBe("Isolated");
+		expect(screen.getByTestId("sandbox-isolation-backend-mcp-stdio").textContent).toBe("bwrap");
+		expect(screen.getByTestId("sandbox-isolation-limits-mcp-stdio").textContent).toBe("Yes");
+		expect(screen.queryByTestId("sandbox-isolation-limits-reason-mcp-stdio")).toBeNull();
+		expect(screen.getByTestId("sandbox-isolation-network-mcp-stdio").textContent).toBe("Yes (required)");
 
 		expect(screen.getByTestId("sandbox-isolation-level-agent-home").textContent).toBe("Confined");
 		expect(screen.getByTestId("sandbox-isolation-level-work-session").textContent).toBe("None");

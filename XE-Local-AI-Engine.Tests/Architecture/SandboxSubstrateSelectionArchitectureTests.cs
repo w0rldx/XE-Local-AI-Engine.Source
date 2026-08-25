@@ -91,6 +91,13 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
             // backend clears that floor (it advertises SupportsHostFilesystemBoundary) and is still excluded, on the
             // toolchain axis alone: compute runs an engine-provisioned host interpreter and never asks for an image.
             [nameof(SandboxWorkloads.RunPython)] = ["process"],
+            // A Sandboxed stdio MCP server: the second workload to declare a filesystem floor, and excluded from the
+            // deterministic backend for run_python's reason — the fake has no mount namespace, so it cannot serve a
+            // boundary, and refusing is the feature. The container backend is excluded on the toolchain axis: an MCP
+            // server is whatever the operator installed on this host (npx, uvx, a compiled binary), which no image
+            // supplies. So this row resolves to the process backend and to nothing else, which is what
+            // docs/security/mcp-trust-tiers.md claims and what would otherwise be only a comment.
+            [nameof(SandboxWorkloads.McpStdio)] = ["process"],
             [nameof(SandboxWorkloads.DevelopmentModeHostToolchain)] = ["fake", "process"],
             // The ONLY row a container backend appears in, and the only declaration that names an image toolchain.
             [nameof(SandboxWorkloads.DevelopmentModeImageToolchain)] = ["docker"]
