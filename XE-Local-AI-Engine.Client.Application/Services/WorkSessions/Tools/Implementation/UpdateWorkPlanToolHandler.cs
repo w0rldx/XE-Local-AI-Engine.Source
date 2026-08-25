@@ -11,7 +11,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     accepted, the unknown key failed the WHOLE batch at deserialization and the retry spent the step's entire
 ///     provider-call budget guessing.
 /// </summary>
-internal sealed record WorkPlanOperationRequest(string? Op,
+internal sealed record WorkPlanOperationRequest(
+    string? Op,
     string? TaskId,
     string? Title,
     string? Name,
@@ -25,7 +26,8 @@ internal sealed record WorkPlanOperationRequest(string? Op,
     /// <summary>The title under whichever key it arrived, trimmed; null when none of them carried anything.</summary>
     public string? EffectiveTitle => Trimmed(Title) ?? Trimmed(Name) ?? Trimmed(Text) ?? Trimmed(Summary);
 
-    private static string? Trimmed(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? Trimmed(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 internal sealed record UpdateWorkPlanRequest(IReadOnlyList<WorkPlanOperationRequest>? Operations);
@@ -34,7 +36,8 @@ internal sealed record UpdateWorkPlanRequest(IReadOnlyList<WorkPlanOperationRequ
 ///     <c>update_work_plan</c>: the model's only way to change the session's task list. The whole batch commits in one
 ///     store transaction, so a partially-applied plan is not a state the session can be observed in.
 /// </summary>
-internal sealed class UpdateWorkPlanToolHandler(IServiceScopeFactory scopeFactory,
+internal sealed class UpdateWorkPlanToolHandler(
+    IServiceScopeFactory scopeFactory,
     IOptions<WorkSessionOptions> options,
     IWorkSessionEventPublisher publisher,
     ILogger<UpdateWorkPlanToolHandler> logger) : WorkSessionToolHandler<UpdateWorkPlanRequest>(scopeFactory, options, publisher, logger)
@@ -88,13 +91,13 @@ internal sealed class UpdateWorkPlanToolHandler(IServiceScopeFactory scopeFactor
         }
 
         var result = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(session.Id,
-                    session.Version,
-                    // One operation id per batch content, so the same batch replayed after a lost response commits once.
-                    WorkSessionOperationId.For(session.Id, session.StepCount, DescribeBatch(changes)),
-                    AgentWorkSessionTaskOrigin.Agent,
-                    changes),
-                cancellationToken)
-            .ConfigureAwait(false);
+                                        session.Version,
+                                        // One operation id per batch content, so the same batch replayed after a lost response commits once.
+                                        WorkSessionOperationId.For(session.Id, session.StepCount, DescribeBatch(changes)),
+                                        AgentWorkSessionTaskOrigin.Agent,
+                                        changes),
+                                    cancellationToken)
+                                .ConfigureAwait(false);
 
         return new WorkSessionToolOutcome(string.Create(CultureInfo.InvariantCulture, $"Recorded {changes.Count} work-plan change(s)."),
             result.Sequence,

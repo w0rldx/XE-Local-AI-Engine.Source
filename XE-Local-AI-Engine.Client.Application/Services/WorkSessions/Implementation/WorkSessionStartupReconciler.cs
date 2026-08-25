@@ -8,7 +8,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     startup. Registered after the chat module so orphaned chat rows are terminalized first: a session that resumes
 ///     must not find its conversation still holding a half-written turn.
 /// </summary>
-public sealed class WorkSessionStartupReconciler(IServiceScopeFactory scopeFactory,
+public sealed class WorkSessionStartupReconciler(
+    IServiceScopeFactory scopeFactory,
     IOptions<WorkSessionOptions> options,
     ILogger<WorkSessionStartupReconciler> logger) : IHostedService
 {

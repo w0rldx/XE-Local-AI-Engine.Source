@@ -76,7 +76,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         const string patch = """
@@ -101,7 +101,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         string[] patches =
@@ -130,7 +130,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         const string patch = """
@@ -157,7 +157,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         _ = await tools.WriteFileAsync("large.txt", "0123456789abcdefg").ConfigureAwait(false);
@@ -186,7 +186,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
 
@@ -230,7 +230,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
 
@@ -269,7 +269,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         _ = await tools.WriteFileAsync(".env", "AWS_SECRET_ACCESS_KEY=renamebypasssentinel\n").ConfigureAwait(false);
@@ -342,7 +342,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
 
@@ -403,7 +403,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
 
@@ -606,7 +606,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using (var sandbox = CreateSandbox())
         {
-            var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+            var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
             first = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
             var tools = new DevelopmentWorkspaceTools(sandbox, first, options, GenericProfile);
 
@@ -635,7 +635,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         }
 
         using var replacementSandbox = CreateSandbox();
-        var replacementProvider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), replacementSandbox, options, TimeProvider.System);
+        var replacementProvider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), replacementSandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var replacement = await replacementProvider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         AssertEx.Equal(first.HostWorktreePath, replacement.HostWorktreePath);
         var replacementTools = new DevelopmentWorkspaceTools(replacementSandbox, replacement, options, GenericProfile);
@@ -677,7 +677,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(canonical));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var workspace = session.HostWorktreePath;
 
@@ -754,7 +754,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         _ = await tools.WriteFileAsync("src/feature.txt", "bounded change\n").ConfigureAwait(false);
@@ -803,7 +803,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         using (var sandbox = CreateSandbox())
         {
-            var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+            var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
             session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
 
             // Identity is supplied per-command because the managed workspace is now a standalone clone: `git clone`
@@ -824,7 +824,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         }
 
         using var replacementSandbox = CreateSandbox();
-        var replacement = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), replacementSandbox, options, TimeProvider.System);
+        var replacement = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), replacementSandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => replacement.PrepareAsync(snapshot, Binding(snapshot, repository)));
     }
 
@@ -838,7 +838,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(sandbox, session, options, GenericProfile);
         _ = await tools.WriteFileAsync("large.txt", new string('x', 1024)).ConfigureAwait(false);
@@ -873,7 +873,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             });
 
         using var sandbox = CreateSandbox();
-        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var workspace = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var runner = new DevelopmentCoderAttemptRunner(store,
             workspace,
             sandbox,
@@ -947,7 +947,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
         using var sandbox = CreateSandbox();
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
 
         var workspaceParent = Path.GetDirectoryName(session.HostWorktreePath)!;

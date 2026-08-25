@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ContainerSandbox;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Runtime.InteropServices;
 using Docker.DotNet;
@@ -43,6 +44,9 @@ public sealed class DockerSandboxRealDaemonTests
     ///     and only the operator of that machine can tell the two apart — so they say which it is.
     /// </summary>
     private const string RequireDockerVariable = "XE_REQUIRE_DOCKER_TESTS";
+
+    /// <summary>The credential the Development-shaped fixture commits, so a shadow has something real to hide.</summary>
+    private const string ShadowedSecretContent = "-----BEGIN PRIVATE KEY-----\ndevmodesentinelvalue\n-----END PRIVATE KEY-----\n";
 
     private static readonly TimeSpan ImagePullTimeout = TimeSpan.FromMinutes(5);
 
@@ -92,6 +96,16 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Contains(settings.CapabilitiesDropped, "ALL");
         AssertEx.Empty(settings.CapabilitiesAdded);
         AssertEx.Contains(settings.SecurityOptions, option => option.Contains("no-new-privileges", StringComparison.OrdinalIgnoreCase));
+
+        // The observed seccomp rendering, recorded here because it is the thing the unit suite has to assume. Measured
+        // against Engine 29.7.2 (rootless, API 1.55): a container created with a seccomp profile inspects back as
+        // `seccomp=<compacted JSON>` — never as a path, and never as the profile's name — while a container created
+        // WITHOUT one inspects back with SecurityOpt null, which is also what a daemon with seccomp disabled reports.
+        // That indistinguishability is the whole reason the profile is passed explicitly.
+        var seccomp = AssertEx.NotNull(settings.SecurityOptions.FirstOrDefault(option => option.StartsWith("seccomp=", StringComparison.Ordinal)),
+            "the daemon applied no seccomp profile; it reported [" + string.Join(", ", settings.SecurityOptions.Select(option => option[..Math.Min(option.Length, 40)])) + "]");
+        AssertEx.Contains(seccomp, "SCMP_ACT_ERRNO");
+        AssertEx.False(seccomp.Contains("unconfined", StringComparison.OrdinalIgnoreCase), "the daemon applied an unconfined seccomp profile");
         AssertEx.Equal("none", settings.NetworkMode);
         AssertEx.Equal(expected: 0, settings.DeviceCount);
         AssertEx.NotEqual("host", settings.PidMode);
@@ -377,13 +391,64 @@ public sealed class DockerSandboxRealDaemonTests
             await ProbeAsync(fixture, "wget -T2 -q -O- http://1.1.1.1 >/dev/null 2>&1 && echo NET-OK || echo NET-BLOCKED"));
     }
 
+    /// <summary>
+    ///     G5 on the container backend. The unit suite can only assert what the engine ASKED for; this is what the
+    ///     daemon did with it — the container reads an EMPTY <c>certs/server.pem</c> while the same file on the host is
+    ///     still the credential, byte for byte. The second half is the load-bearing one: a scheme that neutralized the
+    ///     secret by mutating the worktree would make the tree dirty against its base commit, and an apply would carry
+    ///     the deletion back to the operator's real repository.
+    /// </summary>
+    [Test]
+    public async Task RealDaemon_AShadowedCredentialReadsBackEmptyInsideWhileTheHostFileIsUntouched()
+    {
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateWithRuntimeMountsAsync(options);
+
+        AssertEx.Equal("EMPTY", await ProbeAsync(fixture, "test -s /workspace/certs/server.pem && echo NOT-EMPTY || echo EMPTY"));
+        // Contains, not Equal: ProbeAsync joins stdout and stderr, and the shell's own "Read-only file system"
+        // diagnostic is exactly the evidence being asserted.
+        AssertEx.Contains(await ProbeAsync(fixture, "echo x >> /workspace/certs/server.pem && echo WRITABLE || echo READONLY"), "READONLY");
+
+        var onHost = await File.ReadAllTextAsync(Path.Combine(fixture.WorkspaceRoot, "certs", "server.pem"));
+        AssertEx.Equal(ShadowedSecretContent, onHost);
+    }
+
+    /// <summary>
+    ///     G1(c) on the container backend, composed the way the caller composes it. The flag and the mechanism are two
+    ///     separate facts; this asserts they MEET on a Development-shaped container — the workspace plus the four
+    ///     per-task runtime mounts plus the read-only <c>.git/config</c> — and that the daemon really applied it.
+    /// </summary>
+    [Test]
+    public async Task RealDaemon_DevelopmentShapedRun_ReadsBackNoEgressFromTheCapabilityGatedDecision()
+    {
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateWithRuntimeMountsAsync(options);
+
+        // Exactly the caller-side decision DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy makes.
+        var resolved = fixture.Provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy)
+            ? SandboxNetworkPolicy.None
+            : SandboxNetworkPolicy.Unrestricted;
+        AssertEx.Equal(SandboxNetworkPolicy.None,
+            resolved,
+            "the container backend advertises network policy, so Development Mode must ask it for denial rather than fall back.");
+
+        var settings = await fixture.Client.InspectContainerAsync(fixture.ContainerId);
+        AssertEx.Equal("none", settings.NetworkMode);
+        AssertEx.Equal("NET-BLOCKED",
+            await ProbeAsync(fixture, "wget -T2 -q -O- http://1.1.1.1 >/dev/null 2>&1 && echo NET-OK || echo NET-BLOCKED"));
+
+        // Everything else the hardening contract requires still holds on the denied container.
+        AssertEx.Empty(DockerSandboxHardening.FindViolations(fixture.Specification, settings, fixture.DaemonIsRootless));
+    }
+
     [Test]
     public async Task RealDaemon_WhenUnrestrictedIsRequested_TheContainerIsCreatedOnTheDefaultBridge()
     {
-        // Development Mode requests this: its `dotnet restore` needs the network until D6's package proxy exists, so
-        // while the provider served only `None` the switch could never be thrown. Egress itself is not asserted here —
-        // that would make the suite depend on this machine having working outbound DNS — but the applied network mode
-        // is read back off the daemon, which is the guarantee the provider makes.
+        // Development Mode still requests this — for its WARM RESTORE sandbox, the short-lived one that fills the
+        // package cache from the base commit before the agent-facing sandbox is created. After G1 the agent-facing
+        // sandbox asks for `None` (see the test above); this posture did not become dead, it moved. Egress itself is
+        // not asserted here — that would make the suite depend on this machine having working outbound DNS — but the
+        // applied network mode is read back off the daemon, which is the guarantee the provider makes.
         var options = await RequireDaemonAsync();
         await using var fixture = await ContainerFixture.CreateAsync(options, SandboxNetworkPolicy.Unrestricted);
 
@@ -420,6 +485,130 @@ public sealed class DockerSandboxRealDaemonTests
     }
 
     [Test]
+    // CA2000 is exactly right about the `crashed` provider below, and leaving it undisposed is exactly the point: its
+    // DisposeAsync is the graceful teardown whose ABSENCE creates the leak this test sweeps. The container it created
+    // is removed either by the sweep under test or by the finally block, so nothing is left on the daemon.
+    [SuppressMessage("Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "The undisposed provider models the crash this test exists to recover from; its container is removed in the finally block.")]
+    public async Task RealDaemon_StartupSweep_CollectsAContainerAPreviousRunLeaked()
+    {
+        // The restart, modelled literally: a second provider over the SAME node data directory is what the next
+        // process start is, and its registry is empty for the same reason — the first one's died with it. Against a
+        // real daemon rather than the fake because the property under test is the daemon-side label filter, which the
+        // fake can only imitate.
+        var options = await RequireDaemonAsync();
+        using var workspace = new TemporaryDirectory();
+        var workspaceRoot = Path.Combine(workspace.Path, "workspace");
+        Directory.CreateDirectory(workspaceRoot);
+
+        var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(options);
+        var request = new SandboxCreateRequest
+        {
+            AttachKey = new SandboxAttachKey
+            {
+                OwnerUserId = Guid.NewGuid().ToString("N"),
+                NodeId = "integration-node",
+                ProviderName = DockerSandboxRuntimeProvider.Name,
+                RuntimeProfile = "development",
+                ManifestVersion = 1
+            },
+            RuntimeProfile = "development",
+            NetworkPolicy = SandboxNetworkPolicy.None,
+            TrustedHostWorkspace = new SandboxTrustedHostWorkspace
+            {
+                RootPath = workspaceRoot
+            }
+        };
+
+        // Deliberately NOT disposed: disposing is the graceful teardown whose absence creates the leak.
+        var crashed = new DockerSandboxRuntimeProvider(monitor,
+            new DockerDotNetRuntimeClientFactory(monitor),
+            new FixedNodeDataDirectory(workspace.Path),
+            new FixedTimeProvider(FixedNow),
+            NullLogger<DockerSandboxRuntimeProvider>.Instance);
+
+        var handle = await crashed.CreateOrAttachAsync(request);
+        await using var client = new DockerDotNetRuntimeClientFactory(monitor).Create(DockerDaemonEndpointResolver.Resolve(options));
+        // The handle carries the provider's sandbox id, not the daemon's container id, so the container is located by
+        // the deterministic name the provider gives it.
+        var leaked = (await client.InspectContainerAsync("xe-dev-" + handle.SandboxId)).ContainerId;
+
+        await using var restarted = new DockerSandboxRuntimeProvider(monitor,
+            new DockerDotNetRuntimeClientFactory(monitor),
+            new FixedNodeDataDirectory(workspace.Path),
+            new FixedTimeProvider(FixedNow),
+            NullLogger<DockerSandboxRuntimeProvider>.Instance);
+
+        try
+        {
+            AssertEx.Equal(expected: 1, await restarted.SweepOrphanedContainersAsync());
+            AssertEx.Empty(await client.ListContainersAsync(new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [DockerSandboxHardening.OwnerLabel] = DockerSandboxHardening.OwnerLabelValue,
+                [DockerSandboxHardening.InstallLabel] = DockerSandboxRuntimeProvider.BuildInstallId(workspace.Path)
+            }));
+
+            // Idempotent against a real daemon too: the second start of a swept node finds nothing.
+            AssertEx.Equal(expected: 0, await restarted.SweepOrphanedContainersAsync());
+        }
+        finally
+        {
+            // Belt and braces: if the sweep did not remove it, this test must not leave a container on the box.
+            await client.RemoveContainerAsync(leaked);
+        }
+    }
+
+    [Test]
+    public async Task RealDaemon_StartupSweep_LeavesAnotherInstallationsContainerAlone()
+    {
+        var options = await RequireDaemonAsync();
+        using var theirWorkspace = new TemporaryDirectory();
+        using var ourWorkspace = new TemporaryDirectory();
+        var workspaceRoot = Path.Combine(theirWorkspace.Path, "workspace");
+        Directory.CreateDirectory(workspaceRoot);
+
+        var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(options);
+        await using var theirs = new DockerSandboxRuntimeProvider(monitor,
+            new DockerDotNetRuntimeClientFactory(monitor),
+            new FixedNodeDataDirectory(theirWorkspace.Path),
+            new FixedTimeProvider(FixedNow),
+            NullLogger<DockerSandboxRuntimeProvider>.Instance);
+
+        var handle = await theirs.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = new SandboxAttachKey
+            {
+                OwnerUserId = Guid.NewGuid().ToString("N"),
+                NodeId = "integration-node",
+                ProviderName = DockerSandboxRuntimeProvider.Name,
+                RuntimeProfile = "development",
+                ManifestVersion = 1
+            },
+            RuntimeProfile = "development",
+            NetworkPolicy = SandboxNetworkPolicy.None,
+            TrustedHostWorkspace = new SandboxTrustedHostWorkspace
+            {
+                RootPath = workspaceRoot
+            }
+        });
+
+        await using var ours = new DockerSandboxRuntimeProvider(monitor,
+            new DockerDotNetRuntimeClientFactory(monitor),
+            new FixedNodeDataDirectory(ourWorkspace.Path),
+            new FixedTimeProvider(FixedNow),
+            NullLogger<DockerSandboxRuntimeProvider>.Instance);
+
+        AssertEx.Equal(expected: 0, await ours.SweepOrphanedContainersAsync());
+
+        // Still there, and still usable by the installation that owns it — which is the whole point of the install
+        // label. A sweep keyed on the owner label alone would have taken this one out from under a running engine.
+        await using var client = new DockerDotNetRuntimeClientFactory(monitor).Create(DockerDaemonEndpointResolver.Resolve(options));
+        var settings = await client.InspectContainerAsync("xe-dev-" + handle.SandboxId);
+        AssertEx.Equal("none", settings.NetworkMode);
+    }
+
+    [Test]
     public async Task RealDaemon_AnIdentityThatDoesNotMapToThisEngine_IsRefusedAndTheContainerRemoved()
     {
         // The measurement that inverted the rule, as a regression pin. Under this box's rootless daemon the hardening
@@ -445,6 +634,7 @@ public sealed class DockerSandboxRealDaemonTests
         var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(mismatched);
         await using var provider = new DockerSandboxRuntimeProvider(monitor,
             new DockerDotNetRuntimeClientFactory(monitor),
+            new FixedNodeDataDirectory(workspace.Path),
             new FixedTimeProvider(FixedNow),
             NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
@@ -643,7 +833,7 @@ public sealed class DockerSandboxRealDaemonTests
         }
 
         throw Unavailable("no usable Docker daemon. Tried " + string.Join(" | ", attempts)
-                          + " Start Docker, or point DOCKER_HOST at a daemon this user can open, and re-run.");
+                                                            + " Start Docker, or point DOCKER_HOST at a daemon this user can open, and re-run.");
     }
 
     /// <summary>
@@ -871,11 +1061,32 @@ public sealed class DockerSandboxRealDaemonTests
                     SandboxPath = "/.git/config",
                     ReadOnly = true
                 });
+
+                // G5's shadow, in the exact shape DevelopmentWorkspaceProvider requests it: a committed credential in
+                // the workspace, an engine-generated EMPTY file OUTSIDE it, and a workspace-relative target so the
+                // empty one lands on top of the real one. The real file is left byte-unchanged on disk, which is what
+                // keeps the diff model from seeing a deletion.
+                Directory.CreateDirectory(Path.Combine(workspaceRoot, "certs"));
+                await File.WriteAllTextAsync(Path.Combine(workspaceRoot, "certs", "server.pem"), ShadowedSecretContent);
+                var shadowRoot = Path.Combine(runtimeRoot, "shadow");
+                Directory.CreateDirectory(shadowRoot);
+                var shadowSource = Path.Combine(shadowRoot, "server-pem");
+                await File.WriteAllBytesAsync(shadowSource, []);
+                mounts.Add(new SandboxMount
+                {
+                    HostPath = shadowSource,
+                    SandboxPath = "/certs/server.pem",
+                    TargetIsWorkspaceRelative = true,
+                    ReadOnly = true
+                });
             }
 
             var monitor = new StaticOptionsMonitor<ContainerSandboxOptions>(options);
             var factory = new DockerDotNetRuntimeClientFactory(monitor);
-            var provider = new DockerSandboxRuntimeProvider(monitor, factory, new FixedTimeProvider(FixedNow),
+            var provider = new DockerSandboxRuntimeProvider(monitor,
+                factory,
+                new FixedNodeDataDirectory(workspace.Path),
+                new FixedTimeProvider(FixedNow),
                 NullLogger<DockerSandboxRuntimeProvider>.Instance);
 
             var request = new SandboxCreateRequest
@@ -925,6 +1136,7 @@ public sealed class DockerSandboxRealDaemonTests
                     () => (int)LibC.GetEffectiveGroupId()),
                 "xe-dev-" + handle.SandboxId,
                 handle.SandboxId,
+                DockerSandboxRuntimeProvider.BuildInstallId(workspace.Path),
                 [
                     .. handle.Mounts.Select(mount => new DockerBindMount
                     {

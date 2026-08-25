@@ -135,7 +135,10 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
         // captured here it is gone by the time a command runs and the sandbox silently falls back to the node-wide one.
         var registry = CreateRegistry();
 
-        var handle = await registry.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 4L * 1024 * 1024 });
+        var handle = await registry.CreateOrAttachAsync(CreateRequest(Key()) with
+        {
+            MaxJailDiskBytes = 4L * 1024 * 1024
+        });
 
         AssertEx.Equal(expected: 4L * 1024 * 1024, registry.GetAliveState(handle).MaxJailDiskBytes!.Value);
     }
@@ -158,9 +161,15 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
         // otherwise be silently dropped — the caller would believe it had bought a tighter bound and have the
         // creator's. Tightening is the one direction that is safe to honour after the fact.
         var registry = CreateRegistry();
-        var created = await registry.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 64L * 1024 * 1024 });
+        var created = await registry.CreateOrAttachAsync(CreateRequest(Key()) with
+        {
+            MaxJailDiskBytes = 64L * 1024 * 1024
+        });
 
-        var attached = await registry.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 4L * 1024 * 1024 });
+        var attached = await registry.CreateOrAttachAsync(CreateRequest(Key()) with
+        {
+            MaxJailDiskBytes = 4L * 1024 * 1024
+        });
 
         AssertEx.Equal(created.SandboxId, attached.SandboxId, "the same key must still attach rather than create a second jail");
         AssertEx.Equal(expected: 4L * 1024 * 1024, registry.GetAliveState(attached).MaxJailDiskBytes!.Value);
@@ -172,9 +181,15 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
         // The mirror image, and the one that matters: if an attach could RAISE the ceiling, any later caller could
         // undo the bound the sandbox was created under just by asking, and the control would be advisory.
         var registry = CreateRegistry();
-        var created = await registry.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 4L * 1024 * 1024 });
+        var created = await registry.CreateOrAttachAsync(CreateRequest(Key()) with
+        {
+            MaxJailDiskBytes = 4L * 1024 * 1024
+        });
 
-        _ = await registry.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 512L * 1024 * 1024 });
+        _ = await registry.CreateOrAttachAsync(CreateRequest(Key()) with
+        {
+            MaxJailDiskBytes = 512L * 1024 * 1024
+        });
 
         AssertEx.Equal(expected: 4L * 1024 * 1024, registry.GetAliveState(created).MaxJailDiskBytes!.Value);
     }
@@ -185,7 +200,10 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
         // "No opinion" is not "no ceiling". An attach that omits the field must not erase one, or a single unopinionated
         // caller would widen the sandbox back to the node-wide allowance for everybody sharing it.
         var registry = CreateRegistry();
-        var created = await registry.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 4L * 1024 * 1024 });
+        var created = await registry.CreateOrAttachAsync(CreateRequest(Key()) with
+        {
+            MaxJailDiskBytes = 4L * 1024 * 1024
+        });
 
         _ = await registry.CreateOrAttachAsync(CreateRequest(Key()));
 
@@ -199,11 +217,17 @@ public sealed class SandboxLifecycleRegistryTests : IDisposable
         // decide the answer: whichever wins last, the sandbox must end up carrying the smallest ceiling anybody asked
         // for. A last-writer-wins store would leave a looser ceiling in place half the time.
         var registry = CreateRegistry();
-        var created = await registry.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = 256L * 1024 * 1024 });
+        var created = await registry.CreateOrAttachAsync(CreateRequest(Key()) with
+        {
+            MaxJailDiskBytes = 256L * 1024 * 1024
+        });
         long[] ceilings = [64L * 1024 * 1024, 4L * 1024 * 1024, 128L * 1024 * 1024, 8L * 1024 * 1024, 32L * 1024 * 1024];
 
         await Task.WhenAll(ceilings.Select(ceiling =>
-            Task.Run(() => registry.CreateOrAttachAsync(CreateRequest(Key()) with { MaxJailDiskBytes = ceiling }))));
+            Task.Run(() => registry.CreateOrAttachAsync(CreateRequest(Key()) with
+            {
+                MaxJailDiskBytes = ceiling
+            }))));
 
         AssertEx.Equal(ceilings.Min(), registry.GetAliveState(created).MaxJailDiskBytes!.Value);
     }

@@ -43,6 +43,7 @@ import {
 	type RegisterDevelopmentRepositoryValues,
 	type RegisterDevelopmentTemplateValues,
 } from "@/features/development/components/DevelopmentProjectForm";
+import { SandboxIsolationPanel } from "@/features/development/components/SandboxIsolationPanel";
 import { useDevelopmentAttemptHub } from "@/features/development/hooks/useDevelopmentAttemptHub";
 import {
 	type DevelopmentRepository,
@@ -149,6 +150,7 @@ export function DevelopmentPage() {
 	const capabilityQuery = useDevelopmentCapability();
 	const developmentEnabled = capabilityQuery.data?.enabled === true;
 	const containerRuntime = capabilityQuery.data?.containerRuntime;
+	const sandboxIsolation = capabilityQuery.data?.isolation;
 	// The provider the backend actually resolved. Every surface that describes the isolation posture reads it from
 	// here rather than asserting one, so the two providers cannot both be described by the same static sentence.
 	const sandboxProvider = capabilityQuery.data?.sandboxProvider;
@@ -343,6 +345,13 @@ export function DevelopmentPage() {
 						? apiErrorMessage(capabilityQuery.error, "Could not verify whether Development Mode is available.")
 						: t("pages.development.disabled", "Development Mode is disabled by this node's runtime configuration.")}
 				</Alert>
+
+				{/*
+				 * Rendered on the disabled branch too. Development Mode being off says nothing about how AgentHome and
+				 * `run_python` execute, and this is the one screen that reports that — hiding it here would leave an
+				 * operator with no way to see their agent sandbox's posture at all.
+				 */}
+				<SandboxIsolationPanel roles={sandboxIsolation} />
 			</PageShell>
 		);
 	}
@@ -366,6 +375,8 @@ export function DevelopmentPage() {
 						: undefined
 				}
 			/>
+
+			<SandboxIsolationPanel roles={sandboxIsolation} />
 
 			<PageHeader
 				icon={<IconCode size={24} />}

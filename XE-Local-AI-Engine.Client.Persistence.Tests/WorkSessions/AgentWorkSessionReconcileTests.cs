@@ -27,7 +27,12 @@ public sealed class AgentWorkSessionReconcileTests
 
         AssertEx.Equal(expected: 3, await store.ReconcileRunningSessionsAsync(Reason).ConfigureAwait(false));
 
-        foreach (var sessionId in new[] { running, waitingForApproval, waitingForInput })
+        foreach (var sessionId in new[]
+                 {
+                     running,
+                     waitingForApproval,
+                     waitingForInput
+                 })
         {
             var session = await store.GetAsync(sessionId).ConfigureAwait(false);
             AssertEx.Equal(AgentWorkSessionStatus.Interrupted, session.Status);

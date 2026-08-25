@@ -29,7 +29,10 @@ public sealed class ComputeOptionsValidatorTests
     [Test]
     public void Validate_WhenTimeoutNotPositive_ReturnsFailure()
     {
-        var result = _validator.Validate(name: null, new ComputeOptions { TimeoutSeconds = 0 });
+        var result = _validator.Validate(name: null, new ComputeOptions
+        {
+            TimeoutSeconds = 0
+        });
 
         AssertEx.False(result.Succeeded);
         AssertEx.Contains(result.Failures, failure => failure.Contains("TimeoutSeconds", StringComparison.Ordinal));
@@ -38,7 +41,10 @@ public sealed class ComputeOptionsValidatorTests
     [Test]
     public void Validate_WhenMaxOutputBytesNotPositive_ReturnsFailure()
     {
-        var result = _validator.Validate(name: null, new ComputeOptions { MaxOutputBytes = 0 });
+        var result = _validator.Validate(name: null, new ComputeOptions
+        {
+            MaxOutputBytes = 0
+        });
 
         AssertEx.False(result.Succeeded);
         AssertEx.Contains(result.Failures, failure => failure.Contains("MaxOutputBytes", StringComparison.Ordinal));
@@ -49,7 +55,10 @@ public sealed class ComputeOptionsValidatorTests
     {
         // Zero disables the node-wide LocalContainer watchdog, but it cannot mean that here: this value only ever
         // tightens the node's ceiling, so a non-positive one is a configuration mistake rather than an opt-out.
-        var result = _validator.Validate(name: null, new ComputeOptions { MaxJailDiskBytes = 0 });
+        var result = _validator.Validate(name: null, new ComputeOptions
+        {
+            MaxJailDiskBytes = 0
+        });
 
         AssertEx.False(result.Succeeded);
         AssertEx.Contains(result.Failures, failure => failure.Contains("MaxJailDiskBytes", StringComparison.Ordinal));

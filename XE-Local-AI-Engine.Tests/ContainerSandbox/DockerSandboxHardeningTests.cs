@@ -139,7 +139,9 @@ public sealed class DockerSandboxHardeningTests
         var violations = DockerSandboxHardening.FindViolations(Specification(),
             Conformant() with
             {
-                SecurityOptions = ["no-new-privileges:false"]
+                // The seccomp profile is left in place: these cases weaken ONE guarantee each, and a read-back missing
+                // both would pass a verifier that had only ever checked one of them.
+                SecurityOptions = ["no-new-privileges:false", Seccomp()]
             });
 
         AssertEx.ContainsSingle(violations, violation => violation.Contains("no-new-privileges", StringComparison.Ordinal));
@@ -153,7 +155,7 @@ public sealed class DockerSandboxHardeningTests
         AssertEx.Empty(DockerSandboxHardening.FindViolations(Specification(),
             Conformant() with
             {
-                SecurityOptions = ["no-new-privileges"]
+                SecurityOptions = ["no-new-privileges", Seccomp()]
             }));
     }
 
@@ -446,6 +448,7 @@ public sealed class DockerSandboxHardeningTests
             new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
             "xe-dev-test",
             "sandbox-1",
+            "install-1",
             [Mount()]);
 
         AssertEx.Equal("1000:1000", specification.User);
@@ -479,6 +482,7 @@ public sealed class DockerSandboxHardeningTests
             new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
             "xe-dev-test",
             "sandbox-1",
+            "install-1",
             [Mount()]);
 
         AssertEx.True(specification.TemporaryFilesystems.ContainsKey("/tmp"),
@@ -518,6 +522,7 @@ public sealed class DockerSandboxHardeningTests
             new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
             "xe-dev-test",
             "sandbox-1",
+            "install-1",
             [Mount()],
             requestedLimits: null,
             SandboxNetworkPolicy.Unrestricted);
@@ -538,6 +543,7 @@ public sealed class DockerSandboxHardeningTests
             new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
             "xe-dev-test",
             "sandbox-1",
+            "install-1",
             [Mount()],
             requestedLimits: null,
             SandboxNetworkPolicy.Unrestricted);
@@ -568,6 +574,73 @@ public sealed class DockerSandboxHardeningTests
         });
 
         AssertEx.ContainsSingle(violations, violation => violation.Contains("host network namespace", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void BuildSpecification_AsksForAnExplicitSeccompProfile()
+    {
+        var securityOptions = Specification().SecurityOptions;
+
+        AssertEx.Contains(securityOptions, "no-new-privileges:true");
+        var seccomp = AssertEx.NotNull(securityOptions.FirstOrDefault(option => option.StartsWith("seccomp=", StringComparison.Ordinal)));
+
+        // The engine's own copy of Docker's default profile, sent as CONTENT. The Engine API takes no host path — the
+        // CLI reads the file and sends the JSON — so what goes on the wire, and what inspect echoes back, is this.
+        AssertEx.Contains(seccomp, "SCMP_ACT_ERRNO");
+        AssertEx.Contains(seccomp, "archMap");
+        AssertEx.True(seccomp.Length > 1024, "the embedded seccomp profile looks truncated: " + seccomp.Length + " chars");
+    }
+
+    [Test]
+    public void FindViolations_WhenNoSeccompProfileWasApplied_RejectsIt()
+    {
+        // The gap this closes. A container created with no seccomp option reads back with SecurityOpt carrying only
+        // no-new-privileges — which is EXACTLY what a daemon running with seccomp switched off reports too. Accepting
+        // it as "the daemon default is fine" would be believing a claim the read-back cannot make.
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with
+        {
+            SecurityOptions = ["no-new-privileges:true"]
+        });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("seccomp", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenTheProfileCameBackUnconfined_RejectsIt()
+    {
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with
+        {
+            SecurityOptions = ["no-new-privileges:true", "seccomp=unconfined"]
+        });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("seccomp", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_AcceptsAProfileTheDaemonRenderedDifferently()
+    {
+        // Matched on "names a profile", not on equality with what was sent. The daemon's rendering of the profile is
+        // its business — measured against Engine 29.7.2 it echoes the compacted JSON — and pinning this check to a
+        // byte-for-byte echo would turn a cosmetic daemon change into a spurious fail-closed rejection, which is the
+        // same trap the no-new-privileges check above is prefix-matched to avoid.
+        AssertEx.Empty(DockerSandboxHardening.FindViolations(Specification(), Conformant() with
+        {
+            SecurityOptions = ["no-new-privileges:true", "seccomp={\"defaultAction\":\"SCMP_ACT_ERRNO\"}"]
+        }));
+    }
+
+    [Test]
+    public void FindViolations_DoesNotPrintTheWholeProfileIntoAViolationMessage()
+    {
+        // The profile is ~9 KB of JSON. A violation message an operator cannot read is a violation message nobody
+        // acts on, so the security options are summarised rather than dumped.
+        var violations = DockerSandboxHardening.FindViolations(Specification(), Conformant() with
+        {
+            SecurityOptions = [Specification().SecurityOptions.First(option => option.StartsWith("seccomp=", StringComparison.Ordinal))]
+        });
+
+        AssertEx.ContainsSingle(violations, violation => violation.Contains("no-new-privileges", StringComparison.Ordinal));
+        AssertEx.True(violations[0].Length < 512, "the violation message carries the whole profile: " + violations[0].Length + " chars");
     }
 
     [Test]
@@ -611,7 +684,14 @@ public sealed class DockerSandboxHardeningTests
             new ResolvedContainerIdentity(UserId: 1000, GroupId: 1000),
             "xe-dev-test",
             "sandbox-1",
+            "install-1",
             [Mount()]);
+    }
+
+    /// <summary>The seccomp option the specification really carries, so a case weakening something else keeps it.</summary>
+    internal static string Seccomp()
+    {
+        return Specification().SecurityOptions.First(option => option.StartsWith("seccomp=", StringComparison.Ordinal));
     }
 
     internal static DockerContainerSettings Conformant()

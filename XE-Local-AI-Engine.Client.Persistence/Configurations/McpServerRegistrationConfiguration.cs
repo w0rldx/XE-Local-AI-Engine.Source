@@ -8,7 +8,11 @@ internal sealed class McpServerRegistrationConfiguration : IEntityTypeConfigurat
 {
     public void Configure(EntityTypeBuilder<McpServerRegistration> builder)
     {
-        builder.ToTable("mcp_servers");
+        // The tier decides where a stdio server's process runs, so a value outside the enum is not a display bug — it
+        // is a row the backend selector cannot resolve. Constrained in the schema for the same reason the api-key
+        // scope is.
+        builder.ToTable("mcp_servers",
+            table => table.HasCheckConstraint("CK_mcp_servers_trust_tier", "trust_tier IN (0, 1, 2)"));
         builder.HasKey(entity => entity.Id);
 
         builder.Property(entity => entity.Id)
@@ -40,6 +44,9 @@ internal sealed class McpServerRegistrationConfiguration : IEntityTypeConfigurat
 
         builder.Property(entity => entity.Url)
                .HasColumnName("url");
+
+        builder.Property(entity => entity.TrustTier)
+               .HasColumnName("trust_tier");
 
         builder.Property(entity => entity.Enabled)
                .HasColumnName("enabled");

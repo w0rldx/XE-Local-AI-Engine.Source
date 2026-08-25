@@ -104,23 +104,23 @@ internal sealed class WorkSessionService : IWorkSessionService
         _ = await ResolveToolCapableAgentAsync(model.AgentDefinitionId, cancellationToken).ConfigureAwait(false);
 
         var conversation = await _persistence.CreateConversationAsync(new NodeChatCreateConversationRequest(title,
-                    UserId: null,
-                    _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                    NodeChatOriginValues.Local,
-                    model.AgentDefinitionId),
-                cancellationToken)
-            .ConfigureAwait(false);
+                                                     UserId: null,
+                                                     _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                                                     NodeChatOriginValues.Local,
+                                                     model.AgentDefinitionId),
+                                                 cancellationToken)
+                                             .ConfigureAwait(false);
 
         try
         {
             var created = await _store.CreateAsync(new CreateWorkSessionCommand(Guid.NewGuid(),
-                        conversation.ConversationId,
-                        model.AgentDefinitionId,
-                        model.Kind,
-                        title,
-                        objective),
-                    cancellationToken)
-                .ConfigureAwait(false);
+                                              conversation.ConversationId,
+                                              model.AgentDefinitionId,
+                                              model.Kind,
+                                              title,
+                                              objective),
+                                          cancellationToken)
+                                      .ConfigureAwait(false);
             return ToDetail(created);
         }
         catch
@@ -143,8 +143,7 @@ internal sealed class WorkSessionService : IWorkSessionService
         if ((objective is not null || model.AgentDefinitionId is not null)
             && session.Status is not (AgentWorkSessionStatus.Draft or AgentWorkSessionStatus.Paused or AgentWorkSessionStatus.Interrupted))
         {
-            throw new WorkSessionInvalidTransitionException(
-                $"A work session's objective and agent can only be changed while it is Draft, Paused or Interrupted; this one is {session.Status}.");
+            throw new WorkSessionInvalidTransitionException($"A work session's objective and agent can only be changed while it is Draft, Paused or Interrupted; this one is {session.Status}.");
         }
 
         if (model.AgentDefinitionId is { } agentDefinitionId && agentDefinitionId != session.AgentDefinitionId)
@@ -210,11 +209,11 @@ internal sealed class WorkSessionService : IWorkSessionService
 
         var messageId = Guid.NewGuid();
         _ = await _persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(session.ConversationId,
-                    messageId,
-                    text.Trim(),
-                    _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
-                cancellationToken)
-            .ConfigureAwait(false);
+                                      messageId,
+                                      text.Trim(),
+                                      _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()),
+                                  cancellationToken)
+                              .ConfigureAwait(false);
 
         // A paused or interrupted session picks the follow-up up by resuming: it rides the next step's history like any
         // other user turn. A parked one does not — its live step already holds the node's invocation slot, and its
@@ -371,12 +370,12 @@ internal sealed class WorkSessionService : IWorkSessionService
         }
 
         var parked = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId,
-                    WorkSessionVersions.Any,
-                    AgentWorkSessionStatus.Paused,
-                    CurrentTaskId: null,
-                    "The node could not admit the work session."),
-                cancellationToken)
-            .ConfigureAwait(false);
+                                         WorkSessionVersions.Any,
+                                         AgentWorkSessionStatus.Paused,
+                                         CurrentTaskId: null,
+                                         "The node could not admit the work session."),
+                                     cancellationToken)
+                                 .ConfigureAwait(false);
         _logger.LogWarning("Work session {SessionId} lost the admission race and was left Paused.", sessionId);
         _ = parked;
         throw new WorkSessionInvalidTransitionException("The node could not admit the work session just now. Try again in a moment.");
@@ -397,8 +396,8 @@ internal sealed class WorkSessionService : IWorkSessionService
         }
 
         var settled = await _store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, session.Version, target, CurrentTaskId: null, sanitizedReason),
-                cancellationToken)
-            .ConfigureAwait(false);
+                                      cancellationToken)
+                                  .ConfigureAwait(false);
         return ToDetail(settled);
     }
 
@@ -466,9 +465,8 @@ internal sealed class WorkSessionService : IWorkSessionService
         var findings = await _store.ListFindingsAsync(session.Id, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
         if (findings.Count > 0)
         {
-            throw new WorkSessionValidationException(
-                "This work session already holds findings taken on a node-local model. Moving it to a cloud model would send them off the node; "
-                + "start a new session, or enable KnowledgeBase:AllowCloudModelAccess if that is what you want.");
+            throw new WorkSessionValidationException("This work session already holds findings taken on a node-local model. Moving it to a cloud model would send them off the node; "
+                                                     + "start a new session, or enable KnowledgeBase:AllowCloudModelAccess if that is what you want.");
         }
     }
 
@@ -477,10 +475,10 @@ internal sealed class WorkSessionService : IWorkSessionService
         try
         {
             _ = await _persistence.DeleteConversationAsync(new NodeChatDeleteConversationRequest(conversationId,
-                        _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
-                        PurgeImmediately: true),
-                    CancellationToken.None)
-                .ConfigureAwait(false);
+                                          _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                                          PurgeImmediately: true),
+                                      CancellationToken.None)
+                                  .ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or TimeoutException)
         {

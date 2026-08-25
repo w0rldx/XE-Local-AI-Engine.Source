@@ -76,8 +76,7 @@ public sealed class WorkSessionStateBlockTests
     [Test]
     public void Compose_DropsSupersededFindingsAndClosedTasks()
     {
-        var block = WorkSessionStateBlockComposer.Compose(StateWith(
-                tasks: [Task("Still open"), Task("Already done", status: AgentWorkSessionTaskStatus.Done)],
+        var block = WorkSessionStateBlockComposer.Compose(StateWith(tasks: [Task("Still open"), Task("Already done", status: AgentWorkSessionTaskStatus.Done)],
                 findings: [Finding("Current"), Finding("Withdrawn", superseded: true)]),
             step: 2,
             maxStepsPerRun: 25);

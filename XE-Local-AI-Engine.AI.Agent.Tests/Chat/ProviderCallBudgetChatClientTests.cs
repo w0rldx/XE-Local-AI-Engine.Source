@@ -124,7 +124,10 @@ public sealed class ProviderCallBudgetChatClientTests
             }
         };
 
-        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { ReservedOutputTokenFloor = 0 }))
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   ReservedOutputTokenFloor = 0
+               }))
         {
             _ = await sut.GetResponseAsync(messages, options);
         }
@@ -144,7 +147,10 @@ public sealed class ProviderCallBudgetChatClientTests
         using var inner = new CapturingChatClient();
         using var sut = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
 
-        var messages = new List<ChatMessage> { new(ChatRole.User, "hi") };
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "hi")
+        };
         var options = new ChatOptions
         {
             AdditionalProperties = new AdditionalPropertiesDictionary
@@ -154,7 +160,10 @@ public sealed class ProviderCallBudgetChatClientTests
             }
         };
 
-        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions { ReservedOutputTokenFloor = 0 }))
+        using (ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions
+               {
+                   ReservedOutputTokenFloor = 0
+               }))
         {
             _ = await sut.GetResponseAsync(messages, options);
         }

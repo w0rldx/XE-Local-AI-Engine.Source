@@ -3,22 +3,52 @@ namespace XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
-///     Builds the transport for a registration (stdio process or loopback-validated HTTP/SSE endpoint) and connects an
-///     <see cref="McpClient" />. The HTTP loopback check is defence in depth: the CRUD service validates loopback on
-///     register, but re-validating here guarantees a row carrying a non-loopback URL can never cause an outbound
-///     connection to an arbitrary remote server.
+///     Builds the transport for a registration and connects an <see cref="McpClient" />.
+///     <para>
+///         A stdio registration is routed by its <see cref="McpTrustTier" />: <see cref="McpTrustTier.Sandboxed" />
+///         (the default) launches the server inside the substrate through
+///         <see cref="SandboxedMcpStdioTransport" />, and <see cref="McpTrustTier.PrivilegedHost" /> keeps the plain
+///         host launch this factory has always done — now as an explicit per-server operator grant rather than as the
+///         only behaviour there is. See <c>docs/security/mcp-trust-tiers.md</c>.
+///     </para>
+///     <para>
+///         The HTTP loopback check is defence in depth: the CRUD service validates loopback on register, but
+///         re-validating here guarantees a row carrying a non-loopback URL can never cause an outbound connection to
+///         an arbitrary remote server.
+///     </para>
 /// </summary>
 internal sealed class McpClientFactory : IMcpClientFactory
 {
+    private readonly IOptions<ComputeOptions> _ceilingDefaults;
+    private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly INodeDataDirectory _nodeDataDirectory;
+    private readonly IOptions<LocalContainerOptions> _nodeOptions;
     private readonly McpOptions _options;
+    private readonly IAgentSandboxRuntimeProvider _sandboxProvider;
 
-    public McpClientFactory(IOptions<McpOptions> options, ILoggerFactory loggerFactory)
+    public McpClientFactory(IOptions<McpOptions> options,
+        IAgentSandboxRuntimeProvider sandboxProvider,
+        IAgentHomeIdentityProvider identityProvider,
+        INodeDataDirectory nodeDataDirectory,
+        IOptions<ComputeOptions> ceilingDefaults,
+        IOptions<LocalContainerOptions> nodeOptions,
+        ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
+        _sandboxProvider = sandboxProvider ?? throw new ArgumentNullException(nameof(sandboxProvider));
+        _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
+        // Only to know which host root a sandboxed server must never be able to read; nothing here writes to it.
+        _nodeDataDirectory = nodeDataDirectory ?? throw new ArgumentNullException(nameof(nodeDataDirectory));
+        _ceilingDefaults = ceilingDefaults ?? throw new ArgumentNullException(nameof(ceilingDefaults));
+        _nodeOptions = nodeOptions ?? throw new ArgumentNullException(nameof(nodeOptions));
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
     }
 
@@ -30,7 +60,9 @@ internal sealed class McpClientFactory : IMcpClientFactory
         return McpClient.CreateAsync(transport, clientOptions: null, _loggerFactory, cancellationToken);
     }
 
-    private IClientTransport BuildTransport(McpServerRecord record)
+    // Internal for the tier-routing test: which TRANSPORT TYPE a record resolves to is the whole of the "where does
+    // this process run" decision, and asserting it needs no process, no sandbox and no host capability.
+    internal IClientTransport BuildTransport(McpServerRecord record)
     {
         return record.TransportKind switch
         {
@@ -40,9 +72,23 @@ internal sealed class McpClientFactory : IMcpClientFactory
         };
     }
 
+    /// <summary>
+    ///     The tier decides WHERE the server's process runs, and it is the only place in this factory that decides it.
+    ///     An unrecognized tier is refused rather than defaulted: a stored value nothing here understands must not be
+    ///     resolved to the privileged branch by accident, and the schema check constraint means reaching this is a
+    ///     code-versus-database mismatch worth surfacing.
+    /// </summary>
     private IClientTransport BuildStdioTransport(McpServerRecord record)
     {
-        return new StdioClientTransport(BuildStdioTransportOptions(record), _loggerFactory);
+        return record.TrustTier switch
+        {
+            McpTrustTier.Sandboxed => new SandboxedMcpStdioTransport(record, _sandboxProvider, _identityProvider, _nodeDataDirectory, _ceilingDefaults, _nodeOptions, _loggerFactory),
+            McpTrustTier.PrivilegedHost => new StdioClientTransport(BuildStdioTransportOptions(record), _loggerFactory),
+            // BuiltInTrusted names an engine-owned transport and there is no engine-owned STDIO one. A row carrying it
+            // reached the database past the CRUD refusal and the schema check, so it is a mismatch, not a tier to
+            // serve — and serving it as either of the other two would be picking a privilege level on its behalf.
+            _ => throw new InvalidOperationException($"Unsupported MCP trust tier '{record.TrustTier}' for a stdio server.")
+        };
     }
 
     // Internal for the transport-hardening test: asserts the built options never inherit the parent env.
@@ -53,6 +99,10 @@ internal sealed class McpClientFactory : IMcpClientFactory
             throw new InvalidOperationException("A stdio MCP server requires a command.");
         }
 
+        // The PrivilegedHost launch path. (The sandboxed path does not come through here: the isolated chain clears
+        // the environment inside the namespace and re-emits an allow-list plus the configured variables, so it applies
+        // the same rule by a different mechanism.)
+        //
         // Never let a stdio MCP server inherit the node's full process environment — it can hold secrets such as
         // XE_NODE_SQLITE_KEY when env-provisioned. ModelContextProtocol 1.4.0 defaults InheritEnvironmentVariables to
         // true; force it off and seed only the SDK's minimal default set (PATH/HOME/etc.), then overlay the per-server

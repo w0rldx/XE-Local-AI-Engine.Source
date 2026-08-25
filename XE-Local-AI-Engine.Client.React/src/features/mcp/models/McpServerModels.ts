@@ -7,6 +7,18 @@ export type McpTransportKind = "Stdio" | "Http";
 
 export const mcpTransportKinds: readonly McpTransportKind[] = ["Stdio", "Http"];
 
+// Mirrors the backend McpTrustTier enum. It decides WHERE a stdio server's process runs; see
+// docs/security/mcp-trust-tiers.md. "BuiltInTrusted" is engine-owned and rejected by the API, so it is not
+// offered here — the union carries it only so a row that somehow holds it renders instead of crashing.
+export type McpTrustTier = "Sandboxed" | "PrivilegedHost" | "BuiltInTrusted";
+
+// The two an operator may choose, in the order the selector shows them: the secure default first.
+export const selectableMcpTrustTiers: readonly McpTrustTier[] = ["Sandboxed", "PrivilegedHost"];
+
+// The placeholder the API returns in place of every stored environment VALUE, and the sentinel an update sends
+// back to mean "keep what is stored". Must match McpEnvironmentMask.Value on the backend.
+export const maskedEnvValue = "__XE_MCP_ENV_UNCHANGED__";
+
 // A single stdio environment variable. The form edits env as an ordered list of key/value pairs; the API
 // layer projects it to the wire map<string,string>. Modeled as a list (not a Record) so the editor can keep
 // blank/duplicate rows while the user types without losing focus or collapsing keys.
@@ -15,8 +27,9 @@ export interface McpEnvEntry {
 	readonly value: string;
 }
 
-// Domain view-model for a registered MCP server. Secret-bearing fields (description, args, env) are encrypted
-// at rest on the node; here they are plaintext for editing. Timestamps are epoch milliseconds (long on the
+// Domain view-model for a registered MCP server. Description and args are encrypted at rest on the node and
+// returned decrypted for editing; env VALUES are never returned — each entry carries maskedEnvValue, and the
+// form submits the mask back unchanged for any value the user did not retype. Timestamps are epoch milliseconds (long on the
 // wire). A server is disabled on register by design — enabled is toggled explicitly by the user.
 export interface McpServerRegistration {
 	readonly id: string;
@@ -28,6 +41,7 @@ export interface McpServerRegistration {
 	readonly workingDirectory: string | null;
 	readonly env: readonly McpEnvEntry[];
 	readonly url: string | null;
+	readonly trustTier: McpTrustTier;
 	readonly enabled: boolean;
 	readonly version: number;
 	readonly createdAtUtc: number;
@@ -46,9 +60,12 @@ export interface McpServerFormValues {
 	workingDirectory: string;
 	env: McpEnvEntry[];
 	url: string;
+	trustTier: McpTrustTier;
 }
 
 const transportKindSchema = z.enum(["Stdio", "Http"]);
+
+const trustTierSchema = z.enum(["Sandboxed", "PrivilegedHost", "BuiltInTrusted"]);
 
 const envEntrySchema = z.object({
 	key: z.string(),
@@ -84,6 +101,7 @@ export const mcpServerFormSchema = z
 		workingDirectory: z.string(),
 		env: z.array(envEntrySchema),
 		url: z.string(),
+		trustTier: trustTierSchema,
 	})
 	.superRefine((value, ctx) => {
 		if (value.transportKind === "Stdio") {

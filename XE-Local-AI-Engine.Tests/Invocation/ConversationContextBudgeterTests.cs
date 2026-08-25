@@ -776,7 +776,12 @@ public sealed class ConversationContextBudgeterTests
         AssertEx.Equal(expected: 1, result.ToolResultsTruncated);
         AssertEx.Equal(expected: 1, result.ReasoningStrippedCount);
         AssertEx.Equal(expected: 1, result.ProtectedResultsExcerptedCount);
-        foreach (var messageId in new[] { "message-historical", "message-reasoning", "message-protected" })
+        foreach (var messageId in new[]
+                 {
+                     "message-historical",
+                     "message-reasoning",
+                     "message-protected"
+                 })
         {
             var rewritten = AssertEx.NotNull(result.Messages.FirstOrDefault(message => string.Equals(message.MessageId, messageId, StringComparison.Ordinal)));
             AssertEx.Equal("budgeter-identity", rewritten.AuthorName, "a rewrite must keep the message's author");

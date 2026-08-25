@@ -21,7 +21,8 @@ public enum WorkPlanTaskOperation
     Drop
 }
 
-public sealed record AgentWorkSessionSnapshot(Guid Id,
+public sealed record AgentWorkSessionSnapshot(
+    Guid Id,
     string Title,
     string Objective,
     AgentWorkSessionKind Kind,
@@ -37,7 +38,8 @@ public sealed record AgentWorkSessionSnapshot(Guid Id,
     long UpdatedAtUtc,
     long Version);
 
-public sealed record WorkSessionTaskSnapshot(Guid Id,
+public sealed record WorkSessionTaskSnapshot(
+    Guid Id,
     Guid SessionId,
     Guid? ParentTaskId,
     long Sequence,
@@ -49,7 +51,8 @@ public sealed record WorkSessionTaskSnapshot(Guid Id,
     int CreatedStep,
     int UpdatedStep);
 
-public sealed record WorkSessionFindingSnapshot(Guid Id,
+public sealed record WorkSessionFindingSnapshot(
+    Guid Id,
     Guid SessionId,
     Guid? TaskId,
     long Sequence,
@@ -59,7 +62,8 @@ public sealed record WorkSessionFindingSnapshot(Guid Id,
     int CreatedStep,
     bool Superseded);
 
-public sealed record WorkSessionArtifactSnapshot(Guid Id,
+public sealed record WorkSessionArtifactSnapshot(
+    Guid Id,
     Guid SessionId,
     long Sequence,
     AgentWorkSessionArtifactKind Kind,
@@ -71,7 +75,8 @@ public sealed record WorkSessionArtifactSnapshot(Guid Id,
     string ManagedReference,
     int CreatedStep);
 
-public sealed record WorkSessionCheckpointSnapshot(Guid Id,
+public sealed record WorkSessionCheckpointSnapshot(
+    Guid Id,
     Guid SessionId,
     long Sequence,
     int Step,
@@ -79,7 +84,8 @@ public sealed record WorkSessionCheckpointSnapshot(Guid Id,
     string StateJson,
     long CreatedAtUtc);
 
-public sealed record WorkSessionEventSnapshot(Guid Id,
+public sealed record WorkSessionEventSnapshot(
+    Guid Id,
     Guid SessionId,
     long Sequence,
     int Step,
@@ -89,7 +95,8 @@ public sealed record WorkSessionEventSnapshot(Guid Id,
     string? Outcome,
     long OccurredAtUtc);
 
-public sealed record CreateWorkSessionCommand(Guid SessionId,
+public sealed record CreateWorkSessionCommand(
+    Guid SessionId,
     Guid ConversationId,
     Guid AgentDefinitionId,
     AgentWorkSessionKind Kind,
@@ -97,7 +104,8 @@ public sealed record CreateWorkSessionCommand(Guid SessionId,
     string Objective,
     int ConfigVersion = 1);
 
-public sealed record UpdateWorkSessionCommand(Guid SessionId,
+public sealed record UpdateWorkSessionCommand(
+    Guid SessionId,
     long ExpectedVersion,
     string? Title = null,
     string? Objective = null,
@@ -107,13 +115,15 @@ public sealed record UpdateWorkSessionCommand(Guid SessionId,
 ///     A status move, optionally re-pointing the current task. A null <see cref="CurrentTaskId" /> leaves the current
 ///     task as it is; a terminal target clears it regardless.
 /// </summary>
-public sealed record TransitionWorkSessionStatusCommand(Guid SessionId,
+public sealed record TransitionWorkSessionStatusCommand(
+    Guid SessionId,
     long ExpectedVersion,
     AgentWorkSessionStatus TargetStatus,
     Guid? CurrentTaskId = null,
     string? SanitizedReason = null);
 
-public sealed record WorkPlanTaskChange(Guid TaskId,
+public sealed record WorkPlanTaskChange(
+    Guid TaskId,
     WorkPlanTaskOperation Operation,
     Guid? ParentTaskId = null,
     string? Title = null,
@@ -121,13 +131,15 @@ public sealed record WorkPlanTaskChange(Guid TaskId,
     AgentWorkSessionTaskStatus? Status = null,
     string? BlockedReason = null);
 
-public sealed record ApplyWorkPlanCommand(Guid SessionId,
+public sealed record ApplyWorkPlanCommand(
+    Guid SessionId,
     long ExpectedVersion,
     Guid OperationId,
     AgentWorkSessionTaskOrigin Origin,
     IReadOnlyList<WorkPlanTaskChange> Changes);
 
-public sealed record AppendWorkSessionFindingCommand(Guid SessionId,
+public sealed record AppendWorkSessionFindingCommand(
+    Guid SessionId,
     Guid FindingId,
     long ExpectedVersion,
     Guid OperationId,
@@ -137,7 +149,8 @@ public sealed record AppendWorkSessionFindingCommand(Guid SessionId,
     string? SourceRef = null,
     Guid? SupersedesFindingId = null);
 
-public sealed record AppendWorkSessionArtifactCommand(Guid SessionId,
+public sealed record AppendWorkSessionArtifactCommand(
+    Guid SessionId,
     Guid ArtifactId,
     long ExpectedVersion,
     Guid OperationId,
@@ -148,7 +161,8 @@ public sealed record AppendWorkSessionArtifactCommand(Guid SessionId,
     long SizeBytes,
     string ManagedReference);
 
-public sealed record AppendWorkSessionCheckpointCommand(Guid SessionId,
+public sealed record AppendWorkSessionCheckpointCommand(
+    Guid SessionId,
     Guid CheckpointId,
     long ExpectedVersion,
     Guid OperationId,
@@ -156,7 +170,8 @@ public sealed record AppendWorkSessionCheckpointCommand(Guid SessionId,
     string? Summary,
     string StateJson);
 
-public sealed record AppendWorkSessionEventCommand(Guid SessionId,
+public sealed record AppendWorkSessionEventCommand(
+    Guid SessionId,
     long ExpectedVersion,
     string EventType,
     Guid? OperationId = null,
@@ -172,7 +187,8 @@ public sealed record AppendWorkSessionEventCommand(Guid SessionId,
 ///         blob store deletes them after the commit, because the schema project cannot reach the blob layer.
 ///     </para>
 /// </summary>
-public sealed record WorkSessionMutationResult(Guid SessionId,
+public sealed record WorkSessionMutationResult(
+    Guid SessionId,
     long Sequence,
     int Step,
     long Version,

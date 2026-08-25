@@ -3,7 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>One row of the work-session list. Deliberately carries no objective — the list never renders one.</summary>
-public sealed record WorkSessionSummary(Guid Id,
+public sealed record WorkSessionSummary(
+    Guid Id,
     string Title,
     AgentWorkSessionKind Kind,
     AgentWorkSessionStatus Status,
@@ -20,7 +21,8 @@ public sealed record WorkSessionSummary(Guid Id,
 ///         later update or lifecycle call echoes back.
 ///     </para>
 /// </summary>
-public sealed record WorkSessionDetail(Guid Id,
+public sealed record WorkSessionDetail(
+    Guid Id,
     string Title,
     string Objective,
     AgentWorkSessionKind Kind,
@@ -36,7 +38,8 @@ public sealed record WorkSessionDetail(Guid Id,
     long CreatedUtc,
     long UpdatedUtc);
 
-public sealed record WorkSessionTaskDto(Guid Id,
+public sealed record WorkSessionTaskDto(
+    Guid Id,
     Guid? ParentTaskId,
     long Sequence,
     string Title,
@@ -47,7 +50,8 @@ public sealed record WorkSessionTaskDto(Guid Id,
     int CreatedStep,
     int UpdatedStep);
 
-public sealed record WorkSessionFindingDto(Guid Id,
+public sealed record WorkSessionFindingDto(
+    Guid Id,
     Guid? TaskId,
     long Sequence,
     AgentWorkSessionFindingKind Kind,
@@ -56,7 +60,8 @@ public sealed record WorkSessionFindingDto(Guid Id,
     int CreatedStep,
     bool Superseded);
 
-public sealed record WorkSessionArtifactDto(Guid Id,
+public sealed record WorkSessionArtifactDto(
+    Guid Id,
     long Sequence,
     AgentWorkSessionArtifactKind Kind,
     string Name,
@@ -66,7 +71,8 @@ public sealed record WorkSessionArtifactDto(Guid Id,
     bool IsValid,
     int CreatedStep);
 
-public sealed record WorkSessionCheckpointDto(Guid Id,
+public sealed record WorkSessionCheckpointDto(
+    Guid Id,
     long Sequence,
     int Step,
     string? Summary,
@@ -84,7 +90,8 @@ public sealed record WorkSessionCheckpointDto(Guid Id,
 ///         "attachedBudgets": int }</c>. It is null on a step that made no provider round at all.
 ///     </para>
 /// </param>
-public sealed record WorkSessionEventDto(Guid Id,
+public sealed record WorkSessionEventDto(
+    Guid Id,
     long Sequence,
     int Step,
     string EventType,
@@ -128,7 +135,8 @@ public sealed record WorkSessionEventDto(Guid Id,
 /// <param name="AttachedBudgets">
 ///     How many invocations the step ran: 1 ordinarily, more when the turn spawned sub-agents, each with its own cap.
 /// </param>
-public sealed record WorkSessionStepConsumptionDetail(int ProviderCalls,
+public sealed record WorkSessionStepConsumptionDetail(
+    int ProviderCalls,
     long EstimatedInputTokens,
     int ToolCallsCompleted,
     int ProviderCallCap,

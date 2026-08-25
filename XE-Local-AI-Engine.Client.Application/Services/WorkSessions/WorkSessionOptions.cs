@@ -46,8 +46,8 @@ public sealed class WorkSessionOptions
     ///         600 seconds), or the node expires the pending tool call the session is parked on before the park clock
     ///         fires and the park times out against a prompt that can no longer be answered.
     ///         <c>WorkSessionOptionsValidator</c> checks the relation at startup against the configured seed. The upper
-///         bound of the range below is 3599 because the node's tool-call age itself caps at 60 minutes
-///         (<c>StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes</c>), so nothing above that could ever validate.
+    ///         bound of the range below is 3599 because the node's tool-call age itself caps at 60 minutes
+    ///         (<c>StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes</c>), so nothing above that could ever validate.
     ///     </para>
     ///     <para>
     ///         follow-up: that check reads the configured value only. <c>INodeRuntimeSettings.GetMaxPendingToolCallAgeMinutes</c>

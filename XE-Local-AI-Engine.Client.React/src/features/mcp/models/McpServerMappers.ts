@@ -8,6 +8,7 @@ import type {
 	McpServerFormValues,
 	McpServerRegistration,
 	McpTransportKind,
+	McpTrustTier,
 } from "@/features/mcp/models/McpServerModels";
 import type { McpConnectionStatus, McpServerToolsView } from "@/features/mcp/models/McpServerToolsModels";
 
@@ -22,6 +23,9 @@ import type { McpConnectionStatus, McpServerToolsView } from "@/features/mcp/mod
 // to expose (a redacted connection error string, never raw transport internals).
 
 const DEFAULT_TRANSPORT_KIND: McpTransportKind = "Stdio";
+// An omitted tier means the secure default, never the privileged one — the same fail-closed reading the
+// backend's DTO default applies.
+const DEFAULT_TRUST_TIER: McpTrustTier = "Sandboxed";
 // The tools response status is a plain string on the wire; the domain narrows it to a known union but the panel
 // renders any unrecognized value gracefully, so an omitted status falls back to the neutral "disabled" state.
 const DEFAULT_CONNECTION_STATUS: McpConnectionStatus = "disabled";
@@ -59,6 +63,7 @@ export function toMcpServerRegistration(
 		workingDirectory: dto.workingDirectory ?? null,
 		env: envMapToEntries(dto.env),
 		url: dto.url ?? null,
+		trustTier: dto.trustTier ?? DEFAULT_TRUST_TIER,
 		enabled: dto.enabled ?? false,
 		version: dto.version ?? 0,
 		createdAtUtc: dto.createdAtUtc ?? 0,
@@ -85,6 +90,9 @@ export function toSaveMcpServerRequest(
 		workingDirectory: isStdio && form.workingDirectory.trim().length > 0 ? form.workingDirectory.trim() : null,
 		env: isStdio ? envEntriesToMap(form.env) : {},
 		url: !isStdio && form.url.trim().length > 0 ? form.url.trim() : null,
+		// The tier is inert for HTTP (this node launches nothing), and the backend normalizes it away; send the
+		// secure default rather than whatever the form happened to be carrying when the transport was switched.
+		trustTier: isStdio ? form.trustTier : "Sandboxed",
 	};
 }
 

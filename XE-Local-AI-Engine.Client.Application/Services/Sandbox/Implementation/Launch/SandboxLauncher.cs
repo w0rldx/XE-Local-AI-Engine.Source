@@ -78,8 +78,7 @@ public sealed class SandboxLauncher : ISandboxLauncher
     {
         if (containment.FilesystemIsolation is not { } isolation)
         {
-            throw new SandboxIsolationUnavailableException(
-                containment.FilesystemIsolationUnavailableReason ?? "this host cannot run a command behind a filesystem boundary");
+            throw new SandboxIsolationUnavailableException(containment.FilesystemIsolationUnavailableReason ?? "this host cannot run a command behind a filesystem boundary");
         }
 
         if (context?.JailRoot is not { } jailRoot || string.IsNullOrWhiteSpace(jailRoot))

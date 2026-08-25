@@ -18,7 +18,8 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 ///         all, and a session must still be able to checkpoint its structured state and be resumed from it.
 ///     </para>
 /// </summary>
-internal sealed class WorkSessionCheckpointComposer(IAgentWorkSessionStore store,
+internal sealed class WorkSessionCheckpointComposer(
+    IAgentWorkSessionStore store,
     IConversationCompactionService compaction,
     ILogger<WorkSessionCheckpointComposer> logger)
 {
@@ -51,14 +52,14 @@ internal sealed class WorkSessionCheckpointComposer(IAgentWorkSessionStore store
         // the work actually stopped.
         var checkpointId = Guid.NewGuid();
         return await _store.AppendCheckpointAsync(new AppendWorkSessionCheckpointCommand(sessionId,
-                    checkpointId,
-                    WorkSessionVersions.Any,
-                    checkpointId,
-                    session.StepCount,
-                    summary,
-                    JsonSerializer.Serialize(state)),
-                cancellationToken)
-            .ConfigureAwait(false);
+                                   checkpointId,
+                                   WorkSessionVersions.Any,
+                                   checkpointId,
+                                   session.StepCount,
+                                   summary,
+                                   JsonSerializer.Serialize(state)),
+                               cancellationToken)
+                           .ConfigureAwait(false);
     }
 
     /// <summary>

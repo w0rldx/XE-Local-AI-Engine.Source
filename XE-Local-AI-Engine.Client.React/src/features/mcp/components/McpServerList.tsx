@@ -36,6 +36,7 @@ export function McpServerList({ servers, isMutating, onEdit, onDelete, onToggleE
 						<Table.Th>{t("pages.mcp.list.columns.name", "Name")}</Table.Th>
 						<Table.Th>{t("pages.mcp.list.columns.transport", "Transport")}</Table.Th>
 						<Table.Th>{t("pages.mcp.list.columns.target", "Target")}</Table.Th>
+						<Table.Th>{t("pages.mcp.list.columns.trust", "Trust")}</Table.Th>
 						<Table.Th>{t("pages.mcp.list.columns.enabled", "Enabled")}</Table.Th>
 						<Table.Th>{t("pages.mcp.list.columns.version", "Version")}</Table.Th>
 						<Table.Th>{t("pages.mcp.list.columns.actions", "Actions")}</Table.Th>
@@ -61,6 +62,23 @@ export function McpServerList({ servers, isMutating, onEdit, onDelete, onToggleE
 								<Text size="sm" ff="monospace" lineClamp={1}>
 									{server.transportKind === "Http" ? (server.url ?? "") : (server.command ?? "")}
 								</Text>
+							</Table.Td>
+							<Table.Td>
+								{server.transportKind === "Stdio" ? (
+									<Badge
+										variant="light"
+										color={server.trustTier === "Sandboxed" ? "teal" : "yellow"}
+										data-testid={`mcp-server-trust-${server.id}`}
+									>
+										{t(`pages.mcp.form.trustTier.options.${server.trustTier}`, server.trustTier)}
+									</Badge>
+								) : (
+									// The tier answers "where does the process run", and this node launches nothing for an
+									// HTTP registration — showing a tier here would imply a grant nobody made.
+									<Text size="sm" c="dimmed">
+										{t("pages.mcp.list.trustNotApplicable", "n/a")}
+									</Text>
+								)}
 							</Table.Td>
 							<Table.Td>
 								<Switch

@@ -58,6 +58,11 @@
          the live Hugging Face API before being added: a one-click install that 404s, or one whose declared size is
          wrong, is worse than an absent row (the size drives the free-disk pre-flight AND the aggregate progress). -->
     <EmbeddedResource Include="Services\Images\Catalog\image-model-catalog.seed.json"/>
+    <!-- Docker's own default seccomp profile, copied verbatim from the module the daemon itself vendors
+         (moby/profiles, tag seccomp/v0.2.3). Embedded rather than materialized to disk: the Engine API takes profile
+         CONTENT, not a host path, so a file on disk is not something the daemon would ever open. See
+         DockerSeccompProfile for the provenance and the measured evidence. -->
+    <EmbeddedResource Include="Services\Sandbox\Container\seccomp-default.json"/>
   </ItemGroup>
 
   <ItemGroup>

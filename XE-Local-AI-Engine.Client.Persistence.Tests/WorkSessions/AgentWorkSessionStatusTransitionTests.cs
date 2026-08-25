@@ -69,8 +69,8 @@ public sealed class AgentWorkSessionStatusTransitionTests
             var sessionId = Guid.NewGuid();
             var version = await ArrangeAsync(store, context, sessionId, from).ConfigureAwait(false);
             _ = await AssertEx.ThrowsAsync<WorkSessionInvalidTransitionException>(() =>
-                                  store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, version, to)),
-                              $"{from} -> {to} must be refused.")
+                                      store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, version, to)),
+                                  $"{from} -> {to} must be refused.")
                               .ConfigureAwait(false);
         }
     }
@@ -102,10 +102,10 @@ public sealed class AgentWorkSessionStatusTransitionTests
         // Park expiry is a supervisor action, not a human one: an unattended parked session must be able to release the
         // node's single invocation slot on its own.
         var paused = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId,
-                version,
-                AgentWorkSessionStatus.Paused,
-                SanitizedReason: "The approval went unanswered past the configured budget."))
-            .ConfigureAwait(false);
+                                    version,
+                                    AgentWorkSessionStatus.Paused,
+                                    SanitizedReason: "The approval went unanswered past the configured budget."))
+                                .ConfigureAwait(false);
         AssertEx.Equal(AgentWorkSessionStatus.Paused, paused.Status);
     }
 
@@ -122,11 +122,11 @@ public sealed class AgentWorkSessionStatusTransitionTests
         _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand(sessionId, stale, "MovesTheVersionOn")).ConfigureAwait(false);
 
         _ = await AssertEx.ThrowsAsync<WorkSessionConcurrencyException>(() => store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                              Guid.NewGuid(),
-                              stale,
-                              Guid.NewGuid(),
-                              AgentWorkSessionFindingKind.Finding,
-                              "Lost update."))).ConfigureAwait(false);
+            Guid.NewGuid(),
+            stale,
+            Guid.NewGuid(),
+            AgentWorkSessionFindingKind.Finding,
+            "Lost update."))).ConfigureAwait(false);
 
         var moved = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, WorkSessionVersions.Any, AgentWorkSessionStatus.Running))
                                .ConfigureAwait(false);
@@ -144,11 +144,11 @@ public sealed class AgentWorkSessionStatusTransitionTests
 
         var created = await WorkSessionTestFixture.SeedAsync(store, sessionId).ConfigureAwait(false);
         var planned = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                created.Version,
-                Guid.NewGuid(),
-                AgentWorkSessionTaskOrigin.Agent,
-                [new WorkPlanTaskChange(taskId, WorkPlanTaskOperation.Add, Title: "Current")]))
-            .ConfigureAwait(false);
+                                     created.Version,
+                                     Guid.NewGuid(),
+                                     AgentWorkSessionTaskOrigin.Agent,
+                                     [new WorkPlanTaskChange(taskId, WorkPlanTaskOperation.Add, Title: "Current")]))
+                                 .ConfigureAwait(false);
         var running = await store.TransitionStatusAsync(new TransitionWorkSessionStatusCommand(sessionId, planned.Version, AgentWorkSessionStatus.Running, taskId))
                                  .ConfigureAwait(false);
         AssertEx.Equal(taskId, running.CurrentTaskId);

@@ -175,8 +175,7 @@ public sealed class SandboxOrphanReaper : IHostedService
 
         if (reapedGroups > 0 || reapedScopes > 0 || deletedJails > 0)
         {
-            _logger.LogInformation(
-                "Reaped {Groups} orphaned sandbox process group(s) and {Scopes} transient scope(s), and removed {Jails} stale jail(s) left by a previous run.",
+            _logger.LogInformation("Reaped {Groups} orphaned sandbox process group(s) and {Scopes} transient scope(s), and removed {Jails} stale jail(s) left by a previous run.",
                 reapedGroups,
                 reapedScopes,
                 deletedJails);

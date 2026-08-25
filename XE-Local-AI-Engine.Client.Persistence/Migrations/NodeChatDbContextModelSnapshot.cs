@@ -3131,6 +3131,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("transport_kind");
 
+                    b.Property<int>("TrustTier")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("trust_tier");
+
                     b.Property<long>("UpdatedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("updated_at_utc");
@@ -3152,7 +3156,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("mcp_servers", (string)null);
+                    b.ToTable("mcp_servers", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_mcp_servers_trust_tier", "trust_tier IN (0, 1, 2)");
+                        });
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelClassification", b =>

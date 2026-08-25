@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Sandbox;
 
 using System.Diagnostics;
 using Microsoft.Extensions.Options;
+using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
@@ -56,7 +57,10 @@ public sealed class SandboxFilesystemIsolationContractTests
         };
         var policy = new SandboxLaunchPolicy
         {
-            ResourceLimits = new SandboxResourceLimits { MemoryMb = 512 },
+            ResourceLimits = new SandboxResourceLimits
+            {
+                MemoryMb = 512
+            },
             DenyNetworkEgress = true
         };
 
@@ -117,7 +121,10 @@ public sealed class SandboxFilesystemIsolationContractTests
         using var without = CreateProvider(new StubProbe(SandboxContainment.None));
         AssertEx.False(without.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation));
 
-        using var with = CreateProvider(new StubProbe(SandboxContainment.None with { FilesystemIsolation = FakeIsolation() }));
+        using var with = CreateProvider(new StubProbe(SandboxContainment.None with
+        {
+            FilesystemIsolation = FakeIsolation()
+        }));
         AssertEx.True(with.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsFilesystemIsolation));
 
         await Task.CompletedTask;
@@ -126,8 +133,14 @@ public sealed class SandboxFilesystemIsolationContractTests
     [Test]
     public async Task CreateRequest_RefusesANonPositiveThreadLimit()
     {
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => _ = IsolatedRequest() with { ThreadLimit = 0 });
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => _ = IsolatedRequest() with { ThreadLimit = -1 });
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => _ = IsolatedRequest() with
+        {
+            ThreadLimit = 0
+        });
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => _ = IsolatedRequest() with
+        {
+            ThreadLimit = -1
+        });
 
         await Task.CompletedTask;
     }
@@ -183,7 +196,7 @@ public sealed class SandboxFilesystemIsolationContractTests
         // into something else.
         if (!OperatingSystem.IsLinux())
         {
-            throw new TUnit.Core.Exceptions.SkipTestException("the probe script is POSIX shell, checked with the host's /bin/sh");
+            throw new SkipTestException("the probe script is POSIX shell, checked with the host's /bin/sh");
         }
 
         var directory = Path.Combine(Path.GetTempPath(), $"xe'probe {Guid.NewGuid():N}");
@@ -262,7 +275,10 @@ public sealed class SandboxFilesystemIsolationContractTests
             UsrMergeEntries = [],
             UserId = 1000,
             GroupId = 1000,
-            UserBusEnvironment = new Dictionary<string, string>(StringComparer.Ordinal) { ["XDG_RUNTIME_DIR"] = "/run/user/1000" }
+            UserBusEnvironment = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["XDG_RUNTIME_DIR"] = "/run/user/1000"
+            }
         };
     }
 

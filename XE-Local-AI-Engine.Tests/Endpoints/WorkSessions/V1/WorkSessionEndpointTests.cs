@@ -182,10 +182,10 @@ public sealed class WorkSessionEndpointTests
         await using var factory = EnabledFactory(service);
 
         using var response = await SendAsync(factory,
-                                       "POST",
-                                       Root,
-                                       """{"title":"Study","objective":"Find out","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""")
-                                   .ConfigureAwait(false);
+                "POST",
+                Root,
+                """{"title":"Study","objective":"Find out","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""")
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         AssertEx.NotNull(response.Headers.Location);
@@ -221,10 +221,10 @@ public sealed class WorkSessionEndpointTests
         var title = new string('t', 201);
 
         using var response = await SendAsync(factory,
-                                       "POST",
-                                       Root,
-                                       $$"""{"title":"{{title}}","objective":"o","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""")
-                                   .ConfigureAwait(false);
+                "POST",
+                Root,
+                $$"""{"title":"{{title}}","objective":"o","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""")
+            .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -355,10 +355,10 @@ public sealed class WorkSessionEndpointTests
         await using var factory = EnabledFactory(service);
 
         using var response = await SendAsync(factory,
-                                       "POST",
-                                       Root,
-                                       """{"title":"t","objective":"o","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""")
-                                   .ConfigureAwait(false);
+                "POST",
+                Root,
+                """{"title":"t","objective":"o","kind":"Research","agentDefinitionId":"33333333-3333-3333-3333-333333333333"}""")
+            .ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -384,7 +384,11 @@ public sealed class WorkSessionEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, listResponse.StatusCode);
         AssertEx.Equal(HttpStatusCode.OK, contentResponse.StatusCode);
-        foreach (var json in new[] { listJson, contentJson })
+        foreach (var json in new[]
+                 {
+                     listJson,
+                     contentJson
+                 })
         {
             AssertEx.False(json.Contains(ManagedReference, StringComparison.Ordinal));
             AssertEx.False(json.Contains("managedReference", StringComparison.OrdinalIgnoreCase));

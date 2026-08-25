@@ -357,13 +357,14 @@ public sealed class WorkSessionToolHandlerTests
         }
     }
 
-    private static string Example(string toolName) => toolName switch
-    {
-        WorkSessionToolDefinitions.UpdateWorkPlan.ToolName => WorkSessionToolDefinitions.UpdateWorkPlan.ExampleArguments,
-        WorkSessionToolDefinitions.RecordFinding.ToolName => WorkSessionToolDefinitions.RecordFinding.ExampleArguments,
-        WorkSessionToolDefinitions.SaveArtifact.ToolName => WorkSessionToolDefinitions.SaveArtifact.ExampleArguments,
-        _ => WorkSessionToolDefinitions.CompleteWorkSession.ExampleArguments
-    };
+    private static string Example(string toolName) =>
+        toolName switch
+        {
+            WorkSessionToolDefinitions.UpdateWorkPlan.ToolName => WorkSessionToolDefinitions.UpdateWorkPlan.ExampleArguments,
+            WorkSessionToolDefinitions.RecordFinding.ToolName => WorkSessionToolDefinitions.RecordFinding.ExampleArguments,
+            WorkSessionToolDefinitions.SaveArtifact.ToolName => WorkSessionToolDefinitions.SaveArtifact.ExampleArguments,
+            _ => WorkSessionToolDefinitions.CompleteWorkSession.ExampleArguments
+        };
 
     private static TestServerWebAppFactory NewFactory(RecordingWorkSessionEventPublisher? publisher = null, params (string Key, string Value)[] configuration) =>
         new()
