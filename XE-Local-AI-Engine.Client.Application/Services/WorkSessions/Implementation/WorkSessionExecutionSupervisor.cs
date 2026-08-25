@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
@@ -50,13 +49,9 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
 
     /// <summary>
     ///     Web defaults, so the consumption record reaches the browser in the same camelCase convention as every other
-    ///     JSON payload the session surface carries. Nulls are dropped: usage is provider-reported and often absent, and
-    ///     an absent key reads better on the event row than a null one.
+    ///     JSON payload the session surface carries.
     /// </summary>
-    private static readonly JsonSerializerOptions ConsumptionJsonOptions = new(JsonSerializerDefaults.Web)
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
+    private static readonly JsonSerializerOptions ConsumptionJsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
     ///     The admission gate. A slot is taken before the run is registered and released in the run's finally, so the
@@ -462,7 +457,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         // What the step actually spent, captured once now that the enumeration has landed and the run's own budget has
         // stopped moving. It rides on whichever terminal row this step writes, because the cap it is measured against
         // is a guess until there are recorded steps to size it from.
-        var consumption = ComposeStepConsumptionDetail(callBudget, terminalEvent);
+        var consumption = ComposeStepConsumptionDetail(callBudget);
         var endedRecorded = false;
 
         // A step that spent its provider-call cap is BOUNDED, not broken: the tools it ran are already persisted and
@@ -574,12 +569,18 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     ///         The counts come off the cap scope the step itself seeded, which is the only readable seam: the run's
     ///         ambient <see cref="ProviderCallBudget" /> is written INSIDE the send path and an
     ///         <see cref="AsyncLocal{T}" /> write does not flow back out, so <c>ProviderCallBudget.Current</c> is null
-    ///         again by the time the enumeration returns. The usage pair is the provider's own count off the terminal
-    ///         event, kept beside the estimate deliberately: the estimator runs ~12 % low on this corpus, and a row
-    ///         carrying both is what makes that visible instead of assumed.
+    ///         again by the time the enumeration returns.
+    ///     </para>
+    ///     <para>
+    ///         Every member is a STEP TOTAL, and the provider's own reported usage is deliberately not among them. The
+    ///         terminal event does carry <c>InputTokens</c>/<c>OutputTokens</c>, but the runner assigns
+    ///         <c>UsageSnapshot</c> per provider round rather than accumulating, so on a multi-round step those are the
+    ///         LAST round's numbers — beside a step-total call count and a step-total estimate they would read as a
+    ///         contradiction. Estimate-versus-truth is measured per round where the two halves actually match, by
+    ///         <c>ProviderCallBudgetChatClient</c>'s observed-usage write-back.
     ///     </para>
     /// </summary>
-    private static string? ComposeStepConsumptionDetail(ProviderCallCapScope? capScope, ChatStreamEvent? terminalEvent = null)
+    private static string? ComposeStepConsumptionDetail(ProviderCallCapScope? capScope)
     {
         if (capScope?.CaptureConsumption() is not { } consumption)
         {
@@ -589,9 +590,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         return JsonSerializer.Serialize(new WorkSessionStepConsumptionDetail(consumption.ProviderCalls,
                 consumption.EstimatedInputTokens,
                 consumption.ToolCallsCompleted,
-                consumption.ProviderCallCap,
-                terminalEvent?.InputTokens,
-                terminalEvent?.OutputTokens),
+                consumption.ProviderCallCap),
             ConsumptionJsonOptions);
     }
 

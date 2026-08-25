@@ -47,12 +47,12 @@ describe("WorkSessionEventsTab", () => {
 		expect(screen.getByTestId("work-session-event-outcome-e1").textContent).toBe("Completed");
 	});
 
-	it("adds the provider's own count when the turn reported one", () => {
+	it("ignores a provider usage figure rather than reporting it beside the step totals", () => {
+		// UsageSnapshot is assigned per provider round, not accumulated, so it is the LAST round's count. Printing it
+		// next to a step-total call count and a step-total estimate would read as a contradiction.
 		renderTab([event("e2", { detailJson: consumption({ usageInputTokens: 21_400, usageOutputTokens: 900 }) })]);
 
-		expect(screen.getByTestId("work-session-event-consumption-e2").textContent).toBe(
-			"7/10 provider calls · 3 tool calls · ~18.2k est. input tokens · 21.4k reported",
-		);
+		expect(screen.getByTestId("work-session-event-consumption-e2").textContent).toBe("7/10 provider calls · 3 tool calls · ~18.2k est. input tokens");
 	});
 
 	it("summarises a failed step the same way", () => {

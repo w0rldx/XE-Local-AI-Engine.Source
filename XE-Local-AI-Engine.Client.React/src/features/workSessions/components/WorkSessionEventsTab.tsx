@@ -17,7 +17,6 @@ interface StepConsumption {
 	readonly estimatedInputTokens: number;
 	readonly toolCallsCompleted: number;
 	readonly providerCallCap: number;
-	readonly usageInputTokens?: number;
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -56,7 +55,6 @@ function parseConsumption(eventType: string | null | undefined, detailJson: stri
 		estimatedInputTokens: candidate["estimatedInputTokens"],
 		toolCallsCompleted: candidate["toolCallsCompleted"],
 		providerCallCap: candidate["providerCallCap"],
-		usageInputTokens: isFiniteNumber(candidate["usageInputTokens"]) ? candidate["usageInputTokens"] : undefined,
 	};
 }
 
@@ -95,23 +93,14 @@ export function WorkSessionEventsTab({ events, hasMore, canLoadMore, onLoadMore 
 			return undefined;
 		}
 
-		const parts = [
-			t("pages.workSessions.events.consumption", "{{calls}}/{{cap}} provider calls · {{tools}} tool calls · ~{{tokens}} est. input tokens", {
-				calls: consumption.providerCalls,
-				cap: consumption.providerCallCap,
-				tools: consumption.toolCallsCompleted,
-				tokens: formatTokens(consumption.estimatedInputTokens),
-			}),
-		];
-		if (consumption.usageInputTokens !== undefined) {
-			parts.push(
-				t("pages.workSessions.events.consumptionReported", "{{tokens}} reported", {
-					tokens: formatTokens(consumption.usageInputTokens),
-				}),
-			);
-		}
-
-		return parts.join(" · ");
+		// Every figure here is a step TOTAL. The provider's own reported usage is deliberately absent: it is a
+		// per-round reading, so beside these it would contradict them on any multi-round step.
+		return t("pages.workSessions.events.consumption", "{{calls}}/{{cap}} provider calls · {{tools}} tool calls · ~{{tokens}} est. input tokens", {
+			calls: consumption.providerCalls,
+			cap: consumption.providerCallCap,
+			tools: consumption.toolCallsCompleted,
+			tokens: formatTokens(consumption.estimatedInputTokens),
+		});
 	}
 
 	const rows = ordered.map((event) => ({ event, consumption: consumptionLine(event) }));
