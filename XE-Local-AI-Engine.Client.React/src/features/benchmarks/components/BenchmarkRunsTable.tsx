@@ -1,4 +1,4 @@
-import { ActionIcon, Checkbox, Group, Menu, Stack, Switch, Table, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Button, Checkbox, Group, Menu, Stack, Switch, Table, Text, Tooltip } from "@mantine/core";
 import { IconChevronDown, IconChevronRight, IconDots, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { Fragment, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -28,6 +28,10 @@ interface BenchmarkRunsTableProps {
 	runs: readonly BenchmarkRunSummary[];
 	cohort: BenchmarkRankCohort;
 	selectedRunIds: readonly string[];
+	/** Runs the project has in total. More than `runs.length` means the table shows one page of them. */
+	totalCount?: number;
+	isLoadingMore?: boolean;
+	onLoadMore?: () => void;
 	isActionPending?: boolean;
 	onToggleRun: (runId: string) => void;
 	onRejudgeRun: (run: BenchmarkRunSummary) => void;
@@ -296,6 +300,9 @@ export function BenchmarkRunsTable({
 	runs,
 	cohort,
 	selectedRunIds,
+	totalCount,
+	isLoadingMore = false,
+	onLoadMore,
 	isActionPending = false,
 	onToggleRun,
 	onRejudgeRun,
@@ -421,6 +428,27 @@ export function BenchmarkRunsTable({
 					</Table.Tbody>
 				</Table>
 			</Table.ScrollContainer>
+			{/* A batch launch can make more runs than one page holds. Saying so — and how many are missing — is the only
+			    thing that keeps the ranking honest when the table shows a prefix of it. */}
+			{totalCount !== undefined && totalCount > runs.length ? (
+				<Group gap="sm" justify="center">
+					<Text size="sm" c="dimmed" data-testid="benchmark-runs-loaded">
+						{t("pages.benchmarks.rank.loaded", "Showing {{loaded}} of {{total}} runs", {
+							loaded: runs.length,
+							total: totalCount,
+						})}
+					</Text>
+					<Button
+						variant="subtle"
+						size="xs"
+						loading={isLoadingMore}
+						onClick={onLoadMore}
+						data-testid="benchmark-runs-load-more"
+					>
+						{t("pages.benchmarks.rank.loadMore", "Load more")}
+					</Button>
+				</Group>
+			) : null}
 		</Stack>
 	);
 }

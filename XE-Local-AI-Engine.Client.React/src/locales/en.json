@@ -4175,6 +4175,8 @@
 				"warmupBadge": "warm-up",
 				"repeatBadge": "#{{index}}",
 				"empty": "No runs yet. Start one to populate the ranking.",
+				"loaded": "Showing {{loaded}} of {{total}} runs",
+				"loadMore": "Load more",
 				"source": {
 					"user": "operator",
 					"judge": "judge",

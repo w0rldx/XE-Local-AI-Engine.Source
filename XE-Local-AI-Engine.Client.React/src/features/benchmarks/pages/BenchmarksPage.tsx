@@ -579,6 +579,9 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						runs={runs}
 						cohort={runsQuery.data.cohort}
 						selectedRunIds={selectedRunIds}
+						totalCount={runsQuery.data.totalCount}
+						isLoadingMore={runsQuery.isPlaceholderData}
+						onLoadMore={runsQuery.loadMore}
 						isActionPending={rejudgeRun.isPending || deleteRun.isPending}
 						onToggleRun={toggleRun}
 						onRejudgeRun={rejudgeOne}

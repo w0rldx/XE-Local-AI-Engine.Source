@@ -1,4 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useState } from "react";
 
 import {
 	cancelBenchmarkRun,
@@ -56,18 +57,24 @@ import { isJudgeActive } from "@/features/benchmarks/models/BenchmarkModels";
 const benchmarkQueryKeys = {
 	projects: ["benchmarks", "projects"] as const,
 	project: (id: string) => ["benchmarks", "projects", id] as const,
+	// `runs` is the invalidation PREFIX; the cached entry carries the page size, which "load more" changes.
 	runs: (projectId: string) => ["benchmarks", "projects", projectId, "runs"] as const,
+	runsPage: (projectId: string, pageSize: number) => ["benchmarks", "projects", projectId, "runs", pageSize] as const,
 	run: (id: string) => ["benchmarks", "runs", id] as const,
 	models: (contextTokens?: number) => ["benchmarks", "eligible-models", contextTokens] as const,
 	rubricPresets: ["benchmarks", "rubric-presets"] as const,
 };
 
 const activeRunPollIntervalMs = 2_000;
+/** How many runs one page holds. A matrix launch can create more than this, so the page grows on demand. */
+const benchmarkRunsPageSize = 100;
 
 /** The ranked page of one project: the rows plus what the ranking was computed against. */
 export interface BenchmarkRunList {
 	items: BenchmarkRunSummary[];
 	cohort: BenchmarkRankCohort;
+	/** Every run of the project, not just the loaded page — a matrix launch easily makes more than one page. */
+	totalCount: number;
 }
 
 /** The three rubrics the node offers as starting points. */
@@ -107,23 +114,42 @@ export function useBenchmarkProject(projectId: string | null) {
 	});
 }
 
+/**
+ * The runs of one project, ranked. "Load more" grows the SINGLE page rather than appending a second one: the node ranks
+ * project-wide and returns the page already ordered, so one bigger request keeps the ranking, the grouping and the
+ * repeat statistics computed over one consistent list — where an infinite query would re-fetch every page on each
+ * two-second poll to arrive at the same rows.
+ */
 export function useBenchmarkRuns(projectId: string | null) {
-	return useQuery<BenchmarkRunList>({
-		queryKey: benchmarkQueryKeys.runs(projectId ?? ""),
+	const [pageSize, setPageSize] = useState(benchmarkRunsPageSize);
+	// A different project starts over at one page; its rows are not the ones the operator asked to see more of.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: resetting is the effect, the size itself is not an input.
+	useEffect(() => setPageSize(benchmarkRunsPageSize), [projectId]);
+	const query = useQuery<BenchmarkRunList>({
+		queryKey: benchmarkQueryKeys.runsPage(projectId ?? "", pageSize),
 		enabled: Boolean(projectId),
+		// Growing the page changes the key, so without this the table would unmount into its loading state on every
+		// "load more" — the rows in hand stay on screen while the bigger page is read.
+		placeholderData: keepPreviousData,
 		refetchInterval: (query) => (hasActiveRun(query.state.data) ? activeRunPollIntervalMs : false),
 		queryFn: async ({ signal }) => {
 			const { data } = await callWithResponseValidation(
 				listBenchmarkRuns({
 					path: { projectId: projectId as string },
-					query: { page: 1, pageSize: 100, includeUnscored: true },
+					query: { page: 1, pageSize, includeUnscored: true },
 					signal,
 					throwOnError: true,
 				}),
 			);
-			return { items: (data.items ?? []).map(toBenchmarkRunSummary), cohort: toBenchmarkRankCohort(data.rankCohort) };
+			return {
+				items: (data.items ?? []).map(toBenchmarkRunSummary),
+				cohort: toBenchmarkRankCohort(data.rankCohort),
+				totalCount: data.totalCount ?? (data.items ?? []).length,
+			};
 		},
 	});
+	const loadMore = useCallback(() => setPageSize((size) => size + benchmarkRunsPageSize), []);
+	return { ...query, loadMore };
 }
 
 export function useBenchmarkRun(runId: string) {

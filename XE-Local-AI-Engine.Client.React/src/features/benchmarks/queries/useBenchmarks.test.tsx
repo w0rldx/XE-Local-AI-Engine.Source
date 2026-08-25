@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
@@ -139,7 +139,7 @@ describe("benchmark queries over the real client", () => {
 		expect(result.current.runs.data?.items[0]?.judge.state).toBe("none");
 	});
 
-	// The run list is paged on the wire even though the UI shows one page.
+	// The run list is paged on the wire, and the first page is what the table opens with.
 	it("requests the runs page explicitly", async () => {
 		let observedUrl = "";
 		server.use(
@@ -155,6 +155,39 @@ describe("benchmark queries over the real client", () => {
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		expect(observedUrl).toContain("page=1");
 		expect(observedUrl).toContain("pageSize=100");
+	});
+
+	// A matrix launch can create more runs than one page holds. `loadMore` asks for a BIGGER first page rather than a
+	// second one, because the node ranks project-wide and returns the page already ordered — appending a second page
+	// would leave the table ranking a list assembled from two reads.
+	it("grows the page on demand and reports how many runs the project has", async () => {
+		const observedPageSizes: string[] = [];
+		server.use(
+			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), ({ request }) => {
+				const pageSize = Number(new URL(request.url).searchParams.get("pageSize") ?? 0);
+				observedPageSizes.push(String(pageSize));
+				return HttpResponse.json({
+					items: Array.from({ length: Math.min(pageSize, 150) }, (_, index) =>
+						runRow({ id: `bbbbbbbb-0000-4000-8000-${String(index).padStart(12, "0")}` }),
+					),
+					page: 1,
+					pageSize,
+					totalCount: 150,
+					rankCohort: { rankedCount: 0, totalScored: 0 },
+				});
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useBenchmarkRuns(projectId), { wrapper });
+
+		await waitFor(() => expect(result.current.data?.items).toHaveLength(100));
+		expect(result.current.data?.totalCount).toBe(150);
+
+		act(() => result.current.loadMore());
+
+		await waitFor(() => expect(result.current.data?.items).toHaveLength(150));
+		expect(observedPageSizes).toEqual(["100", "200"]);
 	});
 
 	// The eligible-model read is context-aware: a requested context narrows the candidates server-side.

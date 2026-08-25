@@ -251,4 +251,24 @@ describe("BenchmarkRunsTable", () => {
 		expect(screen.queryByTestId("benchmark-runs-table")).toBeNull();
 		expect(screen.getByText("No runs yet. Start one to populate the ranking.")).toBeTruthy();
 	});
+
+	// A batch launch can create more runs than one page holds. Silently ranking a prefix of the project is the bug
+	// this line exists to prevent: the table says how much of it is on screen and offers the rest.
+	it("says how many of the project's runs are on screen and loads the rest", () => {
+		const onLoadMore = vi.fn();
+		renderTable([rankedRun, excludedRun], { totalCount: 400, onLoadMore });
+
+		expect(screen.getByTestId("benchmark-runs-loaded").textContent).toBe("Showing 2 of 400 runs");
+
+		fireEvent.click(screen.getByTestId("benchmark-runs-load-more"));
+
+		expect(onLoadMore).toHaveBeenCalledTimes(1);
+	});
+
+	it("offers nothing to load once every run is on screen", () => {
+		renderTable([rankedRun, excludedRun], { totalCount: 2 });
+
+		expect(screen.queryByTestId("benchmark-runs-loaded")).toBeNull();
+		expect(screen.queryByTestId("benchmark-runs-load-more")).toBeNull();
+	});
 });

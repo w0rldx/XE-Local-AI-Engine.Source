@@ -4175,6 +4175,8 @@
 				"warmupBadge": "Aufwärmlauf",
 				"repeatBadge": "#{{index}}",
 				"empty": "Noch keine Läufe. Starten Sie einen, um die Rangliste zu füllen.",
+				"loaded": "{{loaded}} von {{total}} Läufen werden angezeigt",
+				"loadMore": "Mehr laden",
 				"source": {
 					"user": "Betreiber",
 					"judge": "Judge",
