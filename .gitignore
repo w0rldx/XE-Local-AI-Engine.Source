@@ -436,6 +436,7 @@ CLAUDE.local.md
 # rationale behind the default `*.pubxml` ignore does not apply here.
 !/publish/
 !/XE-Local-AI-Engine.Client/Properties/PublishProfiles/*.pubxml
+!/XE-Local-AI-Engine.WindowsLauncher/Properties/PublishProfiles/*.pubxml
 
 # Packaged RC bundles (build output, not source)
 /publish/dist/
