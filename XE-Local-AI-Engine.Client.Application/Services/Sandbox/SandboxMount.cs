@@ -28,6 +28,31 @@ public sealed record SandboxMount
     public required string SandboxPath { get; init; }
 
     /// <summary>
+    ///     Whether <see cref="SandboxPath" /> names a path RELATIVE TO THE TRUSTED HOST WORKSPACE ROOT rather than a
+    ///     target the provider derives from <see cref="HostPath" />.
+    ///     <para>
+    ///         A provider with a mount layer normally derives the target of a mount whose host path lies inside the
+    ///         workspace from that host path — which is how the engine asks for a nested <c>.git/config</c> without
+    ///         knowing what the workspace is called inside a container. Derivation can express "put THIS file where it
+    ///         already is"; it cannot express "put file A where file B is", and there is exactly one case that needs
+    ///         that: shadowing a committed credential with engine-generated empty content, where the mount SOURCE has
+    ///         to live outside the workspace precisely so the real file is left byte-unchanged.
+    ///     </para>
+    ///     <para>
+    ///         A separate opt-in rather than a change to how <see cref="SandboxPath" /> is read, because the per-task
+    ///         HOME, temp and package roots are mounts whose host paths sit outside the workspace and whose targets
+    ///         must stay outside it too. Reading every such target as workspace-relative would place the package cache
+    ///         inside the repository work tree.
+    ///     </para>
+    ///     <para>
+    ///         A provider with no mount layer ignores it, exactly as it ignores <see cref="SandboxPath" /> itself: it
+    ///         reports the host path, and nothing is shadowed. That is why a caller requests a shadow only where
+    ///         <see cref="SandboxProviderCapabilities.SupportsReadOnlyMounts" /> is advertised.
+    ///     </para>
+    /// </summary>
+    public bool TargetIsWorkspaceRelative { get; init; }
+
+    /// <summary>
     ///     Whether the mount must be read-only inside the sandbox.
     ///     <para>
     ///         Capability-gated on the caller's side: a provider that does not advertise

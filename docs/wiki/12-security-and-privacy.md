@@ -371,14 +371,14 @@ The **capability-honesty invariant** runs in both directions off that one record
 - `BuildLaunchPolicy` (called by `CreateOrAttachAsync`) **fail-closed rejects** any `SandboxCreateRequest` asking for something the host cannot serve, with `SandboxCapabilityNotSupportedException`, rather than silently returning a sandbox weaker than requested. It rejects on three counts: `NetworkPolicy.Restricted` at all (no allow-list mechanism exists), a denial request when `SupportsNetworkIsolation` is false, and resource limits when `SupportsResourceLimits` is false.
 - Each `…UnavailableReason` carries the measured reason, so a degraded host logs *why* and a live-gated test skips with a reason instead of passing silently.
 
-> **Do not read that fail-closed gate as a guarantee for Development Mode — on the process provider it never fires, so Development Mode DEGRADES rather than failing closed.** The gate can only reject what is *asked for*, and `DevelopmentWorkspaceProvider` asks for nothing the process provider cannot serve on any host: `NetworkPolicy.Unrestricted` (a deliberate, recorded deferral — the `dotnet restore` in the validation gate needs egress, so denying it would break the feature rather than harden it), **no** `ResourceLimits` at all, and the read-only `.git/config` mount only from a provider that advertises `SupportsReadOnlyMounts`. The consequence is platform-dependent and must not be stated once for both:
+> **Do not read that fail-closed gate as a guarantee for Development Mode — on the process provider it never fires, so Development Mode DEGRADES rather than failing closed.** The gate can only reject what is *asked for*, and `DevelopmentWorkspaceProvider` asks for nothing the process provider cannot serve on any host: the agent-facing sandbox's `NetworkPolicy` is **capability-gated** (`None` where the backend advertises `SupportsNetworkPolicy`, `Unrestricted` otherwise — see the egress paragraph below), **no** `ResourceLimits` at all, and the read-only `.git/config` and credential-shadow mounts only from a provider that advertises `SupportsReadOnlyMounts`. The consequence is platform-dependent and must not be stated once for both:
 >
 > - **On Linux**, the process provider does enforce real containment where the probes succeed — process-group launch, `systemd-run --user` ceilings, and `unshare` network isolation are each independently available, and AgentHome takes the empty-namespace path.
 > - **On Windows** (and any host where every probe fails), the record is `SandboxContainment.None`. Development Mode's generated source, MSBuild targets, source generators and tests then execute **as the signed-in user, with full host network access and no resource ceiling** — the supervised-execution guarantees above (fixed executables, working-directory jail, scrubbed environment, timeouts, output caps) still apply, but there is no OS-level containment underneath them. A container-configured node is the only path that changes this.
 
 Neither half may be softened into a silent no-op: a caller must never believe it received isolation the provider does not implement.
 
-Two scope limits a reader must not overrun. **Egress is deny-everything or nothing** — where the mechanism is active the child gets an empty namespace, so egress is denied outright rather than filtered; `SandboxNetworkPolicy.Restricted` (an allow-list) stays unsupported and rejected. And **Development Mode does not get this** — `DevelopmentWorkspaceProvider` requests `Unrestricted` because its `dotnet restore` needs the network until the container work's restore machinery exists. Only AgentHome requests the denial, so there is no engine-wide egress posture to cite — though **Coder is covered too**, because `CoderWorkspaceReader` does not create its own sandbox: it attaches to AgentHome's via `ISandboxRuntimeProvider.ConnectAsync`, so that one policy decision covers AgentHome's 4 injection sites and Coder's single one (three tools, one injected provider — earlier text said 3, counting the tools). The request is itself **capability-gated** (`AgentHomeService.ResolveNetworkPolicy`): it asks for `None` only where the provider advertises `SupportsNetworkPolicy`, and `Unrestricted` otherwise — an unconditional request would be rejected fail-closed on any host without the mechanism. The AgentHome `policy.json` records the posture in force **at the time the agent home was initialised** (`"unrestricted"` when nothing is enforced, `"disabled"` when egress is denied); note that `EnsureBaselineFilesAsync` deliberately does **not** overwrite an existing `policy.json`, so a home created before denial shipped keeps a file reading `"unrestricted"` while the run is actually denied. That preservation is a tested contract protecting operator edits across re-init, and the drift runs in the safe direction — the file under-reports the boundary, never over-reports it — so read the provider's advertised capability, not this file, when you need the posture of a *current* run. An empty namespace is still not a kernel-hardened boundary: **strong isolation remains deferred to a future OS-isolated provider (MXC) behind this same seam**, and approval-gating upstream stays the interim control wherever a mechanism is inactive.
+Two scope limits a reader must not overrun. **Egress is deny-everything or nothing** — where the mechanism is active the child gets an empty namespace, so egress is denied outright rather than filtered; `SandboxNetworkPolicy.Restricted` (an allow-list) stays unsupported and rejected. **Development Mode now requests the denial too, for the sandbox the agent's work runs in** (see [Development Mode egress](#development-mode-egress-two-sandboxes-one-of-them-denied) for the two-sandbox design, the capability gate, and what it does *not* cover). Both requests are **capability-gated**, so there is still no engine-wide egress posture to cite — though **Coder is covered too**, because `CoderWorkspaceReader` does not create its own sandbox: it attaches to AgentHome's via `ISandboxRuntimeProvider.ConnectAsync`, so that one policy decision covers AgentHome's 4 injection sites and Coder's single one (three tools, one injected provider — earlier text said 3, counting the tools). The request is itself **capability-gated** (`AgentHomeService.ResolveNetworkPolicy`): it asks for `None` only where the provider advertises `SupportsNetworkPolicy`, and `Unrestricted` otherwise — an unconditional request would be rejected fail-closed on any host without the mechanism. The AgentHome `policy.json` records the posture in force **at the time the agent home was initialised** (`"unrestricted"` when nothing is enforced, `"disabled"` when egress is denied); note that `EnsureBaselineFilesAsync` deliberately does **not** overwrite an existing `policy.json`, so a home created before denial shipped keeps a file reading `"unrestricted"` while the run is actually denied. That preservation is a tested contract protecting operator edits across re-init, and the drift runs in the safe direction — the file under-reports the boundary, never over-reports it — so read the provider's advertised capability, not this file, when you need the posture of a *current* run. An empty namespace is still not a kernel-hardened boundary: **strong isolation remains deferred to a future OS-isolated provider (MXC) behind this same seam**, and approval-gating upstream stays the interim control wherever a mechanism is inactive.
 
 Guards a contributor must not weaken:
 
@@ -443,6 +443,88 @@ boundary. Do not describe the selected folder as a kernel-enforced filesystem al
 MXC remains future provider work behind the existing sandbox/workspace seams. It is not integrated today, and no
 current MXC profile should be documented as a security boundary. Any future provider must implement and
 independently validate the isolation guarantees it advertises.
+
+#### Development Mode egress: two sandboxes, one of them denied
+
+Until G1 landed, `DevelopmentWorkspaceProvider` created one sandbox with `NetworkPolicy = Unrestricted` and a
+comment recording the deferral. That was the one live High-risk gap in this feature: a malicious package's
+restore hook, an MSBuild target, or a test could read the whole clone and POST it out. It is now closed on the
+axis the engine controls, in three parts, and the honest statement of what remains open matters as much as what
+does not.
+
+**One sandbox cannot have network for one command and not the next.** `SandboxNetworkPolicy` lives on
+`SandboxCreateRequest` and is fixed at create; `SandboxCommandRequest` has no network field. So the design is
+two sandboxes, not one sandbox with two postures.
+
+1. **A warm restore, from the base commit, with egress.** Before the agent-facing sandbox exists, `PrepareAsync`
+   creates a second short-lived sandbox (`RuntimeProfile = "development-warm"`, its own `SandboxAttachKey`, the
+   same mount set) and runs exactly one command: the frozen profile's `dotnet_restore`. Then it kills it. The
+   per-task `NUGET_PACKAGES` / `DOTNET_CLI_HOME` roots and the generated `obj/` trees outlive it, which is what
+   lets the later `--no-restore` build and `--no-build` test work with no network at all. Running
+   repository-authored MSBuild with egress is sound **here and only here**: at warm time the tree *is* the base
+   commit — the operator's own repository, already trusted to the degree the whole feature trusts it — and the
+   agent has written nothing. The gate is therefore not "is this code safe" but "is this tree provably still the
+   base commit": a warm runs only from a worktree whose **tracked** files are clean
+   (`git status --porcelain --untracked-files=no`), once per `BaseCommit`, with the result recorded in
+   `workspace.json` — which lives in `RuntimePath` and is **never mounted**, so it cannot be read or forged from
+   inside any sandbox. A profile with no restore command (`generic-git`) skips warming entirely.
+
+2. **A dependency-manifest change fails validation.** `DevelopmentDependencyManifestPolicy` runs *before* the
+   command loop and fails the gate with `dependency_manifest_changed` for any change to `**/*.csproj`,
+   `**/Directory.Packages.props`, `**/Directory.Build.props`, `**/Directory.Build.targets`,
+   `**/packages.lock.json`, `**/NuGet.config`, the npm/yarn/pnpm lockfiles, `**/Cargo.toml`, `**/Cargo.lock`,
+   `**/requirements*.txt`, `**/pyproject.toml`, `**/uv.lock` or `**/poetry.lock`. Added counts as much as
+   modified — a new `Directory.Packages.props` changes resolution for the whole tree. This is a **verdict, not a
+   `DevelopmentWorkspaceSecurityException`**: the task returns to `InProgress` carrying the reason, because
+   "delete the failing test" is an attack and "add a package" is a legitimate task this version cannot serve.
+   The set is code-owned and versioned with `DevelopmentCommandProfileCatalog.CurrentVersion`; a packaging system
+   missing from it is a hole, not a gap in coverage.
+
+3. **The agent-facing sandbox asks for `SandboxNetworkPolicy.None`.** Capability-gated exactly as AgentHome's
+   request is (`DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy`): `None` where the backend
+   advertises `SupportsNetworkPolicy`, `Unrestricted` where it does not.
+
+> **The Option-B caveat, stated plainly.** A backend fails a confinement request it cannot honour *closed*. An
+> unconditional `None` would therefore not harden Development Mode on Windows — or on any Linux host whose
+> `unshare` probe failed — it would remove Development Mode from those nodes, because the shipped configuration
+> resolves them to the process backend. On such a node **the attempt still has full host network access**, and
+> the abuse case above is still live there. What makes that acceptable rather than silent is that the
+> Development status surface reports the posture the provider actually **served**, not the one that was
+> requested. Making denial mandatory per node is an open follow-up.
+
+Two things this does *not* close, on any backend. A private feed named by the repository's own `NuGet.config` is
+reached by the **warm** restore, which is correct behaviour and will read as "restore worked, build failed" if
+that feed is unreachable later. And a repository whose restore is not idempotent — a hook that writes into
+`obj/` differently under `--no-restore` — can warm green and build red; the synthetic fixture cannot show this.
+
+#### Committed credentials in the clone
+
+`CreateStandaloneWorkspaceAsync` runs `git clone`, so only **tracked** content reaches the workspace: an
+untracked `.env` in the operator's repository does not ride along. The real exposure is a **committed**
+credential, which is common enough to matter, and every prepare now answers for it in two parts.
+
+Detection is unconditional. The engine asks `git ls-files` and tests every path segment against
+`ISensitiveFileExclusionService.IsSecret` — the same predicate the workspace read tools and AgentHome's copy
+filter use. The set is recorded in `workspace.json` and emitted as an operator-visible `DevelopmentEvent`
+(`WorkspaceSecretsDetected`, idempotent per attempt). It never blocks the attempt.
+
+Neutralization is capability-gated. Where the backend advertises `SupportsReadOnlyMounts`, each detected path is
+shadowed by an **engine-generated empty read-only file mount** at that path — the mechanism `.git/config`
+already uses, with `SandboxMount.TargetIsWorkspaceRelative` set because the mount *source* has to live outside
+the workspace. The file on disk is never touched: deleting or emptying it would make the tree dirty against its
+base commit, so `ValidatePreservedWorktreeAsync` and the `SubjectHash` would see a deletion and an apply would
+delete the operator's real file. The set is capped at 32, above which the prepare fails closed rather than
+shadowing some — a partial shadow reads as a control and is not one.
+
+> **On the process backend — today's default — only detection applies.** It has no mount layer, so nothing is
+> shadowed and the recorded event is the whole control: the engine can see the committed credential but cannot
+> stop the repository's own build or tests from reading it. Do not read this section as parity between the two
+> backends.
+
+Accepted trade: `SecretEntryNames` includes `.env.*`, which matches `.env.example`. Shadowing it is harmless in
+most repositories and confusing in a few; it is the same trade AgentHome's copy filter already makes. And a
+committed test certificate a build legitimately needs will turn a green repository red — the recorded event is
+what makes that diagnosable in one look.
 
 **Container-backed Development Mode execution has shipped, opt-in and off by default.**
 [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted 2026-07-29) approves a

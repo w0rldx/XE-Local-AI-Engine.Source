@@ -45,6 +45,9 @@ public sealed class DockerSandboxRealDaemonTests
     /// </summary>
     private const string RequireDockerVariable = "XE_REQUIRE_DOCKER_TESTS";
 
+    /// <summary>The credential the Development-shaped fixture commits, so a shadow has something real to hide.</summary>
+    private const string ShadowedSecretContent = "-----BEGIN PRIVATE KEY-----\ndevmodesentinelvalue\n-----END PRIVATE KEY-----\n";
+
     private static readonly TimeSpan ImagePullTimeout = TimeSpan.FromMinutes(5);
 
     /// <summary>
@@ -388,13 +391,64 @@ public sealed class DockerSandboxRealDaemonTests
             await ProbeAsync(fixture, "wget -T2 -q -O- http://1.1.1.1 >/dev/null 2>&1 && echo NET-OK || echo NET-BLOCKED"));
     }
 
+    /// <summary>
+    ///     G5 on the container backend. The unit suite can only assert what the engine ASKED for; this is what the
+    ///     daemon did with it — the container reads an EMPTY <c>certs/server.pem</c> while the same file on the host is
+    ///     still the credential, byte for byte. The second half is the load-bearing one: a scheme that neutralized the
+    ///     secret by mutating the worktree would make the tree dirty against its base commit, and an apply would carry
+    ///     the deletion back to the operator's real repository.
+    /// </summary>
+    [Test]
+    public async Task RealDaemon_AShadowedCredentialReadsBackEmptyInsideWhileTheHostFileIsUntouched()
+    {
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateWithRuntimeMountsAsync(options);
+
+        AssertEx.Equal("EMPTY", await ProbeAsync(fixture, "test -s /workspace/certs/server.pem && echo NOT-EMPTY || echo EMPTY"));
+        // Contains, not Equal: ProbeAsync joins stdout and stderr, and the shell's own "Read-only file system"
+        // diagnostic is exactly the evidence being asserted.
+        AssertEx.Contains(await ProbeAsync(fixture, "echo x >> /workspace/certs/server.pem && echo WRITABLE || echo READONLY"), "READONLY");
+
+        var onHost = await File.ReadAllTextAsync(Path.Combine(fixture.WorkspaceRoot, "certs", "server.pem"));
+        AssertEx.Equal(ShadowedSecretContent, onHost);
+    }
+
+    /// <summary>
+    ///     G1(c) on the container backend, composed the way the caller composes it. The flag and the mechanism are two
+    ///     separate facts; this asserts they MEET on a Development-shaped container — the workspace plus the four
+    ///     per-task runtime mounts plus the read-only <c>.git/config</c> — and that the daemon really applied it.
+    /// </summary>
+    [Test]
+    public async Task RealDaemon_DevelopmentShapedRun_ReadsBackNoEgressFromTheCapabilityGatedDecision()
+    {
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateWithRuntimeMountsAsync(options);
+
+        // Exactly the caller-side decision DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy makes.
+        var resolved = fixture.Provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy)
+            ? SandboxNetworkPolicy.None
+            : SandboxNetworkPolicy.Unrestricted;
+        AssertEx.Equal(SandboxNetworkPolicy.None,
+            resolved,
+            "the container backend advertises network policy, so Development Mode must ask it for denial rather than fall back.");
+
+        var settings = await fixture.Client.InspectContainerAsync(fixture.ContainerId);
+        AssertEx.Equal("none", settings.NetworkMode);
+        AssertEx.Equal("NET-BLOCKED",
+            await ProbeAsync(fixture, "wget -T2 -q -O- http://1.1.1.1 >/dev/null 2>&1 && echo NET-OK || echo NET-BLOCKED"));
+
+        // Everything else the hardening contract requires still holds on the denied container.
+        AssertEx.Empty(DockerSandboxHardening.FindViolations(fixture.Specification, settings, fixture.DaemonIsRootless));
+    }
+
     [Test]
     public async Task RealDaemon_WhenUnrestrictedIsRequested_TheContainerIsCreatedOnTheDefaultBridge()
     {
-        // Development Mode requests this: its `dotnet restore` needs the network until D6's package proxy exists, so
-        // while the provider served only `None` the switch could never be thrown. Egress itself is not asserted here —
-        // that would make the suite depend on this machine having working outbound DNS — but the applied network mode
-        // is read back off the daemon, which is the guarantee the provider makes.
+        // Development Mode still requests this — for its WARM RESTORE sandbox, the short-lived one that fills the
+        // package cache from the base commit before the agent-facing sandbox is created. After G1 the agent-facing
+        // sandbox asks for `None` (see the test above); this posture did not become dead, it moved. Egress itself is
+        // not asserted here — that would make the suite depend on this machine having working outbound DNS — but the
+        // applied network mode is read back off the daemon, which is the guarantee the provider makes.
         var options = await RequireDaemonAsync();
         await using var fixture = await ContainerFixture.CreateAsync(options, SandboxNetworkPolicy.Unrestricted);
 
@@ -1005,6 +1059,24 @@ public sealed class DockerSandboxRealDaemonTests
                 {
                     HostPath = Path.Combine(workspaceRoot, ".git", "config"),
                     SandboxPath = "/.git/config",
+                    ReadOnly = true
+                });
+
+                // G5's shadow, in the exact shape DevelopmentWorkspaceProvider requests it: a committed credential in
+                // the workspace, an engine-generated EMPTY file OUTSIDE it, and a workspace-relative target so the
+                // empty one lands on top of the real one. The real file is left byte-unchanged on disk, which is what
+                // keeps the diff model from seeing a deletion.
+                Directory.CreateDirectory(Path.Combine(workspaceRoot, "certs"));
+                await File.WriteAllTextAsync(Path.Combine(workspaceRoot, "certs", "server.pem"), ShadowedSecretContent);
+                var shadowRoot = Path.Combine(runtimeRoot, "shadow");
+                Directory.CreateDirectory(shadowRoot);
+                var shadowSource = Path.Combine(shadowRoot, "server-pem");
+                await File.WriteAllBytesAsync(shadowSource, []);
+                mounts.Add(new SandboxMount
+                {
+                    HostPath = shadowSource,
+                    SandboxPath = "/certs/server.pem",
+                    TargetIsWorkspaceRelative = true,
                     ReadOnly = true
                 });
             }

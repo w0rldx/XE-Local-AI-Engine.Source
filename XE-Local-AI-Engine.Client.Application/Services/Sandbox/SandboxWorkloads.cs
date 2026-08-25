@@ -79,10 +79,24 @@ public static class SandboxWorkloads
     };
 
     /// <summary>
-    ///     Development Mode on a node that has NOT been given a container image: the host's toolchain, the worktree
-    ///     preserved across kill/restart, and egress open. The open egress is a recorded deferral, not an oversight —
-    ///     the validation profiles run <c>dotnet restore</c> into a cold per-task package root, so denying egress today
-    ///     would break Development Mode rather than harden it. Closing it is gap G1 and lands on this layer.
+    ///     Development Mode on a node that has NOT been given a container image: the host's toolchain and the worktree
+    ///     preserved across kill/restart.
+    ///     <para>
+    ///         The network FLOOR stays <see cref="SandboxNetworkPolicy.Unrestricted" /> after G1, and for AgentHome's
+    ///         reason rather than as a leftover: this feature now creates TWO sandboxes per prepare, and they want
+    ///         opposite postures. The short-lived warm-restore sandbox genuinely needs egress — it is what fills the
+    ///         package cache from the base commit — and the agent-facing one tightens to
+    ///         <see cref="SandboxNetworkPolicy.None" /> per call wherever the backend advertises
+    ///         <see cref="SandboxProviderCapabilities.SupportsNetworkPolicy" />
+    ///         (<c>DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy</c>). A floor of <c>None</c> would
+    ///         describe neither, and would refuse the workload outright on a node whose backend cannot confine
+    ///         networking — which is the whole of Windows today.
+    ///     </para>
+    ///     <para>
+    ///         The floor is therefore what the workload will ACCEPT, and the served posture is what
+    ///         the Development status surface reports. Those are different numbers on a node without network
+    ///         confinement, and G6 exists so the difference is visible rather than assumed.
+    ///     </para>
     /// </summary>
     public static readonly SandboxRequirements DevelopmentModeHostToolchain = new()
     {

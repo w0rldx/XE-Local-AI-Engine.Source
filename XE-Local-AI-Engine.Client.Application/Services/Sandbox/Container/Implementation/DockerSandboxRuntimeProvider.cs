@@ -774,6 +774,15 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     /// </summary>
     private static string ResolveMountTarget(SandboxMount mount, ContainerSandboxOptions options, string workspaceRoot)
     {
+        // The one shape derivation cannot express: a mount whose SOURCE is engine-generated content outside the
+        // workspace but whose TARGET is a path inside it — shadowing a committed credential without touching the real
+        // file. ResolveContainerPath still rejects every '..' escape, so a caller cannot name a target outside the
+        // workspace mount this way.
+        if (mount.TargetIsWorkspaceRelative)
+        {
+            return DockerSandboxPaths.ResolveContainerPath(options.WorkspaceMountTarget, mount.SandboxPath);
+        }
+
         var hostPath = Path.GetFullPath(mount.HostPath);
         var workspacePrefix = Path.TrimEndingDirectorySeparator(workspaceRoot) + Path.DirectorySeparatorChar;
         if (!hostPath.StartsWith(workspacePrefix, StringComparison.Ordinal))

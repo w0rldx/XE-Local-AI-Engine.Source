@@ -1,15 +1,27 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Workspace;
+using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvider
 {
     private const string RuntimeProfile = "development-local";
+
+    /// <summary>
+    ///     The runtime profile of the short-lived warm-restore sandbox. A DIFFERENT profile from
+    ///     <see cref="RuntimeProfile" /> is what makes its <see cref="SandboxAttachKey" /> different, which is what
+    ///     stops <c>CreateOrAttachAsync</c> handing back — and later killing — the agent-facing sandbox.
+    /// </summary>
+    private const string WarmRuntimeProfile = "development-warm";
+
     private const int WorkspaceManifestVersion = 2;
 
     /// <summary>
@@ -29,6 +41,19 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
     /// <summary>Caps the git stderr excerpt carried in a failure message. See <c>RedactGitError</c>.</summary>
     private const int GitErrorExcerptLimit = 500;
+
+    /// <summary>
+    ///     The engine-owned directory, inside <c>RuntimePath</c> and never mounted as a directory, holding one empty
+    ///     file per shadowed credential. It sits outside the workspace on purpose: the whole point of the shadow is
+    ///     that the real file is left byte-unchanged, so the substitute must not be in the tree the diff model reads.
+    /// </summary>
+    private const string ShadowDirectoryName = "shadow";
+
+    /// <summary>
+    ///     How many committed credentials this engine will neutralize with read-only mounts before refusing. It bounds
+    ///     an engine-generated mount list against a repository that could otherwise name thousands of them.
+    /// </summary>
+    private const int MaxShadowedSecrets = 32;
 
     /// <summary>
     ///     The per-task runtime subdirectories a build needs, and the reason the control-manifest exclusion is satisfied at zero cost.
@@ -78,20 +103,30 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ];
 
     private readonly INodeDataDirectory _dataDirectory;
+    private readonly ISensitiveFileExclusionService _exclusions;
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
+    private readonly IDevelopmentStore _store;
     private readonly TimeProvider _timeProvider;
 
     public DevelopmentWorkspaceProvider(INodeDataDirectory dataDirectory,
         IDevelopmentSandboxRuntimeProvider sandbox,
         IOptions<DevelopmentOptions> options,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IDevelopmentStore store,
+        ISensitiveFileExclusionService? exclusions = null)
     {
         _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
         _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _store = store ?? throw new ArgumentNullException(nameof(store));
+
+        // The product's single definition of "this file may hold a credential", shared with the workspace tools' read
+        // gate and AgentHome's copy filter. Defaulted rather than required so a directly constructed provider behaves
+        // exactly as the DI-resolved one does; there is only ever one implementation.
+        _exclusions = exclusions ?? new SensitiveFileExclusionService();
     }
 
     public async Task<DevelopmentWorkspaceSession> PrepareAsync(DevelopmentExecutionSnapshot snapshot,
@@ -173,15 +208,15 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         }
         else
         {
-            var manifest = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken).ConfigureAwait(false);
-            if (manifest.Version is not (1 or WorkspaceManifestVersion)
-                || !string.Equals(manifest.RepositoryIdentityHash, identity, StringComparison.OrdinalIgnoreCase)
-                || manifest.SelectedFolderId is { } manifestFolderId && manifestFolderId != repository.SelectedFolderId)
+            var preserved = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken).ConfigureAwait(false);
+            if (preserved.Version is not (1 or WorkspaceManifestVersion)
+                || !string.Equals(preserved.RepositoryIdentityHash, identity, StringComparison.OrdinalIgnoreCase)
+                || preserved.SelectedFolderId is { } manifestFolderId && manifestFolderId != repository.SelectedFolderId)
             {
                 throw new DevelopmentWorkspaceSecurityException("The preserved Development worktree does not match its trusted workspace manifest.");
             }
 
-            baseCommit = manifest.BaseCommit;
+            baseCommit = preserved.BaseCommit;
         }
 
         // BEFORE the first host-side Git command touches a workspace a previous attempt could have written to. The
@@ -203,12 +238,20 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         // and the gate fails at command one on a correct change.
         await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(git, worktreePath, cancellationToken).ConfigureAwait(false);
 
-        var persistedManifest = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken).ConfigureAwait(false);
-        if (persistedManifest.Version != WorkspaceManifestVersion || persistedManifest.SelectedFolderId is null)
+        var manifest = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken).ConfigureAwait(false);
+        if (manifest.Version != WorkspaceManifestVersion || manifest.SelectedFolderId is null)
         {
-            await WriteWorkspaceManifestAsync(workspaceManifestPath,
-                new WorkspaceManifest(WorkspaceManifestVersion, identity, repository.SelectedFolderId, baseCommit),
-                cancellationToken).ConfigureAwait(false);
+            // Upgrading a v1 manifest in place. Warm state rides along with `with` rather than being dropped by a
+            // fresh construction: a manifest that already records a warm for this base commit must not be made to
+            // look un-warmed by an unrelated version bump.
+            manifest = manifest with
+            {
+                Version = WorkspaceManifestVersion,
+                RepositoryIdentityHash = identity,
+                SelectedFolderId = repository.SelectedFolderId,
+                BaseCommit = baseCommit
+            };
+            await WriteWorkspaceManifestAsync(workspaceManifestPath, manifest, cancellationToken).ConfigureAwait(false);
         }
 
         var branch = await git.RunAsync(worktreePath,
@@ -218,6 +261,34 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         {
             throw new DevelopmentWorkspaceSecurityException("The managed Development worktree must remain detached from protected branches.");
         }
+
+        // BEFORE either sandbox is created, so both the warm restore and the attempt see the same shadowed view. The
+        // warm restore runs the repository's own MSBuild, which can read a committed credential exactly as a test can.
+        var secrets = await DetectCommittedSecretsAsync(git, worktreePath, cancellationToken).ConfigureAwait(false);
+        if (!manifest.DetectedSecretPaths.SequenceEqual(secrets, StringComparer.Ordinal))
+        {
+            manifest = manifest with
+            {
+                DetectedSecretPaths = secrets
+            };
+            await WriteWorkspaceManifestAsync(workspaceManifestPath, manifest, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (secrets.Count > 0)
+        {
+            _ = await _store.RecordWorkspaceSecretsAsync(snapshot.TaskId, snapshot.AttemptId, secrets, cancellationToken).ConfigureAwait(false);
+        }
+
+        await EnsureWarmRestoreAsync(git,
+            snapshot,
+            identity,
+            worktreePath,
+            runtimePath,
+            workspaceManifestPath,
+            manifest,
+            baseCommit,
+            secrets,
+            cancellationToken).ConfigureAwait(false);
 
         var attachKey = new SandboxAttachKey
         {
@@ -231,22 +302,12 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         {
             AttachKey = attachKey,
             RuntimeProfile = RuntimeProfile,
-            // DELIBERATELY Unrestricted — a recorded deferral, not an oversight, and not an inconsistency with
-            // AgentHome. AgentHome now requests default-deny egress because everything it
-            // runs in the sandbox is local. Development Mode is different: the dotnet-slnx / dotnet-csproj profiles run
-            // `dotnet restore` into a per-task NUGET_PACKAGES root that starts COLD, so denying egress here today would
-            // not harden Development Mode — it would break it outright, along with the validation gate that depends on
-            // a real restore/build/test run.
-            //
-            // Turning this off is future work, and it is only safe once dependency-manifest-rejection machinery exists: restore limited to
-            // the base commit's manifests, plus a dependency-manifest change failing validation with its specific
-            // reason. Until both halves land, "network off" here is an outage rather than a hardening win.
-            NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
+            NetworkPolicy = ResolveAgentFacingNetworkPolicy(),
             TrustedHostWorkspace = new SandboxTrustedHostWorkspace
             {
                 RootPath = worktreePath
             },
-            Mounts = BuildMounts(runtimePath, worktreePath)
+            Mounts = BuildMounts(runtimePath, worktreePath, secrets)
         }, cancellationToken).ConfigureAwait(false);
 
         return new DevelopmentWorkspaceSession(snapshot.ProjectId,
@@ -257,6 +318,207 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             worktreePath,
             runtimePath,
             handle);
+    }
+
+    /// <summary>
+    ///     The committed files in the managed workspace whose names mark them as credential-bearing, as
+    ///     repository-relative paths, sorted.
+    ///     <para>
+    ///         Read from <c>git ls-files</c> rather than by walking the directory, and that is the precise question
+    ///         rather than an optimization. The workspace is a CLONE, so only tracked content arrives — an untracked
+    ///         <c>.env</c> in the operator's repository never rides along, and the real exposure is a
+    ///         <em>committed</em> one. Asking the index also bounds the work by the repository's own size instead of by
+    ///         whatever a build has since written into <c>obj/</c> and <c>node_modules/</c>.
+    ///     </para>
+    ///     <para>
+    ///         Every path SEGMENT is tested, not just the file name, so a file under <c>.ssh/</c> or <c>.aws/</c> is
+    ///         found — those entries name directories, and that is how
+    ///         <see cref="ISensitiveFileExclusionService.IsSecret" /> is applied everywhere else.
+    ///     </para>
+    /// </summary>
+    private async Task<IReadOnlyList<string>> DetectCommittedSecretsAsync(HostGitRunner git,
+        string worktreePath,
+        CancellationToken cancellationToken)
+    {
+        var tracked = await git.RunAsync(worktreePath,
+            AgentHomeGit.Arguments("ls-files", "-z", "--", "."),
+            cancellationToken).ConfigureAwait(false);
+        EnsureGitSuccess(tracked, "The managed Development worktree's tracked files could not be listed.");
+
+        return
+        [
+            .. tracked.StandardOutput
+                      .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+                      .Where(path => path.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => _exclusions.IsSecret(segment)))
+                      .Distinct(StringComparer.Ordinal)
+                      .OrderBy(static path => path, StringComparer.Ordinal)
+        ];
+    }
+
+    /// <summary>
+    ///     The egress posture requested for the AGENT-FACING sandbox: <see cref="SandboxNetworkPolicy.None" /> where
+    ///     the backend advertises real network confinement, <see cref="SandboxNetworkPolicy.Unrestricted" /> where it
+    ///     does not.
+    ///     <para>
+    ///         This used to be an unconditional <c>Unrestricted</c> with a recorded deferral naming two missing halves.
+    ///         Both have landed: <see cref="EnsureWarmRestoreAsync" /> fills the per-task package cache from the base
+    ///         commit before this sandbox exists, and
+    ///         <see cref="DevelopmentDependencyManifestPolicy" /> fails validation for an attempt that changes what
+    ///         would have to be re-resolved. So a denied sandbox now runs <c>--no-restore</c> builds and
+    ///         <c>--no-build</c> tests against a cache that is already complete, and denying egress is a hardening win
+    ///         rather than an outage.
+    ///     </para>
+    ///     <para>
+    ///         <strong>Capability-gated, per the operator's 2026-08-25 ruling (Option B), and this is a real
+    ///         limitation rather than defensive coding.</strong> A backend fails a confinement request it cannot honour
+    ///         CLOSED, so an unconditional <c>None</c> would not harden Development Mode on Windows — or on any Linux
+    ///         host whose <c>unshare</c> probe failed — it would stop it running there at all, since the shipped
+    ///         configuration resolves those nodes to the process backend. The honest consequence is that on such a node
+    ///         the attempt still has egress. What makes that acceptable rather than silent is G6: the Development
+    ///         status surface reports the posture the provider actually SERVED, so an operator can see which of the two
+    ///         they got. Making denial mandatory per node is the recorded follow-up.
+    ///     </para>
+    ///     <para>
+    ///         This mirrors <c>AgentHomeService.ResolveNetworkPolicy</c> deliberately, down to reading the same
+    ///         capability flag. Two consumers deciding the same question two ways is how one of them silently stops
+    ///         matching what the backend can serve.
+    ///     </para>
+    /// </summary>
+    private SandboxNetworkPolicy ResolveAgentFacingNetworkPolicy() =>
+        (_sandbox.Capabilities & SandboxProviderCapabilities.SupportsNetworkPolicy) != SandboxProviderCapabilities.None
+            ? SandboxNetworkPolicy.None
+            : SandboxNetworkPolicy.Unrestricted;
+
+    /// <summary>
+    ///     Populates the per-task package cache from the BASE COMMIT's dependency manifests, in a second short-lived
+    ///     sandbox that has egress, so the agent-facing sandbox created afterwards does not need any.
+    ///     <para>
+    ///         <strong>Why running the repository's own restore with network is sound here and only here.</strong>
+    ///         <c>dotnet restore</c> evaluates repository-authored MSBuild, which is code. At warm time that content is
+    ///         the operator's own base commit — already trusted to the degree the whole feature trusts the registered
+    ///         repository — and the agent has written nothing yet. The gate is therefore not "is this code safe" but
+    ///         "is this tree provably still the base commit", which is what the clean-tracked-tree check below decides.
+    ///         The moment the agent has written anything, this method must not run, and the recorded warm is what
+    ///         stops it.
+    ///     </para>
+    ///     <para>
+    ///         The cache survives the sandbox because it lives in the per-task <c>nuget</c> / <c>dotnet</c> runtime
+    ///         directories (<c>DevelopmentWorkspaceTools.BuildEnvironment</c>) and in the worktree's own
+    ///         <c>obj/</c> trees, none of which the sandbox owns. That is what lets the later <c>--no-restore</c> build
+    ///         and <c>--no-build</c> test work with no network.
+    ///     </para>
+    ///     <para>
+    ///         Warm state lives in <c>workspace.json</c>, which sits in <c>RuntimePath</c> and is never mounted — so
+    ///         "has this base commit been warmed" cannot be answered, or forged, from inside any sandbox.
+    ///     </para>
+    ///     <para>
+    ///         A profile that declares no restore command (<c>generic-git</c>) skips this entirely: there is nothing to
+    ///         warm and a second sandbox would be pure cost.
+    ///     </para>
+    /// </summary>
+    private async Task EnsureWarmRestoreAsync(HostGitRunner git,
+        DevelopmentExecutionSnapshot snapshot,
+        string identity,
+        string worktreePath,
+        string runtimePath,
+        string workspaceManifestPath,
+        WorkspaceManifest manifest,
+        string baseCommit,
+        IReadOnlyList<string> detectedSecrets,
+        CancellationToken cancellationToken)
+    {
+        var profile = DevelopmentCommandProfileCatalog.ResolveStored(snapshot.CommandProfileJson);
+        if (!profile.Commands.Any(static command => string.Equals(command.CommandId, DevelopmentCommandIds.DotnetRestore, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        if (string.Equals(manifest.WarmRestoreCommit, baseCommit, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        // Untracked and ignored files are excluded deliberately: a restore writes obj/ and nothing else, so
+        // "no tracked file differs from the base commit" is the precise predicate, and demanding a pristine directory
+        // would refuse every second attempt on a workspace that has legitimately been built once.
+        var status = await git.RunAsync(worktreePath,
+            AgentHomeGit.Arguments("status", "--porcelain", "--untracked-files=no"),
+            cancellationToken).ConfigureAwait(false);
+        EnsureGitSuccess(status, "The managed Development worktree status could not be read before the dependency warm restore.");
+        if (!string.IsNullOrWhiteSpace(status.StandardOutput))
+        {
+            // Reachable only after a crash between the clone and the first warm. Refusing is the only safe answer:
+            // warming against agent-written content is exactly the thing this whole design exists to prevent, and a
+            // silent skip would leave the attempt to fail later with "restore could not reach the network", naming
+            // the symptom instead of the cause.
+            throw new DevelopmentWorkspaceSecurityException("The managed Development worktree has uncommitted tracked changes and its dependencies have not been warmed for this base "
+                                                            + "commit. Reset the task's workspace so the warm restore can run against the base commit alone.");
+        }
+
+        var warmHandle = await _sandbox.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = new SandboxAttachKey
+            {
+                OwnerUserId = snapshot.ProjectId.ToString("N"),
+                NodeId = snapshot.TaskId.ToString("N"),
+                ProviderName = _sandbox.ProviderName,
+                RuntimeProfile = WarmRuntimeProfile,
+                ManifestVersion = WorkspaceManifestVersion
+            },
+            RuntimeProfile = WarmRuntimeProfile,
+
+            // The one sandbox in Development Mode that still asks for egress, and the reason the agent-facing one no
+            // longer has to. Unconditional rather than capability-gated: a warm that silently ran without network
+            // would populate nothing and turn every later build into a confusing failure.
+            NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
+            TrustedHostWorkspace = new SandboxTrustedHostWorkspace
+            {
+                RootPath = worktreePath
+            },
+
+            // The SAME mount set as the agent-facing sandbox. A warm that wrote its cache anywhere else would warm
+            // nothing the attempt can read.
+            Mounts = BuildMounts(runtimePath, worktreePath, detectedSecrets)
+        }, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            var warmSession = new DevelopmentWorkspaceSession(snapshot.ProjectId,
+                snapshot.TaskId,
+                snapshot.AttemptId,
+                baseCommit,
+                identity,
+                worktreePath,
+                runtimePath,
+                warmHandle);
+
+            // Routed through the same tools the attempt uses, so the warm runs under the same environment, the same
+            // per-command budget and the same post-command workspace invariants. Composing a second execution path
+            // here is how the warm would drift from what the attempt later re-runs with --no-restore.
+            var tools = new DevelopmentWorkspaceTools(_sandbox, warmSession, Options.Create(_options), profile);
+            _ = await tools.RunCommandAsync(DevelopmentCommandIds.DotnetRestore, cancellationToken).ConfigureAwait(false);
+
+            var evidence = tools.CommandEvidence[^1];
+            if (!evidence.Completed || evidence.ExitCode != 0)
+            {
+                throw new InvalidOperationException("The Development dependency warm restore did not succeed, so the attempt's sandbox would have no packages to build against "
+                                                    + $"(exit {evidence.ExitCode}, completed {evidence.Completed}). Check the repository's package sources and try again.");
+            }
+        }
+        finally
+        {
+            // Before PrepareAsync returns, unconditionally. A warm sandbox that outlived this method would be a second
+            // container per task with egress, held open for the whole attempt — the exact thing G1 removes.
+            await _sandbox.KillAsync(warmHandle, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        await WriteWorkspaceManifestAsync(workspaceManifestPath,
+            manifest with
+            {
+                WarmRestoreCommit = baseCommit,
+                WarmRestoreCompletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -282,7 +544,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///         belt-and-braces extra.
     ///     </para>
     /// </summary>
-    private IReadOnlyList<SandboxMount> BuildMounts(string runtimePath, string worktreePath)
+    private IReadOnlyList<SandboxMount> BuildMounts(string runtimePath, string worktreePath, IReadOnlyList<string> detectedSecrets)
     {
         var mounts = RuntimeDirectoryNames
                      .Select(name => new SandboxMount
@@ -293,14 +555,56 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
                      })
                      .ToList();
 
+        var supportsReadOnly = (_sandbox.Capabilities & SandboxProviderCapabilities.SupportsReadOnlyMounts) != SandboxProviderCapabilities.None;
         var gitConfigPath = Path.Combine(worktreePath, ".git", "config");
-        if ((_sandbox.Capabilities & SandboxProviderCapabilities.SupportsReadOnlyMounts) != SandboxProviderCapabilities.None
-            && File.Exists(gitConfigPath))
+        if (supportsReadOnly && File.Exists(gitConfigPath))
         {
             mounts.Add(new SandboxMount
             {
                 HostPath = gitConfigPath,
                 SandboxPath = GitConfigSandboxPath,
+                ReadOnly = true
+            });
+        }
+
+        if (!supportsReadOnly || detectedSecrets.Count == 0)
+        {
+            return mounts;
+        }
+
+        if (detectedSecrets.Count > MaxShadowedSecrets)
+        {
+            // The cap bounds the MOUNT LIST, so it is checked only where a mount list is being generated. Failing
+            // closed above it rather than shadowing the first 32 is the point: a partial shadow reads as a control
+            // and is not one.
+            throw new DevelopmentWorkspaceSecurityException($"The registered repository has {detectedSecrets.Count} committed files whose names mark them as credentials, above the "
+                                                            + $"{MaxShadowedSecrets} this engine will neutralize with read-only mounts. Remove them from the repository, or run this "
+                                                            + "project on a node whose sandbox has no mount layer, where they are reported rather than shadowed.");
+        }
+
+        var shadowRoot = Path.Combine(runtimePath, ShadowDirectoryName);
+        Directory.CreateDirectory(shadowRoot);
+        foreach (var relativePath in detectedSecrets)
+        {
+            // One empty file per shadowed path, named by the hash of that path so a second prepare reuses it and two
+            // shadows never share a mount source — a shared source would make SandboxHandle.TryResolveSandboxPath
+            // answer for one of them arbitrarily.
+            var shadowPath = Path.Combine(shadowRoot, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(relativePath)))[..32]);
+            if (!File.Exists(shadowPath))
+            {
+                File.WriteAllBytes(shadowPath, []);
+            }
+
+            mounts.Add(new SandboxMount
+            {
+                HostPath = shadowPath,
+
+                // Workspace-RELATIVE: the source is engine-generated content outside the workspace and the target is a
+                // path inside it, which is the one shape the provider's host-path derivation cannot express. The real
+                // file on disk is untouched, so the diff model sees no change and an apply cannot delete the
+                // operator's own secret.
+                SandboxPath = "/" + relativePath,
+                TargetIsWorkspaceRelative = true,
                 ReadOnly = true
             });
         }
@@ -562,9 +866,31 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     // content that stops the search there.
     private sealed record ConfigurationFile(string FileName, string Content);
 
+    /// <summary>
+    ///     The workspace CONTROL MANIFEST. It lives directly in <c>RuntimePath</c>, which is never mounted, so nothing
+    ///     inside any sandbox can read or forge it.
+    ///     <para>
+    ///         <see cref="WarmRestoreCommit" /> is the base commit whose dependency manifests the engine has already
+    ///         restored into this task's package cache, and it is what makes the warm run exactly once per base
+    ///         commit. It is nullable rather than version-gated: a v1 or v2 manifest written before warming existed
+    ///         deserializes with no warm recorded, which is the correct answer for it.
+    ///     </para>
+    /// </summary>
     private sealed record WorkspaceManifest(
         int Version,
         string RepositoryIdentityHash,
         Guid? SelectedFolderId,
-        string BaseCommit);
+        string BaseCommit)
+    {
+        public string? WarmRestoreCommit { get; init; }
+
+        public long? WarmRestoreCompletedAtUtc { get; init; }
+
+        /// <summary>
+        ///     The committed files whose names mark them as credentials, as this prepare found them. Recorded so the
+        ///     finding survives a restart and so the operator-facing event and the mount list are two views of one
+        ///     value rather than two independent walks.
+        /// </summary>
+        public IReadOnlyList<string> DetectedSecretPaths { get; init; } = [];
+    }
 }
