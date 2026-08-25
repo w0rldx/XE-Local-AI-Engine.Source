@@ -23,6 +23,7 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
     @staticmethod
     def windows_compliance_files() -> dict[str, bytes]:
         license_bytes = b"Example package terms"
+        asset_notice_bytes = b"Embedded asset notice"
         backend_manifest = {
             "runtimeIdentifier": "win-x64",
             "packages": [
@@ -34,6 +35,21 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
                         {
                             "path": "licenses/nuget/packages/Example.Package@1.0.0/LICENSE",
                             "sha256": hashlib.sha256(license_bytes).hexdigest(),
+                        }
+                    ],
+                }
+            ],
+            # A non-NuGet asset vendored into our own source. Held to the same contract as a package's terms: listed
+            # here, and its bytes really present in the payload below.
+            "embeddedAssets": [
+                {
+                    "name": "example/profiles embedded asset",
+                    "version": "v1.2.3",
+                    "licenseExpression": "Apache-2.0",
+                    "licenseFiles": [
+                        {
+                            "path": "licenses/assets/example-asset/NOTICE.txt",
+                            "sha256": hashlib.sha256(asset_notice_bytes).hexdigest(),
                         }
                     ],
                 }
@@ -75,6 +91,7 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
             "current/backend-components.json": json.dumps(backend_manifest).encode(),
             "current/THIRD-PARTY-NOTICES.md": b"Backend notices",
             "current/licenses/nuget/packages/Example.Package@1.0.0/LICENSE": license_bytes,
+            "current/licenses/assets/example-asset/NOTICE.txt": asset_notice_bytes,
         }
         return files
 
@@ -84,6 +101,43 @@ class ReleaseArtifactVerifierTests(unittest.TestCase):
             for name, content in files.items():
                 output.writestr(name, content)
         return archive
+
+    def test_an_embedded_asset_term_the_payload_does_not_carry_is_rejected(self) -> None:
+        """The listing is not the attribution; the bytes in the payload are.
+
+        An embedded asset is hand-listed in the generator, so nothing upstream can catch a notice that was declared and
+        then not shipped. This is where that becomes a failure rather than a footnote.
+        """
+        files = self.windows_compliance_files()
+        del files["current/licenses/assets/example-asset/NOTICE.txt"]
+        manifest = json.loads(files["current/backend-components.json"])
+        terms = MODULE.backend_legal_terms(files["current/backend-components.json"], "win-x64", "payload")
+
+        self.assertIn("licenses/assets/example-asset/NOTICE.txt", terms)
+        self.assertIn("embeddedAssets", manifest)
+        with self.assertRaisesRegex(ValueError, "missing backend legal term"):
+            MODULE.assert_backend_terms(
+                terms,
+                {name.removeprefix("current/"): content for name, content in files.items()},
+                "payload",
+            )
+
+    def test_an_embedded_asset_term_outside_the_assets_tree_is_rejected(self) -> None:
+        manifest = {
+            "runtimeIdentifier": "win-x64",
+            "packages": [
+                {
+                    "licenseFiles": [
+                        {"path": "licenses/nuget/packages/A@1.0.0/LICENSE", "sha256": "a" * 64},
+                    ]
+                }
+            ],
+            "embeddedAssets": [
+                {"licenseFiles": [{"path": "licenses/nuget/packages/A@1.0.0/SNEAK", "sha256": "b" * 64}]}
+            ],
+        }
+        with self.assertRaisesRegex(ValueError, "invalid legal term"):
+            MODULE.backend_legal_terms(json.dumps(manifest).encode(), "win-x64", "payload")
 
     def test_linux_requires_the_split_runtime_license_corpus(self) -> None:
         paths = [

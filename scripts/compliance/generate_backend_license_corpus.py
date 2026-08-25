@@ -54,6 +54,35 @@ SPECIAL_SOURCE_AVAILABILITY: dict[tuple[str, str, str], dict[str, Any]] = {
         "upstreamTag": "v2.7",
     }
 }
+# Third-party assets that ship in every RID payload but are NOT NuGet packages, so nothing above can discover them.
+# The corpus is otherwise generated from `nuget-license` metadata over the restored graph; an asset vendored into this
+# repository's own source tree is invisible to that, and "we generate the notices" is not an answer for a file the
+# generator cannot see. Each entry is hand-listed HERE — one place, reviewed like any other source change — and is
+# verified two ways before it can be emitted: the curated notice and license texts must match their `.source.txt`
+# provenance hashes, and `sha256` must match the bytes actually checked in at `repositoryPath`, so an attribution
+# cannot drift away from the file it describes. `tests/generate_backend_license_corpus.test.py` asserts both.
+EMBEDDED_ASSETS: list[dict[str, Any]] = [
+    {
+        "name": "moby/profiles seccomp default profile",
+        "version": "seccomp/v0.2.3",
+        "licenseExpression": "Apache-2.0",
+        "copyright": "Copyright 2013-2018 Docker, Inc.",
+        "projectUrl": "https://github.com/moby/profiles",
+        "sourceCommit": "836ae4d37ef2ec995c77c99fc55f5b5f3af3a897",
+        "sourceArchive": ("https://github.com/moby/profiles/archive/836ae4d37ef2ec995c77c99fc55f5b5f3af3a897.tar.gz"),
+        "repositoryPath": ("XE-Local-AI-Engine.Client.Application/Services/Sandbox/Container/seccomp-default.json"),
+        "shippedAs": ("embedded manifest resource in XE-Local-AI-Engine.Client.Application.dll"),
+        "sha256": "536529b665dd0972c37bfb569f5d4ac8a53592e7b00752bc39ff063ca9864c74",
+        "outputSegment": "moby-profiles-seccomp",
+        # The SPDX Apache-2.0 text this repository already curates for NuGet packages, reused rather than copied: one
+        # verified text per license, whatever consumes it.
+        "license": STANDARD_LICENSE_TEXTS["Apache-2.0"],
+        "notice": (
+            Path("assets/moby-profiles-seccomp-v0.2.3-NOTICE.txt"),
+            Path("assets/moby-profiles-seccomp-v0.2.3-NOTICE.txt.source.txt"),
+        ),
+    }
+]
 UPSTREAM_PACKAGE_LICENSE_TEXTS = {
     **{
         (name.casefold(), "8.3.0", "MIT"): (
@@ -393,7 +422,71 @@ def build_component(
     return component
 
 
-def write_notices(packages: list[dict], output_path: Path) -> None:
+def build_embedded_assets(license_root: Path, repository_root: Path | None, output_directory: Path) -> list[dict]:
+    """Copy each hand-listed non-NuGet asset's legal terms into the payload and describe it.
+
+    `repository_root` is optional so the generator still runs from a published tree that has no source beside it; when
+    it IS available the embedded bytes are re-hashed and a mismatch fails the build, which is the check that keeps a
+    stated SHA-256 from outliving the file it was taken from.
+    """
+    assets: list[dict] = []
+    for asset in EMBEDDED_ASSETS:
+        relative_output = f"licenses/assets/{asset['outputSegment']}"
+        asset_output = output_directory / relative_output
+        files: list[dict] = []
+        for role, key in (("license", "license"), ("notice", "notice")):
+            source_path, provenance_path = asset[key]
+            contents = verify_curated_text(license_root / source_path, license_root / provenance_path)
+            destination = asset_output / source_path.name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(contents)
+            digest = hashlib.sha256(contents).hexdigest()
+            if hashlib.sha256(destination.read_bytes()).hexdigest() != digest:
+                raise ValueError(f"omitted expected embedded-asset term {source_path.name}")
+            files.append(
+                {
+                    "path": f"{relative_output}/{source_path.name}",
+                    "repositorySource": f"third-party/{source_path.as_posix()}",
+                    "role": role,
+                    "sha256": digest,
+                    "source": "curated-embedded-asset",
+                    "sourceFile": source_path.name,
+                }
+            )
+
+        if repository_root is not None:
+            embedded = repository_root / asset["repositoryPath"]
+            if not embedded.is_file():
+                raise ValueError(f"embedded asset is missing from the source tree: {embedded}")
+            actual = hashlib.sha256(embedded.read_bytes()).hexdigest()
+            if actual != asset["sha256"]:
+                raise ValueError(
+                    f"embedded asset {asset['repositoryPath']} is {actual}, "
+                    f"but its attribution claims {asset['sha256']}"
+                )
+
+        assets.append(
+            {
+                "copyright": asset["copyright"],
+                "licenseExpression": asset["licenseExpression"],
+                "licenseFiles": files,
+                "licenseTextPath": next(entry["path"] for entry in files if entry["role"] == "license"),
+                "name": asset["name"],
+                "projectUrl": asset["projectUrl"],
+                "repositoryPath": asset["repositoryPath"],
+                "sha256": asset["sha256"],
+                "shippedAs": asset["shippedAs"],
+                "sourceArchive": asset["sourceArchive"],
+                "sourceCommit": asset["sourceCommit"],
+                "version": asset["version"],
+            }
+        )
+
+    assets.sort(key=lambda entry: entry["name"])
+    return assets
+
+
+def write_notices(packages: list[dict], assets: list[dict], output_path: Path) -> None:
     lines = [
         "# Backend third-party notices",
         "",
@@ -429,6 +522,36 @@ def write_notices(packages: list[dict], output_path: Path) -> None:
         for term in entry["licenseFiles"]:
             lines.append(f"  - {term['role']}: `{term['path']}` (SHA-256 `{term['sha256']}`)")
         lines.append("")
+
+    if assets:
+        lines.extend(
+            [
+                "## Embedded third-party assets",
+                "",
+                "Non-NuGet third-party files vendored into this product's own source and shipped inside its "
+                "assemblies.",
+                "",
+            ]
+        )
+        for asset in assets:
+            lines.extend(
+                [
+                    f"### {asset['name']} {asset['version']}",
+                    "",
+                    f"- License: {asset['licenseExpression']}",
+                    f"- Copyright: {asset['copyright']}",
+                    f"- Project: {asset['projectUrl']}",
+                    f"- Immutable commit: {asset['sourceCommit']}",
+                    f"- Source archive: {asset['sourceArchive']}",
+                    f"- Shipped as: {asset['shippedAs']}",
+                    f"- Vendored at: `{asset['repositoryPath']}` (SHA-256 `{asset['sha256']}`)",
+                    "- Bundled legal terms:",
+                ]
+            )
+            for term in asset["licenseFiles"]:
+                lines.append(f"  - {term['role']}: `{term['path']}` (SHA-256 `{term['sha256']}`)")
+            lines.append("")
+
     output_path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
 
@@ -441,6 +564,7 @@ def generate_corpus(
     license_root: Path,
     packages_root: Path,
     output_directory: Path,
+    repository_root: Path | None = None,
 ) -> int:
     tool_version = pinned_tool_version(tool_manifest_path)
     selected = shipped_packages(rid, deps_path, bundle_input_manifest)
@@ -448,6 +572,9 @@ def generate_corpus(
     license_output = output_directory / "licenses" / "nuget"
     if license_output.exists():
         shutil.rmtree(license_output)
+    asset_output = output_directory / "licenses" / "assets"
+    if asset_output.exists():
+        shutil.rmtree(asset_output)
     components: list[dict] = []
     for (folded_name, version), selection in selected.items():
         entry = metadata.get((folded_name, version))
@@ -463,8 +590,10 @@ def generate_corpus(
         )
     components.sort(key=lambda entry: (entry["name"].casefold(), entry["version"], entry["name"]))
     output_directory.mkdir(parents=True, exist_ok=True)
+    assets = build_embedded_assets(license_root, repository_root, output_directory)
     payload = {
         "$generated": "Generated by scripts/compliance/generate_backend_license_corpus.py; do not edit.",
+        "embeddedAssets": assets,
         "metadataSource": {"tool": "nuget-license", "version": tool_version},
         "packages": components,
         "runtimeIdentifier": rid,
@@ -476,7 +605,7 @@ def generate_corpus(
     (output_directory / "backend-components.json").write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
     )
-    write_notices(components, output_directory / "THIRD-PARTY-NOTICES.md")
+    write_notices(components, assets, output_directory / "THIRD-PARTY-NOTICES.md")
     return len(components)
 
 
@@ -490,7 +619,11 @@ def main() -> int:
     parser.add_argument("--license-root", type=Path, default=Path("third-party"))
     parser.add_argument("--nuget-packages-root", type=Path, default=Path.home() / ".nuget" / "packages")
     parser.add_argument("--output-directory", type=Path, required=True)
+    # Optional so a published tree with no source beside it still generates; supplied, it lets the embedded-asset
+    # attributions be re-hashed against the real files rather than trusted.
+    parser.add_argument("--repository-root", type=Path, default=Path())
     args = parser.parse_args()
+    repository_root = args.repository_root if args.repository_root.is_dir() else None
     count = generate_corpus(
         args.rid,
         args.deps_json,
@@ -500,8 +633,12 @@ def main() -> int:
         args.license_root,
         args.nuget_packages_root,
         args.output_directory,
+        repository_root,
     )
-    print(f"generated {args.rid} backend license corpus for {count} shipped NuGet packages")
+    print(
+        f"generated {args.rid} backend license corpus for {count} shipped NuGet packages "
+        f"and {len(EMBEDDED_ASSETS)} embedded third-party asset(s)"
+    )
     return 0
 
 

@@ -201,24 +201,41 @@ def backend_legal_terms(content: bytes, runtime_identifier: str, label: str) -> 
     for package in packages:
         if not isinstance(package, dict):
             raise ValueError(f"{label} backend component manifest has an invalid package")
-        license_files = package.get("licenseFiles")
-        if not isinstance(license_files, list) or not license_files:
-            raise ValueError(f"{label} backend package has no bundled legal terms")
-        for entry in license_files:
-            path = entry.get("path") if isinstance(entry, dict) else None
-            digest = entry.get("sha256") if isinstance(entry, dict) else None
-            if (
-                not isinstance(path, str)
-                or not path.startswith("licenses/nuget/")
-                or Path(path).is_absolute()
-                or ".." in Path(path).parts
-                or path in terms
-                or not isinstance(digest, str)
-                or len(digest) != 64
-            ):
-                raise ValueError(f"{label} backend component manifest has an invalid legal term")
-            terms[path] = digest.casefold()
+        collect_legal_terms(package, "licenses/nuget/", terms, label, "backend package")
+
+    # Non-NuGet assets vendored into our own source and shipped inside the assemblies. Optional, because a manifest
+    # from before they were listed has none — but every one that IS listed is held to exactly the same contract as a
+    # package's terms, and assert_backend_terms then proves the bytes are really in the payload. Listing an attribution
+    # the payload does not carry would otherwise be a notice that exists only in a manifest.
+    assets = payload.get("embeddedAssets")
+    if assets is not None:
+        if not isinstance(assets, list):
+            raise ValueError(f"{label} backend component manifest has an invalid embedded-asset list")
+        for asset in assets:
+            if not isinstance(asset, dict):
+                raise ValueError(f"{label} backend component manifest has an invalid embedded asset")
+            collect_legal_terms(asset, "licenses/assets/", terms, label, "backend embedded asset")
     return terms
+
+
+def collect_legal_terms(component: dict, required_prefix: str, terms: dict[str, str], label: str, what: str) -> None:
+    license_files = component.get("licenseFiles")
+    if not isinstance(license_files, list) or not license_files:
+        raise ValueError(f"{label} {what} has no bundled legal terms")
+    for entry in license_files:
+        path = entry.get("path") if isinstance(entry, dict) else None
+        digest = entry.get("sha256") if isinstance(entry, dict) else None
+        if (
+            not isinstance(path, str)
+            or not path.startswith(required_prefix)
+            or Path(path).is_absolute()
+            or ".." in Path(path).parts
+            or path in terms
+            or not isinstance(digest, str)
+            or len(digest) != 64
+        ):
+            raise ValueError(f"{label} backend component manifest has an invalid legal term")
+        terms[path] = digest.casefold()
 
 
 def assert_backend_terms(terms: dict[str, str], contents: dict[str, bytes], label: str) -> None:
