@@ -359,7 +359,7 @@ reduce risk; they do not create OS isolation.
 
 Any node-side tool or shell execution runs inside a process jail, not against the host filesystem directly. The live provider is `ProcessSandboxRuntimeProvider` (`Services/Sandbox/Implementation/ProcessSandboxRuntimeProvider.cs`, implementing `ISandboxRuntimeProvider`; selected via `SandboxProviderSelector`). The old Docker/container sandbox runtime was removed in the 2026-06-17 runtime re-architecture — there is **no** container inference path, and this process-jail is the execution boundary for AgentHome and Coder. (Discrepancy note vs. older docs: `LocalContainerSandboxProvider` and the HostAgent layer no longer exist as live code.)
 
-> **One scoped exception, and it does not move this boundary.** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted 2026-07-29) permits Docker for **Development Mode build/test/lint execution only**, as a stopgap ahead of MXC. Provider selection is **per feature**: Development Mode gets the container provider; **AgentHome (4 injection sites) and Coder (1) stay on `ProcessSandboxRuntimeProvider`** and keep exactly the posture described below. The split is enforced by the type system rather than by configuration — each feature resolves a role marker (`IAgentSandboxRuntimeProvider` / `IDevelopmentSandboxRuntimeProvider`), and the container provider implements only the Development one, so it cannot be wired into the other two even by mistake. Two things follow for a security reader. First, hardening the process provider is *not* superseded by the container work — those two features remain on it. Second, on Linux **access to the Docker socket is root-equivalent**; the ADR records this rather than mitigating it, and the product neither requires nor provides rootless Docker. The container provider has **shipped as an opt-in Development Mode provider** and is **not the default** — `DockerSandboxRuntimeProvider` (`Name = "docker"`) is registered by `AddNodeContainerSandboxExtensions` and selected by `Development:Sandbox:Provider=docker`. The shipped `appsettings.json` sets no `Development:Sandbox` key at all, so `SandboxProviderSelector.ResolveDevelopment` falls back to the AgentHome provider (`AgentHome:Sandbox:Provider`, shipped as `process`). **The section below therefore describes the default posture, not the whole story** — on a node configured with `docker`, Development Mode runs under the container boundary instead. See [Development Mode container implementation status](../roadmaps/development-mode-container-status.md) for what is and is not implemented; it is the canonical status page, and this page does not restate it.
+> **One scoped exception, and it does not move this boundary.** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted 2026-07-29) permits Docker for **Development Mode build/test/lint execution only**, as a stopgap ahead of MXC. Provider selection is **per feature**: Development Mode gets the container provider; **AgentHome (4 injection sites) and Coder (1) stay on `ProcessSandboxRuntimeProvider`** and keep exactly the posture described below. The split is enforced by each feature's declared requirements rather than by configuration — each feature resolves a role marker (`IAgentSandboxRuntimeProvider` / `IDevelopmentSandboxRuntimeProvider`) whose declaration names a host toolchain that no container backend supplies, so it cannot be wired into the other two even by mistake (ADR 0007; see [Backend selection](#backend-selection-a-feature-declares-what-it-needs-and-never-names-a-backend) for what replaced the compile-time form of this guarantee, and what that trade costs). Two things follow for a security reader. First, hardening the process provider is *not* superseded by the container work — those two features remain on it. Second, on Linux **access to the Docker socket is root-equivalent**; the ADR records this rather than mitigating it, and the product neither requires nor provides rootless Docker. The container provider has **shipped as an opt-in Development Mode provider** and is **not the default** — `DockerSandboxRuntimeProvider` (`Name = "docker"`) is registered by `AddNodeContainerSandboxExtensions` and selected by `Development:Sandbox:Provider=docker`. The shipped `appsettings.json` sets no `Development:Sandbox` key at all, so `SandboxProviderSelector.ResolveDevelopment` falls back to the AgentHome provider (`AgentHome:Sandbox:Provider`, shipped as `process`). **The section below therefore describes the default posture, not the whole story** — on a node configured with `docker`, Development Mode runs under the container boundary instead. See [Development Mode container implementation status](../roadmaps/development-mode-container-status.md) for what is and is not implemented; it is the canonical status page, and this page does not restate it.
 
 **What this boundary is — and is not.** It is **supervised execution**, not an OS isolation boundary. What it enforces: only fixed, node-authored executables run (`dotnet --version`, `git` with hooks disabled, `find`/`grep` — never a model-authored command line); a working-directory jail with path-confinement and symlink-escape guards; a **scrubbed child environment** (the worker's secret-bearing environment — cloud API keys, OAuth tokens, the node SQLite key — is **not** inherited; only a fixed system/toolchain allow-list is forwarded, plus the caller's explicit variables); a per-command timeout; tree-kill teardown; and captured-output byte caps. It is **not** a hardware or kernel isolation boundary. Risky execution is approval-gated upstream, but no formal acceptance of the residual host-user execution risk is established by this repository documentation.
 
@@ -469,6 +469,43 @@ this page. What the decision fixes, and what a reviewer should hold it to:
   resolution and network inputs all stay variable. Do not describe digest pinning as reproducibility.
 - **The scope is narrow by construction, and widening it is a new operator decision**, not an implementation
   detail.
+
+### Backend selection: a feature declares what it needs, and never names a backend
+
+[ADR 0007](../adr/0007-sandbox-execution-substrate-and-backend-selection.md) (Accepted 2026-08-25) changes **who
+decides which of the boundaries above runs**, and changes none of them. Each workload states its requirements as an
+engine-owned constant in `SandboxWorkloads` — a **toolchain source** (the host's, or a named engine-approved image),
+an **isolation floor**, a **network floor**, a **persistence** need and a disk ceiling — and `SandboxProviderSelector`
+resolves the **minimal-satisfying** registered backend: among those that honour every declared axis, the one with the
+smallest additional privilege footprint wins (`fake` < `process` < `docker`, the last because a live daemon whose
+socket is root-equivalent on Linux is additional privilege even where the container is the stronger boundary). When
+none can honour the declaration the call throws `SandboxCapabilityNotSupportedException` naming the unmet axis. There
+is no fallback and no downgrade.
+
+Two consequences a security reader should hold on to.
+
+- **The strongest guarantee in the previous design is weakened in kind, deliberately.** "Docker cannot be wired into
+  AgentHome" used to be an absent `implements` clause — a compile error. It is now three mechanisms: AgentHome
+  declares a host toolchain, which no container backend supplies; the isolation floor has no default, so a new
+  consumer cannot inherit the weakest posture by saying nothing; and
+  `SandboxSubstrateSelectionArchitectureTests` enumerates every declaration and asserts the exact backend set allowed
+  to serve it. A compile error cannot be skipped and a test can. The mitigation is that the test is an enumeration
+  over engine-owned constants rather than a behavioural test, so it fails deterministically and offline — but it is a
+  real reduction. (In this tree `DockerSandboxRuntimeProvider` also still implements only the Development role, so the
+  old compile error stands *behind* the new checks rather than in place of them.)
+- **Diagnosis moved.** A feature can no longer be read off its own file. `SandboxProviderSelector` logs every
+  resolution at **Information** — declaration, candidates considered, winner, and rejected candidates with reasons —
+  and that log line is now the answer to "which boundary is this node actually running".
+
+> **Operator keys changed meaning.** `AgentHome:Sandbox:Provider` and `Development:Sandbox:Provider` used to *name*
+> the provider. They now **constrain the candidate set**, and the workload's declaration decides whether the named
+> backend may serve it at all. On every node that ships today the outcome is identical. Where it differs it is loud,
+> never quiet: a key naming a backend that cannot honour the declaration **fails closed at startup with the unmet axis
+> named**, because silently reinterpreting a set key is how a hardened node becomes an unhardened one. One extra rule
+> applies to Development Mode only — naming `docker` is *also* read as declaring an image-backed toolchain need (which
+> is what that key always meant), and setting `Development:ContainerSandbox:Image` declares the same need without the
+> key. The unset-Development-key fallback to the AgentHome key still applies, but only while no image toolchain is
+> declared.
 
 ### Chat attachments are staged *into* the jail, not read from the host
 
