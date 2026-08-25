@@ -106,14 +106,9 @@ def validate(register: Any, repository_root: Path, today: dt.date) -> list[str]:
         decision = by_id[category_id]
         if category_id == "author-identities-aliases":
             subjects = decision.get("subjects")
-            if (
-                not isinstance(subjects, list)
-                or len(subjects) != 2
-                or any(not nonblank(subject) for subject in subjects)
-            ):
+            if not isinstance(subjects, list) or not subjects or any(not nonblank(subject) for subject in subjects):
                 errors.append(
-                    "author-identities-aliases: subjects must contain exactly two non-blank "
-                    "public identities or aliases"
+                    "author-identities-aliases: subjects must contain at least one non-blank public identity or alias"
                 )
         status = decision.get("status")
         if status != "approved":

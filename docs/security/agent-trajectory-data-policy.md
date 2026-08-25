@@ -2,7 +2,7 @@
 
 > **Status:** Draft, 2026-08-25 — awaiting operator approval. Nothing described under
 > [§3](#3-what-a-content-rich-trajectory-store-would-require) exists, and nothing may be built until this document is
-> accepted. Operator decision D-D (2026-08-25) is *policy first*: the metadata-only audit invariant stays in force
+> accepted. The maintainer's decision (2026-08-25) is *policy first*: the metadata-only audit invariant stays in force
 > meanwhile.
 
 Scope: what this node records about an agent run, and what it would take to record more. It covers Development Mode

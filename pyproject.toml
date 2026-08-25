@@ -7,7 +7,7 @@
 # repo root with its own small uv.lock, and only ever reads tools/training/*.py.
 #
 # Run it through scripts/python-validation.sh (see AGENTS.md); the CI `python-quality` job runs
-# `--scope full`. Mirrors the house setup in ~/projects/AI/Setups/python.
+# `--scope full`.
 
 [project]
 name = "xe-python-tooling"

@@ -218,7 +218,7 @@ discover_server() {
 # Auto-pick the smallest CHAT GGUF. Embedding and reranker GGUFs are excluded on purpose: they ship
 # no chat template, so llama-server would never compile a tool grammar and the whole run would be
 # inert in exactly the way the negative control exists to catch — except it would fail confusingly
-# instead of reporting "wrong kind of model". This box really does have an embedding GGUF sitting
+# instead of reporting "wrong kind of model". A real model store can have an embedding GGUF sitting
 # next to the chat ones, so this is not a hypothetical.
 discover_model() {
   local dir

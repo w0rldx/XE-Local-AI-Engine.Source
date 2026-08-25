@@ -277,7 +277,7 @@ A local temporary clone was exercised with a new HOME and NuGet package director
 
 ### Validation reproduction and evidence retention
 
-The primary clone was `/tmp/xe-open-source-readiness-clean.pl0AoF/repo` at the audited revision, with `CLEAN=/tmp/xe-open-source-readiness-clean.pl0AoF`, `CLEAN_HOME=$CLEAN/home`, and `CLEAN_NUGET=$CLEAN/nuget`. The host was Linux in the Europe/Berlin timezone, using .NET SDK 10.0.302, Aspire CLI 13.4.6, and pnpm 11.2.2 selected by the repository's `packageManager` field. Commands were run sequentially; build and test were not concurrent.
+The primary clone was `/tmp/xe-open-source-readiness-clean.pl0AoF/repo` at the audited revision, with `CLEAN=/tmp/xe-open-source-readiness-clean.pl0AoF`, `CLEAN_HOME=$CLEAN/home`, and `CLEAN_NUGET=$CLEAN/nuget`. The host was Linux, using .NET SDK 10.0.302, Aspire CLI 13.4.6, and pnpm 11.2.2 selected by the repository's `packageManager` field. Commands were run sequentially; build and test were not concurrent.
 
 The command forms used were:
 
