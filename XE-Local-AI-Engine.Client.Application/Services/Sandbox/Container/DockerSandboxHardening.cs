@@ -25,6 +25,24 @@ internal static class DockerSandboxHardening
     /// <summary>Label carrying the attach key's sandbox id, so an attach can find its container by query.</summary>
     internal const string SandboxIdLabel = "com.xe-local-ai-engine.sandbox-id";
 
+    /// <summary>
+    ///     Label carrying the id of the engine INSTALLATION that created the container.
+    ///     <para>
+    ///         <see cref="OwnerLabel" /> alone cannot answer "is this container mine?": its value is the constant
+    ///         <see cref="OwnerLabelValue" />, so every XE installation pointed at one daemon carries it, and a
+    ///         startup sweep keyed on it would remove a second installation's live Development Mode container.
+    ///         <see cref="SandboxIdLabel" /> cannot answer it either — it is a hash over the attach key, and at
+    ///         startup no attach key exists to hash. So the sweep is keyed on this label instead, whose value is
+    ///         derived from the node data directory: the one identity that is both stable across restarts and
+    ///         distinct per installation. See <c>DockerSandboxRuntimeProvider.BuildInstallId</c>.
+    ///     </para>
+    ///     <para>
+    ///         A container created by a build older than this label therefore carries no install id and is never
+    ///         swept. That is deliberate: an unattributable container is exactly the one a sweep must not guess about.
+    ///     </para>
+    /// </summary>
+    internal const string InstallLabel = "com.xe-local-ai-engine.sandbox-install";
+
     internal const string DropAllCapabilities = "ALL";
     internal const string NoNewPrivileges = "no-new-privileges:true";
     internal const string PrivateMountPropagation = "private";
@@ -99,6 +117,7 @@ internal static class DockerSandboxHardening
         ResolvedContainerIdentity identity,
         string containerName,
         string sandboxId,
+        string installId,
         IReadOnlyList<DockerBindMount> bindMounts,
         SandboxResourceLimits? requestedLimits = null,
         SandboxNetworkPolicy networkPolicy = SandboxNetworkPolicy.None)
@@ -126,7 +145,10 @@ internal static class DockerSandboxHardening
             Command = ["-c", "while :; do sleep 3600; done"],
             NetworkMode = ResolveNetworkMode(networkPolicy),
             CapabilitiesToDrop = [DropAllCapabilities],
-            SecurityOptions = [NoNewPrivileges],
+            // The seccomp profile is passed EXPLICITLY even though the daemon applies its default anyway, because a
+            // container created without it reads back with no security option at all — indistinguishable from a
+            // daemon running with seccomp turned off. See DockerSeccompProfile.
+            SecurityOptions = [NoNewPrivileges, DockerSeccompProfile.SecurityOption],
             ReadOnlyRootFilesystem = true,
             // Two tmpfs mounts, for two different reasons. Scratch is the writable area the sandbox contract offers a
             // caller. The temp mount exists because the toolchain's shared-memory path is a compile-time constant that
@@ -144,7 +166,8 @@ internal static class DockerSandboxHardening
             Labels = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 [OwnerLabel] = OwnerLabelValue,
-                [SandboxIdLabel] = sandboxId
+                [SandboxIdLabel] = sandboxId,
+                [InstallLabel] = installId
             }
         };
     }
@@ -249,8 +272,33 @@ internal static class DockerSandboxHardening
 
         if (!present)
         {
-            violations.Add($"no-new-privileges: not applied; the daemon reports [{string.Join(", ", observed.SecurityOptions)}].");
+            violations.Add($"no-new-privileges: not applied; the daemon reports [{Describe(observed.SecurityOptions)}].");
         }
+
+        // Matched on "names a profile" rather than on equality with what was sent. The daemon echoes the profile back
+        // as `seccomp=<json>` (measured against Engine 29.7.2: a container created with `--security-opt
+        // seccomp=<path>` inspects back as the compacted JSON, never as the path), and the two renderings that must
+        // be refused are the two this can tell apart without pinning us to a byte-for-byte echo: no seccomp option at
+        // all — which is ALSO what a daemon with seccomp disabled reports, and the whole reason the profile is passed
+        // explicitly — and `seccomp=unconfined`.
+        if (!observed.SecurityOptions.Any(DockerSeccompProfile.NamesAProfile))
+        {
+            violations.Add($"seccomp: no profile is applied; the daemon reports [{Describe(observed.SecurityOptions)}]. "
+                           + "A container with no seccomp option reads back the same way as one on a daemon with seccomp disabled, "
+                           + "so this cannot be accepted as the daemon default.");
+        }
+    }
+
+    /// <summary>
+    ///     Renders the observed security options for an operator. The seccomp profile is ~9 KB of JSON, so it is
+    ///     summarised rather than printed: a violation message nobody can read is a violation message nobody acts on.
+    /// </summary>
+    private static string Describe(IReadOnlyList<string> securityOptions)
+    {
+        return string.Join(", ",
+            securityOptions.Select(static option => option.Length > 64
+                ? option[..64] + "\u2026 (" + option.Length.ToString(CultureInfo.InvariantCulture) + " chars)"
+                : option));
     }
 
     private static void VerifyPrivilegeAndDevices(DockerContainerSettings observed, List<string> violations)
