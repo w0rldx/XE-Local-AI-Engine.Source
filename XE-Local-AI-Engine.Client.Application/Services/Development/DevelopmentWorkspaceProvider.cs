@@ -1,10 +1,14 @@
 namespace XE_Local_AI_Engine.Client.Services.Development;
 
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Workspace;
+using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 
 internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvider
@@ -37,6 +41,19 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
     /// <summary>Caps the git stderr excerpt carried in a failure message. See <c>RedactGitError</c>.</summary>
     private const int GitErrorExcerptLimit = 500;
+
+    /// <summary>
+    ///     The engine-owned directory, inside <c>RuntimePath</c> and never mounted as a directory, holding one empty
+    ///     file per shadowed credential. It sits outside the workspace on purpose: the whole point of the shadow is
+    ///     that the real file is left byte-unchanged, so the substitute must not be in the tree the diff model reads.
+    /// </summary>
+    private const string ShadowDirectoryName = "shadow";
+
+    /// <summary>
+    ///     How many committed credentials this engine will neutralize with read-only mounts before refusing. It bounds
+    ///     an engine-generated mount list against a repository that could otherwise name thousands of them.
+    /// </summary>
+    private const int MaxShadowedSecrets = 32;
 
     /// <summary>
     ///     The per-task runtime subdirectories a build needs, and the reason the control-manifest exclusion is satisfied at zero cost.
@@ -86,20 +103,30 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ];
 
     private readonly INodeDataDirectory _dataDirectory;
+    private readonly ISensitiveFileExclusionService _exclusions;
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
+    private readonly IDevelopmentStore _store;
     private readonly TimeProvider _timeProvider;
 
     public DevelopmentWorkspaceProvider(INodeDataDirectory dataDirectory,
         IDevelopmentSandboxRuntimeProvider sandbox,
         IOptions<DevelopmentOptions> options,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        IDevelopmentStore store,
+        ISensitiveFileExclusionService? exclusions = null)
     {
         _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
         _sandbox = sandbox ?? throw new ArgumentNullException(nameof(sandbox));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _store = store ?? throw new ArgumentNullException(nameof(store));
+
+        // The product's single definition of "this file may hold a credential", shared with the workspace tools' read
+        // gate and AgentHome's copy filter. Defaulted rather than required so a directly constructed provider behaves
+        // exactly as the DI-resolved one does; there is only ever one implementation.
+        _exclusions = exclusions ?? new SensitiveFileExclusionService();
     }
 
     public async Task<DevelopmentWorkspaceSession> PrepareAsync(DevelopmentExecutionSnapshot snapshot,
@@ -235,6 +262,23 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             throw new DevelopmentWorkspaceSecurityException("The managed Development worktree must remain detached from protected branches.");
         }
 
+        // BEFORE either sandbox is created, so both the warm restore and the attempt see the same shadowed view. The
+        // warm restore runs the repository's own MSBuild, which can read a committed credential exactly as a test can.
+        var secrets = await DetectCommittedSecretsAsync(git, worktreePath, cancellationToken).ConfigureAwait(false);
+        if (!manifest.DetectedSecretPaths.SequenceEqual(secrets, StringComparer.Ordinal))
+        {
+            manifest = manifest with
+            {
+                DetectedSecretPaths = secrets
+            };
+            await WriteWorkspaceManifestAsync(workspaceManifestPath, manifest, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (secrets.Count > 0)
+        {
+            _ = await _store.RecordWorkspaceSecretsAsync(snapshot.TaskId, snapshot.AttemptId, secrets, cancellationToken).ConfigureAwait(false);
+        }
+
         await EnsureWarmRestoreAsync(git,
             snapshot,
             identity,
@@ -243,6 +287,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             workspaceManifestPath,
             manifest,
             baseCommit,
+            secrets,
             cancellationToken).ConfigureAwait(false);
 
         var attachKey = new SandboxAttachKey
@@ -262,7 +307,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             {
                 RootPath = worktreePath
             },
-            Mounts = BuildMounts(runtimePath, worktreePath)
+            Mounts = BuildMounts(runtimePath, worktreePath, secrets)
         }, cancellationToken).ConfigureAwait(false);
 
         return new DevelopmentWorkspaceSession(snapshot.ProjectId,
@@ -273,6 +318,41 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             worktreePath,
             runtimePath,
             handle);
+    }
+
+    /// <summary>
+    ///     The committed files in the managed workspace whose names mark them as credential-bearing, as
+    ///     repository-relative paths, sorted.
+    ///     <para>
+    ///         Read from <c>git ls-files</c> rather than by walking the directory, and that is the precise question
+    ///         rather than an optimization. The workspace is a CLONE, so only tracked content arrives — an untracked
+    ///         <c>.env</c> in the operator's repository never rides along, and the real exposure is a
+    ///         <em>committed</em> one. Asking the index also bounds the work by the repository's own size instead of by
+    ///         whatever a build has since written into <c>obj/</c> and <c>node_modules/</c>.
+    ///     </para>
+    ///     <para>
+    ///         Every path SEGMENT is tested, not just the file name, so a file under <c>.ssh/</c> or <c>.aws/</c> is
+    ///         found — those entries name directories, and that is how
+    ///         <see cref="ISensitiveFileExclusionService.IsSecret" /> is applied everywhere else.
+    ///     </para>
+    /// </summary>
+    private async Task<IReadOnlyList<string>> DetectCommittedSecretsAsync(HostGitRunner git,
+        string worktreePath,
+        CancellationToken cancellationToken)
+    {
+        var tracked = await git.RunAsync(worktreePath,
+            AgentHomeGit.Arguments("ls-files", "-z", "--", "."),
+            cancellationToken).ConfigureAwait(false);
+        EnsureGitSuccess(tracked, "The managed Development worktree's tracked files could not be listed.");
+
+        return
+        [
+            .. tracked.StandardOutput
+                      .Split('\0', StringSplitOptions.RemoveEmptyEntries)
+                      .Where(path => path.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => _exclusions.IsSecret(segment)))
+                      .Distinct(StringComparer.Ordinal)
+                      .OrderBy(static path => path, StringComparer.Ordinal)
+        ];
     }
 
     /// <summary>
@@ -344,6 +424,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         string workspaceManifestPath,
         WorkspaceManifest manifest,
         string baseCommit,
+        IReadOnlyList<string> detectedSecrets,
         CancellationToken cancellationToken)
     {
         var profile = DevelopmentCommandProfileCatalog.ResolveStored(snapshot.CommandProfileJson);
@@ -397,7 +478,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
             // The SAME mount set as the agent-facing sandbox. A warm that wrote its cache anywhere else would warm
             // nothing the attempt can read.
-            Mounts = BuildMounts(runtimePath, worktreePath)
+            Mounts = BuildMounts(runtimePath, worktreePath, detectedSecrets)
         }, cancellationToken).ConfigureAwait(false);
 
         try
@@ -463,7 +544,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///         belt-and-braces extra.
     ///     </para>
     /// </summary>
-    private IReadOnlyList<SandboxMount> BuildMounts(string runtimePath, string worktreePath)
+    private IReadOnlyList<SandboxMount> BuildMounts(string runtimePath, string worktreePath, IReadOnlyList<string> detectedSecrets)
     {
         var mounts = RuntimeDirectoryNames
                      .Select(name => new SandboxMount
@@ -474,14 +555,56 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
                      })
                      .ToList();
 
+        var supportsReadOnly = (_sandbox.Capabilities & SandboxProviderCapabilities.SupportsReadOnlyMounts) != SandboxProviderCapabilities.None;
         var gitConfigPath = Path.Combine(worktreePath, ".git", "config");
-        if ((_sandbox.Capabilities & SandboxProviderCapabilities.SupportsReadOnlyMounts) != SandboxProviderCapabilities.None
-            && File.Exists(gitConfigPath))
+        if (supportsReadOnly && File.Exists(gitConfigPath))
         {
             mounts.Add(new SandboxMount
             {
                 HostPath = gitConfigPath,
                 SandboxPath = GitConfigSandboxPath,
+                ReadOnly = true
+            });
+        }
+
+        if (!supportsReadOnly || detectedSecrets.Count == 0)
+        {
+            return mounts;
+        }
+
+        if (detectedSecrets.Count > MaxShadowedSecrets)
+        {
+            // The cap bounds the MOUNT LIST, so it is checked only where a mount list is being generated. Failing
+            // closed above it rather than shadowing the first 32 is the point: a partial shadow reads as a control
+            // and is not one.
+            throw new DevelopmentWorkspaceSecurityException($"The registered repository has {detectedSecrets.Count} committed files whose names mark them as credentials, above the "
+                                                            + $"{MaxShadowedSecrets} this engine will neutralize with read-only mounts. Remove them from the repository, or run this "
+                                                            + "project on a node whose sandbox has no mount layer, where they are reported rather than shadowed.");
+        }
+
+        var shadowRoot = Path.Combine(runtimePath, ShadowDirectoryName);
+        Directory.CreateDirectory(shadowRoot);
+        foreach (var relativePath in detectedSecrets)
+        {
+            // One empty file per shadowed path, named by the hash of that path so a second prepare reuses it and two
+            // shadows never share a mount source — a shared source would make SandboxHandle.TryResolveSandboxPath
+            // answer for one of them arbitrarily.
+            var shadowPath = Path.Combine(shadowRoot, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(relativePath)))[..32]);
+            if (!File.Exists(shadowPath))
+            {
+                File.WriteAllBytes(shadowPath, []);
+            }
+
+            mounts.Add(new SandboxMount
+            {
+                HostPath = shadowPath,
+
+                // Workspace-RELATIVE: the source is engine-generated content outside the workspace and the target is a
+                // path inside it, which is the one shape the provider's host-path derivation cannot express. The real
+                // file on disk is untouched, so the diff model sees no change and an apply cannot delete the
+                // operator's own secret.
+                SandboxPath = "/" + relativePath,
+                TargetIsWorkspaceRelative = true,
                 ReadOnly = true
             });
         }
@@ -762,5 +885,12 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         public string? WarmRestoreCommit { get; init; }
 
         public long? WarmRestoreCompletedAtUtc { get; init; }
+
+        /// <summary>
+        ///     The committed files whose names mark them as credentials, as this prepare found them. Recorded so the
+        ///     finding survives a restart and so the operator-facing event and the mount list are two views of one
+        ///     value rather than two independent walks.
+        /// </summary>
+        public IReadOnlyList<string> DetectedSecretPaths { get; init; } = [];
     }
 }

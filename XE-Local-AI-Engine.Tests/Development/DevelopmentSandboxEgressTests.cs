@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Development;
 using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -297,7 +298,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
         Directory.CreateDirectory(data);
         var identity = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository));
         var snapshot = Snapshot(identity);
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, Substitute.For<IDevelopmentStore>());
         return await provider.PrepareAsync(snapshot,
                 new DevelopmentRepositoryBinding(snapshot.ProjectId,
                     snapshot.SelectedFolderId!.Value,

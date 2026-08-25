@@ -45,6 +45,9 @@ public sealed class DockerSandboxRealDaemonTests
     /// </summary>
     private const string RequireDockerVariable = "XE_REQUIRE_DOCKER_TESTS";
 
+    /// <summary>The credential the Development-shaped fixture commits, so a shadow has something real to hide.</summary>
+    private const string ShadowedSecretContent = "-----BEGIN PRIVATE KEY-----\ndevmodesentinelvalue\n-----END PRIVATE KEY-----\n";
+
     private static readonly TimeSpan ImagePullTimeout = TimeSpan.FromMinutes(5);
 
     /// <summary>
@@ -386,6 +389,28 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Equal("none", settings.NetworkMode);
         AssertEx.Equal("NET-BLOCKED",
             await ProbeAsync(fixture, "wget -T2 -q -O- http://1.1.1.1 >/dev/null 2>&1 && echo NET-OK || echo NET-BLOCKED"));
+    }
+
+    /// <summary>
+    ///     G5 on the container backend. The unit suite can only assert what the engine ASKED for; this is what the
+    ///     daemon did with it — the container reads an EMPTY <c>certs/server.pem</c> while the same file on the host is
+    ///     still the credential, byte for byte. The second half is the load-bearing one: a scheme that neutralized the
+    ///     secret by mutating the worktree would make the tree dirty against its base commit, and an apply would carry
+    ///     the deletion back to the operator's real repository.
+    /// </summary>
+    [Test]
+    public async Task RealDaemon_AShadowedCredentialReadsBackEmptyInsideWhileTheHostFileIsUntouched()
+    {
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateWithRuntimeMountsAsync(options);
+
+        AssertEx.Equal("EMPTY", await ProbeAsync(fixture, "test -s /workspace/certs/server.pem && echo NOT-EMPTY || echo EMPTY"));
+        // Contains, not Equal: ProbeAsync joins stdout and stderr, and the shell's own "Read-only file system"
+        // diagnostic is exactly the evidence being asserted.
+        AssertEx.Contains(await ProbeAsync(fixture, "echo x >> /workspace/certs/server.pem && echo WRITABLE || echo READONLY"), "READONLY");
+
+        var onHost = await File.ReadAllTextAsync(Path.Combine(fixture.WorkspaceRoot, "certs", "server.pem"));
+        AssertEx.Equal(ShadowedSecretContent, onHost);
     }
 
     /// <summary>
@@ -1034,6 +1059,24 @@ public sealed class DockerSandboxRealDaemonTests
                 {
                     HostPath = Path.Combine(workspaceRoot, ".git", "config"),
                     SandboxPath = "/.git/config",
+                    ReadOnly = true
+                });
+
+                // G5's shadow, in the exact shape DevelopmentWorkspaceProvider requests it: a committed credential in
+                // the workspace, an engine-generated EMPTY file OUTSIDE it, and a workspace-relative target so the
+                // empty one lands on top of the real one. The real file is left byte-unchanged on disk, which is what
+                // keeps the diff model from seeing a deletion.
+                Directory.CreateDirectory(Path.Combine(workspaceRoot, "certs"));
+                await File.WriteAllTextAsync(Path.Combine(workspaceRoot, "certs", "server.pem"), ShadowedSecretContent);
+                var shadowRoot = Path.Combine(runtimeRoot, "shadow");
+                Directory.CreateDirectory(shadowRoot);
+                var shadowSource = Path.Combine(shadowRoot, "server-pem");
+                await File.WriteAllBytesAsync(shadowSource, []);
+                mounts.Add(new SandboxMount
+                {
+                    HostPath = shadowSource,
+                    SandboxPath = "/certs/server.pem",
+                    TargetIsWorkspaceRelative = true,
                     ReadOnly = true
                 });
             }
