@@ -37,6 +37,7 @@ import {
 import type {
 	BenchmarkEligibleModel,
 	BenchmarkKvCacheType,
+	BenchmarkRepeatMode,
 	BenchmarkProjectDetail,
 	BenchmarkProjectDraft,
 	BenchmarkProjectSummary,
@@ -330,17 +331,24 @@ export function useStartBenchmarkRun() {
 			modelName,
 			expectedProjectVersion,
 			kvCacheType,
+			repeatMode,
+			answerVarianceTemperature,
 		}: {
 			projectId: string;
 			modelName: string;
 			expectedProjectVersion: number;
 			/** null = Auto: the member is omitted so the node applies its own rule at freeze. */
 			kvCacheType: BenchmarkKvCacheType | null;
+			repeatMode: BenchmarkRepeatMode;
+			/** null = the node's default (0.7). Never sent in throughput mode, which the node samples at 0. */
+			answerVarianceTemperature: number | null;
 		}) => {
 			const body: StartBenchmarkRunRequest = {
 				modelName,
 				expectedProjectVersion,
 				...(kvCacheType === null ? {} : { kvCacheType }),
+				repeatMode,
+				...(repeatMode === "AnswerVariance" && answerVarianceTemperature !== null ? { answerVarianceTemperature } : {}),
 			};
 			const { data } = await callWithResponseValidation(startBenchmarkRun({ path: { projectId }, body, throwOnError: true }));
 			return toBenchmarkRunDetail(data);
@@ -377,17 +385,28 @@ export function useStartBenchmarkRunBatch() {
 			items,
 			repeatCount,
 			warmup,
+			repeatMode,
+			answerVarianceTemperature,
 		}: {
 			projectId: string;
 			expectedProjectVersion: number;
 			items: StartBenchmarkRunBatchItem[];
 			repeatCount: number;
 			warmup: boolean;
+			repeatMode: BenchmarkRepeatMode;
+			answerVarianceTemperature: number | null;
 		}): Promise<BenchmarkBatchLaunch & { projectId: string }> => {
 			const { data } = await callWithResponseValidation(
 				startBenchmarkRunBatch({
 					path: { projectId },
-					body: { expectedProjectVersion, items, repeatCount, warmup },
+					body: {
+						expectedProjectVersion,
+						items,
+						repeatCount,
+						warmup,
+						repeatMode,
+						...(repeatMode === "AnswerVariance" && answerVarianceTemperature !== null ? { answerVarianceTemperature } : {}),
+					},
 					throwOnError: true,
 				}),
 			);

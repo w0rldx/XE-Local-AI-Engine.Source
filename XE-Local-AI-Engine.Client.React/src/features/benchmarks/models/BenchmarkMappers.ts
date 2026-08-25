@@ -31,6 +31,7 @@ import {
 	benchmarkRubricLimits,
 	toBenchmarkJudgeState,
 	toBenchmarkQualityScoreSource,
+	toBenchmarkRepeatMode,
 	toBenchmarkRankExclusionReason,
 } from "@/features/benchmarks/models/BenchmarkModels";
 
@@ -178,6 +179,9 @@ export function toBenchmarkRunSummary(value: RunSummaryResponse): BenchmarkRunSu
 		repeatGroupId: value.repeatGroupId ?? null,
 		repeatIndex: value.repeatIndex ?? null,
 		isWarmup: value.isWarmup === true,
+		repeatMode: toBenchmarkRepeatMode(value.repeatMode),
+		samplingSeed: value.samplingSeed ?? null,
+		samplingTemperature: value.samplingTemperature ?? null,
 		agentName: value.agentName,
 		agentVersion: numberValue(value.agentVersion),
 		requestedContextTokens: numberValue(value.requestedContextTokens),

@@ -4021,7 +4021,18 @@
 				"kvCacheTypeAuto": "Automatisch",
 				"kvCacheTypeHelp": "Quantisierte Typen starten mit aktivierter Flash Attention. Automatisch verwendet q8_0 auf der GPU, sofern die gewählte Binärdatei das unterstützt, sonst f16.",
 				"select": "{{model}} in der Detailansicht anzeigen",
-				"actions": "Laufaktionen"
+				"actions": "Laufaktionen",
+				"repeatMode": "Wiederholungsmodus",
+				"repeatModes": {
+					"Throughput": "Durchsatz",
+					"AnswerVariance": "Antwortstreuung"
+				},
+				"repeatModeThroughputHelp": "Temperatur 0 und ein fester Seed: Jede Wiederholung liefert dieselbe Antwort, die Streuung ist also allein die Maschine.",
+				"repeatModeVarianceHelp": "Jede Wiederholung sampelt mit der Temperatur unten und eigenem Seed, die Antworten unterscheiden sich also — die Streuung beschreibt das Modell, nicht die Maschine.",
+				"answerVarianceTemperature": "Temperatur",
+				"answerVarianceTemperatureHelp": "Über 0, höchstens {{max}}. Seeds variieren je Wiederholung.",
+				"samplingTemperature": "Temperatur",
+				"samplingSeed": "Seed"
 			},
 			"matrix": {
 				"open": "Mehrere Läufe…",
@@ -4035,7 +4046,8 @@
 				"summary": "{{cells}} Kombinationen × {{perCell}} Läufe = {{total}} Läufe",
 				"rejected": "{{count}} Kombinationen wurden nicht gestartet",
 				"start": "{{count}} Läufe starten",
-				"progress": "Stapel: {{done}} von {{total}} fertig ({{running}} laufend, {{queued}} wartend, {{failed}} fehlgeschlagen)"
+				"progress": "Stapel: {{done}} von {{total}} fertig ({{running}} laufend, {{queued}} wartend, {{failed}} fehlgeschlagen)",
+				"repeatCountVarianceHelp": "Jede Wiederholung sampelt ihre eigene Antwort, die Wiederholungen messen also, wie stark die ANTWORT schwankt. Jede Wiederholung lädt das Modell weiterhin neu."
 			},
 			"metrics": {
 				"duration": "Dauer",
@@ -4049,7 +4061,7 @@
 				"tgTooltip": "Dekodierung (tg): {{rate}}{{tokens}}",
 				"ppTooltip": "Prompt (pp): {{rate}}{{tokens}}",
 				"ttftTooltip": "Zeit bis zum ersten Token: {{value}}",
-				"spreadTooltip": "Über identische Starts — tg {{tg}}, pp {{pp}}, TTFT {{ttft}} ms",
+				"spreadTooltip": "Über identische Starts im Modus {{mode}} — tg {{tg}}, pp {{pp}}, TTFT {{ttft}} ms",
 				"cachedTooltip": "{{tokens}} Prompt-Tokens kamen aus dem KV-Cache, die Prompt-Geschwindigkeit ist daher kein kalter Prefill.",
 				"cached": "{{tokens}} Prompt-Tokens wurden aus dem KV-Cache wiederverwendet — die Prompt-Geschwindigkeit ist kein kalter Prefill.",
 				"throughputDiffers": "Durchsatz unterscheidet sich: {{fields}}",

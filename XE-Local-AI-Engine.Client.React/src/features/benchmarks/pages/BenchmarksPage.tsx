@@ -41,10 +41,16 @@ import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/Benchma
 import type { BenchmarkMatrixSelection } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkLaunchMatrix } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
+import { BenchmarkRepeatModePicker } from "@/features/benchmarks/components/BenchmarkRepeatModePicker";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
 import { BenchmarkRunsTable } from "@/features/benchmarks/components/BenchmarkRunsTable";
 import { benchmarkJudgeFamilyOverlap } from "@/features/benchmarks/models/BenchmarkJudgeFamily";
-import type { BenchmarkKvCacheType, BenchmarkProjectDraft, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
+import type {
+	BenchmarkKvCacheType,
+	BenchmarkProjectDraft,
+	BenchmarkRepeatMode,
+	BenchmarkRunSummary,
+} from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkBatchProgress,
 	benchmarkErrorCode,
@@ -109,6 +115,8 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const [selectedModel, setSelectedModel] = useState<string | null>(null);
 	const [selectedKvCacheType, setSelectedKvCacheType] = useState<BenchmarkKvCacheType | typeof autoKvCacheType>(autoKvCacheType);
 	const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
+	const [repeatMode, setRepeatMode] = useState<BenchmarkRepeatMode>("Throughput");
+	const [answerVarianceTemperature, setAnswerVarianceTemperature] = useState<number | null>(null);
 	const [matrixOpen, setMatrixOpen] = useState(false);
 	const [matrixRejections, setMatrixRejections] = useState<BenchmarkBatchRejection[]>([]);
 	// The runs the last matrix launch started, kept with the project they belong to: another project's table has none
@@ -566,6 +574,8 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 													modelName: selectedModel,
 													expectedProjectVersion: detail.version,
 													kvCacheType: selectedKvCacheType === autoKvCacheType ? null : selectedKvCacheType,
+													repeatMode,
+													answerVarianceTemperature: repeatMode === "AnswerVariance" ? answerVarianceTemperature : null,
 												},
 												{
 													onSuccess: (run) => selectRun(run.id),
@@ -588,6 +598,14 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										{t("pages.benchmarks.matrix.open", "Batch runs…")}
 									</Button>
 								</Group>
+								<BenchmarkRepeatModePicker
+									mode={repeatMode}
+									temperature={answerVarianceTemperature}
+									onChange={(mode, temperature) => {
+										setRepeatMode(mode);
+										setAnswerVarianceTemperature(temperature);
+									}}
+								/>
 								{/* Gone on its own once every started run is terminal — a progress line with nothing left to
 								    report is just clutter the operator has to close. */}
 								{batchProgress && batchProgress.done < batchProgress.total ? (

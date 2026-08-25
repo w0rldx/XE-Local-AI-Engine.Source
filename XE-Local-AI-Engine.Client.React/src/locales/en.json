@@ -4021,7 +4021,18 @@
 				"kvCacheTypeAuto": "Auto",
 				"kvCacheTypeHelp": "Quantized types launch with flash attention on. Auto uses q8_0 on GPU when the selected binary supports it, otherwise f16.",
 				"select": "Show {{model}} in the detail view",
-				"actions": "Run actions"
+				"actions": "Run actions",
+				"repeatMode": "Repeat mode",
+				"repeatModes": {
+					"Throughput": "Throughput",
+					"AnswerVariance": "Answer variance"
+				},
+				"repeatModeThroughputHelp": "Temperature 0 and one fixed seed: every repeat gives the identical answer, so the spread is the machine alone.",
+				"repeatModeVarianceHelp": "Each repeat samples at the temperature below with its own seed, so the answers differ — the spread describes the model, not the machine.",
+				"answerVarianceTemperature": "Temperature",
+				"answerVarianceTemperatureHelp": "Above 0, at most {{max}}. Seeds vary per repeat.",
+				"samplingTemperature": "Temperature",
+				"samplingSeed": "Seed"
 			},
 			"matrix": {
 				"open": "Batch runs…",
@@ -4035,7 +4046,8 @@
 				"summary": "{{cells}} combinations × {{perCell}} runs = {{total}} runs",
 				"rejected": "{{count}} combinations were not started",
 				"start": "Start {{count}} runs",
-				"progress": "Batch: {{done}} of {{total}} done ({{running}} running, {{queued}} queued, {{failed}} failed)"
+				"progress": "Batch: {{done}} of {{total}} done ({{running}} running, {{queued}} queued, {{failed}} failed)",
+				"repeatCountVarianceHelp": "Each repeat samples its own answer, so the repeats measure how much the ANSWER moves. Each repeat is still its own model load."
 			},
 			"metrics": {
 				"duration": "Duration",
@@ -4049,7 +4061,7 @@
 				"tgTooltip": "Decode (tg): {{rate}}{{tokens}}",
 				"ppTooltip": "Prompt (pp): {{rate}}{{tokens}}",
 				"ttftTooltip": "Time to first token: {{value}}",
-				"spreadTooltip": "Across identical launches — tg {{tg}}, pp {{pp}}, TTFT {{ttft}} ms",
+				"spreadTooltip": "Across identical launches in {{mode}} mode — tg {{tg}}, pp {{pp}}, TTFT {{ttft}} ms",
 				"cachedTooltip": "{{tokens}} prompt tokens came from the KV cache, so the prompt speed is not a cold prefill.",
 				"cached": "{{tokens}} prompt tokens were reused from the KV cache — the prompt speed is not a cold prefill.",
 				"throughputDiffers": "Throughput differs: {{fields}}",

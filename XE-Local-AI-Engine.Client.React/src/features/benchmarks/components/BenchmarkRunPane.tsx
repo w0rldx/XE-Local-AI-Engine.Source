@@ -149,6 +149,20 @@ export function BenchmarkRunPane({
 						{t("pages.benchmarks.rank.quality", "Quality")}: <b>{run.qualityScore ?? "—"}</b>
 					</Text>
 				</Group>
+				{/* What this run actually sampled with. In throughput mode it is the proof the repeats were deterministic;
+				    in answer-variance mode the seed is the only thing that says which of the repeats this one is. */}
+				<Group gap="lg" data-testid="benchmark-run-sampling">
+					<Text size="sm">
+						{t("pages.benchmarks.run.repeatMode", "Repeat mode")}:{" "}
+						<b>{t(`pages.benchmarks.run.repeatModes.${run.repeatMode}`, run.repeatMode)}</b>
+					</Text>
+					<Text size="sm">
+						{t("pages.benchmarks.run.samplingTemperature", "Temperature")}: <b>{run.samplingTemperature ?? "—"}</b>
+					</Text>
+					<Text size="sm">
+						{t("pages.benchmarks.run.samplingSeed", "Seed")}: <b>{run.samplingSeed ?? "—"}</b>
+					</Text>
+				</Group>
 				<ThroughputBreakdown run={run} />
 				<Group gap="xs" c={isConnected ? "green" : "dimmed"}>
 					{isConnected ? <IconPlugConnected size={16} /> : <IconPlugConnectedX size={16} />}

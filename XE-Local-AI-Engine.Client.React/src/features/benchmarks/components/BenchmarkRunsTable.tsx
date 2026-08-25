@@ -68,13 +68,20 @@ function ThroughputCell({ run, stats }: { run: BenchmarkRunSummary; stats?: Benc
 			tokens: promptTokens === null ? "" : ` over ${promptTokens} tokens`,
 		}),
 		t("pages.benchmarks.metrics.ttftTooltip", "Time to first token: {{value}}", { value: formatLatencyMs(ttftMs) }),
+		// The mode is part of the reading, not a footnote: the same ± means "this machine wobbles" in throughput mode
+		// and "this model wanders" in answer-variance mode. Cohorts are split by mode, so one line describes one of them.
 		spread === null
 			? null
-			: t("pages.benchmarks.metrics.spreadTooltip", "Across identical launches — tg {{tg}}, pp {{pp}}, TTFT {{ttft}} ms", {
-					tg: spread,
-					pp: formatStatSummary(stats?.promptTokensPerSecond ?? null, 0) ?? "—",
-					ttft: formatStatSummary(stats?.ttftMs ?? null, 0) ?? "—",
-				}),
+			: t(
+					"pages.benchmarks.metrics.spreadTooltip",
+					"Across identical launches in {{mode}} mode — tg {{tg}}, pp {{pp}}, TTFT {{ttft}} ms",
+					{
+						mode: t(`pages.benchmarks.run.repeatModes.${run.repeatMode}`, run.repeatMode),
+						tg: spread,
+						pp: formatStatSummary(stats?.promptTokensPerSecond ?? null, 0) ?? "—",
+						ttft: formatStatSummary(stats?.ttftMs ?? null, 0) ?? "—",
+					},
+				),
 		cachedPromptTokens !== null && cachedPromptTokens > 0
 			? t("pages.benchmarks.metrics.cachedTooltip", "{{tokens}} prompt tokens came from the KV cache, so the prompt speed is not a cold prefill.", {
 					tokens: cachedPromptTokens,

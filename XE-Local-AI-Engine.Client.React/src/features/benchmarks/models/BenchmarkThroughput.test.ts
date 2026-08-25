@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import type { BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import { noBenchmarkRunThroughput } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkRepeatCohortKey,
@@ -119,5 +120,35 @@ describe("benchmarkRepeatStats", () => {
 
 		expect(formatStatSummary(stats.get(benchmarkRepeatCohortKey(measured("a", 80)))?.tokensPerSecond ?? null)).toBeNull();
 		expect(formatStatSummary(null)).toBeNull();
+	});
+});
+
+describe("repeat cohorts across modes", () => {
+	// A throughput group is deterministic and its spread is the machine; an answer-variance group samples and its
+	// spread is the model. Averaging them would report one number describing neither — and the runs are identical in
+	// every other member of the key, so nothing else would have kept them apart.
+	const sampled = (id: string, repeatMode: BenchmarkRunSummary["repeatMode"], tokensPerSecond: number) =>
+		benchmarkRunSummaryFixture({ id, repeatMode, tokensPerSecond, repeatIndex: 1 });
+
+	it("never averages a sampled group together with a deterministic one", () => {
+		const runs = [
+			sampled("t1", "Throughput", 100),
+			sampled("t2", "Throughput", 102),
+			sampled("v1", "AnswerVariance", 40),
+			sampled("v2", "AnswerVariance", 42),
+		];
+
+		const stats = benchmarkRepeatStats(runs);
+
+		expect(stats.size).toBe(2);
+		expect(stats.get(benchmarkRepeatCohortKey(runs[0] as BenchmarkRunSummary))?.tokensPerSecond?.mean).toBe(101);
+		expect(stats.get(benchmarkRepeatCohortKey(runs[2] as BenchmarkRunSummary))?.tokensPerSecond?.mean).toBe(41);
+	});
+
+	it("keeps the mode in the cohort key", () => {
+		const throughput = sampled("a", "Throughput", 10);
+		const variance = sampled("b", "AnswerVariance", 10);
+
+		expect(benchmarkRepeatCohortKey(throughput)).not.toBe(benchmarkRepeatCohortKey(variance));
 	});
 });

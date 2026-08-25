@@ -141,4 +141,15 @@ describe("BenchmarkRunPane", () => {
 
 		expect(onCancel).toHaveBeenCalledExactlyOnceWith("Judge");
 	});
+
+	// In throughput mode the seed is the proof the repeats were deterministic; in answer-variance mode it is the only
+	// thing that says which of several differing answers this one is. Either way it is a fact of the run, not a detail.
+	it("states what the run actually sampled with", () => {
+		renderPane(run({ repeatMode: "AnswerVariance", samplingTemperature: 0.7, samplingSeed: "4242" }));
+
+		const line = screen.getByTestId("benchmark-run-sampling").textContent ?? "";
+		expect(line).toContain("Answer variance");
+		expect(line).toContain("0.7");
+		expect(line).toContain("4242");
+	});
 });

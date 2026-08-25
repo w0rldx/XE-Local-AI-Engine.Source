@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
-import type { BenchmarkEligibleModel, BenchmarkKvCacheType } from "@/features/benchmarks/models/BenchmarkModels";
+import { BenchmarkRepeatModePicker } from "@/features/benchmarks/components/BenchmarkRepeatModePicker";
+import type { BenchmarkEligibleModel, BenchmarkKvCacheType, BenchmarkRepeatMode } from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkBaseModelLabel, benchmarkKvCacheTypes, benchmarkQuantTag } from "@/features/benchmarks/models/BenchmarkModels";
 import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarks";
 
@@ -20,6 +21,9 @@ export interface BenchmarkMatrixSelection {
 	items: { modelName: string; kvCacheType?: string }[];
 	repeatCount: number;
 	warmup: boolean;
+	repeatMode: BenchmarkRepeatMode;
+	/** Null = the node's own default; omitted entirely in throughput mode, which is deterministic by definition. */
+	answerVarianceTemperature: number | null;
 }
 
 interface BenchmarkLaunchMatrixProps {
@@ -46,6 +50,8 @@ export function BenchmarkLaunchMatrix({ models, rejected, isSubmitting, onSubmit
 	const [selectedKvTypes, setSelectedKvTypes] = useState<string[]>([autoKvCacheType]);
 	const [repeatCount, setRepeatCount] = useState<number>(repeatCountLimits.min);
 	const [warmup, setWarmup] = useState(false);
+	const [repeatMode, setRepeatMode] = useState<BenchmarkRepeatMode>("Throughput");
+	const [answerVarianceTemperature, setAnswerVarianceTemperature] = useState<number | null>(null);
 
 	const runsPerCell = repeatCount + (warmup ? 1 : 0);
 	const cellCount = selectedModels.length * selectedKvTypes.length;
@@ -72,6 +78,8 @@ export function BenchmarkLaunchMatrix({ models, rejected, isSubmitting, onSubmit
 			),
 			repeatCount,
 			warmup,
+			repeatMode,
+			answerVarianceTemperature: repeatMode === "AnswerVariance" ? answerVarianceTemperature : null,
 		});
 	};
 
@@ -126,13 +134,29 @@ export function BenchmarkLaunchMatrix({ models, rejected, isSubmitting, onSubmit
 				</Group>
 			</Checkbox.Group>
 
+			<BenchmarkRepeatModePicker
+				mode={repeatMode}
+				temperature={answerVarianceTemperature}
+				onChange={(mode, temperature) => {
+					setRepeatMode(mode);
+					setAnswerVarianceTemperature(temperature);
+				}}
+			/>
+
 			<Group grow={true} align="flex-start">
 				<NumberInput
 					label={t("pages.benchmarks.matrix.repeatCount", "Repeats per combination")}
-					description={t(
-						"pages.benchmarks.matrix.repeatCountHelp",
-						"Sampling is deterministic, so repeats do not change the answer — they measure how much the speed moves between launches. Each repeat is its own model load.",
-					)}
+					description={
+						repeatMode === "AnswerVariance"
+							? t(
+									"pages.benchmarks.matrix.repeatCountVarianceHelp",
+									"Each repeat samples its own answer, so the repeats measure how much the ANSWER moves. Each repeat is still its own model load.",
+								)
+							: t(
+									"pages.benchmarks.matrix.repeatCountHelp",
+									"Sampling is deterministic, so repeats do not change the answer — they measure how much the speed moves between launches. Each repeat is its own model load.",
+								)
+					}
 					min={repeatCountLimits.min}
 					max={repeatCountLimits.max}
 					clampBehavior="strict"

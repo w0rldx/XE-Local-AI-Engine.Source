@@ -286,10 +286,11 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: null });
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: null, repeatMode: "Throughput", answerVarianceTemperature: null });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
-		expect(observedBody).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2 });
+		// The mode always rides along; the temperature never does in throughput mode, which the node samples at 0.
+		expect(observedBody).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2, repeatMode: "Throughput" });
 		expect(result.current.data).toMatchObject({ id: runId, primaryStatus: "Queued" });
 	});
 
@@ -305,7 +306,7 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 1, kvCacheType: null });
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 1, kvCacheType: null, repeatMode: "Throughput", answerVarianceTemperature: null });
 
 		await waitFor(() => expect(result.current.isError).toBe(true));
 		expect(result.current.error).toBeInstanceOf(ApiError);
@@ -326,13 +327,13 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: null });
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: null, repeatMode: "Throughput", answerVarianceTemperature: null });
 		await waitFor(() => expect(bodies).toHaveLength(1));
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q8_0" });
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q8_0", repeatMode: "Throughput", answerVarianceTemperature: null });
 		await waitFor(() => expect(bodies).toHaveLength(2));
 
-		expect(bodies[0]).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2 });
-		expect(bodies[1]).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q8_0" });
+		expect(bodies[0]).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2, repeatMode: "Throughput" });
+		expect(bodies[1]).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q8_0", repeatMode: "Throughput" });
 	});
 
 	// A 422 is the node refusing this KV type on this runtime; its sanitized reason has to survive to the caller.
@@ -347,7 +348,7 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q4_0" });
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q4_0", repeatMode: "Throughput", answerVarianceTemperature: null });
 
 		await waitFor(() => expect(result.current.isError).toBe(true));
 		expect((result.current.error as ApiError).statusCode).toBe(422);

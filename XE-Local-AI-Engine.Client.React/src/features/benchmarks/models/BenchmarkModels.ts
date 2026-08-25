@@ -20,6 +20,21 @@ export const toBenchmarkJudgeState = (value: unknown): BenchmarkJudgeState =>
 	benchmarkJudgeStates.find((state) => state === value) ?? "none";
 
 /**
+ * What a repeat GROUP measures. `Throughput` is the default and the historical behaviour: temperature 0 and one fixed
+ * seed, so every repeat produces the identical answer and only the machine varies. `AnswerVariance` samples at a
+ * temperature and varies the seed per repeat, so the repeats differ in what they SAY — the spread then describes the
+ * model, not the box, and the two must never be averaged together.
+ */
+export const benchmarkRepeatModes = ["Throughput", "AnswerVariance"] as const;
+export type BenchmarkRepeatMode = (typeof benchmarkRepeatModes)[number];
+/** Fail-safe: an unknown mode reads as the deterministic one, never as "these numbers vary for an unknown reason". */
+export const toBenchmarkRepeatMode = (value: unknown): BenchmarkRepeatMode =>
+	benchmarkRepeatModes.find((mode) => mode === value) ?? "Throughput";
+
+/** `BenchmarkRunFreezeService.DefaultAnswerVarianceTemperature` and its ceiling, mirrored for the launch controls. */
+export const benchmarkAnswerVarianceTemperature = { default: 0.7, max: 2 } as const;
+
+/**
  * Why the node left a run out of the ranked cohort. Server-derived and exhaustive: `null` means the run IS ranked.
  * Every member maps to an operator hint and an action in the runs table — a rank that is simply missing, with no
  * reason, would be unactionable.
@@ -342,6 +357,12 @@ export interface BenchmarkRunSummary {
 	repeatIndex: number | null;
 	/** A warm-up run: shown, but never ranked and never counted in a group's statistics. */
 	isWarmup: boolean;
+	/** What this run's group measures. Throughput repeats are deterministic; answer-variance repeats are not. */
+	repeatMode: BenchmarkRepeatMode;
+	/** The seed the run actually sampled with, verbatim (the node's own string), or null for a legacy row. */
+	samplingSeed: string | null;
+	/** The temperature the run actually sampled at. Null for legacy rows; 0 for a throughput repeat. */
+	samplingTemperature: number | null;
 	agentName: string;
 	agentVersion: number;
 	requestedContextTokens: number;
