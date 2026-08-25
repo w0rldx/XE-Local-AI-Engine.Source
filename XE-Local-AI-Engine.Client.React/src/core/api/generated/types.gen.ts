@@ -3117,6 +3117,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResp
 	enabled?: boolean;
 	sandboxProvider?: string;
 	containerRuntime?: XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse | null;
+	isolation?: Array<XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse = {
@@ -3135,6 +3136,18 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemo
 	serverVersion?: string;
 	endpoint?: string;
 	confirmedAtUtc?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse = {
+	role?: string;
+	provider?: string;
+	backend?: string;
+	level?: string;
+	filesystemIsolation?: boolean;
+	networkIsolation?: boolean;
+	resourceLimits?: boolean;
+	readOnlyMounts?: boolean;
+	filesystemIsolationUnavailableReason?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest = {
