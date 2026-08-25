@@ -103,6 +103,27 @@ public sealed record BenchmarkLlamaRuntimeSnapshotV1(
             FlashAttention);
 }
 
+/// <summary>
+///     The frozen sampling a run replays.
+///     <para>
+///         EVERY MEMBER ADDED HERE MUST BE NULLABLE AND <see cref="JsonIgnoreCondition.WhenWritingNull" />. The factory
+///         serializes with <see cref="JsonIgnoreCondition.Never" /> and validates a stored payload by RE-HASHING it, so
+///         a member that emits <c>null</c> changes the bytes of every row frozen before it existed and every one of
+///         those runs stops replaying with "configuration hash is invalid". Omitting the member when it is null keeps
+///         a legacy payload byte-identical; a run that actually sets it is a new configuration and legitimately hashes
+///         differently. <c>BenchmarkRuntimeSnapshotV1CompatibilityTests</c> is the guard.
+///     </para>
+/// </summary>
+/// <param name="ReasoningBudgetTokens">
+///     The per-request thinking budget (<c>reasoning_budget_tokens</c>) frozen onto the run, or <see langword="null" />
+///     to leave the reasoning bounded only by the effort ladder and the window.
+/// </param>
+/// <param name="ReasoningBudgetEnforceable">
+///     What the frozen model's capability snapshot said about llama-server being able to ENFORCE that budget — its
+///     chat template renders a literal reasoning end marker. Frozen rather than re-resolved at execution so a run
+///     replays under the answer that was true when it was created. <see langword="null" /> on a run frozen before this
+///     member existed, which reads as the inert <see langword="true" />: never remove a cap that was working.
+/// </param>
 public sealed record BenchmarkSamplingSnapshotV1(
     float? Temperature,
     float? TopP,
@@ -115,7 +136,11 @@ public sealed record BenchmarkSamplingSnapshotV1(
     float? FrequencyPenalty,
     IReadOnlyList<string> Stop,
     string SeedPolicy,
-    string? SeedValue);
+    string? SeedValue,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? ReasoningBudgetTokens = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    bool? ReasoningBudgetEnforceable = null);
 
 public static class BenchmarkFrozenPolicies
 {
@@ -124,10 +149,22 @@ public static class BenchmarkFrozenPolicies
     /// <summary>
     ///     The frozen sampling every benchmark generation replays. <paramref name="maxOutputTokens" /> is the project's
     ///     optional output budget (<c>n_predict</c>); the default keeps generation context-limited and keeps the
-    ///     judge-policy sampling — which never takes a budget — byte-identical to what it has always hashed.
+    ///     judge-policy sampling — which never takes a budget — byte-identical to what it has always hashed. The same
+    ///     holds for the two reasoning-budget arguments: omitted, they are omitted from the payload entirely.
     /// </summary>
-    public static BenchmarkSamplingSnapshotV1 DeterministicSampling(int? maxOutputTokens = null) =>
-        new(0, null, null, null, maxOutputTokens, null, null, null, null, [], FixedSeedPolicy, "0");
+    public static BenchmarkSamplingSnapshotV1 DeterministicSampling(int? maxOutputTokens = null,
+        int? reasoningBudgetTokens = null,
+        bool? reasoningBudgetEnforceable = null) =>
+        new(0, null, null, null, maxOutputTokens, null, null, null, null, [], FixedSeedPolicy, "0", reasoningBudgetTokens,
+            reasoningBudgetEnforceable);
+
+    /// <summary>
+    ///     Tokens a project's context must keep clear of its own budgets, so a run that pins both a reasoning budget
+    ///     and an output budget still has room for the task, the system prompt and the agent's tool offer. A coarse
+    ///     floor on purpose: the exact prompt is not known when the project is validated, and a floor that refuses the
+    ///     obviously impossible is worth more than a precise one that needs the frozen runtime to compute.
+    /// </summary>
+    public const int MinimumPromptReserveTokens = 512;
 
     /// <summary>The generation budget a run gets when its project does not pin one. See <see cref="FrozenTimeouts" />.</summary>
     public const int DefaultInvocationTimeoutSeconds = 900;

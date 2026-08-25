@@ -40,6 +40,13 @@ public class BenchmarkProjectMutationRequest
     /// <summary>Per-run output-token budget; omitted leaves generation context-limited. Must be &lt; ContextTokens.</summary>
     public int? MaxOutputTokens { get; init; }
 
+    /// <summary>
+    ///     Per-run thinking budget (<c>reasoning_budget_tokens</c>); omitted leaves the reasoning bounded only by the
+    ///     agent's reasoning effort and the window. Must be &lt; ContextTokens, and together with MaxOutputTokens must
+    ///     leave a prompt reserve inside it.
+    /// </summary>
+    public int? ReasoningBudgetTokens { get; init; }
+
     /// <summary>Seconds one run's generation may take; omitted takes the node default (900). Range 60..7200.</summary>
     public int? InvocationTimeoutSeconds { get; init; }
 
@@ -79,6 +86,9 @@ public class BenchmarkProjectSummaryResponse
 
     /// <summary>Per-run output-token budget, or null when generation is context-limited.</summary>
     public int? MaxOutputTokens { get; init; }
+
+    /// <summary>Per-run thinking budget, or null when the reasoning is bounded only by the effort and the window.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
 
     /// <summary>Seconds one run's generation may take, or null for the node default.</summary>
     public int? InvocationTimeoutSeconds { get; init; }

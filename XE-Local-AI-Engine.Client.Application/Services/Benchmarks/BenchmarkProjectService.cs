@@ -251,6 +251,7 @@ public sealed class BenchmarkProjectService(
 
         ValidateContext(draft.ContextTokens, "primary");
         ValidateOutputBudget(draft.MaxOutputTokens, draft.ContextTokens);
+        ValidateReasoningBudget(draft.ReasoningBudgetTokens, draft.MaxOutputTokens, draft.ContextTokens);
         ValidateInvocationTimeout(draft.InvocationTimeoutSeconds);
         var definition = await _agentDefinitionStore.GetByIdAsync(draft.AgentDefinitionId, cancellationToken).ConfigureAwait(false);
         if (definition is null || definition.Kind != AgentDefinitionKind.Single)
@@ -265,7 +266,8 @@ public sealed class BenchmarkProjectService(
                 draft.ContextTokens,
                 draft.AgentDefinitionId,
                 draft.MaxOutputTokens,
-                draft.InvocationTimeoutSeconds),
+                draft.InvocationTimeoutSeconds,
+                draft.ReasoningBudgetTokens),
             policy);
     }
 
@@ -331,6 +333,32 @@ public sealed class BenchmarkProjectService(
         if (maxOutputTokens is { } budget && (budget < 1 || budget >= contextTokens))
         {
             throw new BenchmarkValidationException("The output token budget must be between 1 and the requested context, exclusive.");
+        }
+    }
+
+    /// <summary>
+    ///     The reasoning budget must leave room for an answer. On its own it is bounded like the output budget; with an
+    ///     output budget ALSO pinned the two are additive inside one window, and a pair that sums past the context is a
+    ///     project that can only ever produce truncated runs — the model spends the budget thinking, hits the ceiling,
+    ///     and every run is excluded from its own ranking. A coarse prompt reserve is included because the task and the
+    ///     system prompt occupy the same window and are not zero.
+    /// </summary>
+    private static void ValidateReasoningBudget(int? reasoningBudgetTokens, int? maxOutputTokens, int contextTokens)
+    {
+        if (reasoningBudgetTokens is not { } budget)
+        {
+            return;
+        }
+
+        if (budget < 1 || budget >= contextTokens)
+        {
+            throw new BenchmarkValidationException("The reasoning token budget must be between 1 and the requested context, exclusive.");
+        }
+
+        if (maxOutputTokens is { } output && BenchmarkFrozenPolicies.MinimumPromptReserveTokens + budget + output > contextTokens)
+        {
+            throw new BenchmarkValidationException($"The reasoning and output token budgets must leave at least "
+                                                   + $"{BenchmarkFrozenPolicies.MinimumPromptReserveTokens} tokens of the requested context for the prompt.");
         }
     }
 

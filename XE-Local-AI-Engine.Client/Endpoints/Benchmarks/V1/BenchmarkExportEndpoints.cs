@@ -26,6 +26,9 @@ public sealed class BenchmarkExportProjectResponse
     public int ContextTokens { get; init; }
     public int? MaxOutputTokens { get; init; }
 
+    /// <summary>The thinking budget the runs were frozen with, or null when the reasoning was bounded only by effort.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
+
     /// <summary>The generation budget the runs were given, or null for the node's frozen default.</summary>
     public int? InvocationTimeoutSeconds { get; init; }
 
@@ -107,6 +110,7 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimePr
                           CoreTask = JsonSerializer.Deserialize<string>(project.CoreTaskJson.Span) ?? string.Empty,
                           ContextTokens = project.ContextTokens,
                           MaxOutputTokens = project.MaxOutputTokens,
+                          ReasoningBudgetTokens = project.ReasoningBudgetTokens,
                           InvocationTimeoutSeconds = project.InvocationTimeoutSeconds,
                           Agent = records.Count == 0
                               ? null

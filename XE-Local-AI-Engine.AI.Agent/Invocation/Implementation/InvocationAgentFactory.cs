@@ -119,7 +119,10 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             // sent. For such a model the marker is omitted rather than sent — a field that does nothing is worse than
             // no field, because everything upstream would read it as a cap that holds — and the skip is reported once
             // per model so an operator learns why this model's thinking is uncapped.
-            if (ReasoningOptionsResolver.ResolveReasoningBudgetTokens(definition.ReasoningEffort) is { } budgetTokens)
+            // An explicit sampling budget beats the effort ladder: the ladder is a fixed ceiling picked without
+            // knowing the window, while a caller that pins a number (the benchmark freeze) has to replay exactly it.
+            var pinnedBudget = definition.Sampling?.ReasoningBudgetTokens is { } pinned && pinned > 0 ? pinned : (int?)null;
+            if ((pinnedBudget ?? ReasoningOptionsResolver.ResolveReasoningBudgetTokens(definition.ReasoningEffort)) is { } budgetTokens)
             {
                 if (definition.ReasoningBudgetEnforceable)
                 {

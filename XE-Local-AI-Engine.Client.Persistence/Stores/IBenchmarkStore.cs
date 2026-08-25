@@ -251,6 +251,11 @@ public interface IBenchmarkStore
 ///     The per-run output-token budget frozen into every run's sampling, or <see langword="null" /> to leave generation
 ///     context-limited. Must be <c>1 &lt;= MaxOutputTokens &lt; ContextTokens</c>.
 /// </param>
+/// <param name="ReasoningBudgetTokens">
+///     The per-request thinking budget frozen into every run's sampling, or <see langword="null" /> to leave the
+///     reasoning bounded only by the effort ladder and the window. Must be <c>1 &lt;= ReasoningBudgetTokens &lt;
+///     ContextTokens</c>.
+/// </param>
 public sealed record BenchmarkProjectInput(
     Guid Id,
     string Name,
@@ -258,7 +263,8 @@ public sealed record BenchmarkProjectInput(
     int ContextTokens,
     Guid AgentDefinitionId,
     int? MaxOutputTokens = null,
-    int? InvocationTimeoutSeconds = null);
+    int? InvocationTimeoutSeconds = null,
+    int? ReasoningBudgetTokens = null);
 
 /// <summary>
 ///     The judge half of a project write, applied in the project's own transaction. A <see langword="null" /> instance
@@ -439,7 +445,8 @@ public sealed record BenchmarkProjectRecord(
     long CreatedAtUtc,
     long UpdatedAtUtc,
     int? MaxOutputTokens = null,
-    int? InvocationTimeoutSeconds = null);
+    int? InvocationTimeoutSeconds = null,
+    int? ReasoningBudgetTokens = null);
 
 /// <param name="Judge">
 ///     The derived judge view. Everything judge-related is now attempt-owned: a run is judged many times, so nothing
@@ -578,6 +585,14 @@ public static class BenchmarkPrimaryStopReasons
     public const string Timeout = "timeout";
 
     /// <summary>
+    ///     Generation ran out of budget while still inside its reasoning: <see cref="Length" />, and not one visible
+    ///     answer token was emitted. Truncated for every consumer (<see cref="IsTruncated" /> covers it), but it names
+    ///     the reasoning budget as the thing to raise rather than the output budget, which is the whole difference
+    ///     between a run an operator can fix and one they cannot explain.
+    /// </summary>
+    public const string ReasoningLength = "reasoning-length";
+
+    /// <summary>
     ///     The invocation ended cleanly but produced no answer: the turn stopped on an unanswered tool call, or every
     ///     token it emitted was reasoning. Node-derived, not a provider token — llama-server reports <c>stop</c> or
     ///     <c>tool_calls</c> for both shapes, which read as a finished answer everywhere downstream and let a run that
@@ -589,6 +604,8 @@ public static class BenchmarkPrimaryStopReasons
     ///     Whether the primary generation stopped because it ran out of budget. <see cref="Length" /> is the
     ///     OpenAI-compatible token for BOTH causes llama-server reports it for — <c>n_predict</c> exhausted and the
     ///     context window full (<c>stopped_limit</c>) — and both mean the same thing here: the answer is cut off.
+    ///     <see cref="ReasoningLength" /> is the node's narrowing of the same fact and is therefore also truncated;
+    ///     splitting them here would exclude one and rank the other.
     ///     <para>
     ///         One implementation on purpose. Ranking (<c>BenchmarkStore.ApplyRunExclusions</c>) and judging
     ///         (<c>BenchmarkJudgeExecutor</c>) live in different assemblies and used to hold byte-identical private
@@ -597,7 +614,8 @@ public static class BenchmarkPrimaryStopReasons
     ///     </para>
     /// </summary>
     public static bool IsTruncated(string? primaryStopReason) =>
-        string.Equals(primaryStopReason, Length, StringComparison.OrdinalIgnoreCase);
+        string.Equals(primaryStopReason, Length, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(primaryStopReason, ReasoningLength, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     ///     Whether the primary generation ended without producing an answer. Same posture as

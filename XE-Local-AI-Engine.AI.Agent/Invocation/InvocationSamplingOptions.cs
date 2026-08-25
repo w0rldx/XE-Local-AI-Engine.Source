@@ -18,6 +18,12 @@ public sealed record InvocationSamplingOptions
 
     public int? MaxOutputTokens { get; init; }
 
+    /// <summary>
+    ///     An explicit per-request thinking budget in tokens, overriding the effort-derived ceiling. Null keeps the
+    ///     effort ladder, which leaves every existing caller byte-identical.
+    /// </summary>
+    public int? ReasoningBudgetTokens { get; init; }
+
     public float? RepeatPenalty { get; init; }
 
     public int? RepeatLastN { get; init; }

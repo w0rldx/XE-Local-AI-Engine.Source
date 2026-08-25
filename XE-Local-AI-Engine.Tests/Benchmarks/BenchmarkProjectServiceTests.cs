@@ -65,6 +65,34 @@ public sealed class BenchmarkProjectServiceTests
     }
 
     [Test]
+    public async Task Create_ReasoningBudgetMustFitTheContextAlongsideTheOutputBudget()
+    {
+        var context = new ServiceContext();
+
+        // Same rule as the output budget on its own.
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId, ReasoningBudgetTokens: 4096)));
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId, ReasoningBudgetTokens: 0)));
+
+        // The pair is what actually bites: each budget fits on its own, but together with the prompt they cannot, so
+        // every run this project could ever freeze would burn its window and be excluded from its own ranking.
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId, MaxOutputTokens: 2048,
+                ReasoningBudgetTokens: 2000)));
+        _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(),
+            Arg.Any<CancellationToken>());
+
+        _ = await context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId, MaxOutputTokens: 1024,
+            ReasoningBudgetTokens: 2048));
+        AssertEx.Equal<int?>(2048, AssertEx.NotNull(context.CreatedInput).ReasoningBudgetTokens);
+
+        _ = await context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId));
+        AssertEx.Null(AssertEx.NotNull(context.CreatedInput).ReasoningBudgetTokens,
+            "An omitted budget stays absent: the reasoning keeps the effort ladder's ceiling.");
+    }
+
+    [Test]
     public async Task Create_GenerationTimeoutMustBePlausible()
     {
         var context = new ServiceContext();

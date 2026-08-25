@@ -26,6 +26,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             CoreTaskJson = input.CoreTaskJson.ToArray(),
             ContextTokens = input.ContextTokens,
             MaxOutputTokens = input.MaxOutputTokens,
+            ReasoningBudgetTokens = input.ReasoningBudgetTokens,
             InvocationTimeoutSeconds = input.InvocationTimeoutSeconds,
             AgentDefinitionId = input.AgentDefinitionId,
             Version = 1,
@@ -90,6 +91,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         project.CoreTaskJson = input.CoreTaskJson.ToArray();
         project.ContextTokens = input.ContextTokens;
         project.MaxOutputTokens = input.MaxOutputTokens;
+        project.ReasoningBudgetTokens = input.ReasoningBudgetTokens;
         project.InvocationTimeoutSeconds = input.InvocationTimeoutSeconds;
         project.AgentDefinitionId = input.AgentDefinitionId;
         project.Version++;
@@ -1965,7 +1967,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     private static BenchmarkProjectRecord ToRecord(BenchmarkProject entity, bool frozen) =>
         new(entity.Id, entity.Name, entity.CoreTaskJson.ToArray(), entity.ContextTokens, entity.AgentDefinitionId,
             entity.CurrentJudgePolicyRevisionId is not null, entity.CurrentJudgePolicyRevisionId, frozen,
-            entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.MaxOutputTokens, entity.InvocationTimeoutSeconds);
+            entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.MaxOutputTokens, entity.InvocationTimeoutSeconds,
+            entity.ReasoningBudgetTokens);
 
     // One place writes the six throughput columns, so the success path and the cancel-reset path can never disagree
     // about which of them a run carries.

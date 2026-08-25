@@ -346,10 +346,21 @@ public static class BenchmarkOutputParts
     ///         capture is whatever fragment arrived last, not the shape of the turn.
     ///     </para>
     /// </summary>
+    /// <summary>
+    ///     Whether any VISIBLE answer text was emitted — reasoning excluded, whitespace not counted. The narrow half of
+    ///     <see cref="IsUnanswered" />, separate because a run cut off at the token budget is asked only this: did it
+    ///     ever leave the scratchpad?
+    /// </summary>
+    public static bool HasAnswerText(IReadOnlyList<BenchmarkOutputPart> parts)
+    {
+        ArgumentNullException.ThrowIfNull(parts);
+        return parts.Any(static part => string.Equals(part.Kind, OutputKind, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(part.Content));
+    }
+
     public static bool IsUnanswered(IReadOnlyList<BenchmarkOutputPart> parts)
     {
         ArgumentNullException.ThrowIfNull(parts);
-        if (!parts.Any(static part => string.Equals(part.Kind, OutputKind, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(part.Content)))
+        if (!HasAnswerText(parts))
         {
             return true;
         }
@@ -537,6 +548,11 @@ public sealed record BenchmarkJudgePolicyDraft(
 ///     The per-run output-token budget frozen into every run's sampling, or <see langword="null" /> to leave generation
 ///     context-limited. Validated as <c>1 &lt;= MaxOutputTokens &lt; ContextTokens</c>.
 /// </param>
+/// <param name="ReasoningBudgetTokens">
+///     The per-run thinking budget frozen into every run's sampling, or <see langword="null" /> to leave the reasoning
+///     bounded only by the effort ladder and the window. Validated as <c>1 &lt;= ReasoningBudgetTokens &lt;
+///     ContextTokens</c>, and — with an output budget also set — as leaving a prompt reserve inside the context.
+/// </param>
 public sealed record BenchmarkProjectDraft(
     Guid Id,
     string Name,
@@ -545,7 +561,8 @@ public sealed record BenchmarkProjectDraft(
     Guid AgentDefinitionId,
     BenchmarkJudgePolicyDraft? Judge = null,
     int? MaxOutputTokens = null,
-    int? InvocationTimeoutSeconds = null);
+    int? InvocationTimeoutSeconds = null,
+    int? ReasoningBudgetTokens = null);
 
 public sealed class BenchmarkQueueOptions
 {

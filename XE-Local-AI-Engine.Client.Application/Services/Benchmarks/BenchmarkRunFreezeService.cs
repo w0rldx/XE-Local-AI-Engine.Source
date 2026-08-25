@@ -158,7 +158,11 @@ public sealed class BenchmarkRunFreezeService(
             var primaryLaunch = await _launchResolver
                                       .ResolveAsync(primary.ModelName, project.ContextTokens, requestedKvCacheType, binaryCapabilities, variant, cancellationToken)
                                       .ConfigureAwait(false);
-            var primarySampling = BenchmarkFrozenPolicies.DeterministicSampling(project.MaxOutputTokens);
+            // The enforceability answer is frozen off the capabilities read ABOVE, not re-resolved at execution: a
+            // model swap or a re-detection between freeze and run must not change what a frozen run replays.
+            var primarySampling = BenchmarkFrozenPolicies.DeterministicSampling(project.MaxOutputTokens,
+                project.ReasoningBudgetTokens,
+                project.ReasoningBudgetTokens is null ? null : capabilities.ReasoningBudgetEnforceable);
             var snapshot = _snapshots.Create(new BenchmarkRuntimeSnapshotInput(project.Id,
                 definition.Id,
                 definition.Version,

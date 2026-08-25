@@ -216,13 +216,23 @@ public sealed class BenchmarkRunExecutor(
     ///         <c>tool_calls</c>, and a thinking model that spent the whole turn reasoning reports <c>stop</c> — both
     ///         read downstream as a finished answer, so the judge graded an empty transcript and the ranking seated its
     ///         score beside runs that actually answered. A <c>length</c> stop keeps its own token: that run IS cut off,
-    ///         and <see cref="BenchmarkPrimaryStopReasons.IsTruncated" /> already excludes and annotates it.
+    ///         and <see cref="BenchmarkPrimaryStopReasons.IsTruncated" /> already excludes and annotates it — except
+    ///         when it never emitted an answer either, which is recorded as
+    ///         <see cref="BenchmarkPrimaryStopReasons.ReasoningLength" />: still truncated for every consumer, but it
+    ///         names the reasoning budget as the thing to raise rather than the output budget.
     ///     </para>
     /// </summary>
-    internal static string? ResolveStopReason(string? finishReason, IReadOnlyList<BenchmarkOutputPart> parts) =>
-        !BenchmarkPrimaryStopReasons.IsTruncated(finishReason) && BenchmarkOutputParts.IsUnanswered(parts)
-            ? BenchmarkPrimaryStopReasons.Incomplete
-            : finishReason;
+    internal static string? ResolveStopReason(string? finishReason, IReadOnlyList<BenchmarkOutputPart> parts)
+    {
+        if (BenchmarkPrimaryStopReasons.IsTruncated(finishReason))
+        {
+            // Out of budget having never left the scratchpad: the same cut-off run, but the operator's fix is a
+            // reasoning budget rather than a bigger output budget, and only this distinction says which.
+            return BenchmarkOutputParts.HasAnswerText(parts) ? finishReason : BenchmarkPrimaryStopReasons.ReasoningLength;
+        }
+
+        return BenchmarkOutputParts.IsUnanswered(parts) ? BenchmarkPrimaryStopReasons.Incomplete : finishReason;
+    }
 
     // Crosses the layer boundary by hand rather than by a shared type: the throughput measurement is produced in the
     // invocation layer and persisted by the store, and neither may reference the other's contract.
@@ -322,7 +332,12 @@ public sealed class BenchmarkRunExecutor(
             SamplingOptions: ToSamplingOptions(snapshot.PrimarySampling, snapshot.RequestedContextTokens),
             Skills: runtime.Skills,
             IsUnattended: true,
-            CustomTools: runtime.CustomTools));
+            CustomTools: runtime.CustomTools,
+            // Passed explicitly off the FROZEN model capability rather than defaulted: the default true is the safe
+            // answer for a caller that does not know, and freeze does know. A model whose chat template renders no
+            // reasoning end marker takes the budget and ignores it, so sending one would advertise a cap that never
+            // held. Null is a run frozen before the member existed, which keeps the old default.
+            ReasoningBudgetEnforceable: snapshot.PrimarySampling.ReasoningBudgetEnforceable ?? true));
     }
 
     internal static SamplingOptions ToSamplingOptions(BenchmarkSamplingSnapshotV1 sampling, int contextTokens) =>
@@ -333,6 +348,7 @@ public sealed class BenchmarkRunExecutor(
             TopK = sampling.TopK,
             MinP = sampling.MinP,
             MaxOutputTokens = sampling.MaxOutputTokens,
+            ReasoningBudgetTokens = sampling.ReasoningBudgetTokens,
             RepeatPenalty = sampling.RepeatPenalty,
             RepeatLastN = sampling.RepeatLastN,
             PresencePenalty = sampling.PresencePenalty,

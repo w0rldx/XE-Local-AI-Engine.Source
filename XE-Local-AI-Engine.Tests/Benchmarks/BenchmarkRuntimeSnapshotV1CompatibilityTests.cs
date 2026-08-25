@@ -46,6 +46,42 @@ public sealed class BenchmarkRuntimeSnapshotV1CompatibilityTests
         AssertEx.True(payload.AsSpan().SequenceEqual(reserialized), "a v1 payload must re-serialize to the same bytes");
     }
 
+    [Test]
+    public void Deserialize_LiteralV1Snapshot_LeavesTheAddedSamplingMembersAbsent()
+    {
+        var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
+
+        var snapshot = factory.Deserialize(Encoding.UTF8.GetBytes(LiteralV1Snapshot));
+
+        AssertEx.Null(snapshot.PrimarySampling.ReasoningBudgetTokens, "a run frozen before the budget existed pinned none");
+        AssertEx.Null(snapshot.PrimarySampling.ReasoningBudgetEnforceable, "and said nothing about whether one could be enforced");
+    }
+
+    [Test]
+    public void Serialize_WithAReasoningBudget_EmitsTheMembersAndOmitsThemOtherwise()
+    {
+        // The rule the whole widening rests on: a member added to the sampling snapshot must be OMITTED when null.
+        // The factory validates a stored payload by re-hashing it, so a member that emitted `null` would change the
+        // bytes of every row frozen before it existed and every one of those runs would stop replaying.
+        var factory = new BenchmarkRuntimeSnapshotFactory(new BenchmarkEligibilityPolicy());
+        var pinned = Input() with
+        {
+            PrimarySampling = BenchmarkFrozenPolicies.DeterministicSampling(maxOutputTokens: null,
+                reasoningBudgetTokens: 2048,
+                reasoningBudgetEnforceable: false)
+        };
+
+        var withBudget = Encoding.UTF8.GetString(factory.Serialize(factory.Create(pinned)));
+        var withoutBudget = Encoding.UTF8.GetString(factory.Serialize(factory.Create(Input())));
+
+        AssertEx.True(withBudget.Contains("\"reasoningBudgetTokens\":2048", StringComparison.Ordinal), "a pinned budget must reach the payload");
+        AssertEx.True(withBudget.Contains("\"reasoningBudgetEnforceable\":false", StringComparison.Ordinal),
+            "and so must the enforceability answer it was frozen against");
+        AssertEx.False(withoutBudget.Contains("reasoningBudget", StringComparison.Ordinal),
+            "an unpinned budget must leave no trace at all, or every legacy row re-hashes differently");
+        AssertEx.Equal(LiteralV1Snapshot, withoutBudget, "the v1 wire shape is frozen — no schema v2");
+    }
+
     private static BenchmarkRuntimeSnapshotInput Input() =>
         new(Guid.Parse("11111111-1111-1111-1111-111111111111"),
             Guid.Parse("22222222-2222-2222-2222-222222222222"),
