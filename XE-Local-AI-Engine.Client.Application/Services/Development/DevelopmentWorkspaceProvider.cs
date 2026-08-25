@@ -10,6 +10,14 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvider
 {
     private const string RuntimeProfile = "development-local";
+
+    /// <summary>
+    ///     The runtime profile of the short-lived warm-restore sandbox. A DIFFERENT profile from
+    ///     <see cref="RuntimeProfile" /> is what makes its <see cref="SandboxAttachKey" /> different, which is what
+    ///     stops <c>CreateOrAttachAsync</c> handing back — and later killing — the agent-facing sandbox.
+    /// </summary>
+    private const string WarmRuntimeProfile = "development-warm";
+
     private const int WorkspaceManifestVersion = 2;
 
     /// <summary>
@@ -173,15 +181,15 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         }
         else
         {
-            var manifest = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken).ConfigureAwait(false);
-            if (manifest.Version is not (1 or WorkspaceManifestVersion)
-                || !string.Equals(manifest.RepositoryIdentityHash, identity, StringComparison.OrdinalIgnoreCase)
-                || manifest.SelectedFolderId is { } manifestFolderId && manifestFolderId != repository.SelectedFolderId)
+            var preserved = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken).ConfigureAwait(false);
+            if (preserved.Version is not (1 or WorkspaceManifestVersion)
+                || !string.Equals(preserved.RepositoryIdentityHash, identity, StringComparison.OrdinalIgnoreCase)
+                || preserved.SelectedFolderId is { } manifestFolderId && manifestFolderId != repository.SelectedFolderId)
             {
                 throw new DevelopmentWorkspaceSecurityException("The preserved Development worktree does not match its trusted workspace manifest.");
             }
 
-            baseCommit = manifest.BaseCommit;
+            baseCommit = preserved.BaseCommit;
         }
 
         // BEFORE the first host-side Git command touches a workspace a previous attempt could have written to. The
@@ -203,12 +211,20 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         // and the gate fails at command one on a correct change.
         await DevelopmentWorkspaceWhitespacePolicy.ApplyAsync(git, worktreePath, cancellationToken).ConfigureAwait(false);
 
-        var persistedManifest = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken).ConfigureAwait(false);
-        if (persistedManifest.Version != WorkspaceManifestVersion || persistedManifest.SelectedFolderId is null)
+        var manifest = await ReadWorkspaceManifestAsync(workspaceManifestPath, cancellationToken).ConfigureAwait(false);
+        if (manifest.Version != WorkspaceManifestVersion || manifest.SelectedFolderId is null)
         {
-            await WriteWorkspaceManifestAsync(workspaceManifestPath,
-                new WorkspaceManifest(WorkspaceManifestVersion, identity, repository.SelectedFolderId, baseCommit),
-                cancellationToken).ConfigureAwait(false);
+            // Upgrading a v1 manifest in place. Warm state rides along with `with` rather than being dropped by a
+            // fresh construction: a manifest that already records a warm for this base commit must not be made to
+            // look un-warmed by an unrelated version bump.
+            manifest = manifest with
+            {
+                Version = WorkspaceManifestVersion,
+                RepositoryIdentityHash = identity,
+                SelectedFolderId = repository.SelectedFolderId,
+                BaseCommit = baseCommit
+            };
+            await WriteWorkspaceManifestAsync(workspaceManifestPath, manifest, cancellationToken).ConfigureAwait(false);
         }
 
         var branch = await git.RunAsync(worktreePath,
@@ -218,6 +234,16 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         {
             throw new DevelopmentWorkspaceSecurityException("The managed Development worktree must remain detached from protected branches.");
         }
+
+        await EnsureWarmRestoreAsync(git,
+            snapshot,
+            identity,
+            worktreePath,
+            runtimePath,
+            workspaceManifestPath,
+            manifest,
+            baseCommit,
+            cancellationToken).ConfigureAwait(false);
 
         var attachKey = new SandboxAttachKey
         {
@@ -257,6 +283,137 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             worktreePath,
             runtimePath,
             handle);
+    }
+
+    /// <summary>
+    ///     Populates the per-task package cache from the BASE COMMIT's dependency manifests, in a second short-lived
+    ///     sandbox that has egress, so the agent-facing sandbox created afterwards does not need any.
+    ///     <para>
+    ///         <strong>Why running the repository's own restore with network is sound here and only here.</strong>
+    ///         <c>dotnet restore</c> evaluates repository-authored MSBuild, which is code. At warm time that content is
+    ///         the operator's own base commit — already trusted to the degree the whole feature trusts the registered
+    ///         repository — and the agent has written nothing yet. The gate is therefore not "is this code safe" but
+    ///         "is this tree provably still the base commit", which is what the clean-tracked-tree check below decides.
+    ///         The moment the agent has written anything, this method must not run, and the recorded warm is what
+    ///         stops it.
+    ///     </para>
+    ///     <para>
+    ///         The cache survives the sandbox because it lives in the per-task <c>nuget</c> / <c>dotnet</c> runtime
+    ///         directories (<c>DevelopmentWorkspaceTools.BuildEnvironment</c>) and in the worktree's own
+    ///         <c>obj/</c> trees, none of which the sandbox owns. That is what lets the later <c>--no-restore</c> build
+    ///         and <c>--no-build</c> test work with no network.
+    ///     </para>
+    ///     <para>
+    ///         Warm state lives in <c>workspace.json</c>, which sits in <c>RuntimePath</c> and is never mounted — so
+    ///         "has this base commit been warmed" cannot be answered, or forged, from inside any sandbox.
+    ///     </para>
+    ///     <para>
+    ///         A profile that declares no restore command (<c>generic-git</c>) skips this entirely: there is nothing to
+    ///         warm and a second sandbox would be pure cost.
+    ///     </para>
+    /// </summary>
+    private async Task EnsureWarmRestoreAsync(HostGitRunner git,
+        DevelopmentExecutionSnapshot snapshot,
+        string identity,
+        string worktreePath,
+        string runtimePath,
+        string workspaceManifestPath,
+        WorkspaceManifest manifest,
+        string baseCommit,
+        CancellationToken cancellationToken)
+    {
+        var profile = DevelopmentCommandProfileCatalog.ResolveStored(snapshot.CommandProfileJson);
+        if (!profile.Commands.Any(static command => string.Equals(command.CommandId, DevelopmentCommandIds.DotnetRestore, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        if (string.Equals(manifest.WarmRestoreCommit, baseCommit, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        // Untracked and ignored files are excluded deliberately: a restore writes obj/ and nothing else, so
+        // "no tracked file differs from the base commit" is the precise predicate, and demanding a pristine directory
+        // would refuse every second attempt on a workspace that has legitimately been built once.
+        var status = await git.RunAsync(worktreePath,
+            AgentHomeGit.Arguments("status", "--porcelain", "--untracked-files=no"),
+            cancellationToken).ConfigureAwait(false);
+        EnsureGitSuccess(status, "The managed Development worktree status could not be read before the dependency warm restore.");
+        if (!string.IsNullOrWhiteSpace(status.StandardOutput))
+        {
+            // Reachable only after a crash between the clone and the first warm. Refusing is the only safe answer:
+            // warming against agent-written content is exactly the thing this whole design exists to prevent, and a
+            // silent skip would leave the attempt to fail later with "restore could not reach the network", naming
+            // the symptom instead of the cause.
+            throw new DevelopmentWorkspaceSecurityException("The managed Development worktree has uncommitted tracked changes and its dependencies have not been warmed for this base "
+                                                            + "commit. Reset the task's workspace so the warm restore can run against the base commit alone.");
+        }
+
+        var warmHandle = await _sandbox.CreateOrAttachAsync(new SandboxCreateRequest
+        {
+            AttachKey = new SandboxAttachKey
+            {
+                OwnerUserId = snapshot.ProjectId.ToString("N"),
+                NodeId = snapshot.TaskId.ToString("N"),
+                ProviderName = _sandbox.ProviderName,
+                RuntimeProfile = WarmRuntimeProfile,
+                ManifestVersion = WorkspaceManifestVersion
+            },
+            RuntimeProfile = WarmRuntimeProfile,
+
+            // The one sandbox in Development Mode that still asks for egress, and the reason the agent-facing one no
+            // longer has to. Unconditional rather than capability-gated: a warm that silently ran without network
+            // would populate nothing and turn every later build into a confusing failure.
+            NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
+            TrustedHostWorkspace = new SandboxTrustedHostWorkspace
+            {
+                RootPath = worktreePath
+            },
+
+            // The SAME mount set as the agent-facing sandbox. A warm that wrote its cache anywhere else would warm
+            // nothing the attempt can read.
+            Mounts = BuildMounts(runtimePath, worktreePath)
+        }, cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            var warmSession = new DevelopmentWorkspaceSession(snapshot.ProjectId,
+                snapshot.TaskId,
+                snapshot.AttemptId,
+                baseCommit,
+                identity,
+                worktreePath,
+                runtimePath,
+                warmHandle);
+
+            // Routed through the same tools the attempt uses, so the warm runs under the same environment, the same
+            // per-command budget and the same post-command workspace invariants. Composing a second execution path
+            // here is how the warm would drift from what the attempt later re-runs with --no-restore.
+            var tools = new DevelopmentWorkspaceTools(_sandbox, warmSession, Options.Create(_options), profile);
+            _ = await tools.RunCommandAsync(DevelopmentCommandIds.DotnetRestore, cancellationToken).ConfigureAwait(false);
+
+            var evidence = tools.CommandEvidence[^1];
+            if (!evidence.Completed || evidence.ExitCode != 0)
+            {
+                throw new InvalidOperationException("The Development dependency warm restore did not succeed, so the attempt's sandbox would have no packages to build against "
+                                                    + $"(exit {evidence.ExitCode}, completed {evidence.Completed}). Check the repository's package sources and try again.");
+            }
+        }
+        finally
+        {
+            // Before PrepareAsync returns, unconditionally. A warm sandbox that outlived this method would be a second
+            // container per task with egress, held open for the whole attempt — the exact thing G1 removes.
+            await _sandbox.KillAsync(warmHandle, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        await WriteWorkspaceManifestAsync(workspaceManifestPath,
+            manifest with
+            {
+                WarmRestoreCommit = baseCommit,
+                WarmRestoreCompletedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds()
+            },
+            cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -562,9 +719,24 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     // content that stops the search there.
     private sealed record ConfigurationFile(string FileName, string Content);
 
+    /// <summary>
+    ///     The workspace CONTROL MANIFEST. It lives directly in <c>RuntimePath</c>, which is never mounted, so nothing
+    ///     inside any sandbox can read or forge it.
+    ///     <para>
+    ///         <see cref="WarmRestoreCommit" /> is the base commit whose dependency manifests the engine has already
+    ///         restored into this task's package cache, and it is what makes the warm run exactly once per base
+    ///         commit. It is nullable rather than version-gated: a v1 or v2 manifest written before warming existed
+    ///         deserializes with no warm recorded, which is the correct answer for it.
+    ///     </para>
+    /// </summary>
     private sealed record WorkspaceManifest(
         int Version,
         string RepositoryIdentityHash,
         Guid? SelectedFolderId,
-        string BaseCommit);
+        string BaseCommit)
+    {
+        public string? WarmRestoreCommit { get; init; }
+
+        public long? WarmRestoreCompletedAtUtc { get; init; }
+    }
 }

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Development;
 
 using System.Diagnostics;
+using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -175,7 +176,14 @@ public sealed class DevelopmentProfileGuardTests : IDisposable
             "model",
             "local",
             AttemptVersion: 1,
-            CommandProfileJson: null);
+
+            // A real execution snapshot always carries the project's stored profile, and PrepareAsync now reads it to
+            // decide whether the base commit needs a dependency warm restore. The generic profile declares no restore
+            // command, so this fixture warms nothing — which is what keeps this test about the import tamper check.
+            // The tools below deliberately bind a DIFFERENT profile object; see the comment at that call site.
+            CommandProfileJson: Encoding.UTF8.GetString(DevelopmentCommandProfileCatalog
+                                                        .Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null)
+                                                        .ToCanonicalUtf8()));
 
     private async Task<string> CreateRepositoryAsync()
     {
