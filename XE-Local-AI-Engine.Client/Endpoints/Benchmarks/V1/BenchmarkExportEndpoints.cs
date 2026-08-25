@@ -173,34 +173,20 @@ internal static class BenchmarkExportProjection
 {
     public const int SchemaVersion = 1;
 
-    /// <summary>The store's page ceiling; a project's runs are counted in tens, so one or two pages is the norm.</summary>
-    private const int PageSize = 200;
-
     private const int MaxSlugLength = 40;
 
-    /// <summary>Every run of a project, newest first, with the ranking they were ranked against.</summary>
+    /// <summary>
+    ///     Every run of a project, newest first, with the ranking they were ranked against — in ONE store call. It used
+    ///     to page, which recomputed the whole-project ranking for every page: a full scan plus a judge-view join
+    ///     across three more tables, repeated, to produce the same answer each time.
+    /// </summary>
     public static async Task<(IReadOnlyList<BenchmarkRunRecord> Runs, BenchmarkRankCohort? RankCohort)> ListAllForExportAsync(IBenchmarkStore store,
         Guid projectId,
         CancellationToken ct)
     {
-        var runs = new List<BenchmarkRunRecord>();
-        BenchmarkRankCohort? cohort = null;
-        while (true)
-        {
-            var page = await store.ListRunsAsync(projectId, runs.Count, PageSize, modelContentFingerprint: null, includeUnscored: true, ct)
-                                  .ConfigureAwait(false);
-            cohort ??= page.RankCohort;
-            if (page.Items.Count == 0)
-            {
-                return (runs, cohort);
-            }
-
-            runs.AddRange(page.Items);
-            if (runs.Count >= page.TotalCount)
-            {
-                return (runs, cohort);
-            }
-        }
+        ArgumentNullException.ThrowIfNull(store);
+        var page = await store.ListAllRunsAsync(projectId, ct).ConfigureAwait(false);
+        return (page.Items, page.RankCohort);
     }
 
     public static BenchmarkRankCohortResponse ToResponse(BenchmarkRankCohort? cohort) =>

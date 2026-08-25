@@ -246,7 +246,7 @@ public sealed class BenchmarkExportEndpointTests
 
     private static void ArrangeRuns(Context context, params BenchmarkRunRecord[] runs)
     {
-        context.Store.ListRunsAsync(ProjectId, 0, 200, null, true, Arg.Any<CancellationToken>())
+        context.Store.ListAllRunsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkRunPage(runs.Select(static run => run with
                    {
                        Rank = 1

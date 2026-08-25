@@ -71,6 +71,14 @@ public interface IBenchmarkStore
         bool includeUnscored = true,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Every run of a project in one call, ranked once. The paging overload recomputes the whole-project ranking —
+    ///     a full scan plus a judge-view join across three more tables — for each page, and an export reads every page.
+    ///     The default body pages through <see cref="ListRunsAsync" /> so a test double needs no extra member.
+    /// </summary>
+    Task<BenchmarkRunPage> ListAllRunsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        ListRunsAsync(projectId, skip: 0, int.MaxValue, modelContentFingerprint: null, includeUnscored: true, cancellationToken);
+
     /// <summary>How many runs a project has, counted in the database.</summary>
     Task<int> CountRunsAsync(Guid projectId, CancellationToken cancellationToken = default);
 

@@ -361,6 +361,34 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         return run.Id;
     }
 
+    [Test]
+    public async Task ListAllRuns_ReturnsEveryRunWithTheSameRankingThePagedReadGives()
+    {
+        // The export used to page, which recomputed the whole-project ranking per page to produce the same answer each
+        // time. Ranking once is only safe while the one-call read is INDISTINGUISHABLE from the paged one.
+        await using var context = await CreateDatabaseAsync("rank-list-all.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);
+        var high = await ScoredRunAsync(store, project.Id, score: 90).ConfigureAwait(false);
+        var low = await ScoredRunAsync(store, project.Id, score: 10).ConfigureAwait(false);
+        var unranked = await ScoredRunAsync(store, project.Id, score: 50, warmup: true).ConfigureAwait(false);
+
+        var all = await store.ListAllRunsAsync(project.Id).ConfigureAwait(false);
+        var paged = await store.ListRunsAsync(project.Id, skip: 0, take: 200).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 3, all.Items.Count, "Every run of the project, in one call.");
+        AssertEx.Equal(paged.TotalCount, all.TotalCount);
+        AssertEx.True(all.Items.Select(static run => run.Id).SequenceEqual(paged.Items.Select(static run => run.Id)),
+            "Same order, so the export's rows do not reshuffle against the table the operator was looking at.");
+
+        var byId = all.Items.ToDictionary(static run => run.Id);
+        AssertEx.Equal<int?>(expected: 1, byId[high].Rank);
+        AssertEx.Equal<int?>(expected: 2, byId[low].Rank);
+        AssertEx.Null(byId[unranked].Rank, "A warm-up is excluded here exactly as it is on a page.");
+        AssertEx.Equal(AssertEx.NotNull(paged.RankCohort).RankedCount, AssertEx.NotNull(all.RankCohort).RankedCount);
+        AssertEx.Equal(paged.RankCohort!.TotalScored, all.RankCohort!.TotalScored);
+    }
+
     private static async Task<Guid> ScoredRunAsync(BenchmarkStore store,
         Guid projectId,
         int score,

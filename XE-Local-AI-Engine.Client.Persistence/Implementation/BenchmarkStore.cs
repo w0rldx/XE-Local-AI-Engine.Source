@@ -263,6 +263,28 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         // Rank is computed over the WHOLE project, never the page: a run's position is a property of the project, and
         // paging must not renumber it. Filters narrow which rows come back, not what they are ranked against.
         var ranking = await LoadRankingAsync(projectId, cancellationToken).ConfigureAwait(false);
+        return await PageAsync(ranking, projectId, skip, take, modelContentFingerprint, includeUnscored, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<BenchmarkRunPage> ListAllRunsAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        // ONE ranking for the whole export. Paging through ListRunsAsync recomputed it per page, and the ranking is a
+        // whole-project scan plus a judge-view join across three more tables — work that is identical every time,
+        // because a run's rank is a property of the project rather than of the page it lands on.
+        var ranking = await LoadRankingAsync(projectId, cancellationToken).ConfigureAwait(false);
+        return await PageAsync(ranking, projectId, skip: 0, int.MaxValue, modelContentFingerprint: null, includeUnscored: true, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<BenchmarkRunPage> PageAsync(BenchmarkProjectRanking ranking,
+        Guid projectId,
+        int skip,
+        int take,
+        string? modelContentFingerprint,
+        bool includeUnscored,
+        CancellationToken cancellationToken)
+    {
         var runs = _dbContext.BenchmarkRuns.AsNoTracking().Where(entity => entity.ProjectId == projectId);
         if (modelContentFingerprint is { Length: > 0 })
         {
