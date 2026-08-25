@@ -175,13 +175,15 @@ public sealed class WorkSessionStepLoopTests
     {
         // The other half of the park: the prompt is answered, the turn carries on, and the session must leave
         // WaitingForApproval instead of sitting in it for the rest of the run. The park clock is disarmed on the way
-        // through, so the long MaxParkedSeconds here proves the resume happened rather than the timeout.
+        // through, so the long MaxParkedSeconds here proves the resume happened rather than the timeout. 599 rather
+        // than an arbitrarily huge number: WorkSessionOptionsValidator refuses a park budget that reaches the node's
+        // 10-minute pending tool-call age.
         var sessionId = Guid.NewGuid();
         var publisher = new RecordingWorkSessionEventPublisher();
         FakeNodeChatStreamService? stream = null;
         await using var factory = new TestServerWebAppFactory
         {
-            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1"), ("WorkSessions:MaxParkedSeconds", "3600")),
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1"), ("WorkSessions:MaxParkedSeconds", "599")),
             ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
                 services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
                 publisher)
@@ -219,7 +221,7 @@ public sealed class WorkSessionStepLoopTests
         FakeNodeChatStreamService? stream = null;
         await using var factory = new TestServerWebAppFactory
         {
-            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxParkedSeconds", "3600")),
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxParkedSeconds", "599")),
             ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
                 services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
                 publisher)
@@ -249,7 +251,7 @@ public sealed class WorkSessionStepLoopTests
         FakeNodeChatStreamService? stream = null;
         await using var factory = new TestServerWebAppFactory
         {
-            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxParkedSeconds", "3600")),
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxParkedSeconds", "599")),
             ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
                 services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
                 publisher)
@@ -265,6 +267,52 @@ public sealed class WorkSessionStepLoopTests
         AssertEx.False(supervisor.HasCapacity, "The default admission cap is one session, and it is taken.");
 
         _ = await supervisor.TryStopAsync(sessionId, WorkSessionStopReason.Cancel).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task Supervisor_WhenMoreSessionsStartAtOnceThanTheCapAllows_AdmitsExactlyTheCap()
+    {
+        // Distinct session ids, so the ConcurrentDictionary never refuses the add: the cap is the only thing that can
+        // turn a start down. A cap checked AFTER the add let two starts each see room and then each back out, admitting
+        // fewer than the cap allows — the gate has to be taken before the run is registered.
+        var sessionIds = Enumerable.Range(start: 0, count: 4).Select(_ => Guid.NewGuid()).ToArray();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(
+                ("WorkSessions:MaxConcurrentSessions", "3"),
+                ("WorkSessions:MaxParkedSeconds", "599")),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionIds[0]),
+                publisher)
+        };
+
+        foreach (var sessionId in sessionIds)
+        {
+            _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        }
+
+        var fake = ResolveStream(factory, ref stream);
+        // Every admitted run parks and holds its slot until it is cancelled, so the count below is not a race with a
+        // run that already finished.
+        foreach (var _ in sessionIds)
+        {
+            fake.Enqueue(new StepScript([], Park: true));
+        }
+
+        var supervisor = factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>();
+        var admitted = await Task.WhenAll(sessionIds.Select(sessionId => Task.Run(() => supervisor.TryStart(sessionId)))).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 3, admitted.Count(started => started), "The cap is three, and four starts raced for it.");
+        AssertEx.False(supervisor.HasCapacity, "Every slot is taken while the admitted sessions are in flight.");
+
+        foreach (var sessionId in sessionIds)
+        {
+            _ = await supervisor.TryStopAsync(sessionId, WorkSessionStopReason.Cancel).ConfigureAwait(false);
+        }
+
+        AssertEx.True(supervisor.HasCapacity, "A stopped run hands its slot back, or the node admits nothing ever again.");
     }
 
     [Test]

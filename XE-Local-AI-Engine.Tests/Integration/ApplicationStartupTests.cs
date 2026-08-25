@@ -84,6 +84,37 @@ public sealed class ApplicationStartupTests
     }
 
     [Test]
+    public async Task ConfigurationValidation_WithAParkBudgetOverTheNodeToolCallAge_FailsStartup()
+    {
+        // The relation neither section's data annotations can see: 600 seconds of park against the node's 10-minute
+        // pending tool-call age. A node that boots with this pair parks on calls the node has already expired.
+        await using var invalidFactory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["WorkSessions:MaxParkedSeconds"] = "600",
+                ["WorkerNode:MaxPendingToolCallAgeMinutes"] = "10"
+            }
+        };
+
+        Exception? exception = null;
+
+        try
+        {
+            _ = invalidFactory.Services;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or OptionsValidationException)
+        {
+            exception = ex;
+        }
+
+        // Asserted OUTSIDE the try: the filter above would otherwise swallow the assertion's own failure. The message
+        // has to name the knob, not merely fail, or the operator is left guessing which of the two settings to move.
+        AssertEx.True(exception?.ToString().Contains("WorkSessions:MaxParkedSeconds", StringComparison.Ordinal) == true,
+            $"Startup should have failed naming WorkSessions:MaxParkedSeconds; got: {exception?.ToString() ?? "no exception"}");
+    }
+
+    [Test]
     public async Task ConfigurationValidation_WithMissingBaseUrl_FailsStartup()
     {
         await using var invalidFactory = new TestServerWebAppFactory

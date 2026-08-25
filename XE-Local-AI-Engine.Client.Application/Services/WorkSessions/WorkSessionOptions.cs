@@ -5,8 +5,17 @@ using System.ComponentModel.DataAnnotations;
 /// <summary>
 ///     Configuration for agent work sessions.
 ///     <para>
+///         The shipped posture, stated here once so nothing else has to restate it: <c>XE-Local-AI-Engine.Client/appsettings.json</c>
+///         ships <c>WorkSessions:Enabled: true</c>, and the feature is on for every node that does not override the key.
+///         The compiled-in default of <see cref="Enabled" /> is <see langword="false" />, which is what a host binding
+///         a configuration source WITHOUT the key gets — most test hosts, and nothing that ships.
+///     </para>
+///     <para>
 ///         <see cref="Enabled" /> gates <em>behaviour</em>, never registration: the endpoints and the hub are mapped
-///         unconditionally, so an empty container would answer 500 where a disabled node has to answer legibly.
+///         unconditionally (see <c>WorkSessionEndpoints</c>), so an empty container would answer 500 where a disabled
+///         node has to answer legibly. A disabled node answers <c>404</c> from request-path middleware that runs ahead
+///         of authentication, never <c>500</c> — pinned by
+///         <c>WorkSessionEndpointTests.WorkSessionRoute_WhenTheFeatureIsDisabled_ReturnsNotFoundWithoutReachingTheService</c>.
 ///     </para>
 /// </summary>
 public sealed class WorkSessionOptions
@@ -32,8 +41,21 @@ public sealed class WorkSessionOptions
     /// <summary>
     ///     How long a session may sit waiting on an approval or a question before it is demoted to <c>Paused</c>. An
     ///     unattended parked session would otherwise hold the node's only invocation slot indefinitely.
+    ///     <para>
+    ///         Must stay strictly under <c>WorkerNode:MaxPendingToolCallAgeMinutes</c> (in minutes; 10 by default, so
+    ///         600 seconds), or the node expires the pending tool call the session is parked on before the park clock
+    ///         fires and the park times out against a prompt that can no longer be answered.
+    ///         <c>WorkSessionOptionsValidator</c> checks the relation at startup against the configured seed. The upper
+///         bound of the range below is 3599 because the node's tool-call age itself caps at 60 minutes
+///         (<c>StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes</c>), so nothing above that could ever validate.
+    ///     </para>
+    ///     <para>
+    ///         follow-up: that check reads the configured value only. <c>INodeRuntimeSettings.GetMaxPendingToolCallAgeMinutes</c>
+    ///         lets the database override the tool-call age at runtime, and a startup check cannot see a value written
+    ///         after it ran — an operator who lowers it below this park budget re-opens the gap.
+    ///     </para>
     /// </summary>
-    [Range(1, 24 * 60 * 60)]
+    [Range(1, 3599)]
     public int MaxParkedSeconds { get; init; } = 300;
 
     /// <summary>The cap on one saved artifact, enforced by the blob store and by the <c>save_artifact</c> tool.</summary>

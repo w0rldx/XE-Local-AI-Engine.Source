@@ -40,6 +40,19 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     /// <summary>How long a stop waits for the loop to land before answering. A stuck provider must not hang the caller.</summary>
     private static readonly TimeSpan StopGrace = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    ///     The admission gate. A slot is taken before the run is registered and released in the run's finally, so the
+    ///     cap holds across concurrent starts for DIFFERENT sessions — a count checked after the add lets two
+    ///     admissions each see room and then each back out, admitting fewer sessions than the cap allows.
+    ///     <para>
+    ///         Never disposed, deliberately: <see cref="SemaphoreSlim.Dispose()" /> only matters once
+    ///         <c>AvailableWaitHandle</c> has been touched, which nothing here does, and
+    ///         <see cref="DisposeAsync" /> does not wait for the in-flight runs — so a run landing after the host went
+    ///         down still releases its slot instead of faulting an unobserved task on a disposed gate.
+    ///     </para>
+    /// </summary>
+    private readonly SemaphoreSlim _admission;
+
     private readonly INodeChatStreamCancellationRegistry _cancellationRegistry;
     private readonly ILogger<WorkSessionExecutionSupervisor> _logger;
     private readonly IWorkSessionEventPublisher _publisher;
@@ -64,19 +77,25 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
+        _admission = new SemaphoreSlim(_options.MaxConcurrentSessions, _options.MaxConcurrentSessions);
     }
 
+    /// <summary>
+    ///     A hint, not a reservation — the slot can be taken between this read and the caller's start. The authority is
+    ///     <see cref="TryStart" />, which <c>WorkSessionService.BeginAsync</c> re-checks.
+    /// </summary>
     public bool HasCapacity =>
-        _options.Enabled && !_shutdown.IsCancellationRequested && _runs.Count < _options.MaxConcurrentSessions;
+        _options.Enabled && !_shutdown.IsCancellationRequested && _admission.CurrentCount > 0;
 
     public bool TryStart(Guid sessionId)
     {
-        if (!_options.Enabled || _shutdown.IsCancellationRequested)
+        if (!_options.Enabled || _shutdown.IsCancellationRequested || !_admission.Wait(millisecondsTimeout: 0, CancellationToken.None))
         {
             return false;
         }
 
         CancellationTokenSource? cancellation = null;
+        var admitted = false;
         try
         {
             cancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
@@ -86,23 +105,19 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 return false;
             }
 
-            // ponytail: the cap is checked after the add, so two simultaneous admissions can each see room for a moment.
-            // At the shipped default of 1 that admits at most one extra session, which the node's single invocation slot
-            // then serializes anyway. Take a real gate here if the cap ever becomes a resource promise.
-            if (_runs.Count > _options.MaxConcurrentSessions)
-            {
-                _ = _runs.TryRemove(sessionId, out _);
-                return false;
-            }
-
-            // Ownership passes to the run: its finally removes the entry and disposes the source.
+            // Ownership passes to the run: its finally removes the entry, disposes the source, and releases the slot.
             cancellation = null;
+            admitted = true;
             run.Completion = RunSessionObservedAsync(sessionId, run);
             return true;
         }
         finally
         {
             cancellation?.Dispose();
+            if (!admitted)
+            {
+                _ = _admission.Release();
+            }
         }
     }
 
@@ -195,6 +210,8 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             {
                 removed.Cancellation.Dispose();
             }
+
+            _ = _admission.Release();
         }
     }
 

@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;
+using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
@@ -29,6 +31,10 @@ internal static class AddNodeWorkSessionsExtensions
                .Bind(configuration.GetSection(WorkSessionOptions.Section))
                .ValidateDataAnnotations()
                .ValidateOnStart();
+
+        // Cross-section: the park clock has to expire before the node's pending tool-call clock does, and neither
+        // section's data annotations can see the other.
+        builder.Services.AddSingleton<IValidateOptions<WorkSessionOptions>, WorkSessionOptionsValidator>();
 
         builder.Services.AddScoped<IAgentWorkSessionStore, AgentWorkSessionStore>();
         builder.Services.AddSingleton<IWorkSessionArtifactBlobStore, ManagedWorkSessionArtifactBlobStore>();
