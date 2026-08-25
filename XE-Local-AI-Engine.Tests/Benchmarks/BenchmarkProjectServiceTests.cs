@@ -209,6 +209,10 @@ public sealed class BenchmarkProjectServiceTests
         AssertEx.Equal("RejudgeRequired", exception.Code);
         _ = context.Store.DidNotReceive().ActivateJudgePolicyAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
             Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>());
+
+        // The refusal must cost nothing: taking the lease VERIFIES the model by re-hashing every member file, which
+        // made this 409 take 57 s to return for a 22 GB judge.
+        _ = context.Models.DidNotReceive().AcquireAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

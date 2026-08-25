@@ -95,6 +95,19 @@ public sealed class BenchmarkProjectService(
             throw new BenchmarkConflictException("VersionConflict");
         }
 
+        // Changing the judge invalidates every score already given under the old one. The operator confirms that
+        // explicitly rather than discovering a silently re-scored project.
+        //
+        // Asked BEFORE the policy is built, because building it takes the VERIFYING model lease, which re-hashes every
+        // member file: a 22 GB judge made this refusal take 57 s to say no. Consequence of the order, and the reason
+        // it is not free: re-saving an UNCHANGED judge on a project with runs now asks for the confirmation too,
+        // instead of verifying the model to discover the hash matched. Confirming it stays a no-op — the hash compare
+        // below still returns without activating anything.
+        if (draft is not null && !confirmRejudge && await _benchmarkStore.CountRunsAsync(projectId, cancellationToken).ConfigureAwait(false) > 0)
+        {
+            throw new BenchmarkConflictException("RejudgeRequired");
+        }
+
         var policy = draft is null ? null : await BuildPolicyAsync(draft, cancellationToken).ConfigureAwait(false);
         var current = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
         if (policy is null)
@@ -112,13 +125,6 @@ public sealed class BenchmarkProjectService(
         if (current is not null && string.Equals(current.PolicyHash, hash, StringComparison.Ordinal))
         {
             return new BenchmarkJudgePolicyChange(project, [], current.CohortGeneration);
-        }
-
-        // Changing the judge invalidates every score already given under the old one. The operator confirms that
-        // explicitly rather than discovering a silently re-scored project.
-        if (!confirmRejudge && await _benchmarkStore.CountRunsAsync(projectId, cancellationToken).ConfigureAwait(false) > 0)
-        {
-            throw new BenchmarkConflictException("RejudgeRequired");
         }
 
         var activation = await _benchmarkStore.ActivateJudgePolicyAsync(projectId,
