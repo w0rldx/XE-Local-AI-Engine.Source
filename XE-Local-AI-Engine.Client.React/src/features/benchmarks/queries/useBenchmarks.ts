@@ -223,6 +223,7 @@ const projectMutationBody = (draft: BenchmarkProjectDraft) => ({
 	// Omitted rather than sent as null when unset: an absent budget means context-limited, which the node validates
 	// against the context window.
 	...(draft.maxOutputTokens === null ? {} : { maxOutputTokens: draft.maxOutputTokens }),
+	...(draft.reasoningBudgetTokens === null ? {} : { reasoningBudgetTokens: draft.reasoningBudgetTokens }),
 	...(draft.invocationTimeoutSeconds === null ? {} : { invocationTimeoutSeconds: draft.invocationTimeoutSeconds }),
 	agentDefinitionId: draft.agentDefinitionId,
 	judgeEnabled: draft.judgeEnabled,

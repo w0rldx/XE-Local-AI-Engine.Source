@@ -1,4 +1,5 @@
-import { Button, Checkbox, Divider, Group, NumberInput, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
+import { Alert, Button, Checkbox, Divider, Group, NumberInput, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
+import { IconAlertTriangle } from "@tabler/icons-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -10,6 +11,7 @@ import type {
 } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkInvocationTimeoutLimits,
+	benchmarkPromptReserveTokens,
 	benchmarkRubricIssue,
 	benchmarkRubricLimits,
 } from "@/features/benchmarks/models/BenchmarkModels";
@@ -31,6 +33,8 @@ interface BenchmarkProjectFormProps {
 	 */
 	frozen?: boolean;
 	isSaving?: boolean;
+	/** What the node refused the last save with, already carrying its `code`. Cleared by the caller on the next try. */
+	saveError?: string | null;
 	onSubmit: (draft: BenchmarkProjectDraft) => void;
 	onCancel?: () => void;
 }
@@ -42,6 +46,7 @@ export function BenchmarkProjectForm({
 	presets,
 	frozen = false,
 	isSaving,
+	saveError,
 	onSubmit,
 	onCancel,
 }: BenchmarkProjectFormProps) {
@@ -67,6 +72,24 @@ export function BenchmarkProjectForm({
 			values.maxOutputTokens !== null && (values.maxOutputTokens < 1 || values.maxOutputTokens >= values.contextTokens)
 				? t("pages.benchmarks.validation.maxOutputTokens", "Max output tokens must be between 1 and the requested context.")
 				: undefined,
+		// Mirrors `BenchmarkProjectService.ValidateReasoningBudget`: bounded on its own, and additive with the output
+		// budget inside one window. A pair that sums past the context is a project whose every run is truncated.
+		reasoningBudgetTokens:
+			values.reasoningBudgetTokens === null
+				? undefined
+				: values.reasoningBudgetTokens < 1 || values.reasoningBudgetTokens >= values.contextTokens
+					? t(
+							"pages.benchmarks.validation.reasoningBudget",
+							"The reasoning budget must be between 1 and the requested context.",
+						)
+					: values.maxOutputTokens !== null &&
+							benchmarkPromptReserveTokens + values.reasoningBudgetTokens + values.maxOutputTokens > values.contextTokens
+						? t(
+								"pages.benchmarks.validation.reasoningBudgetSum",
+								"The reasoning and output budgets must leave at least {{reserve}} tokens of the context for the prompt.",
+								{ reserve: benchmarkPromptReserveTokens },
+							)
+						: undefined,
 		invocationTimeoutSeconds:
 			values.invocationTimeoutSeconds !== null &&
 			(values.invocationTimeoutSeconds < benchmarkInvocationTimeoutLimits.min ||
@@ -101,6 +124,13 @@ export function BenchmarkProjectForm({
 	return (
 		<form onSubmit={submit}>
 			<Stack gap="md">
+				{/* The node validates the same rules again with the numbers the operator cannot see (the frozen project's
+				    own context). Its sentence belongs beside the fields it is about, not only in a toast. */}
+				{saveError ? (
+					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-project-save-error">
+						{saveError}
+					</Alert>
+				) : null}
 				<TextInput
 					label={t("pages.benchmarks.project.name", "Name")}
 					required={true}
@@ -151,6 +181,25 @@ export function BenchmarkProjectForm({
 							// An empty field is "no budget", which must stay null rather than collapse to 0 — 0 would be a
 							// budget the node refuses, and the operator never typed it.
 							maxOutputTokens: value === "" || value === null ? null : Number(value),
+						}))
+					}
+				/>
+				<NumberInput
+					label={t("pages.benchmarks.project.reasoningBudget", "Reasoning budget (tokens)")}
+					description={t(
+						"pages.benchmarks.project.reasoningBudgetHint",
+						"Leave empty = as much as the window allows. The context must cover the prompt, this budget AND the max output — a pair that fills the window truncates every run.",
+					)}
+					min={1}
+					step={256}
+					disabled={frozen}
+					value={values.reasoningBudgetTokens ?? ""}
+					error={attempted ? errors.reasoningBudgetTokens : undefined}
+					data-testid="benchmark-reasoning-budget"
+					onChange={(value) =>
+						setValues((current) => ({
+							...current,
+							reasoningBudgetTokens: value === "" || value === null ? null : Number(value),
 						}))
 					}
 				/>

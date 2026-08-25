@@ -125,6 +125,38 @@ describe("BenchmarkRunsTable", () => {
 		expect(screen.queryByTestId("benchmark-truncated-ranked")).toBeNull();
 	});
 
+	// Reasoning exhaustion IS truncation to the node, which excludes it as `truncated`. The badge REPLACES the generic
+	// one rather than adding a second: two badges saying "cut off" would not tell the operator which budget to raise.
+	it("names the reasoning budget when that is the budget that ran out", () => {
+		const exhausted = benchmarkRunSummaryFixture({
+			id: "exhausted",
+			primaryStatus: "Succeeded",
+			primaryStopReason: "reasoning-length",
+			rank: null,
+			rankExclusionReason: "truncated",
+		});
+		renderTable([exhausted]);
+
+		expect(screen.getByTestId("benchmark-reasoning-exhausted-exhausted")).toBeTruthy();
+		expect(screen.queryByTestId("benchmark-truncated-exhausted")).toBeNull();
+	});
+
+	// An answerless run is not a truncated one: no budget ran out, so it gets its own badge and its own reason chip.
+	it("badges a run that answered nothing, apart from a truncated one", () => {
+		const empty = benchmarkRunSummaryFixture({
+			id: "empty",
+			primaryStatus: "Succeeded",
+			primaryStopReason: "incomplete",
+			rank: null,
+			rankExclusionReason: "incomplete",
+		});
+		renderTable([empty]);
+
+		expect(screen.getByTestId("benchmark-incomplete-empty")).toBeTruthy();
+		expect(screen.queryByTestId("benchmark-truncated-empty")).toBeNull();
+		expect(screen.getByTestId("benchmark-rank-exclusion-empty").textContent).toContain("no answer");
+	});
+
 	// Same-model history: collapsed, one row per model; expanded, the model's older runs appear underneath.
 	it("groups a model's runs and expands them on request", () => {
 		const older = benchmarkRunSummaryFixture({

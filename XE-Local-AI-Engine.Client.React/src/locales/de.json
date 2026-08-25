@@ -3967,7 +3967,11 @@
 				"Failed": "Fehlgeschlagen",
 				"Cancelled": "Abgebrochen",
 				"truncated": "Abgeschnitten",
-				"truncatedHint": "Die Antwort wurde vom Token-Budget abgeschnitten. Sie wird nicht gewertet — führen Sie den Lauf mit größerem Kontext oder Ausgabebudget erneut aus."
+				"truncatedHint": "Die Antwort wurde vom Token-Budget abgeschnitten. Sie wird nicht gewertet — führen Sie den Lauf mit größerem Kontext oder Ausgabebudget erneut aus.",
+				"reasoningExhausted": "Denkbudget verbraucht",
+				"reasoningExhaustedHint": "Der Lauf hat sein gesamtes Denkbudget ohne Antwort verbraucht. Er wird nicht gewertet — erhöhen Sie das Denkbudget des Projekts, nicht das Ausgabebudget.",
+				"incomplete": "Keine Antwort",
+				"incompleteHint": "Der Lauf endete ohne Antwort — er stoppte bei einem unbeantworteten Werkzeugaufruf oder gab nur Gedanken aus. Er wird nicht gewertet; starten Sie ihn erneut."
 			},
 			"origin": {
 				"huggingface": "Hugging Face",
@@ -4003,7 +4007,9 @@
 				"maxOutputTokens": "Maximale Ausgabe-Tokens",
 				"maxOutputTokensHint": "Leer lassen = nur durch den Kontext begrenzt. Muss kleiner als der angeforderte Kontext sein.",
 				"invocationTimeout": "Zeitlimit der Generierung (s)",
-				"invocationTimeoutHint": "Sekunden; Standard 900. Erhöhen Sie den Wert für lange Reasoning-Läufe — ein von der Uhr abgebrochener Lauf misst die Testumgebung, nicht das Modell."
+				"invocationTimeoutHint": "Sekunden; Standard 900. Erhöhen Sie den Wert für lange Reasoning-Läufe — ein von der Uhr abgebrochener Lauf misst die Testumgebung, nicht das Modell.",
+				"reasoningBudget": "Denkbudget (Token)",
+				"reasoningBudgetHint": "Leer = so viel, wie das Fenster zulässt. Der Kontext muss Prompt, dieses Budget UND die maximale Ausgabe abdecken — ein Paar, das das Fenster füllt, schneidet jeden Lauf ab."
 			},
 			"run": {
 				"model": "Primärmodell",
@@ -4101,7 +4107,9 @@
 				"judgeContext": "Der Kontext der Bewertung muss positiv sein.",
 				"referenceAnswer": "Die Musterantwort ist zu lang.",
 				"maxOutputTokens": "Die maximalen Ausgabe-Tokens müssen zwischen 1 und dem angeforderten Kontext liegen.",
-				"invocationTimeout": "Das Zeitlimit der Generierung muss zwischen 60 und 7200 Sekunden liegen."
+				"invocationTimeout": "Das Zeitlimit der Generierung muss zwischen 60 und 7200 Sekunden liegen.",
+				"reasoningBudget": "Das Denkbudget muss zwischen 1 und dem angeforderten Kontext liegen.",
+				"reasoningBudgetSum": "Denk- und Ausgabebudget müssen mindestens {{reserve}} Token des Kontexts für den Prompt frei lassen."
 			},
 			"errors": {
 				"projectsLoad": "Benchmark-Projekte konnten nicht geladen werden.",
@@ -4193,6 +4201,7 @@
 					"execution-key-mismatch": "Mit einer anderen Bewertungslaufzeit bewertet als die gewertete Kohorte.",
 					"execution-identity-incomplete": "Die Laufzeit-Identität dieser Bewertung ist unvollständig.",
 					"truncated": "Die Antwort wurde vom Token-Budget abgeschnitten und ist deshalb nicht mit einer vollständigen vergleichbar.",
+					"incomplete": "Der Lauf hat überhaupt keine Antwort erzeugt, es gibt also nichts zu vergleichen oder zu bewerten.",
 					"warmup": "Ein Aufwärmlauf. Er wird absichtlich ausgeschlossen, damit die folgenden Wiederholungen nicht gegen einen kalten Start bewertet werden."
 				},
 				"exclusionShort": {
@@ -4205,13 +4214,14 @@
 					"execution-key-mismatch": "Laufzeit weicht ab",
 					"execution-identity-incomplete": "Identität unvollständig",
 					"truncated": "abgeschnitten",
+					"incomplete": "keine Antwort",
 					"warmup": "Aufwärmlauf"
 				},
 				"action": {
 					"score": "Vergeben Sie eine Betreiberbewertung.",
 					"rejudge": "Neu bewerten, um ihn wieder in die Kohorte zu holen.",
 					"wait": "Warten Sie, bis die Bewertung fertig ist.",
-					"rerun": "Führen Sie den Lauf mit größerem Kontext oder Ausgabebudget erneut aus.",
+					"rerun": "Erneut starten — mit mehr Raum, falls er abgeschnitten wurde.",
 					"none": "Nichts zu tun — ein Aufwärmlauf soll außerhalb der Wertung stehen."
 				}
 			},

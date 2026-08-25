@@ -9,6 +9,8 @@ import {
 	type BenchmarkOutputPart,
 	benchmarkRankExclusionReasons,
 	benchmarkRunEventSchema,
+	isBenchmarkRunIncomplete,
+	isBenchmarkRunReasoningExhausted,
 	isBenchmarkRunTruncated,
 	isUnsupportedKvCacheTypeError,
 	toBenchmarkRankExclusionReason,
@@ -88,6 +90,23 @@ describe("isBenchmarkRunTruncated", () => {
 	it("keeps truncated in the exhaustive rank-exclusion vocabulary", () => {
 		expect(benchmarkRankExclusionReasons).toContain("truncated");
 		expect(toBenchmarkRankExclusionReason("truncated")).toBe("truncated");
+	});
+
+	// The node's `BenchmarkStopReasons.IsTruncated` counts reasoning-length as truncation and excludes it as
+	// `truncated`. A UI that knew only `length` would show a rank-excluded run with no badge saying why.
+	it("reads a reasoning-exhausted run as truncated, and says which budget ran out", () => {
+		expect(isBenchmarkRunTruncated({ primaryStopReason: "reasoning-length" })).toBe(true);
+		expect(isBenchmarkRunReasoningExhausted({ primaryStopReason: "reasoning-length" })).toBe(true);
+		expect(isBenchmarkRunReasoningExhausted({ primaryStopReason: "length" })).toBe(false);
+		expect(isBenchmarkRunIncomplete({ primaryStopReason: "reasoning-length" })).toBe(false);
+	});
+
+	// An answerless run is NOT truncated: no budget ran out, so raising one changes nothing.
+	it("keeps incomplete apart from truncated, in both the predicate and the vocabulary", () => {
+		expect(isBenchmarkRunIncomplete({ primaryStopReason: "incomplete" })).toBe(true);
+		expect(isBenchmarkRunTruncated({ primaryStopReason: "incomplete" })).toBe(false);
+		expect(benchmarkRankExclusionReasons).toContain("incomplete");
+		expect(toBenchmarkRankExclusionReason("incomplete")).toBe("incomplete");
 	});
 });
 

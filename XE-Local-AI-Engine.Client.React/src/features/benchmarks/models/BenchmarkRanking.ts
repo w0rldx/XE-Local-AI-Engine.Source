@@ -73,6 +73,9 @@ export function rankExclusionAction(reason: BenchmarkRankExclusionReason): Bench
 		// has to be taken again with more room.
 		case "truncated":
 			return "rerun";
+		// Nothing was answered at all, so there is nothing for a judge to read either — only another attempt helps.
+		case "incomplete":
+			return "rerun";
 		// The only reason that is not a problem: a warm-up is excluded because that is what it is for.
 		case "warmup":
 			return "none";

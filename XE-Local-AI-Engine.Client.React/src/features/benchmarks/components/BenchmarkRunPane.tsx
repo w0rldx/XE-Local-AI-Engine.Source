@@ -6,9 +6,21 @@ import { BenchmarkJudgePanel } from "@/features/benchmarks/components/BenchmarkJ
 import { BenchmarkLaunchBadges } from "@/features/benchmarks/components/BenchmarkLaunchBadges";
 import { BenchmarkLaunchEvidencePanel } from "@/features/benchmarks/components/BenchmarkLaunchEvidencePanel";
 import { BenchmarkScorePicker } from "@/features/benchmarks/components/BenchmarkScorePicker";
-import { BenchmarkStatusBadge, BenchmarkTruncatedBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
+import {
+	BenchmarkIncompleteBadge,
+	BenchmarkReasoningExhaustedBadge,
+	BenchmarkStatusBadge,
+	BenchmarkTruncatedBadge,
+} from "@/features/benchmarks/components/BenchmarkStatusBadge";
 import type { BenchmarkOutputPart, BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
-import { isBenchmarkRunTruncated, isPrimaryActive, isRunTerminal, toChatMessageParts } from "@/features/benchmarks/models/BenchmarkModels";
+import {
+	isBenchmarkRunIncomplete,
+	isBenchmarkRunReasoningExhausted,
+	isBenchmarkRunTruncated,
+	isPrimaryActive,
+	isRunTerminal,
+	toChatMessageParts,
+} from "@/features/benchmarks/models/BenchmarkModels";
 import { formatLatencyMs, formatTokensPerSecond, hasThroughputBreakdown } from "@/features/benchmarks/models/BenchmarkThroughput";
 import { MessageParts } from "@/features/chat/components/MessageParts";
 
@@ -114,7 +126,12 @@ export function BenchmarkRunPane({
 					</Stack>
 					<Group gap="xs">
 						<BenchmarkStatusBadge status={run.primaryStatus} />
-						{truncated ? <BenchmarkTruncatedBadge /> : null}
+						{isBenchmarkRunReasoningExhausted(run) ? (
+							<BenchmarkReasoningExhaustedBadge />
+						) : truncated ? (
+							<BenchmarkTruncatedBadge />
+						) : null}
+						{isBenchmarkRunIncomplete(run) ? <BenchmarkIncompleteBadge /> : null}
 					</Group>
 				</Group>
 				<BenchmarkLaunchBadges launch={run.primaryLaunch} data-testid="benchmark-run-launch" />

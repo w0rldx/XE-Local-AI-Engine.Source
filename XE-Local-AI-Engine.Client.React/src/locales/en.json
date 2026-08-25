@@ -3967,7 +3967,11 @@
 				"Failed": "Failed",
 				"Cancelled": "Cancelled",
 				"truncated": "Truncated",
-				"truncatedHint": "The answer was cut off by the token budget. It does not rank — rerun with a larger context or output budget."
+				"truncatedHint": "The answer was cut off by the token budget. It does not rank — rerun with a larger context or output budget.",
+				"reasoningExhausted": "Reasoning budget spent",
+				"reasoningExhaustedHint": "The run spent its whole reasoning budget without answering. It does not rank — raise the project's reasoning budget, not the output budget.",
+				"incomplete": "No answer",
+				"incompleteHint": "The run finished without answering — it stopped on an unanswered tool call, or emitted only reasoning. It does not rank; rerun it."
 			},
 			"origin": {
 				"huggingface": "Hugging Face",
@@ -4003,7 +4007,9 @@
 				"maxOutputTokens": "Max output tokens",
 				"maxOutputTokensHint": "Leave empty = context-limited. Must be smaller than the requested context.",
 				"invocationTimeout": "Generation timeout (s)",
-				"invocationTimeoutHint": "Seconds; default 900. Raise it for long reasoning runs — a run cancelled by the clock measures the harness, not the model."
+				"invocationTimeoutHint": "Seconds; default 900. Raise it for long reasoning runs — a run cancelled by the clock measures the harness, not the model.",
+				"reasoningBudget": "Reasoning budget (tokens)",
+				"reasoningBudgetHint": "Leave empty = as much as the window allows. The context must cover the prompt, this budget AND the max output — a pair that fills the window truncates every run."
 			},
 			"run": {
 				"model": "Primary model",
@@ -4101,7 +4107,9 @@
 				"judgeContext": "Judge context must be positive.",
 				"referenceAnswer": "The reference answer is too long.",
 				"maxOutputTokens": "Max output tokens must be between 1 and the requested context.",
-				"invocationTimeout": "The generation timeout must be between 60 and 7200 seconds."
+				"invocationTimeout": "The generation timeout must be between 60 and 7200 seconds.",
+				"reasoningBudget": "The reasoning budget must be between 1 and the requested context.",
+				"reasoningBudgetSum": "The reasoning and output budgets must leave at least {{reserve}} tokens of the context for the prompt."
 			},
 			"errors": {
 				"projectsLoad": "Could not load benchmark projects.",
@@ -4193,6 +4201,7 @@
 					"execution-key-mismatch": "Judged under a different judge runtime than the ranked cohort.",
 					"execution-identity-incomplete": "The judge runtime identity of this judging is incomplete.",
 					"truncated": "The answer was cut off by the token budget, so it is not comparable to a complete one.",
+					"incomplete": "The run produced no answer at all, so there is nothing to compare or grade.",
 					"warmup": "A warm-up run. It is excluded on purpose so the repeats after it are not judged against a cold launch."
 				},
 				"exclusionShort": {
@@ -4205,13 +4214,14 @@
 					"execution-key-mismatch": "runtime differs",
 					"execution-identity-incomplete": "identity incomplete",
 					"truncated": "truncated",
+					"incomplete": "no answer",
 					"warmup": "warm-up"
 				},
 				"action": {
 					"score": "Set an operator score.",
 					"rejudge": "Re-judge to bring it back into the cohort.",
 					"wait": "Wait for the judging to finish.",
-					"rerun": "Rerun with a larger context or output budget.",
+					"rerun": "Rerun it — with more room when it was cut off.",
 					"none": "Nothing to do — a warm-up is meant to sit outside the ranking."
 				}
 			},

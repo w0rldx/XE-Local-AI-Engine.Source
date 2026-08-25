@@ -74,6 +74,7 @@ const emptyProject: BenchmarkProjectDraft = {
 	coreTask: "",
 	contextTokens: 4096,
 	maxOutputTokens: null,
+	reasoningBudgetTokens: null,
 	invocationTimeoutSeconds: null,
 	agentDefinitionId: "",
 	judgeEnabled: false,
@@ -102,6 +103,9 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const [editorMode, setEditorMode] = useState<EditorMode>(null);
 	const [confirmMode, setConfirmMode] = useState<ConfirmMode>(null);
 	const [pendingPolicy, setPendingPolicy] = useState<JudgePolicyDraft | null>(null);
+	// The node's own refusal of the last save, shown inside the editor. A toast would outlive the dialog and leave the
+	// operator re-reading it next to fields it no longer describes.
+	const [saveError, setSaveError] = useState<string | null>(null);
 	const [selectedModel, setSelectedModel] = useState<string | null>(null);
 	const [selectedKvCacheType, setSelectedKvCacheType] = useState<BenchmarkKvCacheType | typeof autoKvCacheType>(autoKvCacheType);
 	const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
@@ -180,6 +184,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						coreTask: detail.coreTask,
 						contextTokens: detail.contextTokens,
 						maxOutputTokens: detail.maxOutputTokens,
+						reasoningBudgetTokens: detail.reasoningBudgetTokens,
 						invocationTimeoutSeconds: detail.invocationTimeoutSeconds,
 						agentDefinitionId: detail.agentDefinitionId,
 						judgeEnabled: detail.judge.enabled,
@@ -208,6 +213,14 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 		[detail, runs],
 	);
 
+	// The node re-checks every rule with numbers the form cannot see, and answers with a machine-readable `code` beside
+	// its sentence. Both are shown: the sentence is what the operator acts on, the code is what they can quote.
+	const showSaveError = (error: unknown): void => {
+		const message = apiErrorMessage(error, t("pages.benchmarks.errors.projectSave", "Could not save the project."));
+		const code = benchmarkErrorCode(error);
+		setSaveError(code === null ? message : `${message} (${code})`);
+	};
+
 	// A judge change on a frozen project is refused until the operator confirms the re-judge it implies, and while any
 	// judging of the project is still running. Both come back as ProblemDetails 409s with their own code.
 	const saveJudgePolicy = (policy: JudgePolicyDraft | null, confirmRejudge: boolean): void => {
@@ -221,6 +234,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 					setEditorMode(null);
 					setConfirmMode(null);
 					setPendingPolicy(null);
+					setSaveError(null);
 				},
 				onError: (error) => {
 					const code = benchmarkErrorCode(error);
@@ -238,13 +252,14 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						);
 						return;
 					}
-					toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.projectSave", "Could not save the project.")));
+					showSaveError(error);
 				},
 			},
 		);
 	};
 
 	const saveProject = (draft: BenchmarkProjectDraft): void => {
+		setSaveError(null);
 		if (editorMode === "edit" && detail?.isFrozen) {
 			saveJudgePolicy(
 				draft.judgeEnabled
@@ -264,8 +279,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 				{ projectId: detail.id, expectedVersion: detail.version, draft },
 				{
 					onSuccess: () => setEditorMode(null),
-					onError: (error) =>
-						toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.projectSave", "Could not save the project."))),
+					onError: showSaveError,
 				},
 			);
 			return;
@@ -275,8 +289,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 				setSelectedProjectId(project.id);
 				setEditorMode(null);
 			},
-			onError: (error) =>
-				toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.projectSave", "Could not save the project."))),
+			onError: showSaveError,
 		});
 	};
 	// A 422 is the node refusing this KV type for this runtime (quantized KV on CPU, or a binary whose manifest does not
@@ -615,7 +628,10 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 
 			<DialogShell
 				opened={editorMode !== null}
-				onClose={() => setEditorMode(null)}
+				onClose={() => {
+					setEditorMode(null);
+					setSaveError(null);
+				}}
 				title={
 					editorMode === "create"
 						? t("pages.benchmarks.project.create", "New project")
@@ -639,6 +655,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 					presets={presetsQuery.data}
 					frozen={editorMode === "edit" && detail?.isFrozen}
 					isSaving={createProject.isPending || updateProject.isPending || updateJudge.isPending}
+					saveError={saveError}
 					onSubmit={saveProject}
 					onCancel={() => setEditorMode(null)}
 				/>

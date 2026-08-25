@@ -34,6 +34,7 @@ export const benchmarkRankExclusionReasons = [
 	"execution-key-mismatch",
 	"execution-identity-incomplete",
 	"truncated",
+	"incomplete",
 	"warmup",
 ] as const;
 export type BenchmarkRankExclusionReason = (typeof benchmarkRankExclusionReasons)[number];
@@ -106,6 +107,8 @@ export interface BenchmarkProjectSummary {
 	contextTokens: number;
 	/** Per-run output-token budget (`n_predict`), or null when generation is only limited by the context window. */
 	maxOutputTokens: number | null;
+	/** Per-run thinking budget, or null for "as much as the window allows". Additive with the output budget. */
+	reasoningBudgetTokens: number | null;
 	/** Seconds one run's generation may take before the node cancels it, or null for the node default (900). */
 	invocationTimeoutSeconds: number | null;
 	agentDefinitionId: string;
@@ -128,6 +131,7 @@ export interface BenchmarkProjectDraft {
 	coreTask: string;
 	contextTokens: number;
 	maxOutputTokens: number | null;
+	reasoningBudgetTokens: number | null;
 	invocationTimeoutSeconds: number | null;
 	agentDefinitionId: string;
 	judgeEnabled: boolean;
@@ -222,6 +226,12 @@ export function benchmarkErrorCode(error: unknown): string | null {
  */
 export const isUnsupportedKvCacheTypeError = (error: unknown): boolean =>
 	error instanceof ApiError && error.statusCode === 422 && benchmarkErrorCode(error) === "UnsupportedKvCacheType";
+
+/**
+ * Context the node keeps for the prompt when it checks a reasoning budget against an output budget
+ * (`BenchmarkFrozenPolicies.MinimumPromptReserveTokens`). Mirrored so the form refuses what the node would refuse.
+ */
+export const benchmarkPromptReserveTokens = 512;
 
 export const benchmarkKvCacheTypes = ["f16", "q8_0", "q4_0"] as const;
 export type BenchmarkKvCacheType = (typeof benchmarkKvCacheTypes)[number];
@@ -595,8 +605,32 @@ export function toChatMessageParts(parts: readonly BenchmarkOutputPart[]): ChatM
 /** Mirrors the node's `BenchmarkFrozenPolicies` so the form refuses what the node would reject anyway. */
 export const benchmarkInvocationTimeoutLimits = { min: 60, max: 7200, default: 900 } as const;
 
-export const isBenchmarkRunTruncated = (run: Pick<BenchmarkRunSummary, "primaryStopReason">): boolean =>
-	run.primaryStopReason?.toLowerCase() === "length";
+/**
+ * Cut off by a budget. Mirrors the node's `BenchmarkStopReasons.IsTruncated`, which counts BOTH tokens: `length` is the
+ * OpenAI-compatible one for a full window or an exhausted `n_predict`, and `reasoning-length` is the node's narrowing
+ * of the same fact for a run that spent the budget thinking. The node EXCLUDES both as `truncated`, so a UI that knew
+ * only `length` would leave a reasoning-truncated run rank-excluded with no badge saying why.
+ */
+export const isBenchmarkRunTruncated = (run: Pick<BenchmarkRunSummary, "primaryStopReason">): boolean => {
+	const reason = run.primaryStopReason?.toLowerCase();
+	return reason === "length" || reason === "reasoning-length";
+};
+
+/**
+ * Truncated INSIDE the reasoning: not one visible answer token was emitted. Truncated as far as ranking is concerned,
+ * but it names the reasoning budget as the thing to raise rather than the output budget — the whole difference between
+ * a run the operator can fix and one they cannot explain.
+ */
+export const isBenchmarkRunReasoningExhausted = (run: Pick<BenchmarkRunSummary, "primaryStopReason">): boolean =>
+	run.primaryStopReason?.toLowerCase() === "reasoning-length";
+
+/**
+ * Stopped cleanly and answered NOTHING — an unanswered tool call, or only reasoning emitted. Distinct from truncated:
+ * no budget ran out, so raising one changes nothing. The node excludes it under its own reason for the same cause
+ * truncation is excluded for: there is no answer for a rubric to grade.
+ */
+export const isBenchmarkRunIncomplete = (run: Pick<BenchmarkRunSummary, "primaryStopReason">): boolean =>
+	run.primaryStopReason?.toLowerCase() === "incomplete";
 
 /**
  * The base model a row belongs to, for DISPLAY. The server key is lowercased for Hugging Face models so two casings of

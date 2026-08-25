@@ -6,11 +6,19 @@ import { useTranslation } from "react-i18next";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkLaunchBadges } from "@/features/benchmarks/components/BenchmarkLaunchBadges";
-import { BenchmarkJudgeStateBadge, BenchmarkStatusBadge, BenchmarkTruncatedBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
+import {
+	BenchmarkIncompleteBadge,
+	BenchmarkJudgeStateBadge,
+	BenchmarkReasoningExhaustedBadge,
+	BenchmarkStatusBadge,
+	BenchmarkTruncatedBadge,
+} from "@/features/benchmarks/components/BenchmarkStatusBadge";
 import type { BenchmarkRankCohort, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkBaseModelLabel,
 	benchmarkQuantTag,
+	isBenchmarkRunIncomplete,
+	isBenchmarkRunReasoningExhausted,
 	isBenchmarkRunTruncated,
 	isRunTerminal,
 } from "@/features/benchmarks/models/BenchmarkModels";
@@ -253,7 +261,14 @@ function RunRow({
 			<Table.Td>
 				<Group gap={4} wrap="nowrap">
 					<BenchmarkStatusBadge status={run.primaryStatus} />
-					{isBenchmarkRunTruncated(run) ? <BenchmarkTruncatedBadge testId={`benchmark-truncated-${run.id}`} /> : null}
+					{/* Reasoning exhaustion IS truncation, so it replaces the generic badge rather than adding a second
+					    one — two badges saying "cut off" would not tell the operator which budget to raise. */}
+					{isBenchmarkRunReasoningExhausted(run) ? (
+						<BenchmarkReasoningExhaustedBadge testId={`benchmark-reasoning-exhausted-${run.id}`} />
+					) : isBenchmarkRunTruncated(run) ? (
+						<BenchmarkTruncatedBadge testId={`benchmark-truncated-${run.id}`} />
+					) : null}
+					{isBenchmarkRunIncomplete(run) ? <BenchmarkIncompleteBadge testId={`benchmark-incomplete-${run.id}`} /> : null}
 					<BenchmarkJudgeStateBadge state={run.judge.state} />
 				</Group>
 			</Table.Td>
