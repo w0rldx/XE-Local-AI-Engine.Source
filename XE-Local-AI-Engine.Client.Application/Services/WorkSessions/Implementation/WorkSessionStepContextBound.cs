@@ -78,12 +78,31 @@ internal sealed class WorkSessionStepContextBound(INodeChatPersistenceService pe
     ///     Estimates the tokens the next step's request will carry for HISTORY: the synopsis plus every completed,
     ///     content-bearing message the synopsis does not already cover. Mirrors
     ///     <c>NodeChatStreamService.BuildConversationContext</c> — same selected-path collapse, same anchor space, same
-    ///     completed/non-empty filter, reasoning included because the runner replays it as
-    ///     <see cref="TextReasoningContent" /> — and measures with the same <see cref="ITokenEstimator" /> the context
-    ///     budgeters use, so this projection and their verdicts are in one arithmetic. The state block for the coming
-    ///     step is deliberately NOT counted: it is bounded by construction and is what the budget exists to protect.
+    ///     completed/non-empty filter — and measures with the same <see cref="ITokenEstimator" /> the context budgeters
+    ///     use, under the same per-model calibration, so this projection and their verdicts are in one arithmetic. The
+    ///     state block for the coming step is deliberately NOT counted: it is bounded by construction and is what the
+    ///     budget exists to protect.
+    ///     <para>
+    ///         Reasoning is counted, and on a llama.cpp session it is counted for a request that will NOT carry it.
+    ///         That is deliberate and it is the conservative direction. Verified against
+    ///         Microsoft.Extensions.AI.OpenAI 10.9.0: the Chat Completions client's content-part conversion handles
+    ///         text, URI, data and hosted-file content only, so a historical <see cref="TextReasoningContent" /> is
+    ///         dropped on the floor rather than sent. Only the Responses API client (Codex) replays it — and MUST, so
+    ///         no suppression seam belongs here. Over-counting a Chat-Completions provider by the reasoning it will
+    ///         discard makes this bound fire slightly early; under-counting a Responses-API one would make it fire too
+    ///         late, which is the failure it exists to prevent.
+    ///     </para>
     /// </summary>
-    internal static int Project(NodeChatConversationDto conversation, ITokenEstimator estimator)
+    /// <param name="conversation">The session's owned conversation, as the send path will read it.</param>
+    /// <param name="estimator">The same estimator the context budgeters measure with.</param>
+    /// <param name="modelName">
+    ///     The model the coming step will run on, so the estimate uses that model's calibrated divisor rather than the
+    ///     uncalibrated chars/4 default. Null resolves it from the transcript — the model the LAST completed assistant
+    ///     message actually ran on, which is the model the next step runs on unless the operator has changed it since.
+    ///     That keeps the resolution local: nothing upstream of here knows the effective model either (a session step
+    ///     sends with no model, and the send path resolves the node default / the bound agent's pin).
+    /// </param>
+    internal static int Project(NodeChatConversationDto conversation, ITokenEstimator estimator, string? modelName = null)
     {
         ArgumentNullException.ThrowIfNull(conversation);
         ArgumentNullException.ThrowIfNull(estimator);
@@ -117,6 +136,32 @@ internal sealed class WorkSessionStepContextBound(INodeChatPersistenceService pe
                 contents));
         }
 
-        return estimator.EstimateTokens(messages);
+        return estimator.EstimateTokens(messages, modelName ?? ResolveTranscriptModel(conversation));
+    }
+
+    /// <summary>
+    ///     The model the most recent completed assistant message ran on, or null when the session has not answered yet
+    ///     (the first step, where the transcript is short enough that the divisor cannot matter). Read from the whole
+    ///     message list rather than the selected path: a variant that was not chosen still ran on the same model.
+    /// </summary>
+    private static string? ResolveTranscriptModel(NodeChatConversationDto conversation)
+    {
+        string? model = null;
+        var latest = long.MinValue;
+        foreach (var message in conversation.Messages)
+        {
+            if (string.IsNullOrWhiteSpace(message.Model)
+                || !string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(message.Status, NodeChatMessageStatusValues.Completed, StringComparison.Ordinal)
+                || message.Sequence <= latest)
+            {
+                continue;
+            }
+
+            latest = message.Sequence;
+            model = message.Model;
+        }
+
+        return model;
     }
 }

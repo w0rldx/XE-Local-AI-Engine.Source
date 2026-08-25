@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -267,8 +268,12 @@ public sealed class WorkSessionStepContextBoundTests
 
         AssertEx.True(whole > 1_800, $"~8,800 characters of history should project well past 1,800 tokens, projected {whole}.");
         AssertEx.True(covered < whole / 2, $"A synopsis covering the first two messages should more than halve the projection, {covered} vs {whole}.");
+        // Counted deliberately, and conservatively. Verified against Microsoft.Extensions.AI.OpenAI 10.9.0: a historical
+        // TextReasoningContent is DROPPED by the Chat Completions content-part conversion, so a llama.cpp step never
+        // actually carries it — but the Responses API (Codex) replays it and must, and over-counting the former is a
+        // bound that fires early where under-counting the latter is the overflow this exists to prevent.
         AssertEx.True(whole - withoutReasoning > 800,
-            $"Replayed reasoning is real input and must be counted; dropping 4,000 characters of it changed the projection by {whole - withoutReasoning}.");
+            $"Replayed reasoning is real input on a Responses-API provider and must be counted; dropping 4,000 characters of it changed the projection by {whole - withoutReasoning}.");
     }
 
     [Test]
@@ -288,6 +293,64 @@ public sealed class WorkSessionStepContextBoundTests
 
         AssertEx.Equal(withoutStreaming, withStreaming, "The send path drops non-completed messages, so the projection must too.");
     }
+
+    [Test]
+    public void Project_UsesTheCalibratedDivisorOfTheModelTheSessionIsRunningOn()
+    {
+        // The projection used to estimate with NO model name, so it always divided by the uncalibrated four while the
+        // two context budgeters it is supposed to agree with were already dividing by the model's measured divisor. The
+        // bound then fired against arithmetic nothing else in the turn used.
+        var store = new TokenEstimatorCalibrationStore();
+        store.SetDivisor(SessionModel, charsPerToken: 2);
+        var estimator = new HeuristicTokenEstimator(store);
+
+        var calibrated = WorkSessionStepContextBound.Project(Conversation(TranscriptOn(SessionModel)), estimator);
+        var uncalibrated = WorkSessionStepContextBound.Project(Conversation(TranscriptOn("a-model-nothing-was-measured-for")), estimator);
+
+        AssertEx.True(calibrated > uncalibrated,
+            $"A model measured at two characters per token must project more tokens for the same transcript than the chars/4 default; {calibrated} vs {uncalibrated}.");
+    }
+
+    [Test]
+    public void Project_WithAnExplicitModelName_PrefersItOverTheTranscript()
+    {
+        var store = new TokenEstimatorCalibrationStore();
+        store.SetDivisor(SessionModel, charsPerToken: 2);
+        var estimator = new HeuristicTokenEstimator(store);
+        var transcript = Conversation(TranscriptOn("a-model-nothing-was-measured-for"));
+
+        var explicitly = WorkSessionStepContextBound.Project(transcript, estimator, SessionModel);
+        var derived = WorkSessionStepContextBound.Project(transcript, estimator);
+
+        AssertEx.True(explicitly > derived,
+            $"An explicitly supplied model must win over the one derived from the transcript; {explicitly} vs {derived}.");
+    }
+
+    [Test]
+    public void Project_WhenNothingHasAnsweredYet_FallsBackToTheUncalibratedDefault()
+    {
+        var store = new TokenEstimatorCalibrationStore();
+        store.SetDivisor(SessionModel, charsPerToken: 2);
+        var estimator = new HeuristicTokenEstimator(store);
+
+        // A first step has no assistant message to read a model off, and must not throw or guess one.
+        var firstStep = WorkSessionStepContextBound.Project(Conversation([Message(sequence: 0, "user", new string('a', 4_000))]), estimator);
+        var plain = WorkSessionStepContextBound.Project(Conversation([Message(sequence: 0, "user", new string('a', 4_000))]), new HeuristicTokenEstimator());
+
+        AssertEx.Equal(plain, firstStep);
+    }
+
+    private const string SessionModel = "qwen3.8-27b:Q4_K_M";
+
+    /// <summary>A completed two-message transcript whose assistant turn ran on <paramref name="model" />.</summary>
+    private static List<NodeChatPersistedMessageDto> TranscriptOn(string model) =>
+    [
+        Message(sequence: 0, "user", new string('a', 4_000)),
+        Message(sequence: 1, "assistant", new string('b', 4_000)) with
+        {
+            Model = model
+        }
+    ];
 
     private static Action<IServiceCollection> WithFakes(Func<IServiceProvider, INodeChatStreamService> streamFactory,
         RecordingWorkSessionEventPublisher publisher,
