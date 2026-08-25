@@ -131,7 +131,51 @@ public sealed class ReconnectDevelopmentRepositoryRequest
 /// <param name="Enabled">This node's Development Mode configuration switch.</param>
 /// <param name="SandboxProvider">The sandbox provider in force for Development Mode (<c>fake</c>, <c>process</c>, or <c>docker</c>).</param>
 /// <param name="ContainerRuntime">The container-runtime preflight, present only when the container provider is in force.</param>
-public sealed record DevelopmentCapabilityResponse(bool Enabled, string SandboxProvider, DevelopmentContainerRuntimeResponse? ContainerRuntime);
+/// <param name="Isolation">
+///     The isolation posture of every sandbox role on this node, container provider or not. Additive: a consumer that
+///     only reads the three axes above is unaffected.
+/// </param>
+public sealed record DevelopmentCapabilityResponse(bool Enabled,
+    string SandboxProvider,
+    DevelopmentContainerRuntimeResponse? ContainerRuntime,
+    IReadOnlyList<SandboxIsolationSummaryResponse> Isolation);
+
+/// <summary>
+///     What one sandbox ROLE is actually isolated by on this host, as the operator sees it.
+///     <para>
+///         Reported per role rather than once for the node because provider selection is per feature: AgentHome,
+///         Development Mode and work sessions each resolve their own provider, and on a mixed node they do not share a
+///         posture. Reporting a single number would have to pick one of them and be wrong about the others.
+///     </para>
+///     <para>
+///         Every boolean here is read from the provider's advertised
+///         <c>SandboxProviderCapabilities</c> — the same flags the fail-closed launch policy gates on — so this surface
+///         cannot claim a boundary the launch path would not enforce. Nothing here describes a hardware or VM boundary:
+///         no provider in this tree can prove one, so <see cref="Level" /> deliberately has no term for it.
+///     </para>
+/// </summary>
+/// <param name="Role">The sandbox role: <c>agent-home</c>, <c>development</c>, or <c>work-session</c>.</param>
+/// <param name="Provider">The provider resolved for that role (<c>fake</c>, <c>process</c>, or <c>docker</c>).</param>
+/// <param name="Backend">The mechanism the boundary is made of: <c>none</c>, <c>process</c>, <c>bwrap</c>, or <c>docker</c>.</param>
+/// <param name="Level">The coarse level derived from the three enforcement axes; <c>DevelopmentContractMapper</c> owns the rule.</param>
+/// <param name="FilesystemIsolation">Whether a command can run with the host filesystem absent from its mount namespace.</param>
+/// <param name="NetworkIsolation">Whether egress can actually be denied.</param>
+/// <param name="ResourceLimits">Whether memory / PID / CPU ceilings can actually be imposed.</param>
+/// <param name="ReadOnlyMounts">Whether the provider can mount a tree read-only.</param>
+/// <param name="FilesystemIsolationUnavailableReason">
+///     The measured reason the filesystem boundary is unavailable, or null when it is available. Null is never "we do
+///     not know": a role without the boundary always carries a reason.
+/// </param>
+public sealed record SandboxIsolationSummaryResponse(
+    string Role,
+    string Provider,
+    string Backend,
+    string Level,
+    bool FilesystemIsolation,
+    bool NetworkIsolation,
+    bool ResourceLimits,
+    bool ReadOnlyMounts,
+    string? FilesystemIsolationUnavailableReason);
 
 /// <summary>
 ///     The container-runtime preflight, as the operator sees it.

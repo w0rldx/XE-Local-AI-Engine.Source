@@ -413,6 +413,26 @@
 				"viewerLabel": "Artefakt {{kind}}",
 				"view": "Anzeigen",
 				"hide": "Ausblenden"
+			},
+			"isolation": {
+				"title": "Sandbox-Isolierung",
+				"intro": "Auf diesem Host gemessen, pro Sandbox-Rolle. Eine Rolle beansprucht nur eine Grenze, die ihr Provider ausweist und der Startpfad durchsetzt.",
+				"caption": "Isolationsstatus jeder Sandbox-Rolle auf diesem Node.",
+				"role": "Rolle",
+				"provider": "Provider",
+				"backend": "Backend",
+				"level": "Stufe",
+				"filesystem": "Dateisystem",
+				"network": "Netzwerk",
+				"limits": "Ressourcenlimits",
+				"readOnlyMounts": "Schreibgeschützte Mounts",
+				"yes": "Ja",
+				"no": "Nein",
+				"levels": {
+					"isolated": "Isoliert",
+					"confined": "Eingeschränkt",
+					"none": "Keine"
+				}
 			}
 		},
 		"knowledgeBase": {

@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 
 // Constructor injection here is only safe because the IDevelopmentEndpoint marker keeps these endpoints out of
 // FastEndpoints discovery when Development:Enabled is false (see the EndpointDiscoveryOptions.Filter in
@@ -36,10 +37,16 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 public sealed class GetDevelopmentCapabilityEndpoint(
     IOptions<DevelopmentOptions> options,
     IDevelopmentSandboxRuntimeProvider sandboxRuntimeProvider,
+    IAgentSandboxRuntimeProvider agentSandboxRuntimeProvider,
+    IWorkSessionSandboxRuntimeProvider workSessionSandboxRuntimeProvider,
+    ISandboxContainmentProbe containmentProbe,
     IDockerDaemonPreflightService dockerDaemonPreflight) : EndpointWithoutRequest<DevelopmentCapabilityResponse>
 {
     private readonly IOptions<DevelopmentOptions> _options = options ?? throw new ArgumentNullException(nameof(options));
     private readonly IDevelopmentSandboxRuntimeProvider _sandboxRuntimeProvider = sandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(sandboxRuntimeProvider));
+    private readonly IAgentSandboxRuntimeProvider _agentSandboxRuntimeProvider = agentSandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(agentSandboxRuntimeProvider));
+    private readonly IWorkSessionSandboxRuntimeProvider _workSessionSandboxRuntimeProvider = workSessionSandboxRuntimeProvider ?? throw new ArgumentNullException(nameof(workSessionSandboxRuntimeProvider));
+    private readonly ISandboxContainmentProbe _containmentProbe = containmentProbe ?? throw new ArgumentNullException(nameof(containmentProbe));
     private readonly IDockerDaemonPreflightService _dockerDaemonPreflight = dockerDaemonPreflight ?? throw new ArgumentNullException(nameof(dockerDaemonPreflight));
 
     public override void Configure()
@@ -52,15 +59,34 @@ public sealed class GetDevelopmentCapabilityEndpoint(
     {
         var enabled = _options.Value.Enabled;
         var providerName = _sandboxRuntimeProvider.ProviderName;
+        var isolation = BuildIsolationSummary();
         if (!string.Equals(providerName, DockerSandboxRuntimeProvider.Name, StringComparison.Ordinal))
         {
-            await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, ContainerRuntime: null), ct).ConfigureAwait(false);
+            await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, ContainerRuntime: null, isolation), ct).ConfigureAwait(false);
             return;
         }
 
         var preflight = await _dockerDaemonPreflight.InspectAsync(ct).ConfigureAwait(false);
 
-        await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, preflight.ToResponse()), ct).ConfigureAwait(false);
+        await Send.OkAsync(new DevelopmentCapabilityResponse(enabled, providerName, preflight.ToResponse(), isolation), ct).ConfigureAwait(false);
+    }
+
+    // Reaches no daemon: the role providers are DI singletons resolved by the selector, and the container preflight
+    // above is the one call that talks to anything (it keeps its own cached attestation). The containment measurement
+    // is a process-lifetime cache behind a Lazy, so whichever caller touches it first pays for it once and every
+    // capability GET after that is free. This endpoint can be that first caller on a node where nothing has read a
+    // provider's Capabilities yet; the probe is bounded and best-effort by contract, so the cost is one bounded
+    // measurement, never a failure.
+    private IReadOnlyList<SandboxIsolationSummaryResponse> BuildIsolationSummary()
+    {
+        var containment = _containmentProbe.Containment;
+
+        return
+        [
+            DevelopmentContractMapper.ToIsolationSummary("agent-home", _agentSandboxRuntimeProvider, containment),
+            DevelopmentContractMapper.ToIsolationSummary("development", _sandboxRuntimeProvider, containment),
+            DevelopmentContractMapper.ToIsolationSummary("work-session", _workSessionSandboxRuntimeProvider, containment)
+        ];
     }
 }
 
