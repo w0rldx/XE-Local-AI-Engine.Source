@@ -20,14 +20,14 @@
     },
     {
       "id": "author-identities-aliases",
-      "scope": "Exactly two author identities or public aliases: repository owner identity/alias and second author identity/alias; do not add private identity data to this public register.",
-      "subjects": ["w0rldx", "WorlDXXXXX"],
+      "scope": "Author identities or public aliases of the sole author; do not add private identity data to this public register.",
+      "subjects": ["w0rldx"],
       "status": "approved",
-      "approver": { "name": "w0rldx", "authority_basis": "Sole author; both public aliases belong to the same person." },
+      "approver": { "name": "w0rldx", "authority_basis": "Sole author." },
       "decision_date": "2026-08-08",
       "expires_on": "2027-08-08",
       "evidence": [
-        { "reference": "Repository git history (git shortlog -sne) shows both public handles 'w0rldx' and 'WorlDXXXXX' bound to a single author identity; no second human author." }
+        { "reference": "Repository git history (git shortlog -sne) shows a single author identity; no second human author." }
       ]
     },
     {

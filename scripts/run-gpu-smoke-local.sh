@@ -415,7 +415,7 @@ assert_gpu_was_used() {
     # report utilisation as "[N/A]"). Still a failure, because an unmeasurable run is not a pass,
     # but say what actually happened so nobody debugs a GPU fault that does not exist.
     step_fail "4-gpu-used" \
-      "GPU utilisation was UNMEASURABLE — nvidia-smi returned no numeric utilisation sample during generation (it can report '[N/A]'). This is not evidence the GPU was idle; it is an absence of evidence, which is not a pass. Check 'nvidia-smi --query-gpu=utilization.gpu --format=csv' on this box."
+      "GPU utilisation was UNMEASURABLE — nvidia-smi returned no numeric utilisation sample during generation (it can report '[N/A]'). This is not evidence the GPU was idle; it is an absence of evidence, which is not a pass. Check 'nvidia-smi --query-gpu=utilization.gpu --format=csv' on this host."
     ok=1
   elif [[ "${peak_util}" -lt "${MIN_UTIL_PERCENT}" ]]; then
     step_fail "4-gpu-used" \

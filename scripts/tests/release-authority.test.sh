@@ -35,7 +35,7 @@ write_valid_fixture() {
     for category in "${categories[@]}"; do
       subjects=""
       if [[ "${category}" == "author-identities-aliases" ]]; then
-        subjects=',"subjects":["Public Alias One","Public Alias Two"]'
+        subjects=',"subjects":["Public Alias One"]'
       fi
       printf '%s    {"id":"%s"%s,"status":"approved","approver":{"name":"Public Approver","authority_basis":"Rights holder"},"decision_date":"2026-01-01","expires_on":"2027-01-01","evidence":[{"reference":"approval memo","repository_path":"docs/compliance/evidence.md"}]}' "${separator}" "${category}" "${subjects}"
       separator=$',\n'
@@ -83,8 +83,18 @@ missing_path="${TMP_DIR}/missing-path.json"
 jq '(.decisions[0].evidence[0].repository_path) = "docs/compliance/removed.md"' "${valid}" > "${missing_path}"
 assert_fails_with "${missing_path}" 'evidence repository_path is missing or escapes the repository'
 
+# A single public identity is the expected shape for a sole author.
 one_author="${TMP_DIR}/one-author.json"
 jq '(.decisions[] | select(.id == "author-identities-aliases") | .subjects) = ["Only one alias"]' "${valid}" > "${one_author}"
-assert_fails_with "${one_author}" 'subjects must contain exactly two non-blank public identities or aliases'
+python3 "${VALIDATOR}" --repository-root "${TMP_DIR}" --today 2026-08-07 "${one_author}" \
+  | grep -Fq 'release-authority: PASS'
+
+no_author="${TMP_DIR}/no-author.json"
+jq '(.decisions[] | select(.id == "author-identities-aliases") | .subjects) = []' "${valid}" > "${no_author}"
+assert_fails_with "${no_author}" 'subjects must contain at least one non-blank public identity or alias'
+
+blank_author="${TMP_DIR}/blank-author.json"
+jq '(.decisions[] | select(.id == "author-identities-aliases") | .subjects) = [""]' "${valid}" > "${blank_author}"
+assert_fails_with "${blank_author}" 'subjects must contain at least one non-blank public identity or alias'
 
 echo "release-authority.test.sh: PASS"

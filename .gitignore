@@ -33,9 +33,7 @@ bld/
 # Visual Studio Code cache/options directory
 .vscode/*
 !.vscode/extensions.json
-!.vscode/launch.json
 !.vscode/tasks.json
-!.vscode/settings.json
 
 # Microsoft .NET Tye Settings directory
 .tye/
@@ -386,6 +384,10 @@ repomix-output.*
 # AI Coding files
 **/*.omc/**
 **/*.omx/**
+# Per-user AI/editor tool state — never shared.
+.codex/
+.cursor/
+.aspire/
 .testagent/
 # Redundant per-tool agent skill mirrors — canonical copy lives under .claude/ only.
 **/.agents/**
@@ -419,6 +421,12 @@ cloud-credentials.enc
 # Local runtime artifacts (machine-specific, not for version control)
 .claude/scheduled_tasks.lock
 .codegraph/daemon.pid
+.claude/settings.local.json
+CLAUDE.local.md
+# Local secrets. Tracked templates (.env.template, .env.tests) stay matched-out.
+.env
+.env.local
+.env.*.local
 
 # --- Self-contained desktop launcher sources (override the Click-Once `publish/` and `*.pubxml` ignores above) ---
 # These are tracked SOURCE artifacts, not build output: the per-RID single-file publish profiles and the

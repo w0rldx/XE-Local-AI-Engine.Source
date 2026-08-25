@@ -118,7 +118,7 @@ GitHub workflow state changed between checks. On 2026-07-24 workflows were repor
 
 ### WSL2 hardware and VRAM readers
 
-Last live check (2026-07-26): RTX 5090, 32 GB, sm_120, CUDA toolkit later observed at 13.3, Ryzen 9 9950X3D host, 8 processors exposed to WSL, and ~31 GiB VM RAM. This entry had previously said RTX 4080/16 GB/sm_89, demonstrating why live probes are required.
+A live probe (2026-07-26) found a different GPU generation than this entry had recorded, and a different CUDA toolkit version than assumed. Notes about the dev hardware go stale silently — probe (`nvidia-smi`, `nvcc --version`, compiled arch) rather than reading a recorded inventory.
 
 Under WDDM pressure, a model with about 1.2 GB truly free still loaded and served rather than OOMing: 161.7 tok/s versus 698.4 tok/s unloaded, a 4.3× slowdown without an error. In another run, `nvidia-smi` reported 492 MiB free while llama.cpp's process-local `cudaMemGetInfo` view reported 29,697 MiB. `nvidia-smi --query-compute-apps` remained empty while processes held large allocations.
 
@@ -186,7 +186,7 @@ On 2026-07-31, `tngtech/Qwen3.6-27B-NVFP4-GGUF` (18.5 GB file) loaded to a 22.7 
 
 ### Silent CPU fallback
 
-The managed Vulkan binary on the WSL box had no Vulkan ICD and `--list-devices` returned an empty list; inference still answered on four CPU threads while the installed record and UI implied GPU. Conversely, a CUDA binary selected by `XE_LLAMACPP_SERVER_PATH` used the GPU while the installed record still said Vulkan. This validated `IRuntimeDeviceAudit` as the authority.
+The managed Vulkan binary in the WSL environment had no Vulkan ICD and `--list-devices` returned an empty list; inference still answered on four CPU threads while the installed record and UI implied GPU. Conversely, a CUDA binary selected by `XE_LLAMACPP_SERVER_PATH` used the GPU while the installed record still said Vulkan. This validated `IRuntimeDeviceAudit` as the authority.
 
 ### Context and admission latch
 

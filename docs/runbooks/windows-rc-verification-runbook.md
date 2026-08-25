@@ -6,7 +6,7 @@
 
 Target: a tester RC portable build (Velopack, `--noInst`) on real Windows 11 with x64 ASP.NET Core Runtime
 10.0.11 or a newer .NET 10 servicing patch installed. Nine checks, risk-ordered.
-Budget ~1 hour. Everything below covers a code path that **cannot be exercised on the Linux/WSL dev box**, which
+Budget ~1 hour. Everything below covers a code path that **cannot be exercised on a Linux/WSL host**, which
 is why it is here at all.
 
 Data root for every path below: `%LOCALAPPDATA%\XE-Local-AI-Engine`.
@@ -30,7 +30,7 @@ Note `llama-server` — the OS process table carries no extension on Windows, ev
 ### What changed since the last revision of this runbook
 
 Checks **4, 5 and 9** describe fixed behaviour rather than known-broken behaviour; each carries a "Changed for
-this RC" note saying what was proven on the dev box and what only you can prove.
+this RC" note saying what was proven on Linux and what only you can prove.
 
 **A 2026-08-02 session ran on a real Windows 11 box (build 26220, RTX 5090, git 2.55.0, .NET 10.0.302) and closed
 several of the questions this runbook was written to ask.** Where that happened the check now says so, and says
@@ -348,7 +348,7 @@ with zero key-ring log lines — on a healthy ring the decorator is invisible, w
 > exercises is the behaviour Windows runs — there is no longer an OS branch to get wrong, and no dependency on
 > Git for Windows being installed. Separately, the gate's first command
 > (`git diff --check`) now runs under a per-path whitespace policy the engine derives from the repository's own
-> index (`DevelopmentWorkspaceWhitespacePolicy`). Both are covered by tests that run on the Linux dev box; what
+> index (`DevelopmentWorkspaceWhitespacePolicy`). Both are covered by tests that run on Linux; what
 > the tester adds is the real Windows filesystem and a real Windows `git`.
 
 **What it proves.** That the two surveys return real results against a real NTFS workspace, and that a
@@ -684,7 +684,7 @@ successfully and returns an empty device list should yield `ProbeSucceeded = tru
 fired — and the reason string blames *"a wedged or busy GPU driver"*, which is the **wrong diagnosis** if the
 real cause is a missing/broken Vulkan ICD.
 
-**Do this.** Point the override at a GPU llama-server build that enumerates zero devices on this box (e.g. a
+**Do this.** Point the override at a GPU llama-server build that enumerates zero devices on the test machine (e.g. a
 Vulkan build with no working ICD), restart, refresh the hardware profile:
 
 ```powershell
@@ -906,7 +906,7 @@ measured on Windows.
   `[65536, 32768, 16384, 8192, 4096, 2048]` (`LlamaServerLaunchPolicyOptions.ChatContextTiers`). On 16 GB expect the OOM
   classifier to walk it down during load and log
   `llama-server automatic context allocation encountered a classified startup OOM; retrying at context tier <N>`.
-  **That is normal on this box, not a failure.** A classified OOM also triggers a one-shot safe-config retry
+  **That is normal on a 16 GB machine, not a failure.** A classified OOM also triggers a one-shot safe-config retry
   (KV-quant + flash-attention off), logged as `…optimized launch (KV-cache quant + flash attention) failed…;
   retrying once with the safe config.`
 - **Partial offload is the routine 16 GB path.** The partial-offload alert will fire on 16 GB for models where a

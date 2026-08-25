@@ -364,7 +364,7 @@ class HubStream:
         Bounded by WALL CLOCK, not by a poll count. A long poll with nothing to deliver can return
         immediately, so a poll budget is not a proxy for elapsed time: a slow (or CPU-bound) turn
         burns hundreds of empty polls in seconds and would fail for a measurement reason rather
-        than a real one. Measured on this box: a CPU-fallback turn exhausted 600 polls while
+        than a real one. Measured in one local run: a CPU-fallback turn exhausted 600 polls while
         generating perfectly well.
         """
         import time

@@ -1,8 +1,8 @@
 # Sandbox threat model
 
-> **Status:** Draft, 2026-08-25. Written as Phase 0 of the secure-agent-execution work
-> (`Plans/secure-agent-execution-2026-08-25/`). It describes what is enforced **today** and names every gap as
-> `GAP → Gx` against that plan's gap list. It is not a certification, an audit, or a risk acceptance.
+> **Status:** Draft, 2026-08-25. Written as Phase 0 of the 2026-08-25 secure-agent-execution work. It describes
+> what is enforced **today** and names every gap as `GAP → Gx` against that work's gap list. It is not a
+> certification, an audit, or a risk acceptance.
 
 Companion records: [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Docker scope),
 [ADR 0007](../adr/0007-sandbox-execution-substrate-and-backend-selection.md) (substrate selection, Proposed),

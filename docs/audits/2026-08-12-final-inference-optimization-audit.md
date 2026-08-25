@@ -94,9 +94,8 @@ The architecture does **not** need to embed llama.cpp into .NET, replace llama.c
 
 ### Reproducible environment
 
-- OS: WSL2 Linux `6.18.33.2-microsoft-standard-WSL2`, x86_64.
-- Visible CPU: AMD Ryzen 9 9950X3D, 4 cores / 8 threads exposed to WSL, one NUMA node.
-- RAM: 31 GiB; swap: 8 GiB.
+- OS: WSL2 Linux (6.18-series kernel), x86_64.
+- Visible CPU: x86-64 desktop CPU, 8 threads exposed to WSL, one NUMA node.
 - GPU: NVIDIA GeForce RTX 5090; driver 610.88; 32,607 MiB reported total VRAM.
 - Installed XE runtime: official Vulkan b10201, commit `8f4646a63`, GNU 11.4.0; server SHA-256 `972e6785e0caf0dbe761ba02654c4e102845d19d75b5c57799c59a602f4f331f`.
 - Existing approved model asset: `Qwen3.6-27B-Q4_K_M.gguf`, 17,106,773,120 bytes.

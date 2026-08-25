@@ -1,7 +1,7 @@
 # Agent Framework 1.15 completion evidence
 
-This document closes the reproducibility and hardware-lane gaps in
-`Plans/2026-07-26-agent-framework-1.15-upgrade-and-harness-assessment-plan.md`.
+This document closes the reproducibility and hardware-lane gaps identified in the
+Agent Framework 1.15 upgrade and harness assessment.
 The deterministic compatibility tests remain the permanent release gate. The real
 llama-server lane below is explicitly opt-in and hardware-dependent.
 

@@ -344,11 +344,11 @@ them wastes the one environment that can do everything above.
   compares `Path.GetFullPath` — which normalises *lexically* and does not resolve reparse points — against
   `git rev-parse --show-toplevel`, which resolves physically. They can never agree behind a junction, a `subst`
   drive, or a redirected profile. **This reproduces on Linux today** with a symlinked data root, so a failing
-  test can be written on the dev box. Real-world likelihood on a stock tester box is low (OneDrive Known Folder
+  test can be written on Linux. Real-world likelihood on a stock tester box is low (OneDrive Known Folder
   Move and Group Policy redirection both leave `AppData\Local` alone) but it is total when it happens, and the
   message blames a *security policy* for what is a path bug.
 - **Turning the ~90 bare-return guards into reported skips.** A mechanical `return;` → `Skip.Test("…")` sweep.
-  Until it is done, no "green on Windows" claim is falsifiable. Best done on the dev box where the whole suite
+  Until it is done, no "green on Windows" claim is falsifiable. Best done on Linux where the whole suite
   can be re-run cheaply.
 - **Pinning `core.autocrlf=false` in the eight Development git fixtures that omit it**
   (`DevelopmentProfileGuardTests.cs:186`, `DevelopmentTemplateServiceTests.cs:188`,

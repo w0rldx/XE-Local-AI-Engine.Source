@@ -8,8 +8,8 @@ Read `docs/agent-knowledge.md` before your first non-trivial change in this repo
 - OpenAPI regen without `XE_LAUNCH_MODE=desktop` **silently drops** desktop-only endpoints from the generated client.
 - Stop the stack with `scripts/dev-stop.sh`, not bare `aspire stop`. (The old "`aspire stop` is a **no-op**" claim did not reproduce on 2026-08-19; the fallback stays because the original VRAM/port leak's trigger is still unidentified.)
 - HostAgent was **deliberately removed** — don't reintroduce it. Docker is off the **inference path** and stays there, but is permitted for **Development Mode execution only** (ADR 0004). Ollama was **not** removed — it's a gated secondary provider; llama.cpp is the default runtime.
-- This WSL box **has** an RTX 5090 (32 GB, sm_120) + CUDA. Older notes claiming no GPU — or claiming a 4080/16 GB/sm_89 — are wrong.
-- **NVFP4 GGUFs work** here, on native sm_120 kernels (live-verified; pin `b10201` carries `GGML_TYPE_NVFP4`). Only NVFP4 **safetensors** are unloadable — that's a container limit, not a format one. Don't re-research this.
+- The development environment **has** a CUDA GPU. Never infer the hardware — or its absence — from notes: run `nvidia-smi` / `nvcc --version`. The hardware has changed before and the stale notes were wrong.
+- **NVFP4 GGUFs work** on native sm_120 (Blackwell) kernels when the llama.cpp pin carries `GGML_TYPE_NVFP4` (pin `b10201` does; live-verified). Only NVFP4 **safetensors** are unloadable — that's a container limit, not a format one. Don't re-research this.
 
 The doc's "Stale beliefs corrected" table lists rules that were true once and are false now — check it before acting on a remembered convention.
 
