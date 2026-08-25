@@ -355,6 +355,11 @@ public sealed class OpenApiDocumentTests
         using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
 
         AssertWorkSessionPaths(document.RootElement.GetProperty("paths"));
+
+        // Proof the overlay actually took: the same client gets the disabled node's 404 from the request-path
+        // middleware. Without this the test would pass identically on a factory whose configuration never applied.
+        using var probe = await client.GetAsync("/api/local/v1/work-sessions").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.NotFound, probe.StatusCode, "A disabled node must refuse the route the document still describes.");
     }
 
     private static void AssertWorkSessionPaths(JsonElement paths)

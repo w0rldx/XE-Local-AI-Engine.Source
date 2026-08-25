@@ -45,7 +45,9 @@ public sealed class WorkSessionOptions
     ///         Must stay strictly under <c>WorkerNode:MaxPendingToolCallAgeMinutes</c> (in minutes; 10 by default, so
     ///         600 seconds), or the node expires the pending tool call the session is parked on before the park clock
     ///         fires and the park times out against a prompt that can no longer be answered.
-    ///         <c>WorkSessionOptionsValidator</c> enforces the relation at startup.
+    ///         <c>WorkSessionOptionsValidator</c> checks the relation at startup against the configured seed. The upper
+///         bound of the range below is 3599 because the node's tool-call age itself caps at 60 minutes
+///         (<c>StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes</c>), so nothing above that could ever validate.
     ///     </para>
     ///     <para>
     ///         follow-up: that check reads the configured value only. <c>INodeRuntimeSettings.GetMaxPendingToolCallAgeMinutes</c>
@@ -53,7 +55,7 @@ public sealed class WorkSessionOptions
     ///         after it ran — an operator who lowers it below this park budget re-opens the gap.
     ///     </para>
     /// </summary>
-    [Range(1, 24 * 60 * 60)]
+    [Range(1, 3599)]
     public int MaxParkedSeconds { get; init; } = 300;
 
     /// <summary>The cap on one saved artifact, enforced by the blob store and by the <c>save_artifact</c> tool.</summary>

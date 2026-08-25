@@ -136,6 +136,12 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
     ///         concession; the previous value is restored in <see cref="RestoreToolCapableModelsAsync" /> so the shared
     ///         serial host is handed on unchanged.
     ///     </para>
+    ///     <para>
+    ///         The save takes effect on the very next offer: nothing memoises the list for the host lifetime.
+    ///         <c>NodeRuntimeSettings.GetToolCapableModels</c> calls <c>INodeSettingsStore.Load</c> per call, and the
+    ///         registered store is <c>CachedNodeSettingsStore</c>, whose single memory-cache entry <c>SaveAsync</c>
+    ///         removes and re-primes from disk — so this write is visible to the running supervisor without a restart.
+    ///     </para>
     /// </summary>
     private async Task MarkChatModelToolCapableAsync()
     {
@@ -314,8 +320,6 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
             {
                 Timeout = 30_000
             });
-
-        await File.AppendAllTextAsync("/tmp/xe-ws-diag.txt", $"[DIAG] test reached the plan assertion, turns={providerTurn}\n").ConfigureAwait(false);
 
         // The plan panel renders what `update_work_plan` wrote. The per-task test id carries a server-side GUID, so
         // match the row by its title instead.

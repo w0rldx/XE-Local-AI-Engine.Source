@@ -4,9 +4,14 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
-///     Machine-checks the one cross-section relation the work-session docs assert: a park must expire before the node
-///     expires the pending tool call it is waiting on, or the park times out against a call the node has already given
-///     up on and the session is checkpointed off a prompt nobody can answer any more.
+///     Checks the one cross-section relation the work-session docs assert: a park must expire before the node expires
+///     the pending tool call it is waiting on, or the park times out against a call the node has already given up on
+///     and the session is checkpointed off a prompt nobody can answer any more.
+///     <para>
+///         Startup-only, and against the CONFIGURED seed. <c>INodeRuntimeSettings.GetMaxPendingToolCallAgeMinutes</c>
+///         lets a stored Node-Settings override lower the tool-call age at runtime, which this check cannot see; such
+///         an override re-opens the gap until the next restart.
+///     </para>
 /// </summary>
 public sealed class WorkSessionOptionsValidator : IValidateOptions<WorkSessionOptions>
 {
@@ -26,6 +31,7 @@ public sealed class WorkSessionOptionsValidator : IValidateOptions<WorkSessionOp
             : ValidateOptionsResult.Fail(
                 $"WorkSessions:MaxParkedSeconds ({options.MaxParkedSeconds}) must stay under WorkerNode:MaxPendingToolCallAgeMinutes "
                 + $"({pendingToolCallAgeMinutes} minutes = {pendingToolCallAgeSeconds} seconds), so a park expires before the node "
-                + "expires the tool call it is parked on.");
+                + "expires the tool call it is parked on. Lower WorkSessions:MaxParkedSeconds (default 300) or raise "
+                + "WorkerNode:MaxPendingToolCallAgeMinutes.");
     }
 }

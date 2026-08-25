@@ -42,12 +42,22 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
     // single run and does not care.
     private readonly ConcurrentQueue<StepScript> _scripts = new();
     private readonly Lock _recordGate = new();
+    private readonly List<NodeChatStreamRequest> _requests = [];
 
-    /// <summary>Every request the supervisor sent, in order.</summary>
-    public List<NodeChatStreamRequest> Requests { get; } = [];
-
-    /// <summary>The interleaved trace of what the supervisor did, for ordering assertions.</summary>
-    public List<string> Trace { get; } = [];
+    /// <summary>
+    ///     Every request the supervisor sent, in order. A copy taken under the same lock the recording side holds: the
+    ///     admission test drives several runs through one fake, so a test reading the raw list could tear.
+    /// </summary>
+    public IReadOnlyList<NodeChatStreamRequest> Requests
+    {
+        get
+        {
+            lock (_recordGate)
+            {
+                return [.. _requests];
+            }
+        }
+    }
 
     public void Enqueue(StepScript script) =>
         _scripts.Enqueue(script);
@@ -63,8 +73,7 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
     {
         lock (_recordGate)
         {
-            Requests.Add(request);
-            Trace.Add("send");
+            _requests.Add(request);
         }
 
         var script = _scripts.TryDequeue(out var next)
@@ -127,17 +136,25 @@ internal sealed class FakeNodeChatStreamService(INodeChatStreamCancellationRegis
 internal sealed class RecordingWorkSessionEventPublisher : IWorkSessionEventPublisher
 {
     private readonly Lock _gate = new();
+    private readonly List<(Guid SessionId, long Sequence, WorkSessionChangeKind Kind)> _published = [];
 
-    public List<(Guid SessionId, long Sequence, WorkSessionChangeKind Kind)> Published { get; } = [];
-
-    public List<string> Trace { get; } = [];
+    /// <summary>Every publish, in order. A copy taken under the recording lock, for the same reason as above.</summary>
+    public IReadOnlyList<(Guid SessionId, long Sequence, WorkSessionChangeKind Kind)> Published
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _published];
+            }
+        }
+    }
 
     public Task PublishAsync(Guid sessionId, long sequence, WorkSessionChangeKind kind, CancellationToken cancellationToken = default)
     {
         lock (_gate)
         {
-            Published.Add((sessionId, sequence, kind));
-            Trace.Add($"publish:{kind}");
+            _published.Add((sessionId, sequence, kind));
         }
 
         return Task.CompletedTask;

@@ -803,7 +803,7 @@ the state block would otherwise carry off the node on the next step.
 | `WorkSessions:MaxStepsPerRun` | `25` | Per start/resume, not per lifetime |
 | `WorkSessions:CheckpointEveryNSteps` | `5` | |
 | `WorkSessions:MaxConcurrentSessions` | `1` | Admission cap — see §5.2 |
-| `WorkSessions:MaxParkedSeconds` | `300` | Must stay under the node's `WorkerNode:MaxPendingToolCallAgeMinutes` — checked at startup by `WorkSessionOptionsValidator` |
+| `WorkSessions:MaxParkedSeconds` | `300` | Must stay under the node's `WorkerNode:MaxPendingToolCallAgeMinutes` — `WorkSessionOptionsValidator` checks it at startup against the configured seed; a stored Node-Settings override is not covered |
 | `WorkSessions:MaxArtifactBytes` | `1048576` | 1 MiB |
 | `WorkSessions:StepTimeoutSeconds` | `0` | 0 inherits the node's maximum message request timeout |
 | `WorkSessions:StepContextBudgetTokens` | `12000` | Replayed-transcript budget per step; over it the boundary force-compacts (§5.3). 0 disables |

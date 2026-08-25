@@ -102,14 +102,16 @@ public sealed class ApplicationStartupTests
         try
         {
             _ = invalidFactory.Services;
-            throw new AssertionException("Expected startup to fail for a park budget at or over the node's pending tool-call age.");
         }
         catch (Exception ex) when (ex is InvalidOperationException or OptionsValidationException)
         {
             exception = ex;
         }
 
-        AssertEx.NotNull(exception);
+        // Asserted OUTSIDE the try: the filter above would otherwise swallow the assertion's own failure. The message
+        // has to name the knob, not merely fail, or the operator is left guessing which of the two settings to move.
+        AssertEx.True(exception?.ToString().Contains("WorkSessions:MaxParkedSeconds", StringComparison.Ordinal) == true,
+            $"Startup should have failed naming WorkSessions:MaxParkedSeconds; got: {exception?.ToString() ?? "no exception"}");
     }
 
     [Test]

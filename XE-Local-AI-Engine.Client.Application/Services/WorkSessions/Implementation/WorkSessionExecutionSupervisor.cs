@@ -44,6 +44,12 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
     ///     The admission gate. A slot is taken before the run is registered and released in the run's finally, so the
     ///     cap holds across concurrent starts for DIFFERENT sessions — a count checked after the add lets two
     ///     admissions each see room and then each back out, admitting fewer sessions than the cap allows.
+    ///     <para>
+    ///         Never disposed, deliberately: <see cref="SemaphoreSlim.Dispose()" /> only matters once
+    ///         <c>AvailableWaitHandle</c> has been touched, which nothing here does, and
+    ///         <see cref="DisposeAsync" /> does not wait for the in-flight runs — so a run landing after the host went
+    ///         down still releases its slot instead of faulting an unobserved task on a disposed gate.
+    ///     </para>
     /// </summary>
     private readonly SemaphoreSlim _admission;
 
@@ -110,7 +116,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
             cancellation?.Dispose();
             if (!admitted)
             {
-                ReleaseAdmission();
+                _ = _admission.Release();
             }
         }
     }
@@ -181,7 +187,6 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
         }
 
         _runs.Clear();
-        _admission.Dispose();
     }
 
     private async Task RunSessionObservedAsync(Guid sessionId, SessionRun run)
@@ -206,23 +211,7 @@ internal sealed class WorkSessionExecutionSupervisor : IWorkSessionExecutionSupe
                 removed.Cancellation.Dispose();
             }
 
-            ReleaseAdmission();
-        }
-    }
-
-    /// <summary>
-    ///     Hands the admission slot back. Tolerates a disposed gate: <see cref="DisposeAsync" /> does not wait for the
-    ///     in-flight runs, so a run landing after the host went down would otherwise fault an unobserved task.
-    /// </summary>
-    private void ReleaseAdmission()
-    {
-        try
-        {
             _ = _admission.Release();
-        }
-        catch (ObjectDisposedException)
-        {
-            // The host is gone; there is no cap left to honour.
         }
     }
 
