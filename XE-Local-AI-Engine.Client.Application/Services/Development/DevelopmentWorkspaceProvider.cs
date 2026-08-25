@@ -257,17 +257,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         {
             AttachKey = attachKey,
             RuntimeProfile = RuntimeProfile,
-            // DELIBERATELY Unrestricted — a recorded deferral, not an oversight, and not an inconsistency with
-            // AgentHome. AgentHome now requests default-deny egress because everything it
-            // runs in the sandbox is local. Development Mode is different: the dotnet-slnx / dotnet-csproj profiles run
-            // `dotnet restore` into a per-task NUGET_PACKAGES root that starts COLD, so denying egress here today would
-            // not harden Development Mode — it would break it outright, along with the validation gate that depends on
-            // a real restore/build/test run.
-            //
-            // Turning this off is future work, and it is only safe once dependency-manifest-rejection machinery exists: restore limited to
-            // the base commit's manifests, plus a dependency-manifest change failing validation with its specific
-            // reason. Until both halves land, "network off" here is an outage rather than a hardening win.
-            NetworkPolicy = SandboxNetworkPolicy.Unrestricted,
+            NetworkPolicy = ResolveAgentFacingNetworkPolicy(),
             TrustedHostWorkspace = new SandboxTrustedHostWorkspace
             {
                 RootPath = worktreePath
@@ -284,6 +274,40 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             runtimePath,
             handle);
     }
+
+    /// <summary>
+    ///     The egress posture requested for the AGENT-FACING sandbox: <see cref="SandboxNetworkPolicy.None" /> where
+    ///     the backend advertises real network confinement, <see cref="SandboxNetworkPolicy.Unrestricted" /> where it
+    ///     does not.
+    ///     <para>
+    ///         This used to be an unconditional <c>Unrestricted</c> with a recorded deferral naming two missing halves.
+    ///         Both have landed: <see cref="EnsureWarmRestoreAsync" /> fills the per-task package cache from the base
+    ///         commit before this sandbox exists, and
+    ///         <see cref="DevelopmentDependencyManifestPolicy" /> fails validation for an attempt that changes what
+    ///         would have to be re-resolved. So a denied sandbox now runs <c>--no-restore</c> builds and
+    ///         <c>--no-build</c> tests against a cache that is already complete, and denying egress is a hardening win
+    ///         rather than an outage.
+    ///     </para>
+    ///     <para>
+    ///         <strong>Capability-gated, per the operator's 2026-08-25 ruling (Option B), and this is a real
+    ///         limitation rather than defensive coding.</strong> A backend fails a confinement request it cannot honour
+    ///         CLOSED, so an unconditional <c>None</c> would not harden Development Mode on Windows — or on any Linux
+    ///         host whose <c>unshare</c> probe failed — it would stop it running there at all, since the shipped
+    ///         configuration resolves those nodes to the process backend. The honest consequence is that on such a node
+    ///         the attempt still has egress. What makes that acceptable rather than silent is G6: the Development
+    ///         status surface reports the posture the provider actually SERVED, so an operator can see which of the two
+    ///         they got. Making denial mandatory per node is the recorded follow-up.
+    ///     </para>
+    ///     <para>
+    ///         This mirrors <c>AgentHomeService.ResolveNetworkPolicy</c> deliberately, down to reading the same
+    ///         capability flag. Two consumers deciding the same question two ways is how one of them silently stops
+    ///         matching what the backend can serve.
+    ///     </para>
+    /// </summary>
+    private SandboxNetworkPolicy ResolveAgentFacingNetworkPolicy() =>
+        (_sandbox.Capabilities & SandboxProviderCapabilities.SupportsNetworkPolicy) != SandboxProviderCapabilities.None
+            ? SandboxNetworkPolicy.None
+            : SandboxNetworkPolicy.Unrestricted;
 
     /// <summary>
     ///     Populates the per-task package cache from the BASE COMMIT's dependency manifests, in a second short-lived

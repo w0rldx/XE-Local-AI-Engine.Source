@@ -388,13 +388,42 @@ public sealed class DockerSandboxRealDaemonTests
             await ProbeAsync(fixture, "wget -T2 -q -O- http://1.1.1.1 >/dev/null 2>&1 && echo NET-OK || echo NET-BLOCKED"));
     }
 
+    /// <summary>
+    ///     G1(c) on the container backend, composed the way the caller composes it. The flag and the mechanism are two
+    ///     separate facts; this asserts they MEET on a Development-shaped container — the workspace plus the four
+    ///     per-task runtime mounts plus the read-only <c>.git/config</c> — and that the daemon really applied it.
+    /// </summary>
+    [Test]
+    public async Task RealDaemon_DevelopmentShapedRun_ReadsBackNoEgressFromTheCapabilityGatedDecision()
+    {
+        var options = await RequireDaemonAsync();
+        await using var fixture = await ContainerFixture.CreateWithRuntimeMountsAsync(options);
+
+        // Exactly the caller-side decision DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy makes.
+        var resolved = fixture.Provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy)
+            ? SandboxNetworkPolicy.None
+            : SandboxNetworkPolicy.Unrestricted;
+        AssertEx.Equal(SandboxNetworkPolicy.None,
+            resolved,
+            "the container backend advertises network policy, so Development Mode must ask it for denial rather than fall back.");
+
+        var settings = await fixture.Client.InspectContainerAsync(fixture.ContainerId);
+        AssertEx.Equal("none", settings.NetworkMode);
+        AssertEx.Equal("NET-BLOCKED",
+            await ProbeAsync(fixture, "wget -T2 -q -O- http://1.1.1.1 >/dev/null 2>&1 && echo NET-OK || echo NET-BLOCKED"));
+
+        // Everything else the hardening contract requires still holds on the denied container.
+        AssertEx.Empty(DockerSandboxHardening.FindViolations(fixture.Specification, settings, fixture.DaemonIsRootless));
+    }
+
     [Test]
     public async Task RealDaemon_WhenUnrestrictedIsRequested_TheContainerIsCreatedOnTheDefaultBridge()
     {
-        // Development Mode requests this: its `dotnet restore` needs the network until D6's package proxy exists, so
-        // while the provider served only `None` the switch could never be thrown. Egress itself is not asserted here —
-        // that would make the suite depend on this machine having working outbound DNS — but the applied network mode
-        // is read back off the daemon, which is the guarantee the provider makes.
+        // Development Mode still requests this — for its WARM RESTORE sandbox, the short-lived one that fills the
+        // package cache from the base commit before the agent-facing sandbox is created. After G1 the agent-facing
+        // sandbox asks for `None` (see the test above); this posture did not become dead, it moved. Egress itself is
+        // not asserted here — that would make the suite depend on this machine having working outbound DNS — but the
+        // applied network mode is read back off the daemon, which is the guarantee the provider makes.
         var options = await RequireDaemonAsync();
         await using var fixture = await ContainerFixture.CreateAsync(options, SandboxNetworkPolicy.Unrestricted);
 
