@@ -166,11 +166,25 @@ internal sealed class RecordingWorkSessionEventPublisher : IWorkSessionEventPubl
 /// <summary>Shared helpers for the work-session suites: host wiring, seeding, and the waits the loop needs.</summary>
 internal static class WorkSessionTestSupport
 {
+    /// <summary>
+    ///     The work-session host defaults, including the operator allow-list the suites' fixture models have to be in.
+    ///     <para>
+    ///         <c>AgentHome:ToolCapableModels</c> is a SECOND tool gate, independent of the capability probe: the offer
+    ///         applies it unconditionally, and a session whose model is missing from it is refused at create and at the
+    ///         step boundary. The fixture models are named here for the same reason an operator lists their own model in
+    ///         Node Settings — a test that seeded an unlisted model would be testing the refusal, not the path it means
+    ///         to exercise. The unlisted cases are deliberate and live in <c>WorkSessionServiceTests</c> (create and
+    ///         repoint) and <c>WorkSessionStepLoopTests</c> (the step guard).
+    ///     </para>
+    /// </summary>
     public static Dictionary<string, string?> Configuration(params (string Key, string Value)[] overrides)
     {
         var configuration = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
-            ["WorkSessions:Enabled"] = "true"
+            ["WorkSessions:Enabled"] = "true",
+            ["AgentHome:ToolCapableModels:0"] = "tool-capable-model",
+            ["AgentHome:ToolCapableModels:1"] = "a-cloud-model",
+            ["AgentHome:ToolCapableModels:2"] = "another-local-model"
         };
         foreach (var (key, value) in overrides)
         {
@@ -193,18 +207,29 @@ internal static class WorkSessionTestSupport
     /// <summary>
     ///     Creates a real conversation and a session row bound to it, bypassing the service's agent checks. The
     ///     conversation has to exist: the supervisor refuses to take a step for a session whose conversation is gone.
+    ///     <para>
+    ///         <paramref name="agentDefinitionId" /> defaults to an id no definition carries, which is also what makes
+    ///         the supervisor's tool-gate guard stand down — it judges only sessions whose agent it can still resolve.
+    ///         Pass a seeded definition to exercise that guard.
+    ///     </para>
     /// </summary>
     public static async Task<AgentWorkSessionSnapshot> SeedSessionAsync(IServiceProvider services,
         Guid sessionId,
         AgentWorkSessionKind kind = AgentWorkSessionKind.Research,
-        string objective = "Find out what the knowledge base says about the runtime.")
+        string objective = "Find out what the knowledge base says about the runtime.",
+        Guid? agentDefinitionId = null)
     {
         await using var scope = services.CreateAsyncScope();
         var conversation = await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>()
                                       .CreateConversationAsync(new NodeChatCreateConversationRequest("Seeded session", UserId: null, CreatedAtUtc: 0))
                                       .ConfigureAwait(false);
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
-        return await store.CreateAsync(new CreateWorkSessionCommand(sessionId, conversation.ConversationId, Guid.NewGuid(), kind, "Seeded session", objective))
+        return await store.CreateAsync(new CreateWorkSessionCommand(sessionId,
+                              conversation.ConversationId,
+                              agentDefinitionId ?? Guid.NewGuid(),
+                              kind,
+                              "Seeded session",
+                              objective))
                           .ConfigureAwait(false);
     }
 

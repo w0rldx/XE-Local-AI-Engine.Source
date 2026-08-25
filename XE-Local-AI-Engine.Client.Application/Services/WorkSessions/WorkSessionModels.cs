@@ -79,6 +79,17 @@ public sealed record WorkSessionCheckpointDto(
     string StateJson,
     long CreatedUtc);
 
+/// <param name="DetailJson">
+///     The event's payload, opaque to this layer and shaped by whatever wrote the row — a caller parses it only after
+///     matching on <paramref name="EventType" />, and must tolerate a shape it does not know.
+///     <para>
+///         Two shapes are defined today. <c>CompletionRequested</c> carries <c>{ "summary": string }</c>.
+///         <c>StepEnded</c> and <c>StepFailed</c> carry the step's content-free consumption record —
+///         <see cref="WorkSessionStepConsumptionDetail" />, i.e.
+///         <c>{ "providerCalls": int, "estimatedInputTokens": long, "toolCallsCompleted": int, "providerCallCap": int,
+///         "attachedBudgets": int }</c>. It is null on a step that made no provider round at all.
+///     </para>
+/// </param>
 public sealed record WorkSessionEventDto(
     Guid Id,
     long Sequence,
@@ -88,6 +99,48 @@ public sealed record WorkSessionEventDto(
     string? Outcome,
     long OccurredUtc,
     Guid? OperationId);
+
+/// <summary>
+///     What one step spent, recorded on its <c>StepEnded</c> / <c>StepFailed</c> row so the per-step provider-call cap
+///     can be sized from what steps actually consume rather than from a guess. Counts only — no prompts, model output,
+///     tool names, arguments or results — so it is safe to persist and to show.
+///     <para>
+///         Every member is a STEP TOTAL, which is why the provider's own reported token usage is not among them: the
+///         invocation runner assigns its <c>UsageSnapshot</c> per provider round rather than accumulating, so on a
+///         multi-round step it holds the LAST round's numbers and would silently contradict the totals beside it.
+///         Estimate-versus-truth is measured per round instead, where both halves describe the same request, by
+///         <c>ProviderCallBudgetChatClient</c>'s observed-usage write-back into the calibration store.
+///     </para>
+///     <para>
+///         <b><see cref="ProviderCalls" /> is a ratio against <see cref="ProviderCallCap" /> only while
+///         <see cref="AttachedBudgets" /> is 1.</b> The cap bounds each invocation separately, and a step that spawned
+///         sub-agents ran more than one — so eighteen calls across two budgets is two runs that each stayed under ten,
+///         not one run that breached it. Read the two together or the record argues for raising a cap nothing hit.
+///     </para>
+///     <para>
+///         The row is per STEP NUMBER, not per attempt. The supervisor derives its event operation id from the session
+///         and the step, so a step replayed after a crash finds the first attempt's row already recorded and the
+///         store's idempotency returns it unchanged — the numbers on the row are the ones the FIRST attempt spent,
+///         and the replay's own spend is not added to them and not recorded anywhere else. Aggregate these rows as a
+///         lower bound on what a session cost, not as an exact total.
+///     </para>
+/// </summary>
+/// <param name="ProviderCalls">Raw provider rounds the step admitted. Against <paramref name="ProviderCallCap" /> this is the number that matters.</param>
+/// <param name="EstimatedInputTokens">Estimated input tokens summed over those rounds, from the character profile rather than the provider.</param>
+/// <param name="ToolCallsCompleted">Tool invocations that returned during the step, successfully or not.</param>
+/// <param name="ProviderCallCap">
+///     The cap the step was seeded with (<c>WorkSessions:MaxProviderCallsPerStep</c>). It bounds each invocation, not
+///     their sum — see <paramref name="AttachedBudgets" /> before treating it as a denominator.
+/// </param>
+/// <param name="AttachedBudgets">
+///     How many invocations the step ran: 1 ordinarily, more when the turn spawned sub-agents, each with its own cap.
+/// </param>
+public sealed record WorkSessionStepConsumptionDetail(
+    int ProviderCalls,
+    long EstimatedInputTokens,
+    int ToolCallsCompleted,
+    int ProviderCallCap,
+    int AttachedBudgets);
 
 /// <summary>
 ///     An artifact's bytes as text. <see cref="IsBase64" /> is set for a media type the node cannot hand over as UTF-8,

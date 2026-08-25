@@ -8,7 +8,6 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
-using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     The work-session surface the REST layer sits on. Owns the rules that need more than one store to decide: which
@@ -32,27 +31,23 @@ internal sealed class WorkSessionService : IWorkSessionService
         "application/x-yaml"
     ];
 
-    private readonly IAgentDefinitionStore _agentDefinitionStore;
     private readonly IWorkSessionArtifactBlobStore _blobStore;
     private readonly IModelCapabilityResolver _capabilityResolver;
-    private readonly ILocalDefaultChatModelResolver _defaultModelResolver;
     private readonly KnowledgeBaseOptions _knowledgeOptions;
     private readonly ILogger<WorkSessionService> _logger;
-    private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly WorkSessionOptions _options;
     private readonly INodeChatPersistenceService _persistence;
     private readonly SecurityOptions _securityOptions;
     private readonly IAgentWorkSessionStore _store;
     private readonly IWorkSessionExecutionSupervisor _supervisor;
     private readonly TimeProvider _timeProvider;
+    private readonly WorkSessionToolGate _toolGate;
 
     public WorkSessionService(IAgentWorkSessionStore store,
         IWorkSessionArtifactBlobStore blobStore,
         INodeChatPersistenceService persistence,
-        IAgentDefinitionStore agentDefinitionStore,
+        WorkSessionToolGate toolGate,
         IModelCapabilityResolver capabilityResolver,
-        ILocalDefaultChatModelResolver defaultModelResolver,
-        INodeSettingsStore nodeSettingsStore,
         IWorkSessionExecutionSupervisor supervisor,
         IOptions<WorkSessionOptions> options,
         IOptions<SecurityOptions> securityOptions,
@@ -66,10 +61,8 @@ internal sealed class WorkSessionService : IWorkSessionService
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
         _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
-        _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
+        _toolGate = toolGate ?? throw new ArgumentNullException(nameof(toolGate));
         _capabilityResolver = capabilityResolver ?? throw new ArgumentNullException(nameof(capabilityResolver));
-        _defaultModelResolver = defaultModelResolver ?? throw new ArgumentNullException(nameof(defaultModelResolver));
-        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -412,37 +405,39 @@ internal sealed class WorkSessionService : IWorkSessionService
     ///     Resolves the agent and answers with the model the session would actually run on. A session bound to a model
     ///     that cannot call tools would burn its whole step budget writing nothing, so it is refused at the boundary
     ///     rather than discovered on step 25.
+    ///     <para>
+    ///         BOTH tool gates are checked, and their refusals are worded differently because their fixes are: a model
+    ///         whose template cannot call tools needs a different agent, while a model the operator has not listed needs
+    ///         one line in Node Settings. Checking only the capability probe is what made this silent — the offer
+    ///         applies the allow-list too, so create succeeded and every state-tool call then came back "Requested
+    ///         function … not found".
+    ///     </para>
     /// </summary>
     private async Task<string?> ResolveToolCapableAgentAsync(Guid agentDefinitionId, CancellationToken cancellationToken)
     {
-        var definition = await _agentDefinitionStore.GetByIdAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false)
-                         ?? throw new WorkSessionValidationException("That agent could not be found. It may have been deleted.");
+        var verdict = await _toolGate.InspectAsync(agentDefinitionId, cancellationToken).ConfigureAwait(false);
+        if (!verdict.AgentExists)
+        {
+            throw new WorkSessionValidationException("That agent could not be found. It may have been deleted.");
+        }
 
-        var effectiveModel = await ResolveEffectiveModelAsync(definition.ModelProfile, cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(effectiveModel))
+        if (verdict.EffectiveModel is null)
         {
             throw new WorkSessionValidationException("This node has no chat model a work session could run on. Install one, or pin a model on the agent.");
         }
 
-        var capabilities = await _capabilityResolver.ResolveAsync(effectiveModel, cancellationToken).ConfigureAwait(false);
-        if (!capabilities.SupportsTools)
+        if (verdict.SupportsTools is false)
         {
             throw new WorkSessionValidationException(
-                $"'{definition.Name}' runs on a model that cannot call tools, so it could never record a task or a finding. Pick an agent on a tool-capable model.");
+                $"'{verdict.AgentName}' runs on a model that cannot call tools, so it could never record a task or a finding. Pick an agent on a tool-capable model.");
         }
 
-        return effectiveModel;
-    }
-
-    private async Task<string?> ResolveEffectiveModelAsync(string? pinnedModel, CancellationToken cancellationToken)
-    {
-        if (!string.IsNullOrWhiteSpace(pinnedModel))
+        if (!verdict.IsAllowListed)
         {
-            return pinnedModel;
+            throw new WorkSessionValidationException(WorkSessionToolGate.AllowListRefusal(verdict.AgentName, verdict.EffectiveModel));
         }
 
-        var nodeSettings = await _nodeSettingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-        return await _defaultModelResolver.ResolveAsync(nodeSettings.DefaultModelName, cancellationToken).ConfigureAwait(false);
+        return verdict.EffectiveModel;
     }
 
     /// <summary>

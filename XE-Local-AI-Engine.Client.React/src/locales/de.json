@@ -4441,6 +4441,9 @@
 			"events": {
 				"empty": "In dieser Sitzung ist noch nichts passiert.",
 				"meta": "Schritt {{step}} · #{{sequence}}",
+				"consumption": "{{calls}}/{{cap}} Provider-Aufrufe · {{tools}} Tool-Aufrufe · ~{{tokens}} geschätzte Eingabe-Tokens",
+				"consumptionAcrossBudgets": "{{calls}} Provider-Aufrufe über {{budgets}} Budgets (Limit {{cap}} pro Budget) · {{tools}} Tool-Aufrufe · ~{{tokens}} geschätzte Eingabe-Tokens",
+				"tokensThousands": "{{value}}k",
 				"showDetail": "Details anzeigen",
 				"hideDetail": "Details ausblenden",
 				"loadMore": "Mehr laden",

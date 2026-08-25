@@ -87,8 +87,9 @@ public sealed class WorkSessionOptions
     ///     <para>
     ///         The node value is larger than <c>read_document</c>'s own 50,000-character cap, so nothing clips a
     ///         knowledge-base read today; several of them in one research step is what overran a 65,536-token window.
-    ///         The default of 16,000 (~4–5k tokens per result) leaves a step room for three or four reads. Tighten-only:
-    ///         a value above the node ceiling has no effect.
+    ///         The default of 8,000 (~2–2.5k tokens per result, at the ~3.4–3.6 chars/token this corpus actually runs)
+    ///         clips a full-size knowledge-base read to about a sixth of itself and leaves a step room for several of
+    ///         them. Tighten-only: a value above the node ceiling has no effect.
     ///     </para>
     /// </summary>
     [Range(0, 1_000_000)]
@@ -104,6 +105,13 @@ public sealed class WorkSessionOptions
     ///         overran a 65,536-token window on 2026-08-24, with each individual result already clipped. Neither the
     ///         step-boundary fold nor the per-result cap can reach that; only a cap on the iterations can. Hitting it
     ///         ends the step cleanly and the next one resumes from the state block, so the work continues.
+    ///     </para>
+    ///     <para>
+    ///         The default of 10 was a guess, and it is meant to be replaced by a measurement rather than by another
+    ///         one. Every step now records what it spent on its <c>StepEnded</c> / <c>StepFailed</c> row — see
+    ///         <see cref="WorkSessionStepConsumptionDetail" />, which carries the admitted call count against this cap,
+    ///         the tool calls, and the estimated input tokens — so size this from the distribution those rows show for
+    ///         the session kind in question.
     ///     </para>
     /// </summary>
     [Range(0, 10_000)]

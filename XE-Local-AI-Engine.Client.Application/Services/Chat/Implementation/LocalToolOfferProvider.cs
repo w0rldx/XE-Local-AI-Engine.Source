@@ -240,10 +240,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         ];
     }
 
-    /// <summary>
-    ///     Whether the migrated <c>AgentHome:ToolCapableModels</c> allow-list admits <paramref name="activeModelId" />,
-    ///     read LIVE from <see cref="INodeRuntimeSettings" /> on every offer. A null/unknown model id is never capable.
-    /// </summary>
+    /// <inheritdoc />
     /// <remarks>
     ///     <para>
     ///         This used to be a <c>HashSet</c> captured at DI composition, with the rationale "singleton + synchronous
@@ -266,7 +263,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     ///         per-call read of the MCP registry a few lines below.
     ///     </para>
     /// </remarks>
-    private bool IsToolCapable(string? activeModelId)
+    public bool IsToolCapable(string? activeModelId)
     {
         if (activeModelId is null)
         {

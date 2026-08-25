@@ -33,6 +33,22 @@ public interface ILocalToolOfferProvider
     IReadOnlyList<AllowedToolDto> GetOfferedTools(string? activeModelId, bool isCloudModel = false);
 
     /// <summary>
+    ///     Whether the node's operator-maintained tool-capable allow-list (the migrated
+    ///     <c>AgentHome:ToolCapableModels</c>, read LIVE per call) admits <paramref name="activeModelId" />. A
+    ///     null/unknown model id is never capable, and the match is <see cref="StringComparison.Ordinal" /> — a model
+    ///     differing only by case is not admitted.
+    ///     <para>
+    ///         This is the predicate every offer method above applies FIRST, and it is a statement about operator
+    ///         permission, not about the model: it is a different, freely disagreeing source from the template-detected
+    ///         capability an <c>IModelCapabilityResolver</c> reports. It is exposed so a caller that must REFUSE up
+    ///         front — rather than silently receive a thinner offer — can ask the same question the offer will ask,
+    ///         instead of re-implementing the allow-list read. Callers that only need the tools should keep using the
+    ///         offer methods.
+    ///     </para>
+    /// </summary>
+    bool IsToolCapable(string? activeModelId);
+
+    /// <summary>
     ///     The FULL offer for the given active model — the synchronous built-in + MCP offer
     ///     (<see cref="GetOfferedTools" />) PLUS the node's enabled, acknowledged user-defined CUSTOM tools. Custom tools
     ///     read from a DbContext-backed store, so this is asynchronous; the synchronous overload stays the built-in + MCP

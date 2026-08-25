@@ -2,9 +2,12 @@ namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using XE_Local_AI_Engine.AI.Agent.Configuration;
+using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -14,6 +17,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class WorkSessionStepLoopTests
 {
+    /// <summary>Web defaults, matching the camelCase convention the supervisor writes the consumption record in.</summary>
+    private static readonly JsonSerializerOptions ConsumptionJsonOptions = new(JsonSerializerDefaults.Web);
+
     [Test]
     public async Task Loop_WhenTheAgentCompletesTheSession_RunsItsStepsAndLandsCompleted()
     {
@@ -337,6 +343,221 @@ public sealed class WorkSessionStepLoopTests
         _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
 
         AssertEx.Equal(expected: 3, (await WorkSessionTestSupport.ReadFindingsAsync(factory.Services, sessionId).ConfigureAwait(false)).Count);
+    }
+
+    [Test]
+    public async Task Loop_WhenTheSessionsModelHasLeftTheToolCapableList_PausesTheStepInsteadOfSendingIt_AndResumeWorksOnceItIsBack()
+    {
+        // The allow-list is read LIVE on every offer, so an operator edit lands mid-run and the create-time refusal
+        // cannot cover it. Without this guard the step still goes out — with the four state tools missing from the
+        // offer — and the session spends its whole budget on "Requested function update_work_plan not found".
+        //
+        // PAUSED rather than Failed is the load-bearing half: the refusal tells the operator to list the model, and
+        // Resume accepts only Paused/Interrupted, so a Failed session could not be restarted after they did it. The
+        // second act of this test is exactly that round trip.
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            // One step per run, so the resumed run sends its turn and pauses on the budget instead of looping to 25.
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1")),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        var agentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId, agentDefinitionId: agentId).ConfigureAwait(false);
+        await SetAllowListAsync(factory.Services, "some-other-model").ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        var refused = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 0, refused.StepCount, "A step that never ran must not be charged to the budget.");
+        AssertEx.Empty(fake.Requests, "The turn must not be sent at all — a sent one would come back tool-less and look like a model failure.");
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        AssertEx.Contains(events,
+            entry => entry.EventType == WorkSessionEventTypes.StepEnded && entry.Outcome == "ToolGate",
+            "The row names the gate that stopped the step; a StepFailed row on a paused session would read as a contradiction.");
+        AssertEx.False(events.Any(entry => entry.EventType == WorkSessionEventTypes.StepFailed), "Nothing failed here.");
+        AssertEx.Contains(events,
+            entry => entry.EventType == "SessionStatusChanged"
+                     && entry.Outcome == nameof(AgentWorkSessionStatus.Paused)
+                     && entry.DetailJson?.Contains("tool-capable model list", StringComparison.Ordinal) == true,
+            "The reason has to name the list the operator must edit.");
+
+        // The operator does what the refusal asked, then presses Resume.
+        await SetAllowListAsync(factory.Services, "tool-capable-model").ConfigureAwait(false);
+        await ResumeWhenTheNodeCanAdmitAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var resumed = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, resumed.StepCount, "The resumed run takes the step the gate had stopped.");
+        AssertEx.Equal(expected: 1, fake.Requests.Count, "And this time the turn is actually sent.");
+        AssertEx.Contains(await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false),
+            entry => entry.EventType == WorkSessionEventTypes.StepStarted);
+    }
+
+    /// <summary>
+    ///     What an operator does in Node Settings: the stored allow-list replaces the seeded one outright, so the
+    ///     session's model is either on it or it is not.
+    /// </summary>
+    private static async Task SetAllowListAsync(IServiceProvider services, params string[] models)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<INodeSettingsStore>();
+        var stored = await store.LoadAsync().ConfigureAwait(false);
+        await store.SaveAsync(stored with
+            {
+                ToolCapableModels = models
+            })
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Resumes through the REST service, retrying the admission race. The settled run releases the node's one slot
+    ///     in its <c>finally</c>, which lands AFTER the status row it settled — so a resume issued the instant the test
+    ///     sees <c>Paused</c> can legitimately lose the race and be refused. That is real behaviour, not a defect, and
+    ///     an operator clicking Resume hits the same window; retrying is what makes the assertion about the GATE rather
+    ///     than about timing.
+    /// </summary>
+    private static async Task ResumeWhenTheNodeCanAdmitAsync(IServiceProvider services, Guid sessionId)
+    {
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(30);
+        while (true)
+        {
+            await using var scope = services.CreateAsyncScope();
+            try
+            {
+                _ = await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ResumeAsync(sessionId).ConfigureAwait(false);
+                return;
+            }
+            catch (WorkSessionInvalidTransitionException) when (DateTimeOffset.UtcNow < deadline)
+            {
+                await Task.Delay(25).ConfigureAwait(false);
+            }
+        }
+    }
+
+    [Test]
+    public async Task Loop_WhenAStepCompletes_RecordsWhatItSpentOnTheStepEndedRow()
+    {
+        // The measurement the per-step provider-call cap is meant to be sized from. It has to land on the ORDINARY
+        // step too: a record written only when the cap trips would always read "10/10" and would measure the bound
+        // rather than the work.
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1"), ("WorkSessions:MaxProviderCallsPerStep", "6")),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted], (_, _) => SpendProviderCallsAsync()));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var ended = AssertEx.NotNull(events.FirstOrDefault(entry => entry.EventType == WorkSessionEventTypes.StepEnded),
+            "Every step that ends without a fault records what it spent.");
+        AssertEx.Equal("Completed", ended.Outcome, "An ordinary step's outcome is not the name of a bound.");
+
+        var consumption = ReadConsumption(ended.DetailJson);
+        AssertEx.Equal(expected: 3, consumption.ProviderCalls);
+        AssertEx.Equal(expected: 4_500L, consumption.EstimatedInputTokens);
+        AssertEx.Equal(expected: 2, consumption.ToolCallsCompleted);
+        AssertEx.Equal(expected: 6, consumption.ProviderCallCap, "The cap the step was seeded with rides along, so the calls can be sized against it.");
+        AssertEx.Equal(expected: 1, consumption.AttachedBudgets, "One invocation ran, which is what makes the calls a ratio against the cap.");
+    }
+
+    [Test]
+    public async Task Loop_WhenAStepFails_RecordsWhatItSpentOnTheStepFailedRow()
+    {
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantFailed], (_, _) => SpendProviderCallsAsync()));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var failed = AssertEx.NotNull(events.FirstOrDefault(entry => entry.EventType == WorkSessionEventTypes.StepFailed));
+        var consumption = ReadConsumption(failed.DetailJson);
+        AssertEx.Equal(expected: 3, consumption.ProviderCalls, "A step that broke still spent what it spent, and that is the interesting part.");
+        AssertEx.Equal(expected: 2, consumption.ToolCallsCompleted);
+        AssertEx.Empty(events.Where(entry => entry.EventType == WorkSessionEventTypes.StepEnded).ToList(),
+            "A failed step records on its StepFailed row; it does not also claim to have ended cleanly.");
+    }
+
+    [Test]
+    public async Task Loop_WhenAStepMakesNoProviderRound_LeavesTheDetailEmpty()
+    {
+        // An empty record would read as "this step was free". Nothing ran under the cap scope, so the row says nothing.
+        var sessionId = Guid.NewGuid();
+        var publisher = new RecordingWorkSessionEventPublisher();
+        FakeNodeChatStreamService? stream = null;
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1")),
+            ConfigureAdditionalTestServices = WorkSessionTestSupport.WithFakes(
+                services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(), services, sessionId),
+                publisher)
+        };
+
+        _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var fake = ResolveStream(factory, ref stream);
+        fake.Enqueue(new StepScript([ChatStreamEventTypes.AssistantCompleted]));
+
+        AssertEx.True(factory.Services.GetRequiredService<IWorkSessionExecutionSupervisor>().TryStart(sessionId));
+        _ = await WorkSessionTestSupport.WaitForStatusAsync(factory.Services, sessionId, AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+
+        var events = await WorkSessionTestSupport.ReadEventsAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var ended = AssertEx.NotNull(events.FirstOrDefault(entry => entry.EventType == WorkSessionEventTypes.StepEnded));
+        AssertEx.Null(ended.DetailJson, "No budget was created under the step's cap scope, so there is nothing to report.");
+    }
+
+    private static WorkSessionStepConsumptionDetail ReadConsumption(string? detailJson)
+    {
+        var detail = AssertEx.NotNull(detailJson, "The step's terminal row carries its consumption record.");
+        return AssertEx.NotNull(JsonSerializer.Deserialize<WorkSessionStepConsumptionDetail>(detail, ConsumptionJsonOptions),
+            "The record is camelCase JSON, the same convention every other session payload uses.");
+    }
+
+    /// <summary>
+    ///     Stands in for the invocation the send path would have run: it seeds the runner's own budget scope inside the
+    ///     turn's async flow, exactly where the real runner seeds it, and registers rounds and tool calls against it.
+    ///     That the supervisor can read those counters afterwards is the whole point — its own
+    ///     <c>ProviderCallBudget.Current</c> is null again by then.
+    /// </summary>
+    private static Task SpendProviderCallsAsync()
+    {
+        using var scope = ProviderCallBudget.BeginScope(new ProviderCallBudgetOptions());
+        var budget = ProviderCallBudget.Current!;
+        budget.RegisterProviderRound(estimatedInputTokens: 1_000);
+        budget.RecordToolCallCompleted(TimeSpan.FromMilliseconds(5), resultBytes: 128, failed: false);
+        budget.RegisterProviderRound(estimatedInputTokens: 1_500);
+        budget.RecordToolCallCompleted(TimeSpan.FromMilliseconds(5), resultBytes: 128, failed: false);
+        budget.RegisterProviderRound(estimatedInputTokens: 2_000);
+        return Task.CompletedTask;
     }
 
     private static FakeNodeChatStreamService ResolveStream(TestServerWebAppFactory factory, ref FakeNodeChatStreamService? stream)

@@ -59,6 +59,11 @@ public sealed class HeuristicTokenEstimator : ITokenEstimator
         return _calibrationStore.ResolveDivisor(modelName);
     }
 
+    public double ResolveObservedCorrection(string? modelName)
+    {
+        return _calibrationStore.ResolveObservedCorrection(modelName);
+    }
+
     public int EstimateTokensWithDivisor(ChatMessage message, int charsPerToken)
     {
         ArgumentNullException.ThrowIfNull(message);
