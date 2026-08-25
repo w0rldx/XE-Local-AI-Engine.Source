@@ -56,6 +56,9 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, "not requested by this role");
         AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, SandboxWorkloads.AgentHome.Workload);
         AssertEx.False(summary.FilesystemIsolationUnavailableReason?.Contains(Reason, StringComparison.Ordinal) == true);
+
+        // Same rule on the ceilings axis: AgentHome asks for none, so that is what its "No" means.
+        AssertEx.Contains(summary.ResourceLimitsUnavailableReason, "not requested by this role");
     }
 
     /// <summary>
@@ -79,6 +82,7 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.True(summary.NetworkIsolation);
         AssertEx.True(summary.ResourceLimits);
         AssertEx.Null(summary.FilesystemIsolationUnavailableReason);
+        AssertEx.Null(summary.ResourceLimitsUnavailableReason);
     }
 
     /// <summary>
@@ -104,10 +108,15 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.Equal("process", summary.Backend);
         AssertEx.Equal("Confined", summary.Level);
 
-        // Egress and ceilings ARE served here, and stay Yes: ResolveAgentFacingNetworkPolicy requests
-        // SandboxNetworkPolicy.None wherever the flag is advertised, which is what this column reports.
+        // Egress IS served here and stays Yes: ResolveAgentFacingNetworkPolicy requests SandboxNetworkPolicy.None
+        // wherever the flag is advertised, which is what that column reports.
         AssertEx.True(summary.NetworkIsolation);
-        AssertEx.True(summary.ResourceLimits);
+
+        // Ceilings are NOT, on the same host that can impose them: DevelopmentWorkspaceProvider passes no
+        // SandboxCreateRequest.ResourceLimits on either sandbox it creates, so nothing bounds a repository's build.
+        AssertEx.False(summary.ResourceLimits);
+        AssertEx.Contains(summary.ResourceLimitsUnavailableReason, "not requested by this role");
+        AssertEx.Contains(summary.ResourceLimitsUnavailableReason, "bounded only by its timeout and the machine");
 
         AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, "not requested by this role");
         AssertEx.Contains(summary.FilesystemIsolationUnavailableReason,
@@ -182,8 +191,12 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.Equal(DockerSandboxRuntimeProvider.Name, summary.Provider);
         AssertEx.Equal("docker", summary.Backend);
         AssertEx.True(summary.NetworkIsolation);
-        AssertEx.True(summary.ResourceLimits);
         AssertEx.True(summary.ReadOnlyMounts);
+
+        // The container can impose ceilings and Development Mode asks for none, so this column is No there too — the
+        // served rule does not change when the backend gets stronger.
+        AssertEx.False(summary.ResourceLimits);
+        AssertEx.Contains(summary.ResourceLimitsUnavailableReason, "not requested by this role");
 
         // The container HAS the property, and the Development declaration still does not ask for it — so the served
         // posture is Confined with the not-requested reason, not Isolated. The role is what changed, not the backend:

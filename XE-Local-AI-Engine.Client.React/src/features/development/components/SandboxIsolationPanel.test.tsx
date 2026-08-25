@@ -81,10 +81,12 @@ describe("SandboxIsolationPanel", () => {
 				level: "Confined",
 				filesystemIsolation: false,
 				networkIsolation: true,
-				resourceLimits: true,
+				resourceLimits: false,
 				readOnlyMounts: true,
 				filesystemIsolationUnavailableReason:
-					"not requested by this role: 'AgentHome' declares an isolation floor of None, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
+					"not requested by this role: 'AgentHome' declares no filesystem boundary, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
+				resourceLimitsUnavailableReason:
+					"not requested by this role: 'AgentHome' declares no CPU, memory or process-count ceilings, so a runaway command is bounded only by its timeout and the machine",
 			},
 			{
 				role: "run_python",
@@ -103,10 +105,12 @@ describe("SandboxIsolationPanel", () => {
 				level: "Confined",
 				filesystemIsolation: false,
 				networkIsolation: true,
-				resourceLimits: true,
 				readOnlyMounts: true,
+				resourceLimits: false,
 				filesystemIsolationUnavailableReason:
-					"not requested by this role: 'DevelopmentMode (host toolchain)' declares an isolation floor of None, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
+					"not requested by this role: 'DevelopmentMode (host toolchain)' declares no filesystem boundary, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
+				resourceLimitsUnavailableReason:
+					"not requested by this role: 'DevelopmentMode (host toolchain)' declares no CPU, memory or process-count ceilings, so a runaway command is bounded only by its timeout and the machine",
 			},
 			{
 				role: "work-session",
@@ -118,7 +122,9 @@ describe("SandboxIsolationPanel", () => {
 				resourceLimits: false,
 				readOnlyMounts: false,
 				filesystemIsolationUnavailableReason:
-					"not requested by this role: 'WorkSession' declares an isolation floor of None, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
+					"not requested by this role: 'WorkSession' declares no filesystem boundary, so its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read",
+				resourceLimitsUnavailableReason:
+					"not requested by this role: 'WorkSession' declares no CPU, memory or process-count ceilings, so a runaway command is bounded only by its timeout and the machine",
 			},
 		]);
 
@@ -146,6 +152,15 @@ describe("SandboxIsolationPanel", () => {
 		// which kind of "No" it is.
 		expect(screen.queryByTestId("sandbox-isolation-reason-run_python")).toBeNull();
 		expect(screen.getByTestId("sandbox-isolation-reason-development").textContent).toContain("not requested by this role");
+
+		// The second axis the panel used to report as advertised rather than served: this host CAN impose ceilings, and
+		// Development Mode asks for none, so the column is No and the reason says which kind of No it is.
+		expect(screen.getByTestId("sandbox-isolation-limits-development").textContent).toBe("No");
+		expect(screen.getByTestId("sandbox-isolation-limits-reason-development").textContent).toContain(
+			"bounded only by its timeout and the machine",
+		);
+		expect(screen.getByTestId("sandbox-isolation-limits-run_python").textContent).toBe("Yes");
+		expect(screen.queryByTestId("sandbox-isolation-limits-reason-run_python")).toBeNull();
 	});
 
 	it("renders nothing rather than an empty table when the backend reported no roles", () => {

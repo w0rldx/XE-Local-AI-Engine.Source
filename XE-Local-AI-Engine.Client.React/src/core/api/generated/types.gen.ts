@@ -3148,6 +3148,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryRe
 	resourceLimits?: boolean;
 	readOnlyMounts?: boolean;
 	filesystemIsolationUnavailableReason?: string | null;
+	resourceLimitsUnavailableReason?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest = {

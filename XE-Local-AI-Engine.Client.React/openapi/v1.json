@@ -28176,6 +28176,10 @@
           "filesystemIsolationUnavailableReason": {
             "type": "string",
             "nullable": true
+          },
+          "resourceLimitsUnavailableReason": {
+            "type": "string",
+            "nullable": true
           }
         }
       },

@@ -35,6 +35,9 @@ public static class SandboxWorkloads
         Toolchain = SandboxToolchainSource.HostToolchain,
         IsolationFloor = SandboxIsolationMode.None,
         NetworkFloor = SandboxNetworkPolicy.Unrestricted,
+        // AgentHome passes no SandboxCreateRequest.ResourceLimits, so nothing bounds CPU, memory or process count for
+        // its runs beyond the command timeout and the machine.
+        RequestsResourceLimits = false,
         Persistence = SandboxPersistence.Disposable
     };
 
@@ -75,6 +78,10 @@ public static class SandboxWorkloads
         Toolchain = SandboxToolchainSource.HostToolchain,
         IsolationFloor = SandboxIsolationMode.Filesystem,
         NetworkFloor = SandboxNetworkPolicy.None,
+        // The one workload that asks. ComputeToolGateway.BuildCreateRequest passes Compute's configured CpuCount,
+        // MemoryMb and PidsLimit wherever the backend advertises SupportsResourceLimits — a script is arbitrary
+        // model-supplied code, so a runaway loop must cost a bounded amount of the machine.
+        RequestsResourceLimits = true,
         Persistence = SandboxPersistence.Disposable
     };
 
@@ -104,6 +111,11 @@ public static class SandboxWorkloads
         Toolchain = SandboxToolchainSource.HostToolchain,
         IsolationFloor = SandboxIsolationMode.None,
         NetworkFloor = SandboxNetworkPolicy.Unrestricted,
+        // DevelopmentWorkspaceProvider passes no ResourceLimits on either sandbox it creates, so a repository's own
+        // build, test or lint command is bounded only by its timeout and the machine. Stated here rather than left
+        // implicit because the isolation summary reports it, and an operator reading "Resource limits: Yes" off the
+        // host's capability would believe a ceiling exists. Changing this is an operator decision, not a mapping fix.
+        RequestsResourceLimits = false,
         Persistence = SandboxPersistence.PreservedTrustedHostWorkspace
     };
 

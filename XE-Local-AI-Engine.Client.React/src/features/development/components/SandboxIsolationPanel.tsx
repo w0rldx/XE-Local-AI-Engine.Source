@@ -23,9 +23,9 @@ interface SandboxIsolationPanelProps {
  * derives every value as that declaration intersected with the provider's advertised capabilities, so nothing here can
  * claim a boundary the launch path would not enforce OR one the role never requested.
  *
- * A "No" in the Filesystem column therefore has two meanings, and the reason line under the table is where they are
- * told apart: the role does not ask for a boundary (nothing to fix), or it asks and this host cannot serve one (the
- * measured probe reason).
+ * A "No" in the Filesystem or Resource-limits column therefore has two meanings, and the reason lines under the table
+ * are where they are told apart: the role does not ask (nothing to fix here — whether it should ask is an operator
+ * decision), or it asks and this host cannot serve it (the measured probe reason).
  *
  * Every value carries a test id, for the same reason the container-runtime panel's do: a test that only asserted the
  * table rendered would pass against a table full of the wrong answers, on the one surface where that matters most.
@@ -37,7 +37,25 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 		return null;
 	}
 
-	const reasons = roles.filter((role) => (role.filesystemIsolationUnavailableReason ?? "") !== "");
+	// One line per role PER AXIS. Two axes can be "No" for different reasons at once — Development Mode on this Linux
+	// box has neither a filesystem boundary nor a ceiling, and the two sentences are not interchangeable — so they are
+	// flattened rather than folded into one. The axis label reuses the column header key, so no new copy to translate.
+	const reasons = roles.flatMap((role) => [
+		{
+			key: `${role.role}-filesystem`,
+			testId: `sandbox-isolation-reason-${role.role}`,
+			label: t("pages.development.isolation.filesystem", "Filesystem"),
+			text: role.filesystemIsolationUnavailableReason ?? "",
+			role: role.role ?? "",
+		},
+		{
+			key: `${role.role}-limits`,
+			testId: `sandbox-isolation-limits-reason-${role.role}`,
+			label: t("pages.development.isolation.limits", "Resource limits"),
+			text: role.resourceLimitsUnavailableReason ?? "",
+			role: role.role ?? "",
+		},
+	]).filter((reason) => reason.text !== "");
 
 	return (
 		<SectionCard
@@ -99,9 +117,9 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 			 */}
 			{reasons.length === 0 ? null : (
 				<Stack gap="xs">
-					{reasons.map((role) => (
-						<Text key={role.role} size="xs" c="dimmed" data-testid={`sandbox-isolation-reason-${role.role}`}>
-							{`${role.role}: ${role.filesystemIsolationUnavailableReason}`}
+					{reasons.map((reason) => (
+						<Text key={reason.key} size="xs" c="dimmed" data-testid={reason.testId}>
+							{`${reason.role} · ${reason.label}: ${reason.text}`}
 						</Text>
 					))}
 				</Stack>

@@ -156,8 +156,15 @@ internal static class DevelopmentContractMapper
     ///         <item>
     ///             <term>Resource limits</term>
     ///             <description>
-    ///                 the provider advertises <see cref="SandboxProviderCapabilities.SupportsResourceLimits" />. No
-    ///                 role declares a ceiling axis, so there is nothing to intersect with.
+    ///                 the provider advertises <see cref="SandboxProviderCapabilities.SupportsResourceLimits" /> AND
+    ///                 the role's <see cref="SandboxRequirements.RequestsResourceLimits" /> is set. Intersected, unlike
+    ///                 Network, because ceilings are the opposite kind of axis:
+    ///                 <see cref="SandboxCreateRequest.ResourceLimits" /> is a PREFERENCE a backend may drop, and
+    ///                 <c>SandboxLifecycleRegistry.BuildLaunchPolicy</c> applies a scope ceiling only when the create
+    ///                 request carries one. <c>run_python</c> is the single create site that passes any
+    ///                 (<c>ComputeToolGateway.BuildCreateRequest</c>); AgentHome, Coder, work sessions and Development
+    ///                 Mode pass none, so on those roles the host's ability to impose a ceiling is a capability nothing
+    ///                 exercises.
     ///             </description>
     ///         </item>
     ///     </list>
@@ -173,10 +180,10 @@ internal static class DevelopmentContractMapper
     ///         served boundary on Linux.
     ///     </para>
     ///     <para>
-    ///         <see cref="SandboxIsolationSummaryResponse.FilesystemIsolationUnavailableReason" /> therefore carries
-    ///         two different sentences, and telling them apart is the operator's whole action: NOT REQUESTED by the
-    ///         role (nothing to fix — the workload declares no boundary) versus REQUESTED AND UNAVAILABLE (the measured
-    ///         probe reason — install the missing mechanism, or leave the tool off).
+    ///         Both reason strings therefore carry two different sentences, and telling them apart is the operator's
+    ///         whole action: NOT REQUESTED by the role (nothing to fix here — the workload declares no boundary and no
+    ///         ceiling; whether it should is an operator decision) versus REQUESTED AND UNAVAILABLE (the measured probe
+    ///         reason — install the missing mechanism, or leave the tool off).
     ///     </para>
     /// </summary>
     /// <param name="role">The wire role name, as the panel keys its rows on.</param>
@@ -202,11 +209,19 @@ internal static class DevelopmentContractMapper
         var boundaryAdvertised = capabilities.HasFlag(SandboxProviderCapabilities.SupportsHostFilesystemBoundary);
         var filesystem = boundaryRequested && boundaryAdvertised;
         var network = capabilities.HasFlag(SandboxProviderCapabilities.SupportsNetworkPolicy);
-        var limits = capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits);
+        var limitsAdvertised = capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits);
+        var limits = requirements.RequestsResourceLimits && limitsAdvertised;
         var enforced = (filesystem ? 1 : 0) + (network ? 1 : 0) + (limits ? 1 : 0);
         var boundaryReason = boundaryRequested
             ? ToFilesystemIsolationUnavailableReason(provider.ProviderName, containment)
-            : ToBoundaryNotRequestedReason(requirements);
+            : ToNotRequestedReason(requirements,
+                "filesystem boundary",
+                "its commands run in a working-directory jail on the host filesystem and can read whatever the account running the engine can read");
+        var limitsReason = requirements.RequestsResourceLimits
+            ? ToResourceLimitsUnavailableReason(provider.ProviderName, containment)
+            : ToNotRequestedReason(requirements,
+                "CPU, memory or process-count ceilings",
+                "a runaway command is bounded only by its timeout and the machine");
 
         return new SandboxIsolationSummaryResponse(role,
             provider.ProviderName,
@@ -221,18 +236,25 @@ internal static class DevelopmentContractMapper
             network,
             limits,
             capabilities.HasFlag(SandboxProviderCapabilities.SupportsReadOnlyMounts),
-            filesystem ? null : boundaryReason);
+            filesystem ? null : boundaryReason,
+            limits ? null : limitsReason);
     }
 
     // Derived from the declaration rather than written per role, so a workload added to SandboxWorkloads gets a true
-    // sentence without touching this file. Every role that declares SandboxIsolationMode.None gets the same one
-    // because that value has exactly one meaning — a working-directory jail on the host filesystem, readable wherever
-    // the engine's own user can read.
-    private static string ToBoundaryNotRequestedReason(SandboxRequirements requirements)
+    // sentence without touching this file.
+    private static string ToNotRequestedReason(SandboxRequirements requirements, string what, string consequence)
     {
-        return $"not requested by this role: '{requirements.Workload}' declares an isolation floor of "
-               + $"{requirements.IsolationFloor}, so its commands run in a working-directory jail on the host "
-               + "filesystem and can read whatever the account running the engine can read";
+        return $"not requested by this role: '{requirements.Workload}' declares no {what}, so {consequence}";
+    }
+
+    // Guarded on the provider for ToFilesystemIsolationUnavailableReason's reason: the containment probe measures the
+    // HOST's systemd-run chain, which is the process provider's ceiling mechanism and nobody else's.
+    private static string ToResourceLimitsUnavailableReason(string providerName, SandboxContainment containment)
+    {
+        return string.Equals(providerName, ProcessSandboxRuntimeProvider.Name, StringComparison.Ordinal)
+            ? containment.ResourceLimitsUnavailableReason
+              ?? "the supervised process sandbox did not advertise resource ceilings on this host"
+            : $"the '{providerName}' sandbox provider does not advertise resource ceilings";
     }
 
     private static string ToIsolationBackend(string providerName, bool filesystemIsolation)

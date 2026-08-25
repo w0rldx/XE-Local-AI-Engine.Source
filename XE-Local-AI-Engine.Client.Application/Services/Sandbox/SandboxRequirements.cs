@@ -67,6 +67,30 @@ public sealed record SandboxRequirements
     /// </summary>
     public required SandboxNetworkPolicy NetworkFloor { get; init; }
 
+    /// <summary>
+    ///     Whether this workload ASKS for CPU / memory / process-count ceilings on its create request.
+    ///     <para>
+    ///         Not a floor, and it constrains no candidate: <see cref="SandboxCreateRequest.ResourceLimits" /> is a
+    ///         preference a backend may drop, so a workload that wants ceilings is not refused by a backend that cannot
+    ///         impose them — it simply does not get them. That is why this is a plain declaration of intent rather than
+    ///         a sixth axis in <c>SandboxProviderSelector.FindUnmetAxis</c>.
+    ///     </para>
+    ///     <para>
+    ///         It exists because the operator-facing isolation summary reports the SERVED posture, and "the host can
+    ///         impose ceilings" and "this role is given ceilings" are different facts. Only <c>run_python</c> asks
+    ///         (<c>ComputeToolGateway.BuildCreateRequest</c>, itself capability-gated); AgentHome, Coder, work sessions
+    ///         and Development Mode pass no <see cref="SandboxCreateRequest.ResourceLimits" /> at all, so reading the
+    ///         provider's flag alone told an operator those roles were bounded when nothing bounds them.
+    ///         <c>SandboxSubstrateSelectionArchitectureTests</c> enumerates this, and each create site's own test
+    ///         asserts its request agrees with the constant, so the two cannot drift.
+    ///     </para>
+    ///     <para>
+    ///         Required, for <see cref="IsolationFloor" />'s reason: a defaulted value would let a new consumer say
+    ///         nothing and be reported as bounded — or unbounded — by accident.
+    ///     </para>
+    /// </summary>
+    public required bool RequestsResourceLimits { get; init; }
+
     /// <summary>Whether the workload's writes have to outlive the sandbox.</summary>
     public required SandboxPersistence Persistence { get; init; }
 

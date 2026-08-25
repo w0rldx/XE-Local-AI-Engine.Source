@@ -139,6 +139,30 @@ public sealed class SandboxSubstrateSelectionArchitectureTests
     }
 
     /// <summary>
+    ///     The same enumeration, for the axis the operator-facing isolation summary reports as SERVED. Ceilings are a
+    ///     PREFERENCE on the create request — a backend may drop them, and one that is never asked applies none — so
+    ///     "the host can impose ceilings" and "this role is given ceilings" are different facts, and only the second is
+    ///     worth reporting. Exactly one workload asks.
+    ///     <para>
+    ///         The other half of the guarantee is not here, because it cannot be: this file constructs no consumer. Each
+    ///         create site's own test asserts its <c>SandboxCreateRequest.ResourceLimits</c> agrees with its constant —
+    ///         <c>ComputeToolGatewayTests</c>, <c>DevelopmentWarmRestoreTests</c>, <c>AgentHomeServiceTests</c> — so a
+    ///         site that starts or stops asking without moving the declaration fails there.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public void OnlyRunPython_DeclaresThatItAsksForResourceCeilings()
+    {
+        var declaring = EnumerateDeclarations()
+                        .Where(static declaration => declaration.Requirements.RequestsResourceLimits)
+                        .Select(static declaration => declaration.Name)
+                        .ToArray();
+
+        AssertEx.Equal(1, declaring.Length, $"Expected exactly one declaration asking for ceilings; found: {string.Join(", ", declaring)}.");
+        AssertEx.Equal(nameof(SandboxWorkloads.RunPython), declaring[0]);
+    }
+
+    /// <summary>
     ///     The selector reads a backend's toolchain from its own code-owned ranking rather than from
     ///     <see cref="ISandboxRuntimeProvider.Capabilities" />, so that resolving a host-toolchain workload never has to
     ///     construct or probe a backend it is about to reject. That is two statements of one fact, so this asserts they

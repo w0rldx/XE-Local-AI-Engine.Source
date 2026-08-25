@@ -176,7 +176,11 @@ public sealed record DevelopmentCapabilityResponse(bool Enabled,
 ///     Whether egress can actually be denied. The capability alone, because every consumer requests
 ///     <c>SandboxNetworkPolicy.None</c> per call exactly where it is advertised, so the flag is the served posture.
 /// </param>
-/// <param name="ResourceLimits">Whether memory / PID / CPU ceilings can actually be imposed.</param>
+/// <param name="ResourceLimits">
+///     Whether memory / PID / CPU ceilings are actually imposed on THIS role — the host can impose them and the role
+///     asks for them. <c>SandboxCreateRequest.ResourceLimits</c> is a preference a backend may drop, and a role that
+///     passes none gets none however capable the host is, so the capability alone was never the served answer.
+/// </param>
 /// <param name="ReadOnlyMounts">Whether the provider can mount a tree read-only.</param>
 /// <param name="FilesystemIsolationUnavailableReason">
 ///     Why this role has no filesystem boundary, or null when it has one. Two different sentences, and telling them
@@ -184,6 +188,11 @@ public sealed record DevelopmentCapabilityResponse(bool Enabled,
 ///     floor of <c>None</c>), or it requests one and the host cannot serve it (the measured probe reason — install the
 ///     missing mechanism, or leave the tool off). Null is never "we do not know": a role without the boundary always
 ///     carries a reason.
+/// </param>
+/// <param name="ResourceLimitsUnavailableReason">
+///     Why this role has no CPU / memory / process-count ceiling, or null when it has one. The same two sentences as
+///     the filesystem reason, and the same operator action behind them: the role does not REQUEST ceilings (whether it
+///     should is an operator decision, not a bug), or it requests them and the host cannot impose them.
 /// </param>
 public sealed record SandboxIsolationSummaryResponse(
     string Role,
@@ -194,7 +203,8 @@ public sealed record SandboxIsolationSummaryResponse(
     bool NetworkIsolation,
     bool ResourceLimits,
     bool ReadOnlyMounts,
-    string? FilesystemIsolationUnavailableReason);
+    string? FilesystemIsolationUnavailableReason,
+    string? ResourceLimitsUnavailableReason);
 
 /// <summary>
 ///     The container-runtime preflight, as the operator sees it.

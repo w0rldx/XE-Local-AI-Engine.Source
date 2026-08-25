@@ -443,8 +443,10 @@ G1 the agent-facing sandbox asks for egress denial wherever the backend advertis
 unrestricted only where it does not — see
 [Development Mode egress](#development-mode-egress-two-sandboxes-one-of-them-denied) for the two-sandbox design and
 the capability gate. **No CPU, memory or process-count ceiling is requested for these commands at all**
-(`DevelopmentWorkspaceProvider` passes no `ResourceLimits`), so the host's ability to impose one — which the
-isolation panel's Resource-limits column reports — is a capability that this workload does not exercise. The Process
+(`DevelopmentWorkspaceProvider` passes no `ResourceLimits` on either sandbox it creates, and
+`SandboxWorkloads.DevelopmentModeHostToolchain.RequestsResourceLimits` states that), so the host's ability to impose
+one is a capability this workload does not exercise — which is why the isolation panel's Resource-limits column reads
+**No** for this role on a host that could impose ceilings. `run_python` is the only workload that asks. The Process
 sandbox and Agent Home are application-level path, byte, environment, and lifecycle controls; neither is an OS
 security boundary. Do not describe the selected folder as a kernel-enforced filesystem allow-list.
 
@@ -586,7 +588,12 @@ its declaration asks for one, and Development Mode's does not: on this repositor
 is the single role whose Filesystem column can read Yes. A panel that read the capability alone claimed a boundary for
 Development Mode on any Linux host with a working bubblewrap chain, which was false in the unsafe direction;
 `DevelopmentContractMapper.ToIsolationSummary` owns the intersection rule and the two different "no boundary" reasons
-(not requested by the role, versus requested and unavailable with the measured probe reason).
+(not requested by the role, versus requested and unavailable with the measured probe reason). The Resource-limits
+column follows the same rule for the same reason: `SandboxCreateRequest.ResourceLimits` is a preference a backend may
+drop, `SandboxLifecycleRegistry.BuildLaunchPolicy` applies a scope ceiling only when the request carries one, and
+`SandboxRequirements.RequestsResourceLimits` is where each workload states whether it asks —
+`SandboxSubstrateSelectionArchitectureTests` asserts exactly one does, and each create site's own test asserts its
+request agrees with its constant.
 
 Two consequences a security reader should hold on to.
 

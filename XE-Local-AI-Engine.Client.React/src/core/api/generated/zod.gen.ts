@@ -3756,6 +3756,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummary
 	resourceLimits: z.boolean().optional(),
 	readOnlyMounts: z.boolean().optional(),
 	filesystemIsolationUnavailableReason: z.string().nullish(),
+	resourceLimitsUnavailableReason: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = z.object({
