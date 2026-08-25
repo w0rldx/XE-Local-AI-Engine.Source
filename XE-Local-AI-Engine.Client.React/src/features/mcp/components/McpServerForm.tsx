@@ -8,8 +8,11 @@ import {
 	type McpEnvEntry,
 	type McpServerFormValues,
 	type McpTransportKind,
+	type McpTrustTier,
+	maskedEnvValue,
 	mcpServerFormSchema,
 	mcpTransportKinds,
+	selectableMcpTrustTiers,
 } from "@/features/mcp/models/McpServerModels";
 
 // Imperative handle so the host dialog can place Save in its sticky footer (outside the form body) yet still
@@ -36,6 +39,13 @@ interface McpServerFormProps {
 // array index (the index would change on remove and lose input focus / component state). The id never leaves
 // the form — env is projected back to plain key/value McpEnvEntry on submit and for schema validation.
 interface McpEnvRow extends McpEnvEntry {
+	/**
+	 * This row arrived carrying the mask, i.e. it is an EXISTING variable whose stored value the API never
+	 * returns. Its box renders empty with an "unchanged" placeholder rather than showing the sentinel, and an
+	 * empty box submits the sentinel back — so clearing the field keeps the stored value instead of blanking it.
+	 * Deleting a variable stays the explicit remove button.
+	 */
+	readonly masked: boolean;
 	id: string;
 }
 
@@ -47,11 +57,18 @@ function nextEnvRowId(): string {
 }
 
 function toEnvRows(entries: readonly McpEnvEntry[]): McpEnvRow[] {
-	return entries.map((entry) => ({ id: nextEnvRowId(), key: entry.key, value: entry.value }));
+	return entries.map((entry) => ({
+		id: nextEnvRowId(),
+		key: entry.key,
+		value: entry.value,
+		masked: entry.value === maskedEnvValue,
+	}));
 }
 
 function toEnvEntries(rows: readonly McpEnvRow[]): McpEnvEntry[] {
-	return rows.map((row) => ({ key: row.key, value: row.value }));
+	// An emptied masked row goes back as the sentinel: the operator cleared the box, which means "leave it alone",
+	// not "store an empty string" and not "delete it".
+	return rows.map((row) => ({ key: row.key, value: row.masked && row.value === "" ? maskedEnvValue : row.value }));
 }
 
 // Flatten the Zod issue path (e.g. ["env", 2, "key"]) to a stable string key so transport-conditional and
@@ -132,6 +149,15 @@ export function McpServerForm({
 		[t],
 	);
 
+	const trustTierData = useMemo(
+		() =>
+			selectableMcpTrustTiers.map((tier) => ({
+				value: tier,
+				label: t(`pages.mcp.form.trustTier.options.${tier}`, tier),
+			})),
+		[t],
+	);
+
 	const isStdio = values.transportKind === "Stdio";
 
 	const handleTransportChange = useCallback(
@@ -140,6 +166,16 @@ export function McpServerForm({
 				return;
 			}
 			updateValues((current) => ({ ...current, transportKind: value as McpTransportKind }));
+		},
+		[updateValues],
+	);
+
+	const handleTrustTierChange = useCallback(
+		(value: string | null) => {
+			if (value === null) {
+				return;
+			}
+			updateValues((current) => ({ ...current, trustTier: value as McpTrustTier }));
 		},
 		[updateValues],
 	);
@@ -167,7 +203,7 @@ export function McpServerForm({
 	);
 
 	const handleAddEnv = useCallback(() => {
-		updateEnvRows((current) => [...current, { id: nextEnvRowId(), key: "", value: "" }]);
+		updateEnvRows((current) => [...current, { id: nextEnvRowId(), key: "", value: "", masked: false }]);
 	}, [updateEnvRows]);
 
 	const handleRemoveEnv = useCallback(
@@ -272,6 +308,26 @@ export function McpServerForm({
 						}}
 						data-testid="mcp-form-working-directory"
 					/>
+					<Select
+						label={t("pages.mcp.form.trustTier.label", "Trust")}
+						description={t(
+							"pages.mcp.form.trustTier.description",
+							"Sandboxed runs the server with no host filesystem and no network. Privileged host runs it as a normal process on this machine — only for a server that genuinely needs it.",
+						)}
+						data={trustTierData}
+						value={values.trustTier}
+						allowDeselect={false}
+						onChange={handleTrustTierChange}
+						data-testid="mcp-form-trust-tier"
+					/>
+					{values.trustTier === "PrivilegedHost" ? (
+						<Alert color="yellow" variant="light" data-testid="mcp-form-trust-tier-warning">
+							{t(
+								"pages.mcp.form.trustTier.privilegedWarning",
+								"This server will run outside the sandbox, with the same access to your files and network as the engine itself.",
+							)}
+						</Alert>
+					) : null}
 					<McpEnvEditor
 						rows={envRows}
 						errors={errors}
@@ -367,8 +423,12 @@ function McpEnvEditor({ rows, errors, onKeyChange, onValueChange, onAdd, onRemov
 						data-testid={`mcp-form-env-key-${index}`}
 					/>
 					<TextInput
-						placeholder={t("pages.mcp.form.env.valuePlaceholder", "value")}
-						value={row.value}
+						placeholder={
+							row.masked
+								? t("pages.mcp.form.env.maskedPlaceholder", "unchanged — enter a new value to replace")
+								: t("pages.mcp.form.env.valuePlaceholder", "value")
+						}
+						value={row.value === maskedEnvValue ? "" : row.value}
 						onChange={(event) => onValueChange(row.id, event.currentTarget.value)}
 						style={{ flex: 1 }}
 						data-testid={`mcp-form-env-value-${index}`}

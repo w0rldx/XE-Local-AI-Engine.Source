@@ -514,7 +514,7 @@ dotnet_diagnostic.S4487.severity = suggestion
 # already-made repo decision — NOT to make the build pass:
 # MA0048: file name must match type name — repo intentionally groups related contracts/DTOs per file.
 dotnet_diagnostic.MA0048.severity = none
-# MA0051: method too long — already governed by SonarAnalyzer S138 and the repo <100-line standard.
+# MA0051: method too long — already governed by Analyzer S138 and the repo <100-line standard.
 dotnet_diagnostic.MA0051.severity = none
 # MA0006: string.Equals vs ==/!= — == / != on strings is idiomatic C#; ordinal intent is covered by MA0002.
 dotnet_diagnostic.MA0006.severity = none

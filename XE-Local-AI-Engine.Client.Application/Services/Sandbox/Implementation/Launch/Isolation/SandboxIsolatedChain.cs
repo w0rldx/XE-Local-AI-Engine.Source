@@ -196,7 +196,7 @@ internal static class SandboxIsolatedChain
         }
 
         return !ReservedMountPoints.Any(reserved => string.Equals(trimmed, reserved, StringComparison.Ordinal)
-                                                   || trimmed.StartsWith(reserved + "/", StringComparison.Ordinal));
+                                                    || trimmed.StartsWith(reserved + "/", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -208,7 +208,10 @@ internal static class SandboxIsolatedChain
         ArgumentException.ThrowIfNullOrWhiteSpace(executable);
         ArgumentNullException.ThrowIfNull(arguments);
 
-        var chain = new List<string> { inputs.SetsidPath };
+        var chain = new List<string>
+        {
+            inputs.SetsidPath
+        };
 
         AppendScope(chain, inputs);
         AppendNamespaces(chain, inputs);

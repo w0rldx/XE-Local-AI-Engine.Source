@@ -2,6 +2,8 @@ namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -11,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Compaction;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -31,8 +34,7 @@ public sealed class WorkSessionStepContextBoundTests
         {
             AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1"),
                 ("WorkSessions:StepContextBudgetTokens", "200")),
-            ConfigureAdditionalTestServices = WithFakes(services => stream = new FakeNodeChatStreamService(
-                    services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
+            ConfigureAdditionalTestServices = WithFakes(services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
                     services,
                     sessionId),
                 publisher,
@@ -66,8 +68,7 @@ public sealed class WorkSessionStepContextBoundTests
         {
             AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1"),
                 ("WorkSessions:StepContextBudgetTokens", "100000")),
-            ConfigureAdditionalTestServices = WithFakes(services => stream = new FakeNodeChatStreamService(
-                    services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
+            ConfigureAdditionalTestServices = WithFakes(services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
                     services,
                     sessionId),
                 publisher,
@@ -102,8 +103,7 @@ public sealed class WorkSessionStepContextBoundTests
         {
             AdditionalConfiguration = WorkSessionTestSupport.Configuration(("WorkSessions:MaxStepsPerRun", "1"),
                 ("WorkSessions:StepContextBudgetTokens", "200")),
-            ConfigureAdditionalTestServices = WithFakes(services => stream = new FakeNodeChatStreamService(
-                    services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
+            ConfigureAdditionalTestServices = WithFakes(services => stream = new FakeNodeChatStreamService(services.GetRequiredService<INodeChatStreamCancellationRegistry>(),
                     services,
                     sessionId),
                 publisher,
@@ -261,14 +261,17 @@ public sealed class WorkSessionStepContextBoundTests
 
         var whole = WorkSessionStepContextBound.Project(Conversation(messages), estimator);
         var covered = WorkSessionStepContextBound.Project(Conversation(messages, "SYNOPSIS", coversToSequence: 1), estimator);
-        var withoutReasoning = WorkSessionStepContextBound.Project(
-            Conversation([messages[0], Message(sequence: 1, "assistant", new string('b', 400)), messages[2]]),
+        var withoutReasoning = WorkSessionStepContextBound.Project(Conversation([messages[0], Message(sequence: 1, "assistant", new string('b', 400)), messages[2]]),
             estimator);
 
         AssertEx.True(whole > 1_800, $"~8,800 characters of history should project well past 1,800 tokens, projected {whole}.");
         AssertEx.True(covered < whole / 2, $"A synopsis covering the first two messages should more than halve the projection, {covered} vs {whole}.");
+        // Counted deliberately, and conservatively. Verified against Microsoft.Extensions.AI.OpenAI 10.9.0: a historical
+        // TextReasoningContent is DROPPED by the Chat Completions content-part conversion, so a llama.cpp step never
+        // actually carries it — but the Responses API (Codex) replays it and must, and over-counting the former is a
+        // bound that fires early where under-counting the latter is the overflow this exists to prevent.
         AssertEx.True(whole - withoutReasoning > 800,
-            $"Replayed reasoning is real input and must be counted; dropping 4,000 characters of it changed the projection by {whole - withoutReasoning}.");
+            $"Replayed reasoning is real input on a Responses-API provider and must be counted; dropping 4,000 characters of it changed the projection by {whole - withoutReasoning}.");
     }
 
     [Test]
@@ -288,6 +291,175 @@ public sealed class WorkSessionStepContextBoundTests
 
         AssertEx.Equal(withoutStreaming, withStreaming, "The send path drops non-completed messages, so the projection must too.");
     }
+
+    [Test]
+    public void Project_UsesTheCalibratedDivisorOfTheModelTheSessionIsRunningOn()
+    {
+        // The projection used to estimate with NO model name, so it always divided by the uncalibrated four while the
+        // two context budgeters it is supposed to agree with were already dividing by the model's measured divisor. The
+        // bound then fired against arithmetic nothing else in the turn used.
+        var store = new TokenEstimatorCalibrationStore();
+        store.SetDivisor(SessionModel, charsPerToken: 2);
+        var estimator = new HeuristicTokenEstimator(store);
+
+        var calibrated = WorkSessionStepContextBound.Project(Conversation(TranscriptOn(SessionModel)), estimator);
+        var uncalibrated = WorkSessionStepContextBound.Project(Conversation(TranscriptOn("a-model-nothing-was-measured-for")), estimator);
+
+        AssertEx.True(calibrated > uncalibrated,
+            $"A model measured at two characters per token must project more tokens for the same transcript than the chars/4 default; {calibrated} vs {uncalibrated}.");
+    }
+
+    [Test]
+    public void Project_WithAnExplicitModelName_PrefersItOverTheTranscript()
+    {
+        var store = new TokenEstimatorCalibrationStore();
+        store.SetDivisor(SessionModel, charsPerToken: 2);
+        var estimator = new HeuristicTokenEstimator(store);
+        var transcript = Conversation(TranscriptOn("a-model-nothing-was-measured-for"));
+
+        var explicitly = WorkSessionStepContextBound.Project(transcript, estimator, SessionModel);
+        var derived = WorkSessionStepContextBound.Project(transcript, estimator);
+
+        AssertEx.True(explicitly > derived,
+            $"An explicitly supplied model must win over the one derived from the transcript; {explicitly} vs {derived}.");
+    }
+
+    [Test]
+    public void Project_WhenNothingHasAnsweredYet_FallsBackToTheUncalibratedDefault()
+    {
+        var store = new TokenEstimatorCalibrationStore();
+        store.SetDivisor(SessionModel, charsPerToken: 2);
+        var estimator = new HeuristicTokenEstimator(store);
+
+        // A first step has no assistant message to read a model off, and must not throw or guess one.
+        var firstStep = WorkSessionStepContextBound.Project(Conversation([Message(sequence: 0, "user", new string('a', 4_000))]), estimator);
+        var plain = WorkSessionStepContextBound.Project(Conversation([Message(sequence: 0, "user", new string('a', 4_000))]), new HeuristicTokenEstimator());
+
+        AssertEx.Equal(plain, firstStep);
+    }
+
+    [Test]
+    public async Task ApplyAsync_WhenTheModelIsObservedToCostMoreThanEstimated_FoldsEarlier()
+    {
+        // The projection already estimates under the model's calibrated divisor. If the BUDGET it is compared against
+        // stays uncalibrated, the two sides are in different arithmetic and the bound folds late on exactly the models
+        // calibration exists to protect. Same transcript, same configured budget - only the correction differs.
+        var store = new TokenEstimatorCalibrationStore();
+        store.RecordObservedUsage(SessionModel, estimatedTokens: 10_000, observedInputTokens: 20_000);
+        var correction = store.ResolveObservedCorrection(SessionModel);
+        AssertEx.True(correction > 1.0, $"The fixture needs an above-neutral correction to mean anything; measured {correction}.");
+
+        var conversation = Conversation(TranscriptOn(SessionModel));
+        var projected = WorkSessionStepContextBound.Project(conversation, new HeuristicTokenEstimator(store), SessionModel);
+
+        // A budget that the projection fits under uncalibrated, but not once the correction tightens it.
+        var budget = projected + 1;
+        AssertEx.True(TokenEstimatorCalibrationStore.ApplyObservedCorrection(budget, correction) < projected,
+            "The fixture's budget must straddle the correction, or the pair below proves nothing.");
+
+        var calibrated = await RunBoundAsync(conversation, budget, store).ConfigureAwait(false);
+        var neutral = await RunBoundAsync(conversation, budget, new TokenEstimatorCalibrationStore()).ConfigureAwait(false);
+
+        AssertEx.NotEmpty(calibrated.Calls, "An over-budget projection under the model's observed correction must fold.");
+        AssertEx.Empty(neutral.Calls, "The same transcript and budget must NOT fold when nothing has been observed for the model.");
+    }
+
+    [Test]
+    public async Task ApplyAsync_WithNoObservedCorrection_ComparesAgainstTheConfiguredBudgetUnchanged()
+    {
+        // The byte-identical guarantee for the flat budget: no safety factor is applied here, so an uncalibrated
+        // session compares against exactly the number the operator configured.
+        var conversation = Conversation(TranscriptOn(SessionModel));
+        var store = new TokenEstimatorCalibrationStore();
+        var projected = WorkSessionStepContextBound.Project(conversation, new HeuristicTokenEstimator(store), SessionModel);
+
+        var atBudget = await RunBoundAsync(conversation, projected, store).ConfigureAwait(false);
+        var overBudget = await RunBoundAsync(conversation, projected - 1, store).ConfigureAwait(false);
+
+        AssertEx.Empty(atBudget.Calls, "A projection exactly at the budget is not over it.");
+        AssertEx.NotEmpty(overBudget.Calls, "A projection one token over the budget must fold.");
+    }
+
+    [Test]
+    public async Task ApplyAsync_WithASuppliedModel_CalibratesUnderItRatherThanTheTranscriptModel()
+    {
+        // The supervisor knows which model the UPCOMING step runs on; the transcript only knows the last one. A paused
+        // session repointed to another agent (or an unpinned agent whose node default moved) runs the next step
+        // elsewhere, and calibrating against the previous model folds late - the overflow this bound exists to stop.
+        var store = new TokenEstimatorCalibrationStore();
+        store.RecordObservedUsage(UpcomingModel, estimatedTokens: 10_000, observedInputTokens: 20_000);
+        var correction = store.ResolveObservedCorrection(UpcomingModel);
+        AssertEx.True(correction > 1.0, $"The fixture needs an above-neutral correction to mean anything; measured {correction}.");
+        AssertEx.Equal(1.0, store.ResolveObservedCorrection(SessionModel), "The transcript's model must stay uncalibrated, or the pair below proves nothing.");
+
+        var conversation = Conversation(TranscriptOn(SessionModel));
+        var projected = WorkSessionStepContextBound.Project(conversation, new HeuristicTokenEstimator(store), UpcomingModel);
+        var budget = projected + 1;
+        AssertEx.True(TokenEstimatorCalibrationStore.ApplyObservedCorrection(budget, correction) < projected,
+            "The fixture's budget must straddle the upcoming model's correction.");
+
+        var supplied = await RunBoundAsync(conversation, budget, store, UpcomingModel).ConfigureAwait(false);
+        var transcriptDerived = await RunBoundAsync(conversation, budget, store).ConfigureAwait(false);
+
+        AssertEx.NotEmpty(supplied.Calls, "The supplied model's observed correction must be the one the budget is tightened by.");
+        AssertEx.Empty(transcriptDerived.Calls, "With no supplied model the uncalibrated transcript model applies, and the same budget is not exceeded.");
+    }
+
+    [Test]
+    public async Task ApplyAsync_WithNoSuppliedModel_FallsBackToTheTranscriptModel()
+    {
+        // The fallback still has to work: the agent definition can be gone, or the gate read can have failed, and the
+        // transcript's model is then the best answer available.
+        var store = new TokenEstimatorCalibrationStore();
+        store.SetDivisor(SessionModel, charsPerToken: 2);
+        var estimator = new HeuristicTokenEstimator(store);
+        var conversation = Conversation(TranscriptOn(SessionModel));
+
+        var calibrated = WorkSessionStepContextBound.Project(conversation, estimator, SessionModel);
+        var uncalibrated = WorkSessionStepContextBound.Project(conversation, estimator, UpcomingModel);
+        AssertEx.True(calibrated > uncalibrated, $"The fixture needs the two models to project differently; {calibrated} vs {uncalibrated}.");
+
+        // A budget the uncalibrated projection sits exactly at - so only the transcript model's divisor exceeds it.
+        var fallback = await RunBoundAsync(conversation, uncalibrated, store).ConfigureAwait(false);
+        var supplied = await RunBoundAsync(conversation, uncalibrated, store, UpcomingModel).ConfigureAwait(false);
+
+        AssertEx.NotEmpty(fallback.Calls, "A null supplied model must estimate under the transcript's model, whose divisor puts the projection over the budget.");
+        AssertEx.Empty(supplied.Calls, "Supplying the upcoming model must override the transcript's, leaving the projection at the budget rather than over it.");
+    }
+
+    /// <summary>Drives ApplyAsync against one conversation and returns the compaction service it talked to.</summary>
+    private static async Task<RecordingCompactionService> RunBoundAsync(NodeChatConversationDto conversation,
+        int budgetTokens,
+        TokenEstimatorCalibrationStore store,
+        string? effectiveModel = null)
+    {
+        var persistence = Substitute.For<INodeChatPersistenceService>();
+        _ = persistence.GetConversationForTurnAsync(conversation.ConversationId, Arg.Any<CancellationToken>())
+                       .Returns(Task.FromResult<NodeChatConversationDto?>(conversation));
+        var compaction = new RecordingCompactionService();
+
+        var sut = new WorkSessionStepContextBound(persistence,
+            compaction,
+            new HeuristicTokenEstimator(store),
+            NullLogger<WorkSessionStepContextBound>.Instance);
+        await sut.ApplyAsync(conversation.ConversationId, budgetTokens, effectiveModel).ConfigureAwait(false);
+        return compaction;
+    }
+
+    private const string SessionModel = "qwen3.8-27b:Q4_K_M";
+
+    /// <summary>The model a repoint (or a moved node default) puts the NEXT step on - not the one the transcript ran on.</summary>
+    private const string UpcomingModel = "gemma-3-12b:Q5_K_M";
+
+    /// <summary>A completed two-message transcript whose assistant turn ran on <paramref name="model" />.</summary>
+    private static List<NodeChatPersistedMessageDto> TranscriptOn(string model) =>
+    [
+        Message(sequence: 0, "user", new string('a', 4_000)),
+        Message(sequence: 1, "assistant", new string('b', 4_000)) with
+        {
+            Model = model
+        }
+    ];
 
     private static Action<IServiceCollection> WithFakes(Func<IServiceProvider, INodeChatStreamService> streamFactory,
         RecordingWorkSessionEventPublisher publisher,
@@ -315,18 +487,18 @@ public sealed class WorkSessionStepContextBoundTests
             var messageId = Guid.NewGuid();
             var requestId = Guid.NewGuid();
             _ = await persistence.PersistUserMessageAsync(new NodeChatPersistUserMessageRequest(conversationId,
-                        Guid.NewGuid(),
-                        new string('u', contentChars),
-                        CreatedAtUtc: turn))
-                .ConfigureAwait(false);
+                                     Guid.NewGuid(),
+                                     new string('u', contentChars),
+                                     CreatedAtUtc: turn))
+                                 .ConfigureAwait(false);
             _ = await persistence.CreateAssistantPlaceholderAsync(new NodeChatCreateAssistantPlaceholderRequest(conversationId, messageId, requestId, CreatedAtUtc: turn))
                                  .ConfigureAwait(false);
             _ = await persistence.TerminalizeAssistantMessageAsync(new NodeChatTerminalizeMessageRequest(new NodeChatMessageCorrelation(conversationId, messageId, requestId),
-                        NodeChatMessageStatusValues.Completed,
-                        UpdatedAtUtc: turn,
-                        new string('a', contentChars),
-                        new string('r', contentChars)))
-                .ConfigureAwait(false);
+                                     NodeChatMessageStatusValues.Completed,
+                                     UpdatedAtUtc: turn,
+                                     new string('a', contentChars),
+                                     new string('r', contentChars)))
+                                 .ConfigureAwait(false);
         }
     }
 
@@ -336,21 +508,21 @@ public sealed class WorkSessionStepContextBoundTests
         await using var scope = services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         _ = await store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
-                    WorkSessionVersions.Any,
-                    Guid.NewGuid(),
-                    AgentWorkSessionTaskOrigin.Agent,
-                    [
-                        new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Title: "Read the runtime wiki", Status: AgentWorkSessionTaskStatus.Active),
-                        new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Title: "Still open after folding", Status: AgentWorkSessionTaskStatus.Planned)
-                    ]))
-            .ConfigureAwait(false);
+                           WorkSessionVersions.Any,
+                           Guid.NewGuid(),
+                           AgentWorkSessionTaskOrigin.Agent,
+                           [
+                               new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Title: "Read the runtime wiki", Status: AgentWorkSessionTaskStatus.Active),
+                               new WorkPlanTaskChange(Guid.NewGuid(), WorkPlanTaskOperation.Add, Title: "Still open after folding", Status: AgentWorkSessionTaskStatus.Planned)
+                           ]))
+                       .ConfigureAwait(false);
         _ = await store.AppendFindingAsync(new AppendWorkSessionFindingCommand(sessionId,
-                    Guid.NewGuid(),
-                    WorkSessionVersions.Any,
-                    Guid.NewGuid(),
-                    AgentWorkSessionFindingKind.Finding,
-                    "llama.cpp is the default runtime"))
-            .ConfigureAwait(false);
+                           Guid.NewGuid(),
+                           WorkSessionVersions.Any,
+                           Guid.NewGuid(),
+                           AgentWorkSessionFindingKind.Finding,
+                           "llama.cpp is the default runtime"))
+                       .ConfigureAwait(false);
     }
 
     private static NodeChatConversationDto Conversation(IReadOnlyList<NodeChatPersistedMessageDto> messages, string? summary = null, int? coversToSequence = null) =>

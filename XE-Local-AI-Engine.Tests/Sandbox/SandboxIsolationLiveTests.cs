@@ -364,7 +364,12 @@ public sealed class SandboxIsolationLiveTests
             Isolation = SandboxIsolationMode.Filesystem,
             ReadOnlyTrees = readOnlyTrees,
             ThreadLimit = 1,
-            ResourceLimits = new SandboxResourceLimits { MemoryMb = 1024, PidsLimit = 64, CpuCount = 2 }
+            ResourceLimits = new SandboxResourceLimits
+            {
+                MemoryMb = 1024,
+                PidsLimit = 64,
+                CpuCount = 2
+            }
         });
     }
 

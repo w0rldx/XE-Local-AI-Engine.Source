@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -158,6 +159,8 @@ public sealed class SandboxProviderSelectionTests
         // Constructing the Docker provider only captures its dependencies — it contacts no daemon until a sandbox is
         // created — so selection can be pinned on a box with no Docker installed at all.
         services.AddSingleton(Substitute.For<IDockerRuntimeClientFactory>());
+        // The container provider derives its install id from this; hashing a path touches no disk.
+        services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(Path.Combine(Path.GetTempPath(), "xe-selection-tests")));
         // Registered as concrete types, exactly as the real module does, because that is what makes two roles naming
         // the same provider resolve to one instance.
         services.AddSingleton<FakeSandboxRuntimeProvider>();

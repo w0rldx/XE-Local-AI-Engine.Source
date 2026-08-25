@@ -3,8 +3,12 @@ namespace XE_Local_AI_Engine.Tests.Mcp;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
+using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
+using XE_Local_AI_Engine.Client.Services.Sandbox;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -123,7 +127,13 @@ public sealed class McpClientFactoryLoopbackTests
             ConnectTimeoutSeconds = 30,
             HttpLoopbackHosts = ["127.0.0.1", "localhost", "::1"]
         });
-        return new McpClientFactory(options, NullLoggerFactory.Instance);
+        return new McpClientFactory(options,
+            new FakeSandboxRuntimeProvider(TimeProvider.System),
+            new StubIdentityProvider(),
+            new FakeNodeDataDirectory(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".xe-node-data-fixture")),
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
+            NullLoggerFactory.Instance);
     }
 
     private static McpServerRecord StdioRecord(Dictionary<string, string> environment)
@@ -137,6 +147,7 @@ public sealed class McpClientFactoryLoopbackTests
             WorkingDirectory: null,
             environment,
             Url: null,
+            McpTrustTier.PrivilegedHost,
             Enabled: true,
             Version: 1,
             CreatedAtUtc: 0,
@@ -154,9 +165,23 @@ public sealed class McpClientFactoryLoopbackTests
             WorkingDirectory: null,
             new Dictionary<string, string>(),
             url,
+            McpTrustTier.Sandboxed,
             Enabled: true,
             Version: 1,
             CreatedAtUtc: 0,
             UpdatedAtUtc: 0);
+    }
+
+    /// <summary>
+    ///     A hand-written stub rather than a substitute: <c>IAgentHomeIdentityProvider</c> is internal to the
+    ///     application assembly, and Castle's dynamic proxy cannot subclass an internal interface from an assembly that
+    ///     is not strong-named and does not expose itself to <c>DynamicProxyGenAssembly2</c>.
+    /// </summary>
+    private sealed class StubIdentityProvider : IAgentHomeIdentityProvider
+    {
+        public Task<AgentHomeOwnerIdentity> GetAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new AgentHomeOwnerIdentity("owner", "node"));
+        }
     }
 }

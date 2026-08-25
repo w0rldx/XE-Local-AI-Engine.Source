@@ -112,14 +112,29 @@ describe("DevelopmentConsentGate", () => {
 
 	// The two providers put the operator in materially different positions. Describing the process provider with the
 	// container sentence would understate the exposure on the exact screen that exists to state it.
-	it("states the process provider's host-user, unrestricted-network and Linux-only-limits posture", () => {
+	it("states the process provider's host-user posture and the conditional egress denial G1 actually delivers", () => {
 		renderGate("process");
 
 		const terms = screen.getByTestId("development-consent-terms").textContent ?? "";
 		expect(terms).toContain("signed-in user account that runs the engine");
-		expect(terms).toContain("nothing restricts what they can reach");
-		expect(terms).toContain("enforced on Linux only");
-		expect(terms).toContain("On Windows there are none");
+
+		// The pre-G1 sentence is gone, and its replacement must not swing to the opposite over-claim: the denial is
+		// conditional on the backend advertising confinement, and Windows is still named as the case where it is not.
+		expect(terms).not.toContain("nothing restricts what they can reach");
+		expect(terms).toContain("wherever this node can enforce it");
+		expect(terms).toContain("Windows");
+		expect(terms).toContain("reach the network unrestricted");
+
+		// The one sandbox that keeps egress by design, stated rather than left as a surprise.
+		expect(terms).toContain("dependency restore");
+
+		// Ceilings ARE requested now (host-toolchain profile), so the notice has to say both halves: what is enforced
+		// where the node can, and that Windows still gets none.
+		expect(terms).toContain("ceilings are requested for these commands wherever this node can enforce them");
+		expect(terms).toContain("bounded only by its timeout and the machine");
+		expect(terms).not.toContain("enforced on Linux only");
+		expect(terms).not.toContain("No CPU, memory or process-count ceiling is requested");
+
 		expect(terms).not.toContain("read-only root filesystem");
 	});
 
@@ -129,19 +144,20 @@ describe("DevelopmentConsentGate", () => {
 		const terms = screen.getByTestId("development-consent-terms").textContent ?? "";
 		expect(terms).toContain("read-only root filesystem");
 		expect(terms).not.toContain("signed-in user account that runs the engine");
-		expect(terms).not.toContain("enforced on Linux only");
+		expect(terms).not.toContain("bounded only by its timeout and the machine");
 	});
 
-	// The container branch used to REPLACE the whole process branch, which took the egress disclosure with it — so the
-	// one provider an operator would assume is network-confined was the only one that never said otherwise. It is not:
-	// DevelopmentWorkspaceProvider requests SandboxNetworkPolicy.Unrestricted on every provider and Docker maps that to
-	// the default bridge, i.e. NAT egress. Containment and egress are separate facts and the notice states both.
-	it("discloses outbound network access under the container provider too", () => {
+	// Containment and egress are separate facts and the notice states both — that is why the container branch carries
+	// its own egress sentence rather than inheriting the process branch's. What the sentence SAYS inverted at G1: the
+	// container backend advertises SupportsNetworkPolicy, so ResolveAgentFacingNetworkPolicy asks for None and gets it,
+	// and the pre-G1 "nothing restricts what it can reach" is now false in the alarming direction.
+	it("states the container provider's egress denial and still names the one sandbox that keeps the network", () => {
 		renderGate("docker");
 
 		const terms = screen.getByTestId("development-consent-terms").textContent ?? "";
-		expect(terms).toContain("outbound network access");
-		expect(terms).toContain("nothing restricts what it can reach");
+		expect(terms).toContain("Egress is denied");
+		expect(terms).not.toContain("nothing restricts what it can reach");
+		expect(terms).toContain("dependency restore");
 		// Containment is not weakened to make room for it — both sentences are present.
 		expect(terms).toContain("all capabilities dropped");
 	});

@@ -181,7 +181,7 @@ Reachable history contains roughly 1,490 commits using a personal mailbox domain
 
 ### S2. Remove private operational disclosures and obsolete infrastructure references
 
-Current tracked text says some material is internal/not open sourced (`.gitignore:454-458`) and documents absent private validator/evaluation layouts (`docs/agent-knowledge.md:51,114-118,190`; `docs/wiki/13-testing-and-validation.md:108`; `docs/wiki/16-code-conventions.md:208-210`). Retired private tester repository names, URLs, collaborator/download flows, and obsolete source URLs remain in `docs/velopack-release-install-guide.md:128-139`, `publish/README.md:8-21,37,68-69,128-132`, and `publish/package-tester-win.ps1:456-457`.
+Current tracked text says some material is internal/not open sourced (`.gitignore:454-458`) and documents absent private validator/evaluation layouts ([The `.opencode/` agent eval foundation](../agent-knowledge.md#the-opencode-agent-eval-foundation); `docs/wiki/13-testing-and-validation.md:108`; `docs/wiki/16-code-conventions.md:208-210`). Retired private tester repository names, URLs, collaborator/download flows, and obsolete source URLs remain in `docs/velopack-release-install-guide.md:128-139`, `publish/README.md:8-21,37,68-69,128-132`, and `publish/package-tester-win.ps1:456-457`.
 
 A deleted historical `opencode.jsonc` remains reachable. Exact object/commit locators belong in the restricted remediation manifest, not this public-intended report. No common secret signature was found in it, but private workflow disclosure and stale maintainer instructions should be reviewed alongside B1's history rewrite. **Strongly recommended.**
 

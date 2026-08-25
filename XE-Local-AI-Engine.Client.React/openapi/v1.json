@@ -24654,6 +24654,7 @@
           "transportKind",
           "arguments",
           "env",
+          "trustTier",
           "enabled",
           "version",
           "createdAtUtc",
@@ -24698,6 +24699,9 @@
             "type": "string",
             "nullable": true
           },
+          "trustTier": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpTrustTier"
+          },
           "enabled": {
             "type": "boolean"
           },
@@ -24723,6 +24727,20 @@
         "enum": [
           "Stdio",
           "Http"
+        ]
+      },
+      "XE_Local_AI_EngineClientPersistenceMcpTrustTier": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Sandboxed",
+          "PrivilegedHost",
+          "BuiltInTrusted"
+        ],
+        "enum": [
+          "Sandboxed",
+          "PrivilegedHost",
+          "BuiltInTrusted"
         ]
       },
       "XE_Local_AI_EngineClientEndpointsMcpV1CreateMcpServerRequest": {
@@ -24765,6 +24783,9 @@
           "url": {
             "type": "string",
             "nullable": true
+          },
+          "trustTier": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpTrustTier"
           }
         }
       },
@@ -25037,6 +25058,9 @@
           "url": {
             "type": "string",
             "nullable": true
+          },
+          "trustTier": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceMcpTrustTier"
           }
         }
       },
@@ -28074,6 +28098,12 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse"
               }
             ]
+          },
+          "isolation": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse"
+            }
           }
         }
       },
@@ -28135,6 +28165,47 @@
           "confirmedAtUtc": {
             "type": "string",
             "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "backend": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "filesystemIsolation": {
+            "type": "boolean"
+          },
+          "networkIsolation": {
+            "type": "boolean"
+          },
+          "networkIsolationRequired": {
+            "type": "boolean"
+          },
+          "resourceLimits": {
+            "type": "boolean"
+          },
+          "readOnlyMounts": {
+            "type": "boolean"
+          },
+          "filesystemIsolationUnavailableReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "resourceLimitsUnavailableReason": {
+            "type": "string",
             "nullable": true
           }
         }

@@ -32,10 +32,20 @@ public sealed class ComputeToolGatewayTests
         var provider = new RecordingSandboxProvider(Contained | SandboxProviderCapabilities.SupportsResourceLimits);
         var gateway = CreateGateway(provider);
 
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         var create = AssertEx.NotNull(provider.CreateRequest);
         AssertEx.Equal(ComputeToolGateway.RuntimeProfile, create.RuntimeProfile);
+
+        // Asserted against the DECLARATION rather than a literal, so this create site and SandboxWorkloads.RunPython
+        // cannot drift apart: run_python is the ONE workload that asks for ceilings, and the operator-facing isolation
+        // summary reports declaration-AND-capability as its "Resource limits" column. This provider advertises the
+        // capability, so the request must carry them; the sibling tests using `Contained` alone do not, and the
+        // gateway's own capability gate is what makes those null.
+        AssertEx.Equal(SandboxWorkloads.RunPython.RequestsResourceLimits, create.ResourceLimits is not null);
         // The attach key carries the profile plus this invocation's id (see the concurrency test below); the profile
         // PREFIX is what keeps the jail keyed apart from AgentHome's.
         AssertEx.True(create.AttachKey.RuntimeProfile.StartsWith(ComputeToolGateway.RuntimeProfile, StringComparison.Ordinal),
@@ -60,9 +70,15 @@ public sealed class ComputeToolGatewayTests
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
 
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
         var firstJail = AssertEx.NotNull(provider.LastJailRoot);
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(2)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(2)"
+        });
         var secondJail = AssertEx.NotNull(provider.LastJailRoot);
 
         AssertEx.Equal(expected: 2, provider.KilledSandboxIds.Count, "each call must terminate the jail it ran in");
@@ -86,7 +102,10 @@ public sealed class ComputeToolGatewayTests
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
 
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         var jailRoot = AssertEx.NotNull(provider.LastJailRoot);
         var environment = AssertEx.NotNull(provider.CommandRequests[0].Environment);
@@ -116,9 +135,15 @@ public sealed class ComputeToolGatewayTests
         // apart in exactly the situation the pinning exists to prevent — and the caller environment is emitted LAST,
         // so this side would silently win.
         var provider = new RecordingSandboxProvider(Contained);
-        var gateway = CreateGateway(provider, new ComputeOptions { ThreadLimit = 3 });
+        var gateway = CreateGateway(provider, new ComputeOptions
+        {
+            ThreadLimit = 3
+        });
 
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         var environment = AssertEx.NotNull(provider.CommandRequests[0].Environment);
         foreach (var name in SandboxIsolatedChain.ThreadCountVariableNames)
@@ -138,7 +163,10 @@ public sealed class ComputeToolGatewayTests
         var provider = new RecordingSandboxProvider(Contained, namesAJailRoot: false);
         var gateway = CreateGateway(provider);
 
-        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         AssertEx.Contains(rendered, "run_python rejected");
         AssertEx.Empty(provider.CommandRequests, "a jail with no nameable root must not run the script anyway");
@@ -154,8 +182,14 @@ public sealed class ComputeToolGatewayTests
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
 
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(2)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(2)"
+        });
 
         AssertEx.Equal(expected: 2, provider.CreateRequests.Count);
         AssertEx.NotEqual(provider.CreateRequests[0].AttachKey, provider.CreateRequests[1].AttachKey,
@@ -175,7 +209,10 @@ public sealed class ComputeToolGatewayTests
         };
         var gateway = CreateGateway(provider);
 
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "raise SystemExit(1)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "raise SystemExit(1)"
+        });
 
         AssertEx.Equal(expected: 1, provider.KilledSandboxIds.Count);
     }
@@ -191,7 +228,10 @@ public sealed class ComputeToolGatewayTests
             PidsLimit = 32
         });
 
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         var create = AssertEx.NotNull(provider.CreateRequest);
         AssertEx.Equal(SandboxNetworkPolicy.None, create.NetworkPolicy);
@@ -208,9 +248,15 @@ public sealed class ComputeToolGatewayTests
         // is the wrong number for this jail. The request may only TIGHTEN it, so no capability gate is needed: a
         // provider that ignores the field is exactly as bounded as it was before.
         var provider = new RecordingSandboxProvider(Contained);
-        var gateway = CreateGateway(provider, new ComputeOptions { MaxJailDiskBytes = 8L * 1024 * 1024 });
+        var gateway = CreateGateway(provider, new ComputeOptions
+        {
+            MaxJailDiskBytes = 8L * 1024 * 1024
+        });
 
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         var create = AssertEx.NotNull(provider.CreateRequest);
         AssertEx.Equal(expected: 8L * 1024 * 1024, create.MaxJailDiskBytes!.Value);
@@ -222,7 +268,10 @@ public sealed class ComputeToolGatewayTests
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
 
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         var create = AssertEx.NotNull(provider.CreateRequest);
         AssertEx.Equal(new ComputeOptions().MaxJailDiskBytes, create.MaxJailDiskBytes!.Value);
@@ -242,7 +291,10 @@ public sealed class ComputeToolGatewayTests
         var identity = new StubIdentityProvider();
         var gateway = CreateGateway(provider, environment: environment, identityProvider: identity);
 
-        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         AssertEx.Contains(rendered, "run_python rejected");
         AssertEx.Contains(rendered, "isolate");
@@ -263,7 +315,10 @@ public sealed class ComputeToolGatewayTests
         var gateway = CreateGateway(provider,
             environment: new StubEnvironment("/provisioned/venv/bin/python", ["/provisioned/venv", "/provisioned/pythons"]));
 
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         var create = AssertEx.NotNull(provider.CreateRequest);
         AssertEx.Equal(SandboxIsolationMode.Filesystem, create.Isolation);
@@ -284,7 +339,10 @@ public sealed class ComputeToolGatewayTests
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
 
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         var threadLimit = AssertEx.NotNull(provider.CreateRequest).ThreadLimit!.Value;
         AssertEx.Equal(Math.Min(val1: 4, Environment.ProcessorCount), threadLimit);
@@ -299,7 +357,10 @@ public sealed class ComputeToolGatewayTests
         var provider = new RecordingSandboxProvider(Contained);
         var gateway = CreateGateway(provider);
 
-        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        _ = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         var create = AssertEx.NotNull(provider.CreateRequest);
         AssertEx.Equal(SandboxNetworkPolicy.None, create.NetworkPolicy);
@@ -315,7 +376,10 @@ public sealed class ComputeToolGatewayTests
         };
         var gateway = CreateGateway(provider);
 
-        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         AssertEx.Contains(rendered, "exit_code: 1");
         AssertEx.Contains(rendered, "stdout:\n4\n");
@@ -336,9 +400,15 @@ public sealed class ComputeToolGatewayTests
                 Completed = false
             }
         };
-        var gateway = CreateGateway(provider, new ComputeOptions { TimeoutSeconds = 7 });
+        var gateway = CreateGateway(provider, new ComputeOptions
+        {
+            TimeoutSeconds = 7
+        });
 
-        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "while True: pass" });
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "while True: pass"
+        });
 
         AssertEx.Contains(rendered, "did not finish within 7s");
         AssertEx.Contains(rendered, "terminated");
@@ -351,9 +421,15 @@ public sealed class ComputeToolGatewayTests
         {
             Result = Completed(exitCode: 0, standardOutput: new string('a', 500), standardError: string.Empty)
         };
-        var gateway = CreateGateway(provider, new ComputeOptions { MaxOutputBytes = 100 });
+        var gateway = CreateGateway(provider, new ComputeOptions
+        {
+            MaxOutputBytes = 100
+        });
 
-        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print('a' * 500)" });
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print('a' * 500)"
+        });
 
         AssertEx.Contains(rendered, "…[output truncated]");
         AssertEx.False(rendered.Contains(new string('a', 200), StringComparison.Ordinal),
@@ -375,7 +451,10 @@ public sealed class ComputeToolGatewayTests
         };
         var gateway = CreateGateway(provider);
 
-        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         AssertEx.Contains(rendered, "…[output truncated]");
     }
@@ -387,7 +466,10 @@ public sealed class ComputeToolGatewayTests
         var gateway = CreateGateway(provider,
             environment: new StubEnvironment(new ComputeEnvironmentException("The Python compute tool is available on Linux only.")));
 
-        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         AssertEx.Contains(rendered, "Linux only");
         AssertEx.Null(provider.CreateRequest, "a failed provision must not create a jail");
@@ -402,7 +484,10 @@ public sealed class ComputeToolGatewayTests
         await cancellationTokenSource.CancelAsync();
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() =>
-            gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" }, cancellationTokenSource.Token));
+            gateway.ExecuteAsync(new ComputeRunToolRequest
+            {
+                Code = "print(1)"
+            }, cancellationTokenSource.Token));
     }
 
     private static SandboxCommandResult Completed(int exitCode, string standardOutput, string standardError)
@@ -426,6 +511,7 @@ public sealed class ComputeToolGatewayTests
             identityProvider ?? new StubIdentityProvider(),
             environment ?? new StubEnvironment("/provisioned/python"),
             Options.Create(options ?? new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             NullLogger<ComputeToolGateway>.Instance);
     }
 
@@ -557,7 +643,10 @@ public sealed class ComputeToolGatewayTests
         {
             CommandRequest = request;
             CommandRequests.Add(request);
-            return Task.FromResult(Result with { ExecutionId = request.ExecutionId });
+            return Task.FromResult(Result with
+            {
+                ExecutionId = request.ExecutionId
+            });
         }
 
         public Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default)

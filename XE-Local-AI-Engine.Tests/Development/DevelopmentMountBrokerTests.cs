@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Development;
 using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
@@ -139,7 +140,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         var options = Options.Create(OptionsValue());
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System);
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         if (sandbox is MappingSandboxRuntimeProvider mapping)
         {

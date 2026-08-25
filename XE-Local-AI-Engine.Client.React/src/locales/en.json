@@ -311,10 +311,10 @@
 				"title": "Before you use Development Mode",
 				"intro": "Development Mode lets a model change files in a managed worktree and runs your repository's own build, test and lint commands on this machine. Read this once before you start.",
 				"container": "On this node those commands run inside a container: read-only root filesystem, all capabilities dropped, no host namespaces, and only the managed worktree and runtime directories mounted.",
-				"containerNetwork": "The network is not part of that containment. The container has outbound network access, and nothing restricts what it can reach — dependency restore needs it.",
+				"containerNetwork": "Egress is denied for the sandbox the agent works in: the container provider can enforce it. Only the engine's own dependency restore, run against your base commit before the agent starts, is given the network.",
 				"processUser": "On this node those commands run as the signed-in user account that runs the engine — with that account's access to your files, not just the repository.",
-				"processNetwork": "They have network access, and nothing restricts what they can reach.",
-				"processLimits": "CPU, memory and process-count limits are enforced on Linux only. On Windows there are none, so a runaway command is bounded only by the machine.",
+				"processNetwork": "Egress is denied for the sandbox the agent works in wherever this node can enforce it — Linux with a working sandbox network probe, or a container provider. Where it cannot, such as Windows, those commands reach the network unrestricted. Only the engine's own dependency restore, run against your base commit before the agent starts, is given the network. The Sandbox isolation panel reports which posture this node served.",
+				"processLimits": "CPU, memory and process-count ceilings are requested for these commands wherever this node can enforce them (the isolation panel shows whether it does): all logical cores, 75% of memory with a 4 GB floor, and 4096 processes by default, and an operator can override them. Where the host cannot impose them — Windows — no ceiling applies and a runaway command is bounded only by its timeout and the machine.",
 				"trust": "Register only repositories you trust. Repository code executes either way.",
 				"disclosureNote": "This notice is a disclosure, not a protection. Acknowledging it is recorded in this browser only and changes nothing about what a Development run is allowed to do.",
 				"checkbox": "I understand what Development Mode executes on this machine.",
@@ -413,6 +413,28 @@
 				"viewerLabel": "{{kind}} artifact",
 				"view": "View",
 				"hide": "Hide"
+			},
+			"isolation": {
+				"title": "Sandbox isolation",
+				"intro": "Measured on this host, per sandbox role. A role only claims a boundary its provider advertises and the launch path enforces.",
+				"caption": "Isolation posture of each sandbox role on this node.",
+				"role": "Role",
+				"provider": "Provider",
+				"backend": "Backend",
+				"level": "Level",
+				"filesystem": "Filesystem",
+				"network": "Network",
+				"limits": "Resource limits",
+				"readOnlyMounts": "Read-only mounts",
+				"yes": "Yes",
+				"no": "No",
+				"egressRequired": "required",
+				"egressWhereAvailable": "where available",
+				"levels": {
+					"isolated": "Isolated",
+					"confined": "Confined",
+					"none": "None"
+				}
 			}
 		},
 		"knowledgeBase": {
@@ -2700,10 +2722,12 @@
 					"name": "Name",
 					"transport": "Transport",
 					"target": "Target",
+					"trust": "Trust",
 					"enabled": "Enabled",
 					"version": "Version",
 					"actions": "Actions"
 				},
+				"trustNotApplicable": "n/a",
 				"title": "Registered servers"
 			},
 			"editor": {
@@ -2728,6 +2752,16 @@
 						"Http": "HTTP"
 					}
 				},
+				"trustTier": {
+					"label": "Trust",
+					"description": "Sandboxed runs the server with no host filesystem and no network. Privileged host runs it as a normal process on this machine — only for a server that genuinely needs it.",
+					"privilegedWarning": "This server will run outside the sandbox, with the same access to your files and network as the engine itself.",
+					"options": {
+						"Sandboxed": "Sandboxed",
+						"PrivilegedHost": "Privileged host",
+						"BuiltInTrusted": "Built-in"
+					}
+				},
 				"command": {
 					"label": "Command",
 					"placeholder": "/usr/bin/my-mcp-server"
@@ -2747,6 +2781,7 @@
 					"empty": "No environment variables.",
 					"keyPlaceholder": "KEY",
 					"valuePlaceholder": "value",
+					"maskedPlaceholder": "unchanged — enter a new value to replace",
 					"remove": "Remove variable"
 				},
 				"url": {
@@ -4432,6 +4467,9 @@
 			"events": {
 				"empty": "Nothing has happened in this session yet.",
 				"meta": "step {{step}} · #{{sequence}}",
+				"consumption": "{{calls}}/{{cap}} provider calls · {{tools}} tool calls · ~{{tokens}} est. input tokens",
+				"consumptionAcrossBudgets": "{{calls}} provider calls across {{budgets}} budgets (cap {{cap}} each) · {{tools}} tool calls · ~{{tokens}} est. input tokens",
+				"tokensThousands": "{{value}}k",
 				"showDetail": "Show detail",
 				"hideDetail": "Hide detail",
 				"loadMore": "Load more",

@@ -2,7 +2,7 @@
   <!--
     Standalone build-time dev tool. Intentionally NOT held to the product analyzer/CPM
     rules: MSBuild's nearest-wins Directory.Build.props discovery stops here, so the strict
-    repo-root props (TreatWarningsAsErrors, AnalysisMode=All, SonarAnalyzer, CPM) do NOT apply.
+    repo-root props (TreatWarningsAsErrors, AnalysisMode=All, CPM) do NOT apply.
     This tool is excluded from the product solution (XE-Local-AI-Engine.slnx) and the runtime
     graph; it exists only to regenerate Templates/agent-templates.seed.json from vendored .md.
   -->

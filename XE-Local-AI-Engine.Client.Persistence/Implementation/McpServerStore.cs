@@ -32,6 +32,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
             WorkingDirectory = input.WorkingDirectory,
             EnvJson = EncodeEnvironment(input.Environment),
             Url = input.Url,
+            TrustTier = (int)input.TrustTier,
             // A registration is always persisted disabled — enabling is a deliberate second action.
             Enabled = false,
             Version = 1,
@@ -72,6 +73,9 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
                             || !string.Equals(entity.WorkingDirectory, input.WorkingDirectory, StringComparison.Ordinal)
                             || !EnvironmentEqual(DecodeEnvironment(entity.EnvJson), input.Environment)
                             || !string.Equals(entity.Url, input.Url, StringComparison.Ordinal)
+                            // The tier decides WHERE the process is launched, so changing it has to relaunch the
+                            // server rather than leave the previous tier's live connection in place.
+                            || entity.TrustTier != (int)input.TrustTier
                             || entity.Enabled != input.Enabled;
 
         entity.Name = input.Name;
@@ -82,6 +86,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
         entity.WorkingDirectory = input.WorkingDirectory;
         entity.EnvJson = environmentJson;
         entity.Url = input.Url;
+        entity.TrustTier = (int)input.TrustTier;
         entity.Enabled = input.Enabled;
         entity.UpdatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
@@ -184,6 +189,7 @@ public sealed class McpServerStore(NodeChatDbContext dbContext, TimeProvider tim
             entity.WorkingDirectory,
             DecodeEnvironment(entity.EnvJson),
             entity.Url,
+            (McpTrustTier)entity.TrustTier,
             entity.Enabled,
             entity.Version,
             entity.CreatedAtUtc,

@@ -21,7 +21,10 @@ public sealed class SandboxCreateRequestTests
     [Test]
     public void MaxJailDiskBytes_WithAPositiveValue_IsCarriedThrough()
     {
-        var request = Request() with { MaxJailDiskBytes = 4L * 1024 * 1024 };
+        var request = Request() with
+        {
+            MaxJailDiskBytes = 4L * 1024 * 1024
+        };
 
         AssertEx.Equal(expected: 4L * 1024 * 1024, request.MaxJailDiskBytes.Value);
     }
@@ -31,13 +34,19 @@ public sealed class SandboxCreateRequestTests
     {
         // Zero is not "no ceiling" here: this field can only tighten the node-wide one, so accepting it would either
         // disable a control the caller was asking to strengthen or terminate every command instantly.
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => _ = Request() with { MaxJailDiskBytes = 0 });
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => _ = Request() with
+        {
+            MaxJailDiskBytes = 0
+        });
     }
 
     [Test]
     public void MaxJailDiskBytes_WhenNegative_IsRejected()
     {
-        AssertEx.Throws<ArgumentOutOfRangeException>(() => _ = Request() with { MaxJailDiskBytes = -1 });
+        AssertEx.Throws<ArgumentOutOfRangeException>(() => _ = Request() with
+        {
+            MaxJailDiskBytes = -1
+        });
     }
 
     private static SandboxCreateRequest Request()

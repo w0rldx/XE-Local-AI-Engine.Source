@@ -1,0 +1,4 @@
+Source: authored in this repository as the attribution notice for the embedded moby/profiles seccomp default profile.
+Upstream: https://github.com/moby/profiles/blob/836ae4d37ef2ec995c77c99fc55f5b5f3af3a897/seccomp/default.json
+Retrieved: 2026-08-25
+SHA-256: 3ec7357669a9372d2bcc78d342d23aa18711590d5b084d8e37064b133168daaf

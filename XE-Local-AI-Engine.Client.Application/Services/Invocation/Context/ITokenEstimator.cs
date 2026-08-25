@@ -22,6 +22,18 @@ public interface ITokenEstimator
         return TokenEstimatorCalibrationStore.DefaultCharsPerToken;
     }
 
+    /// <summary>
+    ///     The multiplicative observed-usage correction learned for a model (see
+    ///     <see cref="ITokenEstimatorCalibrationStore.ResolveObservedCorrection" />). Exposed here rather than by
+    ///     injecting the store into every budgeter: the correction and the divisor are two halves of the same
+    ///     calibration, and both belong behind the estimator abstraction the budgeting policy already depends on. The
+    ///     neutral default keeps an estimator that knows nothing about calibration behaving exactly as before.
+    /// </summary>
+    double ResolveObservedCorrection(string? modelName)
+    {
+        return TokenEstimatorCalibrationStore.NeutralObservedCorrection;
+    }
+
     int EstimateTokensWithDivisor(ChatMessage message, int charsPerToken)
     {
         return EstimateTokens(message);

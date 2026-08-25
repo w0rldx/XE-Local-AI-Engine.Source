@@ -359,7 +359,7 @@ reduce risk; they do not create OS isolation.
 
 Any node-side tool or shell execution runs inside a process jail, not against the host filesystem directly. The live provider is `ProcessSandboxRuntimeProvider` (`Services/Sandbox/Implementation/ProcessSandboxRuntimeProvider.cs`, implementing `ISandboxRuntimeProvider`; selected via `SandboxProviderSelector`). The old Docker/container sandbox runtime was removed in the 2026-06-17 runtime re-architecture — there is **no** container inference path, and this process-jail is the execution boundary for AgentHome and Coder. (Discrepancy note vs. older docs: `LocalContainerSandboxProvider` and the HostAgent layer no longer exist as live code.)
 
-> **One scoped exception, and it does not move this boundary.** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted 2026-07-29) permits Docker for **Development Mode build/test/lint execution only**, as a stopgap ahead of MXC. Provider selection is **per feature**: Development Mode gets the container provider; **AgentHome (4 injection sites) and Coder (1) stay on `ProcessSandboxRuntimeProvider`** and keep exactly the posture described below. The split is enforced by the type system rather than by configuration — each feature resolves a role marker (`IAgentSandboxRuntimeProvider` / `IDevelopmentSandboxRuntimeProvider`), and the container provider implements only the Development one, so it cannot be wired into the other two even by mistake. Two things follow for a security reader. First, hardening the process provider is *not* superseded by the container work — those two features remain on it. Second, on Linux **access to the Docker socket is root-equivalent**; the ADR records this rather than mitigating it, and the product neither requires nor provides rootless Docker. The container provider has **shipped as an opt-in Development Mode provider** and is **not the default** — `DockerSandboxRuntimeProvider` (`Name = "docker"`) is registered by `AddNodeContainerSandboxExtensions` and selected by `Development:Sandbox:Provider=docker`. The shipped `appsettings.json` sets no `Development:Sandbox` key at all, so `SandboxProviderSelector.ResolveDevelopment` falls back to the AgentHome provider (`AgentHome:Sandbox:Provider`, shipped as `process`). **The section below therefore describes the default posture, not the whole story** — on a node configured with `docker`, Development Mode runs under the container boundary instead. See [Development Mode container implementation status](../roadmaps/development-mode-container-status.md) for what is and is not implemented; it is the canonical status page, and this page does not restate it.
+> **One scoped exception, and it does not move this boundary.** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted 2026-07-29) permits Docker for **Development Mode build/test/lint execution only**, as a stopgap ahead of MXC. Provider selection is **per feature**: Development Mode gets the container provider; **AgentHome (4 injection sites) and Coder (1) stay on `ProcessSandboxRuntimeProvider`** and keep exactly the posture described below. The split is enforced by each feature's declared requirements rather than by configuration — each feature resolves a role marker (`IAgentSandboxRuntimeProvider` / `IDevelopmentSandboxRuntimeProvider`) whose declaration names a host toolchain that no container backend supplies, so it cannot be wired into the other two even by mistake (ADR 0007; see [Backend selection](#backend-selection-a-feature-declares-what-it-needs-and-never-names-a-backend) for what replaced the compile-time form of this guarantee, and what that trade costs). Two things follow for a security reader. First, hardening the process provider is *not* superseded by the container work — those two features remain on it. Second, on Linux **access to the Docker socket is root-equivalent**; the ADR records this rather than mitigating it, and the product neither requires nor provides rootless Docker. The container provider has **shipped as an opt-in Development Mode provider** and is **not the default** — `DockerSandboxRuntimeProvider` (`Name = "docker"`) is registered by `AddNodeContainerSandboxExtensions` and selected by `Development:Sandbox:Provider=docker`. The shipped `appsettings.json` sets no `Development:Sandbox` key at all, so `SandboxProviderSelector.ResolveDevelopment` falls back to the AgentHome provider (`AgentHome:Sandbox:Provider`, shipped as `process`). **The section below therefore describes the default posture, not the whole story** — on a node configured with `docker`, Development Mode runs under the container boundary instead. See [Development Mode container implementation status](../roadmaps/development-mode-container-status.md) for what is and is not implemented; it is the canonical status page, and this page does not restate it.
 
 **What this boundary is — and is not.** It is **supervised execution**, not an OS isolation boundary. What it enforces: only fixed, node-authored executables run (`dotnet --version`, `git` with hooks disabled, `find`/`grep` — never a model-authored command line); a working-directory jail with path-confinement and symlink-escape guards; a **scrubbed child environment** (the worker's secret-bearing environment — cloud API keys, OAuth tokens, the node SQLite key — is **not** inherited; only a fixed system/toolchain allow-list is forwarded, plus the caller's explicit variables); a per-command timeout; tree-kill teardown; and captured-output byte caps. It is **not** a hardware or kernel isolation boundary. Risky execution is approval-gated upstream, but no formal acceptance of the residual host-user execution risk is established by this repository documentation.
 
@@ -371,14 +371,14 @@ The **capability-honesty invariant** runs in both directions off that one record
 - `BuildLaunchPolicy` (called by `CreateOrAttachAsync`) **fail-closed rejects** any `SandboxCreateRequest` asking for something the host cannot serve, with `SandboxCapabilityNotSupportedException`, rather than silently returning a sandbox weaker than requested. It rejects on three counts: `NetworkPolicy.Restricted` at all (no allow-list mechanism exists), a denial request when `SupportsNetworkIsolation` is false, and resource limits when `SupportsResourceLimits` is false.
 - Each `…UnavailableReason` carries the measured reason, so a degraded host logs *why* and a live-gated test skips with a reason instead of passing silently.
 
-> **Do not read that fail-closed gate as a guarantee for Development Mode — on the process provider it never fires, so Development Mode DEGRADES rather than failing closed.** The gate can only reject what is *asked for*, and `DevelopmentWorkspaceProvider` asks for nothing the process provider cannot serve on any host: `NetworkPolicy.Unrestricted` (a deliberate, recorded deferral — the `dotnet restore` in the validation gate needs egress, so denying it would break the feature rather than harden it), **no** `ResourceLimits` at all, and the read-only `.git/config` mount only from a provider that advertises `SupportsReadOnlyMounts`. The consequence is platform-dependent and must not be stated once for both:
+> **Do not read that fail-closed gate as a guarantee for Development Mode — on a default-configured node it never fires on the process provider, so Development Mode DEGRADES rather than failing closed.** The gate can only reject what is *asked for*, and by default `DevelopmentWorkspaceProvider` asks for nothing the process provider cannot serve on any host: the agent-facing sandbox's `NetworkPolicy` is **capability-gated** (`None` where the backend advertises `SupportsNetworkPolicy`, `Unrestricted` otherwise — see the egress paragraph below), its `ResourceLimits` are likewise capability-gated (`SandboxResourceCeilings` returns none where `SupportsResourceLimits` is absent), and the read-only `.git/config` and credential-shadow mounts come only from a provider that advertises `SupportsReadOnlyMounts`. **An operator can turn the degradation into a refusal for egress**, per node, with `Development:Sandbox:RequireEgressDenial` (or `AgentHome:Sandbox:RequireEgressDenial` for AgentHome, Coder and work sessions): denial then becomes a precondition and a node that cannot deny refuses to prepare, naming the key. Both default to off. The consequence is platform-dependent and must not be stated once for both:
 >
 > - **On Linux**, the process provider does enforce real containment where the probes succeed — process-group launch, `systemd-run --user` ceilings, and `unshare` network isolation are each independently available, and AgentHome takes the empty-namespace path.
 > - **On Windows** (and any host where every probe fails), the record is `SandboxContainment.None`. Development Mode's generated source, MSBuild targets, source generators and tests then execute **as the signed-in user, with full host network access and no resource ceiling** — the supervised-execution guarantees above (fixed executables, working-directory jail, scrubbed environment, timeouts, output caps) still apply, but there is no OS-level containment underneath them. A container-configured node is the only path that changes this.
 
 Neither half may be softened into a silent no-op: a caller must never believe it received isolation the provider does not implement.
 
-Two scope limits a reader must not overrun. **Egress is deny-everything or nothing** — where the mechanism is active the child gets an empty namespace, so egress is denied outright rather than filtered; `SandboxNetworkPolicy.Restricted` (an allow-list) stays unsupported and rejected. And **Development Mode does not get this** — `DevelopmentWorkspaceProvider` requests `Unrestricted` because its `dotnet restore` needs the network until the container work's restore machinery exists. Only AgentHome requests the denial, so there is no engine-wide egress posture to cite — though **Coder is covered too**, because `CoderWorkspaceReader` does not create its own sandbox: it attaches to AgentHome's via `ISandboxRuntimeProvider.ConnectAsync`, so that one policy decision covers AgentHome's 4 injection sites and Coder's single one (three tools, one injected provider — earlier text said 3, counting the tools). The request is itself **capability-gated** (`AgentHomeService.ResolveNetworkPolicy`): it asks for `None` only where the provider advertises `SupportsNetworkPolicy`, and `Unrestricted` otherwise — an unconditional request would be rejected fail-closed on any host without the mechanism. The AgentHome `policy.json` records the posture in force **at the time the agent home was initialised** (`"unrestricted"` when nothing is enforced, `"disabled"` when egress is denied); note that `EnsureBaselineFilesAsync` deliberately does **not** overwrite an existing `policy.json`, so a home created before denial shipped keeps a file reading `"unrestricted"` while the run is actually denied. That preservation is a tested contract protecting operator edits across re-init, and the drift runs in the safe direction — the file under-reports the boundary, never over-reports it — so read the provider's advertised capability, not this file, when you need the posture of a *current* run. An empty namespace is still not a kernel-hardened boundary: **strong isolation remains deferred to a future OS-isolated provider (MXC) behind this same seam**, and approval-gating upstream stays the interim control wherever a mechanism is inactive.
+Two scope limits a reader must not overrun. **Egress is deny-everything or nothing** — where the mechanism is active the child gets an empty namespace, so egress is denied outright rather than filtered; `SandboxNetworkPolicy.Restricted` (an allow-list) stays unsupported and rejected. **Development Mode now requests the denial too, for the sandbox the agent's work runs in** (see [Development Mode egress](#development-mode-egress-two-sandboxes-one-of-them-denied) for the two-sandbox design, the capability gate, and what it does *not* cover). Both requests are **capability-gated**, so there is still no engine-wide egress posture to cite — though **Coder is covered too**, because `CoderWorkspaceReader` does not create its own sandbox: it attaches to AgentHome's via `ISandboxRuntimeProvider.ConnectAsync`, so that one policy decision covers AgentHome's 4 injection sites and Coder's single one (three tools, one injected provider — earlier text said 3, counting the tools). The request is itself **capability-gated** (`AgentHomeService.ResolveNetworkPolicy`): it asks for `None` only where the provider advertises `SupportsNetworkPolicy`, and `Unrestricted` otherwise — an unconditional request would be rejected fail-closed on any host without the mechanism. The AgentHome `policy.json` records the posture in force **at the time the agent home was initialised** (`"unrestricted"` when nothing is enforced, `"disabled"` when egress is denied); note that `EnsureBaselineFilesAsync` deliberately does **not** overwrite an existing `policy.json`, so a home created before denial shipped keeps a file reading `"unrestricted"` while the run is actually denied. That preservation is a tested contract protecting operator edits across re-init, and the drift runs in the safe direction — the file under-reports the boundary, never over-reports it — so read the provider's advertised capability, not this file, when you need the posture of a *current* run. An empty namespace is still not a kernel-hardened boundary: **strong isolation remains deferred to a future OS-isolated provider (MXC) behind this same seam**, and approval-gating upstream stays the interim control wherever a mechanism is inactive.
 
 Guards a contributor must not weaken:
 
@@ -396,7 +396,7 @@ Guards a contributor must not weaken:
 
 Everything above describes the **default** posture: a supervised child in a working-directory jail that can still *read* everything the engine's own user can read. A second, opt-in posture now exists behind the same provider — `SandboxCreateRequest.Isolation = SandboxIsolationMode.Filesystem` — in which the host filesystem is **not present in the command's mount namespace at all**.
 
-**Status: built, probed, and consumed by exactly one caller — `run_python`.** `ComputeToolGateway` names `SandboxIsolationMode.Filesystem` on every invocation and **refuses the call** on a node whose provider does not advertise `SupportsFilesystemIsolation` (see [Compute Tools §2.1](19-compute-tools.md#21-execution-flow)). AgentHome, Coder and Development Mode create sandboxes without naming an isolation mode and therefore still run the byte-identical chain they always did (asserted by `SandboxFilesystemIsolationContractTests`); extending the boundary to them is a separate epic. Nothing on this page's default posture has moved.
+**Status: built, probed, and consumed by two callers — `run_python` and a `Sandboxed` stdio MCP server (see [§7.2](#72-outbound-mcp-servers-run-under-a-declared-trust-tier)).** `ComputeToolGateway` names `SandboxIsolationMode.Filesystem` on every invocation and **refuses the call** on a node whose provider does not advertise `SupportsFilesystemIsolation` (see [Compute Tools §2.1](19-compute-tools.md#21-execution-flow)). `SandboxedMcpStdioTransport` does the same for an MCP server and refuses the connection the same way. AgentHome, Coder and Development Mode create sandboxes without naming an isolation mode and therefore still run the byte-identical chain they always did (asserted by `SandboxFilesystemIsolationContractTests`); extending the boundary to them is a separate epic. Nothing on this page's default posture has moved.
 
 **What the isolated chain is.** `setsid` → a named transient `systemd-run --user --scope` → `bwrap`, rendered by `SandboxIsolatedChain` (`Services/Sandbox/Implementation/Launch/Isolation/`). Inside it the workload sees: a read-only bind of `/usr` plus whatever legacy roots (`/bin`, `/lib64`, …) this host's layout needs to make an ELF interpreter resolve; an invented four-file `/etc` (`passwd`, `group`, `nsswitch.conf`, `hosts`) generated byte for byte into **sealed `memfd`s** rather than bound from the host, so the machine's real account database is never exposed; `/dev` and `/proc`, both remounted read-only; empty `/home`, `/run`, `/var`; any explicitly named read-only trees at their own canonical paths; and exactly one writable directory, `/work`, which is the engine's jail. `/tmp` is the jail's own subdirectory, so everything the workload writes stays inside the one tree the disk watchdog walks. The environment is `--clearenv` plus a fixed allow-list. PID, IPC, UTS and network namespaces are unshared; `--disable-userns --assert-userns-disabled` closes the nested-user-namespace route back out.
 
@@ -413,6 +413,44 @@ Everything above describes the **default** posture: a supervised child in a work
 **What `run_python` binds, and why it is two trees rather than one.** The compute tool names its own `ReadOnlyTrees`: the provisioned venv (`<compute-runtime>/venv/.venv`) and the uv-managed CPython root it links into (`<compute-runtime>/pythons`). Not the compute cache root above them — that also holds the uv download cache, the digest-pinned uv binary and the lockfile state marker, and naming the parent would have handed all of it to a model-authored script for free. Not the single installed CPython version either: uv addresses the install through a version-alias symlink beside it (`cpython-3.13-…` → `cpython-3.13.15-…`) which the venv's own `bin/python` points at, so binding only the versioned directory leaves that alias resolving to nothing inside. Both are bound **at their own canonical paths**, which is what lets the venv's compiled-in absolute paths keep working, and both are read-only: a script's `os.chmod` on `site-packages` or on the interpreter now answers `EROFS` regardless of who owns the inode. The venv's cleared write bits are still applied, demoted to what they always were — defence in depth for what happens *outside* the namespace.
 
 The same no-follow / byte-recheck philosophy appears in AgentHome host-path safety (`Services/Workspace/Implementation/HostPathSafety.cs`: `TryResolveReparseWithinRoot`, `IsReparsePoint`, `IsPathWithinRoot`) and `HostGitRunner`. Reuse these utilities rather than re-implementing path validation.
+
+### 7.2 Outbound MCP servers run under a declared trust tier
+
+An outbound stdio MCP server is a third-party executable the operator installed, and until Phase 2 it ran as a plain
+child of the engine with nothing but an environment scrub between it and the machine. It now carries a **trust tier**
+on its registration (`McpTrustTier`), and the tier decides where its process runs. The full rationale, including why
+there is no `Remote` tier and why existing rows migrated the way they did, is
+[docs/security/mcp-trust-tiers.md](../security/mcp-trust-tiers.md); what a security reader needs from this page is:
+
+- **`Sandboxed` is the default, including for every registration that already existed.** The server is launched inside
+  the substrate under `SandboxWorkloads.McpStdio` — the §7.1 chain, so no host filesystem, an empty network namespace,
+  a disposable jail as the working directory, and only the configured environment variables. Its own package tree (the
+  resolved command's directory, and the configured working directory when there is one) is bound **read-only**; the
+  jail is the only writable surface it has.
+- **Neither bound tree may cover a sensitive host root.** A tree that equals or contains the home directory, a
+  credential store under it (`~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.azure`, `~/.config`, `~/.docker`, `~/.kube`), the
+  node data directory, the engine's install directory, `/root`, `/etc`, `/var` or `/` is **refused**, naming the
+  path and the tier. Subtrees of those roots stay bindable — `~/.nvm/…/bin` exposes a node install, `$HOME` exposes
+  the operator — which is what keeps `npx`- and `uvx`-based servers usable at the default tier. Comparison happens
+  on resolved paths at one gate both trees pass through, and the list is code-owned.
+- **It fails closed, and it is visible before it fails.** A host whose backend does not advertise
+  `SupportsFilesystemIsolation` — Windows until G12, or a Linux host without bubblewrap — refuses the connection
+  before a process exists, with an engine-authored reason that names the tier and is surfaced verbatim rather than
+  redacted. The Development status isolation panel carries an `mcp-stdio` row that says the same thing ahead of any
+  connection attempt.
+- **`PrivilegedHost` is the old host launch, kept deliberately.** It is a per-server operator grant, never a fallback
+  and never inferred, and its tools are offered as `ToolCategory.WriteExecute` rather than `Network` — because a
+  server this node launched unconfined can write files and run commands here, and the class an operator sees and the
+  node policy tightens on should say the stronger of the two.
+- **`BuiltInTrusted` is engine-owned and unreachable from the API.** The CRUD surface rejects it and a schema check
+  constraint bounds the column.
+- **The stored environment does not come back out.** `EnvJson` was already AEAD-encrypted at rest; the response now
+  returns the variable NAMES with a fixed mask in place of every value, and an update that sends the mask back keeps
+  the stored secret (`McpEnvironmentMask`).
+
+Unchanged: HTTP MCP registrations stay exact-match loopback (`McpOptions.HttpLoopbackHosts`, re-validated at connect
+time), the tier is inert for them, and every MCP tool of every tier remains approval-required, pre-wrapped in
+`ApprovalRequiredAIFunction`, and ineligible for a remembered session approval.
 
 ### Development Mode source and execution boundary
 
@@ -436,13 +474,112 @@ Changes in the detached worktree do not bypass this gate.
 
 These controls limit what the **application's Development tools** read, write, preview, and apply. They do not
 limit what executed repository code can do. Generated source, MSBuild targets, source generators, build scripts,
-and tests run as the host user and have that user's host filesystem and network access. The Process sandbox and
-Agent Home are application-level path, byte, environment, and lifecycle controls; neither is an OS security
-boundary. Do not describe the selected folder as a kernel-enforced filesystem allow-list.
+and tests run as the host user and have that user's **host filesystem** access — the workload declares an isolation
+floor of `None` (`SandboxWorkloads.DevelopmentModeHostToolchain`), so there is no host-filesystem boundary under
+them on any backend the shipped configuration resolves. **Network access is no longer part of that sentence**: since
+G1 the agent-facing sandbox asks for egress denial wherever the backend advertises it, and reaches the network
+unrestricted only where it does not — see
+[Development Mode egress](#development-mode-egress-two-sandboxes-one-of-them-denied) for the two-sandbox design and
+the capability gate. **CPU, memory and process-count ceilings ARE requested for these commands** — since 2026-08-25
+both sandboxes `DevelopmentWorkspaceProvider` creates carry the host-toolchain profile
+(`SandboxWorkloads.DevelopmentModeHostToolchain.Ceilings`), applied wherever the backend advertises
+`SupportsResourceLimits` and reported by the isolation panel as served. The numbers are **not** `run_python`'s, and
+that split is measured rather than argued: under the compute profile's 2 CPU / 2048 MB / 64 tasks this repository's
+own Release build failed outright with 15 errors ("Resource temporarily unavailable" starting `csc`, "Failed to create
+CoreCLR"), and under the 2048 MB ceiling alone it was SIGKILLed mid-build printing no summary, while 8192 MB completed
+it in 33.6 s. Toolchain roles therefore read `LocalContainer:ToolchainLimits`, whose unset members derive from the
+host — all logical cores, 75% of physical RAM floored at 4096 MB and capped at physical RAM, and 4096 tasks — and
+whose overrides are floored by `LocalContainerOptionsValidator` (memory 1024 MB, PIDs 256) because on Linux these
+become `MemoryMax` with swap denied and a thread-counting `TasksMax`, where a too-small ceiling kills every attempt
+rather than bounding it. The Process
+sandbox and Agent Home are application-level path, byte, environment, and lifecycle controls; neither is an OS
+security boundary. Do not describe the selected folder as a kernel-enforced filesystem allow-list.
 
 MXC remains future provider work behind the existing sandbox/workspace seams. It is not integrated today, and no
 current MXC profile should be documented as a security boundary. Any future provider must implement and
 independently validate the isolation guarantees it advertises.
+
+#### Development Mode egress: two sandboxes, one of them denied
+
+Until G1 landed, `DevelopmentWorkspaceProvider` created one sandbox with `NetworkPolicy = Unrestricted` and a
+comment recording the deferral. That was the one live High-risk gap in this feature: a malicious package's
+restore hook, an MSBuild target, or a test could read the whole clone and POST it out. It is now closed on the
+axis the engine controls, in three parts, and the honest statement of what remains open matters as much as what
+does not.
+
+**One sandbox cannot have network for one command and not the next.** `SandboxNetworkPolicy` lives on
+`SandboxCreateRequest` and is fixed at create; `SandboxCommandRequest` has no network field. So the design is
+two sandboxes, not one sandbox with two postures.
+
+1. **A warm restore, from the base commit, with egress.** Before the agent-facing sandbox exists, `PrepareAsync`
+   creates a second short-lived sandbox (`RuntimeProfile = "development-warm"`, its own `SandboxAttachKey`, the
+   same mount set) and runs exactly one command: the frozen profile's `dotnet_restore`. Then it kills it. The
+   per-task `NUGET_PACKAGES` / `DOTNET_CLI_HOME` roots and the generated `obj/` trees outlive it, which is what
+   lets the later `--no-restore` build and `--no-build` test work with no network at all. Running
+   repository-authored MSBuild with egress is sound **here and only here**: at warm time the tree *is* the base
+   commit — the operator's own repository, already trusted to the degree the whole feature trusts it — and the
+   agent has written nothing. The gate is therefore not "is this code safe" but "is this tree provably still the
+   base commit": a warm runs only from a worktree whose **tracked** files are clean
+   (`git status --porcelain --untracked-files=no`), once per `BaseCommit`, with the result recorded in
+   `workspace.json` — which lives in `RuntimePath` and is **never mounted**, so it cannot be read or forged from
+   inside any sandbox. A profile with no restore command (`generic-git`) skips warming entirely.
+
+2. **A dependency-manifest change fails validation.** `DevelopmentDependencyManifestPolicy` runs *before* the
+   command loop and fails the gate with `dependency_manifest_changed` for any change to `**/*.csproj`,
+   `**/Directory.Packages.props`, `**/Directory.Build.props`, `**/Directory.Build.targets`,
+   `**/packages.lock.json`, `**/NuGet.config`, the npm/yarn/pnpm lockfiles, `**/Cargo.toml`, `**/Cargo.lock`,
+   `**/requirements*.txt`, `**/pyproject.toml`, `**/uv.lock` or `**/poetry.lock`. Added counts as much as
+   modified — a new `Directory.Packages.props` changes resolution for the whole tree. This is a **verdict, not a
+   `DevelopmentWorkspaceSecurityException`**: the task returns to `InProgress` carrying the reason, because
+   "delete the failing test" is an attack and "add a package" is a legitimate task this version cannot serve.
+   The set is code-owned and versioned with `DevelopmentCommandProfileCatalog.CurrentVersion`; a packaging system
+   missing from it is a hole, not a gap in coverage.
+
+3. **The agent-facing sandbox asks for `SandboxNetworkPolicy.None`.** Capability-gated exactly as AgentHome's
+   request is (`DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy`): `None` where the backend
+   advertises `SupportsNetworkPolicy`, `Unrestricted` where it does not.
+
+> **The Option-B caveat, stated plainly.** A backend fails a confinement request it cannot honour *closed*. An
+> unconditional `None` would therefore not harden Development Mode on Windows — or on any Linux host whose
+> `unshare` probe failed — it would remove Development Mode from those nodes, because the shipped configuration
+> resolves them to the process backend. On such a node **the attempt still has full host network access**, and
+> the abuse case above is still live there. What makes that acceptable rather than silent is that the
+> Development status surface reports the posture the provider actually **served**, not the one that was
+> requested. Making denial mandatory per node is an open follow-up.
+
+Two things this does *not* close, on any backend. A private feed named by the repository's own `NuGet.config` is
+reached by the **warm** restore, which is correct behaviour and will read as "restore worked, build failed" if
+that feed is unreachable later. And a repository whose restore is not idempotent — a hook that writes into
+`obj/` differently under `--no-restore` — can warm green and build red; the synthetic fixture cannot show this.
+
+#### Committed credentials in the clone
+
+`CreateStandaloneWorkspaceAsync` runs `git clone`, so only **tracked** content reaches the workspace: an
+untracked `.env` in the operator's repository does not ride along. The real exposure is a **committed**
+credential, which is common enough to matter, and every prepare now answers for it in two parts.
+
+Detection is unconditional. The engine asks `git ls-files` and tests every path segment against
+`ISensitiveFileExclusionService.IsSecret` — the same predicate the workspace read tools and AgentHome's copy
+filter use. The set is recorded in `workspace.json` and emitted as an operator-visible `DevelopmentEvent`
+(`WorkspaceSecretsDetected`, idempotent per attempt). It never blocks the attempt.
+
+Neutralization is capability-gated. Where the backend advertises `SupportsReadOnlyMounts`, each detected path is
+shadowed by an **engine-generated empty read-only file mount** at that path — the mechanism `.git/config`
+already uses, with `SandboxMount.TargetIsWorkspaceRelative` set because the mount *source* has to live outside
+the workspace. The file on disk is never touched: deleting or emptying it would make the tree dirty against its
+base commit, so `ValidatePreservedWorktreeAsync` and the `SubjectHash` would see a deletion and an apply would
+delete the operator's real file. The set is capped at 32, above which the prepare fails closed rather than
+shadowing some — a partial shadow reads as a control and is not one.
+
+> **On the process backend — today's default — only detection applies.** It has no mount layer, so nothing is
+> shadowed and the recorded event is the whole control: the engine can see the committed credential but cannot
+> stop the repository's own build or tests from reading it. Do not read this section as parity between the two
+> backends.
+
+Accepted trade: `SecretEntryNames` includes `.env.*`, which matches `.env.example`. Shadowing it is harmless in
+most repositories and confusing in a few; it is the same trade AgentHome's copy filter already makes. And a
+committed test certificate a build legitimately needs will turn a green repository red — the recorded event is
+what makes that diagnosable in one look.
 
 **Container-backed Development Mode execution has shipped, opt-in and off by default.**
 [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted 2026-07-29) approves a
@@ -469,6 +606,66 @@ this page. What the decision fixes, and what a reviewer should hold it to:
   resolution and network inputs all stay variable. Do not describe digest pinning as reproducibility.
 - **The scope is narrow by construction, and widening it is a new operator decision**, not an implementation
   detail.
+
+### Backend selection: a feature declares what it needs, and never names a backend
+
+[ADR 0007](../adr/0007-sandbox-execution-substrate-and-backend-selection.md) (Accepted 2026-08-25) changes **who
+decides which of the boundaries above runs**, and changes none of them. Each workload states its requirements as an
+engine-owned constant in `SandboxWorkloads` — a **toolchain source** (the host's, or a named engine-approved image),
+an **isolation floor**, a **network floor**, a **persistence** need and a disk ceiling — and `SandboxProviderSelector`
+resolves the **minimal-satisfying** registered backend: among those that honour every declared axis, the one with the
+smallest additional privilege footprint wins (`fake` < `process` < `docker`, the last because a live daemon whose
+socket is root-equivalent on Linux is additional privilege even where the container is the stronger boundary). When
+none can honour the declaration the call throws `SandboxCapabilityNotSupportedException` naming the unmet axis. There
+is no fallback and no downgrade.
+
+The **isolation floor is a property, not a mechanism**: at its `Filesystem` value it asks that the host filesystem be
+absent from the sandbox's view, and it is satisfied by any backend advertising `SupportsHostFilesystemBoundary` — the
+bubblewrap chain (probe-exercised) and a hardened container (read-only rootfs, engine-generated mounts, no host
+namespaces, all read back and fail-closed on mismatch) both qualify. That is deliberately **not** the same flag as
+`SupportsFilesystemIsolation`, which means the narrower "serves `SandboxIsolationMode.Filesystem`" — a specific
+create-request contract of named read-only host trees, a synthetic `/etc` and a jail-backed `/tmp`. The container
+provider has the property and implements none of that contract, and still refuses the mode on a create request; a
+single flag asked to mean both would either lie to `run_python` or deny a container an isolation level it genuinely
+has. The isolation panel on the Development page reports the **property**, and reports it as SERVED — the role's declared
+floor intersected with what the backend advertises. So a container-served role reads as having the boundary only when
+its declaration asks for one, and Development Mode's does not: on this repository's shipped declarations `run_python`
+is the single role whose Filesystem column can read Yes. A panel that read the capability alone claimed a boundary for
+Development Mode on any Linux host with a working bubblewrap chain, which was false in the unsafe direction;
+`DevelopmentContractMapper.ToIsolationSummary` owns the intersection rule and the two different "no boundary" reasons
+(not requested by the role, versus requested and unavailable with the measured probe reason). The Resource-limits
+column follows the same rule for the same reason: `SandboxCreateRequest.ResourceLimits` is a preference a backend may
+drop, `SandboxLifecycleRegistry.BuildLaunchPolicy` applies a scope ceiling only when the request carries one, and
+`SandboxRequirements.Ceilings` is where each workload states WHICH profile it asks for —
+`SandboxCeilingProfile.ComputeTool` for `run_python`'s tight script-sized numbers, `HostToolchain` for every role that
+runs a real compiler. `SandboxSubstrateSelectionArchitectureTests` asserts every declaration names a profile, that
+exactly one is on the compute profile, and that `SandboxResourceCeilings.Resolve` hands each declaration exactly that
+profile's numbers; each create site's own test asserts its request agrees with its constant.
+
+Two consequences a security reader should hold on to.
+
+- **The strongest guarantee in the previous design is weakened in kind, deliberately.** "Docker cannot be wired into
+  AgentHome" used to be an absent `implements` clause — a compile error. It is now three mechanisms: AgentHome
+  declares a host toolchain, which no container backend supplies; the isolation floor has no default, so a new
+  consumer cannot inherit the weakest posture by saying nothing; and
+  `SandboxSubstrateSelectionArchitectureTests` enumerates every declaration and asserts the exact backend set allowed
+  to serve it. A compile error cannot be skipped and a test can. The mitigation is that the test is an enumeration
+  over engine-owned constants rather than a behavioural test, so it fails deterministically and offline — but it is a
+  real reduction. (In this tree `DockerSandboxRuntimeProvider` also still implements only the Development role, so the
+  old compile error stands *behind* the new checks rather than in place of them.)
+- **Diagnosis moved.** A feature can no longer be read off its own file. `SandboxProviderSelector` logs every
+  resolution at **Information** — declaration, candidates considered, winner, and rejected candidates with reasons —
+  and that log line is now the answer to "which boundary is this node actually running".
+
+> **Operator keys changed meaning.** `AgentHome:Sandbox:Provider` and `Development:Sandbox:Provider` used to *name*
+> the provider. They now **constrain the candidate set**, and the workload's declaration decides whether the named
+> backend may serve it at all. On every node that ships today the outcome is identical. Where it differs it is loud,
+> never quiet: a key naming a backend that cannot honour the declaration **fails closed at startup with the unmet axis
+> named**, because silently reinterpreting a set key is how a hardened node becomes an unhardened one. One extra rule
+> applies to Development Mode only — naming `docker` is *also* read as declaring an image-backed toolchain need (which
+> is what that key always meant), and setting `Development:ContainerSandbox:Image` declares the same need without the
+> key. The unset-Development-key fallback to the AgentHome key still applies, but only while no image toolchain is
+> declared.
 
 ### Chat attachments are staged *into* the jail, not read from the host
 
@@ -506,6 +703,7 @@ The file documents its own scope: it is the "safe set" — APIs with zero curren
 - [ ] At-rest crypto routes through `AesGcmNodeAeadCipher`; AAD context components are preserved.
 - [ ] Analysis/eval/extraction AI runs node-local only.
 - [ ] Tool execution stays inside the jail with symlink + O_NOFOLLOW + byte-cap guards.
+- [ ] A new outbound MCP capability does not weaken the default trust tier: `Sandboxed` stays the default for stdio, `PrivilegedHost` stays a per-server operator grant, and a host that cannot serve the boundary still refuses rather than degrading.
 - [ ] No banned API (RS0030) and no literal TODO/FIXME comment.
 
 ---

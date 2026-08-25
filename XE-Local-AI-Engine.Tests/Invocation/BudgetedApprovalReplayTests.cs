@@ -339,8 +339,7 @@ public sealed class BudgetedApprovalReplayTests
             // Approve the query, reject the archive: one round carries both verdicts, which is the shape that makes the
             // validator's resolved-response bookkeeping (and the budgeter's atomic group eviction) matter.
             messages.Add(new ChatMessage(ChatRole.User,
-                requests.Select(request => (AIContent)request.CreateResponse(
-                    !string.Equals(ToolNameOf(request), ArchiveToolName, StringComparison.Ordinal),
+                requests.Select(request => (AIContent)request.CreateResponse(!string.Equals(ToolNameOf(request), ArchiveToolName, StringComparison.Ordinal),
                     "Decided by user.")).ToList()));
         }
 

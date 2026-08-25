@@ -21,7 +21,8 @@ public static class WorkSessionHubEvents
 /// </summary>
 public sealed record WorkSessionChanged(Guid SessionId, long Seq, string Kind);
 
-public sealed record WorkSessionSubscriptionSnapshot(Guid SessionId,
+public sealed record WorkSessionSubscriptionSnapshot(
+    Guid SessionId,
     string Status,
     int Step,
     Guid? CurrentTaskId,

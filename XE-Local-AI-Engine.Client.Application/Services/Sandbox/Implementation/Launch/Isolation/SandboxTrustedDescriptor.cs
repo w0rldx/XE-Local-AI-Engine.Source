@@ -103,7 +103,7 @@ internal static class SandboxTrustedDescriptorOpener
             throw new SandboxIsolationUnavailableException("the filesystem boundary is Linux-only");
         }
 
-        if (!System.IO.Path.IsPathRooted(path))
+        if (!Path.IsPathRooted(path))
         {
             throw new SandboxIsolationUnavailableException($"'{path}' is not an absolute path");
         }

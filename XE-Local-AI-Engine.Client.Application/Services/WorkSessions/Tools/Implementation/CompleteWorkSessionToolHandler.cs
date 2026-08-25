@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 
 using System.Text.Json;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 internal sealed record CompleteWorkSessionRequest(string? Summary);
@@ -19,7 +18,8 @@ internal sealed record WorkSessionCompletionDetail(string Summary);
 ///         request survive a crash between the tool call and the end of the step.
 ///     </para>
 /// </summary>
-internal sealed class CompleteWorkSessionToolHandler(IServiceScopeFactory scopeFactory,
+internal sealed class CompleteWorkSessionToolHandler(
+    IServiceScopeFactory scopeFactory,
     IOptions<WorkSessionOptions> options,
     IWorkSessionEventPublisher publisher,
     ILogger<CompleteWorkSessionToolHandler> logger) : WorkSessionToolHandler<CompleteWorkSessionRequest>(scopeFactory, options, publisher, logger)
@@ -50,14 +50,14 @@ internal sealed class CompleteWorkSessionToolHandler(IServiceScopeFactory scopeF
         CancellationToken cancellationToken)
     {
         _ = await store.AppendEventAsync(new AppendWorkSessionEventCommand(session.Id,
-                    session.Version,
-                    WorkSessionEventTypes.CompletionRequested,
-                    // One completion per step: a model that calls this twice in one turn records it once.
-                    WorkSessionOperationId.For(session.Id, session.StepCount, "completion"),
-                    Outcome: null,
-                    JsonSerializer.Serialize(new WorkSessionCompletionDetail(request.Summary!))),
-                cancellationToken)
-            .ConfigureAwait(false);
+                               session.Version,
+                               WorkSessionEventTypes.CompletionRequested,
+                               // One completion per step: a model that calls this twice in one turn records it once.
+                               WorkSessionOperationId.For(session.Id, session.StepCount, "completion"),
+                               Outcome: null,
+                               JsonSerializer.Serialize(new WorkSessionCompletionDetail(request.Summary!))),
+                           cancellationToken)
+                       .ConfigureAwait(false);
 
         // No sequence is published: the session is not finished until the supervisor closes it, and announcing a change
         // now would put the UI ahead of the truth.

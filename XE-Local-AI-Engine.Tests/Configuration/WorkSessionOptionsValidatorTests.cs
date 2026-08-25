@@ -23,7 +23,10 @@ public sealed class WorkSessionOptionsValidatorTests
     [Test]
     public void Validate_WhenTheParkBudgetReachesTheToolCallAge_ReturnsFailure()
     {
-        var result = Validate(new WorkSessionOptions { MaxParkedSeconds = 600 }, pendingToolCallAgeMinutes: 10);
+        var result = Validate(new WorkSessionOptions
+        {
+            MaxParkedSeconds = 600
+        }, pendingToolCallAgeMinutes: 10);
 
         AssertEx.True(result.Failed);
         AssertEx.Contains(result.Failures, failure => failure.Contains("WorkSessions:MaxParkedSeconds", StringComparison.Ordinal));
@@ -34,7 +37,10 @@ public sealed class WorkSessionOptionsValidatorTests
     [Test]
     public void Validate_WhenTheParkBudgetStaysUnderTheToolCallAge_ReturnsSuccess()
     {
-        AssertEx.False(Validate(new WorkSessionOptions { MaxParkedSeconds = 599 }, pendingToolCallAgeMinutes: 10).Failed);
+        AssertEx.False(Validate(new WorkSessionOptions
+        {
+            MaxParkedSeconds = 599
+        }, pendingToolCallAgeMinutes: 10).Failed);
     }
 
     private static ValidateOptionsResult Validate(WorkSessionOptions options, int pendingToolCallAgeMinutes)

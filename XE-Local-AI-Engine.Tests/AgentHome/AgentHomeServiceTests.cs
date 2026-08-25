@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.DocumentIngestion;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
@@ -43,6 +44,88 @@ public sealed class AgentHomeServiceTests : IDisposable
                 // Best-effort temp cleanup.
             }
         }
+    }
+
+    /// <summary>
+    ///     The AgentHome half of the <c>RequireEgressDenial</c> matrix: the create site × the switch × whether the
+    ///     backend can deny. Four cases, and the one that matters most is the fail-closed pair — a node that asked for
+    ///     denial and cannot get it must be refused with a message naming the key it set, not served the host's
+    ///     network. Development Mode's four live in <c>DevelopmentSandboxEgressTests</c>.
+    /// </summary>
+    [Test]
+    [Arguments(false, false, SandboxNetworkPolicy.Unrestricted)]
+    [Arguments(false, true, SandboxNetworkPolicy.None)]
+    [Arguments(true, true, SandboxNetworkPolicy.None)]
+    public async Task PrepareAsync_RequestsTheEgressPostureTheSwitchAndTheBackendImply(bool requireDenial,
+        bool backendCanDeny,
+        SandboxNetworkPolicy expected)
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new CapabilityOverridingProvider(new FakeSandboxRuntimeProvider(clock), backendCanDeny);
+        using var harness = CreateHarness(clock,
+            provider,
+            new FakeSelectedFolderResolver(),
+            sandboxOptions: new SandboxOptions
+            {
+                RequireEgressDenial = requireDenial
+            });
+
+        _ = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = []
+        });
+
+        AssertEx.Equal(expected, AssertEx.NotNull(provider.LastCreate).NetworkPolicy);
+    }
+
+    /// <summary>
+    ///     The fourth case, and the only one that is not a posture but a refusal. It asserts the message names the
+    ///     option because that is the whole reason the refusal is raised here rather than left to the backend's own
+    ///     fail-closed rejection: the backend can name the missing mechanism and cannot name the switch that made it
+    ///     mandatory, and only the switch is the thing an operator can act on.
+    /// </summary>
+    [Test]
+    public async Task PrepareAsync_WhenDenialIsRequiredAndTheBackendCannotDeny_RefusesNamingTheOption()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new CapabilityOverridingProvider(new FakeSandboxRuntimeProvider(clock), canDenyEgress: false);
+        using var harness = CreateHarness(clock,
+            provider,
+            new FakeSelectedFolderResolver(),
+            sandboxOptions: new SandboxOptions
+            {
+                RequireEgressDenial = true
+            });
+
+        var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(async () =>
+            await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+            {
+                SelectedFolderIds = []
+            }));
+
+        AssertEx.Contains(exception.Message, SandboxEgressPolicy.AgentOptionKey);
+        AssertEx.Contains(exception.Message, SandboxWorkloads.AgentHome.Workload);
+        AssertEx.Null(provider.LastCreate, "the refusal must land BEFORE a sandbox is created, not after one exists.");
+    }
+
+    /// <summary>
+    ///     The ceilings half: AgentHome's create request carries exactly what the shared derivation yields for its own
+    ///     declaration, so the site cannot drift from the constant the isolation summary reports.
+    /// </summary>
+    [Test]
+    public async Task PrepareAsync_RequestsTheNodeCeilingsTheDeclarationAndTheBackendImply()
+    {
+        var clock = new FixedClock(FixedNow);
+        var provider = new CapabilityOverridingProvider(new FakeSandboxRuntimeProvider(clock), canDenyEgress: true, canLimitResources: true);
+        using var harness = CreateHarness(clock, provider, new FakeSelectedFolderResolver());
+
+        _ = await harness.Service.PrepareAsync(new AgentHomePrepareRequest
+        {
+            SelectedFolderIds = []
+        });
+
+        AssertEx.Equal(SandboxResourceCeilings.Resolve(SandboxWorkloads.AgentHome, provider.Capabilities, new ComputeOptions(), new LocalContainerOptions()),
+            AssertEx.NotNull(provider.LastCreate).ResourceLimits);
     }
 
     [Test]
@@ -897,8 +980,7 @@ public sealed class AgentHomeServiceTests : IDisposable
             {
                 if (run.IsFaulted)
                 {
-                    throw new InvalidOperationException(
-                        $"A run faulted before {count} command(s) were in flight.",
+                    throw new InvalidOperationException($"A run faulted before {count} command(s) were in flight.",
                         run.Exception);
                 }
             }
@@ -950,7 +1032,10 @@ public sealed class AgentHomeServiceTests : IDisposable
         IConversationUploadedFileStore? uploadedFileStore = null,
         bool enabled = false,
         IAgentHomeExecutionLeaseManager? leaseManager = null,
-        IAgentHomeManifestService? manifestOverride = null)
+        IAgentHomeManifestService? manifestOverride = null,
+        SandboxOptions? sandboxOptions = null,
+        ComputeOptions? ceilingDefaults = null,
+        LocalContainerOptions? nodeOptions = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "agenthome-svc-" + Guid.NewGuid().ToString("N"));
         _tempRoots.Add(root);
@@ -997,12 +1082,66 @@ public sealed class AgentHomeServiceTests : IDisposable
             memoryProposalService,
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             options,
+            Options.Create(sandboxOptions ?? new SandboxOptions()),
+            Options.Create(ceilingDefaults ?? new ComputeOptions()),
+            Options.Create(nodeOptions ?? new LocalContainerOptions()),
             runtimeSettings,
             uploadedFileStore ?? new FakeConversationUploadedFileStore(),
             clock,
             NullLogger<AgentHomeService>.Instance);
 
         return new ServiceHarness(service, manifestService, serviceProvider);
+    }
+
+    /// <summary>
+    ///     The fake, with the two capability flags this file's posture tests need under the test's control. Wrapping
+    ///     rather than reimplementing keeps every other behaviour the production fake's.
+    /// </summary>
+    private sealed class CapabilityOverridingProvider(
+        FakeSandboxRuntimeProvider inner,
+        bool canDenyEgress,
+        bool canLimitResources = false) : IAgentSandboxRuntimeProvider
+    {
+        public SandboxCreateRequest? LastCreate { get; private set; }
+
+        public string ProviderName => inner.ProviderName;
+
+        public SandboxProviderCapabilities Capabilities =>
+            (inner.Capabilities
+             | (canDenyEgress ? SandboxProviderCapabilities.SupportsNetworkPolicy : SandboxProviderCapabilities.None)
+             | (canLimitResources ? SandboxProviderCapabilities.SupportsResourceLimits : SandboxProviderCapabilities.None))
+            & ~(canDenyEgress ? SandboxProviderCapabilities.None : SandboxProviderCapabilities.SupportsNetworkPolicy)
+            & ~(canLimitResources ? SandboxProviderCapabilities.None : SandboxProviderCapabilities.SupportsResourceLimits);
+
+        public Task<SandboxHandle> CreateOrAttachAsync(SandboxCreateRequest request, CancellationToken cancellationToken = default)
+        {
+            LastCreate = request;
+            return inner.CreateOrAttachAsync(request, cancellationToken);
+        }
+
+        public Task<SandboxHandle> ConnectAsync(SandboxAttachKey attachKey, CancellationToken cancellationToken = default) =>
+            inner.ConnectAsync(attachKey, cancellationToken);
+
+        public Task<SandboxCommandResult> ExecuteAsync(SandboxHandle handle, SandboxCommandRequest request, CancellationToken cancellationToken = default) =>
+            inner.ExecuteAsync(handle, request, cancellationToken);
+
+        public Task CopyIntoAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default) =>
+            inner.CopyIntoAsync(handle, request, cancellationToken);
+
+        public Task ResetDirectoryAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default) =>
+            inner.ResetDirectoryAsync(handle, sandboxPath, cancellationToken);
+
+        public Task<string> ReadFileAsync(SandboxHandle handle, string sandboxPath, CancellationToken cancellationToken = default) =>
+            inner.ReadFileAsync(handle, sandboxPath, cancellationToken);
+
+        public Task CopyOutAsync(SandboxHandle handle, SandboxCopyRequest request, CancellationToken cancellationToken = default) =>
+            inner.CopyOutAsync(handle, request, cancellationToken);
+
+        public Task CancelCommandAsync(SandboxHandle handle, string executionId, CancellationToken cancellationToken = default) =>
+            inner.CancelCommandAsync(handle, executionId, cancellationToken);
+
+        public Task KillAsync(SandboxHandle handle, CancellationToken cancellationToken = default) =>
+            inner.KillAsync(handle, cancellationToken);
     }
 
     private sealed class CancelRecordingProvider : IAgentSandboxRuntimeProvider

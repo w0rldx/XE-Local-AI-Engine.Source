@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Mcp;
 
 internal static class McpServerMapper
 {
@@ -21,8 +22,13 @@ internal static class McpServerMapper
             Command = record.Command,
             Arguments = record.Arguments,
             WorkingDirectory = record.WorkingDirectory,
-            Env = record.Environment,
+            // Keys only. The form renders one row per key and submits the mask back for any value it did not change,
+            // so the secret never leaves the node and the round-trip still works.
+            Env = record.Environment.ToDictionary(static pair => pair.Key,
+                static _ => McpEnvironmentMask.Value,
+                StringComparer.Ordinal),
             Url = record.Url,
+            TrustTier = record.TrustTier,
             Enabled = record.Enabled,
             Version = record.Version,
             CreatedAtUtc = record.CreatedAtUtc,
@@ -44,6 +50,7 @@ internal static class McpServerMapper
             request.WorkingDirectory,
             request.Env ?? new Dictionary<string, string>(StringComparer.Ordinal),
             request.Url,
+            request.TrustTier,
             Enabled: false);
     }
 
@@ -61,6 +68,7 @@ internal static class McpServerMapper
             request.WorkingDirectory,
             request.Env ?? new Dictionary<string, string>(StringComparer.Ordinal),
             request.Url,
+            request.TrustTier,
             Enabled: false);
     }
 

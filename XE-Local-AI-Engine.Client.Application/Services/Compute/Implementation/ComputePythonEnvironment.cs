@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 
 using System.Security.Cryptography;
-using XE_Local_AI_Engine.Providers.Training;
 using XE_Local_AI_Engine.Providers.Training.Implementation;
 
 /// <summary>

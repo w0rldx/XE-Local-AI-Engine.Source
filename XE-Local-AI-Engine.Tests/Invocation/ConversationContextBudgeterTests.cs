@@ -776,7 +776,12 @@ public sealed class ConversationContextBudgeterTests
         AssertEx.Equal(expected: 1, result.ToolResultsTruncated);
         AssertEx.Equal(expected: 1, result.ReasoningStrippedCount);
         AssertEx.Equal(expected: 1, result.ProtectedResultsExcerptedCount);
-        foreach (var messageId in new[] { "message-historical", "message-reasoning", "message-protected" })
+        foreach (var messageId in new[]
+                 {
+                     "message-historical",
+                     "message-reasoning",
+                     "message-protected"
+                 })
         {
             var rewritten = AssertEx.NotNull(result.Messages.FirstOrDefault(message => string.Equals(message.MessageId, messageId, StringComparison.Ordinal)));
             AssertEx.Equal("budgeter-identity", rewritten.AuthorName, "a rewrite must keep the message's author");
@@ -825,6 +830,63 @@ public sealed class ConversationContextBudgeterTests
 
     // The last two defaults track the SHIPPED defaults deliberately, so a test that says nothing about them is a test
     // about production behaviour. A test that wants a pass off says so explicitly.
+    [Test]
+    public void Budget_WithNoObservedCorrection_MeasuresAgainstTheSafetyMarginAlone()
+    {
+        // The control for the pair below. Six ten-token turns (120 tokens) against a margined budget of 85: the two
+        // oldest turns go and the round fits at 80. At a neutral correction the effective budget is exactly the
+        // margined window, so every fixture written before the observed-ratio channel existed still proves what it was
+        // written for.
+        var sut = CreateSut(FixedEstimator(perMessage: 10), recentTurnKeepCount: 1);
+
+        var result = sut.Budget(SixTurns(), CapacityFor(85), reservedOutputTokens: 0, modelName: CalibratedModel);
+
+        AssertEx.Equal(expected: 4, result.MessagesDropped);
+    }
+
+    [Test]
+    public void Budget_WhenTheModelIsObservedToCostMoreThanEstimated_TrimsEarlier()
+    {
+        // Same history, same window, same estimator arithmetic — the ONLY difference is that real rounds of this model
+        // have been observed to cost half again what the char heuristic predicts. The budget the estimate is measured
+        // against shrinks (85 -> 56), so two further turns go rather than the round reaching the provider and coming
+        // back as the context-size 400 the budgeter believed could not happen.
+        var sut = CreateSut(FixedEstimator(perMessage: 10, observedCorrection: 1.5), recentTurnKeepCount: 1);
+
+        var result = sut.Budget(SixTurns(), CapacityFor(85), reservedOutputTokens: 0, modelName: CalibratedModel);
+
+        AssertEx.True(result.Trimmed);
+        AssertEx.Equal(expected: 8, result.MessagesDropped);
+    }
+
+    [Test]
+    public void Budget_WhenTheModelIsObservedToCostLessThanEstimated_DoesNotWidenTheWindow()
+    {
+        // Tighten-only: a below-neutral observation is remembered but never spent, because widening past the safety
+        // factor on the strength of a heuristic already known to run optimistic is the failure this whole mechanism
+        // exists to avoid.
+        var sut = CreateSut(FixedEstimator(perMessage: 10, observedCorrection: 0.6), recentTurnKeepCount: 1);
+
+        var result = sut.Budget(SixTurns(), CapacityFor(85), reservedOutputTokens: 0, modelName: CalibratedModel);
+
+        AssertEx.Equal(expected: 4, result.MessagesDropped);
+    }
+
+    private const string CalibratedModel = "qwen3.8-27b:Q4_K_M";
+
+    /// <summary>Six single-message-pair turns of ten estimated tokens each; the keep-window floor of two protects the last two.</summary>
+    private static List<ChatMessage> SixTurns()
+    {
+        var messages = new List<ChatMessage>(12);
+        for (var turn = 0; turn < 6; turn++)
+        {
+            messages.Add(User($"u{turn}"));
+            messages.Add(Assistant($"a{turn}"));
+        }
+
+        return messages;
+    }
+
     private static ConversationContextBudgeter CreateSut(ITokenEstimator estimator,
         int recentTurnKeepCount = 4,
         int historicalToolResultExcerptChars = 2000,
@@ -841,9 +903,10 @@ public sealed class ConversationContextBudgeterTests
         return new ConversationContextBudgeter(estimator, options);
     }
 
-    private static ITokenEstimator FixedEstimator(int perMessage)
+    private static ITokenEstimator FixedEstimator(int perMessage,
+        double observedCorrection = TokenEstimatorCalibrationStore.NeutralObservedCorrection)
     {
-        return new StubTokenEstimator(_ => perMessage);
+        return new StubTokenEstimator(_ => perMessage, observedCorrection);
     }
 
     private static ITokenEstimator CharCountEstimator()
@@ -983,10 +1046,18 @@ public sealed class ConversationContextBudgeterTests
     private sealed class StubTokenEstimator : ITokenEstimator
     {
         private readonly Func<ChatMessage, int> _perMessage;
+        private readonly double _observedCorrection;
 
-        public StubTokenEstimator(Func<ChatMessage, int> perMessage)
+        public StubTokenEstimator(Func<ChatMessage, int> perMessage,
+            double observedCorrection = TokenEstimatorCalibrationStore.NeutralObservedCorrection)
         {
             _perMessage = perMessage;
+            _observedCorrection = observedCorrection;
+        }
+
+        public double ResolveObservedCorrection(string? modelName)
+        {
+            return _observedCorrection;
         }
 
         public int EstimateTokens(ChatMessage message)

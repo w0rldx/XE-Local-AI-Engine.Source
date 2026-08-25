@@ -82,7 +82,10 @@ public sealed class ComputeSandboxLiveTests : IDisposable
         using var provider = CreateHostProvider();
         var gateway = CreateGateway(provider);
 
-        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "raise ValueError('nope')" });
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "raise ValueError('nope')"
+        });
 
         AssertEx.False(rendered.Contains("exit_code: 0", StringComparison.Ordinal), "a raising script must not report success");
         AssertEx.Contains(rendered, "ValueError");
@@ -94,9 +97,15 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     {
         RequireIsolationCapableHost();
         using var provider = CreateHostProvider();
-        var gateway = CreateGateway(provider, new ComputeOptions { TimeoutSeconds = 5 });
+        var gateway = CreateGateway(provider, new ComputeOptions
+        {
+            TimeoutSeconds = 5
+        });
 
-        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "while True: pass" });
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "while True: pass"
+        });
 
         AssertEx.Contains(rendered, "did not finish within 5s");
         AssertEx.Contains(rendered, "terminated");
@@ -107,9 +116,15 @@ public sealed class ComputeSandboxLiveTests : IDisposable
     {
         RequireIsolationCapableHost();
         using var provider = CreateHostProvider();
-        var gateway = CreateGateway(provider, new ComputeOptions { MaxOutputBytes = 2048 });
+        var gateway = CreateGateway(provider, new ComputeOptions
+        {
+            MaxOutputBytes = 2048
+        });
 
-        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print('a' * 200000)" });
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print('a' * 200000)"
+        });
 
         AssertEx.Contains(rendered, "…[output truncated]");
         AssertEx.True(rendered.Length < 20000, "a runaway print must not reach the model in full");
@@ -508,7 +523,10 @@ public sealed class ComputeSandboxLiveTests : IDisposable
         // limit, and this is the assertion that the compute option actually reaches it.
         RequireIsolationCapableHost();
         using var provider = CreateHostProvider();
-        var gateway = CreateGateway(provider, new ComputeOptions { ThreadLimit = 3 });
+        var gateway = CreateGateway(provider, new ComputeOptions
+        {
+            ThreadLimit = 3
+        });
 
         var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
         {
@@ -539,9 +557,13 @@ public sealed class ComputeSandboxLiveTests : IDisposable
             new StubIdentityProvider(),
             environment,
             Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             NullLogger<ComputeToolGateway>.Instance);
 
-        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest { Code = "print(1)" });
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
 
         AssertEx.Contains(rendered, "run_python rejected");
         AssertEx.Contains(rendered, "isolate");
@@ -555,6 +577,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
             new StubIdentityProvider(),
             _environment,
             Options.Create(options ?? new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             NullLogger<ComputeToolGateway>.Instance);
     }
 

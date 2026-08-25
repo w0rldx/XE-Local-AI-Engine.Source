@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -63,6 +64,54 @@ public sealed class WorkSessionServiceTests
                                       .ConfigureAwait(false);
 
         AssertEx.Contains(rejection.Message, "cannot call tools");
+    }
+
+    [Test]
+    public async Task Create_WhenTheAgentsModelIsOutsideTheNodesToolCapableList_IsRejected()
+    {
+        // The SECOND tool gate, and the one that used to be missed here: the model's own capability probe says yes
+        // while the operator's allow-list — which the offer applies unconditionally, cloud pins included — says no. The
+        // session would be created, every state-tool call would come back "Requested function ... not found", and the
+        // run would spend its whole step budget writing nothing.
+        await using var factory = NewFactory();
+        var agentId = await SeedAgentAsync(factory, "a-model-nobody-listed").ConfigureAwait(false);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var rejection = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
+                                          scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
+                                               .CreateAsync(new CreateWorkSessionRequestModel("t", "o", AgentWorkSessionKind.General, agentId)))
+                                      .ConfigureAwait(false);
+
+        AssertEx.Contains(rejection.Message, "tool-capable model list");
+        // The operator has to be told WHICH model to add, not merely that one is missing.
+        AssertEx.Contains(rejection.Message, "a-model-nobody-listed");
+        AssertEx.False(rejection.Message.Contains("cannot call tools", StringComparison.Ordinal),
+            "The two gates have different fixes, so they must not share a message.");
+        AssertEx.Empty(await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ListAsync().ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task Update_RepointingAtAnAgentOutsideTheToolCapableList_IsRejected_ButAListedOneIsAccepted()
+    {
+        await using var factory = NewFactory();
+        var sessionId = Guid.NewGuid();
+        var seeded = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
+        var unlistedAgentId = await SeedAgentAsync(factory, "a-model-nobody-listed").ConfigureAwait(false);
+        var listedAgentId = await SeedAgentAsync(factory, "another-local-model").ConfigureAwait(false);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
+        var rejection = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
+                                          service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, unlistedAgentId)))
+                                      .ConfigureAwait(false);
+
+        AssertEx.Contains(rejection.Message, "tool-capable model list");
+        AssertEx.Equal(seeded.AgentDefinitionId,
+            (await service.GetAsync(sessionId).ConfigureAwait(false)).AgentDefinitionId,
+            "The refused repoint left the session on the agent it had.");
+
+        var repointed = await service.UpdateAsync(sessionId, new UpdateWorkSessionRequestModel(null, null, listedAgentId)).ConfigureAwait(false);
+        AssertEx.Equal(listedAgentId, repointed.AgentDefinitionId, "A listed model still repoints.");
     }
 
     [Test]
@@ -172,7 +221,7 @@ public sealed class WorkSessionServiceTests
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
 
         await using var scope = factory.Services.CreateAsyncScope();
-        var cap = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<SecurityOptions>>().Value.MaxMessageSizeKb;
+        var cap = scope.ServiceProvider.GetRequiredService<IOptions<SecurityOptions>>().Value.MaxMessageSizeKb;
         var refusal = await AssertEx.ThrowsAsync<WorkSessionValidationException>(() =>
                                         scope.ServiceProvider.GetRequiredService<IWorkSessionService>()
                                              .PostFollowUpAsync(sessionId, new string('x', (cap * 1024) + 1)))
@@ -259,16 +308,16 @@ public sealed class WorkSessionServiceTests
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         var artifactId = Guid.NewGuid();
         _ = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand(sessionId,
-                    artifactId,
-                    WorkSessionVersions.Any,
-                    Guid.NewGuid(),
-                    AgentWorkSessionArtifactKind.Note,
-                    "phantom.txt",
-                    "text/plain",
-                    new string('a', 64),
-                    SizeBytes: 4,
-                    "work-session-artifact:phantom"))
-            .ConfigureAwait(false);
+                           artifactId,
+                           WorkSessionVersions.Any,
+                           Guid.NewGuid(),
+                           AgentWorkSessionArtifactKind.Note,
+                           "phantom.txt",
+                           "text/plain",
+                           new string('a', 64),
+                           SizeBytes: 4,
+                           "work-session-artifact:phantom"))
+                       .ConfigureAwait(false);
 
         _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => service.ReadArtifactContentAsync(sessionId, artifactId)).ConfigureAwait(false);
     }
@@ -286,16 +335,16 @@ public sealed class WorkSessionServiceTests
         var store = scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>();
         var artifactId = Guid.NewGuid();
         _ = await store.AppendArtifactAsync(new AppendWorkSessionArtifactCommand(sessionId,
-                    artifactId,
-                    WorkSessionVersions.Any,
-                    Guid.NewGuid(),
-                    AgentWorkSessionArtifactKind.Report,
-                    "report.md",
-                    "text/markdown",
-                    new string('b', 64),
-                    SizeBytes: 12,
-                    "work-session-artifact:report"))
-            .ConfigureAwait(false);
+                           artifactId,
+                           WorkSessionVersions.Any,
+                           Guid.NewGuid(),
+                           AgentWorkSessionArtifactKind.Report,
+                           "report.md",
+                           "text/markdown",
+                           new string('b', 64),
+                           SizeBytes: 12,
+                           "work-session-artifact:report"))
+                       .ConfigureAwait(false);
 
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
 
@@ -377,15 +426,15 @@ public sealed class WorkSessionServiceTests
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         var definition = await store.AddAsync(new AgentDefinitionInput($"Agent on {modelProfile}",
-                    Description: null,
-                    "Work the objective.",
-                    modelProfile,
-                    ReasoningEffort: null,
-                    AgentDefinitionKind.Single,
-                    [],
-                    new Dictionary<string, bool>(StringComparer.Ordinal),
-                    OrchestrationTopologyJson: null))
-            .ConfigureAwait(false);
+                                        Description: null,
+                                        "Work the objective.",
+                                        modelProfile,
+                                        ReasoningEffort: null,
+                                        AgentDefinitionKind.Single,
+                                        [],
+                                        new Dictionary<string, bool>(StringComparer.Ordinal),
+                                        OrchestrationTopologyJson: null))
+                                    .ConfigureAwait(false);
         return definition.Id;
     }
 

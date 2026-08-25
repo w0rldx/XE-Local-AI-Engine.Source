@@ -25,7 +25,8 @@ public interface IGgufModelCapabilityResolver
 ///     sent exclusively on the graded branch. Defaults to <see langword="true" />, the inert safe default: only a
 ///     positively-detected closing-tag-less template turns the cap off, so no unknown can silently remove it.
 /// </param>
-public readonly record struct GgufModelCapabilities(bool SupportsThinking,
+public readonly record struct GgufModelCapabilities(
+    bool SupportsThinking,
     bool SupportsTools,
     bool SupportsVision,
     bool ReasoningBudgetEnforceable = true);

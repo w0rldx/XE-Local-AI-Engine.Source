@@ -103,7 +103,11 @@ public sealed class WorkSessionAgentSeederTests
     {
         await using var factory = new TestServerWebAppFactory();
 
-        foreach (var slug in new[] { AgentDefaults.WorkSessionGeneralAgentSeedSlug, AgentDefaults.WorkSessionResearchAgentSeedSlug })
+        foreach (var slug in new[]
+                 {
+                     AgentDefaults.WorkSessionGeneralAgentSeedSlug,
+                     AgentDefaults.WorkSessionResearchAgentSeedSlug
+                 })
         {
             var definition = await ReadSeededAsync(factory, slug).ConfigureAwait(false);
             foreach (var (name, requiresApproval) in definition.ToolApprovals)

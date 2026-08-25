@@ -49,6 +49,13 @@ internal static class DevelopmentValidationFailureCodes
 
     /// <summary>A test command reported failing tests.</summary>
     public const string TestsFailed = "tests_failed";
+
+    /// <summary>
+    ///     The attempt changed a file that decides what <c>restore</c> resolves. Reported before any command runs — see
+    ///     <see cref="DevelopmentDependencyManifestPolicy" /> for why this is a verdict the agent can act on rather
+    ///     than a security abort.
+    /// </summary>
+    public const string DependencyManifestChanged = "dependency_manifest_changed";
 }
 
 /// <summary>

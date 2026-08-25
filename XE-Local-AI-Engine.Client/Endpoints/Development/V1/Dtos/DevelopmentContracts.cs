@@ -131,7 +131,92 @@ public sealed class ReconnectDevelopmentRepositoryRequest
 /// <param name="Enabled">This node's Development Mode configuration switch.</param>
 /// <param name="SandboxProvider">The sandbox provider in force for Development Mode (<c>fake</c>, <c>process</c>, or <c>docker</c>).</param>
 /// <param name="ContainerRuntime">The container-runtime preflight, present only when the container provider is in force.</param>
-public sealed record DevelopmentCapabilityResponse(bool Enabled, string SandboxProvider, DevelopmentContainerRuntimeResponse? ContainerRuntime);
+/// <param name="Isolation">
+///     The isolation posture of every sandbox role on this node, container provider or not. Additive: a consumer that
+///     only reads the three axes above is unaffected.
+/// </param>
+public sealed record DevelopmentCapabilityResponse(
+    bool Enabled,
+    string SandboxProvider,
+    DevelopmentContainerRuntimeResponse? ContainerRuntime,
+    IReadOnlyList<SandboxIsolationSummaryResponse> Isolation);
+
+/// <summary>
+///     What one sandbox ROLE is actually isolated by on this host, as the operator sees it.
+///     <para>
+///         Reported per role rather than once for the node because provider selection is per feature: AgentHome,
+///         Development Mode and work sessions each resolve their own provider, and on a mixed node they do not share a
+///         posture. Reporting a single number would have to pick one of them and be wrong about the others.
+///     </para>
+///     <para>
+///         Every boolean here is the SERVED posture: the role's own ADR 0007 declaration in <c>SandboxWorkloads</c>
+///         intersected with the provider's advertised <c>SandboxProviderCapabilities</c> — the same flags the
+///         fail-closed launch policy gates on. Both halves are load-bearing. Reading the capabilities alone claimed a
+///         filesystem boundary for Development Mode, whose declaration asks for none and which runs the host toolchain
+///         with the worktree mounted; reading the declaration alone would claim a boundary on a host that cannot serve
+///         one. <c>DevelopmentContractMapper.ToIsolationSummary</c> owns the rule. Nothing here describes a hardware or
+///         VM boundary: no provider in this tree can prove one, so <see cref="Level" /> deliberately has no term for
+///         it.
+///     </para>
+/// </summary>
+/// <param name="Role">
+///     The sandbox role: <c>agent-home</c>, <c>run_python</c>, <c>mcp-stdio</c>, <c>development</c>, or
+///     <c>work-session</c>. <c>run_python</c> and <c>mcp-stdio</c> resolve the same provider instance as
+///     <c>agent-home</c> and are still reported separately, because they are the roles that declare a filesystem
+///     boundary and their served posture therefore differs on the same backend. <c>mcp-stdio</c> covers a
+///     <c>Sandboxed</c> stdio MCP server only; a <c>PrivilegedHost</c> one declares no requirements and has no row.
+/// </param>
+/// <param name="Provider">The provider resolved for that role (<c>fake</c>, <c>process</c>, or <c>docker</c>).</param>
+/// <param name="Backend">The mechanism the boundary is made of: <c>none</c>, <c>process</c>, <c>bwrap</c>, or <c>docker</c>.</param>
+/// <param name="Level">The coarse level derived from the three enforcement axes; <c>DevelopmentContractMapper</c> owns the rule.</param>
+/// <param name="FilesystemIsolation">
+///     Whether THIS role's commands run with the host filesystem absent from their mount namespace — the role asks for
+///     the boundary and the provider serves it. A provider that could serve one to a role that never asks reports
+///     <see langword="false" /> here, with the reason saying so.
+/// </param>
+/// <param name="NetworkIsolation">
+///     Whether egress can actually be denied. The capability alone, because every consumer requests
+///     <c>SandboxNetworkPolicy.None</c> per call exactly where it is advertised, so the flag is the served posture.
+/// </param>
+/// <param name="NetworkIsolationRequired">
+///     Whether denial is a PRECONDITION for this role on this node rather than a best-effort tightening — the
+///     difference between "required" and "where available" in the panel, and it is the operator's whole action on the
+///     <c>RequireEgressDenial</c> switches. True when the role's own declaration will not accept egress
+///     (<c>run_python</c>), or when the node set the switch for the role's section
+///     (<c>AgentHome:Sandbox:RequireEgressDenial</c>, <c>Development:Sandbox:RequireEgressDenial</c>). Required AND
+///     <see cref="NetworkIsolation" /> false is the one combination that means the role will REFUSE TO START here:
+///     the create site fails closed rather than serving the host's network.
+/// </param>
+/// <param name="ResourceLimits">
+///     Whether memory / PID / CPU ceilings are actually imposed on THIS role — the host can impose them and the role
+///     asks for them. <c>SandboxCreateRequest.ResourceLimits</c> is a preference a backend may drop, and a role that
+///     passes none gets none however capable the host is, so the capability alone was never the served answer.
+/// </param>
+/// <param name="ReadOnlyMounts">Whether the provider can mount a tree read-only.</param>
+/// <param name="FilesystemIsolationUnavailableReason">
+///     Why this role has no filesystem boundary, or null when it has one. Two different sentences, and telling them
+///     apart is the operator's whole action: the role does not REQUEST one (nothing to fix — it declares an isolation
+///     floor of <c>None</c>), or it requests one and the host cannot serve it (the measured probe reason — install the
+///     missing mechanism, or leave the tool off). Null is never "we do not know": a role without the boundary always
+///     carries a reason.
+/// </param>
+/// <param name="ResourceLimitsUnavailableReason">
+///     Why this role has no CPU / memory / process-count ceiling, or null when it has one. The same two sentences as
+///     the filesystem reason, and the same operator action behind them: the role does not REQUEST ceilings (whether it
+///     should is an operator decision, not a bug), or it requests them and the host cannot impose them.
+/// </param>
+public sealed record SandboxIsolationSummaryResponse(
+    string Role,
+    string Provider,
+    string Backend,
+    string Level,
+    bool FilesystemIsolation,
+    bool NetworkIsolation,
+    bool NetworkIsolationRequired,
+    bool ResourceLimits,
+    bool ReadOnlyMounts,
+    string? FilesystemIsolationUnavailableReason,
+    string? ResourceLimitsUnavailableReason);
 
 /// <summary>
 ///     The container-runtime preflight, as the operator sees it.

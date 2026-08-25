@@ -336,4 +336,70 @@ public sealed class WorkSessionsPageE2ETests : XESerialE2ETestBase
                 Timeout = 30_000
             });
     }
+
+    /// <summary>
+    ///     The other side of <see cref="MarkChatModelToolCapableAsync" />, which this test deliberately does NOT call:
+    ///     a model the operator has not listed is refused at the dialog, in words that name the model and the list.
+    ///     <para>
+    ///         This is what the gap looked like before the refusal existed. Create SUCCEEDED — the capability probe is a
+    ///         different source from the allow-list and said yes — and the failure only appeared later, as steps that
+    ///         ran with the four state tools missing from the offer, answering "Requested function update_work_plan not
+    ///         found" until the session had spent its whole step budget with an empty plan. Nothing in the UI said why.
+    ///     </para>
+    ///     <para>
+    ///         The model is still pinned and mapped: those are the two fixture concessions that get the create path PAST
+    ///         its earlier refusals, so the one under test is the only one left to fail.
+    ///     </para>
+    /// </summary>
+    [Test]
+    [Category("Page")]
+    public async Task Work_Session_Create_Is_Refused_When_The_Agents_Model_Is_Not_Tool_Capable_Listed()
+    {
+        await PinChatModelOnSeededAgentAsync();
+        await MapChatModelToOllamaAsync();
+
+        await Page.GotoAsync($"{NodeAppUrl}/work-sessions", new PageGotoOptions
+        {
+            WaitUntil = WaitUntilState.NetworkIdle
+        });
+
+        await Expect(Page.GetByTestId("work-sessions-page")).ToBeVisibleAsync();
+        await Page.GetByTestId("work-sessions-create").ClickAsync();
+        await Expect(Page.GetByTestId("create-work-session-dialog")).ToBeVisibleAsync();
+
+        await Page.GetByTestId("create-work-session-title").FillAsync("E2E refused work session");
+        await Page.GetByTestId("create-work-session-objective").FillAsync("This session must never be created.");
+
+        await Page.GetByTestId("chat-agent-selector-trigger").ClickAsync();
+        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        {
+            Name = GeneralAgentName
+        }).First.ClickAsync();
+
+        var submit = Page.GetByTestId("create-work-session-submit");
+        await Expect(submit).ToBeEnabledAsync();
+        var createResponse = await Page.RunAndWaitForResponseAsync(async () => await submit.ClickAsync(),
+            response => response.Url.Contains("/api/local/v1/work-sessions", StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(response.Request.Method, "POST", StringComparison.OrdinalIgnoreCase),
+            new PageRunAndWaitForResponseOptions
+            {
+                Timeout = 10_000
+            });
+
+        await Assert.That(createResponse.Status).IsEqualTo(400);
+
+        // The refusal has to arrive as text the operator can act on, not as a generic "could not create" fallback: the
+        // handler's ProblemDetails carries the message in `detail`, which is what the dialog's alert renders.
+        await Expect(Page.GetByTestId("create-work-session-error")).ToContainTextAsync("tool-capable model list",
+            new LocatorAssertionsToContainTextOptions
+            {
+                Timeout = 10_000
+            });
+        await Expect(Page.GetByTestId("create-work-session-error")).ToContainTextAsync(FakeChatModel);
+
+        // The dialog stays open on the failure, so the operator keeps what they typed. Close it so the shared serial
+        // host is handed on with no modal in the way.
+        await Page.GetByTestId("create-work-session-cancel").ClickAsync();
+        await Expect(Page.GetByTestId("create-work-session-dialog")).ToHaveCountAsync(0);
+    }
 }

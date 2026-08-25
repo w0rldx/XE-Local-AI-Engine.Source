@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.WorkSessions;
 
+using System.Globalization;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -89,6 +89,6 @@ internal sealed class WorkSessionTestFixture : IDisposable
         var count = await RawScalarAsync($"SELECT COUNT(*) FROM {table} WHERE {column} = $value;",
                 command => command.Parameters.AddWithValue("$value", value))
             .ConfigureAwait(false);
-        return Convert.ToInt64(count, System.Globalization.CultureInfo.InvariantCulture);
+        return Convert.ToInt64(count, CultureInfo.InvariantCulture);
     }
 }

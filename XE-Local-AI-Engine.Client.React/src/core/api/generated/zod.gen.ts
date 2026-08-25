@@ -2616,6 +2616,8 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1UpdateLlamaCppRuntimeReque
 
 export const zXeLocalAiEngineClientPersistenceMcpTransportKind = z.enum(["Stdio", "Http"]);
 
+export const zXeLocalAiEngineClientPersistenceMcpTrustTier = z.enum(["Sandboxed", "PrivilegedHost", "BuiltInTrusted"]);
+
 export const zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse = z.object({
 	id: z.guid(),
 	name: z.string(),
@@ -2626,6 +2628,7 @@ export const zXeLocalAiEngineClientEndpointsMcpV1McpServerResponse = z.object({
 	workingDirectory: z.string().nullish(),
 	env: z.record(z.string(), z.string()),
 	url: z.string().nullish(),
+	trustTier: zXeLocalAiEngineClientPersistenceMcpTrustTier,
 	enabled: z.boolean(),
 	version: z
 		.int()
@@ -2644,6 +2647,7 @@ export const zXeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest = z.obje
 	workingDirectory: z.string().nullish(),
 	env: z.record(z.string(), z.string()).nullish(),
 	url: z.string().nullish(),
+	trustTier: zXeLocalAiEngineClientPersistenceMcpTrustTier.optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsMcpV1DeleteMcpServerRequest = z.record(z.string(), z.never());
@@ -2721,6 +2725,7 @@ export const zXeLocalAiEngineClientEndpointsMcpV1UpdateMcpServerRequest = z.obje
 	workingDirectory: z.string().nullish(),
 	env: z.record(z.string(), z.string()).nullish(),
 	url: z.string().nullish(),
+	trustTier: zXeLocalAiEngineClientPersistenceMcpTrustTier.optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1DeleteLocalModelResponse = z.object({
@@ -3746,10 +3751,25 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRun
 	pinnedDaemon: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse.nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse = z.object({
+	role: z.string().optional(),
+	provider: z.string().optional(),
+	backend: z.string().optional(),
+	level: z.string().optional(),
+	filesystemIsolation: z.boolean().optional(),
+	networkIsolation: z.boolean().optional(),
+	networkIsolationRequired: z.boolean().optional(),
+	resourceLimits: z.boolean().optional(),
+	readOnlyMounts: z.boolean().optional(),
+	filesystemIsolationUnavailableReason: z.string().nullish(),
+	resourceLimitsUnavailableReason: z.string().nullish(),
+});
+
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = z.object({
 	enabled: z.boolean().optional(),
 	sandboxProvider: z.string().optional(),
 	containerRuntime: zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerRuntimeResponse.nullish(),
+	isolation: z.array(zXeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1ConfirmDevelopmentContainerRuntimeRequest = z.object({

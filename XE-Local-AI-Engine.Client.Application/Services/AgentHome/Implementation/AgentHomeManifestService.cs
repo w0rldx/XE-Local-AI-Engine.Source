@@ -281,7 +281,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
 
     /// <summary>
     ///     The <c>policy.json</c> network posture, derived from the sandbox provider's advertised capability — the same
-    ///     flag <c>AgentHomeService.ResolveNetworkPolicy</c> uses to choose what to request. One source of truth, so the
+    ///     flag <c>SandboxEgressPolicy</c> uses to choose what to request. One source of truth, so the
     ///     manifest and the run cannot disagree.
     ///     <para>
     ///         Note the baseline writer deliberately does NOT overwrite an existing <c>policy.json</c> (re-init
@@ -311,7 +311,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         var policyJson = JsonSerializer.Serialize(new AgentHomePolicy
             {
                 Version = AgentHomePolicy.CurrentVersion,
-                // DERIVED, never restated: read from the same capability flag AgentHomeService.ResolveNetworkPolicy
+                // DERIVED, never restated: read from the same capability flag SandboxEgressPolicy
                 // reads, so the manifest cannot advertise a posture the run did not actually get. A hard-coded string
                 // here would silently become a lie the moment the effective policy changed on either side.
                 NetworkPolicy = ResolveManifestNetworkPolicy(),

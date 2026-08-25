@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.WorkSessions;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
@@ -57,7 +58,7 @@ public sealed class WorkSessionToolSchemaTests
         {
             AssertEx.Contains(WorkSessionToolDefinitions.ToolNames, descriptor.Name);
             AssertEx.False(descriptor.RequiresApproval, "A prompt per recorded finding would make an unattended session unusable.");
-            AssertEx.Equal(XE_Local_AI_Engine.AI.Agent.Tools.ToolCategory.WriteExecute,
+            AssertEx.Equal(ToolCategory.WriteExecute,
                 descriptor.Category,
                 "These tools write durable rows, and hiding that from a category-based policy would be worse than the click.");
         }

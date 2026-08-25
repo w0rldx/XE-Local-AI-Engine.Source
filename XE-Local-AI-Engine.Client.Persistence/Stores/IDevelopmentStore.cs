@@ -264,6 +264,26 @@ public interface IDevelopmentStore
     Task<DevelopmentOperationResult> RecordApplyStartedAsync(Guid operationId, DevelopmentApprovedApplySubject subject, CancellationToken cancellationToken = default);
     Task<DevelopmentOperationResult> CompleteApplyAsync(Guid operationId, DevelopmentApprovedApplySubject subject, CancellationToken cancellationToken = default);
     Task<DevelopmentOperationResult> BlockApplyAsync(Guid operationId, DevelopmentApprovedApplySubject subject, string sanitizedReason, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Records that the managed workspace for <paramref name="attemptId" /> carries COMMITTED files whose names
+    ///     mark them as credential-bearing, as an operator-visible event. Non-blocking: the attempt proceeds.
+    ///     <para>
+    ///         Idempotent per attempt — the operation is keyed on the attempt id and its own phase, so a second prepare
+    ///         of the same attempt (validation re-prepares the coder's workspace) returns the first result rather than
+    ///         writing a duplicate event.
+    ///     </para>
+    ///     <para>
+    ///         The paths go into the event's encrypted detail. On a backend with no mount layer this event is the WHOLE
+    ///         control: the engine can see the committed secret but cannot stop the repository's own build from reading
+    ///         it, so making it visible is all it can honestly do.
+    ///     </para>
+    /// </summary>
+    Task<DevelopmentOperationResult> RecordWorkspaceSecretsAsync(Guid taskId,
+        Guid attemptId,
+        IReadOnlyList<string> repositoryRelativePaths,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<DevelopmentEventSnapshot>> ListEventsAsync(Guid projectId, CancellationToken cancellationToken = default);
     Task<DevelopmentExecutionSnapshot> GetExecutionSnapshotAsync(Guid attemptId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<DevelopmentProjectSnapshot>> ListProjectsAsync(CancellationToken cancellationToken = default);

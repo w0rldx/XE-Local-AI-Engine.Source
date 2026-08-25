@@ -747,6 +747,12 @@ a failure, so the supervisor recognises the budget's own fixed terminal message
 tools that ran are already persisted and the state block carries the plan, so the next step resumes the
 work. Letting it fall through to the failure branch would end a session on its own safety limit.
 
+`StepEnded` is not the cap's row, though — it is written for **every** step that ends without a fault,
+and the OUTCOME is what distinguishes them: `Completed` for an ordinary step, `ProviderCallBudget` for
+one the call cap clipped, `ToolGate` for one the allow-list check stopped before it was sent (the only
+one of the three whose row carries no consumption detail — nothing ran). A record that existed only when
+a bound tripped would measure the bound rather than the work.
+
 The checkpoint's own compaction is not that bound. It lands every `CheckpointEveryNSteps` steps and keeps
 the configured `Agent:ConversationCompaction:RecentMessagesToKeepVerbatim` (8) — four whole steps for a
 session — so it folds nothing until a session is long, and it runs *after* a step, never before one.
@@ -794,6 +800,33 @@ be a lie a resumed session reads as fact.
 cloud-effective agent unless `KnowledgeBase:AllowCloudModelAccess` is set. The knowledge-base cloud gate
 is per turn and acts on the *offer*; it says nothing about text a local model already extracted, which
 the state block would otherwise carry off the node on the next step.
+
+Create and repoint also check **both** tool gates, through `WorkSessionToolGate` — one seam shared by the
+service and the supervisor so they cannot judge a session differently. The model's own capability probe
+(`IModelCapabilityResolver`) and the operator's `AgentHome:ToolCapableModels` allow-list
+(`ILocalToolOfferProvider.IsToolCapable`, applied by the offer unconditionally — cloud pins included) are
+different sources and are free to disagree, and checking only the first made the failure silent: create
+succeeded, the step ran with the four state tools missing from its offer, every `update_work_plan` came
+back *"Requested function update\_work\_plan not found"*, and the session spent its whole step budget with
+an empty plan. Each gate has its own refusal, because their fixes differ — a different agent versus one
+line in Node Settings. The allow-list is re-read live per offer, so it can also change mid-run: the
+supervisor re-checks it **before the send** (the allow-list alone — `InspectAllowListAsync`, which skips
+the capability probe it would not read) and, rather than sending a turn that cannot work, checkpoints and
+settles **`Paused`** with the same sentence, over a `StepEnded` row whose outcome is `ToolGate`.
+
+Paused, not Failed, is load-bearing: `ResumeAsync` accepts only `Paused`/`Interrupted` and a repoint only
+`Draft`/`Paused`/`Interrupted`, so a `Failed` session could not be started again *after the operator did
+exactly what the refusal asked*. The row gets its own operation-id phase for the same reason — that step
+is retried, and sharing the `ended` phase would let store idempotency swallow the real row the retried
+step writes. A session whose agent definition has since been deleted is not judged at all — create could
+not have judged it either — and a store failure inside the check itself only logs and lets the step
+proceed: gate 4 is enforced by the offer, so the guard is advisory, and failing closed would stop a
+session over a transient read.
+
+**A Codex- or Azure-pinned agent must be listed by hand.** `ToolCapableModelRegistrar` unions a model
+into `AgentHome:ToolCapableModels` only from a locally downloaded GGUF's own template-detected
+capability, so it never sees a cloud model id. Pinning an agent to one and creating a session against it
+is refused until an operator adds that id under **Node Settings → Tools**, and the refusal says so.
 
 ### 5.6 Settings
 
