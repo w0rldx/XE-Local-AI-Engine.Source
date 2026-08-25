@@ -2781,6 +2781,7 @@
 					"empty": "Keine Umgebungsvariablen.",
 					"keyPlaceholder": "KEY",
 					"valuePlaceholder": "Wert",
+					"maskedPlaceholder": "unverändert — neuen Wert eingeben, um ihn zu ersetzen",
 					"remove": "Variable entfernen"
 				},
 				"url": {

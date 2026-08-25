@@ -2781,6 +2781,7 @@
 					"empty": "No environment variables.",
 					"keyPlaceholder": "KEY",
 					"valuePlaceholder": "value",
+					"maskedPlaceholder": "unchanged — enter a new value to replace",
 					"remove": "Remove variable"
 				},
 				"url": {
