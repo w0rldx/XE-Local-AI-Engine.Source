@@ -29621,6 +29621,18 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse"
             }
+          },
+          "repeatGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGroupResponse"
+            }
+          },
+          "llamaBench": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchRowResponse"
+            }
           }
         }
       },
@@ -29648,6 +29660,11 @@
             "format": "int32"
           },
           "maxOutputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningBudgetTokens": {
             "type": "integer",
             "format": "int32",
             "nullable": true
@@ -29933,6 +29950,18 @@
           "isWarmup": {
             "type": "boolean"
           },
+          "repeatMode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesBenchmarkRepeatMode"
+          },
+          "samplingSeed": {
+            "type": "string",
+            "nullable": true
+          },
+          "samplingTemperature": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
           "effectiveContextTokens": {
             "type": "integer",
             "format": "int32",
@@ -30165,6 +30194,144 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientPersistenceEntitiesBenchmarkRepeatMode": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Throughput",
+          "AnswerVariance"
+        ],
+        "enum": [
+          "Throughput",
+          "AnswerVariance"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGroupResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName",
+          "ttftMs",
+          "promptTokensPerSecond",
+          "generationTokensPerSecond"
+        ],
+        "properties": {
+          "repeatGroupId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "repeatMode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesBenchmarkRepeatMode"
+          },
+          "runIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          "ttftMs": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse"
+          },
+          "promptTokensPerSecond": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse"
+          },
+          "generationTokensPerSecond": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sampleCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mean": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "stdDev": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "samples": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchRowResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelName"
+        ],
+        "properties": {
+          "buildCommit": {
+            "type": "string",
+            "nullable": true
+          },
+          "gpuInfo": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelFilename": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelSize": {
+            "type": "integer",
+            "nullable": true
+          },
+          "nGpuLayers": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "nPrompt": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nGen": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "avgTs": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "stddevTs": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "samples": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "repeatGroupId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "modelName": {
+            "type": "string"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest": {
         "type": "object",
         "additionalProperties": false
@@ -30200,6 +30367,11 @@
             "format": "int32"
           },
           "maxOutputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningBudgetTokens": {
             "type": "integer",
             "format": "int32",
             "nullable": true
@@ -30272,6 +30444,11 @@
             "format": "int32"
           },
           "maxOutputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningBudgetTokens": {
             "type": "integer",
             "format": "int32",
             "nullable": true
@@ -30488,6 +30665,14 @@
           },
           "warmup": {
             "type": "boolean"
+          },
+          "repeatMode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesBenchmarkRepeatMode"
+          },
+          "answerVarianceTemperature": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
           }
         }
       },
@@ -30578,6 +30763,14 @@
           },
           "warmup": {
             "type": "boolean"
+          },
+          "repeatMode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientPersistenceEntitiesBenchmarkRepeatMode"
+          },
+          "answerVarianceTemperature": {
+            "type": "number",
+            "format": "float",
+            "nullable": true
           }
         }
       },

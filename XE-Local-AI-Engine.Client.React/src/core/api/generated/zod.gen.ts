@@ -4312,6 +4312,11 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectRe
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	reasoningBudgetTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 	invocationTimeoutSeconds: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -4394,6 +4399,8 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunJudgeRespons
 	criteria: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeCriterionScoreResponse).nullish(),
 });
 
+export const zXeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode = z.enum(["Throughput", "AnswerVariance"]);
+
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse = z.object({
 	id: z.guid().optional(),
 	projectId: z.guid().optional(),
@@ -4430,6 +4437,9 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespo
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
 	isWarmup: z.boolean().optional(),
+	repeatMode: zXeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode.optional(),
+	samplingSeed: z.string().nullish(),
+	samplingTemperature: z.number().nullish(),
 	effectiveContextTokens: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -4512,6 +4522,58 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailRespon
 		}),
 	);
 
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse = z.object({
+	sampleCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	mean: z.number().nullish(),
+	stdDev: z.number().nullish(),
+	samples: z.array(z.number()).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGroupResponse = z.object({
+	repeatGroupId: z.guid().nullish(),
+	modelName: z.string(),
+	repeatMode: zXeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode.optional(),
+	runIds: z.array(z.guid()).optional(),
+	ttftMs: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse,
+	promptTokensPerSecond: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse,
+	generationTokensPerSecond: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchRowResponse = z.object({
+	buildCommit: z.string().nullish(),
+	gpuInfo: z.string().nullish(),
+	modelFilename: z.string().nullish(),
+	modelSize: z.int().nullish(),
+	nGpuLayers: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	nPrompt: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	nGen: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	avgTs: z.number().nullish(),
+	stddevTs: z.number().nullish(),
+	samples: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	repeatGroupId: z.guid().nullish(),
+	modelName: z.string(),
+});
+
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse = z.object({
 	schemaVersion: z
 		.int()
@@ -4522,6 +4584,8 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse 
 	project: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectResponse,
 	rankCohort: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse,
 	runs: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse).optional(),
+	repeatGroups: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGroupResponse).optional(),
+	llamaBench: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchRowResponse).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest = z.record(z.string(), z.never());
@@ -4535,6 +4599,11 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryR
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 	maxOutputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningBudgetTokens: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
@@ -4578,6 +4647,11 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutation
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 	maxOutputTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	reasoningBudgetTokens: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
@@ -4679,6 +4753,8 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 	warmup: z.boolean().optional(),
+	repeatMode: zXeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode.optional(),
+	answerVarianceTemperature: z.number().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartedBenchmarkRunBatchItemResponse = z.object({
@@ -4714,6 +4790,8 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchRe
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
 	warmup: z.boolean().optional(),
+	repeatMode: zXeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode.optional(),
+	answerVarianceTemperature: z.number().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunRouteRequest = z.record(z.string(), z.never());
