@@ -31,6 +31,8 @@ public sealed class DevelopmentDependencyManifestPolicyTests
                      "Directory.Build.props",
                      "src/Directory.Build.targets",
                      "packages.lock.json",
+                     "global.json",
+                     "src/global.json",
                      "NuGet.config",
                      "nuget.config",
                      "web/package.json",

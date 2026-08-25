@@ -29,7 +29,7 @@ internal static class DevelopmentCommandProfileCatalog
     ///     longer matches is rejected rather than silently re-interpreted — see
     ///     <see cref="ResolveStored" />.
     /// </summary>
-    public const string CurrentVersion = "v1";
+    public const string CurrentVersion = "v2";
 
     /// <summary>
     ///     The files whose content decides what <c>restore</c> resolves. A change to any of them fails deterministic
@@ -63,8 +63,8 @@ internal static class DevelopmentCommandProfileCatalog
         "**/Directory.Build.props",
         "**/Directory.Build.targets",
         "**/packages.lock.json",
+        "**/global.json",
         "**/NuGet.config",
-        "**/nuget.config",
         "**/package.json",
         "**/package-lock.json",
         "**/pnpm-lock.yaml",
