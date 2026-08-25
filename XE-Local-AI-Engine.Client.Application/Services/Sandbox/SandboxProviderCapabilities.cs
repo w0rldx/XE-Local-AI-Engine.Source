@@ -24,5 +24,25 @@ public enum SandboxProviderCapabilities
     ///     (<see cref="SandboxIsolationMode.Filesystem" />). Advertised only where a probe has EXERCISED the real
     ///     chain and confirmed its positive controls, never on the strength of a binary being installed.
     /// </summary>
-    SupportsFilesystemIsolation = 1 << 9
+    SupportsFilesystemIsolation = 1 << 9,
+
+    /// <summary>
+    ///     Commands run against the HOST's compilers, SDKs and interpreters, as the engine's user sees them
+    ///     (<see cref="SandboxToolchainSource.HostToolchain" />).
+    /// </summary>
+    SuppliesHostToolchain = 1 << 10,
+
+    /// <summary>
+    ///     Commands run against a digest-pinned, operator-approved image the engine names
+    ///     (<see cref="SandboxToolchainSource.EngineApprovedImage" />). The axis ADR 0007 Decision 5 added so that the
+    ///     flags a backend advertises and the axes a workload declares are ONE vocabulary — without it, the need that
+    ///     drove ADR 0004 was the only need in this engine that could not be written down.
+    ///     <para>
+    ///         A provider advertises exactly one of this and <see cref="SuppliesHostToolchain" />. They are not
+    ///         alternatives a caller may fall back between: a workload that needs the host's SDK is not served by an
+    ///         image pinned to a different one, and a repository needing .NET 8 on a .NET 10 host is the reason the
+    ///         image exists at all.
+    ///     </para>
+    /// </summary>
+    SuppliesImageToolchain = 1 << 11
 }
