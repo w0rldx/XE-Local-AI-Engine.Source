@@ -24,7 +24,16 @@ public enum BenchmarkJudgeAttemptStatus
 public enum BenchmarkWorkKind
 {
     Primary,
-    Judge
+    Judge,
+
+    /// <summary>
+    ///     A quant-fidelity measurement: one llama-perplexity child process against the run's frozen placement, with
+    ///     no llama-server and therefore no readiness probe. Appended at the END — the ordinal is persisted.
+    /// </summary>
+    Fidelity,
+
+    /// <summary>A pairwise judging of two runs in one presentation order. Appended at the END.</summary>
+    Comparison
 }
 
 public enum BenchmarkWorkStatus

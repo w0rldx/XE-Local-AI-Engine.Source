@@ -71,6 +71,31 @@ public sealed class BenchmarkQueueHostedServiceTests
         await harness.JudgeExecutor.DidNotReceive().ExecuteAsync(primary, Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    ///     A kind this build has no executor for is failed CLOSED, not left claimed. Leaving it Running would stall
+    ///     the single consumer behind an item nothing will ever finish; succeeding it would publish a measurement
+    ///     nothing took. The Comparison arm is P2 S3's slot, and until it exists this is the honest answer.
+    /// </summary>
+    [Test]
+    public async Task ExecuteAsync_WhenAKindHasNoExecutor_TerminalizesItFailedAndKeepsConsuming()
+    {
+        using var harness = new Harness();
+        var comparison = Work(BenchmarkWorkKind.Comparison);
+        var following = Work(BenchmarkWorkKind.Primary);
+        harness.Enqueue(comparison, following);
+
+        await harness.RunToIdleAsync();
+
+        await harness.Store.Received(1)
+                     .MarkComparisonFailedAsync(comparison.QueueSequence,
+                         comparison.Version,
+                         Arg.Is<string>(reason => reason.Contains("not supported by this build", StringComparison.Ordinal)),
+                         Arg.Any<CancellationToken>());
+        await harness.RunExecutor.Received(1).ExecuteAsync(following, Arg.Any<CancellationToken>());
+        AssertEx.True(harness.Logger.HasEntry(LogLevel.Error, "unsupported"),
+            "An unsupported kind must be reported, not swallowed.");
+    }
+
     [Test]
     public async Task ExecuteAsync_WhenAnExecutorThrows_LogsAndKeepsConsumingLaterWork()
     {

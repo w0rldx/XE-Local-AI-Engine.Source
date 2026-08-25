@@ -9,6 +9,8 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IBenchmarkStore
 {
     private const string InterruptedMessage = "Interrupted by application restart.";
+    internal const string FidelityKindPerplexity = "ppl";
+    internal const string FidelityKindKld = "kld";
     private const string UnresolvedJudgeRuntimeMessage = "judge runtime unresolved";
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -449,38 +451,87 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             _dbContext.ChangeTracker.Clear();
             var work = await _dbContext.BenchmarkWorkItems.AsNoTracking().SingleAsync(entity => entity.QueueSequence == candidate.QueueSequence, cancellationToken).ConfigureAwait(false);
             var run = await RequireRunAsync(work.RunId, tracking: true, cancellationToken).ConfigureAwait(false);
-            if (work.Kind == BenchmarkWorkKind.Primary)
+            // One explicit arm per kind. A bare `else` here would send a Fidelity or Comparison item down the judge
+            // path, where it would dereference a null JudgeAttemptId, throw InvalidJudgeTransition and stall the
+            // single-consumer queue behind an item it can never claim.
+            switch (work.Kind)
             {
-                if (run.PrimaryStatus != BenchmarkPrimaryStatus.Queued)
+                case BenchmarkWorkKind.Primary:
+                    if (run.PrimaryStatus != BenchmarkPrimaryStatus.Queued)
+                    {
+                        throw new BenchmarkConflictException("InvalidPrimaryTransition");
+                    }
+
+                    run.PrimaryStatus = BenchmarkPrimaryStatus.Running;
+                    run.StartedAtUtc = now;
+                    break;
+                case BenchmarkWorkKind.Judge:
                 {
-                    throw new BenchmarkConflictException("InvalidPrimaryTransition");
+                    // The judging's whole lifecycle lives on its attempt; the run only bumps its version so a reader
+                    // polling the run still sees that something about it changed.
+                    var attempt = await RequireJudgeAttemptAsync(work.JudgeAttemptId ?? throw new BenchmarkConflictException("InvalidJudgeTransition"),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
+                    {
+                        throw new BenchmarkConflictException("InvalidJudgeTransition");
+                    }
+
+                    attempt.Status = BenchmarkJudgeAttemptStatus.Running;
+                    attempt.StartedAtUtc = now;
+                    attempt.Version++;
+                    break;
                 }
 
-                run.PrimaryStatus = BenchmarkPrimaryStatus.Running;
-                run.StartedAtUtc = now;
-            }
-            else
-            {
-                // The judging's whole lifecycle lives on its attempt; the run only bumps its version so a reader
-                // polling the run still sees that something about it changed.
-                var attempt = await RequireJudgeAttemptAsync(work.JudgeAttemptId ?? throw new BenchmarkConflictException("InvalidJudgeTransition"),
-                        cancellationToken)
-                    .ConfigureAwait(false);
-                if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
+                case BenchmarkWorkKind.Fidelity:
                 {
-                    throw new BenchmarkConflictException("InvalidJudgeTransition");
+                    var attempt = await RequireFidelityAttemptAsync(work.FidelityAttemptId ?? throw new BenchmarkConflictException("InvalidFidelityTransition"),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
+                    {
+                        throw new BenchmarkConflictException("InvalidFidelityTransition");
+                    }
+
+                    attempt.Status = BenchmarkJudgeAttemptStatus.Running;
+                    attempt.StartedAtUtc = now;
+                    attempt.Version++;
+                    break;
                 }
 
-                attempt.Status = BenchmarkJudgeAttemptStatus.Running;
-                attempt.StartedAtUtc = now;
-                attempt.Version++;
+                case BenchmarkWorkKind.Comparison:
+                {
+                    var comparison = await RequireComparisonAsync(work.ComparisonId ?? throw new BenchmarkConflictException("InvalidComparisonTransition"),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    if (comparison.Status != BenchmarkJudgeAttemptStatus.Queued)
+                    {
+                        throw new BenchmarkConflictException("InvalidComparisonTransition");
+                    }
+
+                    comparison.Status = BenchmarkJudgeAttemptStatus.Running;
+                    comparison.StartedAtUtc = now;
+                    comparison.Version++;
+                    break;
+                }
+
+                default:
+                    throw new BenchmarkConflictException("UnknownWorkKind");
             }
 
             run.Version++;
             run.UpdatedAtUtc = now;
             await SaveAsync(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return new BenchmarkClaimedWork(work.QueueSequence, work.RunId, work.Kind, work.Attempt, work.Version, ToRecord(run), work.JudgeAttemptId);
+            return new BenchmarkClaimedWork(work.QueueSequence,
+                work.RunId,
+                work.Kind,
+                work.Attempt,
+                work.Version,
+                ToRecord(run),
+                work.JudgeAttemptId,
+                work.FidelityAttemptId,
+                work.ComparisonId);
         }
     }
 
@@ -707,6 +758,194 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<Guid> EnqueueFidelityAsync(Guid runId, string kind, CancellationToken cancellationToken = default)
+    {
+        if (kind is not (FidelityKindPerplexity or FidelityKindKld))
+        {
+            throw new BenchmarkValidationException("Benchmark fidelity kind must be 'ppl' or 'kld'.");
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        if (await _dbContext.BenchmarkWorkItems.AnyAsync(entity => entity.RunId == runId
+                                                                   && entity.Kind == BenchmarkWorkKind.Fidelity
+                                                                   && (entity.Status == BenchmarkWorkStatus.Queued || entity.Status == BenchmarkWorkStatus.Running),
+                    cancellationToken)
+                .ConfigureAwait(false))
+        {
+            throw new BenchmarkConflictException("FidelityAlreadyQueued");
+        }
+
+        var attempt = await AppendFidelityWorkAsync(run, kind, Now(), cancellationToken).ConfigureAwait(false);
+        run.Version++;
+        run.UpdatedAtUtc = Now();
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return attempt.Id;
+    }
+
+    /// <summary>
+    ///     Inserts the attempt-plus-work-item pair, WITHOUT owning a transaction, so freeze can append it inside the
+    ///     one transaction that already inserts the run and its primary item.
+    /// </summary>
+    private async Task<BenchmarkFidelityAttempt> AppendFidelityWorkAsync(BenchmarkRun run, string kind, long now, CancellationToken cancellationToken)
+    {
+        var lastSequence = await _dbContext.BenchmarkFidelityAttempts
+                                           .Where(entity => entity.RunId == run.Id)
+                                           .MaxAsync(entity => (int?)entity.Sequence, cancellationToken)
+                                           .ConfigureAwait(false)
+                           ?? 0;
+        var attempt = new BenchmarkFidelityAttempt
+        {
+            Id = Guid.NewGuid(),
+            RunId = run.Id,
+            Sequence = lastSequence + 1,
+            Kind = kind,
+            Status = BenchmarkJudgeAttemptStatus.Queued,
+            EnqueuedAtUtc = now,
+            Version = 1
+        };
+        _dbContext.BenchmarkFidelityAttempts.Add(attempt);
+        _dbContext.BenchmarkWorkItems.Add(new BenchmarkWorkItem
+        {
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Fidelity,
+            FidelityAttemptId = attempt.Id,
+            Status = BenchmarkWorkStatus.Queued,
+            Attempt = 1,
+            Version = 1,
+            EnqueuedAtUtc = now
+        });
+        run.FidelityStatus = "queued";
+        run.FidelityErrorMessage = null;
+        return attempt;
+    }
+
+    public Task<BenchmarkRunRecord> MarkFidelitySucceededAsync(BenchmarkFidelitySuccessCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        return TerminalizeFidelityAsync(command.RunId,
+            command.ExpectedWorkVersion,
+            BenchmarkJudgeAttemptStatus.Succeeded,
+            BenchmarkWorkStatus.Succeeded,
+            errorMessage: null,
+            command,
+            cancellationToken);
+    }
+
+    public Task<BenchmarkRunRecord> MarkFidelityFailedAsync(Guid runId, long expectedWorkVersion, string errorMessage, CancellationToken cancellationToken = default) =>
+        TerminalizeFidelityAsync(runId, expectedWorkVersion, BenchmarkJudgeAttemptStatus.Failed, BenchmarkWorkStatus.Failed, Sanitize(errorMessage),
+            success: null, cancellationToken);
+
+    public Task<BenchmarkRunRecord> MarkFidelityCancelledAsync(Guid runId, long expectedWorkVersion, CancellationToken cancellationToken = default) =>
+        TerminalizeFidelityAsync(runId, expectedWorkVersion, BenchmarkJudgeAttemptStatus.Cancelled, BenchmarkWorkStatus.Cancelled, errorMessage: null,
+            success: null, cancellationToken);
+
+    public async Task MarkComparisonFailedAsync(long queueSequence, long expectedWorkVersion, string errorMessage, CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var work = await _dbContext.BenchmarkWorkItems.SingleOrDefaultAsync(entity => entity.QueueSequence == queueSequence, cancellationToken).ConfigureAwait(false)
+                   ?? throw new BenchmarkNotFoundException("Benchmark work item was not found.");
+        if (work.Kind != BenchmarkWorkKind.Comparison)
+        {
+            throw new BenchmarkConflictException("InvalidComparisonTransition");
+        }
+
+        EnsureVersion(work.Version, expectedWorkVersion);
+        var now = Now();
+        TerminalizeWork(work, BenchmarkWorkStatus.Failed, Sanitize(errorMessage), now);
+        _ = await TerminalizeComparisonAsync(work.ComparisonId, BenchmarkJudgeAttemptStatus.Failed, Sanitize(errorMessage), now, cancellationToken).ConfigureAwait(false);
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<BenchmarkRunRecord> TerminalizeFidelityAsync(Guid runId,
+        long expectedWorkVersion,
+        BenchmarkJudgeAttemptStatus attemptStatus,
+        BenchmarkWorkStatus workStatus,
+        string? errorMessage,
+        BenchmarkFidelitySuccessCommand? success,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Fidelity, expectedWorkVersion, cancellationToken).ConfigureAwait(false);
+        _dbContext.ChangeTracker.Clear();
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Fidelity, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(work.Version, expectedWorkVersion);
+        var now = Now();
+        TerminalizeWork(work, workStatus, errorMessage, now);
+        var attempt = await TerminalizeFidelityAttemptAsync(work.FidelityAttemptId, attemptStatus, errorMessage, now, cancellationToken).ConfigureAwait(false);
+        if (attempt is null)
+        {
+            // Already terminal: repeating a terminalization must not write a second measurement.
+            return ToRecord(run);
+        }
+
+        if (success is not null)
+        {
+            attempt.PerplexityMean = success.PerplexityMean;
+            attempt.PerplexityStdErr = success.PerplexityStdErr;
+            attempt.PerplexityChunks = success.PerplexityChunks;
+            attempt.PerplexityContextTokens = success.PerplexityContextTokens;
+            attempt.CorpusId = success.CorpusId;
+            attempt.KldMean = success.KldMean;
+            attempt.KldP99 = success.KldP99;
+            attempt.TopTokenAgreement = success.TopTokenAgreement;
+            attempt.BaseModelName = success.BaseModelName;
+            attempt.BaseModelContentFingerprint = success.BaseModelContentFingerprint;
+            attempt.BaseLogitsDigest = success.BaseLogitsDigest;
+            attempt.ReceiptJson = success.ReceiptJson.IsEmpty ? null : success.ReceiptJson.ToArray();
+        }
+
+        run.FidelityStatus = ToFidelityStatus(attemptStatus);
+        run.FidelityErrorMessage = errorMessage;
+        if (attemptStatus == BenchmarkJudgeAttemptStatus.Succeeded && await IsLatestSucceededFidelityAsync(attempt, cancellationToken).ConfigureAwait(false))
+        {
+            // The projection is a copy of the LATEST succeeded attempt. Guarding on the sequence rather than on
+            // arrival order is what makes a re-measurement that lands out of order harmless instead of last-writer-wins.
+            run.FidelityAttemptId = attempt.Id;
+            run.PerplexityMean = attempt.PerplexityMean;
+            run.PerplexityStdErr = attempt.PerplexityStdErr;
+            run.PerplexityChunks = attempt.PerplexityChunks;
+            run.PerplexityContextTokens = attempt.PerplexityContextTokens;
+            run.PerplexityCorpusId = attempt.CorpusId;
+            run.KldMean = attempt.KldMean;
+            run.KldP99 = attempt.KldP99;
+            run.TopTokenAgreement = attempt.TopTokenAgreement;
+            run.KldBaseFingerprint = attempt.BaseModelContentFingerprint;
+            run.KldBaseLogitsDigest = attempt.BaseLogitsDigest;
+        }
+
+        run.Version++;
+        run.LastStreamSequence = checked(run.LastStreamSequence + 1);
+        run.UpdatedAtUtc = now;
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return ToRecord(run);
+    }
+
+    private async Task<bool> IsLatestSucceededFidelityAsync(BenchmarkFidelityAttempt attempt, CancellationToken cancellationToken)
+    {
+        var highest = await _dbContext.BenchmarkFidelityAttempts
+                                      .Where(entity => entity.RunId == attempt.RunId
+                                                       && entity.Status == BenchmarkJudgeAttemptStatus.Succeeded
+                                                       && entity.Id != attempt.Id)
+                                      .MaxAsync(entity => (int?)entity.Sequence, cancellationToken)
+                                      .ConfigureAwait(false);
+        return highest is null || attempt.Sequence > highest;
+    }
+
+    private static string ToFidelityStatus(BenchmarkJudgeAttemptStatus status) =>
+        status switch
+        {
+            BenchmarkJudgeAttemptStatus.Succeeded => "succeeded",
+            BenchmarkJudgeAttemptStatus.Failed => "failed",
+            BenchmarkJudgeAttemptStatus.Cancelled => "cancelled",
+            BenchmarkJudgeAttemptStatus.Running => "running",
+            _ => "queued"
+        };
+
     public async Task<bool> MarkPrimaryLaunchReadyAsync(Guid runId,
         long workItemId,
         long claimedWorkVersion,
@@ -907,6 +1146,34 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             attempt.Version++;
         }
 
+        // Two sibling sweeps, for the same reason: a fidelity attempt or a comparison left Running by a killed
+        // process whose work item a previous partial recovery already terminalized would otherwise stay Running
+        // forever, with nothing left to reach it. The run's fidelity PROJECTION is deliberately untouched — the
+        // numbers from the last attempt that actually succeeded still stand.
+        var interruptedFidelity = await _dbContext.BenchmarkFidelityAttempts
+                                                  .Where(entity => entity.Status == BenchmarkJudgeAttemptStatus.Running)
+                                                  .ToListAsync(cancellationToken)
+                                                  .ConfigureAwait(false);
+        foreach (var attempt in interruptedFidelity)
+        {
+            attempt.Status = BenchmarkJudgeAttemptStatus.Failed;
+            attempt.ErrorMessage = InterruptedMessage;
+            attempt.CompletedAtUtc = now;
+            attempt.Version++;
+        }
+
+        var interruptedComparisons = await _dbContext.BenchmarkComparisons
+                                                     .Where(entity => entity.Status == BenchmarkJudgeAttemptStatus.Running)
+                                                     .ToListAsync(cancellationToken)
+                                                     .ConfigureAwait(false);
+        foreach (var comparison in interruptedComparisons)
+        {
+            comparison.Status = BenchmarkJudgeAttemptStatus.Failed;
+            comparison.ErrorMessage = InterruptedMessage;
+            comparison.CompletedAtUtc = now;
+            comparison.Version++;
+        }
+
         foreach (var work in activeWork)
         {
             var run = await _dbContext.BenchmarkRuns.SingleAsync(entity => entity.Id == work.RunId, cancellationToken).ConfigureAwait(false);
@@ -916,15 +1183,26 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             work.ErrorMessage = cancelledPrimary ? null : InterruptedMessage;
             work.FinishedAtUtc = now;
             work.Version++;
-            if (work.Kind == BenchmarkWorkKind.Primary)
+            switch (work.Kind)
             {
-                run.PrimaryStatus = cancelledPrimary ? BenchmarkPrimaryStatus.Cancelled : BenchmarkPrimaryStatus.Failed;
-                run.PrimaryErrorMessage = cancelledPrimary ? null : InterruptedMessage;
-                run.PrimaryCompletedAtUtc = now;
-            }
-            else
-            {
-                _ = await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken).ConfigureAwait(false);
+                case BenchmarkWorkKind.Primary:
+                    run.PrimaryStatus = cancelledPrimary ? BenchmarkPrimaryStatus.Cancelled : BenchmarkPrimaryStatus.Failed;
+                    run.PrimaryErrorMessage = cancelledPrimary ? null : InterruptedMessage;
+                    run.PrimaryCompletedAtUtc = now;
+                    break;
+                case BenchmarkWorkKind.Judge:
+                    _ = await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken).ConfigureAwait(false);
+                    break;
+                case BenchmarkWorkKind.Fidelity:
+                    _ = await TerminalizeFidelityAttemptAsync(work.FidelityAttemptId, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken)
+                        .ConfigureAwait(false);
+                    break;
+                case BenchmarkWorkKind.Comparison:
+                    _ = await TerminalizeComparisonAsync(work.ComparisonId, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken)
+                        .ConfigureAwait(false);
+                    break;
+                default:
+                    throw new BenchmarkConflictException("UnknownWorkKind");
             }
 
             run.Version++;
@@ -1342,6 +1620,63 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         attempt.Version++;
         return attempt;
     }
+
+    /// <summary>
+    ///     Moves a fidelity attempt to its terminal state and returns it, or <see langword="null" /> when there is
+    ///     nothing to move. The run's fidelity projection is NOT touched here: a failed re-measurement must leave the
+    ///     numbers from the last attempt that succeeded exactly where they are.
+    /// </summary>
+    private async Task<BenchmarkFidelityAttempt?> TerminalizeFidelityAttemptAsync(Guid? attemptId,
+        BenchmarkJudgeAttemptStatus status,
+        string? errorMessage,
+        long now,
+        CancellationToken cancellationToken)
+    {
+        if (attemptId is not { } id)
+        {
+            return null;
+        }
+
+        var attempt = await _dbContext.BenchmarkFidelityAttempts.SingleOrDefaultAsync(entity => entity.Id == id, cancellationToken).ConfigureAwait(false);
+        if (attempt is null || IsAttemptTerminal(attempt.Status))
+        {
+            return null;
+        }
+
+        attempt.Status = status;
+        attempt.ErrorMessage = errorMessage;
+        attempt.CompletedAtUtc = now;
+        attempt.Version++;
+        return attempt;
+    }
+
+    /// <summary>Moves a pairwise comparison to its terminal state, never overwriting one that already reached one.</summary>
+    private async Task<BenchmarkJudgeComparison?> TerminalizeComparisonAsync(Guid? comparisonId,
+        BenchmarkJudgeAttemptStatus status,
+        string? errorMessage,
+        long now,
+        CancellationToken cancellationToken)
+    {
+        if (comparisonId is not { } id)
+        {
+            return null;
+        }
+
+        var comparison = await _dbContext.BenchmarkComparisons.SingleOrDefaultAsync(entity => entity.Id == id, cancellationToken).ConfigureAwait(false);
+        if (comparison is null || IsAttemptTerminal(comparison.Status))
+        {
+            return null;
+        }
+
+        comparison.Status = status;
+        comparison.ErrorMessage = errorMessage;
+        comparison.CompletedAtUtc = now;
+        comparison.Version++;
+        return comparison;
+    }
+
+    private static bool IsAttemptTerminal(BenchmarkJudgeAttemptStatus status) =>
+        status is BenchmarkJudgeAttemptStatus.Succeeded or BenchmarkJudgeAttemptStatus.Failed or BenchmarkJudgeAttemptStatus.Cancelled;
 
     /// <summary>
     ///     Get-or-create by <c>(project, hash)</c>: insert, and on the unique conflict re-query, so two racing
@@ -1851,6 +2186,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     private async Task<BenchmarkJudgeAttempt> RequireJudgeAttemptAsync(Guid attemptId, CancellationToken cancellationToken) =>
         await _dbContext.BenchmarkJudgeAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken).ConfigureAwait(false)
         ?? throw new BenchmarkNotFoundException("Benchmark judge attempt was not found.");
+
+    private async Task<BenchmarkFidelityAttempt> RequireFidelityAttemptAsync(Guid attemptId, CancellationToken cancellationToken) =>
+        await _dbContext.BenchmarkFidelityAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken).ConfigureAwait(false)
+        ?? throw new BenchmarkNotFoundException("Benchmark fidelity attempt was not found.");
+
+    private async Task<BenchmarkJudgeComparison> RequireComparisonAsync(Guid comparisonId, CancellationToken cancellationToken) =>
+        await _dbContext.BenchmarkComparisons.SingleOrDefaultAsync(entity => entity.Id == comparisonId, cancellationToken).ConfigureAwait(false)
+        ?? throw new BenchmarkNotFoundException("Benchmark comparison was not found.");
 
     private static void EnsurePolicyHash([NotNull] string? policyHash)
     {

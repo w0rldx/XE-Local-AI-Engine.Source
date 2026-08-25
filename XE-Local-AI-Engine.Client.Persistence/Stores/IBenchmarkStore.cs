@@ -120,6 +120,30 @@ public interface IBenchmarkStore
 
     Task<BenchmarkRunRecord> MarkJudgeCancelledAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Enqueues one fidelity measurement of a run: a <c>Queued</c> attempt at the next sequence plus its work
+    ///     item, in one transaction. Re-measuring inserts a NEW attempt rather than reusing the previous one, so the
+    ///     numbers a KLD figure was measured against survive a corpus or chunk-count change.
+    /// </summary>
+    Task<Guid> EnqueueFidelityAsync(Guid runId, string kind, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Terminalizes a fidelity work item and its attempt, and — only when the attempt succeeded AND is the
+    ///     highest-sequenced succeeded attempt of the run — refreshes the run's fidelity projection from it. A stale
+    ///     re-measurement therefore cannot overwrite newer numbers, and a failed one leaves the previous numbers alone.
+    /// </summary>
+    Task<BenchmarkRunRecord> MarkFidelitySucceededAsync(BenchmarkFidelitySuccessCommand command, CancellationToken cancellationToken = default);
+
+    Task<BenchmarkRunRecord> MarkFidelityFailedAsync(Guid runId, long expectedWorkVersion, string errorMessage, CancellationToken cancellationToken = default);
+
+    Task<BenchmarkRunRecord> MarkFidelityCancelledAsync(Guid runId, long expectedWorkVersion, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Terminalizes a comparison work item and its comparison as failed. Keyed by queue sequence rather than by
+    ///     run, because a comparison names TWO runs and "the run's comparison work item" is not a well-formed lookup.
+    /// </summary>
+    Task MarkComparisonFailedAsync(long queueSequence, long expectedWorkVersion, string errorMessage, CancellationToken cancellationToken = default);
+
     Task<BenchmarkRunRecord> MarkJudgeCancelledAsync(Guid runId,
         long expectedRunVersion,
         long lastStreamSequence,
@@ -435,6 +459,29 @@ public sealed record BenchmarkJudgeAttemptRecord(
     BenchmarkRunLaunchEvidence? LaunchEvidence = null);
 
 /// <param name="Score">The server-computed 0..100 rubric score stored on the attempt, plaintext and sortable.</param>
+/// <summary>
+///     One succeeded fidelity measurement, as it is written down. <paramref name="ReceiptJson" /> is the REDUCED
+///     evidence block (executable, argv, corpus, environment facts) — llama-perplexity has no readiness probe, so
+///     there is no launch receipt to record, and presenting the reduced block as one would be exactly the drift the
+///     display-only axes exist to prevent.
+/// </summary>
+public sealed record BenchmarkFidelitySuccessCommand(
+    Guid RunId,
+    long ExpectedWorkVersion,
+    Guid FidelityAttemptId,
+    double? PerplexityMean = null,
+    double? PerplexityStdErr = null,
+    int? PerplexityChunks = null,
+    int? PerplexityContextTokens = null,
+    string? CorpusId = null,
+    double? KldMean = null,
+    double? KldP99 = null,
+    double? TopTokenAgreement = null,
+    string? BaseModelName = null,
+    string? BaseModelContentFingerprint = null,
+    string? BaseLogitsDigest = null,
+    ReadOnlyMemory<byte> ReceiptJson = default);
+
 public sealed record BenchmarkJudgeSuccessCommand(
     Guid RunId,
     long ExpectedWorkVersion,
@@ -714,7 +761,9 @@ public sealed record BenchmarkClaimedWork(
     int Attempt,
     long Version,
     BenchmarkRunRecord Run,
-    Guid? JudgeAttemptId = null);
+    Guid? JudgeAttemptId = null,
+    Guid? FidelityAttemptId = null,
+    Guid? ComparisonId = null);
 
 public abstract class BenchmarkStoreException(string message) : InvalidOperationException(message);
 
