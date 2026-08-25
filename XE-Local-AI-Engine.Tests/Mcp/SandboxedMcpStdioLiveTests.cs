@@ -8,6 +8,7 @@ using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
@@ -46,6 +47,8 @@ public sealed class SandboxedMcpStdioLiveTests
             provider,
             new StubIdentityProvider(),
             NodeDataDirectory(),
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             NullLoggerFactory.Instance);
 
         using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -88,6 +91,8 @@ public sealed class SandboxedMcpStdioLiveTests
                 provider,
                 new StubIdentityProvider(),
                 NodeDataDirectory(),
+                Options.Create(new ComputeOptions()),
+                Options.Create(new LocalContainerOptions()),
                 NullLoggerFactory.Instance);
 
             using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -134,6 +139,8 @@ public sealed class SandboxedMcpStdioLiveTests
             provider,
             new StubIdentityProvider(),
             NodeDataDirectory(),
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             NullLoggerFactory.Instance);
 
         using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
@@ -166,6 +173,8 @@ public sealed class SandboxedMcpStdioLiveTests
             provider,
             new StubIdentityProvider(),
             NodeDataDirectory(),
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             NullLoggerFactory.Instance);
 
         using var handshake = new CancellationTokenSource(TimeSpan.FromSeconds(60));
