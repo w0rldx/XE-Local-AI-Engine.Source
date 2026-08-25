@@ -60,8 +60,13 @@ because a third-party server has no reason to write into the tree it was install
 The rule is **equals-or-ancestor, not "is under"**, and that asymmetry is the design. A tree *beneath* one of these is
 fine: `~/.nvm/versions/node/v22/bin` exposes a node install, while `$HOME` exposes the operator. Refusing every
 subtree of home would make `npx`- and `uvx`-based servers unusable at the default tier, which is how a security
-control gets switched off. Both sides are compared after normalization and link resolution, so a symlink to home, a
-relative segment or a trailing separator cannot walk past the list. The list is code-owned: a denylist a registration
+control gets switched off. Both sides are compared after normalization and full link resolution — every ancestor, not just the final
+component, because the kernel resolves the whole chain when bwrap binds by descriptor. A symlink anywhere in
+the path, a relative segment or a trailing separator therefore cannot walk past the list. The list is also
+derived from the account's home directory, so a host that cannot name one (HOME unset) refuses every Sandboxed
+connection rather than checking a list with its credential half missing; the `mcp-stdio` isolation-panel row
+says so. Follow-up: on Windows an 8.3 short name could still alias past the ordinal comparison — Sandboxed is
+Linux-only until G12, so this is recorded rather than fixed. The list is code-owned: a denylist a registration
 could edit would be no denylist at all.
 
 **Egress.** `--unshare-net` is unconditional on the isolated chain and is positively controlled by the containment

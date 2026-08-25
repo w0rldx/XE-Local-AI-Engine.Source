@@ -81,6 +81,28 @@ public sealed class GetDevelopmentCapabilityEndpoint(
     // capability GET after that is free. This endpoint can be that first caller on a node where nothing has read a
     // provider's Capabilities yet; the probe is bounded and best-effort by contract, so the cost is one bounded
     // measurement, never a failure.
+    /// <summary>
+    ///     The one fact about the <c>mcp-stdio</c> row that is not a property of the sandbox mechanism: the tier's
+    ///     sensitive-host-root denylist is derived from the account's home directory, so a host that cannot name one
+    ///     refuses every Sandboxed connection. The mapper reports what the backend serves and knows nothing about
+    ///     that, so it is stated here rather than threaded through a projection it does not belong to.
+    /// </summary>
+    private static SandboxIsolationSummaryResponse WithHomeDirectoryCaveat(SandboxIsolationSummaryResponse summary)
+    {
+        if (!string.IsNullOrWhiteSpace(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)))
+        {
+            return summary;
+        }
+
+        return summary with
+        {
+            FilesystemIsolation = false,
+            FilesystemIsolationUnavailableReason =
+                "this account has no home directory (HOME is unset), so the Sandboxed trust tier cannot tell a server's package tree from the operator's credential stores and refuses every connection. "
+                + "Run the engine as an account with a home directory, or move each server to the Privileged host tier deliberately."
+        };
+    }
+
     private IReadOnlyList<SandboxIsolationSummaryResponse> BuildIsolationSummary()
     {
         var containment = _containmentProbe.Containment;
@@ -106,7 +128,8 @@ public sealed class GetDevelopmentCapabilityEndpoint(
             // registering a server — on a host that cannot isolate, this row says so, and every Sandboxed registration
             // will refuse to connect rather than launching on the host. A PrivilegedHost server has no row here
             // because it declares nothing: it is not a substrate consumer, it is an explicit per-server host grant.
-            DevelopmentContractMapper.ToIsolationSummary("mcp-stdio", SandboxWorkloads.McpStdio, _agentSandboxRuntimeProvider, containment, agentRequiresDenial),
+            WithHomeDirectoryCaveat(
+                DevelopmentContractMapper.ToIsolationSummary("mcp-stdio", SandboxWorkloads.McpStdio, _agentSandboxRuntimeProvider, containment, agentRequiresDenial)),
             // Either Development declaration is correct here: DevelopmentModeImageToolchain is
             // DevelopmentModeHostToolchain `with` a different workload name and toolchain source, and this projection
             // reads neither — it reads the isolation floor, which is None on both. Passing the host-toolchain constant

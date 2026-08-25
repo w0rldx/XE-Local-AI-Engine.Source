@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Mcp;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using System.Globalization;
 using ModelContextProtocol.Client;
 using NSubstitute;
 using TUnit.Core.Exceptions;
@@ -344,6 +345,138 @@ public sealed class SandboxedMcpStdioTransportTests
             () => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, _ => Path.Combine(home, "npx"), SensitiveRoots()));
 
         AssertEx.Contains(exception.Message, Path.TrimEndingDirectorySeparator(home));
+    }
+
+    [Test]
+    public void ResolveReadOnlyTrees_WhenASymlinkedAncestorResolvesOntoADeniedRoot_IsRefused()
+    {
+        // THE CRITICAL, and it needs a NON-LEAF link to show: Path.GetFullPath is lexical and ResolveLinkTarget
+        // follows only a final component, so `link/home` came back as the literal path and matched no denied root —
+        // while bwrap binds by descriptor against a kernel that resolves the whole chain, and would have mounted the
+        // directory holding the credential store. The leaf-link case was already covered; this is the one that got
+        // through.
+        RequireSymlinks();
+        var estate = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"estate-{Guid.NewGuid():N}"));
+        try
+        {
+            var account = Directory.CreateDirectory(Path.Combine(estate.FullName, "home"));
+            _ = Directory.CreateDirectory(Path.Combine(account.FullName, ".ssh"));
+            var link = Path.Combine(FixtureRoot, $"link-{Guid.NewGuid():N}");
+            Directory.CreateSymbolicLink(link, estate.FullName);
+
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "/usr/bin/server-binary",
+                WorkingDirectory = Path.Combine(link, "home")
+            };
+
+            // This fixture's own tree stands in for a home directory: what is under test is ANCESTOR resolution, not
+            // which roots are on the list.
+            var roots = new[] { Path.Combine(account.FullName, ".ssh") };
+
+            var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(
+                () => SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, roots),
+                "a tree reached through a symlinked ANCESTOR must resolve to its real location before the comparison.");
+
+            AssertEx.Contains(exception.Message, account.FullName);
+        }
+        finally
+        {
+            estate.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    public void ResolveReadOnlyTrees_ForASymlinkedAncestorPointingIntoAnAllowedSubtree_IsBoundAtItsResolvedPath()
+    {
+        // The other direction: resolution must not turn into a blanket refusal. `~/tools -> ~/.nvm/versions/x` is a
+        // perfectly ordinary setup, and it has to bind — at the RESOLVED path, because that is what the kernel will
+        // mount and what the chain's descriptor opener will validate.
+        RequireSymlinks();
+        var nvm = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"nvm-{Guid.NewGuid():N}", "versions", "v22"));
+        try
+        {
+            var link = Path.Combine(FixtureRoot, $"tools-{Guid.NewGuid():N}");
+            Directory.CreateSymbolicLink(link, nvm.FullName);
+
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "/usr/bin/server-binary",
+                WorkingDirectory = link
+            };
+
+            var trees = SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots());
+
+            AssertEx.Equal(expected: 1, trees.Count);
+            AssertEx.Equal(Path.TrimEndingDirectorySeparator(nvm.FullName), trees[0]);
+        }
+        finally
+        {
+            nvm.Parent!.Parent!.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    [Arguments("{0}/./sub/..")]
+    [Arguments("{0}/sub/../")]
+    [Arguments("{0}//sub//..//")]
+    public void ResolveReadOnlyTrees_NormalizesRelativeSegmentsAndSeparators(string template)
+    {
+        // Each of these names the fixture directory itself. If normalization differed between the tree and the denied
+        // roots, a spelling would be all it took to walk past the list.
+        var tree = Directory.CreateDirectory(Path.Combine(FixtureRoot, $"norm-{Guid.NewGuid():N}"));
+        try
+        {
+            _ = Directory.CreateDirectory(Path.Combine(tree.FullName, "sub"));
+            var record = StdioRecord(McpTrustTier.Sandboxed) with
+            {
+                Command = "/usr/bin/server-binary",
+                WorkingDirectory = string.Format(CultureInfo.InvariantCulture, template, tree.FullName)
+            };
+
+            var trees = SandboxedMcpStdioTransport.ResolveReadOnlyTrees(record, path => path, SensitiveRoots());
+
+            AssertEx.Equal(expected: 1, trees.Count);
+            AssertEx.Equal(Path.TrimEndingDirectorySeparator(tree.FullName), trees[0]);
+        }
+        finally
+        {
+            tree.Delete(recursive: true);
+        }
+    }
+
+    [Test]
+    public void BuildSensitiveHostRoots_WhenTheHomeDirectoryCannotBeDetermined_FailsClosed()
+    {
+        // Every credential entry is derived from home, so a host that cannot name one would get a list with the whole
+        // credential half missing — still present, still checked, and still letting /home/someone through. A tier that
+        // cannot enforce its own control refuses instead.
+        var exception = AssertEx.Throws<SandboxCapabilityNotSupportedException>(
+            () => SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, static () => string.Empty));
+
+        AssertEx.Contains(exception.Message, "home directory");
+        AssertEx.Contains(exception.Message, "Privileged host");
+    }
+
+    [Test]
+    public void BuildSensitiveHostRoots_WithAHomeDirectory_CarriesEveryCredentialStore()
+    {
+        var roots = SandboxedMcpStdioTransport.BuildSensitiveHostRoots(NodeDataRoot, static () => "/srv/accounts/xe");
+
+        foreach (var expected in new[] { "/srv/accounts/xe", "/srv/accounts/xe/.ssh", "/srv/accounts/xe/.aws", "/srv/accounts/xe/.kube" })
+        {
+            AssertEx.Contains(roots, expected);
+        }
+    }
+
+    private static void RequireSymlinks()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            throw new SkipTestException("creating a directory symlink is privileged on Windows; the rule is platform-independent.");
+        }
+
+        _ = Directory.CreateDirectory(FixtureRoot);
     }
 
     private static McpClientFactory CreateFactory()

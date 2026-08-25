@@ -43,6 +43,9 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     /// </summary>
     private const int SandboxGeneration = 1;
 
+    /// <summary>Link hops followed before a path is treated as a cycle. The kernel's own ELOOP limit is 40.</summary>
+    private const int MaxLinkHops = 40;
+
     /// <summary>Credential and configuration stores under the operator's home directory.</summary>
     private static readonly string[] SensitiveHomeSubdirectories =
     [
@@ -110,23 +113,31 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     ///         no denylist at all.
     ///     </para>
     /// </summary>
-    internal static IReadOnlyList<string> BuildSensitiveHostRoots(string nodeDataRoot)
+    internal static IReadOnlyList<string> BuildSensitiveHostRoots(string nodeDataRoot, Func<string>? resolveHome = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(nodeDataRoot);
 
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = (resolveHome ?? DefaultHome)();
+        if (string.IsNullOrWhiteSpace(home))
+        {
+            // FAIL CLOSED. Every credential entry on this list is derived from the home directory, so a host that
+            // cannot name one (a service account, HOME unset) would silently get a list with the whole
+            // credential half missing — the denylist would still be there, still be checked, and still let
+            // `WorkingDirectory = /home/someone` through. A tier that cannot enforce its own control refuses.
+            throw new SandboxCapabilityNotSupportedException(
+                "The Sandboxed MCP trust tier cannot determine this account's home directory, so it cannot tell a server's package tree from the operator's credential stores. "
+                + "Run the engine as an account with a home directory (set HOME), or move the server to the Privileged host tier deliberately.");
+        }
+
         var roots = new List<string>(16);
 
         // The home directory itself, and each credential store under it by name — the second half is not redundant:
         // the equals-or-ancestor rule catches `WorkingDirectory = $HOME` through the first entry, and
         // `WorkingDirectory = ~/.ssh` only through the second.
-        if (!string.IsNullOrEmpty(home))
+        AddRoot(roots, home);
+        foreach (var relative in SensitiveHomeSubdirectories)
         {
-            AddRoot(roots, home);
-            foreach (var relative in SensitiveHomeSubdirectories)
-            {
-                AddRoot(roots, Path.Combine(home, relative));
-            }
+            AddRoot(roots, Path.Combine(home, relative));
         }
 
         // The engine's own state: the node database, its key material, every sandbox jail, the workspace manifests
@@ -281,18 +292,27 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     {
         try
         {
-            var canonical = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-
-            // Only resolve the link chain for something that EXISTS. ResolveLinkTarget throws on a missing path, and
-            // swallowing that would drop the entry — which for a DENIED ROOT is a hole rather than a nicety: ~/.aws,
-            // ~/.kube and /root are absent on plenty of hosts, and a denylist that only lists what happens to exist
-            // stops covering the directory the moment before someone creates it.
-            if (Directory.Exists(canonical) && Directory.ResolveLinkTarget(canonical, returnFinalTarget: true) is { } target)
+            // EVERY ancestor, not just the leaf. Path.GetFullPath is lexical and
+            // Directory.ResolveLinkTarget only follows a link that IS the final component, so `link/.ssh/sockets`
+            // came back as the literal path and matched no denied root — while bwrap, which binds by descriptor
+            // against a kernel that resolves the whole chain, would have mounted ~/.ssh/sockets into the jail.
+            var current = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+            for (var hop = 0; hop < MaxLinkHops; hop++)
             {
-                canonical = Path.TrimEndingDirectorySeparator(target.FullName);
+                var resolved = ResolveOneLevel(current);
+                if (string.Equals(resolved, current, StringComparison.Ordinal))
+                {
+                    return current;
+                }
+
+                // Restart from the top: a link target can itself sit under links this walk has not seen yet.
+                current = resolved;
             }
 
-            return canonical;
+            // A cycle, or a chain deeper than the kernel would follow. Refusing to answer is the fail-closed reading:
+            // the caller treats a null tree as "contributes nothing", and a null ROOT would be a hole — which is why
+            // BuildSensitiveHostRoots keeps the lexical form when this gives up (see AddRoot).
+            return null;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
@@ -300,12 +320,81 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         }
     }
 
+    /// <summary>
+    ///     Walks <paramref name="path" /> from the filesystem root, replacing the first component that is a symlink
+    ///     with its target and splicing the remainder on. Returns the input unchanged when no component is a link,
+    ///     which is how <see cref="Canonicalize" /> knows it is done.
+    /// </summary>
+    private static string ResolveOneLevel(string path)
+    {
+        var root = Path.GetPathRoot(path);
+        if (string.IsNullOrEmpty(root))
+        {
+            return path;
+        }
+
+        var remainder = path[root.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+        var current = root;
+        for (var index = 0; index < remainder.Length; index++)
+        {
+            current = Path.Combine(current, remainder[index]);
+
+            // A missing component cannot be a link, and nothing below it can be either.
+            if (!Directory.Exists(current) && !File.Exists(current))
+            {
+                break;
+            }
+
+            var target = Directory.Exists(current)
+                ? new DirectoryInfo(current).ResolveLinkTarget(returnFinalTarget: false)
+                : new FileInfo(current).ResolveLinkTarget(returnFinalTarget: false);
+            if (target is null)
+            {
+                continue;
+            }
+
+            // A relative target resolves against the LINK's directory, which is what Path.Combine does here.
+            var replacement = Path.IsPathRooted(target.FullName)
+                ? target.FullName
+                : Path.Combine(Path.GetDirectoryName(current) ?? root, target.FullName);
+            var tail = string.Join(Path.DirectorySeparatorChar, remainder[(index + 1)..]);
+            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(tail.Length == 0 ? replacement : Path.Combine(replacement, tail)));
+        }
+
+        return path;
+    }
+
+    /// <summary>
+    ///     Adds a denied root in its resolved form, and — when resolution gives up (a link cycle) — in its lexical one
+    ///     as well. A root that resolution dropped would be a hole; carrying both spellings can only ever refuse more.
+    /// </summary>
     private static void AddRoot(List<string> roots, string path)
     {
-        if (Canonicalize(path) is { } canonical && !roots.Contains(canonical, StringComparer.Ordinal))
+        foreach (var candidate in new[] { Canonicalize(path), TryLexical(path) })
         {
-            roots.Add(canonical);
+            if (candidate is { } value && !roots.Contains(value, StringComparer.Ordinal))
+            {
+                roots.Add(value);
+            }
         }
+    }
+
+    private static string? TryLexical(string path)
+    {
+        try
+        {
+            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The account's home directory. A seam so a test can drive the fail-closed path without unsetting HOME.</summary>
+    private static string DefaultHome()
+    {
+        return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     }
 
     private static async ValueTask KillQuietlyAsync(IAgentSandboxRuntimeProvider provider, SandboxHandle handle)
