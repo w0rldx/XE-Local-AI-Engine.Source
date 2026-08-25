@@ -86,8 +86,18 @@ public sealed class BenchmarkEventBufferOptions
     public const int DefaultMaxEventCount = 512;
     public const int DefaultMaxUtf8Bytes = 1024 * 1024;
 
+    /// <summary>
+    ///     How many TERMINAL runs keep their (already emptied) buffer entry. The entry carries no output — eviction
+    ///     cleared that — only the sequence bookkeeping that lets a late subscriber be told to reset instead of being
+    ///     answered with silence. Past this many, the oldest are dropped: the hub then compares the run's persisted
+    ///     <c>LastStreamSequence</c> against an empty replay and resets anyway, which is the same answer by another
+    ///     route. Active runs are never dropped, however many there are.
+    /// </summary>
+    public const int DefaultMaxRetainedTerminalRuns = 256;
+
     public int MaxEventCount { get; init; } = DefaultMaxEventCount;
     public int MaxUtf8Bytes { get; init; } = DefaultMaxUtf8Bytes;
+    public int MaxRetainedTerminalRuns { get; init; } = DefaultMaxRetainedTerminalRuns;
 }
 
 public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
@@ -96,16 +106,33 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
     private readonly Lock _gate = new();
     private readonly int _maxEventCount;
     private readonly int _maxUtf8Bytes;
+    private readonly int _maxRetainedTerminalRuns;
     private readonly Dictionary<Guid, RunBuffer> _runs = [];
+
+    /// <summary>Terminal runs in eviction order, so the oldest tombstone is the one dropped when the cap is reached.</summary>
+    private readonly Queue<Guid> _evicted = new();
 
     public BenchmarkEventBuffer(IOptions<BenchmarkEventBufferOptions> options)
     {
         ArgumentNullException.ThrowIfNull(options);
         _maxEventCount = options.Value.MaxEventCount;
         _maxUtf8Bytes = options.Value.MaxUtf8Bytes;
-        if (_maxEventCount <= 0 || _maxUtf8Bytes <= 0)
+        _maxRetainedTerminalRuns = options.Value.MaxRetainedTerminalRuns;
+        if (_maxEventCount <= 0 || _maxUtf8Bytes <= 0 || _maxRetainedTerminalRuns <= 0)
         {
             throw new InvalidOperationException("Benchmark event buffer limits must be positive.");
+        }
+    }
+
+    /// <summary>How many runs the buffer still holds an entry for. Test-only seam.</summary>
+    internal int TrackedRunCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _runs.Count;
+            }
         }
     }
 
@@ -201,7 +228,28 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
             var state = GetOrCreate(runId);
             state.Events.Clear();
             state.Utf8Bytes = 0;
-            state.PlaintextEvicted = true;
+
+            // The entry survives eviction on purpose: emptied of output, it still says "there WAS a stream here and it
+            // is gone", which is what turns a late subscriber's replay into a reset rather than into silence. It is
+            // also the leak — a node that runs a thousand benchmarks kept a thousand of them — so the tombstones are
+            // capped. Called once per terminal PHASE, and a run has two, so the queue only grows on the first.
+            if (!state.PlaintextEvicted)
+            {
+                state.PlaintextEvicted = true;
+                _evicted.Enqueue(runId);
+            }
+
+            while (_evicted.Count > _maxRetainedTerminalRuns)
+            {
+                var oldest = _evicted.Dequeue();
+
+                // Skipped when the run went active again (a judge phase after the primary): its entry belongs to a
+                // live stream now, and dropping it would restart that stream's sequence numbering.
+                if (_runs.TryGetValue(oldest, out var stale) && stale.PlaintextEvicted)
+                {
+                    _ = _runs.Remove(oldest);
+                }
+            }
         }
     }
 
