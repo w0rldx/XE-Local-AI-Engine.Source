@@ -3,12 +3,14 @@ namespace XE_Local_AI_Engine.Tests.Mcp;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
+using NSubstitute;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -73,6 +75,8 @@ public sealed class SandboxedMcpStdioTransportTests
             provider,
             IdentityProvider(),
             NodeDataDirectory(),
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             NullLoggerFactory.Instance);
 
         var exception = await AssertEx.ThrowsAsync<SandboxCapabilityNotSupportedException>(() => transport.ConnectAsync()).ConfigureAwait(false);
@@ -80,6 +84,42 @@ public sealed class SandboxedMcpStdioTransportTests
         AssertEx.Contains(exception.Message, "Sandboxed");
         AssertEx.Contains(exception.Message, "Privileged host");
         AssertEx.Contains(exception.Message, "bubblewrap");
+    }
+
+    /// <summary>
+    ///     The create request carries exactly what the shared derivation yields for this role's declaration, so the
+    ///     site cannot drift from the constant the isolation panel reports. A Sandboxed MCP server runs an
+    ///     operator-installed program, which is why it is bounded at all — and on the HOST-TOOLCHAIN profile, because
+    ///     run_python's script-sized ceiling would strangle a language server on its first index.
+    /// </summary>
+    [Test]
+    public void BuildCreateRequest_CarriesTheHostToolchainCeilingsAndTheIsolatedPosture()
+    {
+        var provider = Substitute.For<IAgentSandboxRuntimeProvider>();
+        provider.ProviderName.Returns("process");
+        provider.Capabilities.Returns(SandboxProviderCapabilities.SupportsHostFilesystemBoundary
+                                      | SandboxProviderCapabilities.SupportsFilesystemIsolation
+                                      | SandboxProviderCapabilities.SupportsNetworkPolicy
+                                      | SandboxProviderCapabilities.SupportsResourceLimits);
+
+        var transport = new SandboxedMcpStdioTransport(StdioRecord(McpTrustTier.Sandboxed),
+            provider,
+            IdentityProvider(),
+            NodeDataDirectory(),
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
+            NullLoggerFactory.Instance);
+
+        var request = transport.BuildCreateRequest(new AgentHomeOwnerIdentity("owner", "node"));
+
+        AssertEx.Equal(SandboxIsolationMode.Filesystem, request.Isolation);
+        AssertEx.Equal(SandboxNetworkPolicy.None, request.NetworkPolicy);
+        AssertEx.Equal(SandboxCeilingProfile.HostToolchain, SandboxWorkloads.McpStdio.Ceilings);
+        AssertEx.Equal(SandboxResourceCeilings.Resolve(SandboxWorkloads.McpStdio,
+                provider.Capabilities,
+                new ComputeOptions(),
+                new LocalContainerOptions()),
+            request.ResourceLimits);
     }
 
     [Test]
@@ -317,6 +357,8 @@ public sealed class SandboxedMcpStdioTransportTests
             new FakeSandboxRuntimeProvider(TimeProvider.System),
             IdentityProvider(),
             NodeDataDirectory(),
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             NullLoggerFactory.Instance);
     }
 

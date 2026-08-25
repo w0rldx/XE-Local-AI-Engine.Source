@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Fake;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -130,6 +131,8 @@ public sealed class McpClientFactoryLoopbackTests
             new FakeSandboxRuntimeProvider(TimeProvider.System),
             new StubIdentityProvider(),
             new FakeNodeDataDirectory(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".xe-node-data-fixture")),
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
             NullLoggerFactory.Instance);
     }
 

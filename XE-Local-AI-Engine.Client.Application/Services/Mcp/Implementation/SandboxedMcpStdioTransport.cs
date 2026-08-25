@@ -5,7 +5,9 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch.Isolation;
 
@@ -66,9 +68,11 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
     private static StringComparison PathComparison =>
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
+    private readonly ComputeOptions _ceilingDefaults;
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly ILoggerFactory _loggerFactory;
     private readonly INodeDataDirectory _nodeDataDirectory;
+    private readonly LocalContainerOptions _nodeOptions;
     private readonly IAgentSandboxRuntimeProvider _provider;
     private readonly McpServerRecord _record;
 
@@ -76,12 +80,16 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         IAgentSandboxRuntimeProvider provider,
         IAgentHomeIdentityProvider identityProvider,
         INodeDataDirectory nodeDataDirectory,
+        IOptions<ComputeOptions> ceilingDefaults,
+        IOptions<LocalContainerOptions> nodeOptions,
         ILoggerFactory loggerFactory)
     {
         _record = record ?? throw new ArgumentNullException(nameof(record));
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
         _nodeDataDirectory = nodeDataDirectory ?? throw new ArgumentNullException(nameof(nodeDataDirectory));
+        _ceilingDefaults = (ceilingDefaults ?? throw new ArgumentNullException(nameof(ceilingDefaults))).Value;
+        _nodeOptions = (nodeOptions ?? throw new ArgumentNullException(nameof(nodeOptions))).Value;
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
     }
 
@@ -312,7 +320,9 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
         }
     }
 
-    private SandboxCreateRequest BuildCreateRequest(AgentHomeOwnerIdentity identity)
+    // Internal so its ceilings and posture can be asserted without standing up a real isolated chain — the same
+    // drift guard every other sandbox create site has.
+    internal SandboxCreateRequest BuildCreateRequest(AgentHomeOwnerIdentity identity)
     {
         return new SandboxCreateRequest
         {
@@ -332,7 +342,14 @@ internal sealed class SandboxedMcpStdioTransport : IClientTransport
             ReadOnlyTrees = ResolveReadOnlyTrees(_record, ResolveExecutablePath, BuildSensitiveHostRoots(_nodeDataDirectory.Root)),
             // Stated though the isolated chain's --unshare-net is what enforces it, so the intent is legible at the
             // one place a reader looks for it.
-            NetworkPolicy = SandboxNetworkPolicy.None
+            NetworkPolicy = SandboxNetworkPolicy.None,
+
+            // The host-toolchain ceilings, through the helper every create site shares, so this request cannot
+            // disagree with SandboxWorkloads.McpStdio's declaration or with what the isolation panel reports.
+            ResourceLimits = SandboxResourceCeilings.Resolve(SandboxWorkloads.McpStdio,
+                _provider.Capabilities,
+                _ceilingDefaults,
+                _nodeOptions)
         };
     }
 

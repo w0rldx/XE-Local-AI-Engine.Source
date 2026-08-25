@@ -5,6 +5,7 @@ using ModelContextProtocol.Client;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
 /// <summary>
@@ -24,9 +25,11 @@ using XE_Local_AI_Engine.Client.Services.Sandbox;
 /// </summary>
 internal sealed class McpClientFactory : IMcpClientFactory
 {
+    private readonly IOptions<ComputeOptions> _ceilingDefaults;
     private readonly IAgentHomeIdentityProvider _identityProvider;
     private readonly ILoggerFactory _loggerFactory;
     private readonly INodeDataDirectory _nodeDataDirectory;
+    private readonly IOptions<LocalContainerOptions> _nodeOptions;
     private readonly McpOptions _options;
     private readonly IAgentSandboxRuntimeProvider _sandboxProvider;
 
@@ -34,6 +37,8 @@ internal sealed class McpClientFactory : IMcpClientFactory
         IAgentSandboxRuntimeProvider sandboxProvider,
         IAgentHomeIdentityProvider identityProvider,
         INodeDataDirectory nodeDataDirectory,
+        IOptions<ComputeOptions> ceilingDefaults,
+        IOptions<LocalContainerOptions> nodeOptions,
         ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -42,6 +47,8 @@ internal sealed class McpClientFactory : IMcpClientFactory
         _identityProvider = identityProvider ?? throw new ArgumentNullException(nameof(identityProvider));
         // Only to know which host root a sandboxed server must never be able to read; nothing here writes to it.
         _nodeDataDirectory = nodeDataDirectory ?? throw new ArgumentNullException(nameof(nodeDataDirectory));
+        _ceilingDefaults = ceilingDefaults ?? throw new ArgumentNullException(nameof(ceilingDefaults));
+        _nodeOptions = nodeOptions ?? throw new ArgumentNullException(nameof(nodeOptions));
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
     }
 
@@ -75,7 +82,7 @@ internal sealed class McpClientFactory : IMcpClientFactory
     {
         return record.TrustTier switch
         {
-            McpTrustTier.Sandboxed => new SandboxedMcpStdioTransport(record, _sandboxProvider, _identityProvider, _nodeDataDirectory, _loggerFactory),
+            McpTrustTier.Sandboxed => new SandboxedMcpStdioTransport(record, _sandboxProvider, _identityProvider, _nodeDataDirectory, _ceilingDefaults, _nodeOptions, _loggerFactory),
             McpTrustTier.PrivilegedHost => new StdioClientTransport(BuildStdioTransportOptions(record), _loggerFactory),
             // BuiltInTrusted names an engine-owned transport and there is no engine-owned STDIO one. A row carrying it
             // reached the database past the CRUD refusal and the schema check, so it is a mismatch, not a tier to
