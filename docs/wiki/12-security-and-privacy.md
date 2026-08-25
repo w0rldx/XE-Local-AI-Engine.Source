@@ -436,9 +436,17 @@ Changes in the detached worktree do not bypass this gate.
 
 These controls limit what the **application's Development tools** read, write, preview, and apply. They do not
 limit what executed repository code can do. Generated source, MSBuild targets, source generators, build scripts,
-and tests run as the host user and have that user's host filesystem and network access. The Process sandbox and
-Agent Home are application-level path, byte, environment, and lifecycle controls; neither is an OS security
-boundary. Do not describe the selected folder as a kernel-enforced filesystem allow-list.
+and tests run as the host user and have that user's **host filesystem** access — the workload declares an isolation
+floor of `None` (`SandboxWorkloads.DevelopmentModeHostToolchain`), so there is no host-filesystem boundary under
+them on any backend the shipped configuration resolves. **Network access is no longer part of that sentence**: since
+G1 the agent-facing sandbox asks for egress denial wherever the backend advertises it, and reaches the network
+unrestricted only where it does not — see
+[Development Mode egress](#development-mode-egress-two-sandboxes-one-of-them-denied) for the two-sandbox design and
+the capability gate. **No CPU, memory or process-count ceiling is requested for these commands at all**
+(`DevelopmentWorkspaceProvider` passes no `ResourceLimits`), so the host's ability to impose one — which the
+isolation panel's Resource-limits column reports — is a capability that this workload does not exercise. The Process
+sandbox and Agent Home are application-level path, byte, environment, and lifecycle controls; neither is an OS
+security boundary. Do not describe the selected folder as a kernel-enforced filesystem allow-list.
 
 MXC remains future provider work behind the existing sandbox/workspace seams. It is not integrated today, and no
 current MXC profile should be documented as a security boundary. Any future provider must implement and
