@@ -89,14 +89,16 @@ public sealed class BenchmarkRunFreezeServiceTests
     {
         var harness = new FreezeHarness();
 
-        var runs = await harness.StartAsync(repeatCount: 3, BenchmarkRepeatMode.AnswerVariance, temperature: 0.9f);
+        var runs = await harness.StartAsync(repeatCount: 3, BenchmarkRepeatMode.AnswerVariance, temperature: 0.9d);
 
         AssertEx.Equal(expected: 3, runs.Count);
         AssertEx.True(harness.Commands.Select(static command => command.SamplingSeed).SequenceEqual(["1", "2", "3"], StringComparer.Ordinal),
             "Each repeat advances the seed off the base, so the runs differ in exactly one input.");
         AssertEx.True(harness.Commands.TrueForAll(static command => command.RepeatMode == BenchmarkRepeatMode.AnswerVariance));
-        AssertEx.True(harness.Commands.TrueForAll(static command => Math.Abs((command.SamplingTemperature ?? 0d) - 0.9d) < 0.0001d),
-            "Every run of the group samples at the requested temperature.");
+        // EXACT, not within a tolerance: the run column and the export are double, and a float carried into them
+        // widens to 0.899999976158142 — a tolerance is what let that reach the operator's CSV.
+        AssertEx.True(harness.Commands.TrueForAll(static command => command.SamplingTemperature is 0.9d),
+            "Every run of the group samples at the requested temperature, recorded exactly.");
 
         // The seed and the temperature are SAMPLING. If either reached the launch arguments, the runs of one group
         // would carry different launch identities and stop being comparable as a launch — which is the whole point of
@@ -115,8 +117,7 @@ public sealed class BenchmarkRunFreezeServiceTests
 
         _ = await harness.StartAsync(repeatCount: 1, BenchmarkRepeatMode.AnswerVariance);
 
-        AssertEx.True(Math.Abs((AssertEx.NotNull(harness.Command).SamplingTemperature ?? 0d) - BenchmarkRunFreezeService.DefaultAnswerVarianceTemperature)
-                      < 0.0001d,
+        AssertEx.Equal<double?>(BenchmarkRunFreezeService.DefaultAnswerVarianceTemperature, AssertEx.NotNull(harness.Command).SamplingTemperature,
             "An omitted temperature takes the everyday default rather than falling back to the deterministic 0.");
     }
 
@@ -597,7 +598,7 @@ public sealed class BenchmarkRunFreezeServiceTests
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkFreezeScope scope) =>
             _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version), scope);
 
-        public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, BenchmarkRepeatMode mode, float? temperature = null) =>
+        public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, BenchmarkRepeatMode mode, double? temperature = null) =>
             _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, KvCacheType: null, repeatCount,
                 Warmup: false, mode, temperature));
 

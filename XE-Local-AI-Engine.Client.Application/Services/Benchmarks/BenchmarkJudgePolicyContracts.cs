@@ -108,7 +108,7 @@ public sealed record BenchmarkJudgePolicySamplingV1(
     public static BenchmarkJudgePolicySamplingV1 FromSnapshot(BenchmarkSamplingSnapshotV1 snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        return new BenchmarkJudgePolicySamplingV1(snapshot.Temperature,
+        return new BenchmarkJudgePolicySamplingV1((float?)snapshot.Temperature,
             snapshot.TopP,
             snapshot.TopK,
             snapshot.MinP,

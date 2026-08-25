@@ -45,7 +45,7 @@ public sealed record BenchmarkRunStartRequest(
     int RepeatCount = 1,
     bool Warmup = false,
     BenchmarkRepeatMode RepeatMode = BenchmarkRepeatMode.Throughput,
-    float? AnswerVarianceTemperature = null);
+    double? AnswerVarianceTemperature = null);
 
 /// <summary>
 ///     Work one launch REQUEST does once and every cell of it would otherwise repeat: the llama-server capability
@@ -190,10 +190,10 @@ public sealed class BenchmarkRunFreezeService(
     ///     default: high enough that repeats actually diverge, low enough that the divergence is still the model
     ///     answering rather than wandering.
     /// </summary>
-    public const float DefaultAnswerVarianceTemperature = 0.7f;
+    public const double DefaultAnswerVarianceTemperature = 0.7d;
 
     /// <summary>The ceiling the chat sampling UI already enforces.</summary>
-    public const float MaxAnswerVarianceTemperature = 2f;
+    public const double MaxAnswerVarianceTemperature = 2d;
 
     public async Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkRunStartRequest request,
         BenchmarkFreezeScope? scope = null,
@@ -393,7 +393,7 @@ public sealed class BenchmarkRunFreezeService(
     /// </summary>
     private static (int RepeatIndex, BenchmarkSamplingSnapshotV1 Sampling) SamplingFor(BenchmarkSamplingSnapshotV1 deterministic,
         BenchmarkRepeatMode mode,
-        float temperature,
+        double temperature,
         int repeatIndex)
     {
         if (mode != BenchmarkRepeatMode.AnswerVariance)
@@ -413,15 +413,15 @@ public sealed class BenchmarkRunFreezeService(
     ///     The temperature an answer-variance group samples at. Throughput mode never reads it, so a value carried on
     ///     a throughput request is ignored rather than refused — the two knobs are independent on the wire.
     /// </summary>
-    private static float ResolveAnswerVarianceTemperature(BenchmarkRunStartRequest request)
+    private static double ResolveAnswerVarianceTemperature(BenchmarkRunStartRequest request)
     {
         if (request.RepeatMode != BenchmarkRepeatMode.AnswerVariance)
         {
-            return 0f;
+            return 0d;
         }
 
         var temperature = request.AnswerVarianceTemperature ?? DefaultAnswerVarianceTemperature;
-        if (temperature is <= 0f or > MaxAnswerVarianceTemperature)
+        if (temperature is <= 0d or > MaxAnswerVarianceTemperature)
         {
             throw new BenchmarkValidationException($"The answer-variance temperature must be above 0 and at most {MaxAnswerVarianceTemperature}.");
         }

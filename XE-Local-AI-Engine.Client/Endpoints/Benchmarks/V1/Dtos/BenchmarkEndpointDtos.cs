@@ -174,7 +174,7 @@ public sealed class StartBenchmarkRunRequest
     public BenchmarkRepeatMode RepeatMode { get; init; }
 
     /// <summary>The temperature an <c>AnswerVariance</c> group samples at; omitted takes 0.7. Range above 0 to 2.</summary>
-    public float? AnswerVarianceTemperature { get; init; }
+    public double? AnswerVarianceTemperature { get; init; }
 }
 
 /// <summary>One cell of the launch matrix: a model, optionally pinned to a KV-cache type.</summary>
@@ -210,7 +210,7 @@ public sealed class StartBenchmarkRunBatchRequest
     public BenchmarkRepeatMode RepeatMode { get; init; }
 
     /// <inheritdoc cref="StartBenchmarkRunRequest.AnswerVarianceTemperature" />
-    public float? AnswerVarianceTemperature { get; init; }
+    public double? AnswerVarianceTemperature { get; init; }
 }
 
 /// <summary>One matrix cell the node accepted, with the runs it enqueued in queue order.</summary>

@@ -30690,7 +30690,7 @@
           },
           "answerVarianceTemperature": {
             "type": "number",
-            "format": "float",
+            "format": "double",
             "nullable": true
           }
         }
@@ -30788,7 +30788,7 @@
           },
           "answerVarianceTemperature": {
             "type": "number",
-            "format": "float",
+            "format": "double",
             "nullable": true
           }
         }

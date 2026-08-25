@@ -343,7 +343,9 @@ public sealed class BenchmarkRunExecutor(
     internal static SamplingOptions ToSamplingOptions(BenchmarkSamplingSnapshotV1 sampling, int contextTokens) =>
         new()
         {
-            Temperature = sampling.Temperature,
+            // The sampler is float all the way to the wire; the snapshot keeps the double so the run's own column
+            // does not record a widening artefact.
+            Temperature = (float?)sampling.Temperature,
             TopP = sampling.TopP,
             TopK = sampling.TopK,
             MinP = sampling.MinP,
