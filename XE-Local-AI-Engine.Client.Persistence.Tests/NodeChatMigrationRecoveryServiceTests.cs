@@ -10,6 +10,16 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 
+/// <summary>
+///     Serialized against the rest of the module. Every test here applies the WHOLE migration set against a real
+///     SQLite file under a wall-clock attempt budget, so it is starved by the dozens of other database tests this
+///     module runs beside it — and starvation here does not read as a slow test: the attempt is cancelled MID-APPLY,
+///     which leaves a half-rebuilt <c>ef_temp_*</c> table behind and the retry then dies on "table already exists".
+///     Different tests of this class failing on different runs is the signature. Raising the budget instead would
+///     have cost the abandoned-lock test the same increase in dead wall clock, because its first attempt is MEANT to
+///     exhaust it.
+/// </summary>
+[NotInParallel]
 public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
 {
     /// <summary>
