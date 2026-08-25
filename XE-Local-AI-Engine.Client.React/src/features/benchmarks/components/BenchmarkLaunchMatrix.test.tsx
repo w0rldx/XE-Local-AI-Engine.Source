@@ -58,6 +58,8 @@ describe("BenchmarkLaunchMatrix", () => {
 			],
 			repeatCount: 1,
 			warmup: false,
+			repeatMode: "Throughput",
+			answerVarianceTemperature: null,
 		});
 	});
 
@@ -89,5 +91,18 @@ describe("BenchmarkLaunchMatrix", () => {
 		});
 
 		expect(screen.getByTestId("benchmark-matrix-rejected").textContent).toContain("owner/Repo:Q8_0 · q4_0 — Needs a GPU build.");
+	});
+
+	// Answer variance is a different experiment, not a flag on the same one: the request carries the mode, and the
+	// temperature only when that mode uses it.
+	it("submits the answer-variance mode with its temperature", () => {
+		const { onSubmit } = renderMatrix();
+
+		fireEvent.click(screen.getByTestId("benchmark-matrix-model-owner/Repo:Q4_K_M"));
+		fireEvent.click(screen.getByTestId("benchmark-repeat-mode"));
+		fireEvent.click(screen.getByRole("option", { name: "Answer variance" }));
+		fireEvent.click(screen.getByTestId("benchmark-matrix-start"));
+
+		expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({ repeatMode: "AnswerVariance", answerVarianceTemperature: null });
 	});
 });

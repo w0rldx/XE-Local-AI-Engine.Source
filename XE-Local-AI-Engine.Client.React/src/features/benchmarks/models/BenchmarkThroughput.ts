@@ -60,8 +60,8 @@ export interface BenchmarkRepeatStats {
 }
 
 /**
- * What makes two runs comparable measurements of the same thing: the same model BUILD, the same KV-cache type, and the
- * same effective launch identity. Two runs of one model on different launch arguments are two different experiments,
+ * What makes two runs comparable measurements of the same thing: the same model BUILD, the same KV-cache type, the
+ * same effective launch identity, and the same repeat MODE. Two runs of one model on different launch arguments are two different experiments,
  * and averaging them would report a spread that is really a configuration difference. The NAME is not the build — a
  * model deleted and reinstalled, or a repo tag repointed at new weights, keeps its name and changes its content
  * fingerprint — so the fingerprint is what keeps two builds out of one mean. Falls back to the INTENDED identity while
@@ -69,7 +69,7 @@ export interface BenchmarkRepeatStats {
  * of one model+KV together rather than scattering them.
  */
 export function benchmarkRepeatCohortKey(
-	run: Pick<BenchmarkRunSummary, "primaryModelName" | "modelContentFingerprint" | "primaryLaunch">,
+	run: Pick<BenchmarkRunSummary, "primaryModelName" | "modelContentFingerprint" | "primaryLaunch" | "repeatMode">,
 ): string {
 	const { kvCacheType, effectiveLaunchIdentity, intendedLaunchIdentity } = run.primaryLaunch;
 	return [
@@ -77,6 +77,10 @@ export function benchmarkRepeatCohortKey(
 		run.modelContentFingerprint,
 		kvCacheType ?? "",
 		effectiveLaunchIdentity ?? intendedLaunchIdentity ?? "",
+		// The repeat MODE is part of the experiment, not a detail of it. A throughput group is deterministic and its
+		// spread is the machine; an answer-variance group samples and its spread is the model. One mean over both
+		// would describe neither, and the runs are otherwise identical in every member above.
+		run.repeatMode,
 	].join("|");
 }
 

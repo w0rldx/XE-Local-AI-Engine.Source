@@ -6,9 +6,21 @@ import { BenchmarkJudgePanel } from "@/features/benchmarks/components/BenchmarkJ
 import { BenchmarkLaunchBadges } from "@/features/benchmarks/components/BenchmarkLaunchBadges";
 import { BenchmarkLaunchEvidencePanel } from "@/features/benchmarks/components/BenchmarkLaunchEvidencePanel";
 import { BenchmarkScorePicker } from "@/features/benchmarks/components/BenchmarkScorePicker";
-import { BenchmarkStatusBadge, BenchmarkTruncatedBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
+import {
+	BenchmarkIncompleteBadge,
+	BenchmarkReasoningExhaustedBadge,
+	BenchmarkStatusBadge,
+	BenchmarkTruncatedBadge,
+} from "@/features/benchmarks/components/BenchmarkStatusBadge";
 import type { BenchmarkOutputPart, BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
-import { isBenchmarkRunTruncated, isPrimaryActive, isRunTerminal, toChatMessageParts } from "@/features/benchmarks/models/BenchmarkModels";
+import {
+	isBenchmarkRunIncomplete,
+	isBenchmarkRunReasoningExhausted,
+	isBenchmarkRunTruncated,
+	isPrimaryActive,
+	isRunTerminal,
+	toChatMessageParts,
+} from "@/features/benchmarks/models/BenchmarkModels";
 import { formatLatencyMs, formatTokensPerSecond, hasThroughputBreakdown } from "@/features/benchmarks/models/BenchmarkThroughput";
 import { MessageParts } from "@/features/chat/components/MessageParts";
 
@@ -114,7 +126,12 @@ export function BenchmarkRunPane({
 					</Stack>
 					<Group gap="xs">
 						<BenchmarkStatusBadge status={run.primaryStatus} />
-						{truncated ? <BenchmarkTruncatedBadge /> : null}
+						{isBenchmarkRunReasoningExhausted(run) ? (
+							<BenchmarkReasoningExhaustedBadge />
+						) : truncated ? (
+							<BenchmarkTruncatedBadge />
+						) : null}
+						{isBenchmarkRunIncomplete(run) ? <BenchmarkIncompleteBadge /> : null}
 					</Group>
 				</Group>
 				<BenchmarkLaunchBadges launch={run.primaryLaunch} data-testid="benchmark-run-launch" />
@@ -131,6 +148,34 @@ export function BenchmarkRunPane({
 					<Text size="sm">
 						{t("pages.benchmarks.rank.quality", "Quality")}: <b>{run.qualityScore ?? "—"}</b>
 					</Text>
+				</Group>
+				{/* What this run actually sampled with. In throughput mode it is the proof the repeats were deterministic;
+				    in answer-variance mode the seed is the only thing that says which of the repeats this one is. */}
+				<Group gap="lg" data-testid="benchmark-run-sampling">
+					<Text size="sm">
+						{t("pages.benchmarks.run.repeatMode", "Repeat mode")}:{" "}
+						<b>{t(`pages.benchmarks.run.repeatModes.${run.repeatMode}`, run.repeatMode)}</b>
+					</Text>
+					<Text size="sm">
+						{t("pages.benchmarks.run.samplingTemperature", "Temperature")}: <b>{run.samplingTemperature ?? "—"}</b>
+					</Text>
+					<Text size="sm">
+						{t("pages.benchmarks.run.samplingSeed", "Seed")}: <b>{run.samplingSeed ?? "—"}</b>
+					</Text>
+					{run.reasoningBudgetTokens === null ? null : (
+						<Text size="sm">
+							{t("pages.benchmarks.project.reasoningBudget", "Reasoning budget (tokens)")}:{" "}
+							<b>{run.reasoningBudgetTokens}</b>
+							{/* A budget the runtime never applied is why the run can look as if it did nothing. Saying so
+							    beats letting the operator raise a number that was never read. */}
+							{run.reasoningBudgetApplicable === false ? (
+								<Text span={true} c="dimmed" data-testid="benchmark-run-budget-not-applicable">
+									{" "}
+									{t("pages.benchmarks.run.reasoningBudgetNotApplicable", "not applied — model has no thinking mode")}
+								</Text>
+							) : null}
+						</Text>
+					)}
 				</Group>
 				<ThroughputBreakdown run={run} />
 				<Group gap="xs" c={isConnected ? "green" : "dimmed"}>

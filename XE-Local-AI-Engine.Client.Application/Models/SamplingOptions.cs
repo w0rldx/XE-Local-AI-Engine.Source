@@ -19,6 +19,14 @@ public sealed record SamplingOptions
 
     public int? MaxOutputTokens { get; init; }
 
+    /// <summary>
+    ///     An explicit per-request thinking budget in tokens, overriding the one the reasoning EFFORT would imply.
+    ///     Null keeps the effort-derived ceiling (or none), which is what every path but the benchmark freeze wants:
+    ///     the fixed effort ladder is a ceiling chosen without knowing the window, whereas a benchmark pins a number
+    ///     and has to replay it exactly. Only honoured on a thinking-capable model whose runtime can enforce a budget.
+    /// </summary>
+    public int? ReasoningBudgetTokens { get; init; }
+
     public float? RepeatPenalty { get; init; }
 
     public int? RepeatLastN { get; init; }

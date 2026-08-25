@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using XE_Local_AI_Engine.Client.Persistence;
 
@@ -10,9 +11,11 @@ using XE_Local_AI_Engine.Client.Persistence;
 namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 {
     [DbContext(typeof(NodeChatDbContext))]
-    partial class NodeChatDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260825173509_AddBenchmarkRunRepeatMode")]
+    partial class AddBenchmarkRunRepeatMode
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
@@ -3154,10 +3157,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("transport_kind");
 
-                    b.Property<int>("TrustTier")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("trust_tier");
-
                     b.Property<long>("UpdatedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("updated_at_utc");
@@ -3179,10 +3178,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("mcp_servers", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_mcp_servers_trust_tier", "trust_tier IN (0, 1, 2)");
-                        });
+                    b.ToTable("mcp_servers", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelClassification", b =>

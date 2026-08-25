@@ -28,7 +28,13 @@ public enum BenchmarkErrorCode
     PrimaryNotSucceeded,
 
     /// <summary>Batch only: the cell never reached the freeze because an earlier cell stopped the batch.</summary>
-    NotAttempted
+    NotAttempted,
+
+    /// <summary>
+    ///     Batch only: the request's time budget ran out before this cell was frozen. Nothing is wrong with the cell —
+    ///     resubmit it, with the project version the response reports.
+    /// </summary>
+    BatchTimeBudget
 }
 
 public class BenchmarkProjectMutationRequest
@@ -39,6 +45,13 @@ public class BenchmarkProjectMutationRequest
 
     /// <summary>Per-run output-token budget; omitted leaves generation context-limited. Must be &lt; ContextTokens.</summary>
     public int? MaxOutputTokens { get; init; }
+
+    /// <summary>
+    ///     Per-run thinking budget (<c>reasoning_budget_tokens</c>); omitted leaves the reasoning bounded only by the
+    ///     agent's reasoning effort and the window. Must be &lt; ContextTokens, and together with MaxOutputTokens must
+    ///     leave a prompt reserve inside it.
+    /// </summary>
+    public int? ReasoningBudgetTokens { get; init; }
 
     /// <summary>Seconds one run's generation may take; omitted takes the node default (900). Range 60..7200.</summary>
     public int? InvocationTimeoutSeconds { get; init; }
@@ -79,6 +92,9 @@ public class BenchmarkProjectSummaryResponse
 
     /// <summary>Per-run output-token budget, or null when generation is context-limited.</summary>
     public int? MaxOutputTokens { get; init; }
+
+    /// <summary>Per-run thinking budget, or null when the reasoning is bounded only by the effort and the window.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
 
     /// <summary>Seconds one run's generation may take, or null for the node default.</summary>
     public int? InvocationTimeoutSeconds { get; init; }
@@ -149,6 +165,16 @@ public sealed class StartBenchmarkRunRequest
 
     /// <summary>Enqueue one extra run first, flagged as a warm-up: never ranked, never in a group's statistics.</summary>
     public bool Warmup { get; init; }
+
+    /// <summary>
+    ///     What the repeats measure. <c>Throughput</c> (the default) freezes temperature 0 and one seed, so every
+    ///     repeat answers identically and only the machine varies. <c>AnswerVariance</c> advances the seed per repeat
+    ///     at <see cref="AnswerVarianceTemperature" />, so the spread of answers is the measurement.
+    /// </summary>
+    public BenchmarkRepeatMode RepeatMode { get; init; }
+
+    /// <summary>The temperature an <c>AnswerVariance</c> group samples at; omitted takes 0.7. Range above 0 to 2.</summary>
+    public double? AnswerVarianceTemperature { get; init; }
 }
 
 /// <summary>One cell of the launch matrix: a model, optionally pinned to a KV-cache type.</summary>
@@ -179,6 +205,12 @@ public sealed class StartBenchmarkRunBatchRequest
 
     /// <summary>Prepend a warm-up run to every item's group.</summary>
     public bool Warmup { get; init; }
+
+    /// <inheritdoc cref="StartBenchmarkRunRequest.RepeatMode" />
+    public BenchmarkRepeatMode RepeatMode { get; init; }
+
+    /// <inheritdoc cref="StartBenchmarkRunRequest.AnswerVarianceTemperature" />
+    public double? AnswerVarianceTemperature { get; init; }
 }
 
 /// <summary>One matrix cell the node accepted, with the runs it enqueued in queue order.</summary>
@@ -392,13 +424,23 @@ public class BenchmarkRunSummaryResponse
     /// <summary>Dense rank within the project, descending. Null when the run is not in the ranked cohort.</summary>
     public int? Rank { get; init; }
 
-    /// <summary>Why this run is not in the project's ranked cohort, or null when it is ranked.</summary>
+    /// <summary>
+    ///     Why this run is not in the project's ranked cohort, or null when it is ranked. One of <c>no-score</c>,
+    ///     <c>judge-pending</c>, <c>judge-failed</c>, <c>judge-cancelled</c>, <c>policy-outdated</c>,
+    ///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>,
+    ///     <c>truncated</c>, <c>incomplete</c>, <c>warmup</c>.
+    /// </summary>
     public string? RankExclusionReason { get; init; }
 
     /// <summary>
     ///     Why the primary generation stopped, verbatim from the provider (<c>stop</c>, <c>length</c>,
     ///     <c>tool_calls</c>, <c>content_filter</c>), or null when none was reported. <c>length</c> means the answer
     ///     was cut off by the token budget — the run still succeeded, but it does not rank.
+    ///     <para>
+    ///         <c>incomplete</c> is the one value the node derives rather than reads: the turn finished cleanly and
+    ///         produced no answer at all — it ended on an unanswered tool call, or emitted only reasoning. It succeeds
+    ///         and does not rank, exactly like <c>length</c>, and carries the <c>incomplete</c> rank-exclusion reason.
+    ///     </para>
     /// </summary>
     public string? PrimaryStopReason { get; init; }
 
@@ -420,6 +462,18 @@ public class BenchmarkRunSummaryResponse
 
     /// <summary>A warm-up run: shown, but never ranked and never counted in a group's statistics.</summary>
     public bool IsWarmup { get; init; }
+
+    /// <summary>What this run's repeat group measures — throughput jitter, or the spread of answers.</summary>
+    public BenchmarkRepeatMode RepeatMode { get; init; }
+
+    /// <summary>
+    ///     The seed this run was frozen with, as a string (a seed is an unconstrained 64-bit value). Null on runs
+    ///     frozen before it was recorded. In an answer-variance group it is the ONE input that differs between runs.
+    /// </summary>
+    public string? SamplingSeed { get; init; }
+
+    /// <summary>The temperature this run was frozen with, or null on a run frozen before it was recorded.</summary>
+    public double? SamplingTemperature { get; init; }
 
     public int? EffectiveContextTokens { get; init; }
     public long? DurationMs { get; init; }
@@ -497,6 +551,17 @@ public class BenchmarkRunSummaryResponse
 public sealed class BenchmarkRunDetailResponse : BenchmarkRunSummaryResponse
 {
     public JsonElement? OutputParts { get; init; }
+
+    /// <summary>The thinking budget frozen onto this run, or null when none was pinned.</summary>
+    public int? ReasoningBudgetTokens { get; init; }
+
+    /// <summary>
+    ///     False when a budget WAS pinned and the frozen model cannot honour it — it does not reason, or its chat
+    ///     template renders no reasoning end marker, so llama-server would accept the cap and ignore it. The node
+    ///     therefore does not send one, and this is the only place that says so. Null when no budget was pinned, and
+    ///     on runs frozen before the field existed.
+    /// </summary>
+    public bool? ReasoningBudgetApplicable { get; init; }
 
     /// <summary>The rubric verdict of the current attempt (<c>BenchmarkJudgeResultV2</c>), or null.</summary>
     public JsonElement? JudgeResult { get; init; }

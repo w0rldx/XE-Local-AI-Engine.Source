@@ -25,8 +25,10 @@ describe("toBenchmarkProjectSummary", () => {
 			id: "",
 			name: "Summarisation",
 			contextTokens: 0,
-			// Null, not 0: an absent budget means context-limited, and 0 is a budget the node refuses.
+			// Null, not 0: an absent budget means context-limited, and 0 is a budget the node refuses. The reasoning
+			// budget reads the same way — absent is "as much as the window allows", never "no thinking".
 			maxOutputTokens: null,
+			reasoningBudgetTokens: null,
 			invocationTimeoutSeconds: null,
 			agentDefinitionId: "",
 			judgeEnabled: false,
@@ -41,10 +43,16 @@ describe("toBenchmarkProjectSummary", () => {
 	// `=== true` rather than truthiness: an absent flag must read as off, never as "unknown means on".
 	it("carries the flags through when present", () => {
 		const mapped = toBenchmarkProjectSummary(
-			partial({ name: "X", judgeEnabled: true, isFrozen: true, runCount: 4, maxOutputTokens: 2048 }),
+			partial({ name: "X", judgeEnabled: true, isFrozen: true, runCount: 4, maxOutputTokens: 2048, reasoningBudgetTokens: 1024 }),
 		);
 
-		expect(mapped).toMatchObject({ judgeEnabled: true, isFrozen: true, runCount: 4, maxOutputTokens: 2048 });
+		expect(mapped).toMatchObject({
+			judgeEnabled: true,
+			isFrozen: true,
+			runCount: 4,
+			maxOutputTokens: 2048,
+			reasoningBudgetTokens: 1024,
+		});
 	});
 });
 

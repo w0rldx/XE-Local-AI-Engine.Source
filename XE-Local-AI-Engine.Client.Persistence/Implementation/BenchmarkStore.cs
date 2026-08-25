@@ -26,6 +26,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             CoreTaskJson = input.CoreTaskJson.ToArray(),
             ContextTokens = input.ContextTokens,
             MaxOutputTokens = input.MaxOutputTokens,
+            ReasoningBudgetTokens = input.ReasoningBudgetTokens,
             InvocationTimeoutSeconds = input.InvocationTimeoutSeconds,
             AgentDefinitionId = input.AgentDefinitionId,
             Version = 1,
@@ -90,6 +91,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         project.CoreTaskJson = input.CoreTaskJson.ToArray();
         project.ContextTokens = input.ContextTokens;
         project.MaxOutputTokens = input.MaxOutputTokens;
+        project.ReasoningBudgetTokens = input.ReasoningBudgetTokens;
         project.InvocationTimeoutSeconds = input.InvocationTimeoutSeconds;
         project.AgentDefinitionId = input.AgentDefinitionId;
         project.Version++;
@@ -198,6 +200,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 RepeatGroupId = command.RepeatGroupId,
                 RepeatIndex = command.RepeatIndex,
                 IsWarmup = command.IsWarmup,
+                RepeatMode = command.RepeatMode,
+                SamplingSeed = command.SamplingSeed,
+                SamplingTemperature = command.SamplingTemperature,
                 Version = 1,
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now
@@ -258,6 +263,28 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         // Rank is computed over the WHOLE project, never the page: a run's position is a property of the project, and
         // paging must not renumber it. Filters narrow which rows come back, not what they are ranked against.
         var ranking = await LoadRankingAsync(projectId, cancellationToken).ConfigureAwait(false);
+        return await PageAsync(ranking, projectId, skip, take, modelContentFingerprint, includeUnscored, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<BenchmarkRunPage> ListAllRunsAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        // ONE ranking for the whole export. Paging through ListRunsAsync recomputed it per page, and the ranking is a
+        // whole-project scan plus a judge-view join across three more tables — work that is identical every time,
+        // because a run's rank is a property of the project rather than of the page it lands on.
+        var ranking = await LoadRankingAsync(projectId, cancellationToken).ConfigureAwait(false);
+        return await PageAsync(ranking, projectId, skip: 0, int.MaxValue, modelContentFingerprint: null, includeUnscored: true, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task<BenchmarkRunPage> PageAsync(BenchmarkProjectRanking ranking,
+        Guid projectId,
+        int skip,
+        int take,
+        string? modelContentFingerprint,
+        bool includeUnscored,
+        CancellationToken cancellationToken)
+    {
         var runs = _dbContext.BenchmarkRuns.AsNoTracking().Where(entity => entity.ProjectId == projectId);
         if (modelContentFingerprint is { Length: > 0 })
         {
@@ -362,7 +389,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                           entity.SegmentCount),
                                   entity.RepeatGroupId,
                                   entity.RepeatIndex,
-                                  entity.IsWarmup))
+                                  entity.IsWarmup,
+
+                                  // Positional, including the generation timeout the listing used to leave defaulted:
+                                  // an expression tree cannot take an out-of-position named argument.
+                                  entity.InvocationTimeoutSeconds,
+                                  entity.RepeatMode,
+                                  entity.SamplingSeed,
+                                  entity.SamplingTemperature))
                               .ToArrayAsync(cancellationToken)
                               .ConfigureAwait(false);
 
@@ -1472,10 +1506,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     ///     <para>
     ///         Outermost first. A WARM-UP outranks even the operator override: it exists to absorb the first-launch
     ///         cost the runs after it should not pay, so ranking it against them would rank the very thing it controls
-    ///         for. TRUNCATION comes next — before every judge-derived reason, after the operator override: a run cut
-    ///         off at the token budget is a real measurement of an INCOMPLETE answer, so its judge score stays visible
-    ///         but never ranks, while an operator who scored it anyway still wins. Read off the persisted stop reason,
-    ///         never inferred from the status.
+    ///         for. TRUNCATION and the SILENT-INCOMPLETE it sits beside come next — before every judge-derived reason,
+    ///         after the operator override: a run cut off at the token budget, and a run that finished cleanly without
+    ///         emitting an answer at all, are both real measurements of a non-answer, so their judge score stays visible
+    ///         but never ranks, while an operator who scored one anyway still wins. Both are read off the persisted stop
+    ///         reason, never inferred from the status.
     ///     </para>
     /// </summary>
     /// <param name="Rankable">
@@ -1487,8 +1522,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         bool isWarmup,
         string? primaryStopReason)
     {
-        var truncated = !isWarmup && userScore is null && BenchmarkPrimaryStopReasons.IsTruncated(primaryStopReason);
-        if (!isWarmup && !truncated)
+        var unanswered = isWarmup || userScore is not null ? null : UnansweredReason(primaryStopReason);
+        if (!isWarmup && unanswered is null)
         {
             var (score, source) = ComputeQuality(userScore, judge);
             return (judge, score, source, true);
@@ -1496,8 +1531,22 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
         return (judge with
         {
-            RankExclusionReason = isWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : BenchmarkRunJudgeStates.ReasonTruncated
+            RankExclusionReason = isWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : unanswered
         }, null, BenchmarkQualityScoreSources.None, false);
+    }
+
+    /// <summary>
+    ///     The exclusion a stop reason implies for a run nothing else already excludes, or <see langword="null" /> when
+    ///     the run answered.
+    /// </summary>
+    private static string? UnansweredReason(string? primaryStopReason)
+    {
+        if (BenchmarkPrimaryStopReasons.IsTruncated(primaryStopReason))
+        {
+            return BenchmarkRunJudgeStates.ReasonTruncated;
+        }
+
+        return BenchmarkPrimaryStopReasons.IsIncomplete(primaryStopReason) ? BenchmarkRunJudgeStates.ReasonIncomplete : null;
     }
 
     private static BenchmarkRunRecord WithRanking(BenchmarkRunRecord run, BenchmarkProjectRanking ranking) =>
@@ -1950,7 +1999,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     private static BenchmarkProjectRecord ToRecord(BenchmarkProject entity, bool frozen) =>
         new(entity.Id, entity.Name, entity.CoreTaskJson.ToArray(), entity.ContextTokens, entity.AgentDefinitionId,
             entity.CurrentJudgePolicyRevisionId is not null, entity.CurrentJudgePolicyRevisionId, frozen,
-            entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.MaxOutputTokens, entity.InvocationTimeoutSeconds);
+            entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.MaxOutputTokens, entity.InvocationTimeoutSeconds,
+            entity.ReasoningBudgetTokens);
 
     // One place writes the six throughput columns, so the success path and the cancel-reset path can never disagree
     // about which of them a run carries.
@@ -1994,7 +2044,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             RepeatGroupId: entity.RepeatGroupId,
             RepeatIndex: entity.RepeatIndex,
             IsWarmup: entity.IsWarmup,
-            InvocationTimeoutSeconds: entity.InvocationTimeoutSeconds);
+            InvocationTimeoutSeconds: entity.InvocationTimeoutSeconds,
+            RepeatMode: entity.RepeatMode,
+            SamplingSeed: entity.SamplingSeed,
+            SamplingTemperature: entity.SamplingTemperature);
 
     private static BenchmarkRunLaunchIntent? ToIntent(string? variant,
         string? kvCacheType,

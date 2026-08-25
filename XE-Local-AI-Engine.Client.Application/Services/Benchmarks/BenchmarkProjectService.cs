@@ -95,8 +95,24 @@ public sealed class BenchmarkProjectService(
             throw new BenchmarkConflictException("VersionConflict");
         }
 
-        var policy = draft is null ? null : await BuildPolicyAsync(draft, cancellationToken).ConfigureAwait(false);
         var current = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
+
+        // Changing the judge invalidates every score already given under the old one. The operator confirms that
+        // explicitly rather than discovering a silently re-scored project.
+        //
+        // Both answers are given BEFORE the policy is built, because building it takes the VERIFYING model lease,
+        // which re-hashes every member file: a 22 GB judge made this refusal take 57 s to say no.
+        if (draft is not null && !confirmRejudge && await _benchmarkStore.CountRunsAsync(projectId, cancellationToken).ConfigureAwait(false) > 0)
+        {
+            if (MatchesCurrentPolicy(draft, current))
+            {
+                return new BenchmarkJudgePolicyChange(project, [], current!.CohortGeneration);
+            }
+
+            throw new BenchmarkConflictException("RejudgeRequired");
+        }
+
+        var policy = draft is null ? null : await BuildPolicyAsync(draft, cancellationToken).ConfigureAwait(false);
         if (policy is null)
         {
             if (current is null)
@@ -112,13 +128,6 @@ public sealed class BenchmarkProjectService(
         if (current is not null && string.Equals(current.PolicyHash, hash, StringComparison.Ordinal))
         {
             return new BenchmarkJudgePolicyChange(project, [], current.CohortGeneration);
-        }
-
-        // Changing the judge invalidates every score already given under the old one. The operator confirms that
-        // explicitly rather than discovering a silently re-scored project.
-        if (!confirmRejudge && await _benchmarkStore.CountRunsAsync(projectId, cancellationToken).ConfigureAwait(false) > 0)
-        {
-            throw new BenchmarkConflictException("RejudgeRequired");
         }
 
         var activation = await _benchmarkStore.ActivateJudgePolicyAsync(projectId,
@@ -251,6 +260,7 @@ public sealed class BenchmarkProjectService(
 
         ValidateContext(draft.ContextTokens, "primary");
         ValidateOutputBudget(draft.MaxOutputTokens, draft.ContextTokens);
+        ValidateReasoningBudget(draft.ReasoningBudgetTokens, draft.MaxOutputTokens, draft.ContextTokens);
         ValidateInvocationTimeout(draft.InvocationTimeoutSeconds);
         var definition = await _agentDefinitionStore.GetByIdAsync(draft.AgentDefinitionId, cancellationToken).ConfigureAwait(false);
         if (definition is null || definition.Kind != AgentDefinitionKind.Single)
@@ -265,7 +275,8 @@ public sealed class BenchmarkProjectService(
                 draft.ContextTokens,
                 draft.AgentDefinitionId,
                 draft.MaxOutputTokens,
-                draft.InvocationTimeoutSeconds),
+                draft.InvocationTimeoutSeconds,
+                draft.ReasoningBudgetTokens),
             policy);
     }
 
@@ -273,6 +284,52 @@ public sealed class BenchmarkProjectService(
     ///     Builds the hashable policy from the operator's draft: the judge model's identity as installed right now, the
     ///     deterministic sampling every judging replays, and the rubric.
     /// </summary>
+    /// <summary>
+    ///     Whether a draft would rebuild the policy the project already carries, decided WITHOUT verifying the model.
+    ///     Everything a policy hashes over is here except the model's content fingerprint and member hashes, which only
+    ///     the verifying lease can produce — so the stored identity is reused for those and the model NAME is compared
+    ///     on its own. The comparison is the real canonicalizer, not a field-by-field re-implementation: a member added
+    ///     to the policy is then covered here the moment it enters the hash.
+    ///     <para>
+    ///         Ceiling, and the honest outcome: a judge model whose FILE changed on disk under an unchanged name reads
+    ///         as unchanged here, so the re-save is a no-op instead of a re-judge. The verifying path still detects it
+    ///         the next time the policy is actually built — the same answer, one save later.
+    ///     </para>
+    /// </summary>
+    private static bool MatchesCurrentPolicy(BenchmarkJudgePolicyDraft draft, BenchmarkJudgePolicyRevisionRecord? current)
+    {
+        if (current?.PolicyJson is null)
+        {
+            return false;
+        }
+
+        BenchmarkJudgePolicyV1 stored;
+        try
+        {
+            stored = BenchmarkJudgeSerialization.DeserializePolicy(current.PolicyJson.Value.Span);
+        }
+        catch (Exception exception) when (exception is BenchmarkSnapshotException or BenchmarkJudgePolicyValidationException)
+        {
+            // A revision that cannot be read or no longer validates cannot be shown to match anything; it falls
+            // through to the confirmation, and the verifying path decides.
+            return false;
+        }
+
+        if (!string.Equals(stored.Model.ModelName, draft.ModelName?.Trim(), StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var candidate = new BenchmarkJudgePolicyV1(stored.Model,
+            draft.ContextTokens,
+            BenchmarkJudgePolicyVersions.PromptVersion,
+            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
+            draft.Rubric ?? BenchmarkJudgeRubricDefaults.Default(),
+            NormalizeReferenceAnswer(draft.ReferenceAnswer));
+        return string.Equals(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(candidate), current.PolicyHash, StringComparison.Ordinal);
+    }
+
     private async Task<BenchmarkJudgePolicyV1> BuildPolicyAsync(BenchmarkJudgePolicyDraft draft, CancellationToken cancellationToken)
     {
         var modelName = draft.ModelName?.Trim();
@@ -331,6 +388,32 @@ public sealed class BenchmarkProjectService(
         if (maxOutputTokens is { } budget && (budget < 1 || budget >= contextTokens))
         {
             throw new BenchmarkValidationException("The output token budget must be between 1 and the requested context, exclusive.");
+        }
+    }
+
+    /// <summary>
+    ///     The reasoning budget must leave room for an answer. On its own it is bounded like the output budget; with an
+    ///     output budget ALSO pinned the two are additive inside one window, and a pair that sums past the context is a
+    ///     project that can only ever produce truncated runs — the model spends the budget thinking, hits the ceiling,
+    ///     and every run is excluded from its own ranking. A coarse prompt reserve is included because the task and the
+    ///     system prompt occupy the same window and are not zero.
+    /// </summary>
+    private static void ValidateReasoningBudget(int? reasoningBudgetTokens, int? maxOutputTokens, int contextTokens)
+    {
+        if (reasoningBudgetTokens is not { } budget)
+        {
+            return;
+        }
+
+        if (budget < 1 || budget >= contextTokens)
+        {
+            throw new BenchmarkValidationException("The reasoning token budget must be between 1 and the requested context, exclusive.");
+        }
+
+        if (maxOutputTokens is { } output && BenchmarkFrozenPolicies.MinimumPromptReserveTokens + budget + output > contextTokens)
+        {
+            throw new BenchmarkValidationException($"The reasoning and output token budgets must leave at least "
+                                                   + $"{BenchmarkFrozenPolicies.MinimumPromptReserveTokens} tokens of the requested context for the prompt.");
         }
     }
 

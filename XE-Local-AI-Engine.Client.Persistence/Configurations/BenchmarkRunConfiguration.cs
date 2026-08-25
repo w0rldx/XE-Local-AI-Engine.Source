@@ -49,6 +49,13 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.RepeatGroupId).HasColumnName("repeat_group_id");
         builder.Property(entity => entity.RepeatIndex).HasColumnName("repeat_index");
         builder.Property(entity => entity.IsWarmup).HasColumnName("is_warmup").HasDefaultValue(false);
+        builder.Property(entity => entity.RepeatMode)
+               .HasColumnName("repeat_mode")
+               .HasConversion<string>()
+               .HasMaxLength(32)
+               .HasDefaultValue(BenchmarkRepeatMode.Throughput);
+        builder.Property(entity => entity.SamplingSeed).HasColumnName("sampling_seed").HasMaxLength(32);
+        builder.Property(entity => entity.SamplingTemperature).HasColumnName("sampling_temperature");
         builder.Property(entity => entity.CurrentJudgeAttemptId).HasColumnName("current_judge_attempt_id");
         builder.Property(entity => entity.PrimaryVariant).HasColumnName("primary_variant").HasMaxLength(32);
         builder.Property(entity => entity.PrimaryKvCacheType).HasColumnName("primary_kv_cache_type").HasMaxLength(32);

@@ -86,8 +86,18 @@ public sealed class BenchmarkEventBufferOptions
     public const int DefaultMaxEventCount = 512;
     public const int DefaultMaxUtf8Bytes = 1024 * 1024;
 
+    /// <summary>
+    ///     How many TERMINAL runs keep their (already emptied) buffer entry. The entry carries no output — eviction
+    ///     cleared that — only the sequence bookkeeping that lets a late subscriber be told to reset instead of being
+    ///     answered with silence. Past this many, the oldest are dropped: the hub then compares the run's persisted
+    ///     <c>LastStreamSequence</c> against an empty replay and resets anyway, which is the same answer by another
+    ///     route. Active runs are never dropped, however many there are.
+    /// </summary>
+    public const int DefaultMaxRetainedTerminalRuns = 256;
+
     public int MaxEventCount { get; init; } = DefaultMaxEventCount;
     public int MaxUtf8Bytes { get; init; } = DefaultMaxUtf8Bytes;
+    public int MaxRetainedTerminalRuns { get; init; } = DefaultMaxRetainedTerminalRuns;
 }
 
 public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
@@ -96,16 +106,33 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
     private readonly Lock _gate = new();
     private readonly int _maxEventCount;
     private readonly int _maxUtf8Bytes;
+    private readonly int _maxRetainedTerminalRuns;
     private readonly Dictionary<Guid, RunBuffer> _runs = [];
+
+    /// <summary>Terminal runs in eviction order, so the oldest tombstone is the one dropped when the cap is reached.</summary>
+    private readonly Queue<Guid> _evicted = new();
 
     public BenchmarkEventBuffer(IOptions<BenchmarkEventBufferOptions> options)
     {
         ArgumentNullException.ThrowIfNull(options);
         _maxEventCount = options.Value.MaxEventCount;
         _maxUtf8Bytes = options.Value.MaxUtf8Bytes;
-        if (_maxEventCount <= 0 || _maxUtf8Bytes <= 0)
+        _maxRetainedTerminalRuns = options.Value.MaxRetainedTerminalRuns;
+        if (_maxEventCount <= 0 || _maxUtf8Bytes <= 0 || _maxRetainedTerminalRuns <= 0)
         {
             throw new InvalidOperationException("Benchmark event buffer limits must be positive.");
+        }
+    }
+
+    /// <summary>How many runs the buffer still holds an entry for. Test-only seam.</summary>
+    internal int TrackedRunCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _runs.Count;
+            }
         }
     }
 
@@ -201,7 +228,39 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
             var state = GetOrCreate(runId);
             state.Events.Clear();
             state.Utf8Bytes = 0;
+
+            // The entry survives eviction on purpose: emptied of output, it still says "there WAS a stream here and it
+            // is gone", which is what turns a late subscriber's replay into a reset rather than into silence. It is
+            // also the leak — a node that runs a thousand benchmarks kept a thousand of them — so the tombstones are
+            // capped.
+            //
+            // Queue membership is its OWN flag, not PlaintextEvicted: a run is evicted once per terminal PHASE and has
+            // two, and BeginActivePhase clears PlaintextEvicted between them, so keying off it enqueued the same run
+            // twice and halved the effective cap to ~128 runs. Queued stays set for as long as the id is in the queue,
+            // whatever the run does afterwards.
             state.PlaintextEvicted = true;
+            if (!state.Queued)
+            {
+                state.Queued = true;
+                _evicted.Enqueue(runId);
+            }
+
+            while (_evicted.Count > _maxRetainedTerminalRuns)
+            {
+                var oldest = _evicted.Dequeue();
+
+                // Skipped when the run went active again (a judge phase after the primary): its entry belongs to a
+                // live stream now, and dropping it would restart that stream's sequence numbering. Either way the id
+                // leaves the queue, so a run that is spared here can be enqueued again by its next eviction.
+                if (_runs.TryGetValue(oldest, out var stale))
+                {
+                    stale.Queued = false;
+                    if (stale.PlaintextEvicted)
+                    {
+                        _ = _runs.Remove(oldest);
+                    }
+                }
+            }
         }
     }
 
@@ -243,6 +302,9 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
         public long LastPublishedSequence { get; set; }
         public int Utf8Bytes { get; set; }
         public bool PlaintextEvicted { get; set; }
+
+        /// <summary>Whether this run's id is currently in the tombstone queue. Owned by the queue, not by a phase.</summary>
+        public bool Queued { get; set; }
         public bool HistoryTruncated { get; set; }
         public LinkedList<BufferedEvent> Events { get; } = [];
     }
@@ -270,6 +332,9 @@ public static class BenchmarkOutputParts
 {
     public const string OutputKind = "output";
     public const string ReasoningKind = "reasoning";
+
+    public const string ToolCallKind = "tool_call";
+    public const string ToolResultKind = "tool_result";
 
     /// <summary>Appended to the last text part the judge is shown when the answer had to be cut to fit its context.</summary>
     public const string TruncationMarker = "\n\n[truncated: the primary output exceeded the judge context budget]";
@@ -325,6 +390,46 @@ public static class BenchmarkOutputParts
         }
 
         return merged;
+    }
+
+    /// <summary>
+    ///     Whether any VISIBLE answer text was emitted — reasoning excluded, whitespace not counted. The narrow half of
+    ///     <see cref="IsUnanswered" />, separate because a run cut off at the token budget is asked only this: did it
+    ///     ever leave the scratchpad?
+    /// </summary>
+    public static bool HasAnswerText(IReadOnlyList<BenchmarkOutputPart> parts)
+    {
+        ArgumentNullException.ThrowIfNull(parts);
+        return parts.Any(static part => string.Equals(part.Kind, OutputKind, StringComparison.Ordinal) && !string.IsNullOrWhiteSpace(part.Content));
+    }
+
+    /// <summary>
+    ///     Whether the turn produced no gradable answer, judged from the parts alone. Two shapes, both of which a
+    ///     provider reports as a CLEAN finish:
+    ///     <list type="bullet">
+    ///         <item>the transcript ENDS on a <c>tool_call</c> — the agent asked for a tool and the turn stopped there,
+    ///         so no <c>tool_result</c> and no answer ever followed;</item>
+    ///         <item>the reasoning-stripped text is empty or whitespace — a thinking model spent the whole turn in its
+    ///         scratchpad.</item>
+    ///     </list>
+    ///     Either way the run reports <c>stop</c> or <c>tool_calls</c>, which reads downstream as a finished answer:
+    ///     the judge grades an empty transcript and the ranking seats the score beside runs that actually answered.
+    ///     <para>
+    ///         Pass the COALESCED parts. The live capture appends one part per delta, so the "last part" of a raw
+    ///         capture is whatever fragment arrived last, not the shape of the turn.
+    ///     </para>
+    /// </summary>
+    public static bool IsUnanswered(IReadOnlyList<BenchmarkOutputPart> parts)
+    {
+        ArgumentNullException.ThrowIfNull(parts);
+        if (!HasAnswerText(parts))
+        {
+            return true;
+        }
+
+        // A tool_call as the FINAL part is by construction one no tool_result ever answered: the transcript is in turn
+        // order, so nothing follows it. An earlier unmatched id is a provider quirk, not an unfinished turn.
+        return parts.Count > 0 && string.Equals(parts[^1].Kind, ToolCallKind, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -505,6 +610,11 @@ public sealed record BenchmarkJudgePolicyDraft(
 ///     The per-run output-token budget frozen into every run's sampling, or <see langword="null" /> to leave generation
 ///     context-limited. Validated as <c>1 &lt;= MaxOutputTokens &lt; ContextTokens</c>.
 /// </param>
+/// <param name="ReasoningBudgetTokens">
+///     The per-run thinking budget frozen into every run's sampling, or <see langword="null" /> to leave the reasoning
+///     bounded only by the effort ladder and the window. Validated as <c>1 &lt;= ReasoningBudgetTokens &lt;
+///     ContextTokens</c>, and — with an output budget also set — as leaving a prompt reserve inside the context.
+/// </param>
 public sealed record BenchmarkProjectDraft(
     Guid Id,
     string Name,
@@ -513,9 +623,32 @@ public sealed record BenchmarkProjectDraft(
     Guid AgentDefinitionId,
     BenchmarkJudgePolicyDraft? Judge = null,
     int? MaxOutputTokens = null,
-    int? InvocationTimeoutSeconds = null);
+    int? InvocationTimeoutSeconds = null,
+    int? ReasoningBudgetTokens = null);
 
 public sealed class BenchmarkQueueOptions
 {
+    /// <summary>The configuration section this binds to.</summary>
+    public const string SectionName = "Benchmarks:Queue";
+
+    /// <summary>The longest poll interval that still lets a queued run start promptly after a signal is missed.</summary>
+    public static readonly TimeSpan MaxPollInterval = TimeSpan.FromMinutes(5);
+
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(1);
+}
+
+/// <summary>
+///     Fails the node's start rather than the first poll: the hosted service already refused a non-positive interval,
+///     but it did so from a background thread after boot, where the operator sees a log line instead of a failure.
+/// </summary>
+internal sealed class BenchmarkQueueOptionsValidator : IValidateOptions<BenchmarkQueueOptions>
+{
+    public ValidateOptionsResult Validate(string? name, BenchmarkQueueOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return options.PollInterval > TimeSpan.Zero && options.PollInterval <= BenchmarkQueueOptions.MaxPollInterval
+            ? ValidateOptionsResult.Success
+            : ValidateOptionsResult.Fail($"{BenchmarkQueueOptions.SectionName}:PollInterval must be positive and at most "
+                                         + $"{BenchmarkQueueOptions.MaxPollInterval}.");
+    }
 }

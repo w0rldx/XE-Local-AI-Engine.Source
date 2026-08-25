@@ -35,16 +35,24 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
+import { BenchmarkBatchProgressAlert } from "@/features/benchmarks/components/BenchmarkBatchProgressAlert";
 import { BenchmarkExportButtons } from "@/features/benchmarks/components/BenchmarkExportButtons";
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import type { BenchmarkMatrixSelection } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkLaunchMatrix } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
+import { BenchmarkRepeatModePicker } from "@/features/benchmarks/components/BenchmarkRepeatModePicker";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
 import { BenchmarkRunsTable } from "@/features/benchmarks/components/BenchmarkRunsTable";
 import { benchmarkJudgeFamilyOverlap } from "@/features/benchmarks/models/BenchmarkJudgeFamily";
-import type { BenchmarkKvCacheType, BenchmarkProjectDraft, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
+import type {
+	BenchmarkKvCacheType,
+	BenchmarkProjectDraft,
+	BenchmarkRepeatMode,
+	BenchmarkRunSummary,
+} from "@/features/benchmarks/models/BenchmarkModels";
 import {
+	benchmarkBatchProgress,
 	benchmarkErrorCode,
 	benchmarkKvCacheTypes,
 	isUnsupportedKvCacheTypeError,
@@ -72,6 +80,7 @@ const emptyProject: BenchmarkProjectDraft = {
 	coreTask: "",
 	contextTokens: 4096,
 	maxOutputTokens: null,
+	reasoningBudgetTokens: null,
 	invocationTimeoutSeconds: null,
 	agentDefinitionId: "",
 	judgeEnabled: false,
@@ -100,11 +109,19 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const [editorMode, setEditorMode] = useState<EditorMode>(null);
 	const [confirmMode, setConfirmMode] = useState<ConfirmMode>(null);
 	const [pendingPolicy, setPendingPolicy] = useState<JudgePolicyDraft | null>(null);
+	// The node's own refusal of the last save, shown inside the editor. A toast would outlive the dialog and leave the
+	// operator re-reading it next to fields it no longer describes.
+	const [saveError, setSaveError] = useState<string | null>(null);
 	const [selectedModel, setSelectedModel] = useState<string | null>(null);
 	const [selectedKvCacheType, setSelectedKvCacheType] = useState<BenchmarkKvCacheType | typeof autoKvCacheType>(autoKvCacheType);
 	const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
+	const [repeatMode, setRepeatMode] = useState<BenchmarkRepeatMode>("Throughput");
+	const [answerVarianceTemperature, setAnswerVarianceTemperature] = useState<number | null>(null);
 	const [matrixOpen, setMatrixOpen] = useState(false);
 	const [matrixRejections, setMatrixRejections] = useState<BenchmarkBatchRejection[]>([]);
+	// The runs the last matrix launch started, kept with the project they belong to: another project's table has none
+	// of them, and a progress line reading "0 of 12 done" there would be a lie rather than a stale number.
+	const [batchLaunch, setBatchLaunch] = useState<{ projectId: string; runIds: string[] } | null>(null);
 	const projectQuery = useBenchmarkProject(selectedProjectId);
 	const runsQuery = useBenchmarkRuns(selectedProjectId);
 	const modelsQuery = useEligibleBenchmarkModels(projectQuery.data?.contextTokens);
@@ -120,6 +137,10 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const startRun = useStartBenchmarkRun();
 	const startBatch = useStartBenchmarkRunBatch();
 	const runs = useMemo(() => runsQuery.data?.items ?? [], [runsQuery.data]);
+	const batchProgress = useMemo(
+		() => (batchLaunch && batchLaunch.projectId === selectedProjectId ? benchmarkBatchProgress(runs, batchLaunch.runIds) : null),
+		[batchLaunch, selectedProjectId, runs],
+	);
 
 	useEffect(() => {
 		if (!selectedProjectId && projectsQuery.data?.[0]) {
@@ -171,6 +192,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						coreTask: detail.coreTask,
 						contextTokens: detail.contextTokens,
 						maxOutputTokens: detail.maxOutputTokens,
+						reasoningBudgetTokens: detail.reasoningBudgetTokens,
 						invocationTimeoutSeconds: detail.invocationTimeoutSeconds,
 						agentDefinitionId: detail.agentDefinitionId,
 						judgeEnabled: detail.judge.enabled,
@@ -199,6 +221,14 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 		[detail, runs],
 	);
 
+	// The node re-checks every rule with numbers the form cannot see, and answers with a machine-readable `code` beside
+	// its sentence. Both are shown: the sentence is what the operator acts on, the code is what they can quote.
+	const showSaveError = (error: unknown): void => {
+		const message = apiErrorMessage(error, t("pages.benchmarks.errors.projectSave", "Could not save the project."));
+		const code = benchmarkErrorCode(error);
+		setSaveError(code === null ? message : `${message} (${code})`);
+	};
+
 	// A judge change on a frozen project is refused until the operator confirms the re-judge it implies, and while any
 	// judging of the project is still running. Both come back as ProblemDetails 409s with their own code.
 	const saveJudgePolicy = (policy: JudgePolicyDraft | null, confirmRejudge: boolean): void => {
@@ -212,6 +242,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 					setEditorMode(null);
 					setConfirmMode(null);
 					setPendingPolicy(null);
+					setSaveError(null);
 				},
 				onError: (error) => {
 					const code = benchmarkErrorCode(error);
@@ -229,13 +260,14 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						);
 						return;
 					}
-					toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.projectSave", "Could not save the project.")));
+					showSaveError(error);
 				},
 			},
 		);
 	};
 
 	const saveProject = (draft: BenchmarkProjectDraft): void => {
+		setSaveError(null);
 		if (editorMode === "edit" && detail?.isFrozen) {
 			saveJudgePolicy(
 				draft.judgeEnabled
@@ -255,8 +287,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 				{ projectId: detail.id, expectedVersion: detail.version, draft },
 				{
 					onSuccess: () => setEditorMode(null),
-					onError: (error) =>
-						toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.projectSave", "Could not save the project."))),
+					onError: showSaveError,
 				},
 			);
 			return;
@@ -266,8 +297,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 				setSelectedProjectId(project.id);
 				setEditorMode(null);
 			},
-			onError: (error) =>
-				toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.projectSave", "Could not save the project."))),
+			onError: showSaveError,
 		});
 	};
 	// A 422 is the node refusing this KV type for this runtime (quantized KV on CPU, or a binary whose manifest does not
@@ -330,6 +360,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 			{
 				onSuccess: (result) => {
 					setMatrixRejections(result.rejected);
+					setBatchLaunch(result.startedRunIds.length > 0 ? { projectId: detail.id, runIds: result.startedRunIds } : null);
 					if (result.startedRunIds[0]) {
 						selectRun(result.startedRunIds[0]);
 					}
@@ -543,6 +574,8 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 													modelName: selectedModel,
 													expectedProjectVersion: detail.version,
 													kvCacheType: selectedKvCacheType === autoKvCacheType ? null : selectedKvCacheType,
+													repeatMode,
+													answerVarianceTemperature: repeatMode === "AnswerVariance" ? answerVarianceTemperature : null,
 												},
 												{
 													onSuccess: (run) => selectRun(run.id),
@@ -565,6 +598,19 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										{t("pages.benchmarks.matrix.open", "Batch runs…")}
 									</Button>
 								</Group>
+								<BenchmarkRepeatModePicker
+									mode={repeatMode}
+									temperature={answerVarianceTemperature}
+									onChange={(mode, temperature) => {
+										setRepeatMode(mode);
+										setAnswerVarianceTemperature(temperature);
+									}}
+								/>
+								{/* Gone on its own once every started run is terminal — a progress line with nothing left to
+								    report is just clutter the operator has to close. */}
+								{batchProgress && batchProgress.done < batchProgress.total ? (
+									<BenchmarkBatchProgressAlert progress={batchProgress} onDismiss={() => setBatchLaunch(null)} />
+								) : null}
 							</Stack>
 						) : !projectQuery.isLoading ? (
 							<Text c="dimmed">{t("pages.benchmarks.project.select", "Select a benchmark project.")}</Text>
@@ -579,6 +625,9 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						runs={runs}
 						cohort={runsQuery.data.cohort}
 						selectedRunIds={selectedRunIds}
+						totalCount={runsQuery.data.totalCount}
+						isLoadingMore={runsQuery.isFetchingNextPage}
+						onLoadMore={runsQuery.loadMore}
 						isActionPending={rejudgeRun.isPending || deleteRun.isPending}
 						onToggleRun={toggleRun}
 						onRejudgeRun={rejudgeOne}
@@ -597,7 +646,10 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 
 			<DialogShell
 				opened={editorMode !== null}
-				onClose={() => setEditorMode(null)}
+				onClose={() => {
+					setEditorMode(null);
+					setSaveError(null);
+				}}
 				title={
 					editorMode === "create"
 						? t("pages.benchmarks.project.create", "New project")
@@ -621,6 +673,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 					presets={presetsQuery.data}
 					frozen={editorMode === "edit" && detail?.isFrozen}
 					isSaving={createProject.isPending || updateProject.isPending || updateJudge.isPending}
+					saveError={saveError}
 					onSubmit={saveProject}
 					onCancel={() => setEditorMode(null)}
 				/>

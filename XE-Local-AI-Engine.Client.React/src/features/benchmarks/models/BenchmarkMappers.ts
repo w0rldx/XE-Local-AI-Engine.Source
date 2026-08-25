@@ -31,6 +31,7 @@ import {
 	benchmarkRubricLimits,
 	toBenchmarkJudgeState,
 	toBenchmarkQualityScoreSource,
+	toBenchmarkRepeatMode,
 	toBenchmarkRankExclusionReason,
 } from "@/features/benchmarks/models/BenchmarkModels";
 
@@ -47,6 +48,7 @@ export function toBenchmarkProjectSummary(value: ProjectSummaryResponse): Benchm
 		name: value.name,
 		contextTokens: numberValue(value.contextTokens),
 		maxOutputTokens: value.maxOutputTokens ?? null,
+		reasoningBudgetTokens: value.reasoningBudgetTokens ?? null,
 		invocationTimeoutSeconds: value.invocationTimeoutSeconds ?? null,
 		agentDefinitionId: value.agentDefinitionId ?? "",
 		judgeEnabled: value.judgeEnabled === true,
@@ -177,6 +179,9 @@ export function toBenchmarkRunSummary(value: RunSummaryResponse): BenchmarkRunSu
 		repeatGroupId: value.repeatGroupId ?? null,
 		repeatIndex: value.repeatIndex ?? null,
 		isWarmup: value.isWarmup === true,
+		repeatMode: toBenchmarkRepeatMode(value.repeatMode),
+		samplingSeed: value.samplingSeed ?? null,
+		samplingTemperature: value.samplingTemperature ?? null,
 		agentName: value.agentName,
 		agentVersion: numberValue(value.agentVersion),
 		requestedContextTokens: numberValue(value.requestedContextTokens),
@@ -224,6 +229,8 @@ export function toBenchmarkRunDetail(value: RunDetailResponse): BenchmarkRunDeta
 		primaryErrorMessage: value.primaryErrorMessage ?? null,
 		startedAtUtc: value.startedAtUtc ?? null,
 		primaryCompletedAtUtc: value.primaryCompletedAtUtc ?? null,
+		reasoningBudgetTokens: value.reasoningBudgetTokens ?? null,
+		reasoningBudgetApplicable: value.reasoningBudgetApplicable ?? null,
 	};
 }
 

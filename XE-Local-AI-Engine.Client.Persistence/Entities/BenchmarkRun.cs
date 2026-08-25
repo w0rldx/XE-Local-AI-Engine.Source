@@ -84,6 +84,24 @@ internal sealed record class BenchmarkRun
     /// </summary>
     public bool IsWarmup { get; set; }
 
+    /// <summary>
+    ///     What the run's repeat group is measuring. Every run recorded before this column existed was a throughput
+    ///     repeat — that is what the frozen deterministic sampling made it — so the default is historically true
+    ///     rather than invented.
+    /// </summary>
+    public BenchmarkRepeatMode RepeatMode { get; set; }
+
+    /// <summary>
+    ///     The seed this run was frozen with, as the string the snapshot carries (a seed is an unconstrained 64-bit
+    ///     value). Plaintext, and duplicated out of the encrypted snapshot on purpose: the listing and the CSV export
+    ///     never decrypt a payload, and a group of answer-variance runs is unreadable without the one input that
+    ///     differs between them. Null on runs frozen before the column existed.
+    /// </summary>
+    public string? SamplingSeed { get; set; }
+
+    /// <summary>The temperature this run was frozen with, duplicated out of the snapshot for the same reason.</summary>
+    public double? SamplingTemperature { get; set; }
+
     /// <summary>The judge attempt whose verdict this run currently shows. Null until the first attempt is enqueued.</summary>
     public Guid? CurrentJudgeAttemptId { get; set; }
 

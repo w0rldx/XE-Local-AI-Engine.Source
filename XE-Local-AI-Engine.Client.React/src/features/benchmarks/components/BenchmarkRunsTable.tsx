@@ -1,4 +1,4 @@
-import { ActionIcon, Checkbox, Group, Menu, Stack, Switch, Table, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Button, Checkbox, Group, Menu, Stack, Switch, Table, Text, Tooltip } from "@mantine/core";
 import { IconChevronDown, IconChevronRight, IconDots, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { Fragment, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -6,11 +6,19 @@ import { useTranslation } from "react-i18next";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkLaunchBadges } from "@/features/benchmarks/components/BenchmarkLaunchBadges";
-import { BenchmarkJudgeStateBadge, BenchmarkStatusBadge, BenchmarkTruncatedBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
+import {
+	BenchmarkIncompleteBadge,
+	BenchmarkJudgeStateBadge,
+	BenchmarkReasoningExhaustedBadge,
+	BenchmarkStatusBadge,
+	BenchmarkTruncatedBadge,
+} from "@/features/benchmarks/components/BenchmarkStatusBadge";
 import type { BenchmarkRankCohort, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkBaseModelLabel,
 	benchmarkQuantTag,
+	isBenchmarkRunIncomplete,
+	isBenchmarkRunReasoningExhausted,
 	isBenchmarkRunTruncated,
 	isRunTerminal,
 } from "@/features/benchmarks/models/BenchmarkModels";
@@ -28,6 +36,10 @@ interface BenchmarkRunsTableProps {
 	runs: readonly BenchmarkRunSummary[];
 	cohort: BenchmarkRankCohort;
 	selectedRunIds: readonly string[];
+	/** Runs the project has in total. More than `runs.length` means the table shows one page of them. */
+	totalCount?: number;
+	isLoadingMore?: boolean;
+	onLoadMore?: () => void;
 	isActionPending?: boolean;
 	onToggleRun: (runId: string) => void;
 	onRejudgeRun: (run: BenchmarkRunSummary) => void;
@@ -56,13 +68,20 @@ function ThroughputCell({ run, stats }: { run: BenchmarkRunSummary; stats?: Benc
 			tokens: promptTokens === null ? "" : ` over ${promptTokens} tokens`,
 		}),
 		t("pages.benchmarks.metrics.ttftTooltip", "Time to first token: {{value}}", { value: formatLatencyMs(ttftMs) }),
+		// The mode is part of the reading, not a footnote: the same ± means "this machine wobbles" in throughput mode
+		// and "this model wanders" in answer-variance mode. Cohorts are split by mode, so one line describes one of them.
 		spread === null
 			? null
-			: t("pages.benchmarks.metrics.spreadTooltip", "Across identical launches — tg {{tg}}, pp {{pp}}, TTFT {{ttft}} ms", {
-					tg: spread,
-					pp: formatStatSummary(stats?.promptTokensPerSecond ?? null, 0) ?? "—",
-					ttft: formatStatSummary(stats?.ttftMs ?? null, 0) ?? "—",
-				}),
+			: t(
+					"pages.benchmarks.metrics.spreadTooltip",
+					"Across identical launches in {{mode}} mode — tg {{tg}}, pp {{pp}}, TTFT {{ttft}} ms",
+					{
+						mode: t(`pages.benchmarks.run.repeatModes.${run.repeatMode}`, run.repeatMode),
+						tg: spread,
+						pp: formatStatSummary(stats?.promptTokensPerSecond ?? null, 0) ?? "—",
+						ttft: formatStatSummary(stats?.ttftMs ?? null, 0) ?? "—",
+					},
+				),
 		cachedPromptTokens !== null && cachedPromptTokens > 0
 			? t("pages.benchmarks.metrics.cachedTooltip", "{{tokens}} prompt tokens came from the KV cache, so the prompt speed is not a cold prefill.", {
 					tokens: cachedPromptTokens,
@@ -249,7 +268,14 @@ function RunRow({
 			<Table.Td>
 				<Group gap={4} wrap="nowrap">
 					<BenchmarkStatusBadge status={run.primaryStatus} />
-					{isBenchmarkRunTruncated(run) ? <BenchmarkTruncatedBadge testId={`benchmark-truncated-${run.id}`} /> : null}
+					{/* Reasoning exhaustion IS truncation, so it replaces the generic badge rather than adding a second
+					    one — two badges saying "cut off" would not tell the operator which budget to raise. */}
+					{isBenchmarkRunReasoningExhausted(run) ? (
+						<BenchmarkReasoningExhaustedBadge testId={`benchmark-reasoning-exhausted-${run.id}`} />
+					) : isBenchmarkRunTruncated(run) ? (
+						<BenchmarkTruncatedBadge testId={`benchmark-truncated-${run.id}`} />
+					) : null}
+					{isBenchmarkRunIncomplete(run) ? <BenchmarkIncompleteBadge testId={`benchmark-incomplete-${run.id}`} /> : null}
 					<BenchmarkJudgeStateBadge state={run.judge.state} />
 				</Group>
 			</Table.Td>
@@ -296,6 +322,9 @@ export function BenchmarkRunsTable({
 	runs,
 	cohort,
 	selectedRunIds,
+	totalCount,
+	isLoadingMore = false,
+	onLoadMore,
 	isActionPending = false,
 	onToggleRun,
 	onRejudgeRun,
@@ -421,6 +450,27 @@ export function BenchmarkRunsTable({
 					</Table.Tbody>
 				</Table>
 			</Table.ScrollContainer>
+			{/* A batch launch can make more runs than one page holds. Saying so — and how many are missing — is the only
+			    thing that keeps the ranking honest when the table shows a prefix of it. */}
+			{totalCount !== undefined && totalCount > runs.length ? (
+				<Group gap="sm" justify="center">
+					<Text size="sm" c="dimmed" data-testid="benchmark-runs-loaded">
+						{t("pages.benchmarks.rank.loaded", "Showing {{loaded}} of {{total}} runs", {
+							loaded: runs.length,
+							total: totalCount,
+						})}
+					</Text>
+					<Button
+						variant="subtle"
+						size="xs"
+						loading={isLoadingMore}
+						onClick={onLoadMore}
+						data-testid="benchmark-runs-load-more"
+					>
+						{t("pages.benchmarks.rank.loadMore", "Load more")}
+					</Button>
+				</Group>
+			) : null}
 		</Stack>
 	);
 }

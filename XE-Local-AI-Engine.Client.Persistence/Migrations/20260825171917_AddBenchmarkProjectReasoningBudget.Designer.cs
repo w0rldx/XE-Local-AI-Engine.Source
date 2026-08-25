@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using XE_Local_AI_Engine.Client.Persistence;
 
@@ -10,9 +11,11 @@ using XE_Local_AI_Engine.Client.Persistence;
 namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 {
     [DbContext(typeof(NodeChatDbContext))]
-    partial class NodeChatDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260825171917_AddBenchmarkProjectReasoningBudget")]
+    partial class AddBenchmarkProjectReasoningBudget
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
@@ -1252,14 +1255,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("repeat_index");
 
-                    b.Property<string>("RepeatMode")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .HasDefaultValue("Throughput")
-                        .HasColumnName("repeat_mode");
-
                     b.Property<int>("RequestedContextTokens")
                         .HasColumnType("INTEGER")
                         .HasColumnName("requested_context_tokens");
@@ -1268,15 +1263,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsRequired()
                         .HasColumnType("BLOB")
                         .HasColumnName("runtime_snapshot_json");
-
-                    b.Property<string>("SamplingSeed")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("sampling_seed");
-
-                    b.Property<double?>("SamplingTemperature")
-                        .HasColumnType("REAL")
-                        .HasColumnName("sampling_temperature");
 
                     b.Property<int?>("SegmentCount")
                         .HasColumnType("INTEGER")
@@ -3154,10 +3140,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("transport_kind");
 
-                    b.Property<int>("TrustTier")
-                        .HasColumnType("INTEGER")
-                        .HasColumnName("trust_tier");
-
                     b.Property<long>("UpdatedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("updated_at_utc");
@@ -3179,10 +3161,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasIndex("Name")
                         .IsUnique();
 
-                    b.ToTable("mcp_servers", null, t =>
-                        {
-                            t.HasCheckConstraint("CK_mcp_servers_trust_tier", "trust_tier IN (0, 1, 2)");
-                        });
+                    b.ToTable("mcp_servers", (string)null);
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ModelClassification", b =>

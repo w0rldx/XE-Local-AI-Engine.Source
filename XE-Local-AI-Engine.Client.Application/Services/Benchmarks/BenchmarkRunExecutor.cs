@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -133,6 +134,12 @@ public sealed class BenchmarkRunExecutor(
 
             var effectiveContext = admission.EffectiveContextTokens
                                    ?? throw new BenchmarkExecutionException("The effective model context was unavailable.");
+
+            // Coalesced HERE, once: the live stream needs one event per delta, storage needs one part per contiguous
+            // run (see BenchmarkOutputParts), and the stop-reason verdict below has to read the SHAPE of the turn,
+            // which a per-delta capture does not show.
+            var parts = BenchmarkOutputParts.Coalesce(capture.Parts);
+            var stopReason = ResolveStopReason(terminal.FinishReason, parts);
             var durationMs = terminal.GenerationDurationMs ?? 0;
             var throughput = ToThroughput(terminal.Throughput);
 
@@ -140,8 +147,7 @@ public sealed class BenchmarkRunExecutor(
             // separately: dividing the turn's total tokens by its wall clock blends prefill into generation, so the same
             // model measured on a long prompt and a short one produced two incomparable numbers. The blended figure
             // remains the fallback for a runtime that reports no timings, so the column never goes empty.
-            var tokensPerSecond = throughput?.GenerationTokensPerSecond
-                                  ?? (terminal.TotalTokens is { } total && durationMs > 0 ? total * 1000d / durationMs : null);
+            var tokensPerSecond = throughput?.GenerationTokensPerSecond ?? TokenThroughput.FromMilliseconds(terminal.TotalTokens, durationMs);
             var metricsEvent = events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.Metrics,
                 new BenchmarkRunStreamPayload(EffectiveContextTokens: effectiveContext,
@@ -161,9 +167,7 @@ public sealed class BenchmarkRunExecutor(
             var persisted = await MarkPrimarySucceededAsync(work,
                     new BenchmarkPrimarySuccessCommand(work.RunId,
                         work.Version,
-                        // Coalesced HERE, at the terminal write, not in the capture: the live stream needs one
-                        // event per delta, storage needs one part per contiguous run (see BenchmarkOutputParts).
-                        BenchmarkExecutionSerialization.SerializeParts(BenchmarkOutputParts.Coalesce(capture.Parts)),
+                        BenchmarkExecutionSerialization.SerializeParts(parts),
                         terminalEvent.Sequence,
                         effectiveContext,
                         durationMs,
@@ -172,7 +176,7 @@ public sealed class BenchmarkRunExecutor(
                         // A generation cut off at the token budget still SUCCEEDS — the measurement is real — but the
                         // run has to carry why it stopped, or the ranking and the judge grade an incomplete answer as
                         // if it were a finished one.
-                        terminal.FinishReason,
+                        stopReason,
                         Throughput: throughput))
                 .ConfigureAwait(false);
             events.PublishReserved(metricsEvent);
@@ -202,6 +206,32 @@ public sealed class BenchmarkRunExecutor(
                 environment,
                 (exception as BenchmarkExecutionException)?.StopReason).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    ///     The stop reason to persist: the provider's own token, unless the turn finished cleanly having produced no
+    ///     answer, which is recorded as <see cref="BenchmarkPrimaryStopReasons.Incomplete" />.
+    ///     <para>
+    ///         The provider cannot report this. A turn that stopped on an unanswered tool call reports
+    ///         <c>tool_calls</c>, and a thinking model that spent the whole turn reasoning reports <c>stop</c> — both
+    ///         read downstream as a finished answer, so the judge graded an empty transcript and the ranking seated its
+    ///         score beside runs that actually answered. A <c>length</c> stop keeps its own token: that run IS cut off,
+    ///         and <see cref="BenchmarkPrimaryStopReasons.IsTruncated" /> already excludes and annotates it — except
+    ///         when it never emitted an answer either, which is recorded as
+    ///         <see cref="BenchmarkPrimaryStopReasons.ReasoningLength" />: still truncated for every consumer, but it
+    ///         names the reasoning budget as the thing to raise rather than the output budget.
+    ///     </para>
+    /// </summary>
+    internal static string? ResolveStopReason(string? finishReason, IReadOnlyList<BenchmarkOutputPart> parts)
+    {
+        if (BenchmarkPrimaryStopReasons.IsTruncated(finishReason))
+        {
+            // Out of budget having never left the scratchpad: the same cut-off run, but the operator's fix is a
+            // reasoning budget rather than a bigger output budget, and only this distinction says which.
+            return BenchmarkOutputParts.HasAnswerText(parts) ? finishReason : BenchmarkPrimaryStopReasons.ReasoningLength;
+        }
+
+        return BenchmarkOutputParts.IsUnanswered(parts) ? BenchmarkPrimaryStopReasons.Incomplete : finishReason;
     }
 
     // Crosses the layer boundary by hand rather than by a shared type: the throughput measurement is produced in the
@@ -302,17 +332,25 @@ public sealed class BenchmarkRunExecutor(
             SamplingOptions: ToSamplingOptions(snapshot.PrimarySampling, snapshot.RequestedContextTokens),
             Skills: runtime.Skills,
             IsUnattended: true,
-            CustomTools: runtime.CustomTools));
+            CustomTools: runtime.CustomTools,
+            // Passed explicitly off the FROZEN model capability rather than defaulted: the default true is the safe
+            // answer for a caller that does not know, and freeze does know. A model whose chat template renders no
+            // reasoning end marker takes the budget and ignores it, so sending one would advertise a cap that never
+            // held. Null is a run frozen before the member existed, which keeps the old default.
+            ReasoningBudgetEnforceable: snapshot.PrimarySampling.ReasoningBudgetEnforceable ?? true));
     }
 
     internal static SamplingOptions ToSamplingOptions(BenchmarkSamplingSnapshotV1 sampling, int contextTokens) =>
         new()
         {
-            Temperature = sampling.Temperature,
+            // The sampler is float all the way to the wire; the snapshot keeps the double so the run's own column
+            // does not record a widening artefact.
+            Temperature = (float?)sampling.Temperature,
             TopP = sampling.TopP,
             TopK = sampling.TopK,
             MinP = sampling.MinP,
             MaxOutputTokens = sampling.MaxOutputTokens,
+            ReasoningBudgetTokens = sampling.ReasoningBudgetTokens,
             RepeatPenalty = sampling.RepeatPenalty,
             RepeatLastN = sampling.RepeatLastN,
             PresencePenalty = sampling.PresencePenalty,
@@ -505,7 +543,7 @@ internal sealed class BenchmarkInvocationCapture : IDisposable
         lock (_gate)
         {
             var requested = payload.Phase == ToolCallLifecyclePhase.Requested;
-            _parts.Add(new BenchmarkOutputPart(requested ? "tool_call" : "tool_result",
+            _parts.Add(new BenchmarkOutputPart(requested ? BenchmarkOutputParts.ToolCallKind : BenchmarkOutputParts.ToolResultKind,
                 ToolCallId: payload.ToolCallId,
                 ToolName: payload.ToolName,
                 Arguments: requested ? payload.Arguments : null,

@@ -5,6 +5,12 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, HuggingFaceOptions options) : IInstalledGgufSnapshotStore
 {
+    /// <summary>
+    ///     Digests of members already verified in this process. The store is a singleton, so one memo per node; see
+    ///     <see cref="GgufMemberHashMemo" /> for the key and its ceiling.
+    /// </summary>
+    internal GgufMemberHashMemo MemberHashMemo { get; } = new();
+
     public async Task<InstalledGgufCandidate?> DiscoverCandidateAsync(string modelName, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
@@ -137,7 +143,16 @@ internal sealed class InstalledGgufSnapshotStore(GgufModelRegistry registry, Hug
                 throw new InstalledGgufSnapshotException("InstalledModelMemberMissing", "A required installed model member is unavailable.");
             }
 
-            var sha256 = await GgufAcquisitionSidecar.ComputeSha256Async(absolutePath, cancellationToken).ConfigureAwait(false);
+            // Re-reading a multi-gigabyte weight file per acquire is the whole cost of verification, and the file is
+            // unchanged almost every time — the benchmark freeze alone acquires once per queued run.
+            var lastWriteTimeUtc = info.LastWriteTimeUtc;
+            var sha256 = MemberHashMemo.TryGet(absolutePath, info.Length, lastWriteTimeUtc);
+            if (sha256 is null)
+            {
+                sha256 = await GgufAcquisitionSidecar.ComputeSha256Async(absolutePath, cancellationToken).ConfigureAwait(false);
+                MemberHashMemo.Set(absolutePath, info.Length, lastWriteTimeUtc, sha256);
+            }
+
             var fingerprint = observation.Role == InstalledModelPhysicalMemberRole.Sidecar
                 ? null
                 : GgufMemberFingerprint.Compute(sha256, info.Length);

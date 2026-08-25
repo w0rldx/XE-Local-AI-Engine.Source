@@ -113,6 +113,8 @@ describe("rankExclusionAction", () => {
 		["execution-identity-incomplete", "rejudge"],
 		// Re-judging the same truncated fragment produces the same fragment, so the only useful action is a rerun.
 		["truncated", "rerun"],
+		// Nothing was answered, so there is nothing for a judge to read either — only another attempt helps.
+		["incomplete", "rerun"],
 		// The one exclusion that is not a problem: a warm-up is excluded because that is what it is for.
 		["warmup", "none"],
 	] as const)("maps %s to %s", (reason, action) => {

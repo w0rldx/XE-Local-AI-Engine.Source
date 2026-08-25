@@ -68,6 +68,107 @@ public sealed class BenchmarkRunFreezeServiceTests
     }
 
     [Test]
+    public async Task Start_InThroughputMode_FreezesOneSamplingAndRecordsItOnEveryRun()
+    {
+        var harness = new FreezeHarness();
+
+        _ = await harness.StartAsync(repeatCount: 3, BenchmarkRepeatMode.Throughput);
+
+        // The default must stay exactly what it was: one snapshot, temperature 0, one seed. Anything else would make
+        // every existing repeat group a different measurement than the one it recorded.
+        AssertEx.Equal(expected: 1, harness.SnapshotsCreated, "A throughput group is one freeze, shared.");
+        AssertEx.True(harness.Commands.TrueForAll(static command => command.RepeatMode == BenchmarkRepeatMode.Throughput));
+        AssertEx.True(harness.Commands.TrueForAll(static command => string.Equals(command.SamplingSeed, "0", StringComparison.Ordinal)),
+            "One fixed seed across the group is what makes the answer identical.");
+        AssertEx.True(harness.Commands.TrueForAll(static command => command.SamplingTemperature is 0d));
+        AssertEx.True(harness.SnapshotInputs.TrueForAll(static input => input.PrimarySampling.Temperature is 0f));
+    }
+
+    [Test]
+    public async Task Start_InAnswerVarianceMode_AdvancesOnlyTheSeedAcrossOneSharedLaunch()
+    {
+        var harness = new FreezeHarness();
+
+        var runs = await harness.StartAsync(repeatCount: 3, BenchmarkRepeatMode.AnswerVariance, temperature: 0.9d);
+
+        AssertEx.Equal(expected: 3, runs.Count);
+        AssertEx.True(harness.Commands.Select(static command => command.SamplingSeed).SequenceEqual(["1", "2", "3"], StringComparer.Ordinal),
+            "Each repeat advances the seed off the base, so the runs differ in exactly one input.");
+        AssertEx.True(harness.Commands.TrueForAll(static command => command.RepeatMode == BenchmarkRepeatMode.AnswerVariance));
+        // EXACT, not within a tolerance: the run column and the export are double, and a float carried into them
+        // widens to 0.899999976158142 — a tolerance is what let that reach the operator's CSV.
+        AssertEx.True(harness.Commands.TrueForAll(static command => command.SamplingTemperature is 0.9d),
+            "Every run of the group samples at the requested temperature, recorded exactly.");
+
+        // The seed and the temperature are SAMPLING. If either reached the launch arguments, the runs of one group
+        // would carry different launch identities and stop being comparable as a launch — which is the whole point of
+        // freezing a group together.
+        AssertEx.Equal(expected: 3, harness.SnapshotsCreated, "A distinct seed is a distinct frozen sampling.");
+        AssertEx.True(harness.SnapshotInputs.TrueForAll(input => input.PrimaryRuntime == harness.SnapshotInputs[0].PrimaryRuntime),
+            "Nothing about the launch may differ across an answer-variance group.");
+        var launchIdentities = harness.Commands.Select(static command => command.PrimaryLaunchIntent?.IntendedLaunchIdentity).Distinct(StringComparer.Ordinal);
+        AssertEx.Equal(expected: 1, launchIdentities.Count(), "One group, one launch identity.");
+    }
+
+    [Test]
+    public async Task Start_InAnswerVarianceModeWithNoTemperature_TakesTheDefault()
+    {
+        var harness = new FreezeHarness();
+
+        _ = await harness.StartAsync(repeatCount: 1, BenchmarkRepeatMode.AnswerVariance);
+
+        AssertEx.Equal<double?>(BenchmarkRunFreezeService.DefaultAnswerVarianceTemperature, AssertEx.NotNull(harness.Command).SamplingTemperature,
+            "An omitted temperature takes the everyday default rather than falling back to the deterministic 0.");
+    }
+
+    [Test]
+    [Arguments(0f)]
+    [Arguments(-1f)]
+    [Arguments(2.5f)]
+    public async Task Start_InAnswerVarianceModeWithAnImpossibleTemperature_IsRejectedBeforeAnythingIsFrozen(float temperature)
+    {
+        var harness = new FreezeHarness();
+
+        // Zero would silently be a throughput group wearing an answer-variance label.
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(async () =>
+            await harness.StartAsync(repeatCount: 2, BenchmarkRepeatMode.AnswerVariance, temperature));
+
+        AssertEx.Equal(expected: 0, harness.SnapshotsCreated);
+        AssertEx.Equal(expected: 0, harness.StoreCalls);
+    }
+
+    [Test]
+    public async Task Start_WithASharedScope_ProbesTheBinaryOnceAndVerifiesEachModelOnce()
+    {
+        // What a batch actually pays for: every cell used to run its own llama-server capability probe and its own
+        // full re-verification of the same model files, serially, before the endpoint answered.
+        var harness = new FreezeHarness();
+        await using var scope = new BenchmarkFreezeScope();
+
+        _ = await harness.StartAsync(scope);
+        _ = await harness.StartAsync(scope);
+
+        _ = harness.LaunchInspector.Received(1).InspectAsync(Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 1, harness.LeaseProvider.Acquired.Count, "The same model must be verified once per request, not once per cell.");
+        AssertEx.Equal(expected: 2, harness.StoreCalls, "Both cells still start.");
+    }
+
+    [Test]
+    public async Task Start_WithNoScope_StaysSelfContained()
+    {
+        // The single-run path must keep behaving exactly as it did: acquire, freeze, release. A scope leaking across
+        // calls would hold a model's read lease open long after the request that took it had answered.
+        var harness = new FreezeHarness();
+
+        _ = await harness.StartAsync();
+        _ = await harness.StartAsync();
+
+        _ = harness.LaunchInspector.Received(2).InspectAsync(Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 2, harness.LeaseProvider.Acquired.Count);
+        AssertEx.True(harness.LeaseProvider.Leases.TrueForAll(static lease => lease.Disposed), "A self-contained freeze releases every lease it took.");
+    }
+
+    [Test]
     public async Task Start_ForAPlainSingleRun_LeavesTheRepeatColumnsNull()
     {
         var harness = new FreezeHarness();
@@ -149,6 +250,32 @@ public sealed class BenchmarkRunFreezeServiceTests
             "The budget is frozen per run, so a later project edit cannot change what an existing run replays.");
         AssertEx.Null(AssertEx.NotNull(unbudgeted.SnapshotInput).PrimarySampling.MaxOutputTokens,
             "No budget means context-limited, which is the sampling every existing snapshot already hashes.");
+    }
+
+    [Test]
+    public async Task Start_WithAReasoningBudgetOnAModelThatDoesNotThink_FreezesItAsUnenforceable()
+    {
+        // A model that does not reason at all cannot have its reasoning capped, and the capability record defaults
+        // ReasoningBudgetEnforceable to true for anything undetected — so freezing that field alone claimed the cap
+        // was enforceable for every non-thinking model, sent it on the wire, and llama-server accepted and ignored it.
+        var nonThinking = new FreezeHarness(reasoningBudgetTokens: 4096);
+        var thinking = new FreezeHarness(reasoningBudgetTokens: 4096, supportsThinking: true);
+        var unbudgeted = new FreezeHarness();
+
+        _ = await nonThinking.StartAsync();
+        _ = await thinking.StartAsync();
+        _ = await unbudgeted.StartAsync();
+
+        var frozen = AssertEx.NotNull(nonThinking.SnapshotInput).PrimarySampling;
+        AssertEx.Equal<int?>(4096, frozen.ReasoningBudgetTokens, "The pinned budget is still frozen — it is the ENFORCEABILITY that is false.");
+        AssertEx.Equal<bool?>(false, frozen.ReasoningBudgetEnforceable,
+            "SupportsThinking is half the answer: a non-thinking model can never honour the cap, whatever the template says.");
+        AssertEx.Equal<bool?>(true, AssertEx.NotNull(thinking.SnapshotInput).PrimarySampling.ReasoningBudgetEnforceable);
+
+        // Null, never false: the member is omitted when writing null, which is what keeps every snapshot frozen
+        // before the field existed hashing to the bytes it already hashed to.
+        AssertEx.Null(AssertEx.NotNull(unbudgeted.SnapshotInput).PrimarySampling.ReasoningBudgetEnforceable,
+            "No pinned budget means no enforceability claim at all.");
     }
 
     [Test]
@@ -364,11 +491,14 @@ public sealed class BenchmarkRunFreezeServiceTests
             Func<int, ResolvedLaunchArguments>? profile = null,
             int? maxOutputTokens = null,
             int? invocationTimeoutSeconds = null,
+            int? reasoningBudgetTokens = null,
+            bool supportsThinking = false,
             bool unverifiableModel = false)
         {
             _primaryModel = primaryModel;
             AgentId = Guid.NewGuid();
-            _project = Project(Guid.NewGuid(), AgentId, judgeModel is not null, judgeModel, maxOutputTokens, invocationTimeoutSeconds);
+            _project = Project(Guid.NewGuid(), AgentId, judgeModel is not null, judgeModel, maxOutputTokens, invocationTimeoutSeconds,
+                reasoningBudgetTokens);
             var store = Substitute.For<IBenchmarkStore>();
             store.GetProjectAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(_project);
             // ONE store call per freeze, however many repeats: the group is inserted atomically, so a mid-group
@@ -388,7 +518,11 @@ public sealed class BenchmarkRunFreezeServiceTests
             Resolver = Substitute.For<IAgentDefinitionResolver>();
             Resolver.ResolveAsync(AgentId, Arg.Any<string>(), "exact task", true, false, false, Arg.Any<CancellationToken>()).Returns(Runtime(AgentId));
             var capabilities = Substitute.For<IGgufModelCapabilityResolver>();
-            capabilities.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new GgufModelCapabilities(false, true, false));
+            // ReasoningBudgetEnforceable is left at its own default (true) on purpose: it is the inert answer for a
+            // model nothing was detected about, and freezing it ALONE is what claimed enforceability for a model that
+            // does not reason at all.
+            capabilities.TryResolveAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                        .Returns(new GgufModelCapabilities(supportsThinking, true, false));
 
             var models = new Dictionary<string, InstalledModelSnapshot>(StringComparer.OrdinalIgnoreCase)
             {
@@ -407,11 +541,13 @@ public sealed class BenchmarkRunFreezeServiceTests
             snapshots.Create(Arg.Do<BenchmarkRuntimeSnapshotInput>(input =>
                      {
                          SnapshotInput = input;
+                         SnapshotInputs.Add(input);
                          SnapshotsCreated++;
                      }))
                      .Returns(call => CreateRuntimeSnapshot(call.Arg<BenchmarkRuntimeSnapshotInput>()));
             snapshots.Serialize(Arg.Any<BenchmarkRuntimeSnapshotV1>()).Returns([1, 2, 3]);
 
+            LaunchInspector = Inspector(inspectedVariant ?? variant, probeSucceeded, supportsQuantizedKv, inspectionFails);
             _service = new BenchmarkRunFreezeService(store,
                 definitions,
                 Resolver,
@@ -422,7 +558,7 @@ public sealed class BenchmarkRunFreezeServiceTests
                 snapshots,
                 new BenchmarkPhaseLaunchResolver(Profiles(profile),
                     Variants(variant),
-                    Inspector(inspectedVariant ?? variant, probeSucceeded, supportsQuantizedKv, inspectionFails),
+                    LaunchInspector,
                     FallbackStore(optimizedConfigDisabled),
                     LaunchPolicy()),
                 TimeProvider.System,
@@ -432,6 +568,9 @@ public sealed class BenchmarkRunFreezeServiceTests
         public Guid AgentId { get; }
         public IAgentDefinitionResolver Resolver { get; }
         public RecordingLeaseProvider LeaseProvider { get; }
+
+        /// <summary>The llama-server probe, so a test can count how many times a request actually inspected it.</summary>
+        public ILlamaServerLaunchCapabilityInspector LaunchInspector { get; }
         public BenchmarkStartRunCommand? Command { get; private set; }
 
         /// <summary>Every insert in order — a repeat group is several, and their ORDER is the contract.</summary>
@@ -446,22 +585,35 @@ public sealed class BenchmarkRunFreezeServiceTests
         public int SnapshotsCreated { get; private set; }
         public BenchmarkRuntimeSnapshotInput? SnapshotInput { get; private set; }
 
+        /// <summary>Every snapshot the freeze created, in order — an answer-variance group is several.</summary>
+        public List<BenchmarkRuntimeSnapshotInput> SnapshotInputs { get; } = [];
+
         public async Task<BenchmarkRunRecord> StartAsync(string? kvCacheType = null) =>
-            (await _service.StartAsync(_project.Id, _primaryModel, _project.Version, kvCacheType).ConfigureAwait(false))[0];
+            (await _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, kvCacheType))
+                           .ConfigureAwait(false))[0];
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, bool warmup) =>
-            _service.StartAsync(_project.Id, _primaryModel, _project.Version, kvCacheType: null, repeatCount, warmup);
+            _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, KvCacheType: null, repeatCount, warmup));
+
+        public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkFreezeScope scope) =>
+            _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version), scope);
+
+        public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, BenchmarkRepeatMode mode, double? temperature = null) =>
+            _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, KvCacheType: null, repeatCount,
+                Warmup: false, mode, temperature));
 
         private static BenchmarkProjectRecord Project(Guid id,
             Guid agentId,
             bool judgeEnabled,
             string? judgeModel,
             int? maxOutputTokens,
-            int? invocationTimeoutSeconds)
+            int? invocationTimeoutSeconds,
+            int? reasoningBudgetTokens)
         {
             _ = judgeModel;
             return new BenchmarkProjectRecord(id, "Benchmark", JsonSerializer.SerializeToUtf8Bytes("exact task"), 4096, agentId,
-                judgeEnabled, judgeEnabled ? Guid.NewGuid() : null, IsFrozen: false, 7, 1, 1, maxOutputTokens, invocationTimeoutSeconds);
+                judgeEnabled, judgeEnabled ? Guid.NewGuid() : null, IsFrozen: false, 7, 1, 1, maxOutputTokens, invocationTimeoutSeconds,
+                reasoningBudgetTokens);
         }
 
         private static AgentDefinitionRecord Definition(Guid id) =>

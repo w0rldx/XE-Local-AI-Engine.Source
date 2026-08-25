@@ -13,6 +13,8 @@ internal sealed class BenchmarkProjectConfiguration : IEntityTypeConfiguration<B
             table.HasCheckConstraint("CK_benchmark_projects_context_tokens", "context_tokens > 0");
             table.HasCheckConstraint("CK_benchmark_projects_max_output_tokens",
                 "max_output_tokens IS NULL OR (max_output_tokens > 0 AND max_output_tokens < context_tokens)");
+            table.HasCheckConstraint("CK_benchmark_projects_reasoning_budget_tokens",
+                "reasoning_budget_tokens IS NULL OR (reasoning_budget_tokens > 0 AND reasoning_budget_tokens < context_tokens)");
             table.HasCheckConstraint("CK_benchmark_projects_invocation_timeout",
                 "invocation_timeout_seconds IS NULL OR (invocation_timeout_seconds >= 60 AND invocation_timeout_seconds <= 7200)");
         });
@@ -22,6 +24,7 @@ internal sealed class BenchmarkProjectConfiguration : IEntityTypeConfiguration<B
         builder.Property(entity => entity.CoreTaskJson).HasColumnName("core_task_json").IsRequired();
         builder.Property(entity => entity.ContextTokens).HasColumnName("context_tokens");
         builder.Property(entity => entity.MaxOutputTokens).HasColumnName("max_output_tokens");
+        builder.Property(entity => entity.ReasoningBudgetTokens).HasColumnName("reasoning_budget_tokens");
         builder.Property(entity => entity.InvocationTimeoutSeconds).HasColumnName("invocation_timeout_seconds");
         builder.Property(entity => entity.AgentDefinitionId).HasColumnName("agent_definition_id");
         builder.Property(entity => entity.CurrentJudgePolicyRevisionId).HasColumnName("current_judge_policy_revision_id");

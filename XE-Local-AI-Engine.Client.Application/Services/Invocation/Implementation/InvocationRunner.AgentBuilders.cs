@@ -460,6 +460,7 @@ public sealed partial class InvocationRunner
             TopK = sampling.TopK,
             MinP = sampling.MinP,
             MaxOutputTokens = sampling.MaxOutputTokens,
+            ReasoningBudgetTokens = sampling.ReasoningBudgetTokens,
             RepeatPenalty = sampling.RepeatPenalty,
             RepeatLastN = sampling.RepeatLastN,
             PresencePenalty = sampling.PresencePenalty,

@@ -136,11 +136,13 @@ public sealed class BenchmarkJudgeExecutor(
                                                            .ConfigureAwait(false);
 
             using var reservation = decision.Reservation;
-            // Truncation is read through the shared predicate, not a local copy: the judging still runs — a truncated
-            // answer is a real answer that scored badly, not an absent one — but both the payload and the system prompt
-            // say so, and ranking must exclude exactly the runs the judge was told about.
+            // Truncation and the silent-incomplete beside it are read through the shared predicates, not local copies:
+            // the judging still runs — a truncated answer is a real answer that scored badly, and an absent one is a
+            // real result too — but both the payload and the system prompt say which it is, and ranking must exclude
+            // exactly the runs the judge was told about.
             var package = BuildJudgePackage(snapshot, policy, runtime, output.Span,
-                BenchmarkPrimaryStopReasons.IsTruncated(work.Run.PrimaryStopReason));
+                BenchmarkPrimaryStopReasons.IsTruncated(work.Run.PrimaryStopReason),
+                BenchmarkPrimaryStopReasons.IsIncomplete(work.Run.PrimaryStopReason));
             var admission = new BenchmarkContextAdmissionPolicy(runtime.RequestedContextTokens);
             using var capture = new BenchmarkInvocationCapture(work.RunId, package.InvocationId, dispatcher, events);
             events.Append(work.RunId,
@@ -228,7 +230,8 @@ public sealed class BenchmarkJudgeExecutor(
         BenchmarkJudgePolicyV1 policy,
         BenchmarkJudgeRuntimeV1 runtime,
         ReadOnlySpan<byte> outputParts,
-        bool primaryOutputTruncated)
+        bool primaryOutputTruncated,
+        bool primaryOutputIncomplete)
     {
         // What the judge grades: the stored transcript reduced to its visible answer (see BenchmarkOutputParts.ForJudge)
         // and bounded against the frozen judge window — the raw per-delta transcript of a thinking model does not fit it.
@@ -239,10 +242,11 @@ public sealed class BenchmarkJudgeExecutor(
             policy.Rubric,
             Encoding.UTF8.GetString(BenchmarkExecutionSerialization.SerializeParts(graded)),
             BenchmarkJudgeOutputSchemaV2.Json,
-            primaryOutputTruncated);
+            primaryOutputTruncated,
+            primaryOutputIncomplete);
         return packageBuilder.Build(new LocalChatRuntimePackageRequest(Guid.NewGuid(),
             Guid.NewGuid(),
-            BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated),
+            BenchmarkJudgePromptV2.SystemPromptFor(primaryOutputTruncated, primaryOutputIncomplete),
             [
                 new ConversationMessageDto
                 {

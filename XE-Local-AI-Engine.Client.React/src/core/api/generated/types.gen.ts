@@ -3626,6 +3626,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse = 
 	project: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectResponse;
 	rankCohort: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse;
 	runs?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse>;
+	repeatGroups?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGroupResponse>;
+	llamaBench?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchRowResponse>;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectResponse = {
@@ -3634,6 +3636,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectResp
 	coreTask: string;
 	contextTokens?: number;
 	maxOutputTokens?: number | null;
+	reasoningBudgetTokens?: number | null;
 	invocationTimeoutSeconds?: number | null;
 	agent?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportAgentResponse | null;
 	judge: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse;
@@ -3682,6 +3685,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortRespons
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse =
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse & {
 		outputParts?: unknown;
+		reasoningBudgetTokens?: number | null;
+		reasoningBudgetApplicable?: boolean | null;
 		judgeResult?: unknown;
 		primaryErrorMessage?: string | null;
 		startedAtUtc?: number | null;
@@ -3710,6 +3715,9 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	repeatGroupId?: string | null;
 	repeatIndex?: number | null;
 	isWarmup?: boolean;
+	repeatMode?: XeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode;
+	samplingSeed?: string | null;
+	samplingTemperature?: number | null;
 	effectiveContextTokens?: number | null;
 	durationMs?: number | null;
 	totalTokens?: number | null;
@@ -3771,6 +3779,42 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeCriterionSco
 	rationale: string;
 };
 
+export type XeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode = "Throughput" | "AnswerVariance";
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGroupResponse = {
+	repeatGroupId?: string | null;
+	modelName: string;
+	repeatMode?: XeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode;
+	runIds?: Array<string>;
+	meanPromptTokens?: number | null;
+	meanGenerationTokens?: number | null;
+	ttftMs: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse;
+	promptTokensPerSecond: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse;
+	generationTokensPerSecond: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportSampleStatisticsResponse = {
+	sampleCount?: number;
+	mean?: number | null;
+	stdDev?: number | null;
+	samples?: Array<number>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchRowResponse = {
+	buildCommit?: string | null;
+	gpuInfo?: string | null;
+	modelFilename?: string | null;
+	modelSize?: number | null;
+	nGpuLayers?: number | null;
+	nPrompt?: number;
+	nGen?: number;
+	avgTs?: number | null;
+	stddevTs?: number | null;
+	samples?: number;
+	repeatGroupId?: string | null;
+	modelName: string;
+};
+
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest = {
 	[key: string]: never;
 };
@@ -3784,6 +3828,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryRes
 	name: string;
 	contextTokens?: number;
 	maxOutputTokens?: number | null;
+	reasoningBudgetTokens?: number | null;
 	invocationTimeoutSeconds?: number | null;
 	agentDefinitionId?: string;
 	judgeEnabled?: boolean;
@@ -3805,6 +3850,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRe
 	coreTask?: string;
 	contextTokens?: number;
 	maxOutputTokens?: number | null;
+	reasoningBudgetTokens?: number | null;
 	invocationTimeoutSeconds?: number | null;
 	agentDefinitionId?: string;
 	judgeEnabled?: boolean;
@@ -3870,6 +3916,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest =
 	kvCacheType?: string | null;
 	repeatCount?: number;
 	warmup?: boolean;
+	repeatMode?: XeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode;
+	answerVarianceTemperature?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchResponse = {
@@ -3896,6 +3944,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchRequ
 	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchItem>;
 	repeatCount?: number;
 	warmup?: boolean;
+	repeatMode?: XeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode;
+	answerVarianceTemperature?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunBatchItem = {

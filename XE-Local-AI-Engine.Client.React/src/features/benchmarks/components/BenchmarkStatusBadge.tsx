@@ -34,24 +34,63 @@ export function BenchmarkStatusBadge({ status }: { status: BenchmarkPrimaryStatu
 
 /**
  * Shown next to a Succeeded status, never instead of it: the run really did succeed, and the badge is what stops the
- * reader from taking a fragment for a finished answer.
+ * reader from taking a fragment — or an empty answer — for a finished one. Three readings of one stop reason share it,
+ * because the difference between them is only which sentence tells the operator what to do next.
  */
+function StopReasonBadge({ color, label, hint, testId }: { color: MantineColor; label: string; hint: string; testId: string }) {
+	return (
+		<Tooltip label={hint} multiline={true} w={260}>
+			<span>
+				<StatusBadge color={color} label={label} aria-label={label} data-testid={testId} />
+			</span>
+		</Tooltip>
+	);
+}
+
 export function BenchmarkTruncatedBadge({ testId }: { testId?: string }) {
 	const { t } = useTranslation();
-	const label = t("pages.benchmarks.status.truncated", "Truncated");
 	return (
-		<Tooltip
-			label={t(
+		<StopReasonBadge
+			color="orange"
+			label={t("pages.benchmarks.status.truncated", "Truncated")}
+			hint={t(
 				"pages.benchmarks.status.truncatedHint",
 				"The answer was cut off by the token budget. It does not rank — rerun with a larger context or output budget.",
 			)}
-			multiline={true}
-			w={260}
-		>
-			<span>
-				<StatusBadge color="orange" label={label} aria-label={label} data-testid={testId ?? "benchmark-truncated"} />
-			</span>
-		</Tooltip>
+			testId={testId ?? "benchmark-truncated"}
+		/>
+	);
+}
+
+/** Truncated, but inside the thinking: the reasoning budget is the one to raise, not the output budget. */
+export function BenchmarkReasoningExhaustedBadge({ testId }: { testId?: string }) {
+	const { t } = useTranslation();
+	return (
+		<StopReasonBadge
+			color="grape"
+			label={t("pages.benchmarks.status.reasoningExhausted", "Reasoning budget spent")}
+			hint={t(
+				"pages.benchmarks.status.reasoningExhaustedHint",
+				"The run spent its whole reasoning budget without answering. It does not rank — raise the project's reasoning budget, not the output budget.",
+			)}
+			testId={testId ?? "benchmark-reasoning-exhausted"}
+		/>
+	);
+}
+
+/** No budget ran out: the run stopped cleanly and produced no answer, so raising a budget changes nothing. */
+export function BenchmarkIncompleteBadge({ testId }: { testId?: string }) {
+	const { t } = useTranslation();
+	return (
+		<StopReasonBadge
+			color="red"
+			label={t("pages.benchmarks.status.incomplete", "No answer")}
+			hint={t(
+				"pages.benchmarks.status.incompleteHint",
+				"The run finished without answering — it stopped on an unanswered tool call, or emitted only reasoning. It does not rank; rerun it.",
+			)}
+			testId={testId ?? "benchmark-incomplete"}
+		/>
 	);
 }
 

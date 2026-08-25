@@ -100,8 +100,14 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
         {
             // The FIRST run of the group is the response: it is the one that starts, so it is the one an operator's
             // live pane should open on. The rest are reachable through its repeatGroupId.
-            var created = await _runs.StartAsync(req.ProjectId, req.ModelName, req.ExpectedProjectVersion, kvCacheType, req.RepeatCount,
-                                         req.Warmup, ct)
+            var created = await _runs.StartAsync(new BenchmarkRunStartRequest(req.ProjectId,
+                                             req.ModelName,
+                                             req.ExpectedProjectVersion,
+                                             kvCacheType,
+                                             req.RepeatCount,
+                                             req.Warmup,
+                                             req.RepeatMode,
+                                             req.AnswerVarianceTemperature), scope: null, ct)
                                      .ConfigureAwait(false);
             await Send.ResultAsync(Results.Accepted(value: created[0].ToDetail())).ConfigureAwait(false);
         }
@@ -122,13 +128,26 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
 ///     Enqueues a whole model × KV-type matrix against one project. Per-item outcomes, not all-or-nothing: one
 ///     ineligible model must not cost the operator the other nine cells.
 /// </summary>
-public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunFreezeService runs)
+public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunFreezeService runs, TimeProvider timeProvider)
     : Endpoint<StartBenchmarkRunBatchRequest, StartBenchmarkRunBatchResponse>
 {
     /// <summary>Matrix ceiling. Ten models × four KV types is already a very long night; beyond that is a mistake.</summary>
     private const int MaxItems = 50;
 
+    /// <summary>
+    ///     How long the request keeps freezing cells before it answers with what it has. The freeze is synchronous per
+    ///     cell by design — no background job — so without a budget a fifty-cell matrix over cold, unverified models
+    ///     holds the connection until something times out and the operator cannot tell which cells started. With one,
+    ///     the answer always names every started cell and every cell to resubmit.
+    ///     <para>
+    ///         Checked BETWEEN cells, never inside one: a cell that has begun freezing runs to completion, so the
+    ///         budget can be overrun by one cell and no cell is ever half-frozen.
+    ///     </para>
+    /// </summary>
+    private static readonly TimeSpan RequestTimeBudget = TimeSpan.FromSeconds(45);
+
     private readonly IBenchmarkRunFreezeService _runs = runs ?? throw new ArgumentNullException(nameof(runs));
+    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public override void Configure()
     {
@@ -155,6 +174,13 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunFreezeService ru
         var started = new List<StartedBenchmarkRunBatchItemResponse>(req.Items.Count);
         var rejected = new List<RejectedBenchmarkRunBatchItemResponse>();
 
+        // One scope for the whole matrix: the llama-server capability probe runs once instead of once per cell, and
+        // each distinct model is verified once and then held. Holding the verified leases is the point — a model that
+        // changed halfway through would give the later cells a different snapshot from the earlier ones, which is the
+        // variable a matrix exists to hold still.
+        await using var scope = new BenchmarkFreezeScope();
+        var startedAt = _timeProvider.GetTimestamp();
+
         // Every insert bumps the project version by exactly one, so the version the NEXT item must present is the
         // running total of runs created so far. Re-reading the project between items would be the same number with an
         // extra round trip and a wider race window.
@@ -162,6 +188,20 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunFreezeService ru
         for (var index = 0; index < req.Items.Count; index++)
         {
             var item = req.Items[index];
+
+            // The budget is spent: answer with what started rather than holding the connection. Every remaining cell
+            // is reported by name so the operator resubmits exactly those, against the version below.
+            if (_timeProvider.GetElapsedTime(startedAt) >= RequestTimeBudget)
+            {
+                var exhausted = $"The batch reached its {RequestTimeBudget.TotalSeconds:0} second time budget after {started.Count} cell(s) started; "
+                                + "resubmit the remaining items with the project version in this response.";
+                for (var untried = index; untried < req.Items.Count; untried++)
+                {
+                    rejected.Add(Rejection(req.Items[untried], BenchmarkErrorCode.BatchTimeBudget, exhausted));
+                }
+
+                break;
+            }
 
             // Same rule as the single-run endpoint, as a per-cell verdict: a blank name would reach the freeze and come
             // back as an ArgumentException, i.e. a 500 for what is one operator typo in one cell of a matrix.
@@ -179,9 +219,15 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunFreezeService ru
 
             try
             {
-                var created = await _runs.StartAsync(req.ProjectId, item.ModelName, expectedVersion, kvCacheType, req.RepeatCount,
-                                             req.Warmup, ct)
-                                         .ConfigureAwait(false);
+                var created = await _runs.StartAsync(new BenchmarkRunStartRequest(req.ProjectId,
+                                                 item.ModelName,
+                                                 expectedVersion,
+                                                 kvCacheType,
+                                                 req.RepeatCount,
+                                                 req.Warmup,
+                                                 req.RepeatMode,
+                                                 req.AnswerVarianceTemperature), scope, ct)
+                                             .ConfigureAwait(false);
                 expectedVersion += created.Count;
                 started.Add(new StartedBenchmarkRunBatchItemResponse
                 {

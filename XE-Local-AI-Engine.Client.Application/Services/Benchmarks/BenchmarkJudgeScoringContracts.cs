@@ -254,9 +254,30 @@ public static class BenchmarkJudgePromptV2
         " The primary output was cut off by the token budget before the model finished answering. "
         + "Score it as the incomplete answer it is; do not credit work the model did not produce.";
 
-    /// <summary>The system prompt for one judging: the base instruction, plus the truncation notice when it applies.</summary>
-    public static string SystemPromptFor(bool primaryOutputTruncated) =>
-        primaryOutputTruncated ? SystemPrompt + TruncatedPrimaryOutputInstruction : SystemPrompt;
+    /// <summary>
+    ///     The extra instruction a primary output that answered NOTHING gets — it stopped on an unanswered tool call,
+    ///     or emitted only reasoning. Appended on the same terms as <see cref="TruncatedPrimaryOutputInstruction" />
+    ///     and for the same reason: a run reaching this state used to be graded as if its empty transcript were an
+    ///     answer, and every judging that came before must stay byte-identical.
+    /// </summary>
+    public const string IncompletePrimaryOutputInstruction =
+        " The model produced no answer at all: the turn ended on an unanswered tool call, or emitted only reasoning. "
+        + "Score the absence of an answer; do not credit work the model did not produce.";
+
+    /// <summary>
+    ///     The system prompt for one judging: the base instruction, plus the notice for a primary output that was cut
+    ///     off or never came. The two are mutually exclusive by construction — a run is recorded as <c>incomplete</c>
+    ///     only when it did NOT stop at the token budget — and truncation wins if a caller ever passes both.
+    /// </summary>
+    public static string SystemPromptFor(bool primaryOutputTruncated, bool primaryOutputIncomplete = false)
+    {
+        if (primaryOutputTruncated)
+        {
+            return SystemPrompt + TruncatedPrimaryOutputInstruction;
+        }
+
+        return primaryOutputIncomplete ? SystemPrompt + IncompletePrimaryOutputInstruction : SystemPrompt;
+    }
 
     /// <summary>
     ///     Embeds the caller's already-shaped pieces verbatim — this builder frames, it never re-serializes.
@@ -270,12 +291,17 @@ public static class BenchmarkJudgePromptV2
     ///     Emits <c>primaryOutputTruncated: true</c> after the output parts. Written ONLY when true, so the payload of
     ///     a complete run stays byte-identical to the one this builder has always produced.
     /// </param>
+    /// <param name="primaryOutputIncomplete">
+    ///     Emits <c>primaryOutputIncomplete: true</c> on the same terms, for a run that finished cleanly and answered
+    ///     nothing. Mutually exclusive with <paramref name="primaryOutputTruncated" />.
+    /// </param>
     public static string BuildUserPayloadJson(string taskJson,
         string? referenceAnswer,
         BenchmarkJudgeRubricV1 rubric,
         string primaryOutputPartsJson,
         string outputSchemaJson,
-        bool primaryOutputTruncated = false)
+        bool primaryOutputTruncated = false,
+        bool primaryOutputIncomplete = false)
     {
         ArgumentNullException.ThrowIfNull(rubric);
         var payload = new JsonObject
@@ -292,6 +318,10 @@ public static class BenchmarkJudgePromptV2
         if (primaryOutputTruncated)
         {
             payload["primaryOutputTruncated"] = JsonValue.Create(value: true);
+        }
+        else if (primaryOutputIncomplete)
+        {
+            payload["primaryOutputIncomplete"] = JsonValue.Create(value: true);
         }
 
         payload["outputSchema"] = JsonNode.Parse(outputSchemaJson);

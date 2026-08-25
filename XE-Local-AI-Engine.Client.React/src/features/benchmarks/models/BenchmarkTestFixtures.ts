@@ -24,6 +24,9 @@ export function benchmarkRunSummaryFixture(overrides: Partial<BenchmarkRunSummar
 		repeatGroupId: null,
 		repeatIndex: null,
 		isWarmup: false,
+		repeatMode: "Throughput",
+		samplingSeed: null,
+		samplingTemperature: null,
 		agentName: "agent",
 		agentVersion: 1,
 		requestedContextTokens: 4096,
@@ -66,6 +69,8 @@ export function benchmarkRunDetailFixture(overrides: Partial<BenchmarkRunDetail>
 		primaryErrorMessage: null,
 		startedAtUtc: 1,
 		primaryCompletedAtUtc: 2,
+		reasoningBudgetTokens: null,
+		reasoningBudgetApplicable: null,
 		...overrides,
 	};
 }

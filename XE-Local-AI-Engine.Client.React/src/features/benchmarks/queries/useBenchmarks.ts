@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
 	cancelBenchmarkRun,
@@ -37,6 +37,7 @@ import {
 import type {
 	BenchmarkEligibleModel,
 	BenchmarkKvCacheType,
+	BenchmarkRepeatMode,
 	BenchmarkProjectDetail,
 	BenchmarkProjectDraft,
 	BenchmarkProjectSummary,
@@ -63,11 +64,15 @@ const benchmarkQueryKeys = {
 };
 
 const activeRunPollIntervalMs = 2_000;
+/** The largest page the node serves: `ListBenchmarkRunsEndpoint` answers 400 above it, so this is a ceiling, not a taste. */
+const benchmarkRunsPageSize = 200;
 
-/** The ranked page of one project: the rows plus what the ranking was computed against. */
+/** The ranked runs of one project loaded so far: the rows plus what the ranking was computed against. */
 export interface BenchmarkRunList {
 	items: BenchmarkRunSummary[];
 	cohort: BenchmarkRankCohort;
+	/** Every run of the project, not just the loaded page — a matrix launch easily makes more than one page. */
+	totalCount: number;
 }
 
 /** The three rubrics the node offers as starting points. */
@@ -107,23 +112,54 @@ export function useBenchmarkProject(projectId: string | null) {
 	});
 }
 
+/**
+ * The runs of one project, ranked, one page of 200 at a time. The node caps `pageSize` at 200 and a matrix launch can
+ * make hundreds of runs, so the pages are appended rather than one page grown — and appending is safe here because the
+ * ranking is computed project-wide by the node and the pages are contiguous slices of that one order, so the
+ * concatenation is the same list the node would return in one go.
+ *
+ * The cost is that the two-second poll re-reads every loaded page, not just the first. That is one request per 200
+ * runs, and the alternative is showing the operator half of a 400-run matrix.
+ */
 export function useBenchmarkRuns(projectId: string | null) {
-	return useQuery<BenchmarkRunList>({
+	const query = useInfiniteQuery({
 		queryKey: benchmarkQueryKeys.runs(projectId ?? ""),
 		enabled: Boolean(projectId),
-		refetchInterval: (query) => (hasActiveRun(query.state.data) ? activeRunPollIntervalMs : false),
-		queryFn: async ({ signal }) => {
+		initialPageParam: 1,
+		getNextPageParam: (lastPage: BenchmarkRunList, pages: BenchmarkRunList[]) => {
+			const loaded = pages.reduce((count, page) => count + page.items.length, 0);
+			// The empty-page guard is what stops a "load more" loop if the node ever reports a total it cannot serve.
+			return lastPage.items.length > 0 && loaded < lastPage.totalCount ? pages.length + 1 : undefined;
+		},
+		refetchInterval: (query) => (query.state.data?.pages.some(hasActiveRun) ? activeRunPollIntervalMs : false),
+		queryFn: async ({ pageParam, signal }): Promise<BenchmarkRunList> => {
 			const { data } = await callWithResponseValidation(
 				listBenchmarkRuns({
 					path: { projectId: projectId as string },
-					query: { page: 1, pageSize: 100, includeUnscored: true },
+					query: { page: pageParam, pageSize: benchmarkRunsPageSize, includeUnscored: true },
 					signal,
 					throwOnError: true,
 				}),
 			);
-			return { items: (data.items ?? []).map(toBenchmarkRunSummary), cohort: toBenchmarkRankCohort(data.rankCohort) };
+			return {
+				items: (data.items ?? []).map(toBenchmarkRunSummary),
+				cohort: toBenchmarkRankCohort(data.rankCohort),
+				totalCount: data.totalCount ?? (data.items ?? []).length,
+			};
 		},
+		// Flattened here so every consumer keeps seeing one ranked list and never the page machinery. Deduplicated by
+		// id, first occurrence winning: the store pages by OFFSET over a newest-first order, so a run started while two
+		// pages are loaded shifts every row down one and the next page re-serves the row that just left the previous
+		// one. Un-deduplicated that is a repeated React key and one real run hidden behind its own copy.
+		// ponytail: keyset paging on (createdAtUtc, id) would remove the overlap itself rather than absorb it.
+		select: (data) => ({
+			items: [...new Map(data.pages.flatMap((page) => page.items).map((run) => [run.id, run])).values()],
+			cohort: (data.pages[0] as BenchmarkRunList).cohort,
+			totalCount: (data.pages[0] as BenchmarkRunList).totalCount,
+		}),
 	});
+	// The promise is the caller's to ignore: a failed page read is already reported as the query's error state.
+	return { ...query, loadMore: query.fetchNextPage };
 }
 
 export function useBenchmarkRun(runId: string) {
@@ -192,6 +228,7 @@ const projectMutationBody = (draft: BenchmarkProjectDraft) => ({
 	// Omitted rather than sent as null when unset: an absent budget means context-limited, which the node validates
 	// against the context window.
 	...(draft.maxOutputTokens === null ? {} : { maxOutputTokens: draft.maxOutputTokens }),
+	...(draft.reasoningBudgetTokens === null ? {} : { reasoningBudgetTokens: draft.reasoningBudgetTokens }),
 	...(draft.invocationTimeoutSeconds === null ? {} : { invocationTimeoutSeconds: draft.invocationTimeoutSeconds }),
 	agentDefinitionId: draft.agentDefinitionId,
 	judgeEnabled: draft.judgeEnabled,
@@ -298,17 +335,24 @@ export function useStartBenchmarkRun() {
 			modelName,
 			expectedProjectVersion,
 			kvCacheType,
+			repeatMode,
+			answerVarianceTemperature,
 		}: {
 			projectId: string;
 			modelName: string;
 			expectedProjectVersion: number;
 			/** null = Auto: the member is omitted so the node applies its own rule at freeze. */
 			kvCacheType: BenchmarkKvCacheType | null;
+			repeatMode: BenchmarkRepeatMode;
+			/** null = the node's default (0.7). Never sent in throughput mode, which the node samples at 0. */
+			answerVarianceTemperature: number | null;
 		}) => {
 			const body: StartBenchmarkRunRequest = {
 				modelName,
 				expectedProjectVersion,
 				...(kvCacheType === null ? {} : { kvCacheType }),
+				repeatMode,
+				...(repeatMode === "AnswerVariance" && answerVarianceTemperature !== null ? { answerVarianceTemperature } : {}),
 			};
 			const { data } = await callWithResponseValidation(startBenchmarkRun({ path: { projectId }, body, throwOnError: true }));
 			return toBenchmarkRunDetail(data);
@@ -345,17 +389,28 @@ export function useStartBenchmarkRunBatch() {
 			items,
 			repeatCount,
 			warmup,
+			repeatMode,
+			answerVarianceTemperature,
 		}: {
 			projectId: string;
 			expectedProjectVersion: number;
 			items: StartBenchmarkRunBatchItem[];
 			repeatCount: number;
 			warmup: boolean;
+			repeatMode: BenchmarkRepeatMode;
+			answerVarianceTemperature: number | null;
 		}): Promise<BenchmarkBatchLaunch & { projectId: string }> => {
 			const { data } = await callWithResponseValidation(
 				startBenchmarkRunBatch({
 					path: { projectId },
-					body: { expectedProjectVersion, items, repeatCount, warmup },
+					body: {
+						expectedProjectVersion,
+						items,
+						repeatCount,
+						warmup,
+						repeatMode,
+						...(repeatMode === "AnswerVariance" && answerVarianceTemperature !== null ? { answerVarianceTemperature } : {}),
+					},
 					throwOnError: true,
 				}),
 			);

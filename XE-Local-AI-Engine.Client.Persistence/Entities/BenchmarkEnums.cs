@@ -35,3 +35,23 @@ public enum BenchmarkWorkStatus
     Failed,
     Cancelled
 }
+
+/// <summary>
+///     What a repeat group is measuring. The mode changes only SAMPLING, never the launch, so every run of a group
+///     still shares one <c>LaunchIdentity</c> and stays comparable as a launch.
+/// </summary>
+public enum BenchmarkRepeatMode
+{
+    /// <summary>
+    ///     Cold-launch throughput jitter: temperature 0 and one fixed seed, so every repeat produces the SAME answer
+    ///     and what varies is only what the machine did. The historical behaviour and the default.
+    /// </summary>
+    Throughput,
+
+    /// <summary>
+    ///     Answer variance: a non-zero temperature and a seed that advances with the repeat index, so the repeats
+    ///     differ in exactly one input and the spread of answers is the measurement. Throughput numbers from such a
+    ///     group are still real, but they are no longer a controlled comparison.
+    /// </summary>
+    AnswerVariance
+}

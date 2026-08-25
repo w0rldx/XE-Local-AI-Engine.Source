@@ -43,6 +43,7 @@ function draft(overrides: Partial<BenchmarkProjectDraft> = {}): BenchmarkProject
 		coreTask: "Summarise the attached text.",
 		contextTokens: 4096,
 		maxOutputTokens: null,
+		reasoningBudgetTokens: null,
 		invocationTimeoutSeconds: null,
 		agentDefinitionId: "agent-1",
 		judgeEnabled: false,
@@ -264,5 +265,34 @@ describe("BenchmarkProjectForm", () => {
 
 		expect(onCancel).toHaveBeenCalledOnce();
 		expect(screen.getByRole("button", { name: "Save" })).toBeTruthy();
+	});
+
+	// Mirrors `BenchmarkProjectService.ValidateReasoningBudget`. The pair rule is the one worth having client-side: a
+	// reasoning and an output budget that each look fine can still sum past the window, and the node is the only place
+	// that ever said so.
+	it("refuses a reasoning and output budget that leave no room for the prompt", () => {
+		const { container, onSubmit } = renderForm(draft({ contextTokens: 4096, maxOutputTokens: 2048, reasoningBudgetTokens: 2048 }));
+
+		save(container);
+
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(screen.getByText(/at least 512 tokens of the context for the prompt/)).toBeTruthy();
+	});
+
+	it("submits a reasoning budget that fits", () => {
+		const values = draft({ contextTokens: 8192, maxOutputTokens: 2048, reasoningBudgetTokens: 2048 });
+		const { container, onSubmit } = renderForm(values);
+
+		save(container);
+
+		expect(onSubmit).toHaveBeenCalledExactlyOnceWith(values);
+	});
+
+	// The node re-checks the same rules against numbers the form cannot see. Its sentence belongs beside the fields,
+	// not only in a toast that outlives the dialog.
+	it("shows what the node refused the save with", () => {
+		renderForm(draft(), { saveError: "The reasoning token budget must be between 1 and the requested context. (InvalidRequest)" });
+
+		expect(screen.getByTestId("benchmark-project-save-error").textContent).toContain("(InvalidRequest)");
 	});
 });

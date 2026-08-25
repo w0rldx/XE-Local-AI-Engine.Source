@@ -20,6 +20,13 @@ internal sealed record class BenchmarkProject
     public int? MaxOutputTokens { get; set; }
 
     /// <summary>
+    ///     The per-request thinking budget (<c>reasoning_budget_tokens</c>) frozen into every run's sampling, or
+    ///     <see langword="null" /> to leave the reasoning bounded only by the reasoning-effort ladder and the window.
+    ///     Plaintext, not sensitive.
+    /// </summary>
+    public int? ReasoningBudgetTokens { get; set; }
+
+    /// <summary>
     ///     How long one run's generation may take before the node cancels it, or <see langword="null" /> for the
     ///     frozen default (<see cref="Services.Benchmarks.BenchmarkFrozenPolicies" />). Plaintext, not sensitive.
     /// </summary>

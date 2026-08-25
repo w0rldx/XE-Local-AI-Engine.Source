@@ -179,6 +179,87 @@ public sealed class BenchmarkExecutionPrimitivesTests
         _ = store.DidNotReceive().CancelAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public void EventBuffer_DropsTheOldestTerminalRunsButKeepsTheReplayResetForRecentOnes()
+    {
+        // The leak: one entry per run, forever. A node that runs a thousand benchmarks kept a thousand of them, each
+        // holding sequence bookkeeping for a stream that ended hours ago.
+        var buffer = Buffer(maxEvents: 8, maxBytes: 4096, maxTerminalRuns: 2);
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var third = Guid.NewGuid();
+        foreach (var runId in new[] { first, second, third })
+        {
+            _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: "out"));
+            buffer.EvictPlaintext(runId);
+        }
+
+        AssertEx.Equal(expected: 2, buffer.TrackedRunCount, "Only the cap's worth of terminal runs may be remembered.");
+
+        // The recent ones still answer "reset" — that is the whole reason an emptied entry is kept at all.
+        AssertEx.True(buffer.Replay(third, afterSequence: 0, runVersion: 1).ResetRequired);
+        AssertEx.True(buffer.Replay(second, afterSequence: 0, runVersion: 1).ResetRequired);
+
+        // The dropped one is answered as unknown. The hub does NOT read that as "nothing happened": it compares the
+        // run's persisted LastStreamSequence against this LatestSequence and resets on the difference, which is the
+        // same answer by another route.
+        var forgotten = buffer.Replay(first, afterSequence: 0, runVersion: 1);
+        AssertEx.False(forgotten.ResetRequired);
+        AssertEx.Equal(expected: 0L, forgotten.LatestSequence, "An unknown run reports no sequence, which is what the hub's persisted-sequence check needs.");
+    }
+
+    [Test]
+    public void EventBuffer_KeepsARunThatWentActiveAgainAfterItsPrimaryPhaseEnded()
+    {
+        // A run is evicted once per terminal PHASE, and it has two: the primary, then the judge. Dropping the entry
+        // for a run that is streaming again would restart its sequence numbering under a live subscriber.
+        var buffer = Buffer(maxEvents: 8, maxBytes: 4096, maxTerminalRuns: 1);
+        var judged = Guid.NewGuid();
+        _ = buffer.Append(judged, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: "answer"));
+        buffer.EvictPlaintext(judged);
+        buffer.BeginActivePhase(judged, persistedSequence: 1);
+        var judging = buffer.Append(judged, BenchmarkRunStreamEventKind.JudgeState, new BenchmarkRunStreamPayload(State: "running"));
+
+        // Another run terminalizes and pushes the cap.
+        var other = Guid.NewGuid();
+        _ = buffer.Append(other, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: "out"));
+        buffer.EvictPlaintext(other);
+
+        AssertEx.Equal(expected: 2L, judging.Sequence, "The judge phase continues the run's sequence, it does not restart it.");
+        var replay = buffer.Replay(judged, afterSequence: 1, runVersion: 1);
+        AssertEx.False(replay.ResetRequired, "A live phase must not be told to reset because another run ended.");
+        AssertEx.Equal(expected: 2L, replay.LatestSequence);
+    }
+
+    [Test]
+    public void QueueOptionsValidator_AcceptsThePositiveBoundedIntervalAndRejectsEverythingElse()
+    {
+        var validator = new BenchmarkQueueOptionsValidator();
+
+        AssertEx.True(validator.Validate(name: null, new BenchmarkQueueOptions()).Succeeded, "the default poll interval must validate");
+        AssertEx.True(validator.Validate(name: null,
+                                    new BenchmarkQueueOptions
+                                    {
+                                        PollInterval = BenchmarkQueueOptions.MaxPollInterval
+                                    })
+                               .Succeeded,
+            "the ceiling itself is a legal interval");
+        AssertEx.True(validator.Validate(name: null,
+                                    new BenchmarkQueueOptions
+                                    {
+                                        PollInterval = TimeSpan.Zero
+                                    })
+                               .Failed,
+            "a zero interval would spin the queue");
+        AssertEx.True(validator.Validate(name: null,
+                                    new BenchmarkQueueOptions
+                                    {
+                                        PollInterval = BenchmarkQueueOptions.MaxPollInterval + TimeSpan.FromSeconds(1)
+                                    })
+                               .Failed,
+            "an interval past the ceiling would strand queued work");
+    }
+
     private static InvocationGenerationAdmissionContext Context(int? effective) =>
         new()
         {
@@ -189,11 +270,12 @@ public sealed class BenchmarkExecutionPrimitivesTests
             ProviderName = "llamacpp"
         };
 
-    private static BenchmarkEventBuffer Buffer(int maxEvents, int maxBytes) =>
+    private static BenchmarkEventBuffer Buffer(int maxEvents, int maxBytes, int? maxTerminalRuns = null) =>
         new(Options.Create(new BenchmarkEventBufferOptions
         {
             MaxEventCount = maxEvents,
-            MaxUtf8Bytes = maxBytes
+            MaxUtf8Bytes = maxBytes,
+            MaxRetainedTerminalRuns = maxTerminalRuns ?? BenchmarkEventBufferOptions.DefaultMaxRetainedTerminalRuns
         }));
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary, string judgeState, long version) =>

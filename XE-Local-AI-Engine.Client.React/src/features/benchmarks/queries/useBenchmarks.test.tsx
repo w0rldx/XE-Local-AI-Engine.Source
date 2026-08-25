@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 
@@ -76,6 +76,7 @@ const draft: BenchmarkProjectDraft = {
 	coreTask: "Summarise the attached text.",
 	contextTokens: 4096,
 	maxOutputTokens: null,
+	reasoningBudgetTokens: null,
 	invocationTimeoutSeconds: null,
 	agentDefinitionId: "cccccccc-0000-4000-8000-000000000003",
 	judgeEnabled: false,
@@ -139,7 +140,7 @@ describe("benchmark queries over the real client", () => {
 		expect(result.current.runs.data?.items[0]?.judge.state).toBe("none");
 	});
 
-	// The run list is paged on the wire even though the UI shows one page.
+	// The run list is paged on the wire, and the first page is what the table opens with.
 	it("requests the runs page explicitly", async () => {
 		let observedUrl = "";
 		server.use(
@@ -154,7 +155,107 @@ describe("benchmark queries over the real client", () => {
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		expect(observedUrl).toContain("page=1");
-		expect(observedUrl).toContain("pageSize=100");
+		expect(observedUrl).toContain("pageSize=200");
+	});
+
+	// A matrix launch can create more runs than one page holds, and the node REFUSES a pageSize above 200 with a 400
+	// (`ListBenchmarkRunsEndpoint`). So the pages are appended rather than one page grown — safe because the ranking is
+	// project-wide and the pages are contiguous slices of that one order. The 400 route is the regression guard: a
+	// hook that grew the page instead would fail its third read on any project with more than 400 runs.
+	it("appends further pages instead of asking for a page the node refuses", async () => {
+		const totalCount = 450;
+		const observed: string[] = [];
+		server.use(
+			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), ({ request }) => {
+				const params = new URL(request.url).searchParams;
+				const page = Number(params.get("page") ?? 1);
+				const pageSize = Number(params.get("pageSize") ?? 0);
+				observed.push(`${page}/${pageSize}`);
+				if (pageSize > 200) {
+					return HttpResponse.json({ errors: { pageSize: ["pageSize must be between 1 and 200."] } }, { status: 400 });
+				}
+				const offset = (page - 1) * pageSize;
+				return HttpResponse.json({
+					items: Array.from({ length: Math.max(0, Math.min(pageSize, totalCount - offset)) }, (_, index) =>
+						runRow({ id: `bbbbbbbb-0000-4000-8000-${String(offset + index).padStart(12, "0")}` }),
+					),
+					page,
+					pageSize,
+					totalCount,
+					rankCohort: { rankedCount: 0, totalScored: 0 },
+				});
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useBenchmarkRuns(projectId), { wrapper });
+
+		await waitFor(() => expect(result.current.data?.items).toHaveLength(200));
+		expect(result.current.data?.totalCount).toBe(totalCount);
+
+		act(() => {
+			result.current.loadMore();
+		});
+		await waitFor(() => expect(result.current.data?.items).toHaveLength(400));
+
+		act(() => {
+			result.current.loadMore();
+		});
+		await waitFor(() => expect(result.current.data?.items).toHaveLength(450));
+
+		expect(observed).toEqual(["1/200", "2/200", "3/200"]);
+		expect(result.current.isError).toBe(false);
+		// Every id survives the concatenation: an appended page must not re-serve rows the previous one already had.
+		expect(new Set(result.current.data?.items.map((run) => run.id)).size).toBe(450);
+	});
+
+	// The store pages by OFFSET over a newest-first order, and the poll refetches every loaded page. A run started
+	// while two pages are loaded shifts every row down one, so page 2 re-serves the row that just left page 1. Without
+	// the dedupe that is a repeated React key and one genuine run hidden behind its own copy.
+	it("keeps one row per run when a new run shifts the pages apart", async () => {
+		const id = (index: number) => `bbbbbbbb-0000-4000-8000-${String(index).padStart(12, "0")}`;
+		server.use(
+			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), ({ request }) => {
+				const page = Number(new URL(request.url).searchParams.get("page") ?? 1);
+				// Page 2 starts at the LAST id of page 1: exactly the one-row overlap a concurrent launch produces.
+				const ids = page === 1 ? [id(1), id(2)] : [id(2), id(3)];
+				return HttpResponse.json({
+					items: ids.map((runId) => runRow({ id: runId })),
+					page,
+					pageSize: 2,
+					totalCount: 4,
+					rankCohort: { rankedCount: 0, totalScored: 0 },
+				});
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useBenchmarkRuns(projectId), { wrapper });
+
+		await waitFor(() => expect(result.current.data?.items).toHaveLength(2));
+
+		act(() => {
+			result.current.loadMore();
+		});
+
+		await waitFor(() => expect(result.current.data?.items).toHaveLength(3));
+		const ids = result.current.data?.items.map((run) => run.id) ?? [];
+		expect(new Set(ids).size).toBe(ids.length);
+		expect(ids).toEqual([id(1), id(2), id(3)]);
+	});
+
+	it("stops offering more once every run is loaded", async () => {
+		server.use(
+			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), () =>
+				HttpResponse.json({ items: [runRow()], page: 1, pageSize: 200, totalCount: 1, rankCohort: { rankedCount: 0, totalScored: 0 } }),
+			),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useBenchmarkRuns(projectId), { wrapper });
+
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+		expect(result.current.hasNextPage).toBe(false);
 	});
 
 	// The eligible-model read is context-aware: a requested context narrows the candidates server-side.
@@ -220,10 +321,11 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: null });
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: null, repeatMode: "Throughput", answerVarianceTemperature: null });
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
-		expect(observedBody).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2 });
+		// The mode always rides along; the temperature never does in throughput mode, which the node samples at 0.
+		expect(observedBody).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2, repeatMode: "Throughput" });
 		expect(result.current.data).toMatchObject({ id: runId, primaryStatus: "Queued" });
 	});
 
@@ -239,7 +341,7 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 1, kvCacheType: null });
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 1, kvCacheType: null, repeatMode: "Throughput", answerVarianceTemperature: null });
 
 		await waitFor(() => expect(result.current.isError).toBe(true));
 		expect(result.current.error).toBeInstanceOf(ApiError);
@@ -260,13 +362,13 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: null });
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: null, repeatMode: "Throughput", answerVarianceTemperature: null });
 		await waitFor(() => expect(bodies).toHaveLength(1));
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q8_0" });
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q8_0", repeatMode: "Throughput", answerVarianceTemperature: null });
 		await waitFor(() => expect(bodies).toHaveLength(2));
 
-		expect(bodies[0]).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2 });
-		expect(bodies[1]).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q8_0" });
+		expect(bodies[0]).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2, repeatMode: "Throughput" });
+		expect(bodies[1]).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q8_0", repeatMode: "Throughput" });
 	});
 
 	// A 422 is the node refusing this KV type on this runtime; its sanitized reason has to survive to the caller.
@@ -281,7 +383,7 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q4_0" });
+		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q4_0", repeatMode: "Throughput", answerVarianceTemperature: null });
 
 		await waitFor(() => expect(result.current.isError).toBe(true));
 		expect((result.current.error as ApiError).statusCode).toBe(422);

@@ -65,6 +65,34 @@ public sealed class BenchmarkProjectServiceTests
     }
 
     [Test]
+    public async Task Create_ReasoningBudgetMustFitTheContextAlongsideTheOutputBudget()
+    {
+        var context = new ServiceContext();
+
+        // Same rule as the output budget on its own.
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId, ReasoningBudgetTokens: 4096)));
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId, ReasoningBudgetTokens: 0)));
+
+        // The pair is what actually bites: each budget fits on its own, but together with the prompt they cannot, so
+        // every run this project could ever freeze would burn its window and be excluded from its own ranking.
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId, MaxOutputTokens: 2048,
+                ReasoningBudgetTokens: 2000)));
+        _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(),
+            Arg.Any<CancellationToken>());
+
+        _ = await context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId, MaxOutputTokens: 1024,
+            ReasoningBudgetTokens: 2048));
+        AssertEx.Equal<int?>(2048, AssertEx.NotNull(context.CreatedInput).ReasoningBudgetTokens);
+
+        _ = await context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId));
+        AssertEx.Null(AssertEx.NotNull(context.CreatedInput).ReasoningBudgetTokens,
+            "An omitted budget stays absent: the reasoning keeps the effort ladder's ceiling.");
+    }
+
+    [Test]
     public async Task Create_GenerationTimeoutMustBePlausible()
     {
         var context = new ServiceContext();
@@ -181,6 +209,44 @@ public sealed class BenchmarkProjectServiceTests
         AssertEx.Equal("RejudgeRequired", exception.Code);
         _ = context.Store.DidNotReceive().ActivateJudgePolicyAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
             Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>());
+
+        // The refusal must cost nothing: taking the lease VERIFIES the model by re-hashing every member file, which
+        // made this 409 take 57 s to return for a 22 GB judge.
+        _ = context.Models.DidNotReceive().AcquireAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UpdateJudgePolicy_ReSavingTheSameJudgeOnAProjectWithRuns_IsANoOpWithoutVerifyingTheModel()
+    {
+        // Re-saving an unchanged judge is not a change, so it must not demand the re-judge confirmation — and it must
+        // reach that answer without the verifying lease, which is the 57 s this ordering exists to avoid.
+        var context = new ServiceContext(runCount: 2);
+        var draft = new BenchmarkJudgePolicyDraft("judge-model", 4096);
+        await context.SetCurrentPolicyAsync(draft);
+        context.Models.ClearReceivedCalls();
+
+        var change = await context.Service.UpdateJudgePolicyAsync(ProjectId, 1, draft, confirmRejudge: false);
+
+        AssertEx.Equal<int?>(1, change.CohortGeneration, "The project keeps the cohort it already had.");
+        _ = context.Models.DidNotReceive().AcquireAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        _ = context.Store.DidNotReceive().ActivateJudgePolicyAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
+            Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UpdateJudgePolicy_EditingTheJudgeOnAProjectWithRuns_RequiresConfirmationWithoutVerifyingTheModel()
+    {
+        // The same path against a REAL stored policy, so the refusal comes from the comparison answering "different"
+        // rather than from a revision it could not read.
+        var context = new ServiceContext(runCount: 2);
+        await context.SetCurrentPolicyAsync(new BenchmarkJudgePolicyDraft("judge-model", 4096));
+        context.Models.ClearReceivedCalls();
+
+        var exception = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() =>
+            context.Service.UpdateJudgePolicyAsync(ProjectId, 1, new BenchmarkJudgePolicyDraft("judge-model", 8192), confirmRejudge: false));
+
+        AssertEx.Equal("RejudgeRequired", exception.Code);
+        _ = context.Models.DidNotReceive().AcquireAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

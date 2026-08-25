@@ -31,6 +31,17 @@ internal sealed class ManualTimeProvider : TimeProvider
         }
     }
 
+    /// <summary>
+    ///     The monotonic clock, moved by <see cref="Advance" /> like the wall clock. The base implementation reads
+    ///     <see cref="System.Diagnostics.Stopwatch" />, which leaves any production code that measures elapsed time the
+    ///     right way — <see cref="TimeProvider.GetElapsedTime(long)" /> — waiting in real seconds.
+    /// </summary>
+    public override long GetTimestamp() =>
+        GetUtcNow().UtcTicks;
+
+    /// <inheritdoc cref="GetTimestamp" />
+    public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
     public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
     {
         ArgumentNullException.ThrowIfNull(callback);

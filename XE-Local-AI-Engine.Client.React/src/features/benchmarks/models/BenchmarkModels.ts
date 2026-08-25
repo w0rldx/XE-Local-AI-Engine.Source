@@ -20,6 +20,21 @@ export const toBenchmarkJudgeState = (value: unknown): BenchmarkJudgeState =>
 	benchmarkJudgeStates.find((state) => state === value) ?? "none";
 
 /**
+ * What a repeat GROUP measures. `Throughput` is the default and the historical behaviour: temperature 0 and one fixed
+ * seed, so every repeat produces the identical answer and only the machine varies. `AnswerVariance` samples at a
+ * temperature and varies the seed per repeat, so the repeats differ in what they SAY — the spread then describes the
+ * model, not the box, and the two must never be averaged together.
+ */
+export const benchmarkRepeatModes = ["Throughput", "AnswerVariance"] as const;
+export type BenchmarkRepeatMode = (typeof benchmarkRepeatModes)[number];
+/** Fail-safe: an unknown mode reads as the deterministic one, never as "these numbers vary for an unknown reason". */
+export const toBenchmarkRepeatMode = (value: unknown): BenchmarkRepeatMode =>
+	benchmarkRepeatModes.find((mode) => mode === value) ?? "Throughput";
+
+/** `BenchmarkRunFreezeService.DefaultAnswerVarianceTemperature` and its ceiling, mirrored for the launch controls. */
+export const benchmarkAnswerVarianceTemperature = { default: 0.7, max: 2 } as const;
+
+/**
  * Why the node left a run out of the ranked cohort. Server-derived and exhaustive: `null` means the run IS ranked.
  * Every member maps to an operator hint and an action in the runs table — a rank that is simply missing, with no
  * reason, would be unactionable.
@@ -34,6 +49,7 @@ export const benchmarkRankExclusionReasons = [
 	"execution-key-mismatch",
 	"execution-identity-incomplete",
 	"truncated",
+	"incomplete",
 	"warmup",
 ] as const;
 export type BenchmarkRankExclusionReason = (typeof benchmarkRankExclusionReasons)[number];
@@ -106,6 +122,8 @@ export interface BenchmarkProjectSummary {
 	contextTokens: number;
 	/** Per-run output-token budget (`n_predict`), or null when generation is only limited by the context window. */
 	maxOutputTokens: number | null;
+	/** Per-run thinking budget, or null for "as much as the window allows". Additive with the output budget. */
+	reasoningBudgetTokens: number | null;
 	/** Seconds one run's generation may take before the node cancels it, or null for the node default (900). */
 	invocationTimeoutSeconds: number | null;
 	agentDefinitionId: string;
@@ -128,6 +146,7 @@ export interface BenchmarkProjectDraft {
 	coreTask: string;
 	contextTokens: number;
 	maxOutputTokens: number | null;
+	reasoningBudgetTokens: number | null;
 	invocationTimeoutSeconds: number | null;
 	agentDefinitionId: string;
 	judgeEnabled: boolean;
@@ -222,6 +241,12 @@ export function benchmarkErrorCode(error: unknown): string | null {
  */
 export const isUnsupportedKvCacheTypeError = (error: unknown): boolean =>
 	error instanceof ApiError && error.statusCode === 422 && benchmarkErrorCode(error) === "UnsupportedKvCacheType";
+
+/**
+ * Context the node keeps for the prompt when it checks a reasoning budget against an output budget
+ * (`BenchmarkFrozenPolicies.MinimumPromptReserveTokens`). Mirrored so the form refuses what the node would refuse.
+ */
+export const benchmarkPromptReserveTokens = 512;
 
 export const benchmarkKvCacheTypes = ["f16", "q8_0", "q4_0"] as const;
 export type BenchmarkKvCacheType = (typeof benchmarkKvCacheTypes)[number];
@@ -332,6 +357,12 @@ export interface BenchmarkRunSummary {
 	repeatIndex: number | null;
 	/** A warm-up run: shown, but never ranked and never counted in a group's statistics. */
 	isWarmup: boolean;
+	/** What this run's group measures. Throughput repeats are deterministic; answer-variance repeats are not. */
+	repeatMode: BenchmarkRepeatMode;
+	/** The seed the run actually sampled with, verbatim (the node's own string), or null for a legacy row. */
+	samplingSeed: string | null;
+	/** The temperature the run actually sampled at. Null for legacy rows; 0 for a throughput repeat. */
+	samplingTemperature: number | null;
 	agentName: string;
 	agentVersion: number;
 	requestedContextTokens: number;
@@ -369,6 +400,13 @@ export interface BenchmarkRunDetail extends BenchmarkRunSummary {
 	primaryErrorMessage: string | null;
 	startedAtUtc: number | null;
 	primaryCompletedAtUtc: number | null;
+	/** The budget this run was frozen with, or null when the project pinned none. */
+	reasoningBudgetTokens: number | null;
+	/**
+	 * Whether the model could actually honour it. False = the run carries a budget the runtime never applied (no
+	 * thinking mode), which is why the run can look as if the budget did nothing; null for a legacy row.
+	 */
+	reasoningBudgetApplicable: boolean | null;
 }
 
 /** Everything a write needs to address one run under optimistic concurrency. A detail or a summary row satisfies it. */
@@ -595,8 +633,32 @@ export function toChatMessageParts(parts: readonly BenchmarkOutputPart[]): ChatM
 /** Mirrors the node's `BenchmarkFrozenPolicies` so the form refuses what the node would reject anyway. */
 export const benchmarkInvocationTimeoutLimits = { min: 60, max: 7200, default: 900 } as const;
 
-export const isBenchmarkRunTruncated = (run: Pick<BenchmarkRunSummary, "primaryStopReason">): boolean =>
-	run.primaryStopReason?.toLowerCase() === "length";
+/**
+ * Cut off by a budget. Mirrors the node's `BenchmarkStopReasons.IsTruncated`, which counts BOTH tokens: `length` is the
+ * OpenAI-compatible one for a full window or an exhausted `n_predict`, and `reasoning-length` is the node's narrowing
+ * of the same fact for a run that spent the budget thinking. The node EXCLUDES both as `truncated`, so a UI that knew
+ * only `length` would leave a reasoning-truncated run rank-excluded with no badge saying why.
+ */
+export const isBenchmarkRunTruncated = (run: Pick<BenchmarkRunSummary, "primaryStopReason">): boolean => {
+	const reason = run.primaryStopReason?.toLowerCase();
+	return reason === "length" || reason === "reasoning-length";
+};
+
+/**
+ * Truncated INSIDE the reasoning: not one visible answer token was emitted. Truncated as far as ranking is concerned,
+ * but it names the reasoning budget as the thing to raise rather than the output budget — the whole difference between
+ * a run the operator can fix and one they cannot explain.
+ */
+export const isBenchmarkRunReasoningExhausted = (run: Pick<BenchmarkRunSummary, "primaryStopReason">): boolean =>
+	run.primaryStopReason?.toLowerCase() === "reasoning-length";
+
+/**
+ * Stopped cleanly and answered NOTHING — an unanswered tool call, or only reasoning emitted. Distinct from truncated:
+ * no budget ran out, so raising one changes nothing. The node excludes it under its own reason for the same cause
+ * truncation is excluded for: there is no answer for a rubric to grade.
+ */
+export const isBenchmarkRunIncomplete = (run: Pick<BenchmarkRunSummary, "primaryStopReason">): boolean =>
+	run.primaryStopReason?.toLowerCase() === "incomplete";
 
 /**
  * The base model a row belongs to, for DISPLAY. The server key is lowercased for Hugging Face models so two casings of
@@ -620,6 +682,41 @@ export const isJudgeActive = (state: BenchmarkJudgeState): boolean => state === 
 const isPrimaryTerminal = (status: BenchmarkPrimaryStatus): boolean => !isPrimaryActive(status);
 export const isRunTerminal = (run: BenchmarkRunSummary): boolean =>
 	isPrimaryTerminal(run.primaryStatus) && !isJudgeActive(run.judge.state);
+
+/** How far a matrix launch has got. `done` counts every terminal run, of which `failed` is the unhappy part. */
+export interface BenchmarkBatchProgress {
+	total: number;
+	done: number;
+	running: number;
+	queued: number;
+	failed: number;
+}
+
+/**
+ * What a batch launch has achieved, read off the runs the list already holds. A started run the loaded page does not
+ * carry yet counts as queued rather than disappearing, so `done + running + queued` always equals the number of runs
+ * the node said it started — a progress line that silently shrank its own denominator would be worse than none.
+ */
+export function benchmarkBatchProgress(
+	runs: readonly BenchmarkRunSummary[],
+	startedRunIds: readonly string[],
+): BenchmarkBatchProgress {
+	const progress: BenchmarkBatchProgress = { total: startedRunIds.length, done: 0, running: 0, queued: 0, failed: 0 };
+	for (const runId of startedRunIds) {
+		const run = runs.find((candidate) => candidate.id === runId);
+		if (!run || run.primaryStatus === "Queued") {
+			progress.queued += 1;
+		} else if (isPrimaryActive(run.primaryStatus)) {
+			progress.running += 1;
+		} else {
+			progress.done += 1;
+			if (run.primaryStatus !== "Succeeded") {
+				progress.failed += 1;
+			}
+		}
+	}
+	return progress;
+}
 
 /**
  * The first thing the node's `BenchmarkJudgePolicyValidator` would reject, mirrored client-side so the operator is not
