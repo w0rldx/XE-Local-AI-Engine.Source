@@ -1,0 +1,77 @@
+namespace XE_Local_AI_Engine.Client.Services.Sandbox;
+
+/// <summary>
+///     What a workload needs from an execution substrate, on axes that have meaning to every backend. ADR 0007
+///     Decision 1: a consumer declares requirements; it never names a backend.
+///     <para>
+///         <b>Engine-owned, from constants.</b> Every value in this record is composed by engine code in
+///         <see cref="SandboxWorkloads" /> — never from configuration, never from a repository, never from anything a
+///         model can write. That is not a style rule: a requirements record derivable from a repository would be
+///         <c>devcontainer.json</c> under another name, which ADR 0004 §5 rejects wholesale.
+///     </para>
+///     <para>
+///         <b>This is a declaration, not a request.</b> It is consulted once, when a backend is selected, and it is
+///         deliberately NOT an extension of <see cref="SandboxCreateRequest" />. The two answer different questions at
+///         different times: this one answers "which backend may serve this workload at all", at DI resolution, before
+///         any sandbox exists; <see cref="SandboxCreateRequest" /> answers "what shape is THIS sandbox", per call,
+///         against the backend already chosen. The per-call fields that carry the same axes — <see
+///         cref="SandboxCreateRequest.Isolation" />, <see cref="SandboxCreateRequest.NetworkPolicy" />, <see
+///         cref="SandboxCreateRequest.MaxJailDiskBytes" />, <see cref="SandboxCreateRequest.TrustedHostWorkspace" /> —
+///         are unchanged and remain what the backend enforces. Nothing here weakens or replaces them.
+///     </para>
+/// </summary>
+public sealed record SandboxRequirements
+{
+    /// <summary>
+    ///     The workload this declaration belongs to, for the selector's resolution log and for the message a
+    ///     fail-closed refusal carries. Diagnosis moved from "read the injected type" to "read the resolved backend
+    ///     from the log line" when selection replaced naming, so the log line has to say whose resolution it is.
+    /// </summary>
+    public required string Workload { get; init; }
+
+    /// <summary>Where the workload's compilers, SDKs and interpreters come from.</summary>
+    public required SandboxToolchainSource Toolchain { get; init; }
+
+    /// <summary>
+    ///     The WEAKEST filesystem separation this workload will accept. There is deliberately no default value: a
+    ///     declaration that omits it does not compile.
+    ///     <para>
+    ///         That is the second of the three mechanisms ADR 0007 Decision 4 uses to replace the compile-time guard.
+    ///         A defaulted field would let a new consumer inherit the weakest posture by saying nothing, which is
+    ///         exactly the failure mode the absent <c>implements</c> clause used to make impossible. Requiring the
+    ///         value keeps "no unisolated fallback" a compiler-enforced property rather than a review one — note that
+    ///         <see cref="SandboxCreateRequest.Isolation" /> does default, correctly, because it is a per-call request
+    ///         against a backend already chosen for a workload that already declared its floor here.
+    ///     </para>
+    /// </summary>
+    public required SandboxIsolationMode IsolationFloor { get; init; }
+
+    /// <summary>
+    ///     The WEAKEST egress posture this workload will accept — not the posture it asks for per call.
+    ///     <para>
+    ///         The distinction is load-bearing for AgentHome, which requests <see cref="SandboxNetworkPolicy.None" />
+    ///         wherever the backend advertises it and <see cref="SandboxNetworkPolicy.Unrestricted" /> where it does
+    ///         not (<c>AgentHomeService.ResolveNetworkPolicy</c>). Declaring <see cref="SandboxNetworkPolicy.None" />
+    ///         as a floor there would not harden AgentHome; it would refuse to start it on Windows, where the
+    ///         mechanism is not implemented at all. So AgentHome's floor is
+    ///         <see cref="SandboxNetworkPolicy.Unrestricted" /> and its per-call tightening is unchanged.
+    ///     </para>
+    /// </summary>
+    public required SandboxNetworkPolicy NetworkFloor { get; init; }
+
+    /// <summary>Whether the workload's writes have to outlive the sandbox.</summary>
+    public required SandboxPersistence Persistence { get; init; }
+
+    /// <summary>
+    ///     Optional ceiling, in bytes, on what this workload's sandbox may leave on disk. Recorded on the declaration
+    ///     because ADR 0007 names it as one of the five axes, and <see langword="null" /> everywhere today.
+    ///     <para>
+    ///         It constrains no candidate, and cannot: per <see cref="SandboxCreateRequest.MaxJailDiskBytes" /> the
+    ///         ceiling may only TIGHTEN what the operator already allows, so a backend that ignores it is no worse off
+    ///         than one that honours it and every backend satisfies it vacuously. It is stated here so the axis is
+    ///         expressible — the effective per-call number stays on the create request, where it is read from
+    ///         configuration and therefore could not live on an engine-owned constant.
+    ///     </para>
+    /// </summary>
+    public long? MaxDiskBytes { get; init; }
+}
