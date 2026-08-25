@@ -99,6 +99,20 @@ describe("SandboxIsolationPanel", () => {
 				readOnlyMounts: true,
 			},
 			{
+				role: "mcp-stdio",
+				provider: "process",
+				backend: "bwrap",
+				level: "Isolated",
+				filesystemIsolation: true,
+				networkIsolation: true,
+				// The row that separates the two isolated roles: an MCP server gets the SAME boundary run_python gets
+				// and NO ceilings, so a reader cannot take one column as standing for the whole posture.
+				resourceLimits: false,
+				readOnlyMounts: true,
+				resourceLimitsUnavailableReason:
+					"not requested by this role: 'McpStdio (sandboxed)' declares no CPU, memory or process-count ceilings, so a runaway command is bounded only by its timeout and the machine",
+			},
+			{
 				role: "development",
 				provider: "process",
 				backend: "process",
@@ -140,6 +154,12 @@ describe("SandboxIsolationPanel", () => {
 		expect(screen.getByTestId("sandbox-isolation-filesystem-run_python").textContent).toBe("Yes");
 		expect(screen.getByTestId("sandbox-isolation-level-run_python").textContent).toBe("Isolated");
 		expect(screen.getByTestId("sandbox-isolation-backend-run_python").textContent).toBe("bwrap");
+
+		// Two roles on one provider, both isolated, differing on the ceilings axis alone.
+		expect(screen.getByTestId("sandbox-isolation-filesystem-mcp-stdio").textContent).toBe("Yes");
+		expect(screen.getByTestId("sandbox-isolation-level-mcp-stdio").textContent).toBe("Isolated");
+		expect(screen.getByTestId("sandbox-isolation-backend-mcp-stdio").textContent).toBe("bwrap");
+		expect(screen.getByTestId("sandbox-isolation-limits-reason-mcp-stdio").textContent).toContain("not requested by this role");
 
 		expect(screen.getByTestId("sandbox-isolation-level-agent-home").textContent).toBe("Confined");
 		expect(screen.getByTestId("sandbox-isolation-level-work-session").textContent).toBe("None");

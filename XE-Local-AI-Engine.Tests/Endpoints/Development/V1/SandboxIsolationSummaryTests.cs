@@ -85,6 +85,54 @@ public sealed class SandboxIsolationSummaryTests
         AssertEx.Null(summary.ResourceLimitsUnavailableReason);
     }
 
+    [Test]
+    public void ToIsolationSummary_ForMcpStdioOnAFullyContainedHost_ReportsIsolatedButUnbounded()
+    {
+        // A Sandboxed stdio MCP server declares the same filesystem floor run_python does, so its boundary is the same
+        // — but it asks for NO ceilings, and the panel has to say so rather than reading them off a host that could
+        // impose them. Same provider, same host, same call as the run_python case: only the declaration differs.
+        var containment = FullyContainedHost();
+        using var provider = CreateProcessProvider(containment);
+
+        var summary = DevelopmentContractMapper.ToIsolationSummary("mcp-stdio",
+            SandboxWorkloads.McpStdio,
+            provider,
+            containment);
+
+        AssertEx.Equal("mcp-stdio", summary.Role);
+        AssertEx.Equal("bwrap", summary.Backend);
+        AssertEx.True(summary.FilesystemIsolation);
+        AssertEx.True(summary.NetworkIsolation);
+        AssertEx.Null(summary.FilesystemIsolationUnavailableReason);
+
+        AssertEx.False(summary.ResourceLimits, "an MCP server is given no CPU, memory or process-count ceiling.");
+        AssertEx.Contains(summary.ResourceLimitsUnavailableReason, "not requested by this role");
+        AssertEx.Contains(summary.ResourceLimitsUnavailableReason, SandboxWorkloads.McpStdio.Workload);
+    }
+
+    [Test]
+    public void ToIsolationSummary_ForMcpStdioOnAHostWithoutABoundary_ReportsTheMeasuredProbeReason()
+    {
+        // The row an operator reads BEFORE registering a server. On this host every Sandboxed registration will refuse
+        // to connect, and the panel has to say why ahead of the first failed connection rather than only after it.
+        const string Reason = "the host is not Linux (the Windows Job Object path is not implemented)";
+        var containment = SandboxContainment.None with
+        {
+            FilesystemIsolationUnavailableReason = Reason
+        };
+        using var provider = CreateProcessProvider(containment);
+
+        var summary = DevelopmentContractMapper.ToIsolationSummary("mcp-stdio",
+            SandboxWorkloads.McpStdio,
+            provider,
+            containment);
+
+        AssertEx.False(summary.FilesystemIsolation);
+        AssertEx.Contains(summary.FilesystemIsolationUnavailableReason, Reason);
+        AssertEx.False(summary.FilesystemIsolationUnavailableReason?.Contains("not requested by this role", StringComparison.Ordinal) == true,
+            "this role DOES ask, so the honest sentence is the measured host reason, not 'it never asked'.");
+    }
+
     /// <summary>
     ///     THE REGRESSION THIS FILE EXISTS FOR SINCE G6b. Live on a Linux box with a working chain, the panel showed
     ///     role <c>development</c> as filesystem-isolated and <c>Isolated</c> — read straight off the process backend's
