@@ -389,7 +389,9 @@ repomix-output.*
 .cursor/
 .aspire/
 .testagent/
-# Redundant per-tool agent skill mirrors — canonical copy lives under .claude/ only.
+# Per-user AI agent configuration — kept local, not shared through the repository.
+.claude/
+.mcp.json
 **/.agents/**
 **/.junie/**
 # Per-user editor state — share only .vscode/extensions.json.
@@ -419,9 +421,7 @@ cloud-credentials.enc
 *.token
 
 # Local runtime artifacts (machine-specific, not for version control)
-.claude/scheduled_tasks.lock
 .codegraph/daemon.pid
-.claude/settings.local.json
 CLAUDE.local.md
 # Local secrets. Tracked templates (.env.template, .env.tests) stay matched-out.
 .env
