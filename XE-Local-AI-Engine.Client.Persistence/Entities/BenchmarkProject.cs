@@ -37,6 +37,24 @@ internal sealed record class BenchmarkProject
     /// <summary>The judge policy revision this project judges under, or <see langword="null" /> when judging is off.</summary>
     public Guid? CurrentJudgePolicyRevisionId { get; set; }
 
+    /// <summary>Whether freeze enqueues a quant-fidelity (perplexity) measurement beside each measured run.</summary>
+    public bool FidelityEnabled { get; set; }
+
+    /// <summary>
+    ///     Whether the fidelity pass also measures KL-divergence against a base model. Opt-in and separate because the
+    ///     base-logit cache it needs is tens of gigabytes per base model.
+    /// </summary>
+    public bool FidelityKldEnabled { get; set; }
+
+    /// <summary>Chunks to score at the pinned 512-token window, or <see langword="null" /> for the frozen default.</summary>
+    public int? FidelityChunks { get; set; }
+
+    /// <summary>The base model KL-divergence is measured against, and its content fingerprint. Persisted rather than
+    ///     remembered, so "which base was this KLD against" is answerable on read.</summary>
+    public string? FidelityKldBaseModelName { get; set; }
+
+    public string? FidelityKldBaseFingerprint { get; set; }
+
     public long Version { get; set; }
     public long CreatedAtUtc { get; set; }
     public long UpdatedAtUtc { get; set; }

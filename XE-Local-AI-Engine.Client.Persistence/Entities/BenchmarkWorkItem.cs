@@ -12,6 +12,19 @@ internal sealed record class BenchmarkWorkItem
     /// </summary>
     public Guid? JudgeAttemptId { get; set; }
 
+    /// <summary>
+    ///     The comparison this item judges. Set exactly when <see cref="Kind" /> is
+    ///     <see cref="BenchmarkWorkKind.Comparison" />, and the uniqueness key for comparison work.
+    /// </summary>
+    public Guid? ComparisonId { get; set; }
+
+    /// <summary>
+    ///     The fidelity attempt this item measures. Set exactly when <see cref="Kind" /> is
+    ///     <see cref="BenchmarkWorkKind.Fidelity" />, and the uniqueness key for fidelity work — a run has many
+    ///     attempts.
+    /// </summary>
+    public Guid? FidelityAttemptId { get; set; }
+
     public BenchmarkWorkStatus Status { get; set; }
     public int Attempt { get; set; }
     public long Version { get; set; }

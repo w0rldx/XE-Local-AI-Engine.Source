@@ -122,6 +122,12 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<BenchmarkJudgeAttempt> BenchmarkJudgeAttempts => Set<BenchmarkJudgeAttempt>();
 
+    internal DbSet<BenchmarkFidelityAttempt> BenchmarkFidelityAttempts => Set<BenchmarkFidelityAttempt>();
+
+    internal DbSet<BenchmarkJudgeComparison> BenchmarkComparisons => Set<BenchmarkJudgeComparison>();
+
+    internal DbSet<BenchmarkPairwiseFit> BenchmarkPairwiseFits => Set<BenchmarkPairwiseFit>();
+
     internal DbSet<TrainingDatasetDefinition> TrainingDatasetDefinitions => Set<TrainingDatasetDefinition>();
 
     internal DbSet<TrainingDataset> TrainingDatasets => Set<TrainingDataset>();
@@ -407,6 +413,9 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new BenchmarkWorkItemConfiguration());
         modelBuilder.ApplyConfiguration(new BenchmarkJudgePolicyRevisionConfiguration());
         modelBuilder.ApplyConfiguration(new BenchmarkJudgeAttemptConfiguration());
+        modelBuilder.ApplyConfiguration(new BenchmarkFidelityAttemptConfiguration());
+        modelBuilder.ApplyConfiguration(new BenchmarkJudgeComparisonConfiguration());
+        modelBuilder.ApplyConfiguration(new BenchmarkPairwiseFitConfiguration());
         modelBuilder.ApplyConfiguration(new TrainingDatasetDefinitionConfiguration());
         modelBuilder.ApplyConfiguration(new TrainingDatasetConfiguration());
         modelBuilder.ApplyConfiguration(new TrainingDatasetSampleConfiguration());

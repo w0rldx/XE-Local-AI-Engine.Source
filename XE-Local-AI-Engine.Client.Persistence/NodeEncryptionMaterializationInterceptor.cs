@@ -196,6 +196,35 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     judgeAttempt.Id,
                     "benchmark_judge_attempt_environment_facts_json");
                 break;
+            case BenchmarkFidelityAttempt fidelityAttempt:
+                fidelityAttempt.ReceiptJson = DecryptIfPresent(fidelityAttempt.ReceiptJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    fidelityAttempt.Id,
+                    "benchmark_fidelity_receipt_json");
+                break;
+            case BenchmarkJudgeComparison comparison:
+                comparison.JudgeRuntimeJson = DecryptIfPresent(comparison.JudgeRuntimeJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    comparison.Id,
+                    "benchmark_comparison_runtime_json");
+                comparison.ResultJson = DecryptIfPresent(comparison.ResultJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    comparison.Id,
+                    "benchmark_comparison_result_json");
+                comparison.LaunchReceiptJson = DecryptIfPresent(comparison.LaunchReceiptJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    comparison.Id,
+                    "benchmark_comparison_launch_receipt_json");
+                comparison.EnvironmentFactsJson = DecryptIfPresent(comparison.EnvironmentFactsJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    comparison.Id,
+                    "benchmark_comparison_environment_facts_json");
+                break;
             case TrainingDatasetDefinition datasetDefinition:
                 datasetDefinition.DefinitionJson = NodePayloadProtector.Decrypt(datasetDefinition.DefinitionJson,
                     context.NodeEncryptionKey.Span,
