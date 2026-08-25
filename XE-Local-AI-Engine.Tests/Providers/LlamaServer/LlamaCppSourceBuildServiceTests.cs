@@ -432,7 +432,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         // The stub emits all three targets, so the assertion below proves the quantizer travelled through the staged →
         // adopted swap with the server, not merely that cmake was asked for it.
         WriteScript(Path.Combine(stubs, "cmake"),
-            $"#!/bin/sh\necho \"$@\" >> '{cmakeArgs}'\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; for tool in llama-server llama-fit-params llama-quantize; do printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/$tool\"; chmod 755 \"$2/bin/$tool\"; done; exit 0; fi\nexit 0\n");
+            $"#!/bin/sh\necho \"$@\" >> '{cmakeArgs}'\nif [ \"$1\" = \"-B\" ]; then mkdir -p \"$2\"; exit 0; fi\nif [ \"$1\" = \"--build\" ]; then mkdir -p \"$2/bin\"; for tool in llama-server llama-fit-params llama-quantize llama-perplexity; do printf '#!/bin/sh\\nexit 0\\n' > \"$2/bin/$tool\"; chmod 755 \"$2/bin/$tool\"; done; exit 0; fi\nexit 0\n");
         using var path = new PathScope(stubs);
 
         using var store = new InstalledRuntimeStore(temp.Path);
@@ -454,13 +454,14 @@ public sealed class LlamaCppSourceBuildServiceTests
         AssertEx.Equal(LlamaCppSourceBuildPhase.Completed, service.GetStatus().Phase);
 
         var args = await File.ReadAllTextAsync(cmakeArgs);
-        AssertEx.True(args.Contains("--target llama-server llama-fit-params llama-quantize", StringComparison.Ordinal),
-            "The quantizer must be a cmake build target.");
+        AssertEx.True(args.Contains("--target llama-server llama-fit-params llama-quantize llama-perplexity", StringComparison.Ordinal),
+            "The quantizer and the perplexity tool must be cmake build targets.");
 
         var adoptedBin = Path.Combine(temp.Path, "llama.cpp", "source-build", "active", "build", "bin");
         AssertEx.True(File.Exists(Path.Combine(adoptedBin, "llama-quantize")),
             "The built quantizer must be adopted alongside the server.");
         AssertEx.Equal(Path.Combine(adoptedBin, "llama-quantize"), LlamaCppToolBinaries.TryResolveQuantizer(adoptedBin));
+        AssertEx.Equal(Path.Combine(adoptedBin, "llama-perplexity"), LlamaCppToolBinaries.TryResolvePerplexity(adoptedBin));
     }
 
     [Test]
@@ -500,6 +501,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         AssertEx.Equal(LlamaCppSourceBuildPhase.Completed, service.GetStatus().Phase);
         var adoptedBin = Path.Combine(temp.Path, "llama.cpp", "source-build", "active", "build", "bin");
         AssertEx.Null(LlamaCppToolBinaries.TryResolveQuantizer(adoptedBin));
+        AssertEx.Null(LlamaCppToolBinaries.TryResolvePerplexity(adoptedBin));
     }
 
     [Test]
@@ -548,7 +550,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             AssertEx.True(args.Contains("-DGGML_CUDA=OFF", StringComparison.Ordinal));
             AssertEx.True(args.Contains("-DGGML_VULKAN=OFF", StringComparison.Ordinal));
             AssertEx.False(args.Contains("CMAKE_CUDA_ARCHITECTURES", StringComparison.Ordinal));
-            AssertEx.True(args.Contains("--target llama-server llama-fit-params", StringComparison.Ordinal));
+            AssertEx.True(args.Contains("--target llama-server llama-fit-params llama-quantize llama-perplexity", StringComparison.Ordinal));
             AssertEx.True(File.Exists(Path.Combine(temp.Path,
                 "llama.cpp",
                 "source-build",

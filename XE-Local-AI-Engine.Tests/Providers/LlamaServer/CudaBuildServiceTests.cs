@@ -188,8 +188,8 @@ public sealed class CudaBuildServiceTests
         await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(30));
         AssertEx.Equal(CudaBuildPhase.Completed, service.GetStatus().Phase);
         var allCapturedArgs = await File.ReadAllTextAsync(cmakeArgs, CancellationToken.None);
-        AssertEx.True(allCapturedArgs.Contains("--target llama-server llama-fit-params", StringComparison.Ordinal),
-            "The source-CUDA build must compile both the server and machine-readable fit helper.");
+        AssertEx.True(allCapturedArgs.Contains("--target llama-server llama-fit-params llama-perplexity", StringComparison.Ordinal),
+            "The source-CUDA build must compile the server, the machine-readable fit helper and the perplexity tool.");
         AssertEx.True(File.Exists(Path.Combine(dir.Path,
             "llama.cpp",
             "source-cuda",

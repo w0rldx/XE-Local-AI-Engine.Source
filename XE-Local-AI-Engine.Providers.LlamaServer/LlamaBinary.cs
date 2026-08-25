@@ -25,4 +25,13 @@ public sealed record LlamaBinary(
     ///     A null here means "training exports cannot quantize with this runtime", never that the runtime is unusable.
     /// </summary>
     public string? QuantizerExecutablePath => LlamaCppToolBinaries.TryResolveQuantizerBesideServer(ServerExecutablePath);
+
+    /// <summary>
+    ///     The <c>llama-perplexity</c> helper beside this binary, or <see langword="null" /> when this runtime shipped
+    ///     none. Prebuilt archives carry it; a source build only does so from the commit that widened the cmake target
+    ///     lists onward. Evaluated on read rather than stored, exactly like <see cref="QuantizerExecutablePath" />.
+    ///     A null here means "benchmark fidelity cannot be measured with this runtime", never that the runtime is
+    ///     unusable.
+    /// </summary>
+    public string? PerplexityExecutablePath => LlamaCppToolBinaries.TryResolvePerplexityBesideServer(ServerExecutablePath);
 }
