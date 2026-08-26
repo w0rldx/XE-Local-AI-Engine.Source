@@ -692,7 +692,17 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var cells = new List<BenchmarkCellRecord>();
         foreach (var group in rows.GroupBy(static row => row.CellKey, StringComparer.Ordinal))
         {
-            var members = group.OrderBy(static row => row.TaskItemIndex ?? int.MinValue).ThenBy(static row => row.Id).ToArray();
+            // A run inserted between the ranking read and this one is not in either map; it is skipped rather than
+            // throwing, because a freeze landing mid-read is ordinary and the next read will carry it.
+            var members = group.Where(row => ranking.Runs.ContainsKey(row.Id))
+                               .OrderBy(static row => row.TaskItemIndex ?? int.MinValue)
+                               .ThenBy(static row => row.Id)
+                               .ToArray();
+            if (members.Length == 0)
+            {
+                continue;
+            }
+
             var cell = ranking.Cells.TryGetValue(group.Key, out var entry) ? entry : new CellRanking(null, null, Countable: false);
             cells.Add(new BenchmarkCellRecord(group.Key,
                 members[0].PrimaryModelName,
