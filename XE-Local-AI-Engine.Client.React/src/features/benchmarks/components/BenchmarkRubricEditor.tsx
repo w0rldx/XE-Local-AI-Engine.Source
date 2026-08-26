@@ -89,9 +89,15 @@ export function BenchmarkRubricEditor({ rubric, presets, issue, onChange }: Benc
 				// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional until the rubric is saved.
 				<Card key={index} withBorder={true} radius="sm" padding="sm" data-testid={`benchmark-rubric-criterion-${index}`}>
 					<Stack gap="xs">
-						<Group gap="xs" align="flex-start" wrap="nowrap">
+						{/*
+						  * One line on a wide form, three wrapped fields on a phone: the title claims the first line
+						  * once the row can no longer seat all three, and the id shrinks (`miw={0}`, which the weight
+						  * deliberately does not do) rather than pushing the delete button off the card.
+						  */}
+						<Group gap="xs" align="flex-start">
 							<TextInput
-								flex={1}
+								flex="1 1 220px"
+								miw={0}
 								label={t("pages.benchmarks.rubric.criterionTitle", "Title")}
 								maxLength={benchmarkRubricLimits.maxTitleLength}
 								value={criterion.title}
@@ -105,7 +111,8 @@ export function BenchmarkRubricEditor({ rubric, presets, issue, onChange }: Benc
 								}}
 							/>
 							<TextInput
-								w={180}
+								flex="0 1 180px"
+								miw={0}
 								label={t("pages.benchmarks.rubric.criterionId", "Id")}
 								maxLength={benchmarkRubricLimits.maxIdLength}
 								value={criterion.id}
@@ -116,7 +123,7 @@ export function BenchmarkRubricEditor({ rubric, presets, issue, onChange }: Benc
 								}}
 							/>
 							<NumberInput
-								w={110}
+								flex="0 0 110px"
 								label={t("pages.benchmarks.rubric.criterionWeight", "Weight")}
 								min={benchmarkRubricLimits.minWeight}
 								max={benchmarkRubricLimits.maxWeight}

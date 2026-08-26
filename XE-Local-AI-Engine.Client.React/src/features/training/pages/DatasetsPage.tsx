@@ -300,7 +300,9 @@ export function DatasetsPage() {
 				title={t("training.export.title", "Export ({{format}})", { format: exported?.format ?? "" })}
 				size="xl"
 			>
-				<ScrollArea h={400}>
+				{/* A viewport-relative cap rather than a fixed 400px: the dialog is full-screen below 768px, and a
+				    landscape phone is shorter than the preview would otherwise claim. */}
+				<ScrollArea mah="40vh">
 					<Code block={true} data-testid="training-export-content">
 						{exported?.content ?? ""}
 					</Code>

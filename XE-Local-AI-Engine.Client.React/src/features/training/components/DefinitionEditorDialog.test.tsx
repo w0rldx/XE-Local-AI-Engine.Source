@@ -151,3 +151,16 @@ describe("DefinitionEditorDialog", () => {
 		expect(createSpy).not.toHaveBeenCalled();
 	});
 });
+
+// DialogShell goes full-screen below 768px, leaving a sample-kind row under 360px wide — narrower than the kind,
+// count, label and delete controls need side by side. The row must be free to wrap rather than overflow.
+describe("DefinitionEditorDialog narrow layout", () => {
+	it("lets a sample-kind row wrap, with the kind free to shrink", () => {
+		renderDialog(null);
+
+		const row = screen.getAllByTestId("training-definition-kind-row")[0] as HTMLElement;
+		expect(row.style.getPropertyValue("--group-wrap")).toBe("wrap");
+		const kindRoot = screen.getByLabelText("Kind").closest(".mantine-InputWrapper-root") as HTMLElement;
+		expect(kindRoot.style.minWidth).toBe("0rem");
+	});
+});

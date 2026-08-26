@@ -133,3 +133,26 @@ describe("BenchmarkRubricEditor verifiable criteria", () => {
 		});
 	});
 });
+
+// The editor is authored inside a dialog that goes full-screen below 768px, so a criterion row gets under 360px on a
+// phone. It used to be `wrap="nowrap"`, which pushed the delete button past the card edge; the row is now free to
+// wrap, and the id is free to shrink so the wrap lands in two lines rather than a horizontal scrollbar.
+describe("BenchmarkRubricEditor narrow layout", () => {
+	afterEach(cleanup);
+
+	it("lets a criterion row wrap instead of forcing every field onto one line", () => {
+		renderEditor({ rubric: rubric(1) });
+
+		const row = screen.getByTestId("benchmark-rubric-criterion-0").querySelector(".mantine-Group-root") as HTMLElement;
+		expect(row.style.getPropertyValue("--group-wrap")).toBe("wrap");
+	});
+
+	it("lets the id shrink while the weight keeps its width", () => {
+		renderEditor({ rubric: rubric(1) });
+
+		const rootOf = (label: string): HTMLElement => screen.getByLabelText(label).closest(".mantine-InputWrapper-root") as HTMLElement;
+		expect(rootOf("Id").style.minWidth).toBe("0rem");
+		expect(rootOf("Title").style.minWidth).toBe("0rem");
+		expect(rootOf("Weight").style.flex).toBe("0 0 110px");
+	});
+});
