@@ -268,9 +268,9 @@ public interface IBenchmarkStore
     }
 
     /// <summary>
-    ///     Removes a terminal run and everything that pointed at it: work items, judge attempts, and every pairwise
-    ///     comparison it took part in on EITHER side. Refused while any of those is Queued or Running — including a
-    ///     comparison whose canonical first run is the other one, which no work item names.
+    ///     Removes a terminal run and everything that pointed at it: work items, judge attempts, fidelity attempts,
+    ///     and every pairwise comparison it took part in on EITHER side. Refused while any of those is Queued or
+    ///     Running — including a comparison whose canonical first run is the other one, which no work item names.
     ///     <para>
     ///         Deleting comparisons bumps the affected revisions' <c>ComparisonSetVersion</c> and deactivates the
     ///         project's active pairwise fits, because a fit whose fitted set names a deleted run ranks something that

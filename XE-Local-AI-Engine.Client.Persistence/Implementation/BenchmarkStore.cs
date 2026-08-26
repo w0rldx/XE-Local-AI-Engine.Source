@@ -1839,13 +1839,15 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         }
 
         // Foreign keys are not enforced on this database, so the order below IS the referential integrity: the run
-        // stops pointing at its attempt, then work items, then attempts, then the run itself.
+        // stops pointing at its attempt, then comparisons, work items, judge and fidelity attempts, then the run
+        // itself. Anything left out of that list does not error — it simply outlives its run for good.
         var projectId = run.ProjectId;
         run.CurrentJudgeAttemptId = null;
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await DeleteComparisonsOfAsync(runId, projectId, cancellationToken).ConfigureAwait(false);
         await _dbContext.BenchmarkWorkItems.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await _dbContext.BenchmarkJudgeAttempts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await _dbContext.BenchmarkFidelityAttempts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         // The deletes intentionally bypass the tracker: this scope may have materialized the required work/run
         // relationship earlier, and mixing ExecuteDelete for the child with tracked Remove for the parent makes EF
         // interpret the already-deleted child as a severed required association.

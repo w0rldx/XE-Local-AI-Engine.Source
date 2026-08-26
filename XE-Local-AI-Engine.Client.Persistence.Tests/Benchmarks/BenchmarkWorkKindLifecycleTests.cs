@@ -150,6 +150,30 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     }
 
     [Test]
+    public async Task DeleteRunAsync_RemovesTheRunsFidelityAttempts()
+    {
+        await using var context = await CreateSchemaAsync("delete-fidelity-attempts.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
+        var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, primary.Run.Version,
+                Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 1, 4096, 100, 12, 120))
+            .ConfigureAwait(false);
+        var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, claimed.Version, attemptId, PerplexityMean: 6.7983))
+                       .ConfigureAwait(false);
+
+        await store.DeleteRunAsync(run.Id, AssertEx.NotNull(await store.GetRunAsync(run.Id).ConfigureAwait(false)).Version).ConfigureAwait(false);
+
+        // Foreign keys are off, so an attempt row nothing deletes simply survives its run forever — and it carries an
+        // encrypted receipt, which makes it a leak rather than a tidiness problem.
+        context.ChangeTracker.Clear();
+        AssertEx.Empty(await context.BenchmarkFidelityAttempts.AsNoTracking().Where(entity => entity.RunId == run.Id).ToListAsync().ConfigureAwait(false));
+    }
+
+    [Test]
     public async Task RequeueFidelityAsync_PutsTheClaimedItemBackInTheQueueRatherThanFailingIt()
     {
         await using var context = await CreateSchemaAsync("requeue-fidelity.sqlite").ConfigureAwait(false);
