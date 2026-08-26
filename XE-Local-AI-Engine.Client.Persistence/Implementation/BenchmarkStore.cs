@@ -1755,8 +1755,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
         // Two sibling sweeps, for the same reason: a fidelity attempt or a comparison left Running by a killed
         // process whose work item a previous partial recovery already terminalized would otherwise stay Running
-        // forever, with nothing left to reach it. The run's fidelity PROJECTION is deliberately untouched — the
-        // numbers from the last attempt that actually succeeded still stand.
+        // forever, with nothing left to reach it.
         var interruptedFidelity = await _dbContext.BenchmarkFidelityAttempts
                                                   .Where(entity => entity.Status == BenchmarkJudgeAttemptStatus.Running)
                                                   .ToListAsync(cancellationToken)
@@ -1767,6 +1766,18 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             attempt.ErrorMessage = InterruptedMessage;
             attempt.CompletedAtUtc = now;
             attempt.Version++;
+
+            // The run's fidelity NUMBERS are deliberately untouched — the last attempt that actually succeeded still
+            // stands. Its STATUS is not: left reading 'queued'/'running' with no attempt and no work item behind it,
+            // every API reports an active measurement forever, the poller never stops and the UI keeps re-measure
+            // disabled on a run nothing is measuring.
+            var owner = await _dbContext.BenchmarkRuns.SingleAsync(entity => entity.Id == attempt.RunId, cancellationToken).ConfigureAwait(false);
+            owner.FidelityStatus = ToFidelityStatus(BenchmarkJudgeAttemptStatus.Failed);
+            owner.FidelityErrorMessage = InterruptedMessage;
+            owner.Version++;
+            owner.LastStreamSequence = checked(owner.LastStreamSequence + 1);
+            owner.UpdatedAtUtc = now;
+            _ = recoveredRunIds.Add(owner.Id);
         }
 
         var interruptedComparisons = await _dbContext.BenchmarkComparisons

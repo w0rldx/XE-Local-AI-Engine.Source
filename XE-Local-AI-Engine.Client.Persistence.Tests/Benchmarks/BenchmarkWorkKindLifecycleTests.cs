@@ -121,7 +121,7 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     }
 
     [Test]
-    public async Task Recovery_RunningFidelityAttempt_TerminalizesFailedAndLeavesTheProjectionAlone()
+    public async Task Recovery_RunningFidelityAttempt_FailsTheRunsFidelityStatusAndKeepsTheNumbers()
     {
         await using var context = await CreateSchemaAsync("recover-fidelity.sqlite").ConfigureAwait(false);
         var store = new BenchmarkStore(context, TimeProvider.System);
@@ -147,6 +147,16 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         var recovered = await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id).ConfigureAwait(false);
         AssertEx.Equal<Guid?>(first, recovered.FidelityAttemptId, "The projection keeps pointing at the attempt that actually succeeded.");
         AssertEx.Equal<double?>(6.7983, recovered.PerplexityMean, "An interrupted re-measurement must not erase the previous number.");
+
+        // The status is the half that MUST move. Left reading 'queued' with no attempt and no work item behind it,
+        // every API reports an active measurement forever and the UI keeps re-measure disabled.
+        AssertEx.Equal("failed", recovered.FidelityStatus, "A measurement whose process died is not still queued.");
+        AssertEx.True(recovered.FidelityErrorMessage is { Length: > 0 }, "The run carries the reason its measurement stopped.");
+        AssertEx.Empty(await context.BenchmarkWorkItems.AsNoTracking()
+                                    .Where(item => item.Kind == BenchmarkWorkKind.Fidelity
+                                                   && (item.Status == BenchmarkWorkStatus.Queued || item.Status == BenchmarkWorkStatus.Running))
+                                    .ToListAsync()
+                                    .ConfigureAwait(false));
     }
 
     [Test]
