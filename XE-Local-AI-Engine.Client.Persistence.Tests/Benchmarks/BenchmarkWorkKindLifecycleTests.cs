@@ -120,6 +120,38 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
             (await context.BenchmarkComparisons.AsNoTracking().SingleAsync(entity => entity.Id == comparisonId).ConfigureAwait(false)).Status);
     }
 
+    /// <summary>
+    ///     A comparison is not an event in either run's life. Claiming one used to fall through to the common run
+    ///     version bump on the canonical first run, which invalidated that run's CAS token on every pairwise claim:
+    ///     scoring, deleting or re-measuring it returned VersionConflict throughout a tournament.
+    /// </summary>
+    [Test]
+    public async Task ClaimNextAsync_Comparison_LeavesBothRunsVersionsAlone()
+    {
+        await using var context = await CreateSchemaAsync("claim-comparison-versions.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var first = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
+        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        var second = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
+        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+
+        var before = await context.BenchmarkRuns.AsNoTracking().OrderBy(entity => entity.CreatedAtUtc).ToListAsync().ConfigureAwait(false);
+        var canonical = string.CompareOrdinal(first.Id.ToString(), second.Id.ToString()) < 0
+            ? (Left: first.Id, Right: second.Id)
+            : (Left: second.Id, Right: first.Id);
+        _ = await InsertComparisonWorkAsync(context, project.Id, revision.Id, canonical.Left, pair: canonical).ConfigureAwait(false);
+
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        AssertEx.Equal(BenchmarkWorkKind.Comparison, claimed.Kind);
+
+        context.ChangeTracker.Clear();
+        var after = await context.BenchmarkRuns.AsNoTracking().OrderBy(entity => entity.CreatedAtUtc).ToListAsync().ConfigureAwait(false);
+        AssertEx.Equal(before[0].Version, after[0].Version, "The canonical run of the pair keeps the CAS token its caller is holding.");
+        AssertEx.Equal(before[1].Version, after[1].Version, "The other run of the pair is not touched either.");
+    }
+
     [Test]
     public async Task Recovery_RunningFidelityAttempt_FailsTheRunsFidelityStatusAndKeepsTheNumbers()
     {
@@ -483,10 +515,10 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         Guid projectId,
         Guid revisionId,
         Guid runId,
-        BenchmarkJudgeAttemptStatus status = BenchmarkJudgeAttemptStatus.Queued)
+        BenchmarkJudgeAttemptStatus status = BenchmarkJudgeAttemptStatus.Queued,
+        (Guid Left, Guid Right)? pair = null)
     {
-        var left = new Guid("11111111-0000-0000-0000-000000000000");
-        var right = new Guid("22222222-0000-0000-0000-000000000000");
+        var (left, right) = pair ?? (new Guid("11111111-0000-0000-0000-000000000000"), new Guid("22222222-0000-0000-0000-000000000000"));
         var comparison = new BenchmarkJudgeComparison
         {
             Id = Guid.NewGuid(),

@@ -556,8 +556,17 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                     throw new BenchmarkConflictException("UnknownWorkKind");
             }
 
-            run.Version++;
-            run.UpdatedAtUtc = now;
+            // Every per-run kind bumps the run's version, so a reader polling the run sees that something about it
+            // changed. A comparison is NOT an event in a run's life: it names two runs and its work item names only
+            // the canonical first, so bumping that one invalidated its CAS token on every pairwise claim — scoring,
+            // deleting or re-measuring it returned VersionConflict throughout a tournament, and the other run of the
+            // pair never heard about it anyway. The fit's own publication is what refreshes a pairwise reader.
+            if (work.Kind != BenchmarkWorkKind.Comparison)
+            {
+                run.Version++;
+                run.UpdatedAtUtc = now;
+            }
+
             await SaveAsync(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return new BenchmarkClaimedWork(work.QueueSequence,
