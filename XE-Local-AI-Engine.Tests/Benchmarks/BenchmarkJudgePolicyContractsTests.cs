@@ -387,7 +387,7 @@ public sealed class BenchmarkJudgePolicyContractsTests
     }
 
     [Test]
-    public void Mode_DefaultsToPointwiseAndPairwiseIsRefusedUntilS3()
+    public void Mode_DefaultsToPointwiseAndOnlyAnUnknownModeIsRefused()
     {
         var baseline = Policy(BenchmarkJudgeRubricDefaults.Default());
 
