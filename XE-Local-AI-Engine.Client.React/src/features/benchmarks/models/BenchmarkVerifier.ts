@@ -7,7 +7,7 @@
  * `llm` is what every criterion written before P2 carries and the only kind that costs a model turn; every other kind
  * is checked server-side against the graded answer with no inference at all.
  */
-export const benchmarkCriterionKinds = ["llm", "exact", "regex", "jsonSchema", "mathAnswer", "constraint"] as const;
+export const benchmarkCriterionKinds = ["llm", "exact", "regex", "jsonSchema", "mathAnswer", "constraint", "pythonTests"] as const;
 export type BenchmarkCriterionKind = (typeof benchmarkCriterionKinds)[number];
 
 /** An absent or unrecognized kind reads as `llm` — the node's own default for a criterion written before P2. */
@@ -19,6 +19,18 @@ export const isVerifiableCriterionKind = (kind: BenchmarkCriterionKind): boolean
 
 /** The node's cap. A pattern above it is refused at activation. */
 export const maxVerifierPatternLength = 512;
+
+/**
+ * `pythonTests` bounds, mirroring `BenchmarkJudgeVerifierConfig` and `BenchmarkPythonTestsHarness`. The test-code cap
+ * is checked at ACTIVATION rather than at judging, because the composed harness has to fit inside the sandbox's
+ * script ceiling alongside the model's own answer — and an operator learning that an hour into a batch learns it from
+ * a failed run instead of from the form they were filling in.
+ */
+export const benchmarkPythonTestsLimits = { maxTestCodeLength: 4000, maxExports: 16, maxTimeoutSeconds: 600 } as const;
+
+/** How the candidate's code is taken out of the answer before it is run. */
+export const benchmarkPythonExtractModes = ["firstPythonFence", "wholeText"] as const;
+export type BenchmarkPythonExtractMode = (typeof benchmarkPythonExtractModes)[number];
 
 /** The structural JSON-Schema subset the node enforces. A schema naming anything else is refused rather than under-checked. */
 export const supportedSchemaKeywords = ["type", "properties", "required", "items", "enum", "const", "additionalProperties"];
@@ -63,6 +75,8 @@ export function defaultVerifierConfig(kind: BenchmarkCriterionKind): string | nu
 			return JSON.stringify({ expected: "" });
 		case "constraint":
 			return JSON.stringify({});
+		case "pythonTests":
+			return JSON.stringify({ testCode: "" });
 		default:
 			return JSON.stringify({ expected: "" });
 	}
@@ -86,7 +100,13 @@ export type BenchmarkVerifierIssue =
 	| "constraintEmpty"
 	| "constraintWords"
 	| "constraintContains"
-	| "constraintFormat";
+	| "constraintFormat"
+	| "testCodeRequired"
+	| "testCodeTooLong"
+	| "exportsInvalid"
+	| "exportsCap"
+	| "timeoutRange"
+	| "extractInvalid";
 
 const isObject = (value: unknown): value is BenchmarkVerifierConfig =>
 	typeof value === "object" && value !== null && !Array.isArray(value);
@@ -145,6 +165,47 @@ const toleranceIssue = (config: BenchmarkVerifierConfig, key: string): boolean =
 	const value = config[key];
 	return value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value < 0);
 };
+
+const pythonIdentifier = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * The node's `ParsePythonTests`, re-checked. `exports` are seeded into the test namespace as `solve(10)` shorthands
+ * for `candidate.solve(10)`, so each one has to be a name Python can bind.
+ */
+function pythonTestsIssue(config: BenchmarkVerifierConfig): BenchmarkVerifierIssue | null {
+	const { testCode, exports, timeoutSeconds, extract } = config as {
+		testCode?: unknown;
+		exports?: unknown;
+		timeoutSeconds?: unknown;
+		extract?: unknown;
+	};
+	if (!nonEmptyString(testCode)) {
+		return "testCodeRequired";
+	}
+	if ((testCode as string).length > benchmarkPythonTestsLimits.maxTestCodeLength) {
+		return "testCodeTooLong";
+	}
+	if (exports !== undefined) {
+		if (!Array.isArray(exports) || exports.some((name) => typeof name !== "string" || !pythonIdentifier.test(name))) {
+			return "exportsInvalid";
+		}
+		if (exports.length > benchmarkPythonTestsLimits.maxExports) {
+			return "exportsCap";
+		}
+	}
+	if (
+		timeoutSeconds !== undefined &&
+		(typeof timeoutSeconds !== "number" ||
+			!Number.isInteger(timeoutSeconds) ||
+			timeoutSeconds < 1 ||
+			timeoutSeconds > benchmarkPythonTestsLimits.maxTimeoutSeconds)
+	) {
+		return "timeoutRange";
+	}
+	return extract !== undefined && !benchmarkPythonExtractModes.includes(extract as BenchmarkPythonExtractMode)
+		? "extractInvalid"
+		: null;
+}
 
 function constraintIssue(config: BenchmarkVerifierConfig): BenchmarkVerifierIssue | null {
 	const { minWords, maxWords, mustContain, mustNotContain, format } = config as {
@@ -210,6 +271,8 @@ export function verifierConfigIssue(kind: BenchmarkCriterionKind, config: string
 			return config !== null && config !== undefined && Object.keys(parsed).length === 0
 				? "schemaInvalidJson"
 				: schemaIssue(parsed["schema"]);
+		case "pythonTests":
+			return pythonTestsIssue(parsed);
 		case "mathAnswer": {
 			if (parseMathAnswerNumber(parsed["expected"]) === null) {
 				return "mathExpected";

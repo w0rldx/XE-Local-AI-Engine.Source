@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<BenchmarkRun>
@@ -56,6 +57,24 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
                .HasDefaultValue(BenchmarkRepeatMode.Throughput);
         builder.Property(entity => entity.SamplingSeed).HasColumnName("sampling_seed").HasMaxLength(32);
         builder.Property(entity => entity.SamplingTemperature).HasColumnName("sampling_temperature");
+        // The four immutable identity stamps. Plaintext, like every other column the ranking read scans; cell_key and
+        // both hashes are NOT NULL so a missing stamp can never be read as "belongs with everything else".
+        builder.Property(entity => entity.TaskItemId).HasColumnName("task_item_id");
+        builder.Property(entity => entity.TaskItemIndex).HasColumnName("task_item_index");
+        builder.Property(entity => entity.CellKey).HasColumnName("cell_key").HasMaxLength(64).IsRequired();
+        // The two hash stamps default to the legacy constant so the migration can make them NOT NULL over existing
+        // rows: a run frozen before task items existed is compared against the same constant on both axes and is
+        // therefore never read as stale. Every insert writes its own value, so the default only ever describes history.
+        builder.Property(entity => entity.TaskInputHash)
+               .HasColumnName("task_input_hash")
+               .HasMaxLength(67)
+               .HasDefaultValue(BenchmarkStore.LegacyTaskHash)
+               .IsRequired();
+        builder.Property(entity => entity.TaskItemSetHash)
+               .HasColumnName("task_item_set_hash")
+               .HasMaxLength(67)
+               .HasDefaultValue(BenchmarkStore.LegacyTaskHash)
+               .IsRequired();
         builder.Property(entity => entity.CurrentJudgeAttemptId).HasColumnName("current_judge_attempt_id");
 
         // The fidelity projection: plaintext numerics, same posture as tokens_per_second above. Display only —
@@ -110,6 +129,16 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
             entity.PrimaryKvCacheType
         }).HasDatabaseName("ix_benchmark_runs_project_primary_kv_cache_type");
         builder.HasIndex(entity => entity.RepeatGroupId).HasDatabaseName("ix_benchmark_runs_repeat_group_id");
+        builder.HasIndex(entity => new
+        {
+            entity.ProjectId,
+            entity.TaskItemId
+        }).HasDatabaseName("ix_benchmark_runs_project_task_item_id");
+        builder.HasIndex(entity => new
+        {
+            entity.ProjectId,
+            entity.CellKey
+        }).HasDatabaseName("ix_benchmark_runs_project_cell_key");
     }
 
     private static string? ConvertOriginToStore(LocalModelOrigin? value) =>

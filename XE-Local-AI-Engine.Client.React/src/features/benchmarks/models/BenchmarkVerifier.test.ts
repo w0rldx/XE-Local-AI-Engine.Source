@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	benchmarkPythonTestsLimits,
 	defaultVerifierConfig,
 	firstVerifierIssue,
 	parseMathAnswerNumber,
@@ -18,7 +19,7 @@ describe("toBenchmarkCriterionKind", () => {
 	it("reads an absent or unknown kind as llm, the pre-P2 default", () => {
 		expect(toBenchmarkCriterionKind(undefined)).toBe("llm");
 		expect(toBenchmarkCriterionKind(null)).toBe("llm");
-		expect(toBenchmarkCriterionKind("pythonTests")).toBe("llm");
+		expect(toBenchmarkCriterionKind("somethingANewerNodeInvented")).toBe("llm");
 	});
 
 	it("passes a known kind through", () => {
@@ -150,5 +151,52 @@ describe("firstVerifierIssue", () => {
 
 	it("is null when every criterion passes the pre-check", () => {
 		expect(firstVerifierIssue([{ kind: "llm", config: null }, { kind: "exact", config: '{"expected":"42"}' }])).toBeNull();
+	});
+});
+
+// pythonTests is decided by RUNNING the answer's code against the operator's tests, so its configuration carries a
+// program. The node bounds it at activation because the composed harness has to fit inside the sandbox script
+// alongside the candidate's own code — a limit an operator must meet in the form, not an hour into a batch.
+describe("pythonTests configuration", () => {
+	const config = (overrides: Record<string, unknown> = {}) => JSON.stringify({ testCode: "assert candidate.solve(2) == 4", ...overrides });
+
+	it("accepts the smallest valid configuration", () => {
+		expect(verifierConfigIssue("pythonTests", config())).toBeNull();
+	});
+
+	it("requires test code, because there is nothing else to decide the criterion by", () => {
+		expect(verifierConfigIssue("pythonTests", JSON.stringify({ testCode: "  " }))).toBe("testCodeRequired");
+		expect(verifierConfigIssue("pythonTests", null)).toBe("testCodeRequired");
+	});
+
+	it("refuses test code past the node's activation cap", () => {
+		expect(verifierConfigIssue("pythonTests", config({ testCode: "x".repeat(benchmarkPythonTestsLimits.maxTestCodeLength + 1) }))).toBe(
+			"testCodeTooLong",
+		);
+	});
+
+	// Exports are seeded into the test namespace as bare names, so each has to be something Python can bind.
+	it("requires every export to be a plain Python identifier", () => {
+		expect(verifierConfigIssue("pythonTests", config({ exports: ["solve", "_helper2"] }))).toBeNull();
+		expect(verifierConfigIssue("pythonTests", config({ exports: ["solve()"] }))).toBe("exportsInvalid");
+		expect(verifierConfigIssue("pythonTests", config({ exports: ["2fast"] }))).toBe("exportsInvalid");
+		expect(
+			verifierConfigIssue("pythonTests", config({ exports: Array.from({ length: 17 }, (_, index) => `name${index}`) })),
+		).toBe("exportsCap");
+	});
+
+	it("bounds the timeout and the extraction mode the same way the node does", () => {
+		expect(verifierConfigIssue("pythonTests", config({ timeoutSeconds: 30 }))).toBeNull();
+		expect(verifierConfigIssue("pythonTests", config({ timeoutSeconds: 0 }))).toBe("timeoutRange");
+		expect(verifierConfigIssue("pythonTests", config({ timeoutSeconds: 601 }))).toBe("timeoutRange");
+		expect(verifierConfigIssue("pythonTests", config({ extract: "wholeText" }))).toBeNull();
+		expect(verifierConfigIssue("pythonTests", config({ extract: "everything" }))).toBe("extractInvalid");
+	});
+
+	// A criterion that starts valid is one the operator never read; the empty test code is deliberate.
+	it("starts from an empty program the editor immediately reports as incomplete", () => {
+		const started = defaultVerifierConfig("pythonTests");
+
+		expect(verifierConfigIssue("pythonTests", started)).toBe("testCodeRequired");
 	});
 });

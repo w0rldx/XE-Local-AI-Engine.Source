@@ -6,6 +6,7 @@ import {
 	Grid,
 	Group,
 	Loader,
+	SegmentedControl,
 	Select,
 	SimpleGrid,
 	Stack,
@@ -40,14 +41,19 @@ import { BenchmarkBatchProgressAlert } from "@/features/benchmarks/components/Be
 import { BenchmarkExportButtons } from "@/features/benchmarks/components/BenchmarkExportButtons";
 import { BenchmarkFidelityPanel } from "@/features/benchmarks/components/BenchmarkFidelityPanel";
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
+import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
+import { canComparePairedDeltas } from "@/features/benchmarks/models/BenchmarkCells";
 import type { BenchmarkMatrixSelection } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkLaunchMatrix } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
+import { BenchmarkPairedDelta } from "@/features/benchmarks/components/BenchmarkPairedDelta";
 import { BenchmarkPairwiseEstimateNote } from "@/features/benchmarks/components/BenchmarkPairwiseEstimateNote";
 import { BenchmarkPairwiseMatrix } from "@/features/benchmarks/components/BenchmarkPairwiseMatrix";
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
 import { BenchmarkRepeatModePicker } from "@/features/benchmarks/components/BenchmarkRepeatModePicker";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
+import { BenchmarkCellsTable } from "@/features/benchmarks/components/BenchmarkCellsTable";
 import { BenchmarkRunsTable } from "@/features/benchmarks/components/BenchmarkRunsTable";
+import { BenchmarkTaskItemEditor } from "@/features/benchmarks/components/BenchmarkTaskItemEditor";
 import { benchmarkJudgeFamilyOverlap } from "@/features/benchmarks/models/BenchmarkJudgeFamily";
 import type {
 	BenchmarkKvCacheType,
@@ -64,14 +70,23 @@ import {
 	toggleBenchmarkRunSelection,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { hasActiveJudgeAttempt, succeededRunCount } from "@/features/benchmarks/models/BenchmarkRanking";
+import {
+	benchmarkRunEstimate,
+	formatBenchmarkDuration,
+	medianBenchmarkRunDurationMs,
+} from "@/features/benchmarks/models/BenchmarkRunEstimate";
+import { leafBenchmarkTaskItems } from "@/features/benchmarks/models/BenchmarkTaskItems";
+import { isVerifiableCriterionKind, toBenchmarkCriterionKind } from "@/features/benchmarks/models/BenchmarkVerifier";
 import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarks";
 import {
+	useBenchmarkCells,
 	useBenchmarkComparisons,
 	useBenchmarkProject,
 	useBenchmarkProjects,
 	useBenchmarkRunDetails,
 	useBenchmarkRubricPresets,
 	useBenchmarkRuns,
+	useBenchmarkTaskItems,
 	useCreateBenchmarkProject,
 	useDeleteBenchmarkRun,
 	useEligibleBenchmarkModels,
@@ -160,6 +175,20 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	// list projection does not carry.
 	const selectedRunDetails = useBenchmarkRunDetails(selectedRunIds);
 	const runs = useMemo(() => runsQuery.data?.items ?? [], [runsQuery.data]);
+	// The suite multiplies every launch: one "start run" click is one run per task item, and the matrix is that again
+	// per combination. Both entry points state the arithmetic before the operator commits GPU-hours to it.
+	const taskItemsQuery = useBenchmarkTaskItems(selectedProjectId);
+	// A project always holds at least one item, so an unloaded list reads as the single-item case rather than as zero
+	// runs — which would print "0 runs" on a button that is about to start one.
+	const leafItemCount = Math.max(leafBenchmarkTaskItems(taskItemsQuery.data?.items ?? []).length, 1);
+	const medianRunMs = useMemo(() => medianBenchmarkRunDurationMs(runs), [runs]);
+	const singleRunEstimate = benchmarkRunEstimate({ cellCount: 1, leafItemCount, repeatCount: 1, warmup: false }, medianRunMs);
+	// A suite is what makes the CELL the ranked unit. A single-item project has one run per cell, so its cell table
+	// would be its runs table with a layer of indirection — it keeps the runs table it has always had.
+	const isSuite = leafItemCount > 1;
+	const cellsQuery = useBenchmarkCells(selectedProjectId, isSuite);
+	const [ranking, setRanking] = useState<"cells" | "runs">("cells");
+	const showCells = isSuite && ranking === "cells";
 	const [chartsOpen, setChartsOpen] = useState(false);
 	const batchProgress = useMemo(
 		() => (batchLaunch && batchLaunch.projectId === selectedProjectId ? benchmarkBatchProgress(runs, batchLaunch.runIds) : null),
@@ -299,7 +328,13 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 		setSaveError(null);
 		// Switching a project INTO pairwise commits its queue to a quadratic number of judge calls, so it is confirmed
 		// against the node's own estimate rather than saved on the click that selected the mode.
-		if (editorMode === "edit" && detail && draft.judgeEnabled && draft.judgeMode === "pairwise" && detail.judge.mode !== "pairwise") {
+		if (
+			editorMode === "edit" &&
+			detail &&
+			draft.judgeEnabled &&
+			draft.judgeMode === "pairwise" &&
+			detail.judge.mode !== "pairwise"
+		) {
 			setPendingProjectDraft(draft);
 			setConfirmMode("pairwise");
 			return;
@@ -426,6 +461,30 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 			},
 		);
 	};
+	// Re-measure one combination. The node has no per-item start — a freeze always fans out over every leaf item — so
+	// the smallest thing that can answer a missing or a revised item is the whole cell, and the button says "re-run"
+	// rather than promising a single-item run it cannot make.
+	const rerunCell = (cell: BenchmarkCell): void => {
+		if (!detail) {
+			return;
+		}
+		startRun.mutate(
+			{
+				projectId: detail.id,
+				modelName: cell.primaryModelName,
+				expectedProjectVersion: detail.version,
+				// The cell reports the type the node resolved, which is a plain string; anything the picker does not
+				// know is sent as Auto rather than as a value the start endpoint would refuse.
+				kvCacheType: benchmarkKvCacheTypes.find((type) => type === cell.kvCacheType) ?? null,
+				repeatMode,
+				answerVarianceTemperature: repeatMode === "AnswerVariance" ? answerVarianceTemperature : null,
+			},
+			{
+				onSuccess: (run) => selectRun(run.id),
+				onError: (error) => toast.error(startRunErrorMessage(error)),
+			},
+		);
+	};
 	const removeRun = (run: BenchmarkRunSummary): void => {
 		deleteRun.mutate(run, {
 			onError: (error) =>
@@ -548,11 +607,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 									</Alert>
 								) : null}
 								{detail.judge.enabled && detail.judge.promptVersionOutdated ? (
-									<Alert
-										color="yellow"
-										icon={<IconAlertTriangle size={16} />}
-										data-testid="benchmark-judge-prompt-outdated"
-									>
+									<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-judge-prompt-outdated">
 										<Group justify="space-between" align="center" wrap="nowrap">
 											<Text size="sm">
 												{t(
@@ -588,6 +643,16 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										)}
 									</Alert>
 								) : null}
+								<BenchmarkTaskItemEditor
+									projectId={detail.id}
+									projectContextTokens={detail.contextTokens}
+									hasRuns={runs.length > 0}
+									// Only a verifiable criterion has configuration to override; an `llm` one is decided by reading the
+									// rubric, and an item cannot hand the judge a different opinion of it.
+									criteria={(detail.judge.rubric?.criteria ?? []).filter((criterion) =>
+										isVerifiableCriterionKind(toBenchmarkCriterionKind(criterion.kind)),
+									)}
+								/>
 								<Group grow={true} align="flex-end">
 									<Select
 										label={t("pages.benchmarks.run.model", "Primary model")}
@@ -652,6 +717,16 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										{t("pages.benchmarks.matrix.open", "Batch runs…")}
 									</Button>
 								</Group>
+								<Text size="xs" c="dimmed" data-testid="benchmark-single-run-estimate">
+									{t("pages.benchmarks.run.estimate", "One start = {{count}} runs, one per task item", {
+										count: singleRunEstimate.totalRuns,
+									})}
+									{singleRunEstimate.estimatedMs === null
+										? ""
+										: ` · ${t("pages.benchmarks.matrix.estimate", "about {{duration}}", {
+												duration: formatBenchmarkDuration(singleRunEstimate.estimatedMs),
+											})}`}
+								</Text>
 								<BenchmarkFidelityPanel
 									projectId={detail.id}
 									fidelity={detail.fidelity}
@@ -681,20 +756,56 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 
 			{runsQuery.data && runs.length > 0 ? (
 				<SectionCard title={t("pages.benchmarks.runs", "Runs")}>
-					<BenchmarkRunsTable
-						runs={runs}
-						pairwiseScores={pairwiseScores}
-						cohort={runsQuery.data.cohort}
-						selectedRunIds={selectedRunIds}
-						totalCount={runsQuery.data.totalCount}
-						isLoadingMore={runsQuery.isFetchingNextPage}
-						onLoadMore={runsQuery.loadMore}
-						isActionPending={rejudgeRun.isPending || deleteRun.isPending || measureFidelity.isPending}
-						onToggleRun={toggleRun}
-						onRejudgeRun={rejudgeOne}
-						onMeasureFidelity={measureRunFidelity}
-						onDeleteRun={removeRun}
-					/>
+					{/* A suite ranks COMBINATIONS, not runs — but the per-run actions (re-judge, measure, delete) live on
+					    the runs table, and an operator working a suite still needs them. So the ranked view switches and
+					    the run list stays one click away, rather than being replaced. */}
+					{isSuite ? (
+						<SegmentedControl
+							size="xs"
+							value={ranking}
+							onChange={(value) => setRanking(value === "runs" ? "runs" : "cells")}
+							data={[
+								{ value: "cells", label: t("pages.benchmarks.cells.view", "Combinations") },
+								{ value: "runs", label: t("pages.benchmarks.cells.runsView", "Every run") },
+							]}
+							data-testid="benchmark-ranking-view"
+						/>
+					) : null}
+					{showCells ? (
+						<BenchmarkCellsTable
+							cells={cellsQuery.data?.cells ?? []}
+							cohort={cellsQuery.data?.cohort ?? runsQuery.data.cohort}
+							scorableItemCount={cellsQuery.data?.scorableItemCount ?? leafItemCount}
+							items={taskItemsQuery.data?.items ?? []}
+							selectedRunIds={selectedRunIds}
+							isActionPending={startRun.isPending}
+							onToggleRun={toggleRun}
+							onRerunCell={rerunCell}
+						/>
+					) : (
+						<BenchmarkRunsTable
+							runs={runs}
+							pairwiseScores={pairwiseScores}
+							cohort={runsQuery.data.cohort}
+							selectedRunIds={selectedRunIds}
+							totalCount={runsQuery.data.totalCount}
+							isLoadingMore={runsQuery.isFetchingNextPage}
+							onLoadMore={runsQuery.loadMore}
+							isActionPending={rejudgeRun.isPending || deleteRun.isPending || measureFidelity.isPending}
+							onToggleRun={toggleRun}
+							onRejudgeRun={rejudgeOne}
+							onMeasureFidelity={measureRunFidelity}
+							onDeleteRun={removeRun}
+						/>
+					)}
+					{/* "A beats B by 6" is only a finding with an interval on it, and the interval is paired over the items
+					    the two combinations share. Gated on THREE scoring items, not on a suite existing: below that the
+					    node reports no delta at all, so a two-item project would render a panel that can never fill. */}
+					{showCells &&
+					detail &&
+					canComparePairedDeltas(cellsQuery.data?.cells.length ?? 0, cellsQuery.data?.scorableItemCount ?? 0) ? (
+						<BenchmarkPairedDelta projectId={detail.id} cells={cellsQuery.data?.cells ?? []} />
+					) : null}
 					{/* One fit covers the cohort, so the matrix is mounted once here rather than under each run pane. */}
 					{detail?.judge.mode === "pairwise" ? <BenchmarkPairwiseMatrix projectId={detail.id} /> : null}
 					{selectedRunIds.length >= 2 ? <BenchmarkLaunchCompare runIds={selectedRunIds} /> : null}
@@ -709,9 +820,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 							aria-expanded={chartsOpen}
 							data-testid="benchmark-charts-toggle"
 						>
-							{chartsOpen
-								? t("pages.benchmarks.charts.hide", "Hide charts")
-								: t("pages.benchmarks.charts.show", "Show charts")}
+							{chartsOpen ? t("pages.benchmarks.charts.hide", "Hide charts") : t("pages.benchmarks.charts.show", "Show charts")}
 						</Button>
 					</Group>
 					{chartsOpen ? (
@@ -779,6 +888,8 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 			>
 				<BenchmarkLaunchMatrix
 					models={modelsQuery.data ?? []}
+					leafItemCount={leafItemCount}
+					medianRunMs={medianRunMs}
 					rejected={matrixRejections}
 					isSubmitting={startBatch.isPending}
 					onSubmit={startMatrix}
@@ -806,16 +917,16 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 									"Every eligible run is judged against every other, in both orders. The comparisons are queued at once and the ranking only appears once the fit completes.",
 								)
 							: confirmMode === "judgePolicy"
-							? t(
-									"pages.benchmarks.project.rejudgeConfirmPolicy",
-									"Changing the judge re-scores this project. All {{count}} succeeded runs will be re-judged and the ranking is rebuilt from the new cohort.",
-									{ count: affectedRunCount },
-								)
-							: t(
-									"pages.benchmarks.project.rejudgeConfirmAll",
-									"All {{count}} succeeded runs will be re-judged under the current policy, and the ranked cohort moves to the current judge runtime.",
-									{ count: affectedRunCount },
-								)}
+								? t(
+										"pages.benchmarks.project.rejudgeConfirmPolicy",
+										"Changing the judge re-scores this project. All {{count}} succeeded runs will be re-judged and the ranking is rebuilt from the new cohort.",
+										{ count: affectedRunCount },
+									)
+								: t(
+										"pages.benchmarks.project.rejudgeConfirmAll",
+										"All {{count}} succeeded runs will be re-judged under the current policy, and the ranked cohort moves to the current judge runtime.",
+										{ count: affectedRunCount },
+									)}
 					</Text>
 					<Group justify="flex-end">
 						<Button variant="default" onClick={() => setConfirmMode(null)}>
@@ -824,31 +935,31 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						<Button
 							loading={updateJudge.isPending || rejudgeProject.isPending}
 							onClick={() => {
-							if (confirmMode === "pairwise") {
-								const draft = pendingProjectDraft;
-								setConfirmMode(null);
-								setPendingProjectDraft(null);
-								if (draft && detail) {
-									saveJudgePolicy(
-										{
-											modelName: draft.judgeModelName ?? "",
-											contextTokens: draft.judgeContextTokens ?? 0,
-											mode: draft.judgeMode,
-											rubric: draft.rubric,
-											referenceAnswer: draft.referenceAnswer,
-										},
-										true,
-									);
+								if (confirmMode === "pairwise") {
+									const draft = pendingProjectDraft;
+									setConfirmMode(null);
+									setPendingProjectDraft(null);
+									if (draft && detail) {
+										saveJudgePolicy(
+											{
+												modelName: draft.judgeModelName ?? "",
+												contextTokens: draft.judgeContextTokens ?? 0,
+												mode: draft.judgeMode,
+												rubric: draft.rubric,
+												referenceAnswer: draft.referenceAnswer,
+											},
+											true,
+										);
+									}
+									return;
 								}
-								return;
-							}
-							confirmMode === "judgePolicy" ? saveJudgePolicy(pendingPolicy, true) : rejudgeAll();
-						}}
+								confirmMode === "judgePolicy" ? saveJudgePolicy(pendingPolicy, true) : rejudgeAll();
+							}}
 							data-testid="benchmark-rejudge-confirm-accept"
 						>
 							{confirmMode === "pairwise"
-							? t("pages.benchmarks.project.pairwiseConfirmAccept", "Switch and queue")
-							: t("pages.benchmarks.project.rejudgeConfirmAccept", "Re-judge")}
+								? t("pages.benchmarks.project.pairwiseConfirmAccept", "Switch and queue")
+								: t("pages.benchmarks.project.rejudgeConfirmAccept", "Re-judge")}
 						</Button>
 					</Group>
 				</Stack>

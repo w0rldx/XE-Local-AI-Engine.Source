@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -32,6 +33,7 @@ public sealed class BenchmarkJudgeExecutor(
     IBenchmarkCancellationRegistry cancellations,
     IRuntimeEnvironmentFactsProvider environmentFacts,
     BenchmarkAdmissionRetry admissionRetry,
+    IBenchmarkPythonTestsVerifier pythonTests,
     ILogger<BenchmarkJudgeExecutor> logger) : IBenchmarkJudgeExecutor
 {
     private const string FingerprintChangedMessage = "The installed judge model changed after the benchmark was created.";
@@ -94,6 +96,12 @@ public sealed class BenchmarkJudgeExecutor(
                 throw new BenchmarkExecutionException(OutdatedPolicyVersionMessage);
             }
 
+            // The rubric is the question; a task item is one instance of it. A suite whose items all had to share one
+            // expected answer could only ask one question, so an item may override the policy's reference answer and
+            // any criterion's verifier config. The generated long-context cases are exactly that shape: one `exact`
+            // criterion in the rubric, one expected passcode per case.
+            policy = await ApplyItemOverridesAsync(policy, work.Run, token).ConfigureAwait(false);
+
             var runtime = attempt.JudgeRuntimeJson is { } runtimeJson
                 ? BenchmarkJudgeSerialization.DeserializeRuntime(runtimeJson.Span)
                 : throw new BenchmarkExecutionException("The frozen judge runtime is unavailable.");
@@ -110,9 +118,19 @@ public sealed class BenchmarkJudgeExecutor(
             var graded = BenchmarkOutputParts.ForJudge(BenchmarkExecutionSerialization.DeserializeParts(output.Span),
                 Math.Min(runtime.RequestedContextTokens, runtime.Runtime.ContextTokens));
             var verifiable = policy.Rubric.Criteria.Where(static criterion => BenchmarkJudgeCriterionKinds.IsVerifiable(criterion.Kind)).ToArray();
-            IReadOnlyList<BenchmarkJudgeVerifierResultV1> verifierResults = verifiable.Length == 0
-                ? []
-                : [.. verifiable.Select(criterion => BenchmarkJudgeVerifiers.Verify(criterion, BenchmarkJudgeVerifiers.AnswerText(graded)))];
+            var answerText = verifiable.Length == 0 ? string.Empty : BenchmarkJudgeVerifiers.AnswerText(graded);
+            List<BenchmarkJudgeVerifierResultV1> verified = [];
+            foreach (var criterion in verifiable)
+            {
+                // Two paths, because only one of them can be unscorable. A pure verifier is a function of the answer
+                // text; pythonTests runs the answer's code in the compute sandbox, so it is async and it refuses —
+                // fail-closed, with the run left unranked — on a host that cannot be trusted to run it.
+                verified.Add(BenchmarkJudgeCriterionKinds.IsExecutionVerified(criterion.Kind)
+                    ? await pythonTests.VerifyAsync(criterion, answerText, token).ConfigureAwait(false)
+                    : BenchmarkJudgeVerifiers.Verify(criterion, answerText));
+            }
+
+            IReadOnlyList<BenchmarkJudgeVerifierResultV1> verifierResults = verified;
             if (verifiable.Length == policy.Rubric.Criteria.Count)
             {
                 await CompleteVerifiedAsync(work, policy, verifierResults, token).ConfigureAwait(false);
@@ -252,6 +270,98 @@ public sealed class BenchmarkJudgeExecutor(
                     ? exception.Message
                     : InvocationFailedMessage,
                 environment).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    ///     The policy as THIS run's task item asks it: each criterion's verifier config resolved as item override ??
+    ///     policy config, and the reference answer likewise.
+    ///     <para>
+    ///         Deliberately not a policy-hash change. The override lives on the item, so it is inside the item's input
+    ///         hash and inside the project's item-set hash — which is what unranks the stale answers to it — and
+    ///         moving the POLICY hash instead would force a project-wide re-judge of every item that did not change.
+    ///     </para>
+    /// </summary>
+    private async Task<BenchmarkJudgePolicyV1> ApplyItemOverridesAsync(BenchmarkJudgePolicyV1 policy, BenchmarkRunRecord run, CancellationToken cancellationToken)
+    {
+        if (run.TaskItemId is not { } itemId)
+        {
+            return policy;
+        }
+
+        var items = await store.ListTaskItemsAsync(run.ProjectId, cancellationToken).ConfigureAwait(false);
+        var item = items.FirstOrDefault(entry => entry.Id == itemId);
+        if (item is null)
+        {
+            // The item was deleted after the run was frozen. The ranking read already excludes such a run as
+            // item-set-revised, so judging it under the policy's own configuration costs nothing and refusing would
+            // turn a stale row into a failed attempt.
+            return policy;
+        }
+
+        var referenceAnswer = BenchmarkTaskItemService.DecodeOptional(item.ReferenceAnswerJson) ?? policy.ReferenceAnswer;
+        var overrides = ReadVerifierOverrides(item);
+
+        // An override that matches no criterion is not a no-op. Applying nothing and grading on leaves this item
+        // measured against the POLICY's expected answer — another item's question — and the score would look like any
+        // other. The item write refuses this, so reaching it means the rubric moved afterwards; the run is left
+        // unranked under its own reason rather than scored.
+        // An override that matches no criterion is not a no-op. Applying nothing and grading on leaves this item
+        // measured against the POLICY's expected answer — another item's question — and the score would look like any
+        // other. The item write refuses this, so reaching it means the rubric moved afterwards; the run is left
+        // unranked under its own reason rather than scored.
+        if (overrides.Keys.FirstOrDefault(id => !policy.Rubric.Criteria.Any(criterion => string.Equals(criterion.Id, id, StringComparison.Ordinal)))
+            is { } unmatched)
+        {
+            throw new BenchmarkExecutionException(BenchmarkRunJudgeStates.OverrideUnmatchedPrefix
+                                                  + $"The task item's verifier override names criterion '{unmatched}', which the judge rubric does not have. "
+                                                  + "Edit the item's override or restore the criterion, then re-judge.");
+        }
+
+        var criteria = overrides.Count == 0
+            ? policy.Rubric.Criteria
+            : [.. policy.Rubric.Criteria.Select(criterion => overrides.TryGetValue(criterion.Id, out var config)
+                ? criterion with
+                {
+                    Config = config
+                }
+                : criterion)];
+
+        return policy with
+        {
+            ReferenceAnswer = referenceAnswer,
+            Rubric = policy.Rubric with
+            {
+                Criteria = criteria
+            }
+        };
+    }
+
+    /// <summary>
+    ///     One item's <c>{criterionId: config}</c> overrides, as raw JSON per criterion — read through
+    ///     <see cref="BenchmarkTaskItemService.ReadOverrides" />, the same call the item write validates with, so the
+    ///     two cannot disagree about what an override is.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> ReadVerifierOverrides(BenchmarkTaskItemRecord item)
+    {
+        if (item.VerifierConfigJson is not { IsEmpty: false } payload)
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            return BenchmarkTaskItemService.ReadOverrides(document.RootElement);
+        }
+        catch (Exception exception) when (exception is JsonException or BenchmarkValidationException)
+        {
+            // Fail the attempt rather than judge under the policy's configuration: silently ignoring the override
+            // would grade this item against another item's expected answer and call the result a score.
+            throw new BenchmarkExecutionException($"The task item's verifier override is not valid JSON: {exception.Message}")
+            {
+                Source = exception.Source
+            };
         }
     }
 

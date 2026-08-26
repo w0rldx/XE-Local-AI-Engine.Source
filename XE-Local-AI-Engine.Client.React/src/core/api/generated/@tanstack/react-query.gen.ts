@@ -48,12 +48,15 @@ import {
 	codexStatus,
 	commitSkillImport,
 	compactNodeChatConversation,
+	compareBenchmarkCells,
 	confirmDevelopmentContainerRuntime,
 	connectConnection,
 	continuePreviewRun,
 	createAgentDefinition,
 	createBaseArtifact,
+	createBenchmarkFromComparison,
 	createBenchmarkProject,
+	createBenchmarkTaskItem,
 	createComparison,
 	createCustomTool,
 	createDevelopmentProject,
@@ -79,6 +82,7 @@ import {
 	deleteBaseArtifact,
 	deleteBenchmarkProject,
 	deleteBenchmarkRun,
+	deleteBenchmarkTaskItem,
 	deleteComparison,
 	deleteConversationFile,
 	deleteCustomTool,
@@ -215,10 +219,12 @@ import {
 	listAgentPlaybookActions,
 	listAgentTemplates,
 	listBaseArtifacts,
+	listBenchmarkCells,
 	listBenchmarkComparisons,
 	listBenchmarkFidelityAttempts,
 	listBenchmarkProjects,
 	listBenchmarkRuns,
+	listBenchmarkTaskItems,
 	listComparisons,
 	listConversationFiles,
 	listCustomTools,
@@ -299,6 +305,7 @@ import {
 	removeStableDiffusionCppSourceBuild,
 	removeTrainingRuntime,
 	renameNodeChatConversation,
+	reorderBenchmarkTaskItems,
 	resolveToolApproval,
 	resolveUserQuestion,
 	resumeEvaluation,
@@ -342,6 +349,7 @@ import {
 	updateBenchmarkJudgePolicy,
 	updateBenchmarkProject,
 	updateBenchmarkProjectFidelity,
+	updateBenchmarkTaskItem,
 	updateCustomTool,
 	updateLlamaCppRuntime,
 	updateMcpServer,
@@ -447,6 +455,9 @@ import type {
 	CompactNodeChatConversationData,
 	CompactNodeChatConversationError,
 	CompactNodeChatConversationResponse,
+	CompareBenchmarkCellsData,
+	CompareBenchmarkCellsError,
+	CompareBenchmarkCellsResponse,
 	ConfirmDevelopmentContainerRuntimeData,
 	ConfirmDevelopmentContainerRuntimeResponse,
 	ConnectConnectionData,
@@ -460,9 +471,15 @@ import type {
 	CreateBaseArtifactData,
 	CreateBaseArtifactError,
 	CreateBaseArtifactResponse,
+	CreateBenchmarkFromComparisonData,
+	CreateBenchmarkFromComparisonError,
+	CreateBenchmarkFromComparisonResponse,
 	CreateBenchmarkProjectData,
 	CreateBenchmarkProjectError,
 	CreateBenchmarkProjectResponse,
+	CreateBenchmarkTaskItemData,
+	CreateBenchmarkTaskItemError,
+	CreateBenchmarkTaskItemResponse,
 	CreateComparisonData,
 	CreateComparisonError,
 	CreateComparisonResponse,
@@ -528,6 +545,9 @@ import type {
 	DeleteBenchmarkRunData,
 	DeleteBenchmarkRunError,
 	DeleteBenchmarkRunResponse,
+	DeleteBenchmarkTaskItemData,
+	DeleteBenchmarkTaskItemError,
+	DeleteBenchmarkTaskItemResponse,
 	DeleteComparisonData,
 	DeleteComparisonError,
 	DeleteComparisonResponse,
@@ -832,6 +852,9 @@ import type {
 	ListAgentTemplatesResponse,
 	ListBaseArtifactsData,
 	ListBaseArtifactsResponse,
+	ListBenchmarkCellsData,
+	ListBenchmarkCellsError,
+	ListBenchmarkCellsResponse,
 	ListBenchmarkComparisonsData,
 	ListBenchmarkComparisonsError,
 	ListBenchmarkComparisonsResponse,
@@ -843,6 +866,9 @@ import type {
 	ListBenchmarkRunsData,
 	ListBenchmarkRunsError,
 	ListBenchmarkRunsResponse,
+	ListBenchmarkTaskItemsData,
+	ListBenchmarkTaskItemsError,
+	ListBenchmarkTaskItemsResponse,
 	ListComparisonsData,
 	ListComparisonsResponse,
 	ListConversationFilesData,
@@ -1027,6 +1053,9 @@ import type {
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationError,
 	RenameNodeChatConversationResponse,
+	ReorderBenchmarkTaskItemsData,
+	ReorderBenchmarkTaskItemsError,
+	ReorderBenchmarkTaskItemsResponse,
 	ResolveToolApprovalData,
 	ResolveToolApprovalError,
 	ResolveToolApprovalResponse,
@@ -1140,6 +1169,9 @@ import type {
 	UpdateBenchmarkProjectFidelityError,
 	UpdateBenchmarkProjectFidelityResponse,
 	UpdateBenchmarkProjectResponse,
+	UpdateBenchmarkTaskItemData,
+	UpdateBenchmarkTaskItemError,
+	UpdateBenchmarkTaskItemResponse,
 	UpdateCustomToolData,
 	UpdateCustomToolResponse,
 	UpdateLlamaCppRuntimeData,
@@ -7063,6 +7095,50 @@ export const listEligibleBenchmarkModelsOptions = (options?: Options<ListEligibl
 		queryKey: listEligibleBenchmarkModelsQueryKey(options),
 	});
 
+export const listBenchmarkCellsQueryKey = (options: Options<ListBenchmarkCellsData>) =>
+	createQueryKey("listBenchmarkCells", options);
+
+export const listBenchmarkCellsOptions = (options: Options<ListBenchmarkCellsData>) =>
+	queryOptions<
+		ListBenchmarkCellsResponse,
+		AxiosError<ListBenchmarkCellsError>,
+		ListBenchmarkCellsResponse,
+		ReturnType<typeof listBenchmarkCellsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listBenchmarkCells({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listBenchmarkCellsQueryKey(options),
+	});
+
+export const compareBenchmarkCellsQueryKey = (options: Options<CompareBenchmarkCellsData>) =>
+	createQueryKey("compareBenchmarkCells", options);
+
+export const compareBenchmarkCellsOptions = (options: Options<CompareBenchmarkCellsData>) =>
+	queryOptions<
+		CompareBenchmarkCellsResponse,
+		AxiosError<CompareBenchmarkCellsError>,
+		CompareBenchmarkCellsResponse,
+		ReturnType<typeof compareBenchmarkCellsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await compareBenchmarkCells({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: compareBenchmarkCellsQueryKey(options),
+	});
+
 export const exportBenchmarkProjectQueryKey = (options: Options<ExportBenchmarkProjectData>) =>
 	createQueryKey("exportBenchmarkProject", options);
 
@@ -7213,6 +7289,30 @@ export const clearBenchmarkFidelityCacheMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await clearBenchmarkFidelityCache({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const createBenchmarkFromComparisonMutation = (
+	options?: Partial<Options<CreateBenchmarkFromComparisonData>>,
+): UseMutationOptions<
+	CreateBenchmarkFromComparisonResponse,
+	AxiosError<CreateBenchmarkFromComparisonError>,
+	Options<CreateBenchmarkFromComparisonData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CreateBenchmarkFromComparisonResponse,
+		AxiosError<CreateBenchmarkFromComparisonError>,
+		Options<CreateBenchmarkFromComparisonData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createBenchmarkFromComparison({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -7673,6 +7773,124 @@ export const rejudgeBenchmarkRunMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await rejudgeBenchmarkRun({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listBenchmarkTaskItemsQueryKey = (options: Options<ListBenchmarkTaskItemsData>) =>
+	createQueryKey("listBenchmarkTaskItems", options);
+
+export const listBenchmarkTaskItemsOptions = (options: Options<ListBenchmarkTaskItemsData>) =>
+	queryOptions<
+		ListBenchmarkTaskItemsResponse,
+		AxiosError<ListBenchmarkTaskItemsError>,
+		ListBenchmarkTaskItemsResponse,
+		ReturnType<typeof listBenchmarkTaskItemsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listBenchmarkTaskItems({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listBenchmarkTaskItemsQueryKey(options),
+	});
+
+export const createBenchmarkTaskItemMutation = (
+	options?: Partial<Options<CreateBenchmarkTaskItemData>>,
+): UseMutationOptions<
+	CreateBenchmarkTaskItemResponse,
+	AxiosError<CreateBenchmarkTaskItemError>,
+	Options<CreateBenchmarkTaskItemData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CreateBenchmarkTaskItemResponse,
+		AxiosError<CreateBenchmarkTaskItemError>,
+		Options<CreateBenchmarkTaskItemData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createBenchmarkTaskItem({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteBenchmarkTaskItemMutation = (
+	options?: Partial<Options<DeleteBenchmarkTaskItemData>>,
+): UseMutationOptions<
+	DeleteBenchmarkTaskItemResponse,
+	AxiosError<DeleteBenchmarkTaskItemError>,
+	Options<DeleteBenchmarkTaskItemData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteBenchmarkTaskItemResponse,
+		AxiosError<DeleteBenchmarkTaskItemError>,
+		Options<DeleteBenchmarkTaskItemData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteBenchmarkTaskItem({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const updateBenchmarkTaskItemMutation = (
+	options?: Partial<Options<UpdateBenchmarkTaskItemData>>,
+): UseMutationOptions<
+	UpdateBenchmarkTaskItemResponse,
+	AxiosError<UpdateBenchmarkTaskItemError>,
+	Options<UpdateBenchmarkTaskItemData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateBenchmarkTaskItemResponse,
+		AxiosError<UpdateBenchmarkTaskItemError>,
+		Options<UpdateBenchmarkTaskItemData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateBenchmarkTaskItem({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const reorderBenchmarkTaskItemsMutation = (
+	options?: Partial<Options<ReorderBenchmarkTaskItemsData>>,
+): UseMutationOptions<
+	ReorderBenchmarkTaskItemsResponse,
+	AxiosError<ReorderBenchmarkTaskItemsError>,
+	Options<ReorderBenchmarkTaskItemsData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ReorderBenchmarkTaskItemsResponse,
+		AxiosError<ReorderBenchmarkTaskItemsError>,
+		Options<ReorderBenchmarkTaskItemsData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await reorderBenchmarkTaskItems({
 				...options,
 				...fnOptions,
 				throwOnError: true,

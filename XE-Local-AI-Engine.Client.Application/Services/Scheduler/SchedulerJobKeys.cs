@@ -20,6 +20,13 @@ public static class SchedulerJobKeys
     public const string Group = "scheduled-jobs";
 
     /// <summary>
+    ///     Per-fire trigger <c>JobDataMap</c> key stamped by every manual <c>TriggerNowAsync</c> fire (and by nothing
+    ///     else), so the dispatcher can record the run as <c>Manual</c> rather than <c>Schedule</c>. A recurring cron
+    ///     fire never carries it. It is NOT a parameter override — the dispatcher's whitelist never sees it.
+    /// </summary>
+    public const string ManualFireKey = "manualFire";
+
+    /// <summary>
     ///     Optional per-fire trigger <c>JobDataMap</c> key carrying a use-case override for a model-fit recommendation
     ///     refresh. A manual <c>TriggerNowAsync</c> fire may stamp this onto the trigger's data map so the run produces the
     ///     selected use-case instead of the definition's baked one. The recurring (cron) fire never sets it, so a scheduled

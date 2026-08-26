@@ -527,6 +527,37 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.EnqueueFidelityAsync(run.Id, "hellaswag")).ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     What a scheduled matrix's busy guard has to ask. Counting a project's RUN statuses called it idle the moment
+    ///     every primary finished, while its judging, fidelity and pairwise work was still holding the single-consumer
+    ///     queue and the GPU — so the next fire piled a second matrix straight on top of the first.
+    /// </summary>
+    [Test]
+    public async Task CountActiveWorkAsync_CountsEveryKindOfOneProjectAndNothingTerminalOrForeign()
+    {
+        await using var context = await CreateSchemaAsync("count-active-work.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var runs = await store.StartRunsAsync([CreateRun(project), CreateRun(project)], project.Version).ConfigureAwait(false);
+        _ = await store.EnqueueFidelityAsync(runs[0].Id, "ppl").ConfigureAwait(false);
+        _ = await InsertComparisonWorkAsync(context, project.Id, revision.Id, runs[0].Id).ConfigureAwait(false);
+
+        // A cancelled run's work is terminal, so it is not what makes a project busy.
+        _ = await store.CancelAsync(runs[1].Id, runs[1].Version).ConfigureAwait(false);
+
+        // And another project's queue is not this project's — with foreign keys off, the join is the only thing saying so.
+        var (other, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        _ = await store.StartRunAsync(CreateRun(other)).ConfigureAwait(false);
+
+        var active = await store.CountActiveWorkAsync(project.Id).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 3, active.Values.Sum());
+        AssertEx.Equal(expected: 1, active[BenchmarkWorkKind.Primary]);
+        AssertEx.Equal(expected: 1, active[BenchmarkWorkKind.Fidelity]);
+        AssertEx.Equal(expected: 1, active[BenchmarkWorkKind.Comparison]);
+        AssertEx.Equal(expected: 1, (await store.CountActiveWorkAsync(other.Id).ConfigureAwait(false)).Values.Sum());
+    }
+
     private async Task<NodeChatDbContext> CreateSchemaAsync(string fileName)
     {
         Directory.CreateDirectory(_rootPath);

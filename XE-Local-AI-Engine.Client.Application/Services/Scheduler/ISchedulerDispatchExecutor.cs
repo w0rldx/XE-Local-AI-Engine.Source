@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+
 /// <summary>
 ///     Loads a scheduled job definition by id, resolves its template handler, and invokes it for one fire. Owns the
 ///     guard rails (missing / disabled / soft-deleted definition, unknown template) so the thin <see cref="IJob" />
@@ -24,10 +26,16 @@ public interface ISchedulerDispatchExecutor
     ///     building the context — the stored definition is never mutated and no other key can override a stored parameter.
     ///     <c>null</c> (the recurring/cron path) leaves the stored parameters untouched.
     /// </param>
+    /// <param name="triggeredBy">
+    ///     What caused this fire, recorded on the run row and passed to the handler. Defaults to
+    ///     <see cref="ScheduledRunTrigger.Schedule" />; the Quartz job runner passes
+    ///     <see cref="ScheduledRunTrigger.Manual" /> when the firing trigger carries the manual-fire marker.
+    /// </param>
     Task DispatchAsync(Guid scheduledJobId,
         string fireInstanceId,
         DateTimeOffset? scheduledFireTimeUtc,
         DateTimeOffset actualFireTimeUtc,
         CancellationToken cancellationToken,
-        IReadOnlyDictionary<string, string>? parameterOverrides = null);
+        IReadOnlyDictionary<string, string>? parameterOverrides = null,
+        ScheduledRunTrigger triggeredBy = ScheduledRunTrigger.Schedule);
 }

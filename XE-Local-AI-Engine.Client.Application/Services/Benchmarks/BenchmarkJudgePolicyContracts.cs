@@ -493,6 +493,31 @@ public static class BenchmarkJudgeRubricDefaults
                 """{"pattern":"(?i:i (?:cannot|can not|am unable to|won't|will not) )","mustMatch":false}""")
         ]);
 
+    public const string SolutionRunsId = "solution_runs";
+
+    /// <summary>
+    ///     The execution preset: one criterion, decided by RUNNING the answer's code against the operator's hidden
+    ///     tests rather than by asking a model to read it. It is a single criterion at full weight on purpose — the
+    ///     tests either pass or they do not, and averaging that against a model's opinion of the same code reintroduces
+    ///     exactly the judgement this preset exists to replace.
+    ///     <para>
+    ///         Both halves are placeholders the operator must edit: <c>testCode</c> is the hidden test suite, and
+    ///         <c>exports</c> names the symbols those tests call. It needs <c>Compute:Enabled</c> on a node whose
+    ///         sandbox can isolate and can enforce resource ceilings; where it cannot, runs are left unranked with
+    ///         <c>verifier-unavailable</c> rather than scored 0.
+    ///     </para>
+    /// </summary>
+    public static BenchmarkJudgeRubricV1 CodeExecution() =>
+        new(BenchmarkJudgePolicyVersions.RubricVersion,
+        [
+            new BenchmarkJudgeRubricCriterionV1(SolutionRunsId,
+                "Solution passes the hidden tests",
+                "The Python code in the answer is run in the compute sandbox against the operator's tests. Edit the test code and the exported names to your task.",
+                100,
+                BenchmarkJudgeCriterionKinds.PythonTests,
+                """{"testCode":"assert solve(2) == 4\nassert solve(0) == 0","exports":["solve"],"timeoutSeconds":30}""")
+        ]);
+
     private static BenchmarkJudgeRubricV1 Build(string correctnessTitle,
         string correctnessDescription,
         string reasoningTitle,

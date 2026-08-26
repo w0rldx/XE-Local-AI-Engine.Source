@@ -1477,6 +1477,11 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("reasoning_budget_tokens");
 
+                    b.Property<string>("TaskItemSetHash")
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("task_item_set_hash");
+
                     b.Property<long>("UpdatedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("updated_at_utc");
@@ -1523,6 +1528,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<int?>("CachedPromptTokens")
                         .HasColumnType("INTEGER")
                         .HasColumnName("cached_prompt_tokens");
+
+                    b.Property<string>("CellKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cell_key");
 
                     b.Property<long>("CreatedAtUtc")
                         .HasColumnType("INTEGER")
@@ -1795,6 +1806,30 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("started_at_utc");
 
+                    b.Property<string>("TaskInputHash")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("v1:legacy")
+                        .HasColumnName("task_input_hash");
+
+                    b.Property<Guid?>("TaskItemId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("task_item_id");
+
+                    b.Property<int?>("TaskItemIndex")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("task_item_index");
+
+                    b.Property<string>("TaskItemSetHash")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("v1:legacy")
+                        .HasColumnName("task_item_set_hash");
+
                     b.Property<double?>("TokensPerSecond")
                         .HasColumnType("REAL")
                         .HasColumnName("tokens_per_second");
@@ -1829,11 +1864,17 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasIndex("RepeatGroupId")
                         .HasDatabaseName("ix_benchmark_runs_repeat_group_id");
 
+                    b.HasIndex("ProjectId", "CellKey")
+                        .HasDatabaseName("ix_benchmark_runs_project_cell_key");
+
                     b.HasIndex("ProjectId", "CreatedAtUtc")
                         .HasDatabaseName("ix_benchmark_runs_project_created_at");
 
                     b.HasIndex("ProjectId", "PrimaryKvCacheType")
                         .HasDatabaseName("ix_benchmark_runs_project_primary_kv_cache_type");
+
+                    b.HasIndex("ProjectId", "TaskItemId")
+                        .HasDatabaseName("ix_benchmark_runs_project_task_item_id");
 
                     b.ToTable("benchmark_runs", null, t =>
                         {
@@ -1842,6 +1883,96 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                             t.HasCheckConstraint("CK_benchmark_runs_requested_context", "requested_context_tokens > 0");
 
                             t.HasCheckConstraint("CK_benchmark_runs_user_score", "user_score IS NULL OR (user_score >= 0 AND user_score <= 100)");
+                        });
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkTaskItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("CountsTowardScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true)
+                        .HasColumnName("counts_toward_score");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("GeneratorConfigJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("generator_config_json");
+
+                    b.Property<int>("Index")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("index");
+
+                    b.Property<string>("InputHash")
+                        .IsRequired()
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("input_hash");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid?>("ParentItemId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("parent_item_id");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("project_id");
+
+                    b.Property<byte[]>("PromptJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("prompt_json");
+
+                    b.Property<byte[]>("ReferenceAnswerJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("reference_answer_json");
+
+                    b.Property<int>("Revision")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("revision");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<byte[]>("VerifierConfigJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("verifier_config_json");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ParentItemId")
+                        .HasDatabaseName("ix_benchmark_task_items_parent");
+
+                    b.HasIndex("ProjectId", "Index")
+                        .IsUnique()
+                        .HasDatabaseName("ux_benchmark_task_items_project_index");
+
+                    b.ToTable("benchmark_task_items", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_benchmark_task_items_index", "\"index\" >= 0");
+
+                            t.HasCheckConstraint("CK_benchmark_task_items_kind", "kind IN ('prompt', 'niah', 'niahCase')");
+
+                            t.HasCheckConstraint("CK_benchmark_task_items_revision", "revision >= 1");
                         });
                 });
 
@@ -5668,6 +5799,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                 });
 
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkRun", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkProject", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkTaskItem", b =>
                 {
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkProject", null)
                         .WithMany()

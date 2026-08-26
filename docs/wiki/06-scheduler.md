@@ -93,6 +93,34 @@ Security and runtime invariants:
 - **Shared admission and cancellation.** The run uses the capacity gate and node-wide invocation slot,
   observes Quartz cancellation/timeout, and releases any footprint reservation on every terminal path.
 
+`RunBenchmarkBatchHandler` (`Handlers/RunBenchmarkBatchHandler.cs`), template id `run-benchmark-batch`,
+freezes a whole model x KV-cache matrix against one benchmark project, so an overnight matrix is a
+schedule rather than a foreground wait. It supports Cron, one-shot, simple-interval and manual schedules
+and defaults to Cron. Its parameters are `projectId`, `models` (1..10), `kvCacheTypes` (1..4, `null` =
+Auto, absent = one Auto cell per model), `repeatCount` (1..10) and `warmup`; the expanded matrix is
+capped at 50 cells, the same ceiling the interactive batch endpoint enforces.
+
+Runtime invariants:
+
+- **It enqueues and returns.** The runs are drained by the existing single-consumer benchmark queue, so
+  the fire holds neither the scheduler thread nor the GPU for their duration. Its descriptor therefore
+  carries `DefaultMaxRuntimeSeconds: null`.
+- **It refuses to pile up.** A fire that finds queued, running or cancelling work on the project records
+  a **skipped** fire with that reason and enqueues nothing — a nightly matrix landing on the previous
+  night's leftovers would otherwise measure the same project twice. A skip is a *success*, not a failure.
+  `SchedulerMisfirePolicy.SkipMissed` covers the other half: a node that was off when the trigger was due.
+- **Per-cell freeze budget, not a per-fire one.** The interactive batch endpoint stops after 45 s because
+  it holds an HTTP connection; a fire holds nothing, and copying that flat number truncated a 4-cell
+  matrix in a live run (the freeze verifies each model's GGUF by digest, ~18 s per cold cell). The
+  handler spends **45 s per cell**, checked *between* cells so none is ever half-frozen.
+- **Per-cell verdicts.** One ineligible or uninstalled model costs its own cells and no others; a
+  vanished project or a moved project version stops the matrix, because every remaining cell would fail
+  identically. The job run fails only when *every* cell failed, with a sanitized reason.
+- **`AllowAgentCreation: false`.** An AI agent may schedule a saved-agent run; it may not schedule
+  GPU-hours.
+- **Content-safe history.** The summary records the project id, cells requested, runs created and
+  per-cell failure reasons — never a task prompt or a model answer.
+
 ---
 
 ## The execution path

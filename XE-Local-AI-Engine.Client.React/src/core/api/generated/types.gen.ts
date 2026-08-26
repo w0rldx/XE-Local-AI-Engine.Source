@@ -3620,6 +3620,67 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkModelsReq
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkCellsResponse = {
+	cells?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse>;
+	rankCohort: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse;
+	scorableItemCount?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse = {
+	cellKey: string;
+	primaryModelName: string;
+	modelContentFingerprint: string;
+	kvCacheType?: string | null;
+	repeatGroupId?: string | null;
+	repeatIndex?: number | null;
+	quality?: number | null;
+	rank?: number | null;
+	rankExclusionReason?: string | null;
+	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellItemResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellItemResponse = {
+	runId?: string;
+	taskItemId?: string | null;
+	taskItemIndex?: number | null;
+	qualityScore?: number | null;
+	primaryStopReason?: string | null;
+	rankExclusionReason?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse = {
+	policyRevision?: number | null;
+	executionKey?: string | null;
+	cohortGeneration?: number | null;
+	rankedCount?: number;
+	totalScored?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkCellsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsResponse = {
+	cells?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse>;
+	rankCohort: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse;
+	scorableItemCount?: number;
+	pairedDeltas?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse = {
+	aCellKey: string;
+	bCellKey: string;
+	sharedItemCount?: number;
+	delta?: number;
+	ciLow?: number;
+	ciHigh?: number;
+	separated?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse = {
 	schemaVersion?: number;
 	exportedAtUtc?: number;
@@ -3629,6 +3690,9 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse = 
 	repeatGroups?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGroupResponse>;
 	llamaBench?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchRowResponse>;
 	pairwiseFit?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseFitResponse | null;
+	taskItems?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse>;
+	cells?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse>;
+	scorableItemCount?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectResponse = {
@@ -3678,14 +3742,6 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricCriterionDt
 	config?: string | null;
 };
 
-export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse = {
-	policyRevision?: number | null;
-	executionKey?: string | null;
-	cohortGeneration?: number | null;
-	rankedCount?: number;
-	totalScored?: number;
-};
-
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse =
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse & {
 		outputParts?: unknown;
@@ -3714,7 +3770,13 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	qualityScore?: number | null;
 	qualityScoreSource: string;
 	rank?: number | null;
+	cellQuality?: number | null;
 	rankExclusionReason?: string | null;
+	taskItemId?: string | null;
+	taskItemIndex?: number | null;
+	cellKey?: string | null;
+	taskInputHash?: string | null;
+	taskItemSetHash?: string | null;
 	primaryStopReason?: string | null;
 	modelGroupKey: string;
 	repeatGroupId?: string | null;
@@ -3867,6 +3929,25 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseSco
 	reason?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse = {
+	id?: string;
+	projectId?: string;
+	parentItemId?: string | null;
+	index?: number;
+	kind: string;
+	revision?: number;
+	inputHash: string;
+	isLeaf?: boolean;
+	countsTowardScore?: boolean;
+	prompt: string;
+	referenceAnswer?: string | null;
+	verifierConfig?: unknown;
+	generatorConfig?: unknown;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest = {
 	[key: string]: never;
 };
@@ -3894,6 +3975,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectFidelityCh
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse =
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse & {
+		taskItems?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse>;
+		taskItemSetHash?: string | null;
 		coreTask: string;
 		judge: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse;
 		fidelityEnabled?: boolean;
@@ -3962,6 +4045,24 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptRe
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsRequest = {
 	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse = {
+	projectId: string;
+	baseModelName: string;
+	tunedModelName: string;
+	baseRunIds: Array<string>;
+	tunedRunIds: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest = {
+	name?: string | null;
+	coreTask: string;
+	contextTokens: number;
+	agentDefinitionId: string;
+	kvCacheType?: string | null;
+	repeatCount?: number;
+	warmup?: boolean;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsResponse = {
@@ -4092,6 +4193,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricPresetsResp
 	programming: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
 	reasoning: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
 	verifiable: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
+	codeExecution: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkRunsResponse = {
@@ -4176,6 +4278,39 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1ClearBenchmarkRunScoreRequ
 export type XeLocalAiEngineClientEndpointsBenchmarksV1RejudgeBenchmarkRunRequest = {
 	expectedVersion?: number;
 	force?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkTaskItemsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse>;
+	taskItemSetHash?: string | null;
+	projectVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkTaskItemRequest =
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest & {
+		expectedProjectVersion?: number;
+	};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest = {
+	prompt?: string;
+	kind?: string | null;
+	referenceAnswer?: string | null;
+	verifierConfig?: unknown;
+	generatorConfig?: unknown;
+	countsTowardScore?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkTaskItemRequest =
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest & {
+		expectedVersion?: number;
+	};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkTaskItemRequest = {
+	expectedVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ReorderBenchmarkTaskItemsRequest = {
+	itemIds?: Array<string>;
 };
 
 export type XeLocalAiEngineClientEndpointsAutomationV1ListSlashCommandsResponse = {
@@ -13227,6 +13362,82 @@ export type ListEligibleBenchmarkModelsResponses = {
 export type ListEligibleBenchmarkModelsResponse =
 	ListEligibleBenchmarkModelsResponses[keyof ListEligibleBenchmarkModelsResponses];
 
+export type ListBenchmarkCellsData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/cells";
+};
+
+export type ListBenchmarkCellsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ListBenchmarkCellsError = ListBenchmarkCellsErrors[keyof ListBenchmarkCellsErrors];
+
+export type ListBenchmarkCellsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkCellsResponse;
+};
+
+export type ListBenchmarkCellsResponse = ListBenchmarkCellsResponses[keyof ListBenchmarkCellsResponses];
+
+export type CompareBenchmarkCellsData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query: {
+		cellKeys: Array<string>;
+	};
+	url: "/api/local/v1/benchmarks/projects/{projectId}/compare";
+};
+
+export type CompareBenchmarkCellsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type CompareBenchmarkCellsError = CompareBenchmarkCellsErrors[keyof CompareBenchmarkCellsErrors];
+
+export type CompareBenchmarkCellsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsResponse;
+};
+
+export type CompareBenchmarkCellsResponse = CompareBenchmarkCellsResponses[keyof CompareBenchmarkCellsResponses];
+
 export type ExportBenchmarkProjectData = {
 	body?: never;
 	path: {
@@ -13485,6 +13696,48 @@ export type ClearBenchmarkFidelityCacheResponses = {
 
 export type ClearBenchmarkFidelityCacheResponse =
 	ClearBenchmarkFidelityCacheResponses[keyof ClearBenchmarkFidelityCacheResponses];
+
+export type CreateBenchmarkFromComparisonData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest;
+	path: {
+		comparisonId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/comparisons/{comparisonId}/benchmark";
+};
+
+export type CreateBenchmarkFromComparisonErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+	422: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type CreateBenchmarkFromComparisonError = CreateBenchmarkFromComparisonErrors[keyof CreateBenchmarkFromComparisonErrors];
+
+export type CreateBenchmarkFromComparisonResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse;
+};
+
+export type CreateBenchmarkFromComparisonResponse =
+	CreateBenchmarkFromComparisonResponses[keyof CreateBenchmarkFromComparisonResponses];
 
 export type ListBenchmarkComparisonsData = {
 	body?: never;
@@ -14177,6 +14430,203 @@ export type RejudgeBenchmarkRunResponses = {
 };
 
 export type RejudgeBenchmarkRunResponse = RejudgeBenchmarkRunResponses[keyof RejudgeBenchmarkRunResponses];
+
+export type ListBenchmarkTaskItemsData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/items";
+};
+
+export type ListBenchmarkTaskItemsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ListBenchmarkTaskItemsError = ListBenchmarkTaskItemsErrors[keyof ListBenchmarkTaskItemsErrors];
+
+export type ListBenchmarkTaskItemsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkTaskItemsResponse;
+};
+
+export type ListBenchmarkTaskItemsResponse = ListBenchmarkTaskItemsResponses[keyof ListBenchmarkTaskItemsResponses];
+
+export type CreateBenchmarkTaskItemData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkTaskItemRequest;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/items";
+};
+
+export type CreateBenchmarkTaskItemErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type CreateBenchmarkTaskItemError = CreateBenchmarkTaskItemErrors[keyof CreateBenchmarkTaskItemErrors];
+
+export type CreateBenchmarkTaskItemResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse;
+};
+
+export type CreateBenchmarkTaskItemResponse = CreateBenchmarkTaskItemResponses[keyof CreateBenchmarkTaskItemResponses];
+
+export type DeleteBenchmarkTaskItemData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkTaskItemRequest;
+	path: {
+		projectId: string;
+		itemId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/items/{itemId}";
+};
+
+export type DeleteBenchmarkTaskItemErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type DeleteBenchmarkTaskItemError = DeleteBenchmarkTaskItemErrors[keyof DeleteBenchmarkTaskItemErrors];
+
+export type DeleteBenchmarkTaskItemResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteBenchmarkTaskItemResponse = DeleteBenchmarkTaskItemResponses[keyof DeleteBenchmarkTaskItemResponses];
+
+export type UpdateBenchmarkTaskItemData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkTaskItemRequest;
+	path: {
+		projectId: string;
+		itemId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/items/{itemId}";
+};
+
+export type UpdateBenchmarkTaskItemErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type UpdateBenchmarkTaskItemError = UpdateBenchmarkTaskItemErrors[keyof UpdateBenchmarkTaskItemErrors];
+
+export type UpdateBenchmarkTaskItemResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse;
+};
+
+export type UpdateBenchmarkTaskItemResponse = UpdateBenchmarkTaskItemResponses[keyof UpdateBenchmarkTaskItemResponses];
+
+export type ReorderBenchmarkTaskItemsData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1ReorderBenchmarkTaskItemsRequest;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/items/order";
+};
+
+export type ReorderBenchmarkTaskItemsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ReorderBenchmarkTaskItemsError = ReorderBenchmarkTaskItemsErrors[keyof ReorderBenchmarkTaskItemsErrors];
+
+export type ReorderBenchmarkTaskItemsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkTaskItemsResponse;
+};
+
+export type ReorderBenchmarkTaskItemsResponse = ReorderBenchmarkTaskItemsResponses[keyof ReorderBenchmarkTaskItemsResponses];
 
 export type ListSlashCommandsData = {
 	body?: never;

@@ -114,6 +114,8 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<BenchmarkProject> BenchmarkProjects => Set<BenchmarkProject>();
 
+    internal DbSet<BenchmarkTaskItem> BenchmarkTaskItems => Set<BenchmarkTaskItem>();
+
     internal DbSet<BenchmarkRun> BenchmarkRuns => Set<BenchmarkRun>();
 
     internal DbSet<BenchmarkWorkItem> BenchmarkWorkItems => Set<BenchmarkWorkItem>();
@@ -409,6 +411,7 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new DevelopmentTemplateConfiguration());
         modelBuilder.ApplyConfiguration(new DevelopmentTemplateMaterializationConfiguration());
         modelBuilder.ApplyConfiguration(new BenchmarkProjectConfiguration());
+        modelBuilder.ApplyConfiguration(new BenchmarkTaskItemConfiguration());
         modelBuilder.ApplyConfiguration(new BenchmarkRunConfiguration());
         modelBuilder.ApplyConfiguration(new BenchmarkWorkItemConfiguration());
         modelBuilder.ApplyConfiguration(new BenchmarkJudgePolicyRevisionConfiguration());

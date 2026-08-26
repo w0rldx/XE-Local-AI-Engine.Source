@@ -61,7 +61,17 @@ export function groupBenchmarkRunsByModel(runs: readonly BenchmarkRunSummary[]):
  * What the operator can do about an exclusion. `wait` = the node is already working on it, `rerun` = re-judging cannot
  * help because the measurement itself is incomplete.
  */
-export type BenchmarkRankExclusionAction = "score" | "rejudge" | "wait" | "rerun" | "remove-runs" | "none";
+export type BenchmarkRankExclusionAction =
+	| "score"
+	| "rejudge"
+	| "wait"
+	| "rerun"
+	| "rerun-item"
+	| "rerun-cell"
+	| "enable-compute"
+	| "fix-override"
+	| "remove-runs"
+	| "none";
 
 export function rankExclusionAction(reason: BenchmarkRankExclusionReason): BenchmarkRankExclusionAction {
 	switch (reason) {
@@ -79,6 +89,22 @@ export function rankExclusionAction(reason: BenchmarkRankExclusionReason): Bench
 		// The only reason that is not a problem: a warm-up is excluded because that is what it is for.
 		case "warmup":
 			return "none";
+		// Suites. All three are measurement problems, not judging ones — the difference is only in scope. A missing or
+		// edited item needs that ONE item taken again; a changed item SET means the whole cell measured a suite the
+		// project no longer has, so every item of it has to be answered again under the current one.
+		case "item-incomplete":
+		case "item-revised":
+			return "rerun-item";
+		case "item-set-revised":
+			return "rerun-cell";
+		// Not a run problem at all: the node could not run the verifier. Re-judging repeats the refusal until the
+		// operator changes the node's configuration.
+		case "verifier-unavailable":
+			return "enable-compute";
+		// Also not a run problem, and NOT a re-judge: the item's override names a criterion the rubric no longer has, so
+		// every re-judge refuses again until the item or the rubric is edited to agree.
+		case "override-unmatched":
+			return "fix-override";
 		// Pairwise. The node is already working (`pending`) or already fixing itself (`stale` refits on the next pass),
 		// so both are waits; the rest name what the operator has to change.
 		case "pairwise-pending":

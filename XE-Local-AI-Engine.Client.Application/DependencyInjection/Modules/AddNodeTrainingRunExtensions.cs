@@ -49,6 +49,10 @@ internal static class AddNodeTrainingRunExtensions
         builder.Services.AddScoped<ITrainingEvaluationInstalledModelLeaseProvider, TrainingEvaluationInstalledModelLeaseProvider>();
         builder.Services.AddScoped<IEvaluationRunExecutor, EvaluationRunExecutor>();
         builder.Services.AddScoped<IComparisonReportService, ComparisonReportService>();
+
+        // Training comparison -> benchmark hand-off. Scoped like the report service it sits beside; it reaches into the
+        // benchmark project service and freeze service, which are scoped too.
+        builder.Services.AddScoped<IComparisonBenchmarkHandoffService, ComparisonBenchmarkHandoffService>();
         // Export/smoke/promotion. The export service is a SINGLETON because it owns background work that outlives the
         // request that started it (and the single-flight hold that goes with it); it opens its own scopes for stores.
         builder.Services.AddSingleton<ITrainedModelSmokeGate, TrainedModelSmokeGate>();

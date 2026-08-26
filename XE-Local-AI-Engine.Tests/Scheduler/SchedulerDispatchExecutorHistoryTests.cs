@@ -45,6 +45,77 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task DispatchAsync_WhenTriggeredManually_RecordsManualOnTheRunAndTheContext()
+    {
+        ScheduledRunTrigger? observed = null;
+        var handler = new ConfigurableHandler((ctx, _) =>
+        {
+            observed = ctx.TriggeredBy;
+            return Task.CompletedTask;
+        });
+        var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
+
+        await executor.DispatchAsync(JobId, "fire-manual", Now, Now, CancellationToken.None, parameterOverrides: null, ScheduledRunTrigger.Manual);
+
+        await runStore.Received(1).UpsertByFireInstanceAsync(Arg.Is<ScheduledJobRunInput>(i => i.TriggeredBy == ScheduledRunTrigger.Manual),
+            Arg.Any<CancellationToken>());
+        AssertEx.Equal(ScheduledRunTrigger.Manual, observed!.Value);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Success summary: the handler's own sentence is persisted; its absence keeps the generic constant
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Test]
+    public async Task DispatchAsync_WhenHandlerRecordsSummary_PersistsThatSummaryOnTheRun()
+    {
+        const string handlerSummary = "Benchmark project 2222: 3/4 cell(s) enqueued, 6 run(s) created.";
+        var handler = new ConfigurableHandler((ctx, _) =>
+        {
+            ctx.Summary = handlerSummary;
+            return Task.CompletedTask;
+        });
+        var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
+
+        await executor.DispatchAsync(JobId, "fire-summary", Now, Now, CancellationToken.None);
+
+        await runStore.Received(1).UpdateLifecycleAsync(RunId,
+            ScheduledRunStatus.Succeeded,
+            Arg.Any<long?>(),
+            Arg.Any<long?>(),
+            Arg.Is<string?>(summary => summary == handlerSummary),
+            Arg.Any<string?>(),
+            Arg.Any<string?>(),
+            Arg.Any<string?>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DispatchAsync_WhenHandlerRecordsNoSummary_PersistsTheGenericCompletedConstant()
+    {
+        // Left untouched (the common case) and set to whitespace both fall back to the constant.
+        var handler = new ConfigurableHandler((ctx, _) =>
+        {
+            ctx.Summary = ctx.FireInstanceId == "fire-blank-summary" ? "   " : null;
+            return Task.CompletedTask;
+        });
+        var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
+
+        await executor.DispatchAsync(JobId, "fire-no-summary", Now, Now, CancellationToken.None);
+        await executor.DispatchAsync(JobId, "fire-blank-summary", Now, Now, CancellationToken.None);
+
+        await runStore.Received(2).UpdateLifecycleAsync(RunId,
+            ScheduledRunStatus.Succeeded,
+            Arg.Any<long?>(),
+            Arg.Any<long?>(),
+            Arg.Is<string?>(summary => summary == "Completed."),
+            Arg.Any<string?>(),
+            Arg.Any<string?>(),
+            Arg.Any<string?>(),
+            Arg.Any<CancellationToken>());
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // Handler throws → Failed, sanitized (no secret leaks), not re-thrown
     // ──────────────────────────────────────────────────────────────────────

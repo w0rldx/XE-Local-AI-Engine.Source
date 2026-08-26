@@ -5,6 +5,8 @@ import type {
 	BenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { noBenchmarkLaunchFacts, noBenchmarkRunJudge } from "@/features/benchmarks/models/BenchmarkModels";
+import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
+import type { BenchmarkTaskItem } from "@/features/benchmarks/models/BenchmarkTaskItems";
 
 // One neutral run per shape, so a contract change lands in a single fixture instead of in every benchmark suite.
 // Deliberately a succeeded, unjudged, unranked run: every test states the facts it is actually about.
@@ -91,6 +93,48 @@ export function benchmarkRunDetailFixture(overrides: Partial<BenchmarkRunDetail>
 		primaryCompletedAtUtc: 2,
 		reasoningBudgetTokens: null,
 		reasoningBudgetApplicable: null,
+		...overrides,
+	};
+}
+
+/** A plain authored prompt item: the degenerate single-item project, which is what a pre-suite project reads as. */
+export function benchmarkTaskItemFixture(overrides: Partial<BenchmarkTaskItem> = {}): BenchmarkTaskItem {
+	return {
+		id: "item-1",
+		projectId: "project-1",
+		parentItemId: null,
+		index: 0,
+		kind: "prompt",
+		revision: 1,
+		inputHash: "v1:hash-1",
+		isLeaf: true,
+		countsTowardScore: true,
+		prompt: "Summarise the attached release notes.",
+		referenceAnswer: null,
+		verifierConfig: null,
+		generatorConfig: null,
+		version: 1,
+		createdAtUtc: 1,
+		updatedAtUtc: 1,
+		...overrides,
+	};
+}
+
+/** One complete, ranked cell of a single-item project — the shape a pre-suite project's history reads as. */
+export function benchmarkCellFixture(overrides: Partial<BenchmarkCell> = {}): BenchmarkCell {
+	return {
+		cellKey: "cell:group-1:1",
+		primaryModelName: "model.gguf",
+		modelContentFingerprint: "v1:test",
+		kvCacheType: null,
+		repeatGroupId: null,
+		repeatIndex: null,
+		quality: 70,
+		rank: 1,
+		rankExclusionReason: null,
+		items: [
+			{ runId: "run-1", taskItemId: "item-1", taskItemIndex: 0, qualityScore: 70, primaryStopReason: "stop", rankExclusionReason: null },
+		],
 		...overrides,
 	};
 }

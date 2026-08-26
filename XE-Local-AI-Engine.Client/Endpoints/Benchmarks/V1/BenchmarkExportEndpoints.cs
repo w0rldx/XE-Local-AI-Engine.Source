@@ -148,6 +148,21 @@ public sealed class BenchmarkExportResponse
 
     /// <summary>The active Bradley-Terry fit the project ranked through, or null when it judges pointwise.</summary>
     public BenchmarkExportPairwiseFitResponse? PairwiseFit { get; init; }
+
+    /// <summary>
+    ///     The project's task items as it asks them NOW, prompts in clear — exactly as <c>project.coreTask</c> already
+    ///     is, because an export is an operator downloading their own project.
+    /// </summary>
+    public IReadOnlyList<BenchmarkTaskItemResponse> TaskItems { get; init; } = [];
+
+    /// <summary>
+    ///     The measurement cells the ranking was computed over. A run row carries its cell key; this says what the
+    ///     cell scored, what it ranked, and which items it holds.
+    /// </summary>
+    public IReadOnlyList<BenchmarkCellResponse> Cells { get; init; } = [];
+
+    /// <summary>How many leaf items the project counts toward its score right now.</summary>
+    public int ScorableItemCount { get; init; }
 }
 
 /// <summary>
@@ -241,7 +256,8 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimePr
             var verdict = await BenchmarkEndpointSupport.ReadVerdictAsync(_store, full, ct).ConfigureAwait(false);
             runs.Add((full with
             {
-                Rank = summary.Rank
+                Rank = summary.Rank,
+                CellQuality = summary.CellQuality
             }).ToDetail(verdict, expectedKldDigest));
             if (firstOfGroup.Contains(full.Id))
             {
@@ -249,9 +265,15 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimePr
             }
         }
 
+        var taskItems = await _store.ListTaskItemsAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var cells = await _store.ListCellsAsync(req.ProjectId, ct).ConfigureAwait(false);
+
         HttpContext.Response.Headers.ContentDisposition = BenchmarkExportProjection.Attachment(project.Name, now, "json");
         await Send.OkAsync(new BenchmarkExportResponse
                   {
+                      TaskItems = [.. taskItems.Select(BenchmarkEndpointMapper.ToResponse)],
+                      Cells = cells.ToResponse().Cells,
+                      ScorableItemCount = cells.ScorableItemCount,
                       ExportedAtUtc = now.ToUnixTimeMilliseconds(),
                       Project = new BenchmarkExportProjectResponse
                       {
@@ -515,7 +537,12 @@ internal static class BenchmarkExportProjection
     ///     3 since the P2 axes joined the record: the fidelity block on every run, and the pairwise fit the project
     ///     ranked through. Both are additive — a version 2 reader still finds every column it knew.
     /// </summary>
-    public const int SchemaVersion = 3;
+    /// <summary>
+    ///     4 since task suites: the project's <c>taskItems</c>, its measurement <c>cells</c>, and the four identity
+    ///     stamps plus the cell mean on every run row. Additive again, and the fourth stamp is what makes an exported
+    ///     cell self-describing about the suite it measured rather than about the one the project asks today.
+    /// </summary>
+    public const int SchemaVersion = 4;
 
     public static BenchmarkExportPairwiseFitResponse? ToResponse(BenchmarkPairwiseFitRecord? fit) =>
         fit is null
@@ -656,7 +683,11 @@ internal static class BenchmarkExportCsv
         // fit's per-run interval. The strength itself is already in qualityScore with qualityScoreSource "pairwise".
         + "fidelityStatus,perplexityMean,perplexityStdErr,perplexityChunks,perplexityContextTokens,perplexityCorpusId,"
         + "kldState,kldMean,kldP99,topTokenAgreement,kldBaseFingerprint,kldBaseLogitsDigest,"
-        + "pairwiseScore,pairwiseCiLow,pairwiseCiHigh,pairwiseComparisons,pairwiseFitKey";
+        + "pairwiseScore,pairwiseCiLow,pairwiseCiHigh,pairwiseComparisons,pairwiseFitKey,"
+
+        // Appended once more. The four identity stamps plus the cell mean: which case this row answered, which cell
+        // its score aggregates into, exactly what it was asked, and what the whole question set was at the time.
+        + "taskItemId,taskItemIndex,cellKey,taskInputHash,taskItemSetHash,cellQuality";
 
     /// <param name="expectedKldBaseLogitsDigest">
     ///     The digest the project's CURRENT settings recompute. A run whose stored digest differs exports
@@ -791,7 +822,22 @@ internal static class BenchmarkExportCsv
                .Append(',');
         AppendFidelity(builder, run, expectedKldBaseLogitsDigest);
         AppendPairwise(builder, run, pairwiseFit, scores);
-        _ = builder.Append("\r\n");
+
+        // taskItemIndex goes through Field, not Number: an index is numeric, but a project that renumbered into a
+        // negative range would hand a spreadsheet a leading '-' to evaluate.
+        _ = builder.Append(',')
+                   .Append(Field(run.TaskItemId?.ToString()))
+                   .Append(',')
+                   .Append(Field(run.TaskItemIndex?.ToString(CultureInfo.InvariantCulture)))
+                   .Append(',')
+                   .Append(Field(run.CellKey))
+                   .Append(',')
+                   .Append(Field(run.TaskInputHash))
+                   .Append(',')
+                   .Append(Field(run.TaskItemSetHash))
+                   .Append(',')
+                   .Append(Number(run.CellQuality))
+                   .Append("\r\n");
     }
 
     private static void AppendFidelity(StringBuilder builder, BenchmarkRunRecord run, string? expectedKldBaseLogitsDigest)

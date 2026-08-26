@@ -78,6 +78,11 @@ public static class NodeSchedulerServiceCollectionExtensions
         // IServiceScopeFactory scope and runs a node-local agent headlessly on a schedule.
         builder.Services.AddSingleton<IScheduledJobHandler, RunSavedAgentHandler>();
 
+        // Benchmark-matrix template handler. Singleton for the same registry-snapshot reason; it resolves the scoped
+        // benchmark store and freeze service per fire and only ENQUEUES the matrix — the existing single-consumer
+        // benchmark queue drains it, so the fire never holds the scheduler thread for the runs' duration.
+        builder.Services.AddSingleton<IScheduledJobHandler, RunBenchmarkBatchHandler>();
+
         // Default no-op publisher so the dispatcher/management service resolve a publisher in Application-only and test
         // hosts. The Client host registers a hub-backed publisher (ConfigureServices) that supersedes this.
         builder.Services.TryAddSingleton<ISchedulerEventPublisher, NullSchedulerEventPublisher>();

@@ -67,3 +67,14 @@ describe("BenchmarkExportButtons", () => {
 		expect(saveBlobMock).not.toHaveBeenCalled();
 	});
 });
+
+// A downloaded file is usually read by something other than a person, so the shape it will have is named before the
+// download rather than found inside it.
+describe("BenchmarkExportButtons schema", () => {
+	it("names the export schema on both buttons", () => {
+		renderWithProviders(<BenchmarkExportButtons projectId="project-1" />);
+
+		expect(screen.getByTestId("benchmark-export-json").textContent).toContain("v4");
+		expect(screen.getByTestId("benchmark-export-csv").textContent).toContain("v4");
+	});
+});

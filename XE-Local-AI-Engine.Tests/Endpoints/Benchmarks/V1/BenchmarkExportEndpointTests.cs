@@ -176,7 +176,8 @@ public sealed class BenchmarkExportEndpointTests
                        + "repeatMode,samplingSeed,samplingTemperature,"
                        + "fidelityStatus,perplexityMean,perplexityStdErr,perplexityChunks,perplexityContextTokens,perplexityCorpusId,"
                        + "kldState,kldMean,kldP99,topTokenAgreement,kldBaseFingerprint,kldBaseLogitsDigest,"
-                       + "pairwiseScore,pairwiseCiLow,pairwiseCiHigh,pairwiseComparisons,pairwiseFitKey",
+                       + "pairwiseScore,pairwiseCiLow,pairwiseCiHigh,pairwiseComparisons,pairwiseFitKey,"
+                       + "taskItemId,taskItemIndex,cellKey,taskInputHash,taskItemSetHash,cellQuality",
             lines[0]);
 
         // pp is 123 tokens over 500 ms = 246, tg is 89 over 2000 ms = 44.5. The group key is the base model, so the
@@ -185,10 +186,45 @@ public sealed class BenchmarkExportEndpointTests
                        + "50000000-0000-0000-0000-000000000005,2,false,"
                        + "512,41.5,180.25,123,246,89,44.5,7,2,12340,73,judge,,,,,,answerVariance,3,0.7"
 
-                       // A run with no fidelity attempt and no pairwise fit still writes every cell, empty. A short
-                       // row is what breaks an index-reading consumer, which is the whole reason these were appended.
-                       + new string(',', count: 17),
+                       // A run with no fidelity attempt, no pairwise fit and no task item still writes every cell,
+                       // empty. A short row is what breaks an index-reading consumer, which is the whole reason these
+                       // were appended.
+                       + new string(',', count: 23),
             lines[1]);
+    }
+
+    [Test]
+    public async Task ExportCsv_CarriesTheIdentityStampsAndEscapesTheTaskItemIndex()
+    {
+        await using var context = CreateContext();
+        ArrangeProject(context);
+        var itemId = Guid.Parse("70000000-0000-0000-0000-000000000007");
+        ArrangeRuns(context,
+            Run(BenchmarkPrimaryStatus.Succeeded) with
+            {
+                QualityScore = 80,
+                QualityScoreSource = BenchmarkQualityScoreSources.User,
+                TaskItemId = itemId,
+
+                // Negative only because an index is numeric and a leading '-' is what a spreadsheet evaluates. The
+                // column is written through the formula guard for that reason, not because a real index is negative.
+                TaskItemIndex = -1,
+                CellKey = "cell:80000000-0000-0000-0000-000000000008:1",
+                TaskInputHash = "v1:item",
+                TaskItemSetHash = "v1:set",
+                CellQuality = 75
+            });
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var row = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries)[1];
+        AssertEx.True(row.EndsWith("," + itemId.ToString("D") + ",\"'-1\",cell:80000000-0000-0000-0000-000000000008:1,v1:item,v1:set,75",
+                StringComparison.Ordinal),
+            "The four stamps and the cell mean close the row, and the index is escaped: " + row);
     }
 
     [Test]
@@ -315,8 +351,16 @@ public sealed class BenchmarkExportEndpointTests
         AssertEx.True(judge.GetProperty("promptVersionOutdated").GetBoolean());
     }
 
-    private static void ArrangeProject(Context context) =>
+    private static void ArrangeProject(Context context)
+    {
         context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
+
+        // The suite sections of schema 4. A project with no item rows is the pre-suite shape these tests describe, so
+        // both come back empty rather than absent — the export still has to say what the ranking counted.
+        context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns([]);
+        context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkCellPage([], new BenchmarkRankCohort(2, "cohort-key", 3, RankedCount: 1, TotalScored: 1), ScorableItemCount: 0));
+    }
 
     private static void ArrangeRuns(Context context, params BenchmarkRunRecord[] runs)
     {

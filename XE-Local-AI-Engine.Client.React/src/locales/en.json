@@ -4086,7 +4086,8 @@
 				"answerVarianceTemperatureHelp": "Above 0, at most {{max}}. Seeds vary per repeat.",
 				"samplingTemperature": "Temperature",
 				"samplingSeed": "Seed",
-				"reasoningBudgetNotApplicable": "not applied — model has no thinking mode"
+				"reasoningBudgetNotApplicable": "not applied — model has no thinking mode",
+				"estimate": "One start = {{count}} runs, one per task item"
 			},
 			"matrix": {
 				"open": "Batch runs…",
@@ -4097,11 +4098,13 @@
 				"repeatCountHelp": "Sampling is deterministic, so repeats do not change the answer — they measure how much the speed moves between launches. Each repeat is its own model load.",
 				"warmup": "Warm-up run first",
 				"warmupHelp": "Adds one extra run per combination that is never ranked and never counted in the spread.",
-				"summary": "{{cells}} combinations × {{perCell}} runs = {{total}} runs",
+				"summary": "{{cells}} combinations × {{items}} task items × {{perCell}} runs = {{total}} runs",
 				"rejected": "{{count}} combinations were not started",
 				"start": "Start {{count}} runs",
 				"progress": "Batch: {{done}} of {{total}} done ({{running}} running, {{queued}} queued, {{failed}} failed)",
-				"repeatCountVarianceHelp": "Each repeat samples its own answer, so the repeats measure how much the ANSWER moves. Each repeat is still its own model load."
+				"repeatCountVarianceHelp": "Each repeat samples its own answer, so the repeats measure how much the ANSWER moves. Each repeat is still its own model load.",
+				"estimate": "about {{duration}}",
+				"overCap": "The node refuses more than {{max}} runs in one request. Pick fewer combinations, fewer repeats, or split the matrix."
 			},
 			"metrics": {
 				"duration": "Duration",
@@ -4136,9 +4139,10 @@
 				"clear": "Clear override"
 			},
 			"export": {
-				"json": "Export JSON",
-				"csv": "Export CSV",
-				"error": "Could not export this benchmark project."
+				"json": "Export JSON (v{{version}})",
+				"csv": "Export CSV (v{{version}})",
+				"error": "Could not export this benchmark project.",
+				"schemaHelp": "Schema {{version}}: every run at full detail, plus the project's task items, each run's item and combination stamps, and the combination table."
 			},
 			"judge": {
 				"title": "Automated judge",
@@ -4280,7 +4284,12 @@
 					"pairwise-unfitted": "not in the active fit",
 					"pairwise-cross-case": "compared under a different task case",
 					"pairwise-execution-mismatch": "fitted under a different judge runtime",
-					"pairwise-execution-identity-incomplete": "judge runtime not fully recorded"
+					"pairwise-execution-identity-incomplete": "judge runtime not fully recorded",
+					"item-incomplete": "At least one task item of this combination has no rankable answer, so its mean would be over a different suite than the ones beside it.",
+					"item-revised": "The task item this run answered has been edited since. The answer is to a question the project no longer asks.",
+					"item-set-revised": "A task item was added or removed after this combination was measured, so it was scored against a suite the project no longer has.",
+					"verifier-unavailable": "A deterministic verifier could not run on this node, so the answer was never checked. That is not a zero.",
+					"override-unmatched": "The task item this run answered carries a verifier override naming a rubric criterion that no longer exists, so nothing it asked for was applied."
 				},
 				"exclusionShort": {
 					"no-score": "unscored",
@@ -4301,7 +4310,12 @@
 					"pairwise-unfitted": "unfitted",
 					"pairwise-cross-case": "cross-case",
 					"pairwise-execution-mismatch": "runtime differs",
-					"pairwise-execution-identity-incomplete": "runtime unknown"
+					"pairwise-execution-identity-incomplete": "runtime unknown",
+					"item-incomplete": "item missing",
+					"item-revised": "item edited",
+					"item-set-revised": "suite changed",
+					"verifier-unavailable": "verifier unavailable",
+					"override-unmatched": "override unmatched"
 				},
 				"action": {
 					"score": "Set an operator score.",
@@ -4309,7 +4323,11 @@
 					"wait": "Wait for the judging to finish.",
 					"rerun": "Rerun it — with more room when it was cut off.",
 					"none": "Nothing to do — a warm-up is meant to sit outside the ranking.",
-					"remove-runs": "Remove runs to bring the cohort under the cap."
+					"remove-runs": "Remove runs to bring the cohort under the cap.",
+					"rerun-item": "Run that task item again for this model.",
+					"rerun-cell": "Run this whole combination again under the current task items.",
+					"enable-compute": "Enable Compute on this node — and give it a host where the sandbox can be bounded — then re-judge.",
+					"fix-override": "Edit the task item's override, or the rubric, so the two name the same criterion — then re-judge."
 				},
 				"comparing": "Comparing {{count}} runs"
 			},
@@ -4335,7 +4353,8 @@
 					"weight": "The weight must be between 1 and 100."
 				},
 				"presetVerifiable": "Verifiable",
-				"criterionDescriptionVerified": "This criterion is decided server-side, so the text is documentation for the operator rather than an instruction to a model."
+				"criterionDescriptionVerified": "This criterion is decided server-side, so the text is documentation for the operator rather than an instruction to a model.",
+				"presetCodeExecution": "Code execution"
 			},
 			"fidelity": {
 				"title": "Quant fidelity (PPL / KLD)",
@@ -4405,7 +4424,8 @@
 					"regex": "Regular expression",
 					"jsonSchema": "JSON schema",
 					"mathAnswer": "Numeric answer",
-					"constraint": "Structural constraints"
+					"constraint": "Structural constraints",
+					"pythonTests": "Running the code against tests"
 				},
 				"expected": "Expected answer",
 				"normalize": {
@@ -4447,7 +4467,26 @@
 					"constraintEmpty": "State at least one constraint.",
 					"constraintWords": "The word bounds are inconsistent.",
 					"constraintContains": "A contains entry cannot be empty.",
-					"constraintFormat": "That format is not supported."
+					"constraintFormat": "That format is not supported.",
+					"testCodeRequired": "Test code is required — a pythonTests criterion is decided by running it.",
+					"testCodeTooLong": "The test code is too long: it has to fit inside the sandbox script alongside the answer's own code.",
+					"exportsInvalid": "Every export must be a plain Python identifier.",
+					"exportsCap": "At most 16 exports.",
+					"timeoutRange": "The timeout must be a whole number of seconds between 1 and 600.",
+					"extractInvalid": "Take the code from the first python fence or from the whole answer."
+				},
+				"kindLocked": "Decided by: {{kind}} — set by the judge policy.",
+				"pythonTestsHelp": "The answer's code runs in an untrusted child process inside the compute sandbox; these tests run in the parent, which never executes it. All tests pass = 10, anything else = 0. The tests reach the answer as candidate.name(...), or as bare names you list under Exports.",
+				"testCode": "Test code",
+				"exports": "Exports",
+				"exportsHelp": "Names the tests may call directly instead of through candidate. Plain Python identifiers, at most {{max}}.",
+				"timeoutSeconds": "Timeout (s)",
+				"timeoutSecondsHelp": "Empty = the node's own compute timeout.",
+				"extract": "Code taken from",
+				"extractHelp": "Empty = the node's default, the first python fence.",
+				"extractModes": {
+					"firstPythonFence": "The first ```python block",
+					"wholeText": "The whole answer"
 				}
 			},
 			"pairwise": {
@@ -4475,6 +4514,103 @@
 				"estimateCapped": "{{capped}} runs are left out — the cohort caps at {{maximum}}. They rank as pairwise-cap until removed.",
 				"truncated": "truncated",
 				"truncatedHint": "One of the two answers was cut off by the token budget, so this verdict compared a fragment."
+			},
+			"items": {
+				"section": "Task items",
+				"count": "{{count}} of {{max}} items — a model's project score is the mean over them",
+				"add": "Add item",
+				"historyWarning": "This project has runs. Editing an item unranks every measurement of it (item-revised); adding or deleting one unranks every combination measured under the old set (item-set-revised). Reordering changes nothing — the set is identified by its items, not their positions.",
+				"caseCount": "{{count}} probe cases",
+				"notScored": "own axis",
+				"hasOverride": "verifier override",
+				"revision": "r{{revision}}",
+				"showCases": "Show the generated probe cases",
+				"moveUp": "Move up",
+				"moveDown": "Move down",
+				"newTitle": "New task item",
+				"editTitle": "Task item {{index}}",
+				"niahKind": "Long-context probe (NIAH)",
+				"reviseWarning": "Saving bumps this item to r{{revision}}. Every run that answered r{{current}} of it is excluded as item-revised — the answers were given to a different question.",
+				"prompt": "Prompt",
+				"niahPrompt": "Probe description",
+				"niahPromptHelp": "Shown in the item list. The cases carry their own generated prompts.",
+				"niahContextTokens": "Probe lengths (tokens)",
+				"niahContextTokensHelp": "Comma separated. Each must fit the project's {{context}}-token window.",
+				"niahDepths": "Needle depths (%)",
+				"niahDepthsHelp": "Comma separated, 0..100 — where in the haystack the needle is hidden.",
+				"niahNeedle": "Needle template",
+				"niahNeedleHelp": "Must contain {city} and {code}.",
+				"niahQuestion": "Question template",
+				"niahQuestionHelp": "Must contain {city}.",
+				"niahCriterion": "Criterion to override",
+				"niahCriterionHelp": "An exact-match criterion of the judge policy. Each case supplies its own passcode as that criterion's expected answer.",
+				"niahSeed": "Seed",
+				"niahSummary": "Expands into {{count}} cases — {{count}} runs per combination, and {{count}} against the item cap.",
+				"niahIssues": {
+					"contextTokensRequired": "Name at least one probe length.",
+					"depthsRequired": "Name at least one needle depth.",
+					"depthRange": "A needle depth is a percentage between 0 and 100.",
+					"contextTooSmall": "A probe under 512 tokens is too short to hide anything, and its depths stop being distinguishable.",
+					"contextTooLarge": "A probe longer than the project's {{context}}-token window would be truncated to it, and a truncated probe measures the window rather than the model.",
+					"caseCap": "One probe expands into at most 20 cases.",
+					"itemCap": "That expansion would take the project past {{max}} task items.",
+					"needleTemplate": "The needle template must contain both {city} and {code} — the passcode IS what the model has to find.",
+					"questionTemplate": "The question template must contain {city}, so the question names what it is asking about."
+				},
+				"referenceAnswer": "Reference answer (optional)",
+				"referenceAnswerHelp": "Overrides the judge policy's reference answer for this item only.",
+				"countsTowardScore": "Counts toward the project score",
+				"countsTowardScoreHelp": "Off = measured and reported on its own axis, never averaged into the rubric mean. A long-context probe starts off, because recall is a capability rather than answer quality.",
+				"overrides": "Verifier overrides",
+				"overridesHelp": "Give one criterion a different expected answer for this item. Left empty, the judge policy's own configuration is used.",
+				"deleteTitle": "Delete this task item?",
+				"deleteConfirm": "Deleting an item changes what the project measures. Every combination that was already measured is excluded as item-set-revised — it was scored against a suite this project no longer has, and a partial one never becomes complete by losing the question it missed.",
+				"deleteCases": "Its {{count}} generated probe cases are deleted with it.",
+				"validation": {
+					"prompt": "A prompt is required."
+				},
+				"errors": {
+					"create": "Could not add this task item.",
+					"update": "Could not save this task item.",
+					"delete": "Could not delete this task item.",
+					"reorder": "Could not reorder the task items."
+				}
+			},
+			"cells": {
+				"view": "Combinations",
+				"runsView": "Every run",
+				"empty": "No measured combinations yet.",
+				"cohort": "{{ranked}} of {{scored}} combinations ranked, each over {{items}} scored items",
+				"quality": "Suite mean",
+				"items": "Items",
+				"itemsOf": "{{answered}} of {{total}}",
+				"recall": "Recall",
+				"recallValue": "{{found}} of {{graded}} needles",
+				"recallUnknown": "recall unknown",
+				"recallUnknownSome": "{{count}} unknown",
+				"expand": "Show this combination item by item",
+				"rerun": "Re-run",
+				"unranked": "Not ranked.",
+				"selectRun": "Show this item's run in the detail view",
+				"missing": "Never answered: {{items}}",
+				"legacyItem": "the project's task",
+				"unknownItem": "item {{index}}",
+				"displayOnly": "No task item of this project counts toward a score, so no combination is ranked. Recall is the measurement here.",
+				"displayOnlyCell": "Nothing here counts toward a score, so there is nothing to rank."
+			},
+			"paired": {
+				"title": "Paired difference",
+				"a": "A",
+				"b": "B",
+				"hint": "Pick two different combinations to compare them over the items they share.",
+				"loading": "Comparing…",
+				"failed": "Could not compare these two combinations.",
+				"insufficient": "These two share fewer than three scored items answered rankably, which cannot support an interval. That is a gap in the measurement, not a tie.",
+				"value": "A − B = {{delta}} [{{low}}, {{high}}]",
+				"separated": "separated",
+				"notSeparated": "not separated",
+				"notSeparatedHelp": "Zero is inside the interval: this suite does not separate them.",
+				"detail": "Over the {{count}} scored items both answered, 95 % bootstrap interval."
 			}
 		},
 		"customTools": {

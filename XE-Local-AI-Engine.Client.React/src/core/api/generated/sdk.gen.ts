@@ -123,6 +123,9 @@ import type {
 	CompactNodeChatConversationData,
 	CompactNodeChatConversationErrors,
 	CompactNodeChatConversationResponses,
+	CompareBenchmarkCellsData,
+	CompareBenchmarkCellsErrors,
+	CompareBenchmarkCellsResponses,
 	ConfirmDevelopmentContainerRuntimeData,
 	ConfirmDevelopmentContainerRuntimeErrors,
 	ConfirmDevelopmentContainerRuntimeResponses,
@@ -138,9 +141,15 @@ import type {
 	CreateBaseArtifactData,
 	CreateBaseArtifactErrors,
 	CreateBaseArtifactResponses,
+	CreateBenchmarkFromComparisonData,
+	CreateBenchmarkFromComparisonErrors,
+	CreateBenchmarkFromComparisonResponses,
 	CreateBenchmarkProjectData,
 	CreateBenchmarkProjectErrors,
 	CreateBenchmarkProjectResponses,
+	CreateBenchmarkTaskItemData,
+	CreateBenchmarkTaskItemErrors,
+	CreateBenchmarkTaskItemResponses,
 	CreateComparisonData,
 	CreateComparisonErrors,
 	CreateComparisonResponses,
@@ -216,6 +225,9 @@ import type {
 	DeleteBenchmarkRunData,
 	DeleteBenchmarkRunErrors,
 	DeleteBenchmarkRunResponses,
+	DeleteBenchmarkTaskItemData,
+	DeleteBenchmarkTaskItemErrors,
+	DeleteBenchmarkTaskItemResponses,
 	DeleteComparisonData,
 	DeleteComparisonErrors,
 	DeleteComparisonResponses,
@@ -624,6 +636,9 @@ import type {
 	ListBaseArtifactsData,
 	ListBaseArtifactsErrors,
 	ListBaseArtifactsResponses,
+	ListBenchmarkCellsData,
+	ListBenchmarkCellsErrors,
+	ListBenchmarkCellsResponses,
 	ListBenchmarkComparisonsData,
 	ListBenchmarkComparisonsErrors,
 	ListBenchmarkComparisonsResponses,
@@ -636,6 +651,9 @@ import type {
 	ListBenchmarkRunsData,
 	ListBenchmarkRunsErrors,
 	ListBenchmarkRunsResponses,
+	ListBenchmarkTaskItemsData,
+	ListBenchmarkTaskItemsErrors,
+	ListBenchmarkTaskItemsResponses,
 	ListComparisonsData,
 	ListComparisonsErrors,
 	ListComparisonsResponses,
@@ -871,6 +889,9 @@ import type {
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationErrors,
 	RenameNodeChatConversationResponses,
+	ReorderBenchmarkTaskItemsData,
+	ReorderBenchmarkTaskItemsErrors,
+	ReorderBenchmarkTaskItemsResponses,
 	ResolveToolApprovalData,
 	ResolveToolApprovalErrors,
 	ResolveToolApprovalResponses,
@@ -1000,6 +1021,9 @@ import type {
 	UpdateBenchmarkProjectFidelityErrors,
 	UpdateBenchmarkProjectFidelityResponses,
 	UpdateBenchmarkProjectResponses,
+	UpdateBenchmarkTaskItemData,
+	UpdateBenchmarkTaskItemErrors,
+	UpdateBenchmarkTaskItemResponses,
 	UpdateCustomToolData,
 	UpdateCustomToolErrors,
 	UpdateCustomToolResponses,
@@ -1125,6 +1149,9 @@ import {
 	zCompactNodeChatConversationBody,
 	zCompactNodeChatConversationPath,
 	zCompactNodeChatConversationResponse,
+	zCompareBenchmarkCellsPath,
+	zCompareBenchmarkCellsQuery,
+	zCompareBenchmarkCellsResponse,
 	zConfirmDevelopmentContainerRuntimeBody,
 	zConfirmDevelopmentContainerRuntimeResponse,
 	zConnectConnectionResponse,
@@ -1134,8 +1161,14 @@ import {
 	zCreateAgentDefinitionResponse,
 	zCreateBaseArtifactBody,
 	zCreateBaseArtifactResponse,
+	zCreateBenchmarkFromComparisonBody,
+	zCreateBenchmarkFromComparisonPath,
+	zCreateBenchmarkFromComparisonResponse,
 	zCreateBenchmarkProjectBody,
 	zCreateBenchmarkProjectResponse,
+	zCreateBenchmarkTaskItemBody,
+	zCreateBenchmarkTaskItemPath,
+	zCreateBenchmarkTaskItemResponse,
 	zCreateComparisonBody,
 	zCreateComparisonResponse,
 	zCreateCustomToolBody,
@@ -1191,6 +1224,9 @@ import {
 	zDeleteBenchmarkRunBody,
 	zDeleteBenchmarkRunPath,
 	zDeleteBenchmarkRunResponse,
+	zDeleteBenchmarkTaskItemBody,
+	zDeleteBenchmarkTaskItemPath,
+	zDeleteBenchmarkTaskItemResponse,
 	zDeleteComparisonBody,
 	zDeleteComparisonPath,
 	zDeleteComparisonResponse,
@@ -1437,6 +1473,8 @@ import {
 	zListAgentPlaybookActionsResponse,
 	zListAgentTemplatesResponse,
 	zListBaseArtifactsResponse,
+	zListBenchmarkCellsPath,
+	zListBenchmarkCellsResponse,
 	zListBenchmarkComparisonsPath,
 	zListBenchmarkComparisonsResponse,
 	zListBenchmarkFidelityAttemptsPath,
@@ -1445,6 +1483,8 @@ import {
 	zListBenchmarkRunsPath,
 	zListBenchmarkRunsQuery,
 	zListBenchmarkRunsResponse,
+	zListBenchmarkTaskItemsPath,
+	zListBenchmarkTaskItemsResponse,
 	zListComparisonsResponse,
 	zListConversationFilesPath,
 	zListConversationFilesResponse,
@@ -1589,6 +1629,9 @@ import {
 	zRenameNodeChatConversationBody,
 	zRenameNodeChatConversationPath,
 	zRenameNodeChatConversationResponse,
+	zReorderBenchmarkTaskItemsBody,
+	zReorderBenchmarkTaskItemsPath,
+	zReorderBenchmarkTaskItemsResponse,
 	zResolveToolApprovalBody,
 	zResolveToolApprovalResponse,
 	zResolveUserQuestionBody,
@@ -1683,6 +1726,9 @@ import {
 	zUpdateBenchmarkProjectFidelityResponse,
 	zUpdateBenchmarkProjectPath,
 	zUpdateBenchmarkProjectResponse,
+	zUpdateBenchmarkTaskItemBody,
+	zUpdateBenchmarkTaskItemPath,
+	zUpdateBenchmarkTaskItemResponse,
 	zUpdateCustomToolBody,
 	zUpdateCustomToolPath,
 	zUpdateCustomToolResponse,
@@ -10476,6 +10522,66 @@ export const listEligibleBenchmarkModels = <ThrowOnError extends boolean = false
 		...options,
 	});
 
+export const listBenchmarkCells = <ThrowOnError extends boolean = false>(
+	options: Options<ListBenchmarkCellsData, ThrowOnError>,
+): RequestResult<ListBenchmarkCellsResponses, ListBenchmarkCellsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListBenchmarkCellsResponses, ListBenchmarkCellsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListBenchmarkCellsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListBenchmarkCellsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/cells",
+		...options,
+	});
+
+export const compareBenchmarkCells = <ThrowOnError extends boolean = false>(
+	options: Options<CompareBenchmarkCellsData, ThrowOnError>,
+): RequestResult<CompareBenchmarkCellsResponses, CompareBenchmarkCellsErrors, ThrowOnError> =>
+	(options.client ?? client).get<CompareBenchmarkCellsResponses, CompareBenchmarkCellsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCompareBenchmarkCellsPath,
+					query: zCompareBenchmarkCellsQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCompareBenchmarkCellsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/compare",
+		...options,
+	});
+
 export const exportBenchmarkProject = <ThrowOnError extends boolean = false>(
 	options: Options<ExportBenchmarkProjectData, ThrowOnError>,
 ): RequestResult<ExportBenchmarkProjectResponses, ExportBenchmarkProjectErrors, ThrowOnError> =>
@@ -10686,6 +10792,40 @@ export const clearBenchmarkFidelityCache = <ThrowOnError extends boolean = false
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/fidelity/cache",
 		...options,
+	});
+
+export const createBenchmarkFromComparison = <ThrowOnError extends boolean = false>(
+	options: Options<CreateBenchmarkFromComparisonData, ThrowOnError>,
+): RequestResult<CreateBenchmarkFromComparisonResponses, CreateBenchmarkFromComparisonErrors, ThrowOnError> =>
+	(options.client ?? client).post<CreateBenchmarkFromComparisonResponses, CreateBenchmarkFromComparisonErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateBenchmarkFromComparisonBody,
+					path: zCreateBenchmarkFromComparisonPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateBenchmarkFromComparisonResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/training/comparisons/{comparisonId}/benchmark",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const listBenchmarkComparisons = <ThrowOnError extends boolean = false>(
@@ -11297,6 +11437,171 @@ export const rejudgeBenchmarkRun = <ThrowOnError extends boolean = false>(
 			},
 		],
 		url: "/api/local/v1/benchmarks/runs/{runId}/rejudge",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listBenchmarkTaskItems = <ThrowOnError extends boolean = false>(
+	options: Options<ListBenchmarkTaskItemsData, ThrowOnError>,
+): RequestResult<ListBenchmarkTaskItemsResponses, ListBenchmarkTaskItemsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListBenchmarkTaskItemsResponses, ListBenchmarkTaskItemsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListBenchmarkTaskItemsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListBenchmarkTaskItemsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/items",
+		...options,
+	});
+
+export const createBenchmarkTaskItem = <ThrowOnError extends boolean = false>(
+	options: Options<CreateBenchmarkTaskItemData, ThrowOnError>,
+): RequestResult<CreateBenchmarkTaskItemResponses, CreateBenchmarkTaskItemErrors, ThrowOnError> =>
+	(options.client ?? client).post<CreateBenchmarkTaskItemResponses, CreateBenchmarkTaskItemErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateBenchmarkTaskItemBody,
+					path: zCreateBenchmarkTaskItemPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateBenchmarkTaskItemResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/items",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteBenchmarkTaskItem = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteBenchmarkTaskItemData, ThrowOnError>,
+): RequestResult<DeleteBenchmarkTaskItemResponses, DeleteBenchmarkTaskItemErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeleteBenchmarkTaskItemResponses, DeleteBenchmarkTaskItemErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zDeleteBenchmarkTaskItemBody,
+					path: zDeleteBenchmarkTaskItemPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteBenchmarkTaskItemResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/items/{itemId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const updateBenchmarkTaskItem = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateBenchmarkTaskItemData, ThrowOnError>,
+): RequestResult<UpdateBenchmarkTaskItemResponses, UpdateBenchmarkTaskItemErrors, ThrowOnError> =>
+	(options.client ?? client).put<UpdateBenchmarkTaskItemResponses, UpdateBenchmarkTaskItemErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateBenchmarkTaskItemBody,
+					path: zUpdateBenchmarkTaskItemPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateBenchmarkTaskItemResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/items/{itemId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const reorderBenchmarkTaskItems = <ThrowOnError extends boolean = false>(
+	options: Options<ReorderBenchmarkTaskItemsData, ThrowOnError>,
+): RequestResult<ReorderBenchmarkTaskItemsResponses, ReorderBenchmarkTaskItemsErrors, ThrowOnError> =>
+	(options.client ?? client).put<ReorderBenchmarkTaskItemsResponses, ReorderBenchmarkTaskItemsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zReorderBenchmarkTaskItemsBody,
+					path: zReorderBenchmarkTaskItemsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zReorderBenchmarkTaskItemsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/items/order",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

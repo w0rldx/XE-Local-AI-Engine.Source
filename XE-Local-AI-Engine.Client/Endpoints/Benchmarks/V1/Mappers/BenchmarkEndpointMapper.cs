@@ -27,6 +27,43 @@ internal static class BenchmarkEndpointMapper
             request.FidelityChunks,
             request.FidelityKldBaseModelName);
 
+    public static BenchmarkTaskItemDraft ToDraft(this BenchmarkTaskItemMutationRequest request) =>
+        new(request.Prompt,
+            request.Kind,
+            request.ReferenceAnswer,
+            request.VerifierConfig,
+            request.GeneratorConfig,
+            request.CountsTowardScore);
+
+    public static BenchmarkTaskItemResponse ToResponse(this BenchmarkTaskItemRecord item) =>
+        new()
+        {
+            Id = item.Id,
+            ProjectId = item.ProjectId,
+            ParentItemId = item.ParentItemId,
+            Index = item.Index,
+            Kind = item.Kind,
+            Revision = item.Revision,
+            InputHash = item.InputHash,
+            IsLeaf = item.IsLeaf,
+            CountsTowardScore = item.CountsTowardScore,
+            Prompt = BenchmarkTaskItemService.DecodePrompt(item.PromptJson.Span),
+            ReferenceAnswer = BenchmarkTaskItemService.DecodeOptional(item.ReferenceAnswerJson),
+            VerifierConfig = ParseJson(item.VerifierConfigJson),
+            GeneratorConfig = ParseJson(item.GeneratorConfigJson),
+            Version = item.Version,
+            CreatedAtUtc = item.CreatedAtUtc,
+            UpdatedAtUtc = item.UpdatedAtUtc
+        };
+
+    public static ListBenchmarkTaskItemsResponse ToResponse(this IReadOnlyList<BenchmarkTaskItemRecord> items, BenchmarkProjectRecord project) =>
+        new()
+        {
+            Items = [.. items.Select(ToResponse)],
+            TaskItemSetHash = project.TaskItemSetHash,
+            ProjectVersion = project.Version
+        };
+
     public static BenchmarkProjectSummaryResponse ToSummary(this BenchmarkProjectRecord project, int runCount) =>
         new()
         {
@@ -46,11 +83,18 @@ internal static class BenchmarkEndpointMapper
         };
 
     /// <param name="judge">The decrypted current judge policy, or a disabled marker when the project does not judge.</param>
+    /// <param name="taskItems">
+    ///     The project's items. Omitted leaves the detail's item list empty rather than guessing: a caller that did
+    ///     not read them must not be able to render "this project asks nothing".
+    /// </param>
     public static BenchmarkProjectDetailResponse ToDetail(this BenchmarkProjectRecord project,
         int runCount,
-        BenchmarkJudgePolicyResponse? judge = null) =>
+        BenchmarkJudgePolicyResponse? judge = null,
+        IReadOnlyList<BenchmarkTaskItemRecord>? taskItems = null) =>
         new()
         {
+            TaskItems = taskItems is null ? [] : [.. taskItems.Select(ToResponse)],
+            TaskItemSetHash = project.TaskItemSetHash,
             Id = project.Id,
             Name = project.Name,
             CoreTask = JsonSerializer.Deserialize<string>(project.CoreTaskJson.Span)
@@ -103,7 +147,13 @@ internal static class BenchmarkEndpointMapper
             QualityScore = run.QualityScore,
             QualityScoreSource = run.QualityScoreSource ?? BenchmarkQualityScoreSources.None,
             Rank = run.Rank,
+            CellQuality = run.CellQuality,
             RankExclusionReason = run.Judge?.RankExclusionReason,
+            TaskItemId = run.TaskItemId,
+            TaskItemIndex = run.TaskItemIndex,
+            CellKey = run.CellKey,
+            TaskInputHash = run.TaskInputHash,
+            TaskItemSetHash = run.TaskItemSetHash,
             PrimaryStopReason = run.PrimaryStopReason,
             ModelGroupKey = BenchmarkModelGroupKey.From(run.PrimaryModelName, run.PrimaryModelOrigin),
             RepeatGroupId = run.RepeatGroupId,
@@ -198,7 +248,13 @@ internal static class BenchmarkEndpointMapper
             QualityScore = run.QualityScore,
             QualityScoreSource = run.QualityScoreSource ?? BenchmarkQualityScoreSources.None,
             Rank = run.Rank,
+            CellQuality = run.CellQuality,
             RankExclusionReason = run.Judge?.RankExclusionReason,
+            TaskItemId = run.TaskItemId,
+            TaskItemIndex = run.TaskItemIndex,
+            CellKey = run.CellKey,
+            TaskInputHash = run.TaskInputHash,
+            TaskItemSetHash = run.TaskItemSetHash,
             PrimaryStopReason = run.PrimaryStopReason,
             ModelGroupKey = BenchmarkModelGroupKey.From(run.PrimaryModelName, run.PrimaryModelOrigin),
             RepeatGroupId = run.RepeatGroupId,
@@ -414,4 +470,48 @@ internal static class BenchmarkEndpointMapper
         using var document = JsonDocument.Parse(value);
         return document.RootElement.Clone();
     }
+}
+
+internal static class BenchmarkCellMapper
+{
+    public static ListBenchmarkCellsResponse ToResponse(this BenchmarkCellPage page) =>
+        new()
+        {
+            Cells =
+            [
+                .. page.Cells.Select(static cell => new BenchmarkCellResponse
+                {
+                    CellKey = cell.CellKey,
+                    PrimaryModelName = cell.PrimaryModelName,
+                    ModelContentFingerprint = cell.ModelContentFingerprint,
+                    KvCacheType = cell.KvCacheType,
+                    RepeatGroupId = cell.RepeatGroupId,
+                    RepeatIndex = cell.RepeatIndex,
+                    Quality = cell.Quality,
+                    Rank = cell.Rank,
+                    RankExclusionReason = cell.RankExclusionReason,
+                    Items =
+                    [
+                        .. cell.Items.Select(static item => new BenchmarkCellItemResponse
+                        {
+                            RunId = item.RunId,
+                            TaskItemId = item.TaskItemId,
+                            TaskItemIndex = item.TaskItemIndex,
+                            QualityScore = item.QualityScore,
+                            PrimaryStopReason = item.PrimaryStopReason,
+                            RankExclusionReason = item.RankExclusionReason
+                        })
+                    ]
+                })
+            ],
+            RankCohort = new BenchmarkRankCohortResponse
+            {
+                PolicyRevision = page.RankCohort?.PolicyRevision,
+                ExecutionKey = page.RankCohort?.ExecutionKey,
+                CohortGeneration = page.RankCohort?.CohortGeneration,
+                RankedCount = page.RankCohort?.RankedCount ?? 0,
+                TotalScored = page.RankCohort?.TotalScored ?? 0
+            },
+            ScorableItemCount = page.ScorableItemCount
+        };
 }

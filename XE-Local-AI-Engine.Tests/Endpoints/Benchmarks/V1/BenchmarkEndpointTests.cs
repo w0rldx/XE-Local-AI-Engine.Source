@@ -25,6 +25,7 @@ public sealed class BenchmarkEndpointTests
     [Arguments("PUT", "/projects/00000000-0000-0000-0000-000000000001")]
     [Arguments("DELETE", "/projects/00000000-0000-0000-0000-000000000001")]
     [Arguments("GET", "/projects/00000000-0000-0000-0000-000000000001/runs")]
+    [Arguments("GET", "/projects/00000000-0000-0000-0000-000000000001/cells")]
     [Arguments("POST", "/projects/00000000-0000-0000-0000-000000000001/runs")]
     [Arguments("POST", "/projects/00000000-0000-0000-0000-000000000001/runs/batch")]
     [Arguments("GET", "/runs/00000000-0000-0000-0000-000000000002")]
@@ -54,6 +55,47 @@ public sealed class BenchmarkEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Test]
+    public async Task ListCells_ReturnsTheCellTableWithItsPerItemBreakdown()
+    {
+        await using var context = CreateContext();
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: true));
+        var runId = Guid.Parse("00000000-0000-0000-0000-0000000000aa");
+        var itemId = Guid.Parse("00000000-0000-0000-0000-0000000000bb");
+        context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkCellPage(
+                   [
+                       new BenchmarkCellRecord("cell:c:1", "model.gguf", "v1:fp", "q8_0", null, null, 72, 1, null,
+                           [new BenchmarkCellItemRecord(runId, itemId, 0, 72, "stop", null)])
+                   ],
+                   new BenchmarkRankCohort(2, "cohort-key", 3, RankedCount: 1, TotalScored: 1),
+                   ScorableItemCount: 3));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}/cells");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Contains(body, "\"cellKey\":\"cell:c:1\"", StringComparison.Ordinal);
+        AssertEx.Contains(body, "\"quality\":72", StringComparison.Ordinal);
+
+        // Not derivable from the cells alone, and it is what makes an item-incomplete badge readable.
+        AssertEx.Contains(body, "\"scorableItemCount\":3", StringComparison.Ordinal);
+        AssertEx.Contains(body, "\"taskItemId\":\"" + itemId.ToString("D") + "\"", StringComparison.Ordinal);
+    }
+
+    [Test]
+    public async Task ListCells_ForAnUnknownProject_Is404()
+    {
+        await using var context = CreateContext();
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}/cells");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Test]
@@ -1349,6 +1391,16 @@ public sealed class BenchmarkEndpointTests
             AssertEx.Equal(expected: 5, criteria.GetArrayLength(), $"The {preset} preset must offer the full rubric.");
             AssertEx.Equal("correctness", criteria[0].GetProperty("id").GetString());
         }
+
+        // The two server-side presets do NOT share those ids and weights, because a verifiable criterion is a
+        // different question. codeExecution is a single criterion on purpose: the hidden tests pass or they do not.
+        var verifiable = document.RootElement.GetProperty("verifiable").GetProperty("criteria");
+        AssertEx.True(verifiable.GetArrayLength() > 0);
+
+        var execution = document.RootElement.GetProperty("codeExecution").GetProperty("criteria");
+        AssertEx.Equal(expected: 1, execution.GetArrayLength());
+        AssertEx.Equal("pythonTests", execution[0].GetProperty("kind").GetString());
+        AssertEx.Equal(expected: 100, execution[0].GetProperty("weight").GetInt32());
     }
 
     [Test]

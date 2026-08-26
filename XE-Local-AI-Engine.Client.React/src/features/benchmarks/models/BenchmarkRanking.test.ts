@@ -99,7 +99,18 @@ describe("rankExclusionAction", () => {
 	// Every reason the node can send must map to something the operator can DO; an unmapped reason would render a chip
 	// with no next step.
 	it.each(benchmarkRankExclusionReasons)("maps %s to an action", (reason) => {
-		expect(["score", "rejudge", "wait", "rerun", "remove-runs", "none"]).toContain(rankExclusionAction(reason));
+		expect([
+			"score",
+			"rejudge",
+			"wait",
+			"rerun",
+			"rerun-item",
+			"rerun-cell",
+			"enable-compute",
+			"fix-override",
+			"remove-runs",
+			"none",
+		]).toContain(rankExclusionAction(reason));
 	});
 
 	it.each([
@@ -108,6 +119,13 @@ describe("rankExclusionAction", () => {
 		["judge-failed", "rejudge"],
 		["judge-cancelled", "rejudge"],
 		["policy-outdated", "rejudge"],
+		// A suite exclusion is a measurement problem, and the scope of the re-run is what tells the three apart: one
+		// item was edited or is missing, or the whole question SET moved under a cell that had already answered it.
+		["item-incomplete", "rerun-item"],
+		["item-revised", "rerun-item"],
+		["item-set-revised", "rerun-cell"],
+		// Not a run problem at all: re-judging repeats the refusal until the node's compute configuration changes.
+		["verifier-unavailable", "enable-compute"],
 		["generation-stale", "rejudge"],
 		["execution-key-mismatch", "rejudge"],
 		["execution-identity-incomplete", "rejudge"],
@@ -161,6 +179,12 @@ describe("rankExclusionAction for pairwise reasons", () => {
 		for (const reason of ["pairwise-cross-case", "pairwise-execution-mismatch", "pairwise-execution-identity-incomplete"] as const) {
 			expect(rankExclusionAction(reason)).toBe("rejudge");
 		}
+	});
+
+	// A re-judge repeats the refusal for as long as the override names a criterion the rubric does not have, so the
+	// only next step is an edit to one of the two.
+	it("sends an unmatched override to an edit rather than to another re-judge", () => {
+		expect(rankExclusionAction("override-unmatched")).toBe("fix-override");
 	});
 
 	it("gives every exclusion reason an action, so a chip is never unactionable", () => {

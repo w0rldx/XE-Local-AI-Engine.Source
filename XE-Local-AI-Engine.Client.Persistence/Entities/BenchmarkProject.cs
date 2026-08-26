@@ -55,6 +55,14 @@ internal sealed record class BenchmarkProject
 
     public string? FidelityKldBaseFingerprint { get; set; }
 
+    /// <summary>
+    ///     <c>v1:</c> + SHA-256 over this project's LEAF task items, ordered by their immutable
+    ///     <see cref="BenchmarkTaskItem.Id" /> rather than by index — so adding or deleting an item moves the hash and
+    ///     reordering does not. <see langword="null" /> until the project's first item write. Plaintext, and the value
+    ///     every run copies at freeze so a cell can say which question set it was measured against.
+    /// </summary>
+    public string? TaskItemSetHash { get; set; }
+
     public long Version { get; set; }
     public long CreatedAtUtc { get; set; }
     public long UpdatedAtUtc { get; set; }

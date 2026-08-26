@@ -47,6 +47,11 @@ export function BenchmarkRubricEditor({ rubric, presets, issue, onChange }: Benc
 			label: t("pages.benchmarks.rubric.presetVerifiable", "Verifiable"),
 			rubric: presets?.verifiable ?? null,
 		},
+		{
+			key: "codeExecution",
+			label: t("pages.benchmarks.rubric.presetCodeExecution", "Code execution"),
+			rubric: presets?.codeExecution ?? null,
+		},
 	];
 
 	return (

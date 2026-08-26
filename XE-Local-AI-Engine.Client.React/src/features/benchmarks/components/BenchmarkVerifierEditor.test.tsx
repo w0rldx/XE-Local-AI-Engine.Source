@@ -3,6 +3,20 @@
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// Monaco is ~3 MB behind a lazy import and needs a layout engine jsdom does not have. What is under test here is the
+// pythonTests CONFIGURATION, not the editing surface, so the shared code editor is stood in for by a textarea.
+vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
+	CodeEditor: ({
+		value,
+		onChange,
+		"data-testid": testId,
+	}: {
+		value: string;
+		onChange?: (next: string) => void;
+		"data-testid"?: string;
+	}) => <textarea data-testid={testId} value={value} onChange={(event) => onChange?.(event.currentTarget.value)} />,
+}));
+
 import { BenchmarkVerifierEditor } from "@/features/benchmarks/components/BenchmarkVerifierEditor";
 import type { BenchmarkCriterionKind } from "@/features/benchmarks/models/BenchmarkVerifier";
 import { renderWithProviders } from "@/test/RenderWithProviders";
@@ -101,5 +115,44 @@ describe("BenchmarkVerifierEditor", () => {
 		renderEditor("jsonSchema", '{"schema":{"type":"object"}}');
 
 		expect(screen.getByTestId("verifier").textContent).toContain("additionalProperties");
+	});
+});
+
+// pythonTests is the one kind whose configuration is a PROGRAM. The editor's job is the same as for every other kind:
+// keep the stored blob a valid config of its kind at every keystroke, and say what the node would refuse.
+describe("BenchmarkVerifierEditor pythonTests", () => {
+	it("edits the operator's test code", () => {
+		const onChange = renderEditor("pythonTests", '{"testCode":""}');
+
+		fireEvent.change(screen.getByTestId("verifier-test-code"), { target: { value: "assert candidate.solve(2) == 4" } });
+
+		expect(onChange).toHaveBeenCalledWith({ kind: "pythonTests", config: '{"testCode":"assert candidate.solve(2) == 4"}' });
+	});
+
+	it("edits the exports the tests may call by bare name", () => {
+		const onChange = renderEditor("pythonTests", '{"testCode":"assert solve(2) == 4"}');
+
+		fireEvent.change(screen.getByTestId("verifier-exports"), { target: { value: "solve" } });
+		fireEvent.keyDown(screen.getByTestId("verifier-exports"), { key: "Enter" });
+
+		expect(onChange).toHaveBeenCalledWith({
+			kind: "pythonTests",
+			config: '{"testCode":"assert solve(2) == 4","exports":["solve"]}',
+		});
+	});
+
+	// The process boundary is the whole soundness argument for this kind, so the form states it rather than leaving an
+	// operator to assume their tests and the model's code share an interpreter.
+	it("says where the answer's code runs and where the tests run", () => {
+		renderEditor("pythonTests", '{"testCode":"assert True"}');
+
+		expect(screen.getByTestId("verifier-python").textContent).toContain("untrusted child process");
+	});
+
+	it("renders none of the other kinds' fields", () => {
+		renderEditor("pythonTests", '{"testCode":"assert True"}');
+
+		expect(screen.queryByTestId("verifier-expected")).toBeNull();
+		expect(screen.queryByTestId("verifier-pattern")).toBeNull();
 	});
 });

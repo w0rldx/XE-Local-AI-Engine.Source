@@ -8,10 +8,18 @@ public interface IBenchmarkStore
     /// <summary>
     ///     Creates the project and, with a <paramref name="judgePolicy" />, activates its judge in the SAME
     ///     transaction: a project that persisted with judging off because a second transaction never ran is one an
-    ///     operator can only retry into a duplicate.
+    ///     operator can only retry into a duplicate. <paramref name="initialItems" /> is created in that same
+    ///     transaction for the same reason — so a project never exists without at least one question to ask, and no
+    ///     read path has to invent one.
     /// </summary>
+    /// <param name="initialItems">
+    ///     The project's task items. Empty or <see langword="null" /> leaves the project item-less, which is what a
+    ///     caller written before task items existed does; <see cref="GetOrCreateItemsAsync" /> materializes item 0 for
+    ///     it on first touch.
+    /// </param>
     Task<BenchmarkProjectRecord> CreateProjectAsync(BenchmarkProjectInput input,
         BenchmarkJudgePolicyChangeInput? judgePolicy = null,
+        IReadOnlyList<BenchmarkTaskItemInput>? initialItems = null,
         CancellationToken cancellationToken = default);
 
     Task<BenchmarkProjectRecord?> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default);
@@ -28,6 +36,78 @@ public interface IBenchmarkStore
         CancellationToken cancellationToken = default);
 
     Task DeleteProjectAsync(Guid projectId, long expectedVersion, CancellationToken cancellationToken = default);
+
+    /// <summary>Every task item of a project — generators included — ordered by <see cref="BenchmarkTaskItemRecord.Index" />.</summary>
+    Task<IReadOnlyList<BenchmarkTaskItemRecord>> ListTaskItemsAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The project's task items, materializing item 0 from <see cref="BenchmarkProjectRecord.CoreTaskJson" /> when
+    ///     it has none. This is a LEGACY path only: a project created after task items existed gets them in the same
+    ///     transaction as itself, so the write-on-a-read-path is not reachable from anything an operator can newly
+    ///     create.
+    ///     <para>
+    ///         It runs inside the normal EF write path so both encryption interceptors fire — which is exactly why a
+    ///         migration cannot do this instead: it has no node key, and the prompt is a required encrypted blob bound
+    ///         to its own item's id. Idempotent under the unique (project, index) index: a race is a constraint
+    ///         violation this catches and re-reads, not a second item 0.
+    ///     </para>
+    ///     <para>
+    ///         It deliberately leaves <see cref="BenchmarkProjectRecord.TaskItemSetHash" /> null. Materializing item 0
+    ///         changes nothing about what the project asks, so it must not move the hash every historical run is
+    ///         compared against — that would unrank a whole project's history for a bookkeeping write.
+    ///     </para>
+    /// </summary>
+    Task<IReadOnlyList<BenchmarkTaskItemRecord>> GetOrCreateItemsAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Appends one task item and recomputes the project's item-set hash. A changed set hash resets the rank
+    ///     cohort, through the same path a judge-policy activation uses: the project score is a mean over the item
+    ///     set, so changing the set changes what the score means.
+    /// </summary>
+    /// <param name="children">
+    ///     The leaf cases a generator item expands into, written in the SAME transaction as the generator. A case is
+    ///     an ordinary item with its own id, so every cap, every hash and the export reach it without knowing what
+    ///     generated it — and a generator never exists, even for one commit, without the cases it promises.
+    /// </param>
+    Task<BenchmarkTaskItemRecord> CreateTaskItemAsync(Guid projectId,
+        long expectedProjectVersion,
+        BenchmarkTaskItemInput input,
+        IReadOnlyList<BenchmarkTaskItemInput>? children = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Rewrites one task item's payloads, bumping its <see cref="BenchmarkTaskItemRecord.Revision" /> and
+    ///     recomputing its <see cref="BenchmarkTaskItemRecord.InputHash" /> — which is what makes every stored answer
+    ///     to the OLD instance identifiable as an answer to a question that no longer exists.
+    /// </summary>
+    /// <param name="children">
+    ///     A generator's cases, REGENERATED: the item's existing children are deleted and these written in their
+    ///     place, inside the same transaction as the edit. Atomicity is the point — a case must never be left
+    ///     describing parameters its generator no longer has.
+    /// </param>
+    Task<BenchmarkTaskItemRecord> UpdateTaskItemAsync(Guid projectId,
+        Guid itemId,
+        long expectedItemVersion,
+        BenchmarkTaskItemInput input,
+        IReadOnlyList<BenchmarkTaskItemInput>? children = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Deletes one task item, and a generator's children before the generator itself — foreign keys are off on
+    ///     this connection and no cascade fires, so that order IS the referential integrity. Deleting the last leaf is
+    ///     refused: a project always asks at least one question.
+    /// </summary>
+    Task DeleteTaskItemAsync(Guid projectId, Guid itemId, long expectedItemVersion, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Renumbers the project's items into the given order. Deliberately NOT a revision bump and NOT a cohort
+    ///     reset: the index is a display position, it is absent from every hash, and a drag-and-drop must not unrank a
+    ///     completed suite. <paramref name="orderedItemIds" /> must name exactly the project's current items, which is
+    ///     also this call's concurrency check.
+    /// </summary>
+    Task<IReadOnlyList<BenchmarkTaskItemRecord>> ReorderTaskItemsAsync(Guid projectId,
+        IReadOnlyList<Guid> orderedItemIds,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Starts ONE run. Shorthand for a single-item <see cref="StartRunsAsync" /> against the command's own
@@ -79,8 +159,23 @@ public interface IBenchmarkStore
     Task<BenchmarkRunPage> ListAllRunsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
         ListRunsAsync(projectId, skip: 0, int.MaxValue, modelContentFingerprint: null, includeUnscored: true, cancellationToken);
 
+    /// <summary>
+    ///     The project's measurement CELLS: one model, one KV type, one repeat of the whole task-item suite. A cell is
+    ///     what ranks, so this is the shape a comparison reads — the per-run listing shows the same numbers one row at
+    ///     a time and cannot say which items a cell is missing.
+    /// </summary>
+    Task<BenchmarkCellPage> ListCellsAsync(Guid projectId, CancellationToken cancellationToken = default);
+
     /// <summary>How many runs a project has, counted in the database.</summary>
     Task<int> CountRunsAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The project's ACTIVE work — queued or running — counted per kind, empty when the project is idle. A run's
+    ///     <see cref="BenchmarkRunRecord.PrimaryStatus" /> does not answer this: a judged, measured or pairwise-compared
+    ///     matrix keeps the single-consumer queue and the GPU busy long after every run of it reads
+    ///     <see cref="BenchmarkPrimaryStatus.Succeeded" />.
+    /// </summary>
+    Task<IReadOnlyDictionary<BenchmarkWorkKind, int>> CountActiveWorkAsync(Guid projectId, CancellationToken cancellationToken = default);
 
     Task<BenchmarkClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default);
 
@@ -415,6 +510,49 @@ public sealed record BenchmarkProjectInput(
     string? FidelityKldBaseFingerprint = null);
 
 /// <summary>
+///     One task item as it is written. The store owns <c>Index</c>, <c>Revision</c> and <c>InputHash</c> — a caller
+///     that could name them could present a stale answer as a current one.
+/// </summary>
+/// <param name="Id">Empty mints a new one. Named explicitly only so a generated case can be created deterministically.</param>
+/// <param name="ParentItemId">The generator this item was expanded from, or null for an authored item.</param>
+/// <param name="CountsTowardScore">Whether the item enters the project's ranked mean, or is reported on its own axis.</param>
+public sealed record BenchmarkTaskItemInput(
+    ReadOnlyMemory<byte> PromptJson,
+    string Kind = BenchmarkTaskItemKinds.Prompt,
+    ReadOnlyMemory<byte>? ReferenceAnswerJson = null,
+    ReadOnlyMemory<byte>? VerifierConfigJson = null,
+    ReadOnlyMemory<byte>? GeneratorConfigJson = null,
+    Guid Id = default,
+    Guid? ParentItemId = null,
+    bool CountsTowardScore = true);
+
+/// <param name="InputHash">
+///     Plaintext, and the value every run of this item is stamped with at freeze. The ranking read compares the two
+///     without decrypting anything, so an edited item's stored answers are identifiable as answers to a question that
+///     no longer exists.
+/// </param>
+public sealed record BenchmarkTaskItemRecord(
+    Guid Id,
+    Guid ProjectId,
+    Guid? ParentItemId,
+    int Index,
+    string Kind,
+    int Revision,
+    string InputHash,
+    bool CountsTowardScore,
+    ReadOnlyMemory<byte> PromptJson,
+    ReadOnlyMemory<byte>? ReferenceAnswerJson,
+    ReadOnlyMemory<byte>? VerifierConfigJson,
+    ReadOnlyMemory<byte>? GeneratorConfigJson,
+    long Version,
+    long CreatedAtUtc,
+    long UpdatedAtUtc)
+{
+    /// <summary>Whether a freeze fans out over this item, or it is only the generator of items that a freeze does.</summary>
+    public bool IsLeaf => BenchmarkTaskItemKinds.IsLeaf(Kind);
+}
+
+/// <summary>
 ///     The judge half of a project write, applied in the project's own transaction. A <see langword="null" /> instance
 ///     leaves the judge alone; an instance with a <see langword="null" /> <paramref name="PolicyJson" /> disables it.
 /// </summary>
@@ -424,6 +562,15 @@ public sealed record BenchmarkJudgePolicyChangeInput(ReadOnlyMemory<byte>? Polic
     public static BenchmarkJudgePolicyChangeInput Disabled { get; } = new(null, null);
 }
 
+/// <summary>
+///     One run as it is frozen. The last five members are the immutable identity stamps: which leaf item this run
+///     answered, which cell its per-item score aggregates into, exactly what it was asked, and what the whole question
+///     set was at the time. A caller that names none of them — every caller written before task suites existed — gets
+///     the pre-suite shape: no item, its own singleton cell, and the legacy hashes.
+/// </summary>
+/// <param name="CellKey">
+///     Null lets the store derive the run's own singleton cell, which is what a single-item single-repeat freeze is.
+/// </param>
 public sealed record BenchmarkStartRunCommand(
     Guid RunId,
     Guid ProjectId,
@@ -443,7 +590,12 @@ public sealed record BenchmarkStartRunCommand(
     int? InvocationTimeoutSeconds = null,
     BenchmarkRepeatMode RepeatMode = BenchmarkRepeatMode.Throughput,
     string? SamplingSeed = null,
-    double? SamplingTemperature = null);
+    double? SamplingTemperature = null,
+    Guid? TaskItemId = null,
+    int? TaskItemIndex = null,
+    string? CellKey = null,
+    string? TaskInputHash = null,
+    string? TaskItemSetHash = null);
 
 /// <summary>
 ///     Application-owned dependency guard executed by <see cref="IBenchmarkStore.StartRunAsync" /> inside the same
@@ -739,6 +891,41 @@ public sealed record BenchmarkJudgeSuccessCommand(
     int? Score = null,
     string? VerifiedExecutionKey = null);
 
+/// <summary>
+///     One measurement cell as a reader sees it. <paramref name="Quality" /> is the mean of its scorable items'
+///     qualities, and it is <see langword="null" /> exactly when <paramref name="RankExclusionReason" /> says why.
+/// </summary>
+/// <param name="Items">Every run of the cell, in task-item order; a pre-suite cell holds exactly one, naming no item.</param>
+public sealed record BenchmarkCellRecord(
+    string CellKey,
+    string PrimaryModelName,
+    string ModelContentFingerprint,
+    string? KvCacheType,
+    Guid? RepeatGroupId,
+    int? RepeatIndex,
+    int? Quality,
+    int? Rank,
+    string? RankExclusionReason,
+    IReadOnlyList<BenchmarkCellItemRecord> Items);
+
+/// <summary>One item's answer inside a cell.</summary>
+public sealed record BenchmarkCellItemRecord(
+    Guid RunId,
+    Guid? TaskItemId,
+    int? TaskItemIndex,
+    int? QualityScore,
+    string? PrimaryStopReason,
+    string? RankExclusionReason);
+
+/// <param name="ScorableItemCount">
+///     How many leaf items the project counts toward its score right now. A cell holding fewer of them is why a reader
+///     sees <c>item-incomplete</c>, and it is not derivable from the cells alone.
+/// </param>
+public sealed record BenchmarkCellPage(
+    IReadOnlyList<BenchmarkCellRecord> Cells,
+    BenchmarkRankCohort RankCohort,
+    int ScorableItemCount);
+
 /// <param name="JudgeEnabled">Derived: the project judges exactly while it points at a policy revision.</param>
 public sealed record BenchmarkProjectRecord(
     Guid Id,
@@ -759,7 +946,8 @@ public sealed record BenchmarkProjectRecord(
     bool FidelityKldEnabled = false,
     int? FidelityChunks = null,
     string? FidelityKldBaseModelName = null,
-    string? FidelityKldBaseFingerprint = null);
+    string? FidelityKldBaseFingerprint = null,
+    string? TaskItemSetHash = null);
 
 /// <param name="Judge">
 ///     The derived judge view. Everything judge-related is now attempt-owned: a run is judged many times, so nothing
@@ -804,7 +992,13 @@ public sealed record BenchmarkRunRecord(
     BenchmarkRepeatMode RepeatMode = BenchmarkRepeatMode.Throughput,
     string? SamplingSeed = null,
     double? SamplingTemperature = null,
-    BenchmarkRunFidelity? Fidelity = null);
+    BenchmarkRunFidelity? Fidelity = null,
+    Guid? TaskItemId = null,
+    int? TaskItemIndex = null,
+    string? CellKey = null,
+    string? TaskInputHash = null,
+    string? TaskItemSetHash = null,
+    int? CellQuality = null);
 
 /// <summary>
 ///     A run's quant-fidelity projection: a copy of the latest succeeded measurement. Display only — perplexity and
@@ -986,6 +1180,30 @@ public static class BenchmarkPrimaryStopReasons
         string.Equals(primaryStopReason, Incomplete, StringComparison.OrdinalIgnoreCase);
 }
 
+/// <summary>
+///     The <see cref="BenchmarkTaskItem.Kind" /> vocabulary. A LEAF kind is a run target; a generator kind is not —
+///     it expands into leaf children at write time, and every cap counts the leaves.
+/// </summary>
+public static class BenchmarkTaskItemKinds
+{
+    /// <summary>An authored prompt. The default, and the only kind a project created before task items existed has.</summary>
+    public const string Prompt = "prompt";
+
+    /// <summary>A long-context generator: never a run target, expands into <see cref="NiahCase" /> children.</summary>
+    public const string Niah = "niah";
+
+    /// <summary>One materialized long-context probe. A leaf with its own durable identity.</summary>
+    public const string NiahCase = "niahCase";
+
+    /// <summary>Whether an item of this kind is frozen into runs, or is only the generator of items that are.</summary>
+    public static bool IsLeaf(string? kind) =>
+        !string.Equals(kind, Niah, StringComparison.Ordinal);
+
+    /// <summary>Whether <paramref name="kind" /> is a member of the vocabulary at all.</summary>
+    public static bool IsKnown(string? kind) =>
+        kind is Prompt or Niah or NiahCase;
+}
+
 /// <summary>The <see cref="BenchmarkRunJudgeView.State" /> and <see cref="BenchmarkRunJudgeView.RankExclusionReason" /> vocabularies.</summary>
 public static class BenchmarkRunJudgeStates
 {
@@ -1063,6 +1281,59 @@ public static class BenchmarkRunJudgeStates
 
     /// <summary>Nothing has promoted a reference execution key yet, so no fit can be shown to belong to a cohort.</summary>
     public const string ReasonPairwiseExecutionIdentityIncomplete = "pairwise-execution-identity-incomplete";
+
+    /// <summary>
+    ///     A criterion could not be CHECKED — the compute sandbox is disabled, cannot isolate, or cannot enforce the
+    ///     resource ceilings unattended execution requires. Distinct from <see cref="ReasonJudgeFailed" /> because the
+    ///     fix is an operator action on the node (enable Compute, install bubblewrap) rather than a re-judge, and
+    ///     distinct from a score of 0 because 0 is something an answer earns and "unmeasurable" is not.
+    /// </summary>
+    public const string ReasonVerifierUnavailable = "verifier-unavailable";
+
+    /// <summary>
+    ///     What a judging failed by an unusable verifier puts in front of its error message. It is how the ranking read
+    ///     tells that failure apart from every other judge failure without a second column: the judge executor is the
+    ///     only thing that writes it, and it writes it only for a sandbox it could not trust.
+    /// </summary>
+    public const string VerifierUnavailablePrefix = "verifier-unavailable: ";
+
+    /// <summary>
+    ///     The run's task item carries a verifier override naming a rubric criterion that no longer exists, so nothing
+    ///     it asked for was applied. Distinct from <see cref="ReasonJudgeFailed" /> because the fix is an edit to the
+    ///     item or to the rubric, and distinct from a score because the alternative — grading the item under the
+    ///     POLICY's configuration — measures it against another item's expected answer and calls the result a number.
+    /// </summary>
+    public const string ReasonOverrideUnmatched = "override-unmatched";
+
+    /// <summary>
+    ///     What a judging refused by an unmatched item override puts in front of its error message, read back by the
+    ///     ranking view exactly as <see cref="VerifierUnavailablePrefix" /> is.
+    /// </summary>
+    public const string OverrideUnmatchedPrefix = "override-unmatched: ";
+
+    /// <summary>
+    ///     This run's task item has been edited since it was frozen, so its stored answer answers a question that no
+    ///     longer exists. Unlike truncation, an operator score does NOT override it: the score was given for a
+    ///     different question and the operator has no way to know it changed.
+    /// </summary>
+    public const string ReasonItemRevised = "item-revised";
+
+    /// <summary>
+    ///     The project's task-item SET has changed since this run's cell was measured. Completeness is judged against a
+    ///     mutable set, so without this stamp deleting an item retroactively "completes" a historical cell: a
+    ///     three-item cell holding two answers becomes a two-of-two cell and ranks, as a mean over a suite the model
+    ///     was never scored on. An operator score does not override it, for the same reason as
+    ///     <see cref="ReasonItemRevised" /> — a cell mean is a mean OF the suite, and the suite is what moved.
+    /// </summary>
+    public const string ReasonItemSetRevised = "item-set-revised";
+
+    /// <summary>
+    ///     The cell is missing a scorable task item, or one of its runs is not rankable. A cell is ranked only when
+    ///     every item in it produced a rankable score: with partial credit a model that ran out of budget on the
+    ///     hardest item would be scored on the easy ones only and could outrank one that attempted everything — which
+    ///     is the same reason a truncated run is excluded outright rather than scored low.
+    /// </summary>
+    public const string ReasonItemIncomplete = "item-incomplete";
 }
 
 /// <summary>

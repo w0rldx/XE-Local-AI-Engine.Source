@@ -33,6 +33,7 @@ internal sealed class BenchmarkProjectConfiguration : IEntityTypeConfiguration<B
         builder.Property(entity => entity.FidelityChunks).HasColumnName("fidelity_chunks");
         builder.Property(entity => entity.FidelityKldBaseModelName).HasColumnName("fidelity_kld_base_model_name").HasMaxLength(256);
         builder.Property(entity => entity.FidelityKldBaseFingerprint).HasColumnName("fidelity_kld_base_fingerprint").HasMaxLength(67);
+        builder.Property(entity => entity.TaskItemSetHash).HasColumnName("task_item_set_hash").HasMaxLength(67);
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");

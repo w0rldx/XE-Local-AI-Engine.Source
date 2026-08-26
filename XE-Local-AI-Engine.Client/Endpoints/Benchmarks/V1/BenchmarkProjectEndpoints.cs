@@ -55,7 +55,7 @@ public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
         await Send.CreatedAtAsync<GetBenchmarkProjectEndpoint>(new
                       {
                           projectId = project.Id
-                      }, project.ToDetail(runCount: 0, await BenchmarkJudgePolicyProjection.ReadAsync(_store, project.Id, ct).ConfigureAwait(false)),
+                      }, await BenchmarkProjectDetailProjection.ReadAsync(_store, project, runCount: 0, ct).ConfigureAwait(false),
                       cancellation: ct)
                   .ConfigureAwait(false);
     }
@@ -83,8 +83,7 @@ public sealed class GetBenchmarkProjectEndpoint(IBenchmarkStore store)
         }
 
         var runCount = await _store.CountRunsAsync(project.Id, ct).ConfigureAwait(false);
-        await Send.OkAsync(project.ToDetail(runCount, await BenchmarkJudgePolicyProjection.ReadAsync(_store, project.Id, ct).ConfigureAwait(false)), ct)
-                  .ConfigureAwait(false);
+        await Send.OkAsync(await BenchmarkProjectDetailProjection.ReadAsync(_store, project, runCount, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
     }
 }
 
@@ -107,8 +106,7 @@ public sealed class UpdateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
     public override async Task HandleAsync(UpdateBenchmarkProjectRequest req, CancellationToken ct)
     {
         var project = await _projects.UpdateAsync(req.ProjectId, req.ExpectedVersion, req.ToDraft(req.ProjectId), ct).ConfigureAwait(false);
-        await Send.OkAsync(project.ToDetail(runCount: 0, await BenchmarkJudgePolicyProjection.ReadAsync(_store, project.Id, ct).ConfigureAwait(false)), ct)
-                  .ConfigureAwait(false);
+        await Send.OkAsync(await BenchmarkProjectDetailProjection.ReadAsync(_store, project, runCount: 0, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
     }
 }
 
@@ -173,7 +171,7 @@ public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService 
         var runCount = await store.CountRunsAsync(change.Project.Id, ct).ConfigureAwait(false);
         return new BenchmarkJudgeChangeResponse
         {
-            Project = change.Project.ToDetail(runCount, await BenchmarkJudgePolicyProjection.ReadAsync(store, change.Project.Id, ct).ConfigureAwait(false)),
+            Project = await BenchmarkProjectDetailProjection.ReadAsync(store, change.Project, runCount, ct).ConfigureAwait(false),
             EnqueuedRunIds = change.EnqueuedRunIds,
             CohortGeneration = change.CohortGeneration
         };
@@ -217,8 +215,32 @@ public sealed class GetBenchmarkRubricPresetsEndpoint : EndpointWithoutRequest<B
             Default = BenchmarkJudgeRubricDefaults.Default().ToDto(),
             Programming = BenchmarkJudgeRubricDefaults.Programming().ToDto(),
             Reasoning = BenchmarkJudgeRubricDefaults.Reasoning().ToDto(),
-            Verifiable = BenchmarkJudgeRubricDefaults.Verifiable().ToDto()
+            Verifiable = BenchmarkJudgeRubricDefaults.Verifiable().ToDto(),
+            CodeExecution = BenchmarkJudgeRubricDefaults.CodeExecution().ToDto()
         }, ct);
+}
+
+/// <summary>
+///     The whole project detail in one place: the judge policy and the task items, so a create, an edit, a judge
+///     change and a plain GET can never disagree about what a project detail carries.
+/// </summary>
+internal static class BenchmarkProjectDetailProjection
+{
+    public static async Task<BenchmarkProjectDetailResponse> ReadAsync(IBenchmarkStore store,
+        BenchmarkProjectRecord project,
+        int runCount,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(project);
+
+        // A plain LIST, never get-or-create: materializing item 0 for a project created before task items existed is a
+        // write, and exactly one endpoint may perform it — the items GET. Every other project read stays a read, so a
+        // page refresh cannot race two item-0 rows into existence.
+        return project.ToDetail(runCount,
+            await BenchmarkJudgePolicyProjection.ReadAsync(store, project.Id, ct).ConfigureAwait(false),
+            await store.ListTaskItemsAsync(project.Id, ct).ConfigureAwait(false));
+    }
 }
 
 /// <summary>Reads and decrypts a project's current judge policy for the wire.</summary>

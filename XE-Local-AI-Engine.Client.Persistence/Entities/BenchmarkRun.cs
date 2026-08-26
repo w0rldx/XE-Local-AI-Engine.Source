@@ -102,6 +102,38 @@ internal sealed record class BenchmarkRun
     /// <summary>The temperature this run was frozen with, duplicated out of the snapshot for the same reason.</summary>
     public double? SamplingTemperature { get; set; }
 
+    /// <summary>
+    ///     Which LEAF task item this run answered. <see langword="null" /> on a run frozen before task items existed,
+    ///     which reads as the project's item 0. Stamped at freeze and never recomputed.
+    /// </summary>
+    public Guid? TaskItemId { get; set; }
+
+    /// <summary>The item's display index, denormalized so the flat-column ranking read never opens an item row.</summary>
+    public int? TaskItemIndex { get; set; }
+
+    /// <summary>
+    ///     The measurement cell this run's per-item score aggregates into, stamped at freeze and NEVER null: a null
+    ///     would put every ungrouped run of a project into one anonymous bucket and average their scores together,
+    ///     silently. A run that is its own cell carries a singleton key derived from its own id.
+    /// </summary>
+    public string CellKey { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     A copy of the leaf item's <see cref="BenchmarkTaskItem.InputHash" /> at freeze — exactly what this run was
+    ///     asked. A run whose stamp no longer matches its item answered a question that no longer exists, and the
+    ///     ranking read excludes it. Runs frozen before task items existed carry the legacy constant on both hash
+    ///     columns and are compared against the same constant, so they are never stale.
+    /// </summary>
+    public string TaskInputHash { get; set; } = string.Empty;
+
+    /// <summary>
+    ///     A copy of the project's <see cref="BenchmarkProject.TaskItemSetHash" /> at freeze — what the whole question
+    ///     set was when this cell was measured. The only stamp that can answer "was this cell complete WHEN it was
+    ///     measured": completeness against the current item set turns a two-of-three cell into a two-of-two cell the
+    ///     moment the third item is deleted.
+    /// </summary>
+    public string TaskItemSetHash { get; set; } = string.Empty;
+
     /// <summary>The judge attempt whose verdict this run currently shows. Null until the first attempt is enqueued.</summary>
     public Guid? CurrentJudgeAttemptId { get; set; }
 

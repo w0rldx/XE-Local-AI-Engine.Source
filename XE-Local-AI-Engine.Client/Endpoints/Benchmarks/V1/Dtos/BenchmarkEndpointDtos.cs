@@ -163,6 +163,15 @@ public sealed class BenchmarkProjectFidelityChangeResponse
 
 public sealed class BenchmarkProjectDetailResponse : BenchmarkProjectSummaryResponse
 {
+    /// <summary>
+    ///     The questions this project asks, in display order. A project created before task items existed reports an
+    ///     empty list until something touches its items, at which point item 0 is materialized from the core task.
+    /// </summary>
+    public IReadOnlyList<BenchmarkTaskItemResponse> TaskItems { get; init; } = [];
+
+    /// <summary>What the whole leaf set asks, as a value. Null until the project's items have been written.</summary>
+    public string? TaskItemSetHash { get; init; }
+
     public required string CoreTask { get; init; }
 
     /// <summary>The judge configuration this project judges under. <c>Enabled: false</c> when judging is off.</summary>
@@ -409,8 +418,11 @@ public sealed class BenchmarkRubricCriterionDto
 
     /// <summary>
     ///     How the criterion is decided: <c>llm</c> (the default an omitted value takes), <c>exact</c>, <c>regex</c>,
-    ///     <c>jsonSchema</c>, <c>mathAnswer</c> or <c>constraint</c>. Optional on the way in so a caller written
-    ///     before verifiable criteria existed keeps working unchanged; always present on the way out.
+    ///     <c>jsonSchema</c>, <c>mathAnswer</c>, <c>constraint</c> or <c>pythonTests</c>. Optional on the way in so a
+    ///     caller written before verifiable criteria existed keeps working unchanged; always present on the way out.
+    ///     <c>pythonTests</c> is the only kind that EXECUTES anything: it runs the answer's code against the operator's
+    ///     test code in the node's compute sandbox, and a node that cannot run it leaves the run unranked rather than
+    ///     scoring it 0.
     /// </summary>
     public string? Kind { get; init; }
 
@@ -469,6 +481,14 @@ public sealed class BenchmarkRubricPresetsResponse
 
     /// <summary>The all-verifiable preset: judged server-side, with no llama-server spawn at all.</summary>
     public required BenchmarkRubricDto Verifiable { get; init; }
+
+    /// <summary>
+    ///     The execution preset: one <c>pythonTests</c> criterion that RUNS the answer's code against the operator's
+    ///     hidden tests in the compute sandbox. Both the test code and the exported names ship as placeholders to edit.
+    ///     It needs <c>Compute:Enabled</c> on a node whose sandbox can isolate and can enforce resource ceilings;
+    ///     where it cannot, runs are left unranked rather than scored 0.
+    /// </summary>
+    public required BenchmarkRubricDto CodeExecution { get; init; }
 }
 
 /// <summary>One verifiable criterion's server-side evidence. Detail responses only.</summary>
@@ -659,16 +679,61 @@ public class BenchmarkRunSummaryResponse
     /// <summary><c>user</c>, <c>judge</c>, or <c>none</c>.</summary>
     public required string QualityScoreSource { get; init; }
 
-    /// <summary>Dense rank within the project, descending. Null when the run is not in the ranked cohort.</summary>
+    /// <summary>
+    ///     Dense rank within the project, descending. Null when the run is not in the ranked cohort.
+    ///     <para>
+    ///         It is the rank of this run's CELL, not of the run alone: what ranks is one model, one KV type and one
+    ///         repeat of the whole task-item suite. On a single-item project a cell is one run and this is exactly the
+    ///         number it always was.
+    ///     </para>
+    /// </summary>
     public int? Rank { get; init; }
+
+    /// <summary>
+    ///     The score this run's cell ranks by — the mean of its scorable items' quality scores — or null when the cell
+    ///     does not rank. <see cref="QualityScore" /> stays this run's OWN score.
+    /// </summary>
+    public int? CellQuality { get; init; }
 
     /// <summary>
     ///     Why this run is not in the project's ranked cohort, or null when it is ranked. One of <c>no-score</c>,
     ///     <c>judge-pending</c>, <c>judge-failed</c>, <c>judge-cancelled</c>, <c>policy-outdated</c>,
     ///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>,
-    ///     <c>truncated</c>, <c>incomplete</c>, <c>warmup</c>.
+    ///     <c>verifier-unavailable</c>, <c>override-unmatched</c>, <c>truncated</c>, <c>incomplete</c>,
+    ///     <c>warmup</c>, <c>item-revised</c>, <c>item-set-revised</c>, <c>item-incomplete</c>.
+    ///     <para>
+    ///         <c>verifier-unavailable</c> and <c>override-unmatched</c> are judgings that were REFUSED rather than
+    ///         failed: the first because a deterministic verifier could not run on this node, the second because the
+    ///         run's task item carries a verifier override naming a rubric criterion that no longer exists. Neither
+    ///         yields a score, because grading anyway would measure the answer against another item's expected answer.
+    ///     </para>
+    ///     <para>
+    ///         The last three are suite-level. <c>item-revised</c>: this run's own task item has been edited since it
+    ///         was frozen. <c>item-set-revised</c>: the project's item set has changed since this run's cell was
+    ///         measured. <c>item-incomplete</c>: nothing is wrong with this run, but its cell is missing a scorable
+    ///         item or holds one that cannot rank. Unlike <c>truncated</c>, the first two are NOT overridden by an
+    ///         operator score — that score was given for a question, or a suite, that has since moved.
+    ///     </para>
     /// </summary>
     public string? RankExclusionReason { get; init; }
+
+    /// <summary>The leaf task item this run answered, or null on a run frozen before task suites existed.</summary>
+    public Guid? TaskItemId { get; init; }
+
+    /// <summary>That item's display position, denormalized so a listing never reads the item table.</summary>
+    public int? TaskItemIndex { get; init; }
+
+    /// <summary>
+    ///     The measurement cell this run's per-item score aggregates into. Never null and never shared across two
+    ///     freezes: a run that belongs to no group is stamped its own singleton cell.
+    /// </summary>
+    public string? CellKey { get; init; }
+
+    /// <summary>A copy of the task item's input hash at freeze — exactly what this run was asked.</summary>
+    public string? TaskInputHash { get; init; }
+
+    /// <summary>A copy of the project's item-set hash at freeze — what the whole question set was when this cell was measured.</summary>
+    public string? TaskItemSetHash { get; init; }
 
     /// <summary>
     ///     Why the primary generation stopped, verbatim from the provider (<c>stop</c>, <c>length</c>,
@@ -971,4 +1036,232 @@ public sealed class GetBenchmarkPairwiseEstimateResponse
     public bool Warn { get; init; }
 
     public int MaximumRuns { get; init; }
+}
+
+/// <summary>
+///     One task item as an operator writes it. The index, the revision and the input hash are absent on purpose: the
+///     server owns them, because a client that could name them could present an answer to an old question as an
+///     answer to the current one.
+/// </summary>
+public class BenchmarkTaskItemMutationRequest
+{
+    public string Prompt { get; init; } = string.Empty;
+
+    /// <summary>
+    ///     Omitted means <c>prompt</c>. <c>niah</c> writes a long-context probe, which expands into its
+    ///     <c>niahCase</c> children here and now, so each case is an ordinary item with its own id. A <c>niahCase</c>
+    ///     is refused: a case is written by the generator that owns it, never by hand.
+    /// </summary>
+    public string? Kind { get; init; }
+
+    /// <summary>Overrides the judge policy's reference answer for this item only.</summary>
+    public string? ReferenceAnswer { get; init; }
+
+    /// <summary>Per-criterion overrides of the judge policy's verifier config, keyed by criterion id.</summary>
+    public JsonElement? VerifierConfig { get; init; }
+
+    /// <summary>
+    ///     Generator parameters; null for a plain prompt, required for a <c>niah</c> probe:
+    ///     <c>{contextTokens[], needleDepthPercent[], needleTemplate?, questionTemplate?, criterionId?, seed?,
+    ///     countsTowardScore?}</c>. One case is generated per (length x depth) pair, and a length past the project's
+    ///     context window is refused with both numbers named.
+    /// </summary>
+    public JsonElement? GeneratorConfig { get; init; }
+
+    /// <summary>Whether this item enters the project's ranked mean, or is reported on its own axis.</summary>
+    public bool CountsTowardScore { get; init; } = true;
+}
+
+public sealed class CreateBenchmarkTaskItemRequest : BenchmarkTaskItemMutationRequest
+{
+    public Guid ProjectId { get; init; }
+
+    /// <summary>The project version this write is made against: adding an item changes what a freeze would produce.</summary>
+    public long ExpectedProjectVersion { get; init; }
+}
+
+public sealed class UpdateBenchmarkTaskItemRequest : BenchmarkTaskItemMutationRequest
+{
+    public Guid ProjectId { get; init; }
+    public Guid ItemId { get; init; }
+
+    /// <summary>The ITEM's version, not the project's — an edit is a write to one item.</summary>
+    public long ExpectedVersion { get; init; }
+}
+
+public sealed class DeleteBenchmarkTaskItemRequest
+{
+    public Guid ProjectId { get; init; }
+    public Guid ItemId { get; init; }
+    public long ExpectedVersion { get; init; }
+}
+
+/// <summary>
+///     The whole new order, named at once. Listing every current item id is also the concurrency check: an item added
+///     or deleted while the operator was dragging makes the two sets disagree and the reorder is refused.
+/// </summary>
+public sealed class ReorderBenchmarkTaskItemsRequest
+{
+    public Guid ProjectId { get; init; }
+    public IReadOnlyList<Guid> ItemIds { get; init; } = [];
+}
+
+/// <param name="InputHash">
+///     What this item asks, as a value. Every run of it is stamped with a copy at freeze, and a run whose stamp no
+///     longer matches answered a question that no longer exists.
+/// </param>
+public sealed class BenchmarkTaskItemResponse
+{
+    public Guid Id { get; init; }
+    public Guid ProjectId { get; init; }
+
+    /// <summary>The generator this item was expanded from, or null for an authored item.</summary>
+    public Guid? ParentItemId { get; init; }
+
+    /// <summary>Display position. Not a scoring input, and deliberately not part of the project's item-set hash.</summary>
+    public int Index { get; init; }
+
+    public required string Kind { get; init; }
+    public int Revision { get; init; }
+    public required string InputHash { get; init; }
+
+    /// <summary>Whether a freeze fans out over this item, or it only generates the items that a freeze does.</summary>
+    public bool IsLeaf { get; init; }
+
+    public bool CountsTowardScore { get; init; }
+    public required string Prompt { get; init; }
+    public string? ReferenceAnswer { get; init; }
+    public JsonElement? VerifierConfig { get; init; }
+    public JsonElement? GeneratorConfig { get; init; }
+    public long Version { get; init; }
+    public long CreatedAtUtc { get; init; }
+    public long UpdatedAtUtc { get; init; }
+}
+
+public sealed class ListBenchmarkTaskItemsResponse
+{
+    public IReadOnlyList<BenchmarkTaskItemResponse> Items { get; init; } = [];
+
+    /// <summary>
+    ///     What the whole leaf set asks, as a value — ordered by the items' ids, so adding or deleting one moves it
+    ///     and reordering does not. Null on a project whose items have never been written.
+    /// </summary>
+    public string? TaskItemSetHash { get; init; }
+
+    /// <summary>The project version, so a client can make its next item write against the version it just read.</summary>
+    public long ProjectVersion { get; init; }
+}
+
+public sealed class ListBenchmarkCellsRequest
+{
+    public Guid ProjectId { get; init; }
+}
+
+/// <summary>One item's answer inside a cell.</summary>
+public sealed class BenchmarkCellItemResponse
+{
+    public Guid RunId { get; init; }
+    public Guid? TaskItemId { get; init; }
+    public int? TaskItemIndex { get; init; }
+
+    /// <summary>This run's own quality score, not the cell's mean.</summary>
+    public int? QualityScore { get; init; }
+
+    public string? PrimaryStopReason { get; init; }
+    public string? RankExclusionReason { get; init; }
+}
+
+/// <summary>
+///     One measurement cell: one model, one KV type, one repeat of the whole task-item suite. This is the unit that
+///     ranks — the per-run listing shows the same numbers one row at a time and cannot say which items a cell is
+///     missing.
+/// </summary>
+public sealed class BenchmarkCellResponse
+{
+    public required string CellKey { get; init; }
+    public required string PrimaryModelName { get; init; }
+    public required string ModelContentFingerprint { get; init; }
+    public string? KvCacheType { get; init; }
+    public Guid? RepeatGroupId { get; init; }
+    public int? RepeatIndex { get; init; }
+
+    /// <summary>The mean of the cell's scorable items' quality scores, or null when it does not rank.</summary>
+    public int? Quality { get; init; }
+
+    public int? Rank { get; init; }
+
+    /// <summary>
+    ///     Why the cell does not rank, or null when it does — <c>item-set-revised</c>, <c>item-incomplete</c>, or a
+    ///     run-level reason on a pre-suite singleton cell.
+    /// </summary>
+    public string? RankExclusionReason { get; init; }
+
+    public IReadOnlyList<BenchmarkCellItemResponse> Items { get; init; } = [];
+}
+
+public sealed class ListBenchmarkCellsResponse
+{
+    public IReadOnlyList<BenchmarkCellResponse> Cells { get; init; } = [];
+
+    /// <summary>What the ranking is computed against, counted in CELLS.</summary>
+    public required BenchmarkRankCohortResponse RankCohort { get; init; }
+
+    /// <summary>
+    ///     How many leaf items the project counts toward its score right now. A cell holding fewer of them is why a
+    ///     reader sees <c>item-incomplete</c>, and it is not derivable from the cells alone.
+    /// </summary>
+    public int ScorableItemCount { get; init; }
+}
+
+/// <summary>
+///     Two to six cells to compare. The cells are named explicitly rather than derived from a model filter: which
+///     quant of which model an operator wants a difference between is a question only they can answer.
+/// </summary>
+public sealed class CompareBenchmarkCellsRequest
+{
+    public Guid ProjectId { get; init; }
+
+    /// <summary>Repeated query parameter: <c>?cellKeys=…&amp;cellKeys=…</c>. Two to six, distinct.</summary>
+    public IReadOnlyList<string> CellKeys { get; init; } = [];
+}
+
+/// <summary>
+///     The paired difference between two cells over the items they BOTH answered rankably, with a 95 % percentile
+///     bootstrap interval. Present only when at least three items are shared — an absent entry for a requested pair
+///     means "too few shared items", and is never a delta of zero.
+/// </summary>
+public sealed class BenchmarkPairedDeltaResponse
+{
+    public required string ACellKey { get; init; }
+    public required string BCellKey { get; init; }
+
+    /// <summary>How many items were rankable in both cells; the resampling unit.</summary>
+    public int SharedItemCount { get; init; }
+
+    /// <summary>Mean of <c>qualityA − qualityB</c> over the shared items. Positive means A scored higher.</summary>
+    public double Delta { get; init; }
+
+    public double CiLow { get; init; }
+    public double CiHigh { get; init; }
+
+    /// <summary>
+    ///     False exactly when 0 lies inside the interval — the flag a reader renders "not separated by this suite"
+    ///     from, so no client re-derives it from the two bounds.
+    /// </summary>
+    public bool Separated { get; init; }
+}
+
+/// <summary>The requested cells, in the order they were asked for, plus every pairwise delta between them.</summary>
+public sealed class CompareBenchmarkCellsResponse
+{
+    public IReadOnlyList<BenchmarkCellResponse> Cells { get; init; } = [];
+
+    /// <summary>What the ranking is computed against, counted in CELLS — the whole project's, not the selection's.</summary>
+    public required BenchmarkRankCohortResponse RankCohort { get; init; }
+
+    /// <summary>How many leaf items the project counts toward its score right now.</summary>
+    public int ScorableItemCount { get; init; }
+
+    /// <summary>One entry per unordered pair of requested cells that shares enough items to support an interval.</summary>
+    public IReadOnlyList<BenchmarkPairedDeltaResponse> PairedDeltas { get; init; } = [];
 }

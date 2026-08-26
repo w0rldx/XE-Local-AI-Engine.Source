@@ -50,4 +50,18 @@ public sealed class ScheduledJobExecutionContext
     ///     </para>
     /// </summary>
     public Func<string, int?, CancellationToken, Task>? ReportProgressAsync { get; init; }
+
+    /// <summary>
+    ///     Optional operator-facing one-line outcome for this fire, written by the handler and persisted verbatim onto
+    ///     the run row's <c>summary</c> by the dispatcher when the handler completes successfully. Left
+    ///     <see langword="null" /> (the default) the dispatcher records its generic "Completed." instead, so a handler
+    ///     that has nothing distinctive to say need not set it.
+    ///     <para>
+    ///         Same content rules as <see cref="ReportProgressAsync" />: the column is plaintext-structural, so this
+    ///         must carry only sanitized facts about the work (counts, ids, operator-supplied names) — never prompt,
+    ///         parameter or model-answer text. Last write wins; a handler that sets it more than once records its final
+    ///         value.
+    ///     </para>
+    /// </summary>
+    public string? Summary { get; set; }
 }

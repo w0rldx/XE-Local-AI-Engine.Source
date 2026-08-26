@@ -95,8 +95,7 @@ public sealed class UpdateBenchmarkProjectFidelityEndpoint(IBenchmarkProjectServ
         var runCount = await _store.CountRunsAsync(req.ProjectId, ct).ConfigureAwait(false);
         await Send.OkAsync(new BenchmarkProjectFidelityChangeResponse
                   {
-                      Project = change.Project.ToDetail(runCount,
-                          await BenchmarkJudgePolicyProjection.ReadAsync(_store, req.ProjectId, ct).ConfigureAwait(false)),
+                      Project = await BenchmarkProjectDetailProjection.ReadAsync(_store, change.Project, runCount, ct).ConfigureAwait(false),
                       EnqueuedRunIds = change.EnqueuedRunIds,
                       EnqueuedCount = change.EnqueuedRunIds.Count
                   }, ct)

@@ -74,9 +74,14 @@ public sealed class BenchmarkProjectService(
     {
         var (input, policy) = await ValidateAsync(draft, cancellationToken).ConfigureAwait(false);
 
-        // Project and judge in one store call, so a failure between them cannot persist a project with judging off
-        // that the operator could only retry into a duplicate.
-        return await _benchmarkStore.CreateProjectAsync(input, ToPolicyChange(policy), cancellationToken).ConfigureAwait(false);
+        // Project, judge AND item 0 in one store call, so a failure between them cannot persist a project with
+        // judging off — or with no question to ask — that the operator could only retry into a duplicate. Every
+        // project created from here therefore has its items already; the lazy backfill is left for older rows only.
+        return await _benchmarkStore.CreateProjectAsync(input,
+                                        ToPolicyChange(policy),
+                                        [new BenchmarkTaskItemInput(input.CoreTaskJson)],
+                                        cancellationToken)
+                                    .ConfigureAwait(false);
     }
 
     public async Task<BenchmarkProjectRecord> UpdateAsync(Guid projectId,
@@ -88,6 +93,12 @@ public sealed class BenchmarkProjectService(
         {
             Id = projectId
         }, cancellationToken).ConfigureAwait(false);
+
+        // This route changes the rubric too, so it owes the item overrides the same check the judge-only route makes.
+        if (policy is not null)
+        {
+            await EnsureItemOverridesFitAsync(projectId, policy.Rubric, cancellationToken).ConfigureAwait(false);
+        }
 
         // An unfrozen project edits its judge exactly the way a frozen one does — get-or-create plus repoint, never an
         // in-place edit of a revision — minus the re-judge, because it has no runs to re-judge. Both halves commit
@@ -174,6 +185,7 @@ public sealed class BenchmarkProjectService(
             return new BenchmarkJudgePolicyChange(project, [], current.CohortGeneration);
         }
 
+        await EnsureItemOverridesFitAsync(projectId, policy.Rubric, cancellationToken).ConfigureAwait(false);
         var activation = await _benchmarkStore.ActivateJudgePolicyAsync(projectId,
                                                   expectedVersion,
                                                   new ReadOnlyMemory<byte>(BenchmarkJudgeSerialization.SerializePolicy(policy)),
@@ -451,6 +463,40 @@ public sealed class BenchmarkProjectService(
             NormalizeReferenceAnswer(draft.ReferenceAnswer),
             BenchmarkJudgePolicyModes.Normalize(draft.Mode));
         return string.Equals(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(candidate), current.PolicyHash, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     Refuses a rubric that would strand an item's verifier override — one naming a criterion the new rubric
+    ///     drops, renames, or gives an incompatible kind.
+    ///     <para>
+    ///         The alternative was to accept the rubric and mark the affected items revised. It was rejected as the
+    ///         larger and less honest option: a stranded override is not a stale answer to a question that moved, it is
+    ///         a question with no expected answer at all, and quietly unranking the item hides an edit the operator can
+    ///         still take back. Refusing names both halves of the fix — clear the item's override, or keep the
+    ///         criterion — and costs one read of an at-most-20-row table.
+    ///     </para>
+    /// </summary>
+    private async Task EnsureItemOverridesFitAsync(Guid projectId, BenchmarkJudgeRubricV1 rubric, CancellationToken cancellationToken)
+    {
+        foreach (var item in await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken).ConfigureAwait(false))
+        {
+            if (item.VerifierConfigJson is not { IsEmpty: false } config)
+            {
+                continue;
+            }
+
+            try
+            {
+                BenchmarkTaskItemService.EnsureOverridesFitRubric(config, rubric);
+            }
+            catch (BenchmarkValidationException exception)
+            {
+                throw new BenchmarkValidationException($"Task item {item.Index + 1} cannot be judged under this rubric. {exception.Message}")
+                {
+                    Source = exception.Source
+                };
+            }
+        }
     }
 
     private async Task<BenchmarkJudgePolicyV1> BuildPolicyAsync(BenchmarkJudgePolicyDraft draft, CancellationToken cancellationToken)

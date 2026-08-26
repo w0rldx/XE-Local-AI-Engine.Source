@@ -3,13 +3,15 @@ namespace XE_Local_AI_Engine.Tests.Scheduler;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Quartz;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 
 /// <summary>
 ///     Tests for <see cref="SchedulerDispatchJobRunner" /> — the Quartz <c>IJob</c> → executor hop. It must forward EVERY
 ///     whitelisted per-fire override key (model-fit use-case AND breadth limit) from the merged data map to the executor;
 ///     a regression here silently drops an override so the run falls back to the baked parameter (the limit-override bug
-///     caught in live verification 2026-06-03). A cron / no-override fire forwards a null override map.
+///     caught in live verification 2026-06-03). A cron / no-override fire forwards a null override map. It also decides
+///     the run's trigger kind: the manual-fire marker means Manual, its absence means Schedule.
 /// </summary>
 public sealed class SchedulerDispatchJobRunnerTests
 {
@@ -84,6 +86,28 @@ public sealed class SchedulerDispatchJobRunnerTests
     }
 
     [Test]
+    public async Task RunAsync_WhenFireCarriesManualMarker_DispatchesAsManualTrigger()
+    {
+        var executor = Substitute.For<ISchedulerDispatchExecutor>();
+        var context = BuildContext(new JobDataMap
+        {
+            [SchedulerJobKeys.ScheduledJobIdKey] = JobId.ToString(),
+            [SchedulerJobKeys.ManualFireKey] = bool.TrueString
+        });
+
+        await SchedulerDispatchJobRunner.RunAsync(executor, NullLogger.Instance, context);
+
+        // Manual, and the marker must NOT be mistaken for a parameter override.
+        await executor.Received(1).DispatchAsync(JobId,
+            "fire-x",
+            Arg.Any<DateTimeOffset?>(),
+            Arg.Any<DateTimeOffset>(),
+            Arg.Any<CancellationToken>(),
+            Arg.Is<IReadOnlyDictionary<string, string>?>(overrides => overrides == null),
+            ScheduledRunTrigger.Manual);
+    }
+
+    [Test]
     public async Task RunAsync_WhenScheduledJobIdMissing_DoesNotDispatch()
     {
         var executor = Substitute.For<ISchedulerDispatchExecutor>();
@@ -96,7 +120,8 @@ public sealed class SchedulerDispatchJobRunnerTests
             Arg.Any<DateTimeOffset?>(),
             Arg.Any<DateTimeOffset>(),
             Arg.Any<CancellationToken>(),
-            Arg.Any<IReadOnlyDictionary<string, string>?>());
+            Arg.Any<IReadOnlyDictionary<string, string>?>(),
+            Arg.Any<ScheduledRunTrigger>());
     }
 
     private static IJobExecutionContext BuildContext(JobDataMap mergedDataMap)

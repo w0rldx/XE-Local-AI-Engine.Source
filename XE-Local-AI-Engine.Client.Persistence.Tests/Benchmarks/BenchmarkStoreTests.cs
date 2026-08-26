@@ -1065,6 +1065,109 @@ public sealed class BenchmarkStoreTests : IDisposable
     private static BenchmarkJudgeAttemptSeed JudgeSeed(BenchmarkJudgePolicyRevisionRecord revision) =>
         new(revision.Id, new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("{\"judgeRuntime\":1}")));
 
+    [Test]
+    public async Task StartRuns_WithoutIdentityStamps_KeepsEveryRunItsOwnSingletonCell()
+    {
+        // R2: a caller written before task suites names none of the stamps and gets exactly the pre-suite shape.
+        var databasePath = GetDatabasePath("start-runs-legacy-stamps.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+
+        var runs = await store.StartRunsAsync([CreateRun(project), CreateRun(project)], project.Version);
+
+        var stored = await context.BenchmarkRuns.AsNoTracking().Where(entity => entity.ProjectId == project.Id).ToListAsync();
+        AssertEx.Equal(2, stored.Count);
+        AssertEx.True(stored.TrueForAll(static entity => entity.TaskItemId is null && entity.TaskItemIndex is null));
+        AssertEx.True(stored.TrueForAll(static entity => entity.TaskInputHash == "v1:legacy" && entity.TaskItemSetHash == "v1:legacy"));
+        AssertEx.True(stored.TrueForAll(entity => entity.CellKey == "cell:" + entity.Id.ToString("D")),
+            "An unstamped run is its own singleton cell, so two freezes of one project never average together.");
+        AssertEx.Equal(2, runs.Count);
+    }
+
+    [Test]
+    public async Task StartRuns_WithIdentityStamps_PersistsThemVerbatim()
+    {
+        var databasePath = GetDatabasePath("start-runs-item-stamps.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var cellKey = "cell:" + Guid.NewGuid().ToString("D") + ":1";
+        var itemIds = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+
+        _ = await store.StartRunsAsync([.. itemIds.Select((itemId, index) => CreateRun(project) with
+        {
+            TaskItemId = itemId,
+            TaskItemIndex = index,
+            CellKey = cellKey,
+            TaskInputHash = "v1:item-" + index,
+            TaskItemSetHash = "v1:set"
+        })], project.Version);
+
+        var stored = await context.BenchmarkRuns.AsNoTracking()
+                                  .Where(entity => entity.ProjectId == project.Id)
+                                  .OrderBy(entity => entity.TaskItemIndex)
+                                  .ToListAsync();
+        AssertEx.Equal(3, stored.Count);
+        AssertEx.True(stored.TrueForAll(entity => entity.CellKey == cellKey), "Three items measured together share one cell.");
+        AssertEx.True(stored.Select(static entity => entity.TaskItemId).SequenceEqual(itemIds.Select(static id => (Guid?)id)));
+        AssertEx.True(stored.Select(static entity => entity.TaskInputHash).SequenceEqual(["v1:item-0", "v1:item-1", "v1:item-2"], StringComparer.Ordinal));
+        AssertEx.True(stored.TrueForAll(static entity => entity.TaskItemSetHash == "v1:set"));
+    }
+
+    [Test]
+    public async Task Fidelity_IsQueuedOncePerCell_NotOncePerTaskItem()
+    {
+        // Perplexity and KL divergence measure the model file against a corpus, not the task, so every item of one
+        // cell would otherwise queue an identical measurement — N times the GPU hours, and for KLD N times ~25 GB of
+        // base logits, to produce N copies of one number.
+        var databasePath = GetDatabasePath("fidelity-per-cell.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject() with
+        {
+            FidelityEnabled = true
+        });
+        var cellKey = "cell:" + Guid.NewGuid().ToString("D") + ":1";
+        var runs = await store.StartRunsAsync([.. Enumerable.Range(0, 3).Select(index => CreateRun(project) with
+        {
+            TaskItemId = Guid.NewGuid(),
+            TaskItemIndex = index,
+            CellKey = cellKey,
+            TaskInputHash = "v1:item-" + index,
+            TaskItemSetHash = "v1:set"
+        })], project.Version);
+
+        var marked = await context.BenchmarkRuns.AsNoTracking()
+                                  .Where(entity => entity.ProjectId == project.Id && entity.FidelityStatus == "skipped")
+                                  .CountAsync();
+        AssertEx.Equal(2, marked, "Only the lowest-indexed item of the cell carries the measurement; the rest are marked skipped.");
+
+        // Drain all three primaries: only the measured one may seed a fidelity attempt.
+        for (var drained = 0; drained < runs.Count; drained++)
+        {
+            var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+            _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(claimed.RunId, claimed.Run.Version,
+                Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 120));
+        }
+
+        var attempts = await context.BenchmarkFidelityAttempts.AsNoTracking().CountAsync();
+        AssertEx.Equal(1, attempts, "One cell, one fidelity measurement.");
+
+        // And the sweep that measures existing runs must agree with the seed, or it re-adds what freeze excluded.
+        var frozen = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var change = await store.UpdateProjectFidelityAsync(project.Id, frozen.Version,
+            new BenchmarkProjectFidelityInput(FidelityEnabled: true, FidelityKldEnabled: false, FidelityChunks: null, null, null),
+            measureExisting: true);
+        AssertEx.Empty(change.EnqueuedRunIds, "The sweep re-expresses the same rule; the cell is already measured.");
+    }
+
     private static BenchmarkProjectInput CreateProject(Guid? id = null) =>
         new(id ?? Guid.NewGuid(), "Benchmark", Encoding.UTF8.GetBytes("{\"task\":\"answer\"}"), 4096, Guid.NewGuid());
 

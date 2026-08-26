@@ -4262,6 +4262,111 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListEligibleBenchmarkMod
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkModelsRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellItemResponse = z.object({
+	runId: z.guid().optional(),
+	taskItemId: z.guid().nullish(),
+	taskItemIndex: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	qualityScore: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	primaryStopReason: z.string().nullish(),
+	rankExclusionReason: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse = z.object({
+	cellKey: z.string(),
+	primaryModelName: z.string(),
+	modelContentFingerprint: z.string(),
+	kvCacheType: z.string().nullish(),
+	repeatGroupId: z.guid().nullish(),
+	repeatIndex: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	quality: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	rank: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	rankExclusionReason: z.string().nullish(),
+	items: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellItemResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse = z.object({
+	policyRevision: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	executionKey: z.string().nullish(),
+	cohortGeneration: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	rankedCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	totalScored: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkCellsResponse = z.object({
+	cells: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse).optional(),
+	rankCohort: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse,
+	scorableItemCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkCellsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse = z.object({
+	aCellKey: z.string(),
+	bCellKey: z.string(),
+	sharedItemCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	delta: z.number().optional(),
+	ciLow: z.number().optional(),
+	ciHigh: z.number().optional(),
+	separated: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsResponse = z.object({
+	cells: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse).optional(),
+	rankCohort: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse,
+	scorableItemCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	pairedDeltas: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportAgentResponse = z.object({
 	name: z.string(),
 	version: z.int().optional(),
@@ -4347,30 +4452,6 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectRe
 		.nullish(),
 	agent: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportAgentResponse.nullish(),
 	judge: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse,
-});
-
-export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse = z.object({
-	policyRevision: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	executionKey: z.string().nullish(),
-	cohortGeneration: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.nullish(),
-	rankedCount: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-	totalScored: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
 });
 
 export const zXeLocalAiEngineClientPersistenceEntitiesBenchmarkPrimaryStatus = z.enum([
@@ -4483,7 +4564,21 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespo
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	cellQuality: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
 	rankExclusionReason: z.string().nullish(),
+	taskItemId: z.guid().nullish(),
+	taskItemIndex: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	cellKey: z.string().nullish(),
+	taskInputHash: z.string().nullish(),
+	taskItemSetHash: z.string().nullish(),
 	primaryStopReason: z.string().nullish(),
 	modelGroupKey: z.string(),
 	repeatGroupId: z.guid().nullish(),
@@ -4697,6 +4792,33 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseF
 	scores: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseScoreResponse).optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse = z.object({
+	id: z.guid().optional(),
+	projectId: z.guid().optional(),
+	parentItemId: z.guid().nullish(),
+	index: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	kind: z.string(),
+	revision: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	inputHash: z.string(),
+	isLeaf: z.boolean().optional(),
+	countsTowardScore: z.boolean().optional(),
+	prompt: z.string(),
+	referenceAnswer: z.string().nullish(),
+	verifierConfig: z.unknown().optional(),
+	generatorConfig: z.unknown().optional(),
+	version: z.int().optional(),
+	createdAtUtc: z.int().optional(),
+	updatedAtUtc: z.int().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse = z.object({
 	schemaVersion: z
 		.int()
@@ -4710,6 +4832,13 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse 
 	repeatGroups: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGroupResponse).optional(),
 	llamaBench: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchRowResponse).optional(),
 	pairwiseFit: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseFitResponse.nullish(),
+	taskItems: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse).optional(),
+	cells: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse).optional(),
+	scorableItemCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest = z.record(z.string(), z.never());
@@ -4778,6 +4907,8 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryR
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse =
 	zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse.and(
 		z.object({
+			taskItems: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse).optional(),
+			taskItemSetHash: z.string().nullish(),
 			coreTask: z.string(),
 			judge: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse,
 			fidelityEnabled: z.boolean().optional(),
@@ -4862,6 +4993,31 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAtt
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse = z.object({
+	projectId: z.guid(),
+	baseModelName: z.string(),
+	tunedModelName: z.string(),
+	baseRunIds: z.array(z.guid()),
+	tunedRunIds: z.array(z.guid()),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest = z.object({
+	name: z.string().nullish(),
+	coreTask: z.string(),
+	contextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	agentDefinitionId: z.guid(),
+	kvCacheType: z.string().nullish(),
+	repeatCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	warmup: z.boolean().optional(),
+});
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkComparisonResponse = z.object({
 	id: z.guid().optional(),
@@ -5097,6 +5253,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricPresetsRe
 	programming: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto,
 	reasoning: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto,
 	verifiable: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto,
+	codeExecution: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto,
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkRunsResponse = z.object({
@@ -5201,6 +5358,43 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1ClearBenchmarkRunScoreRe
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1RejudgeBenchmarkRunRequest = z.object({
 	expectedVersion: z.int().optional(),
 	force: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkTaskItemsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse).optional(),
+	taskItemSetHash: z.string().nullish(),
+	projectVersion: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest = z.object({
+	prompt: z.string().optional(),
+	kind: z.string().nullish(),
+	referenceAnswer: z.string().nullish(),
+	verifierConfig: z.unknown().optional(),
+	generatorConfig: z.unknown().optional(),
+	countsTowardScore: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkTaskItemRequest =
+	zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest.and(
+		z.object({
+			expectedProjectVersion: z.int().optional(),
+		}),
+	);
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkTaskItemRequest =
+	zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest.and(
+		z.object({
+			expectedVersion: z.int().optional(),
+		}),
+	);
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkTaskItemRequest = z.object({
+	expectedVersion: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1ReorderBenchmarkTaskItemsRequest = z.object({
+	itemIds: z.array(z.guid()).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionTypeDto = z.enum(["sendPrompt"]);
@@ -8141,6 +8335,28 @@ export const zListEligibleBenchmarkModelsQuery = z.object({
 export const zListEligibleBenchmarkModelsResponse =
 	zXeLocalAiEngineClientEndpointsBenchmarksV1ListEligibleBenchmarkModelsResponse;
 
+export const zListBenchmarkCellsPath = z.object({
+	projectId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zListBenchmarkCellsResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkCellsResponse;
+
+export const zCompareBenchmarkCellsPath = z.object({
+	projectId: z.guid(),
+});
+
+export const zCompareBenchmarkCellsQuery = z.object({
+	cellKeys: z.array(z.string()),
+});
+
+/**
+ * Success
+ */
+export const zCompareBenchmarkCellsResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsResponse;
+
 export const zExportBenchmarkProjectPath = z.object({
 	projectId: z.guid(),
 });
@@ -8216,6 +8432,18 @@ export const zClearBenchmarkFidelityCachePath = z.object({
  * No Content
  */
 export const zClearBenchmarkFidelityCacheResponse = z.void();
+
+export const zCreateBenchmarkFromComparisonBody = zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest;
+
+export const zCreateBenchmarkFromComparisonPath = z.object({
+	comparisonId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zCreateBenchmarkFromComparisonResponse =
+	zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse;
 
 export const zListBenchmarkComparisonsPath = z.object({
 	projectId: z.guid(),
@@ -8413,6 +8641,61 @@ export const zRejudgeBenchmarkRunPath = z.object({
  * Success
  */
 export const zRejudgeBenchmarkRunResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse;
+
+export const zListBenchmarkTaskItemsPath = z.object({
+	projectId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zListBenchmarkTaskItemsResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkTaskItemsResponse;
+
+export const zCreateBenchmarkTaskItemBody = zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkTaskItemRequest;
+
+export const zCreateBenchmarkTaskItemPath = z.object({
+	projectId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zCreateBenchmarkTaskItemResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse;
+
+export const zDeleteBenchmarkTaskItemBody = zXeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkTaskItemRequest;
+
+export const zDeleteBenchmarkTaskItemPath = z.object({
+	projectId: z.guid(),
+	itemId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteBenchmarkTaskItemResponse = z.void();
+
+export const zUpdateBenchmarkTaskItemBody = zXeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkTaskItemRequest;
+
+export const zUpdateBenchmarkTaskItemPath = z.object({
+	projectId: z.guid(),
+	itemId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateBenchmarkTaskItemResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse;
+
+export const zReorderBenchmarkTaskItemsBody = zXeLocalAiEngineClientEndpointsBenchmarksV1ReorderBenchmarkTaskItemsRequest;
+
+export const zReorderBenchmarkTaskItemsPath = z.object({
+	projectId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zReorderBenchmarkTaskItemsResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkTaskItemsResponse;
 
 /**
  * Success

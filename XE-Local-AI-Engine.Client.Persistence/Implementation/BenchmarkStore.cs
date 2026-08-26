@@ -13,6 +13,12 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     internal const string FidelityKindPerplexity = "ppl";
     internal const string FidelityKindKld = "kld";
     private const string UnresolvedJudgeRuntimeMessage = "judge runtime unresolved";
+
+    /// <summary>
+    ///     What a run frozen before task items existed was asked, and what a project with no items still asks. It is a
+    ///     constant on BOTH sides of the staleness comparison, so a legacy run is never read as revised.
+    /// </summary>
+    internal const string LegacyTaskHash = "v1:legacy";
     private const string VerdictA = "a";
     private const string VerdictB = "b";
     private const string VerdictTie = "tie";
@@ -28,6 +34,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
     public async Task<BenchmarkProjectRecord> CreateProjectAsync(BenchmarkProjectInput input,
         BenchmarkJudgePolicyChangeInput? judgePolicy = null,
+        IReadOnlyList<BenchmarkTaskItemInput>? initialItems = null,
         CancellationToken cancellationToken = default)
     {
         ValidateProject(input);
@@ -51,23 +58,388 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             CreatedAtUtc = now,
             UpdatedAtUtc = now
         };
-        if (judgePolicy is null)
+        if (judgePolicy is null && initialItems is not { Count: > 0 })
         {
             _dbContext.BenchmarkProjects.Add(entity);
             await SaveAsync(cancellationToken).ConfigureAwait(false);
             return ToRecord(entity, frozen: false);
         }
 
-        // The project and its judge are one creation. Staged saves inside one transaction are what the circular
-        // project↔revision pointers force: project with a null pointer, then the revision, then the pointer.
+        // The project, its judge and its items are ONE creation. Staged saves inside one transaction are what the
+        // circular project↔revision pointers force: project with a null pointer, then the revision, then the pointer.
+        // The items ride the same transaction so a project never exists without a question to ask — which is what lets
+        // every read path stop inventing one.
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         _dbContext.BenchmarkProjects.Add(entity);
         await SaveAsync(cancellationToken).ConfigureAwait(false);
-        await ApplyJudgePolicyChangeAsync(entity, judgePolicy, now, cancellationToken).ConfigureAwait(false);
+        if (judgePolicy is not null)
+        {
+            await ApplyJudgePolicyChangeAsync(entity, judgePolicy, now, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (initialItems is { Count: > 0 })
+        {
+            var created = new List<BenchmarkTaskItem>(initialItems.Count);
+            for (var index = 0; index < initialItems.Count; index++)
+            {
+                created.Add(NewTaskItem(entity.Id, initialItems[index], index, now));
+            }
+
+            _dbContext.BenchmarkTaskItems.AddRange(created);
+            entity.TaskItemSetHash = BenchmarkTaskItemHashing.ComputeSetHash(created);
+        }
+
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return ToRecord(entity, frozen: false);
     }
+
+    public async Task<IReadOnlyList<BenchmarkTaskItemRecord>> ListTaskItemsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
+        [.. (await TaskItemsAsync(projectId, tracking: false, cancellationToken).ConfigureAwait(false)).Select(ToRecord)];
+
+    public async Task<IReadOnlyList<BenchmarkTaskItemRecord>> GetOrCreateItemsAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        var existing = await ListTaskItemsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        if (existing.Count > 0)
+        {
+            return existing;
+        }
+
+        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var now = Now();
+        var item = NewTaskItem(projectId,
+            new BenchmarkTaskItemInput(project.CoreTaskJson),
+            index: 0,
+            now);
+
+        // The project's set hash is deliberately NOT written here. Materializing item 0 changes nothing about what the
+        // project asks, and moving the hash every historical run is compared against would unrank the whole project's
+        // history for a bookkeeping write. It moves on the first real item edit, where unranking is the correct answer.
+        _dbContext.BenchmarkTaskItems.Add(item);
+        try
+        {
+            await SaveAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (BenchmarkConflictException exception) when (string.Equals(exception.Code, "DuplicateWork", StringComparison.Ordinal))
+        {
+            // Two concurrent readers of one legacy project both tried to materialize item 0. The unique
+            // (project_id, index) index turns that into a constraint violation rather than a second item 0, so the
+            // loser simply reads what the winner wrote.
+            _dbContext.ChangeTracker.Clear();
+            return await ListTaskItemsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        }
+
+        return [ToRecord(item)];
+    }
+
+    public async Task<BenchmarkTaskItemRecord> CreateTaskItemAsync(Guid projectId,
+        long expectedProjectVersion,
+        BenchmarkTaskItemInput input,
+        IReadOnlyList<BenchmarkTaskItemInput>? children = null,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateTaskItem(input);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(project.Version, expectedProjectVersion);
+        await EnsureNoActiveProjectWorkAsync(projectId, cancellationToken).ConfigureAwait(false);
+
+        var items = await TaskItemsAsync(projectId, tracking: true, cancellationToken).ConfigureAwait(false);
+        if (input.ParentItemId is { } parentId && items.All(entity => entity.Id != parentId))
+        {
+            throw new BenchmarkValidationException("The parent task item does not belong to this project.");
+        }
+
+        var now = Now();
+
+        // Indices are never renumbered on delete, so the next one is one past the highest — a gap is fine and is
+        // cheaper than rewriting every sibling row to close it.
+        var nextIndex = items.Count == 0 ? 0 : items.Max(entity => entity.Index) + 1;
+        var item = NewTaskItem(projectId, input, nextIndex, now);
+        _dbContext.BenchmarkTaskItems.Add(item);
+        var written = new List<BenchmarkTaskItem>(items) { item };
+        written.AddRange(AddChildren(projectId, item.Id, children, nextIndex + 1, now));
+        await ApplyItemSetChangeAsync(project, written, now, cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return ToRecord(item);
+    }
+
+    public async Task<BenchmarkTaskItemRecord> UpdateTaskItemAsync(Guid projectId,
+        Guid itemId,
+        long expectedItemVersion,
+        BenchmarkTaskItemInput input,
+        IReadOnlyList<BenchmarkTaskItemInput>? children = null,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateTaskItem(input);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await EnsureNoActiveProjectWorkAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var items = await TaskItemsAsync(projectId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var item = items.SingleOrDefault(entity => entity.Id == itemId) ?? throw new BenchmarkNotFoundException("Benchmark task item was not found.");
+        EnsureVersion(item.Version, expectedItemVersion);
+        if (!string.Equals(item.Kind, input.Kind, StringComparison.Ordinal))
+        {
+            // A kind change would turn a run target into a generator (or the reverse) under a stable id, which is a
+            // different item wearing the old identity. Delete and re-create instead, where the set hash moves for it.
+            throw new BenchmarkValidationException("A task item's kind cannot be changed. Delete the item and create the new one.");
+        }
+
+        var now = Now();
+        item.PromptJson = input.PromptJson.ToArray();
+        item.ReferenceAnswerJson = OptionalPayload(input.ReferenceAnswerJson);
+        item.VerifierConfigJson = OptionalPayload(input.VerifierConfigJson);
+        item.GeneratorConfigJson = OptionalPayload(input.GeneratorConfigJson);
+        item.CountsTowardScore = input.CountsTowardScore;
+
+        // The revision is inside the input hash, so a payload that is edited BACK to its previous bytes still reads as
+        // a different question — which is right: the answers in between were given to something else.
+        item.Revision = checked(item.Revision + 1);
+        item.InputHash = BenchmarkTaskItemHashing.ComputeInputHash(item);
+        item.Version++;
+        item.UpdatedAtUtc = now;
+
+        // A generator's cases are regenerated, not patched: the old rows go and the new ones are written in this same
+        // transaction, so no case is ever left describing parameters its generator no longer has. The replacements
+        // take fresh indices past the highest rather than reusing the vacated ones — the unique (project, index)
+        // index is enforced per statement, and a reused index collides with a row EF has not deleted yet.
+        var survivors = items;
+        if (children is not null)
+        {
+            var doomed = items.Where(entity => entity.ParentItemId == itemId).ToArray();
+            _dbContext.BenchmarkTaskItems.RemoveRange(doomed);
+            survivors = [.. items.Where(entity => Array.IndexOf(doomed, entity) < 0)];
+            survivors.AddRange(AddChildren(projectId, itemId, children, items.Max(entity => entity.Index) + 1, now));
+        }
+
+        await ApplyItemSetChangeAsync(project, survivors, now, cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return ToRecord(item);
+    }
+
+    /// <summary>
+    ///     Writes a generator's cases as ordinary items pointing back at it. Called inside the generator's own
+    ///     transaction, never on its own.
+    /// </summary>
+    private List<BenchmarkTaskItem> AddChildren(Guid projectId,
+        Guid parentItemId,
+        IReadOnlyList<BenchmarkTaskItemInput>? children,
+        int firstIndex,
+        long now)
+    {
+        var written = new List<BenchmarkTaskItem>(children?.Count ?? 0);
+        foreach (var child in children ?? [])
+        {
+            ValidateTaskItem(child);
+            var row = NewTaskItem(projectId, child with
+            {
+                ParentItemId = parentItemId
+            }, firstIndex + written.Count, now);
+            _dbContext.BenchmarkTaskItems.Add(row);
+            written.Add(row);
+        }
+
+        return written;
+    }
+
+    public async Task DeleteTaskItemAsync(Guid projectId, Guid itemId, long expectedItemVersion, CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        await EnsureNoActiveProjectWorkAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var items = await TaskItemsAsync(projectId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var item = items.SingleOrDefault(entity => entity.Id == itemId) ?? throw new BenchmarkNotFoundException("Benchmark task item was not found.");
+        EnsureVersion(item.Version, expectedItemVersion);
+
+        // A generator goes with its children, so the doomed set is the item plus everything it expanded into.
+        var doomed = items.Where(entity => entity.Id == itemId || entity.ParentItemId == itemId).ToArray();
+        var survivors = items.Where(entity => Array.IndexOf(doomed, entity) < 0).ToArray();
+        if (!survivors.Any(entity => BenchmarkTaskItemKinds.IsLeaf(entity.Kind)))
+        {
+            throw new BenchmarkValidationException("A benchmark project must keep at least one task item.");
+        }
+
+        // Foreign keys are off on this connection and no cascade fires, so this order IS the referential integrity:
+        // children before the parent they point at.
+        _dbContext.BenchmarkTaskItems.RemoveRange(doomed.Where(entity => entity.ParentItemId == itemId));
+        _dbContext.BenchmarkTaskItems.Remove(item);
+        await ApplyItemSetChangeAsync(project, survivors, Now(), cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<BenchmarkTaskItemRecord>> ReorderTaskItemsAsync(Guid projectId,
+        IReadOnlyList<Guid> orderedItemIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(orderedItemIds);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var items = await TaskItemsAsync(projectId, tracking: true, cancellationToken).ConfigureAwait(false);
+
+        // Naming exactly the current set is this call's concurrency check: an item added or deleted while the operator
+        // was dragging makes the two sets disagree, and the reorder is refused instead of renumbering a stale list.
+        if (orderedItemIds.Count != items.Count || orderedItemIds.Distinct().Count() != orderedItemIds.Count
+            || orderedItemIds.Any(id => items.All(entity => entity.Id != id)))
+        {
+            throw new BenchmarkConflictException("VersionConflict");
+        }
+
+        var now = Now();
+
+        // Two passes over disjoint index ranges: the unique (project_id, index) index is enforced per statement, so
+        // renumbering in place would collide with a row that has not moved yet.
+        var offset = items.Max(entity => entity.Index) + 1;
+        for (var position = 0; position < orderedItemIds.Count; position++)
+        {
+            items.Single(entity => entity.Id == orderedItemIds[position]).Index = offset + position;
+        }
+
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        for (var position = 0; position < orderedItemIds.Count; position++)
+        {
+            var item = items.Single(entity => entity.Id == orderedItemIds[position]);
+            item.Index = position;
+            item.Version++;
+            item.UpdatedAtUtc = now;
+        }
+
+        // No revision bump, no set-hash change and no cohort reset, all deliberately: the index is a display position
+        // that no hash carries, and a drag-and-drop must not unrank a completed suite.
+        project.UpdatedAtUtc = now;
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return [.. items.OrderBy(static entity => entity.Index).Select(ToRecord)];
+    }
+
+    /// <summary>
+    ///     Keeps the project's core task and its FIRST item asking the same question. The project edit is refused once
+    ///     the project has runs, so this is only ever reached while there is no history to unrank — which is why it
+    ///     bumps the item's revision and the set hash without resetting a cohort that cannot exist yet.
+    /// </summary>
+    private async Task SyncFirstItemPromptAsync(BenchmarkProject project, ReadOnlyMemory<byte> coreTaskJson, long now, CancellationToken cancellationToken)
+    {
+        if (project.CoreTaskJson.AsSpan().SequenceEqual(coreTaskJson.Span))
+        {
+            return;
+        }
+
+        var items = await TaskItemsAsync(project.Id, tracking: true, cancellationToken).ConfigureAwait(false);
+        var first = items.Where(static entity => BenchmarkTaskItemKinds.IsLeaf(entity.Kind)).MinBy(static entity => entity.Index);
+        if (first is null)
+        {
+            return;
+        }
+
+        first.PromptJson = coreTaskJson.ToArray();
+        first.Revision = checked(first.Revision + 1);
+        first.InputHash = BenchmarkTaskItemHashing.ComputeInputHash(first);
+        first.Version++;
+        first.UpdatedAtUtc = now;
+        project.TaskItemSetHash = BenchmarkTaskItemHashing.ComputeSetHash(items);
+    }
+
+    /// <summary>
+    ///     Recomputes the project's item-set hash over <paramref name="items" /> and, when it MOVED, bumps the project
+    ///     version and resets the rank cohort — the same reset a judge-policy activation performs, and for the same
+    ///     reason: the project score is a mean over the item set, so a different set is a different score.
+    /// </summary>
+    private async Task ApplyItemSetChangeAsync(BenchmarkProject project,
+        IReadOnlyCollection<BenchmarkTaskItem> items,
+        long now,
+        CancellationToken cancellationToken)
+    {
+        var setHash = BenchmarkTaskItemHashing.ComputeSetHash(items);
+        var moved = !string.Equals(project.TaskItemSetHash, setHash, StringComparison.Ordinal);
+        project.TaskItemSetHash = setHash;
+        project.UpdatedAtUtc = now;
+        if (moved)
+        {
+            project.Version++;
+        }
+
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        if (moved)
+        {
+            await ResetCurrentCohortAsync(project.Id, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    ///     Refuses an item write while any of the project's work is queued or running. The ranking read's staleness
+    ///     exclusions are a safety net for history; this is the primary guard, and it is what keeps a run from being
+    ///     frozen against one revision of an item and judged against another.
+    /// </summary>
+    private async Task EnsureNoActiveProjectWorkAsync(Guid projectId, CancellationToken cancellationToken)
+    {
+        var active = await (from work in _dbContext.BenchmarkWorkItems.AsNoTracking()
+            join run in _dbContext.BenchmarkRuns.AsNoTracking() on work.RunId equals run.Id
+            where run.ProjectId == projectId && (work.Status == BenchmarkWorkStatus.Queued || work.Status == BenchmarkWorkStatus.Running)
+            select work.QueueSequence).AnyAsync(cancellationToken).ConfigureAwait(false);
+        if (active)
+        {
+            throw new BenchmarkConflictException("ActiveRun");
+        }
+    }
+
+    private async Task<List<BenchmarkTaskItem>> TaskItemsAsync(Guid projectId, bool tracking, CancellationToken cancellationToken)
+    {
+        var query = tracking ? _dbContext.BenchmarkTaskItems.AsQueryable() : _dbContext.BenchmarkTaskItems.AsNoTracking();
+        return await query.Where(entity => entity.ProjectId == projectId)
+                          .OrderBy(entity => entity.Index)
+                          .ThenBy(entity => entity.Id)
+                          .ToListAsync(cancellationToken)
+                          .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     A new item with the store-owned fields filled in. The input hash is computed here and nowhere else, so a
+    ///     caller cannot present one — the value is what the ranking read trusts to say what a run was asked.
+    /// </summary>
+    private static BenchmarkTaskItem NewTaskItem(Guid projectId, BenchmarkTaskItemInput input, int index, long now)
+    {
+        var item = new BenchmarkTaskItem
+        {
+            Id = input.Id == Guid.Empty ? Guid.NewGuid() : input.Id,
+            ProjectId = projectId,
+            ParentItemId = input.ParentItemId,
+            Index = index,
+            Kind = input.Kind,
+            Revision = 1,
+            CountsTowardScore = input.CountsTowardScore,
+            PromptJson = input.PromptJson.ToArray(),
+            ReferenceAnswerJson = OptionalPayload(input.ReferenceAnswerJson),
+            VerifierConfigJson = OptionalPayload(input.VerifierConfigJson),
+            GeneratorConfigJson = OptionalPayload(input.GeneratorConfigJson),
+            Version = 1,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now
+        };
+        item.InputHash = BenchmarkTaskItemHashing.ComputeInputHash(item);
+        return item;
+    }
+
+    /// <summary>
+    ///     An absent optional payload is NULL, never an empty blob. The two are indistinguishable to a reader once
+    ///     encrypted, and "this item has no reference answer" is a different fact from "its reference answer is empty"
+    ///     — the second one participates in the input hash and would make an untouched item look edited.
+    /// </summary>
+    private static byte[]? OptionalPayload(ReadOnlyMemory<byte>? payload) =>
+        payload is { IsEmpty: false } value ? value.ToArray() : null;
+
+    private static void ValidateTaskItem(BenchmarkTaskItemInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        if (input.PromptJson.Length == 0 || !BenchmarkTaskItemKinds.IsKnown(input.Kind))
+        {
+            throw new BenchmarkValidationException("Benchmark task item input is invalid.");
+        }
+    }
+
+    private static BenchmarkTaskItemRecord ToRecord(BenchmarkTaskItem entity) =>
+        new(entity.Id, entity.ProjectId, entity.ParentItemId, entity.Index, entity.Kind, entity.Revision, entity.InputHash,
+            entity.CountsTowardScore, entity.PromptJson.ToArray(), entity.ReferenceAnswerJson?.ToArray(),
+            entity.VerifierConfigJson?.ToArray(), entity.GeneratorConfigJson?.ToArray(),
+            entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc);
 
     public async Task<BenchmarkProjectRecord?> GetProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
@@ -105,6 +477,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         }
 
         var now = Now();
+        await SyncFirstItemPromptAsync(project, input.CoreTaskJson, now, cancellationToken).ConfigureAwait(false);
         project.Name = input.Name.Trim();
         project.CoreTaskJson = input.CoreTaskJson.ToArray();
         project.ContextTokens = input.ContextTokens;
@@ -145,6 +518,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         // before the revisions go, and nothing relies on a cascade that this database does not enforce.
         project.CurrentJudgePolicyRevisionId = null;
         await SaveAsync(cancellationToken).ConfigureAwait(false);
+
+        // The guard above refuses a project that still holds runs, so every run-scoped child (work items, judge and
+        // fidelity attempts, comparisons) went with its run. What is scoped to the PROJECT did not: task items hold
+        // encrypted prompts, reference answers and verifier overrides and outlive every run, and a pairwise fit is
+        // only DEACTIVATED when the runs it was fitted over are deleted. Both are children of the project row, so
+        // both go before it.
+        await _dbContext.BenchmarkTaskItems.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await _dbContext.BenchmarkPairwiseFits.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await _dbContext.BenchmarkJudgePolicyRevisions.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         _dbContext.ChangeTracker.Clear();
         _ = await _dbContext.BenchmarkProjects.Where(entity => entity.Id == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
@@ -231,6 +612,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 UpdatedAtUtc = now
             };
 
+            // The identity stamps are NOT NULL, so a freeze that names no cell still names one: the run's own
+            // singleton. A project with one item and no repeats is exactly this case and ranks as it always has.
+            run.TaskItemId = command.TaskItemId;
+            run.TaskItemIndex = command.TaskItemIndex;
+            run.CellKey = string.IsNullOrEmpty(command.CellKey) ? SingletonCellKey(run.Id) : command.CellKey;
+            run.TaskInputHash = command.TaskInputHash ?? LegacyTaskHash;
+            run.TaskItemSetHash = command.TaskItemSetHash ?? project.TaskItemSetHash ?? LegacyTaskHash;
+
             // Added in caller order, and the queue sequence is assigned in insert order, which is what makes a repeat
             // group run back-to-back — warm-up first, then 1..N — rather than interleaved with whatever else is queued.
             _dbContext.BenchmarkRuns.Add(run);
@@ -248,18 +637,27 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             // primary then fails or is cancelled, hours of GPU work stay queued against a run that has no answer to
             // measure. It is seeded on primary SUCCESS instead, exactly where the judge attempt is seeded.
             //
-            // What freeze does record is the cells that will never be measured. One fidelity item per measured CELL,
-            // not per repeat: perplexity is deterministic given the same weights and the same arguments, so N repeats
-            // of one cell would produce N identical numbers at N times the cost, and a warm-up is never measured at
-            // all — it exists to absorb first-launch costs, not to be compared.
-            if (project.FidelityEnabled && !IsFidelityMeasuredCell(run))
+            runs.Add(run);
+        }
+
+        // What freeze does record is the cells that will never be measured. One fidelity item per measured CELL, not
+        // per repeat and not per ITEM: perplexity and KL divergence measure the model file against a corpus, so they
+        // are identical for every repeat and every task item of one cell and would otherwise cost N times the GPU
+        // hours (and, for KLD, N times ~25 GB of base logits) to produce N copies of one number. A warm-up is never
+        // measured at all — it exists to absorb first-launch costs, not to be compared. Decided over the batch rather
+        // than by a query because these rows are not saved yet.
+        if (project.FidelityEnabled)
+        {
+            var measured = runs.Where(IsFidelityMeasuredRepeat)
+                               .GroupBy(static run => run.CellKey, StringComparer.Ordinal)
+                               .Select(static cell => cell.OrderBy(static run => run.TaskItemIndex ?? int.MinValue).First().Id)
+                               .ToHashSet();
+            foreach (var run in runs.Where(run => !measured.Contains(run.Id)))
             {
                 // Recorded rather than left null: "this cell's repeats are covered by repeat 1" and "fidelity was
                 // never asked for" are different facts, and the UI shows a different thing for each.
                 run.FidelityStatus = "skipped";
             }
-
-            runs.Add(run);
         }
 
         project.Version += commands.Count;
@@ -283,7 +681,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var (judge, qualityScore, qualityScoreSource, _) = ApplyRunExclusions(JudgeViewFor(views, runId, entity.UserScore),
             entity.UserScore,
             entity.IsWarmup,
-            entity.PrimaryStopReason);
+            entity.PrimaryStopReason,
+            await LoadRunIdentityAsync(entity, cancellationToken).ConfigureAwait(false));
         return ToRecord(entity) with
         {
             Judge = judge,
@@ -314,6 +713,71 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var ranking = await LoadRankingAsync(projectId, cancellationToken).ConfigureAwait(false);
         return await PageAsync(ranking, projectId, skip: 0, int.MaxValue, modelContentFingerprint: null, includeUnscored: true, cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<BenchmarkCellPage> ListCellsAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        // ONE ranking, then one flat read of the runs it ranked — the same two reads the export makes, grouped by the
+        // key the ranking already decided rather than by re-deriving anything. Warm-ups never form a rankable cell, so
+        // they are absent here for the same reason they are absent from the denominator.
+        var ranking = await LoadRankingAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var rows = await _dbContext.BenchmarkRuns.AsNoTracking()
+                                   .Where(entity => entity.ProjectId == projectId && !entity.IsWarmup)
+                                   .OrderBy(entity => entity.CreatedAtUtc)
+                                   .Select(entity => new
+                                   {
+                                       entity.Id,
+                                       entity.CellKey,
+                                       entity.PrimaryModelName,
+                                       entity.ModelContentFingerprint,
+                                       entity.PrimaryKvCacheType,
+                                       entity.RepeatGroupId,
+                                       entity.RepeatIndex,
+                                       entity.TaskItemId,
+                                       entity.TaskItemIndex,
+                                       entity.PrimaryStopReason
+                                   })
+                                   .ToArrayAsync(cancellationToken)
+                                   .ConfigureAwait(false);
+
+        var cells = new List<BenchmarkCellRecord>();
+        foreach (var group in rows.GroupBy(static row => row.CellKey, StringComparer.Ordinal))
+        {
+            // A run inserted between the ranking read and this one is not in either map; it is skipped rather than
+            // throwing, because a freeze landing mid-read is ordinary and the next read will carry it.
+            var members = group.Where(row => ranking.Runs.ContainsKey(row.Id))
+                               .OrderBy(static row => row.TaskItemIndex ?? int.MinValue)
+                               .ThenBy(static row => row.Id)
+                               .ToArray();
+            if (members.Length == 0)
+            {
+                continue;
+            }
+
+            var cell = ranking.Cells.TryGetValue(group.Key, out var entry) ? entry : new CellRanking(null, null, Countable: false);
+            cells.Add(new BenchmarkCellRecord(group.Key,
+                members[0].PrimaryModelName,
+                members[0].ModelContentFingerprint,
+                members[0].PrimaryKvCacheType,
+                members[0].RepeatGroupId,
+                members[0].RepeatIndex,
+                cell.Quality,
+
+                // Every run of a cell reports its cell's rank, so the first one carries it.
+                ranking.Runs[members[0].Id].Rank,
+                cell.Reason,
+                [
+                    .. members.Select(member => new BenchmarkCellItemRecord(member.Id,
+                        member.TaskItemId,
+                        member.TaskItemIndex,
+                        ranking.Runs[member.Id].QualityScore,
+                        member.PrimaryStopReason,
+                        ranking.Runs[member.Id].Judge.RankExclusionReason))
+                ]));
+        }
+
+        return new BenchmarkCellPage(cells, ranking.Cohort, ranking.ScorableItemCount);
     }
 
     private async Task<BenchmarkRunPage> PageAsync(BenchmarkProjectRanking ranking,
@@ -435,7 +899,13 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                   entity.InvocationTimeoutSeconds,
                                   entity.RepeatMode,
                                   entity.SamplingSeed,
-                                  entity.SamplingTemperature))
+                                  entity.SamplingTemperature,
+                                  null,
+                                  entity.TaskItemId,
+                                  entity.TaskItemIndex,
+                                  entity.CellKey,
+                                  entity.TaskInputHash,
+                                  entity.TaskItemSetHash))
                               .ToArrayAsync(cancellationToken)
                               .ConfigureAwait(false);
 
@@ -446,6 +916,21 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
     public Task<int> CountRunsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
         _dbContext.BenchmarkRuns.AsNoTracking().CountAsync(entity => entity.ProjectId == projectId, cancellationToken);
+
+    public async Task<IReadOnlyDictionary<BenchmarkWorkKind, int>> CountActiveWorkAsync(Guid projectId,
+        CancellationToken cancellationToken = default) =>
+        (await _dbContext.BenchmarkWorkItems.AsNoTracking()
+                         .Where(item => (item.Status == BenchmarkWorkStatus.Queued || item.Status == BenchmarkWorkStatus.Running)
+                                        && _dbContext.BenchmarkRuns.Any(run => run.Id == item.RunId && run.ProjectId == projectId))
+                         .GroupBy(item => item.Kind)
+                         .Select(group => new
+                         {
+                             Kind = group.Key,
+                             Count = group.Count()
+                         })
+                         .ToListAsync(cancellationToken)
+                         .ConfigureAwait(false))
+        .ToDictionary(static entry => entry.Kind, static entry => entry.Count);
 
     public async Task<BenchmarkClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default)
     {
@@ -678,7 +1163,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         // answer, so it must not exist until there IS one. The eligibility rule is the per-cell one shared with the
         // freeze marker and with EnqueueMissingFidelityAsync — the current project settings decide it, because the
         // fidelity settings deliberately write through the freeze.
-        if (settings is { FidelityEnabled: true } && IsFidelityMeasuredCell(run))
+        if (settings is { FidelityEnabled: true } && await IsFidelityMeasuredCellAsync(run, cancellationToken).ConfigureAwait(false))
         {
             _ = await AppendFidelityWorkAsync(run, settings.FidelityKldEnabled ? FidelityKindKld : FidelityKindPerplexity, now, cancellationToken)
                 .ConfigureAwait(false);
@@ -690,12 +1175,38 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     }
 
     /// <summary>
-    ///     The measured cell of a repeat group: non-warm-up, first of its group. One rule, three callers — freeze's
-    ///     "skipped" marker, the seed on primary success, and the measure-existing sweep — because a cell measured by
-    ///     one of them and a cell measured by another must mean the same thing. <c>EnqueueMissingFidelityAsync</c>
-    ///     re-expresses this rule as an EF predicate because a method cannot be translated; the two must change together.
+    ///     The repeat half of the measured-cell rule: non-warm-up, first of its group.
     /// </summary>
-    private static bool IsFidelityMeasuredCell(BenchmarkRun run) => !run.IsWarmup && run.RepeatIndex is null or 1;
+    private static bool IsFidelityMeasuredRepeat(BenchmarkRun run) => !run.IsWarmup && run.RepeatIndex is null or 1;
+
+    /// <summary>
+    ///     The one run of a cell that a fidelity measurement is attached to: the repeat half above, plus the
+    ///     lowest-indexed task item of the cell. One rule, three callers — freeze's "skipped" marker, the seed on
+    ///     primary success, and the measure-existing sweep — because a cell measured by one of them and a cell measured
+    ///     by another must mean the same thing. Freeze decides it over its own batch (those rows are not saved yet) and
+    ///     <c>EnqueueMissingFidelityAsync</c> re-expresses it as an EF predicate; all three must change together.
+    ///     <para>
+    ///         The item half exists because perplexity and KL divergence measure the model file against a corpus, not
+    ///         the task: every item of one cell would otherwise queue an identical measurement at N times the cost.
+    ///         A pre-suite run carries a null <c>TaskItemIndex</c>, which no sibling can undercut, so nothing about it
+    ///         changes.
+    ///     </para>
+    /// </summary>
+    private async Task<bool> IsFidelityMeasuredCellAsync(BenchmarkRun run, CancellationToken cancellationToken) =>
+        IsFidelityMeasuredRepeat(run)
+        && !await _dbContext.BenchmarkRuns.AsNoTracking()
+                            .AnyAsync(other => other.ProjectId == run.ProjectId
+                                               && other.CellKey == run.CellKey
+                                               && other.TaskItemIndex < run.TaskItemIndex,
+                                cancellationToken)
+                            .ConfigureAwait(false);
+
+    /// <summary>
+    ///     The cell key of a run that is a cell of one. Derived from the run's own id, so it is unique by construction
+    ///     rather than by hoping the column was populated, and two freezes of one project never share a cell.
+    /// </summary>
+    internal static string SingletonCellKey(Guid runId) =>
+        "cell:" + runId.ToString("D");
 
     public Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId, long expectedRunVersion, string errorMessage, CancellationToken cancellationToken = default) =>
         TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Failed, BenchmarkWorkStatus.Failed, errorMessage,
@@ -2057,6 +2568,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                                           && entity.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
                                                           && !entity.IsWarmup
                                                           && (entity.RepeatIndex == null || entity.RepeatIndex == 1)
+                                                          && !_dbContext.BenchmarkRuns.Any(other => other.ProjectId == entity.ProjectId
+                                                                                                    && other.CellKey == entity.CellKey
+                                                                                                    && other.TaskItemIndex < entity.TaskItemIndex)
                                                           && !_dbContext.BenchmarkFidelityAttempts.Any(attempt => attempt.RunId == entity.Id))
                                          .OrderBy(entity => entity.CreatedAtUtc)
                                          .ToListAsync(cancellationToken)
@@ -2519,10 +3033,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     /// </summary>
     private static BenchmarkRunRecord ToRecordWithJudge(BenchmarkRun run, IReadOnlyDictionary<Guid, BenchmarkRunJudgeView> views)
     {
+        // The write paths that project a run they have just touched compare it against nothing: item edits are refused
+        // while any of the project's work is Queued or Running, so a row a write just moved cannot be stale. The
+        // ranking read and the single-run read do the real comparison.
         var (judge, qualityScore, qualityScoreSource, _) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
             run.UserScore,
             run.IsWarmup,
-            run.PrimaryStopReason);
+            run.PrimaryStopReason,
+            BenchmarkRunIdentity.Unstamped);
         return ToRecord(run) with
         {
             Judge = judge,
@@ -2532,9 +3050,40 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     }
 
     /// <summary>
+    ///     What one run was asked, against what the project asks now. Two tiny plaintext reads; a run that names no
+    ///     item short-circuits to <see cref="BenchmarkRunIdentity.Unstamped" /> and cannot be stale on either axis.
+    /// </summary>
+    private async Task<BenchmarkRunIdentity> LoadRunIdentityAsync(BenchmarkRun entity, CancellationToken cancellationToken)
+    {
+        if (entity.TaskItemId is not { } itemId)
+        {
+            return BenchmarkRunIdentity.Unstamped;
+        }
+
+        var currentInputHash = await _dbContext.BenchmarkTaskItems.AsNoTracking()
+                                               .Where(item => item.Id == itemId)
+                                               .Select(static item => item.InputHash)
+                                               .FirstOrDefaultAsync(cancellationToken)
+                                               .ConfigureAwait(false);
+        var currentSetHash = await _dbContext.BenchmarkProjects.AsNoTracking()
+                                             .Where(project => project.Id == entity.ProjectId)
+                                             .Select(static project => project.TaskItemSetHash)
+                                             .FirstOrDefaultAsync(cancellationToken)
+                                             .ConfigureAwait(false);
+        return new BenchmarkRunIdentity(entity.TaskInputHash, currentInputHash, entity.TaskItemSetHash, currentSetHash);
+    }
+
+    /// <summary>
     ///     The project's ranking, computed once per request from flat columns only. Dense rank, descending, ties
-    ///     sharing a rank. Recompute per request rather than maintain a rollup: a project is one hard-fixed task and
-    ///     its run count stays small.
+    ///     sharing a rank. Recompute per request rather than maintain a rollup: a project's run count stays small.
+    ///     <para>
+    ///         The unit that ranks is a CELL — one model, one KV type, one repeat of the whole task-item suite — and a
+    ///         cell is ranked only when every scorable item in it produced a rankable score. Partial credit is
+    ///         rejected: it would let a model that ran out of budget on the hardest item be scored on the easy ones
+    ///         only and outrank one that attempted everything, which is the same reason a truncated run is excluded
+    ///         outright rather than scored low. A single-item project has one run per cell and the numbers are
+    ///         identical to what they always were.
+    ///     </para>
     /// </summary>
     private async Task<BenchmarkProjectRanking> LoadRankingAsync(Guid projectId, CancellationToken cancellationToken)
     {
@@ -2545,60 +3094,165 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                          entity.Id,
                                          entity.UserScore,
                                          entity.PrimaryStopReason,
-                                         entity.IsWarmup
+                                         entity.IsWarmup,
+                                         entity.TaskItemId,
+                                         entity.CellKey,
+                                         entity.TaskInputHash,
+                                         entity.TaskItemSetHash
                                      })
                                      .ToArrayAsync(cancellationToken)
                                      .ConfigureAwait(false);
+
+        // Plaintext on both sides — hashes and flags, never a payload — so this read still decrypts nothing.
+        var items = await _dbContext.BenchmarkTaskItems.AsNoTracking()
+                                    .Where(entity => entity.ProjectId == projectId)
+                                    .Select(entity => new
+                                    {
+                                        entity.Id,
+                                        entity.Kind,
+                                        entity.InputHash,
+                                        entity.CountsTowardScore
+                                    })
+                                    .ToArrayAsync(cancellationToken)
+                                    .ConfigureAwait(false);
+        var currentInputHashes = items.ToDictionary(static item => item.Id, static item => item.InputHash);
+        var scorableItemIds = items.Where(static item => BenchmarkTaskItemKinds.IsLeaf(item.Kind) && item.CountsTowardScore)
+                                   .Select(static item => item.Id)
+                                   .ToHashSet();
+        var currentSetHash = await _dbContext.BenchmarkProjects.AsNoTracking()
+                                             .Where(entity => entity.Id == projectId)
+                                             .Select(static entity => entity.TaskItemSetHash)
+                                             .FirstOrDefaultAsync(cancellationToken)
+                                             .ConfigureAwait(false);
+
         var views = await LoadJudgeViewsAsync([.. scored.Select(static run => run.Id)], cancellationToken).ConfigureAwait(false);
         var current = await GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
         var pairwise = await LoadPairwiseRankingAsync(current, cancellationToken).ConfigureAwait(false);
 
         var runs = new Dictionary<Guid, BenchmarkRunRanking>(scored.Length);
-        var totalScored = 0;
+        var rankable = new Dictionary<Guid, bool>(scored.Length);
+        var anyScore = new Dictionary<Guid, bool>(scored.Length);
+        var setRevised = new HashSet<Guid>();
         foreach (var run in scored)
         {
-            var (judge, qualityScore, source, rankable) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
+            var identity = new BenchmarkRunIdentity(run.TaskInputHash,
+                run.TaskItemId is { } itemId && currentInputHashes.TryGetValue(itemId, out var hash) ? hash : null,
+                run.TaskItemSetHash,
+                currentSetHash);
+            var (judge, qualityScore, source, runRankable) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
                 run.UserScore,
                 run.IsWarmup,
                 run.PrimaryStopReason,
+                identity,
                 ToPairwiseRunView(pairwise, run.Id));
 
-            // The denominator counts only runs a score could ever rank: a project's "n of m ranked" must not carry a
-            // gap nothing the operator does can close. `rankable` is the exclusion method's OWN verdict rather than a
-            // second copy of the rule — a warm-up and a truncated run without an operator override are both
-            // permanently unrankable, and re-judging cannot un-truncate one.
-            if (rankable && (run.UserScore is not null || judge.Score is not null || PairwiseScoreFor(pairwise, run.Id)?.Score is not null))
+            rankable[run.Id] = runRankable;
+            anyScore[run.Id] = run.UserScore is not null || judge.Score is not null || PairwiseScoreFor(pairwise, run.Id)?.Score is not null;
+            if (identity.SetRevised)
             {
-                totalScored++;
+                _ = setRevised.Add(run.Id);
             }
 
-            runs[run.Id] = new BenchmarkRunRanking(judge, qualityScore, source, Rank: null);
+            runs[run.Id] = new BenchmarkRunRanking(judge, qualityScore, source, Rank: null, CellQuality: null);
         }
 
-        // Dense rank: equal scores share a position and the next distinct score is the next integer, so "rank 2" is
-        // always "the second-best score in this project", however many runs tie above it.
-        var ordered = runs.Values.Where(static entry => entry.QualityScore is not null)
-                          .Select(static entry => entry.QualityScore!.Value)
-                          .Distinct()
-                          .OrderByDescending(static score => score)
-                          .ToArray();
-        foreach (var (runId, entry) in runs.ToArray())
+        // Warm-ups are dropped BEFORE grouping. A warm-up sits at repeat index 0, so it forms a cell of its own that
+        // could only ever be complete if every leaf item also got a warm-up run — and it would then sit in the
+        // denominator forever. It is not a contender at cell granularity for exactly the reason it is not one at run
+        // granularity.
+        var cells = new Dictionary<string, CellRanking>(StringComparer.Ordinal);
+        foreach (var cell in scored.Where(static run => !run.IsWarmup).GroupBy(static run => run.CellKey, StringComparer.Ordinal))
         {
-            if (entry.QualityScore is { } score)
+            var members = cell.ToArray();
+
+            // The set check comes FIRST: "does this cell hold every current item" is only a meaningful question once
+            // both sides agree on what the set is. Asking it of a cell frozen under a different set is the bug.
+            if (Array.Exists(members, member => setRevised.Contains(member.Id)))
             {
-                runs[runId] = entry with
-                {
-                    Rank = Array.IndexOf(ordered, score) + 1
-                };
+                cells[cell.Key] = new CellRanking(null, BenchmarkRunJudgeStates.ReasonItemSetRevised, Countable: false);
+                continue;
             }
+
+            // A cell whose runs name no item at all was frozen before task suites: it is a singleton, it is ranked on
+            // its own run's score, and materializing item 0 for the project later must not retroactively unrank it.
+            var contributing = members.Where(member => member.TaskItemId is { } id && scorableItemIds.Contains(id)).ToArray();
+            if (contributing.Length == 0 && Array.TrueForAll(members, static member => member.TaskItemId is null))
+            {
+                var only = members[0];
+                cells[cell.Key] = new CellRanking(runs[only.Id].QualityScore,
+                    runs[only.Id].QualityScore is null ? runs[only.Id].Judge.RankExclusionReason : null,
+                    rankable[only.Id] && anyScore[only.Id]);
+                continue;
+            }
+
+            // A project whose every leaf is excluded from the mean — a pure long-context probe, where recall is
+            // reported on its own axis — has nothing to rank, which is not the same as a cell missing an item. Saying
+            // "incomplete" here would send the operator looking for a question that was never asked; the runs still
+            // carry their own scores, and those are what the recall axis reads.
+            if (scorableItemIds.Count == 0)
+            {
+                cells[cell.Key] = new CellRanking(null, BenchmarkRunJudgeStates.ReasonNoScore, Countable: false);
+                continue;
+            }
+
+            var covered = contributing.Select(static member => member.TaskItemId!.Value).ToHashSet();
+            var complete = scorableItemIds.All(covered.Contains)
+                           && Array.TrueForAll(contributing, member => rankable[member.Id]);
+            if (!complete)
+            {
+                cells[cell.Key] = new CellRanking(null, BenchmarkRunJudgeStates.ReasonItemIncomplete, Countable: false);
+                continue;
+            }
+
+            // Half away from zero, matching ComputeQuality's own arithmetic.
+            var quality = Array.TrueForAll(contributing, member => runs[member.Id].QualityScore is not null)
+                ? (int)Math.Round(contributing.Average(member => (double)runs[member.Id].QualityScore!.Value), MidpointRounding.AwayFromZero)
+                : (int?)null;
+            cells[cell.Key] = new CellRanking(quality,
+                quality is null ? BenchmarkRunJudgeStates.ReasonItemIncomplete : null,
+                Array.TrueForAll(contributing, member => anyScore[member.Id]));
+        }
+
+        // Dense rank over CELLS: equal scores share a position and the next distinct score is the next integer, so
+        // "rank 2" is always "the second-best score in this project", however many cells tie above it. Every run of a
+        // cell reports its cell's rank and its cell's mean; its own quality score stays its own.
+        var ordered = cells.Values.Where(static entry => entry.Quality is not null)
+                           .Select(static entry => entry.Quality!.Value)
+                           .Distinct()
+                           .OrderByDescending(static score => score)
+                           .ToArray();
+        foreach (var run in scored)
+        {
+            if (run.IsWarmup || !cells.TryGetValue(run.CellKey, out var cell))
+            {
+                continue;
+            }
+
+            var entry = runs[run.Id];
+            runs[run.Id] = entry with
+            {
+                CellQuality = cell.Quality,
+                Rank = cell.Quality is { } quality ? Array.IndexOf(ordered, quality) + 1 : null,
+
+                // A run the cell excluded but that nothing about the run itself excluded reports the cell's reason:
+                // "your sibling item never answered" is why this row does not rank, and it is not visible anywhere else.
+                Judge = entry.Judge.RankExclusionReason is null && cell.Reason is not null
+                    ? entry.Judge with
+                    {
+                        RankExclusionReason = cell.Reason
+                    }
+                    : entry.Judge
+            };
         }
 
         return new BenchmarkProjectRanking(runs,
             new BenchmarkRankCohort(current?.Revision,
                 current?.ReferenceExecutionKey,
                 current?.CohortGeneration,
-                runs.Values.Count(static entry => entry.Rank is not null),
-                totalScored));
+                cells.Values.Count(static entry => entry.Quality is not null),
+                cells.Values.Count(static entry => entry.Countable)),
+            cells,
+            scorableItemIds.Count);
     }
 
     /// <summary>
@@ -2629,10 +3283,18 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         int? userScore,
         bool isWarmup,
         string? primaryStopReason,
+        BenchmarkRunIdentity identity,
         PairwiseRunView? pairwise = null)
     {
-        var unanswered = isWarmup || userScore is not null ? null : UnansweredReason(primaryStopReason);
-        if (!isWarmup && unanswered is null)
+        // The stale stamps sit ABOVE the operator override, and truncation still sits below it. An operator who read a
+        // truncated answer and scored it anyway has overruled the machine about a fact they could see; an operator who
+        // scored an answer to a question that has since been edited, or to one item of a suite whose membership has
+        // since changed, has not — they had no way to know either moved.
+        var revised = identity.Revised;
+        var setRevised = identity.SetRevised;
+        var stale = revised || setRevised;
+        var unanswered = isWarmup || stale || userScore is not null ? null : UnansweredReason(primaryStopReason);
+        if (!isWarmup && !stale && unanswered is null)
         {
             var (score, source) = ComputeQuality(userScore, judge, pairwise);
             if (pairwise is null)
@@ -2646,10 +3308,57 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             }, score, source, true);
         }
 
+        // The more specific cause wins: "your question changed" before "the suite around it changed".
+        var reason = StaleReason(revised, setRevised) ?? unanswered;
         return (judge with
         {
-            RankExclusionReason = isWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : unanswered
+            RankExclusionReason = isWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : reason
         }, null, BenchmarkQualityScoreSources.None, false);
+    }
+
+    /// <summary>
+    ///     Which stale-identity reason a run carries, or <see langword="null" /> when neither stamp moved. The more
+    ///     specific cause wins, so the badge names the question rather than the suite whenever both apply.
+    /// </summary>
+    private static string? StaleReason(bool revised, bool setRevised)
+    {
+        if (revised)
+        {
+            return BenchmarkRunJudgeStates.ReasonItemRevised;
+        }
+
+        return setRevised ? BenchmarkRunJudgeStates.ReasonItemSetRevised : null;
+    }
+
+    /// <summary>
+    ///     What a run was asked, against what the project asks now. Both sides are plaintext, so the ranking read still
+    ///     never decrypts anything.
+    ///     <para>
+    ///         The two axes fail differently and neither implies the other. <paramref name="TaskInputHash" /> answers
+    ///         "was this run's own question edited"; every run of an untouched item passes it.
+    ///         <paramref name="TaskItemSetHash" /> answers "was this cell measured against the suite the project now
+    ///         claims" — and the deletion case is the one nothing else catches: delete the item a cell never answered
+    ///         and its two surviving runs keep matching their own item hashes, satisfy every per-item check, and now
+    ///         constitute a COMPLETE two-item cell whose mean is over a suite the model was never scored on.
+    ///     </para>
+    /// </summary>
+    /// <param name="CurrentInputHash">
+    ///     The item's hash now, or <see langword="null" /> when the run names no item (pre-suite) or names one that no
+    ///     longer exists — in which case the set hash has moved and is the accurate reason.
+    /// </param>
+    private sealed record BenchmarkRunIdentity(string? TaskInputHash,
+        string? CurrentInputHash,
+        string? TaskItemSetHash,
+        string? CurrentItemSetHash)
+    {
+        /// <summary>A run frozen before task suites, or a projection that has no project state to compare against.</summary>
+        public static BenchmarkRunIdentity Unstamped { get; } = new(null, null, null, null);
+
+        public bool Revised =>
+            CurrentInputHash is not null && !string.Equals(TaskInputHash, CurrentInputHash, StringComparison.Ordinal);
+
+        public bool SetRevised =>
+            TaskItemSetHash is not null && !string.Equals(TaskItemSetHash, CurrentItemSetHash ?? LegacyTaskHash, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -2673,7 +3382,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 Judge = entry.Judge,
                 QualityScore = entry.QualityScore,
                 QualityScoreSource = entry.Source,
-                Rank = entry.Rank
+                Rank = entry.Rank,
+                CellQuality = entry.CellQuality
             }
             : run;
 
@@ -2768,9 +3478,21 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             entry?.Reason ?? pairwise.ScopeReason ?? (entry is null ? BenchmarkRunJudgeStates.ReasonPairwiseInsufficient : null));
     }
 
-    private sealed record BenchmarkRunRanking(BenchmarkRunJudgeView Judge, int? QualityScore, string Source, int? Rank);
+    private sealed record BenchmarkRunRanking(BenchmarkRunJudgeView Judge, int? QualityScore, string Source, int? Rank, int? CellQuality);
 
-    private sealed record BenchmarkProjectRanking(IReadOnlyDictionary<Guid, BenchmarkRunRanking> Runs, BenchmarkRankCohort Cohort);
+    /// <summary>
+    ///     One measurement cell: the mean of its scorable items' qualities, or the reason it has none.
+    /// </summary>
+    /// <param name="Countable">
+    ///     Whether this cell belongs in the "n of m ranked" denominator — complete, every member rankable, every member
+    ///     carrying some score. A cell nothing the operator does could ever rank must not sit in it.
+    /// </param>
+    private sealed record CellRanking(int? Quality, string? Reason, bool Countable);
+
+    private sealed record BenchmarkProjectRanking(IReadOnlyDictionary<Guid, BenchmarkRunRanking> Runs,
+        BenchmarkRankCohort Cohort,
+        IReadOnlyDictionary<string, CellRanking> Cells,
+        int ScorableItemCount);
 
     private static BenchmarkRunJudgeView JudgeViewFor(IReadOnlyDictionary<Guid, BenchmarkRunJudgeView> views, Guid runId, int? userScore)
     {
@@ -2863,7 +3585,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         return row.Status switch
         {
             BenchmarkJudgeAttemptStatus.Queued or BenchmarkJudgeAttemptStatus.Running => BenchmarkRunJudgeStates.ReasonJudgePending,
-            BenchmarkJudgeAttemptStatus.Failed => BenchmarkRunJudgeStates.ReasonJudgeFailed,
+            // A judging that failed because a verifier could not RUN is not the same fact as one whose judge model
+            // failed: the run is unranked either way, but only one of them is fixed by an operator action on the node.
+            // Nor is one refused because the item's override named a criterion the rubric does not have — that one is
+            // fixed by editing the item or the rubric.
+            BenchmarkJudgeAttemptStatus.Failed => FailedReason(row.ErrorMessage),
             BenchmarkJudgeAttemptStatus.Cancelled => BenchmarkRunJudgeStates.ReasonJudgeCancelled,
             _ when row.Score is null => BenchmarkRunJudgeStates.ReasonNoScore,
             _ when !policyCurrent => BenchmarkRunJudgeStates.ReasonPolicyOutdated,
@@ -2873,6 +3599,20 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             _ => null
         };
     }
+
+    /// <summary>
+    ///     Which failure a failed judging was. The message prefix is the only column carrying it: the executor is the
+    ///     one thing that writes either prefix, and it writes each only for the condition it names.
+    /// </summary>
+    private static string FailedReason(string? errorMessage) =>
+        errorMessage switch
+        {
+            not null when errorMessage.StartsWith(BenchmarkRunJudgeStates.VerifierUnavailablePrefix, StringComparison.Ordinal) =>
+                BenchmarkRunJudgeStates.ReasonVerifierUnavailable,
+            not null when errorMessage.StartsWith(BenchmarkRunJudgeStates.OverrideUnmatchedPrefix, StringComparison.Ordinal) =>
+                BenchmarkRunJudgeStates.ReasonOverrideUnmatched,
+            _ => BenchmarkRunJudgeStates.ReasonJudgeFailed
+        };
 
     /// <summary>The flat columns the derived judge view is computed from. Never leaves this class.</summary>
     private sealed record JudgeViewRow(
@@ -3202,7 +3942,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             entity.CurrentJudgePolicyRevisionId is not null, entity.CurrentJudgePolicyRevisionId, frozen,
             entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.MaxOutputTokens, entity.InvocationTimeoutSeconds,
             entity.ReasoningBudgetTokens, entity.FidelityEnabled, entity.FidelityKldEnabled, entity.FidelityChunks,
-            entity.FidelityKldBaseModelName, entity.FidelityKldBaseFingerprint);
+            entity.FidelityKldBaseModelName, entity.FidelityKldBaseFingerprint, entity.TaskItemSetHash);
 
     // One place writes the six throughput columns, so the success path and the cancel-reset path can never disagree
     // about which of them a run carries.
@@ -3250,7 +3990,12 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             RepeatMode: entity.RepeatMode,
             SamplingSeed: entity.SamplingSeed,
             SamplingTemperature: entity.SamplingTemperature,
-            Fidelity: ToFidelity(entity));
+            Fidelity: ToFidelity(entity),
+            TaskItemId: entity.TaskItemId,
+            TaskItemIndex: entity.TaskItemIndex,
+            CellKey: entity.CellKey,
+            TaskInputHash: entity.TaskInputHash,
+            TaskItemSetHash: entity.TaskItemSetHash);
 
     /// <summary>
     ///     Null when nothing has ever been measured, so the API says "no measurement" rather than a projection of
