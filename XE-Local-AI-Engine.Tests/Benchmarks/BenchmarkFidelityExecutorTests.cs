@@ -138,6 +138,64 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         AssertEx.True(receipt.Contains("\"argv\"", StringComparison.Ordinal), "The argv is the auditable part of a measurement with no receipt.");
     }
 
+    [Test]
+    public async Task Execute_MeasuringKldFromScratch_ReservesForTheBaseModelFirstAndTheQuantSecond()
+    {
+        // The reservation used to be sized ONCE, off the quant, and then held across a base-logit pass that loads a
+        // model routinely larger than it — an over-admission that OOMs on exactly the box where the base is the big
+        // one. The two phases never overlap, so each reserves for the model it actually loads.
+        var harness = new Harness(_root, kind: "kld");
+        harness.ScriptedOutputs.Enqueue(BasePhaseOutput);
+        harness.ScriptedOutputs.Enqueue(KlDivergenceOutput);
+        BenchmarkFidelitySuccessCommand? command = null;
+        _ = harness.Store.MarkFidelitySucceededAsync(Arg.Do<BenchmarkFidelitySuccessCommand>(value => command = value), Arg.Any<CancellationToken>());
+
+        await harness.Executor().ExecuteAsync(harness.Work(), CancellationToken.None);
+
+        AssertEx.Equal(expected: 2, harness.CapacityRequests.Count, "One reservation per phase, taken and released in turn.");
+        AssertEx.Equal(Harness.BaseModelName, harness.CapacityRequests[0].ModelName, "The base-logit phase is admitted against the BASE model's footprint.");
+        AssertEx.Equal("quant.gguf", harness.CapacityRequests[1].ModelName, "And the quant pass against the quant's, after the base has been released.");
+        AssertEx.True(harness.CapacityRequests.All(static request => !request.PublishLaunchAdmission),
+            "Neither phase launches a server, so neither publishes a launch admission.");
+        AssertEx.Equal<double?>(0.030165, AssertEx.NotNull(command).KldMean, "And the measurement itself still lands.");
+    }
+
+    [Test]
+    public async Task Execute_WhenTheBaseLogitsAreAlreadyCached_ReservesOnlyForTheQuant()
+    {
+        // The early return on a published base file loads nothing, so it must reserve nothing either.
+        var harness = new Harness(_root, kind: "kld");
+        harness.ScriptedOutputs.Enqueue(BasePhaseOutput);
+        harness.ScriptedOutputs.Enqueue(KlDivergenceOutput);
+        await harness.Executor().ExecuteAsync(harness.Work(), CancellationToken.None);
+
+        var second = new Harness(_root, kind: "kld");
+        second.ScriptedOutputs.Enqueue(KlDivergenceOutput);
+        await second.Executor().ExecuteAsync(second.Work(), CancellationToken.None);
+
+        AssertEx.Equal(expected: 1, second.CapacityRequests.Count);
+        AssertEx.Equal("quant.gguf", second.CapacityRequests[0].ModelName);
+    }
+
+    private const string BasePhaseOutput = """
+        0.31.519.491 I perplexity: 7.18 seconds per pass - ETA 5.97 minutes
+        1.12.579.214 I Final estimate: PPL = 5.7712 +/- 0.38886
+        """;
+
+    /// <summary>A real <c>--kl-divergence</c> tail: no `Final estimate` line, `±` separators, `Same top p`.</summary>
+    private const string KlDivergenceOutput = """
+        ====== Perplexity statistics ======
+        Mean PPL(Q)                   :   5.886524 ±   0.398426
+        Mean PPL(base)                :   5.771204 ±   0.388860
+
+        ====== KL divergence statistics ======
+        Mean    KLD:   0.030165 ±   0.002043
+        99.0%   KLD:   0.388019
+
+        ====== Token probability statistics ======
+        Same top p: 91.529 ± 0.780 %
+        """;
+
     private static string? ValueAfter(IReadOnlyList<string> arguments, string flag)
     {
         var index = arguments.ToList().IndexOf(flag);
@@ -155,9 +213,10 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         private readonly string _withoutTool;
         private readonly BenchmarkRuntimeSnapshotV1 _snapshot;
 
-        public Harness(string root)
+        public Harness(string root, string kind = "ppl")
         {
             var installed = InstalledModel();
+            var baseModel = BaseModel();
             _snapshot = SnapshotFor(installed);
             _run = RunFor(_snapshot);
             RunId = _run.Id;
@@ -172,23 +231,41 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
 
             Store = Substitute.For<IBenchmarkStore>();
             _ = Store.GetFidelityAttemptAsync(AttemptId, Arg.Any<CancellationToken>())
-                     .Returns(new BenchmarkFidelityAttemptRecord(AttemptId, RunId, 1, "ppl", BenchmarkJudgeAttemptStatus.Running,
+                     .Returns(new BenchmarkFidelityAttemptRecord(AttemptId, RunId, 1, kind, BenchmarkJudgeAttemptStatus.Running,
                          null, null, null, null, null, null, null, null, null, null, null, null, 1, null, null));
             _ = Store.GetProjectAsync(_run.ProjectId, Arg.Any<CancellationToken>())
                      .Returns(new BenchmarkProjectRecord(_run.ProjectId, "p", new byte[] { 1 }, 4096, Guid.NewGuid(), false, null, true, 1, 1, 1,
-                         FidelityEnabled: true));
-            Lease = new StubLease(installed);
+                         FidelityEnabled: true,
+                         FidelityKldEnabled: kind == "kld",
+                         FidelityKldBaseModelName: BaseModelName,
+                         FidelityKldBaseFingerprint: BaseFingerprint));
+            _ = Store.ListLiveFidelityDigestsAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlySet<string>>(_ => new HashSet<string>(StringComparer.Ordinal));
+            _leases = new Dictionary<string, IBenchmarkInstalledModelLease>(StringComparer.Ordinal)
+            {
+                [installed.ModelName] = new StubLease(installed),
+                [BaseModelName] = new StubLease(baseModel)
+            };
             Gguf = Substitute.For<IGgufModelStore>();
             _ = Gguf.ResolveModelFilePathAsync(installed.ModelName, Arg.Any<CancellationToken>()).Returns("/models/quant.gguf");
+            _ = Gguf.ResolveModelFilePathAsync(BaseModelName, Arg.Any<CancellationToken>()).Returns("/models/base.gguf");
         }
+
+        public const string BaseModelName = "base.gguf";
+        private static readonly string BaseFingerprint = "v1:" + new string('e', 64);
+        private readonly Dictionary<string, IBenchmarkInstalledModelLease> _leases;
 
         public static Guid AttemptId { get; } = new("44444444-4444-4444-4444-444444444444");
         public IBenchmarkStore Store { get; }
         public Guid RunId { get; }
-        public StubLease Lease { get; }
         public IGgufModelStore Gguf { get; }
         /// <summary>Whether the resolved runtime directory contains the perplexity helper at all.</summary>
         public bool RuntimeHasPerplexityTool { get; set; } = true;
+
+        /// <summary>Every capacity request the executor made, in the order it made them.</summary>
+        public List<CapacityRequest> CapacityRequests { get; } = [];
+
+        /// <summary>Consumed in order — the KLD path runs the base phase first and the quant pass second.</summary>
+        public Queue<string> ScriptedOutputs { get; } = new();
 
         public string Output { get; set; } = """
             0.31.519.491 I perplexity: 7.18 seconds per pass - ETA 5.97 minutes
@@ -211,10 +288,10 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
             return binaries;
         }
 
-        private static ICapacityService AllowingCapacity()
+        private ICapacityService AllowingCapacity()
         {
             var capacity = Substitute.For<ICapacityService>();
-            _ = capacity.DecideAsync(Arg.Any<CapacityRequest>(), Arg.Any<CancellationToken>())
+            _ = capacity.DecideAsync(Arg.Do<CapacityRequest>(request => CapacityRequests.Add(request)), Arg.Any<CancellationToken>())
                         .Returns(new CapacityDecision(CapacityVerdict.Allow, "allowed", OllamaEvictionWarning: false));
             return capacity;
         }
@@ -222,11 +299,11 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         public BenchmarkFidelityExecutor Executor() =>
             new(Store,
                 new FixedSnapshots(_snapshot),
-                new FixedLeases(Lease),
+                new NamedLeases(_leases),
                 Gguf,
                 AllowingCapacity(),
                 Binaries(Path.Combine(RuntimeHasPerplexityTool ? _withTool : _withoutTool, "llama-server")),
-                new ScriptedPerplexity(() => Output),
+                new ScriptedPerplexity(() => ScriptedOutputs.Count > 0 ? ScriptedOutputs.Dequeue() : Output),
                 _cache,
                 Options.Create(new BenchmarkKldCacheOptions()),
                 new StubEnvironment(),
@@ -251,6 +328,26 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                 "Q4_K_M",
                 GgufRole.Chat,
                 Fingerprint);
+        }
+
+        /// <summary>The KLD base model: a different name AND a different fingerprint, which is what the executor checks.</summary>
+        private static InstalledModelSnapshot BaseModel()
+        {
+            var revision = "v1:" + new string('d', 64);
+            return new InstalledModelSnapshot(BaseModelName,
+                revision,
+                [],
+                revision,
+                [],
+                revision,
+                LocalModelOrigin.Imported,
+                "llamacpp",
+                "map-revision",
+                "repo/base",
+                "revision",
+                "BF16",
+                GgufRole.Chat,
+                BaseFingerprint);
         }
 
         private static BenchmarkRuntimeSnapshotV1 SnapshotFor(InstalledModelSnapshot installed) =>
@@ -317,10 +414,14 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         public BenchmarkRuntimeSnapshotV1 Deserialize(ReadOnlySpan<byte> payload) => snapshot;
     }
 
-    private sealed class FixedLeases(StubLease lease) : IBenchmarkInstalledModelLeaseProvider
+    /// <summary>
+    ///     Keyed by model name, because the KLD path leases TWO models — the quant it measures and the base it
+    ///     measures against — and the executor verifies each one's fingerprint against a different expectation.
+    /// </summary>
+    private sealed class NamedLeases(IReadOnlyDictionary<string, IBenchmarkInstalledModelLease> leases) : IBenchmarkInstalledModelLeaseProvider
     {
         public Task<IBenchmarkInstalledModelLease> AcquireAsync(string modelName, CancellationToken cancellationToken) =>
-            Task.FromResult<IBenchmarkInstalledModelLease>(lease);
+            leases.TryGetValue(modelName, out var lease) ? Task.FromResult(lease) : throw new KeyNotFoundException(modelName);
     }
 
     internal sealed class StubLease(InstalledModelSnapshot snapshot) : IBenchmarkInstalledModelLease
@@ -331,8 +432,20 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
 
     private sealed class ScriptedPerplexity(Func<string> output) : IBenchmarkPerplexityRunner
     {
-        public Task<BenchmarkPerplexityProcessResult> RunAsync(string executablePath, IReadOnlyList<string> arguments, CancellationToken cancellationToken) =>
-            Task.FromResult(new BenchmarkPerplexityProcessResult(0, output()));
+        public async Task<BenchmarkPerplexityProcessResult> RunAsync(string executablePath,
+            IReadOnlyList<string> arguments,
+            CancellationToken cancellationToken)
+        {
+            // The base phase's whole product is the logit file, and the cache publishes it with a same-directory move.
+            // A scripted runner that wrote nothing would fail at the publish instead of exercising the phase ordering.
+            var index = arguments.ToList().IndexOf("--kl-divergence-base");
+            if (index >= 0 && !arguments.Contains("--kl-divergence", StringComparer.Ordinal))
+            {
+                await File.WriteAllTextAsync(arguments[index + 1], "logits", cancellationToken).ConfigureAwait(false);
+            }
+
+            return new BenchmarkPerplexityProcessResult(0, output());
+        }
     }
 
     private sealed class StubEnvironment : IRuntimeEnvironmentFactsProvider

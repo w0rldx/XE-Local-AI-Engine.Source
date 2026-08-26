@@ -133,6 +133,21 @@ public sealed class BenchmarkFidelityExecutor(
         // Host facts captured before anything is reserved or spawned, exactly as the judge does. Non-throwing.
         var environment = await environmentFacts.CaptureAsync(snapshot.PrimaryRuntime.Variant, token).ConfigureAwait(false);
 
+        var binary = await binaries.EnsureBinaryAsync(snapshot.PrimaryRuntime.Variant, token).ConfigureAwait(false);
+        if (binary.PerplexityExecutablePath is not { } executable)
+        {
+            throw new BenchmarkExecutionException(PerplexityUnavailableMessage);
+        }
+
+        // The base-logit phase runs the BASE model, which is routinely larger than the quant this run measures, so it
+        // reserves for ITSELF and releases before the quant is admitted. One reservation sized on the quant and held
+        // across both phases admitted the base against the wrong footprint — an over-admission that OOMs on exactly
+        // the box where the base is the big one. The two phases never overlap, so two sequential reservations cost
+        // nothing and describe what is actually resident.
+        var kld = string.Equals(attempt.Kind, "kld", StringComparison.Ordinal)
+            ? await PrepareKldAsync(work.RunId, project, corpus, chunks, executable, snapshot, token).ConfigureAwait(false)
+            : null;
+
         // Sized on the PINNED 512 window rather than the project's context: that is what this process will allocate.
         // No launch admission, and the same retry the judge uses — a fidelity item is dequeued by the same FIFO
         // consumer that just ran the primary, so it routinely arrives while that llama-server is handing VRAM back.
@@ -152,16 +167,6 @@ public sealed class BenchmarkFidelityExecutor(
                                                            token)
                                                        .ConfigureAwait(false);
         using var reservation = decision.Reservation;
-
-        var binary = await binaries.EnsureBinaryAsync(snapshot.PrimaryRuntime.Variant, token).ConfigureAwait(false);
-        if (binary.PerplexityExecutablePath is not { } executable)
-        {
-            throw new BenchmarkExecutionException(PerplexityUnavailableMessage);
-        }
-
-        var kld = string.Equals(attempt.Kind, "kld", StringComparison.Ordinal)
-            ? await PrepareKldAsync(project, corpus, chunks, executable, snapshot, token).ConfigureAwait(false)
-            : null;
 
         var arguments = BuildArguments(modelPath, corpus.Path, chunks, snapshot.PrimaryRuntime, kld?.BaseFilePath, isBasePhase: false);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -202,7 +207,8 @@ public sealed class BenchmarkFidelityExecutor(
     ///     identifies it. The key — not the base model's fingerprint — is what a stored KLD figure is later gated on,
     ///     because the corpus, the chunk count and the format version all move without the fingerprint moving.
     /// </summary>
-    private async Task<KldPreparation> PrepareKldAsync(BenchmarkProjectRecord project,
+    private async Task<KldPreparation> PrepareKldAsync(Guid runId,
+        BenchmarkProjectRecord project,
         BenchmarkFidelityCorpusFile corpus,
         int chunks,
         string executable,
@@ -241,6 +247,26 @@ public sealed class BenchmarkFidelityExecutor(
                 : throw new BenchmarkExecutionException(BaseWaitedTooLongMessage);
         }
 
+        // Reserved for the BASE model, and only once this phase is certainly going to run it: an early return on a
+        // published file, or a lease another process holds, allocates nothing and must reserve nothing. The
+        // reservation is released when this method returns, i.e. after the base file is published, so the quant pass
+        // is admitted against a ledger the base is no longer in.
+        var decision = await BenchmarkCapacityAdmission.AdmitAsync(capacity,
+                                                           new CapacityRequest(baseModelName,
+                                                               ModelRole.Chat,
+                                                               BenchmarkFidelityPolicy.ContextTokens,
+                                                               PublishLaunchAdmission: false,
+                                                               snapshot.PrimaryRuntime.KvTypeK),
+                                                           new BenchmarkAdmissionContext(runId,
+                                                               "fidelity-base",
+                                                               BenchmarkFidelityPolicy.ContextTokens,
+                                                               snapshot.PrimaryRuntime.KvTypeK ?? BenchmarkKvCacheType.F16,
+                                                               CapacityRejectedMessage),
+                                                           admissionRetry,
+                                                           logger,
+                                                           token)
+                                                       .ConfigureAwait(false);
+        using var reservation = decision.Reservation;
         cache.EnsureSpaceFor(BenchmarkFidelityPolicy.EstimateKldBytes(chunks, BenchmarkFidelityPolicy.DefaultVocabSize));
         var tempPath = cache.TempPathFor(key, Guid.NewGuid());
         try
