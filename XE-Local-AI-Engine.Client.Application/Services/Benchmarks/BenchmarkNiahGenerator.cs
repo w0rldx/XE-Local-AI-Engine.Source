@@ -76,8 +76,10 @@ public sealed record BenchmarkNiahConfigV1(
 /// </summary>
 /// <param name="ContextTokens">The REQUESTED probe length. What the refusal compares against the project's window.</param>
 /// <param name="ApproximateTokens">
-///     What the haystack actually estimates to, by the same approximation the knowledge chunker sizes windows with.
-///     It under-counts, which is why the generator targets a fraction of the request rather than the request itself.
+///     What the WHOLE prompt estimates to — haystack, framing and question — by the same approximation the knowledge
+///     chunker sizes windows with. It under-counts, which is why the haystack is built to a fraction of the request
+///     rather than to the request itself; the framing then takes back some of that margin, so this lands near the
+///     requested length without exceeding it.
 /// </param>
 /// <param name="Label">
 ///     The display name, and deliberately hedged (<c>≈32k @ 50%</c>). A probe that silently ran at 26k instead of 32k

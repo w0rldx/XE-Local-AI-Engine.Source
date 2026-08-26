@@ -143,6 +143,75 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
             "Reordering asks the same questions, so it must not unrank the answers to them.");
     }
 
+    /// <summary>
+    ///     A project whose every leaf is display-only — a pure recall probe — has nothing to rank, which is NOT the
+    ///     same as a cell missing an item. Saying "incomplete" there sends the operator looking for a question that
+    ///     was never asked; the runs still carry their own scores, and those are the recall axis.
+    /// </summary>
+    [Test]
+    public async Task ACellOfOnlyDisplayOnlyLeaves_IsUnrankedAsNoScore_NotItemIncomplete()
+    {
+        var (context, store) = await CreateStoreAsync("niah-only-project.sqlite").ConfigureAwait(false);
+        await using var scope = context;
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("authored")]).ConfigureAwait(false);
+        var probeId = Guid.NewGuid();
+        _ = await store.CreateTaskItemAsync(project.Id, project.Version, Probe(probeId), [Case(probeId, "case-a"), Case(probeId, "case-b")])
+                       .ConfigureAwait(false);
+
+        // Leaving only the two cases behind: every remaining leaf is excluded from the mean.
+        var items = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
+        var authored = items.Single(static item => string.Equals(item.Kind, BenchmarkTaskItemKinds.Prompt, StringComparison.Ordinal));
+        await store.DeleteTaskItemAsync(project.Id, authored.Id, authored.Version).ConfigureAwait(false);
+
+        var runIds = await ScoredCellAsync(store, project.Id, 100, 0).ConfigureAwait(false);
+
+        var page = await store.ListRunsAsync(project.Id, skip: 0, take: 50).ConfigureAwait(false);
+        var byId = page.Items.ToDictionary(static run => run.Id);
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonNoScore, byId[runIds[0]].Judge!.RankExclusionReason,
+            "Nothing here is scored, and there is no missing item to re-run.");
+        AssertEx.True(runIds.All(id => byId[id].Rank is null), "A project with no scorable leaf ranks nothing.");
+        AssertEx.Equal<int?>(100, byId[runIds[0]].QualityScore, "Each case keeps its own recall score — that IS the axis.");
+        AssertEx.Equal<int?>(0, byId[runIds[1]].QualityScore, "Including the case that missed the needle.");
+        AssertEx.True(byId.Values.All(static run => run.CellQuality is null), "No mean exists for them to report.");
+        AssertEx.Equal(expected: 0, AssertEx.NotNull(page.RankCohort).RankedCount);
+    }
+
+    /// <summary>One freeze of every leaf into one cell, drained in insert order and scored by the operator.</summary>
+    private static async Task<IReadOnlyList<Guid>> ScoredCellAsync(BenchmarkStore store, Guid projectId, params int[] scores)
+    {
+        var project = AssertEx.NotNull(await store.GetProjectAsync(projectId).ConfigureAwait(false));
+        var leaves = (await store.ListTaskItemsAsync(projectId).ConfigureAwait(false)).Where(static item => item.IsLeaf).ToArray();
+        var key = "cell:" + Guid.NewGuid().ToString("D") + ":1";
+        var runs = await store.StartRunsAsync([.. leaves.Select(item => NewRun(project) with
+        {
+            TaskItemId = item.Id,
+            TaskItemIndex = item.Index,
+            CellKey = key,
+            TaskInputHash = item.InputHash,
+            TaskItemSetHash = project.TaskItemSetHash
+        })], project.Version).ConfigureAwait(false);
+
+        var ids = new List<Guid>(runs.Count);
+        for (var index = 0; index < runs.Count; index++)
+        {
+            var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+            var succeeded = await store.MarkPrimarySucceededAsync(
+                new BenchmarkPrimarySuccessCommand(claimed.RunId, claimed.Run.Version,
+                    Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""), 1, 4096, 10, 12, 120) with
+                {
+                    PrimaryStopReason = "stop"
+                }).ConfigureAwait(false);
+            _ = await store.SetUserScoreAsync(claimed.RunId, scores[index], succeeded.Version).ConfigureAwait(false);
+            ids.Add(claimed.RunId);
+        }
+
+        return ids;
+    }
+
+    private static BenchmarkStartRunCommand NewRun(BenchmarkProjectRecord project) =>
+        new(Guid.NewGuid(), project.Id, project.Version, Encoding.UTF8.GetBytes("""{"schemaVersion":1}"""), "model.gguf",
+            LocalModelOrigin.Imported, "v1:" + new string('a', count: 64), "Agent", 1, 4096);
+
     private static BenchmarkTaskItemInput Item(string prompt) =>
         new(Encoding.UTF8.GetBytes(prompt));
 
