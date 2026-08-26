@@ -17,6 +17,7 @@ import {
 	useStartBenchmarkRun,
 	useUpdateBenchmarkJudgePolicy,
 	useUpdateBenchmarkProject,
+	useUpdateBenchmarkProjectFidelity,
 } from "@/features/benchmarks/queries/useBenchmarks";
 import { domainErrorRoute, jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -70,6 +71,9 @@ function runRow(overrides: Record<string, unknown> = {}) {
 		...overrides,
 	};
 }
+
+/** A fidelity row as the node sends it: `kldState` rides along even when nothing was measured against a base. */
+const fidelityRow = (status: string) => ({ status, kldState: "none" });
 
 const draft: BenchmarkProjectDraft = {
 	name: "Summarisation",
@@ -488,6 +492,121 @@ describe("benchmark queries over the real client", () => {
 		rejudge.result.current.mutate({ projectId, expectedVersion: 2 });
 
 		await waitFor(() => expect(runReads).toBeGreaterThan(1));
+	});
+
+	// Fidelity is measured on its OWN queue and only starts once the run itself is terminal, so a poll predicate reading
+	// just the primary and the judge goes quiet the instant a measurement is queued — and the numbers it queued for never
+	// arrive. Both runs below are terminal on primary and judge and differ ONLY in their fidelity row, so one elapsed
+	// clock separates the two behaviours: whatever kept the first one reading cannot have been the run's own state.
+	it("keeps polling a run whose fidelity measurement is in flight and leaves a measured one alone", async () => {
+		const measuredRunId = "bbbbbbbb-0000-4000-8000-000000000009";
+		const reads = { queued: 0, measured: 0 };
+		server.use(
+			http.get(localApiPath(`benchmarks/runs/${runId}`), () => {
+				reads.queued += 1;
+				return HttpResponse.json(runRow({ fidelity: fidelityRow("queued") }));
+			}),
+			http.get(localApiPath(`benchmarks/runs/${measuredRunId}`), () => {
+				reads.measured += 1;
+				return HttpResponse.json(runRow({ id: measuredRunId, fidelity: { ...fidelityRow("succeeded"), perplexityMean: 7.5 } }));
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => ({ queued: useBenchmarkRun(runId), measured: useBenchmarkRun(measuredRunId) }), {
+			wrapper,
+		});
+		await waitFor(() => expect(result.current.measured.isSuccess).toBe(true));
+
+		await waitFor(() => expect(reads.queued).toBeGreaterThan(1), { timeout: 8_000 });
+		expect(result.current.queued.data?.fidelity?.status).toBe("queued");
+		// Same wall clock, same terminal primary and judge: a settled measurement must not have brought a second read.
+		expect(reads.measured).toBe(1);
+	});
+
+	// The ranked table reads the same rows, and it is where the operator watches a batch of measurements finish.
+	it("keeps polling the runs list while a row's fidelity measurement is in flight", async () => {
+		const quietProjectId = "aaaaaaaa-0000-4000-8000-000000000008";
+		const reads = { active: 0, quiet: 0 };
+		const page = (status: string) => ({
+			items: [runRow({ fidelity: fidelityRow(status) })],
+			rankCohort: { rankedCount: 0, totalScored: 0 },
+		});
+		server.use(
+			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), () => {
+				reads.active += 1;
+				return HttpResponse.json(page("running"));
+			}),
+			http.get(localApiPath(`benchmarks/projects/${quietProjectId}/runs`), () => {
+				reads.quiet += 1;
+				return HttpResponse.json(page("skipped"));
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => ({ active: useBenchmarkRuns(projectId), quiet: useBenchmarkRuns(quietProjectId) }), {
+			wrapper,
+		});
+		await waitFor(() => expect(result.current.quiet.isSuccess).toBe(true));
+
+		await waitFor(() => expect(reads.active).toBeGreaterThan(1), { timeout: 8_000 });
+		// `skipped` is a terminal answer, not a pending one: nothing more is coming, so nothing should keep asking.
+		expect(reads.quiet).toBe(1);
+	});
+
+	// Enabling fidelity with `measureExisting` queues a measurement per existing run, but the response only COUNTS them.
+	// Every affected run is terminal, so its own detail query stopped polling long ago and nothing else would tell it to
+	// look again — the refreshed rows are what put both the list and the pane back on the poll.
+	it("refreshes the runs list and the open run details when existing runs are queued for measurement", async () => {
+		const reads = { detail: 0, list: 0 };
+		let enqueuedCount = 2;
+		server.use(
+			http.get(localApiPath(`benchmarks/runs/${runId}`), () => {
+				reads.detail += 1;
+				return HttpResponse.json(runRow());
+			}),
+			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), () => {
+				reads.list += 1;
+				return HttpResponse.json({ items: [runRow()], rankCohort: { rankedCount: 0, totalScored: 0 } });
+			}),
+			http.patch(localApiPath(`benchmarks/projects/${projectId}/fidelity`), () =>
+				HttpResponse.json({ project: projectDetail({ version: 3, fidelityEnabled: true }), enqueuedCount }),
+			),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(
+			() => ({
+				detail: useBenchmarkRun(runId),
+				runs: useBenchmarkRuns(projectId),
+				save: useUpdateBenchmarkProjectFidelity(),
+			}),
+			{ wrapper },
+		);
+		await waitFor(() => expect(result.current.detail.isSuccess).toBe(true));
+		await waitFor(() => expect(result.current.runs.isSuccess).toBe(true));
+		expect(reads.detail).toBe(1);
+
+		const fidelityDraft = {
+			fidelityEnabled: true,
+			fidelityKldEnabled: false,
+			fidelityChunks: null,
+			fidelityKldBaseModelName: null,
+		};
+		result.current.save.mutate({ projectId, expectedVersion: 2, draft: fidelityDraft, measureExisting: true });
+
+		await waitFor(() => expect(reads.list).toBeGreaterThan(1));
+		await waitFor(() => expect(reads.detail).toBeGreaterThan(1));
+
+		// A save that measured nothing must NOT sweep every open pane: the list still refreshes (the project changed),
+		// and the detail read count staying put is what says the family-wide invalidation was gated on the count.
+		enqueuedCount = 0;
+		const detailReadsAfterQueue = reads.detail;
+		const listReadsAfterQueue = reads.list;
+		result.current.save.mutate({ projectId, expectedVersion: 3, draft: fidelityDraft, measureExisting: true });
+
+		await waitFor(() => expect(reads.list).toBeGreaterThan(listReadsAfterQueue));
+		expect(reads.detail).toBe(detailReadsAfterQueue);
 	});
 
 	it("re-judges a whole project and reports how many runs were enqueued", async () => {

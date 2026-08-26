@@ -61,9 +61,17 @@ export function fidelityEvidenceEntries(fidelity: BenchmarkRunFidelity | null): 
 }
 
 /**
+ * A measurement the node still owes an answer for. Fidelity runs on its OWN queue and only starts once the run itself
+ * is terminal, so this is the one thing that still changes about a run whose primary and judge have both finished —
+ * which is why both the re-measure guard below and the poll predicate in `useBenchmarks` read it.
+ */
+export const isFidelityActive = (fidelity: Pick<BenchmarkRunFidelity, "status"> | null): boolean =>
+	fidelity?.status === "queued" || fidelity?.status === "running";
+
+/**
  * Whether re-measuring this run is a request the node can act on. Fidelity replays the run's own frozen placement, so
  * there is nothing to replay until the primary succeeded, and a measurement already in flight would only queue a
  * second attempt behind itself.
  */
 export const canMeasureFidelity = (run: Pick<BenchmarkRunSummary, "primaryStatus" | "fidelity">): boolean =>
-	run.primaryStatus === "Succeeded" && run.fidelity?.status !== "queued" && run.fidelity?.status !== "running";
+	run.primaryStatus === "Succeeded" && !isFidelityActive(run.fidelity);

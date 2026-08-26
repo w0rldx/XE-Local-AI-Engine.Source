@@ -31,6 +31,7 @@ import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest as StartBenchmarkRunRequest,
 } from "@/core/api/generated";
 import { callWithResponseValidation } from "@/core/api/ResponseValidation";
+import { isFidelityActive } from "@/features/benchmarks/models/BenchmarkFidelity";
 import {
 	toBenchmarkComparisonList,
 	toBenchmarkEligibleModel,
@@ -70,6 +71,8 @@ const benchmarkQueryKeys = {
 	project: (id: string) => ["benchmarks", "projects", id] as const,
 	runs: (projectId: string) => ["benchmarks", "projects", projectId, "runs"] as const,
 	run: (id: string) => ["benchmarks", "runs", id] as const,
+	/** The prefix every {@link benchmarkQueryKeys.run} entry sits under, for the rare change that touches runs it cannot name. */
+	runDetails: ["benchmarks", "runs"] as const,
 	models: (contextTokens?: number) => ["benchmarks", "eligible-models", contextTokens] as const,
 	kldEstimate: (projectId: string, chunks?: number) => ["benchmarks", "projects", projectId, "kld-estimate", chunks] as const,
 	comparisons: (projectId: string) => ["benchmarks", "projects", projectId, "comparisons"] as const,
@@ -100,8 +103,13 @@ export interface BenchmarkRubricPresets {
 	verifiable: BenchmarkRubric | null;
 }
 
-const isRunActive = (run: Pick<BenchmarkRunSummary, "primaryStatus" | "judge">): boolean =>
-	["Queued", "Running", "CancelRequested"].includes(run.primaryStatus) || isJudgeActive(run.judge.state);
+// Three things can still change a run's row, and the poll has to survive all three. Fidelity is the one that is easy to
+// miss: it is measured on its own queue AFTER the primary and the judge are both terminal, so a predicate reading only
+// those two stops polling the instant a measurement is queued and the finished numbers never arrive on their own.
+const isRunActive = (run: Pick<BenchmarkRunSummary, "primaryStatus" | "judge" | "fidelity">): boolean =>
+	["Queued", "Running", "CancelRequested"].includes(run.primaryStatus) ||
+	isJudgeActive(run.judge.state) ||
+	isFidelityActive(run.fidelity);
 
 function hasActiveRun(list: BenchmarkRunList | undefined): boolean {
 	return list?.items.some(isRunActive) ?? false;
@@ -465,6 +473,7 @@ export interface BenchmarkFidelityChange {
  */
 export function useUpdateBenchmarkProjectFidelity() {
 	const invalidate = useBenchmarkInvalidation();
+	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: async ({
 			projectId,
@@ -494,7 +503,16 @@ export function useUpdateBenchmarkProjectFidelity() {
 			);
 			return { project: toBenchmarkProjectDetail(data.project), enqueuedCount: data.enqueuedCount ?? 0 };
 		},
-		onSuccess: (change) => invalidate(change.project.id),
+		// The refreshed runs carry their measurement as `queued`, which is what puts the list back on the two-second poll.
+		// The response counts the runs it enqueued but does not name them, so an OPEN detail pane — whose own query stopped
+		// polling when the run went terminal — is reached by invalidating the run details as a family. Only when something
+		// was actually enqueued: a save that measured nothing must not sweep every open pane.
+		onSuccess: async (change) => {
+			await invalidate(change.project.id);
+			if (change.enqueuedCount > 0) {
+				await queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.runDetails });
+			}
+		},
 	});
 }
 
