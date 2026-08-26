@@ -9,7 +9,7 @@ import type { BenchmarkVerifierConfig } from "@/features/benchmarks/models/Bench
  * `niahCase` children, one per context length x needle depth. A case is an ordinary item with its own identity, which
  * is why every cap, every hash and every exclusion below applies to it for free.
  */
-export const benchmarkTaskItemKinds = ["prompt", "niah", "niahCase"] as const;
+const benchmarkTaskItemKinds = ["prompt", "niah", "niahCase"] as const;
 export type BenchmarkTaskItemKind = (typeof benchmarkTaskItemKinds)[number];
 
 /** An unrecognized kind reads as `prompt` — the node's own default for an item written before the generator kinds. */
@@ -124,7 +124,7 @@ export interface BenchmarkNiahGeneratorConfig {
 }
 
 /** The node's own generator bounds (`BenchmarkNiahGenerator`), re-checked here so a form error never costs a request. */
-export const benchmarkNiahLimits = { minimumContextTokens: 512, maximumCases: 20 } as const;
+const benchmarkNiahLimits = { minimumContextTokens: 512, maximumCases: 20 } as const;
 
 export const defaultNiahGeneratorConfig: BenchmarkNiahGeneratorConfig = {
 	contextTokens: [8192],
