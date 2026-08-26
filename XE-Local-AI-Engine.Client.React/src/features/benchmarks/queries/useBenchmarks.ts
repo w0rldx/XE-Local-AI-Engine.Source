@@ -281,12 +281,22 @@ export function useBenchmarkKldDiskEstimate(projectId: string | null, chunks?: n
 }
 
 /**
+ * What the ranked reading of a pairwise project was computed from: which fit produced the scores, whether that fit still
+ * describes the cohort, and which cohort/comparison set it was fitted over. Every one of those changes the number a run's
+ * row shows; a verdict merely landing does not.
+ */
+const pairwiseFitSignature = (list: BenchmarkComparisonList): string =>
+	[list.fit?.fitKey ?? "", list.fit?.isCurrent ?? false, list.comparisonSetVersion, list.cohortGeneration].join("|");
+
+/**
  * The verdict matrix and the fit read out of it. Polls while any comparison is still working, for the same reason the
  * runs list does: a pairwise cohort finishes one pair at a time and the fit only appears after the last one.
  */
 export function useBenchmarkComparisons(projectId: string | null, enabled = true) {
+	const queryClient = useQueryClient();
+	const queryKey = benchmarkQueryKeys.comparisons(projectId ?? "");
 	return useQuery<BenchmarkComparisonList>({
-		queryKey: benchmarkQueryKeys.comparisons(projectId ?? ""),
+		queryKey,
 		enabled: enabled && Boolean(projectId),
 		refetchInterval: (query) =>
 			query.state.data?.items.some((item) => item.status === "Queued" || item.status === "Running")
@@ -296,7 +306,26 @@ export function useBenchmarkComparisons(projectId: string | null, enabled = true
 			const { data } = await callWithResponseValidation(
 				listBenchmarkComparisons({ path: { projectId: projectId as string }, signal, throwOnError: true }),
 			);
-			return toBenchmarkComparisonList(data);
+			const list = toBenchmarkComparisonList(data);
+			// A pairwise project's scores and ranks are read out of the FIT, and this poll is the only thing watching for
+			// one: the runs list polls on run activity, which a pairwise judging leaves untouched, so it would keep showing
+			// null scores until something unrelated refetched it. Compared against what this cache already holds, so a poll
+			// that merely advances the verdicts invalidates nothing — and the comparison of a first read against nothing
+			// invalidates nothing either, since the list it would refresh was loaded from the same node state.
+			// The project carries the cohort generation the judge panel shows, so it goes with them.
+			const previous = queryClient.getQueryData<BenchmarkComparisonList>(queryKey);
+			if (previous !== undefined && pairwiseFitSignature(previous) !== pairwiseFitSignature(list)) {
+				// Not awaited: the verdicts are already in hand and must not wait on a second round trip. A failed refresh
+				// is reported as that query's own error state, exactly as the paged `loadMore` above leaves it.
+				// `exact` on the project is load-bearing: its key is a PREFIX of this very query's key, so a prefix
+				// invalidation would refetch the comparisons too — and that refetch would see the same difference again
+				// and invalidate again, forever.
+				queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.runs(projectId as string) }).catch(() => undefined);
+				queryClient
+					.invalidateQueries({ queryKey: benchmarkQueryKeys.project(projectId as string), exact: true })
+					.catch(() => undefined);
+			}
+			return list;
 		},
 	});
 }

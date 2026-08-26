@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import type { BenchmarkProjectDraft } from "@/features/benchmarks/models/BenchmarkModels";
 import {
+	useBenchmarkComparisons,
 	useBenchmarkProject,
 	useBenchmarkProjects,
 	useBenchmarkRun,
@@ -72,6 +73,9 @@ function runRow(overrides: Record<string, unknown> = {}) {
 	};
 }
 
+/** The hooks' own poll cadence, mirrored so a timing assertion says which interval it is waiting past. */
+const activeComparisonPollMs = 2_000;
+
 /** A fidelity row as the node sends it: `kldState` rides along even when nothing was measured against a base. */
 const fidelityRow = (status: string) => ({ status, kldState: "none" });
 
@@ -96,6 +100,10 @@ const draft: BenchmarkProjectDraft = {
 };
 
 describe("benchmark queries over the real client", () => {
+	// Without this the hooks of a finished test stay mounted, and any of them left polling keeps hitting the NEXT test's
+	// handlers — which is a silent read count from nowhere in every assertion that counts requests.
+	afterEach(cleanup);
+
 	it("maps the project list through the boundary mapper", async () => {
 		server.use(jsonRoute("get", "benchmarks/projects", { items: [projectRow()] }));
 		const { wrapper } = createProvidersWrapper();
@@ -608,6 +616,75 @@ describe("benchmark queries over the real client", () => {
 		await waitFor(() => expect(reads.list).toBeGreaterThan(listReadsAfterQueue));
 		expect(reads.detail).toBe(detailReadsAfterQueue);
 	});
+
+	// A pairwise project's scores and ranks are read out of the FIT, and the comparisons poll is the only thing watching
+	// for one: the runs list polls on RUN activity, which a pairwise judging leaves untouched, so the ranked table would
+	// keep showing null scores against the very verdicts that produced them. The stages below are served one per poll,
+	// so the cohort advances exactly the way it does on the node — a pair at a time, the fit only after the last one.
+	it("refreshes the ranked runs when a pairwise fit arrives, and not while the verdicts merely progress", async () => {
+		const comparison = (id: string, status: string, verdict: string | null) => ({
+			id,
+			runAId: runId,
+			runBId: "bbbbbbbb-0000-4000-8000-000000000007",
+			order: 0,
+			status,
+			verdict,
+		});
+		const pending = comparison("cccccccc-0000-4000-8000-00000000000c", "Running", null);
+		const judged = comparison("cccccccc-0000-4000-8000-00000000000c", "Succeeded", "a");
+		const second = comparison("dddddddd-0000-4000-8000-00000000000d", "Running", null);
+		const fit = {
+			fitKey: "fit-1",
+			judgeExecutionKey: "exec-1",
+			comparisonSetVersion: 1,
+			cohortGeneration: 1,
+			isCurrent: true,
+			fittedSetJson: "[]",
+			scores: [{ runId, score: 72, ciLow: 61, ciHigh: 83 }],
+		};
+		const cohort = { cohortGeneration: 1, comparisonSetVersion: 1 };
+		const stages = [
+			{ ...cohort, items: [pending, second], fit: null },
+			// One verdict further along, same cohort and same comparison set: progress, not a new reading.
+			{ ...cohort, items: [judged, second], fit: null },
+			{ ...cohort, items: [judged, { ...second, status: "Succeeded", verdict: "b" }], fit },
+		];
+		let comparisonReads = 0;
+		let listReads = 0;
+		server.use(
+			http.get(localApiPath(`benchmarks/projects/${projectId}/comparisons`), () => {
+				comparisonReads += 1;
+				return HttpResponse.json(stages[Math.min(comparisonReads - 1, stages.length - 1)]);
+			}),
+			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), () => {
+				listReads += 1;
+				return HttpResponse.json({ items: [runRow()], rankCohort: { rankedCount: 0, totalScored: 0 } });
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(
+			() => ({ comparisons: useBenchmarkComparisons(projectId), runs: useBenchmarkRuns(projectId) }),
+			{ wrapper },
+		);
+		await waitFor(() => expect(result.current.runs.isSuccess).toBe(true));
+		await waitFor(() => expect(result.current.comparisons.isSuccess).toBe(true));
+		// The first read has nothing to compare against, and the list it would refresh came from the same node state.
+		expect(listReads).toBe(1);
+
+		await waitFor(() => expect(comparisonReads).toBeGreaterThanOrEqual(2), { timeout: 8_000 });
+		expect(listReads).toBe(1);
+
+		await waitFor(() => expect(listReads).toBe(2), { timeout: 8_000 });
+		expect(result.current.comparisons.data?.fit?.fitKey).toBe("fit-1");
+
+		// Every comparison is terminal now, so the verdicts stop being re-read and the table stops being refreshed with
+		// them: one fit, one refresh. A predicate that fired on any change instead would keep the table on the wire.
+		const readsAtFit = comparisonReads;
+		await new Promise((resolve) => setTimeout(resolve, activeComparisonPollMs + 500));
+		expect(comparisonReads).toBe(readsAtFit);
+		expect(listReads).toBe(2);
+	}, 30_000);
 
 	it("re-judges a whole project and reports how many runs were enqueued", async () => {
 		let observedBody: unknown;
