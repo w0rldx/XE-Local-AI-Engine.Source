@@ -135,8 +135,17 @@ public sealed class BenchmarkQueueHostedService(
         // The sweep above terminalizes what the kill interrupted; this re-enqueues what it left missing. A crash
         // between a primary succeeding and its pairs being enqueued would otherwise leave a cohort permanently one
         // comparison short, with every run in it stuck pending and nothing that would ever notice.
-        await scope.ServiceProvider.GetRequiredService<IBenchmarkPairwisePlanner>()
-                   .ReconcilePairwiseAsync(cancellationToken)
-                   .ConfigureAwait(false);
+        //
+        // Resolved optionally, unlike the executors in the loop: this runs BEFORE the first claim, so a host that
+        // composed the queue without a planner would die here at startup and starve EVERY kind of benchmark work over
+        // a leg that had nothing to do — a host with no planner cannot have enqueued pairwise work either.
+        var planner = scope.ServiceProvider.GetService<IBenchmarkPairwisePlanner>();
+        if (planner is null)
+        {
+            logger.LogWarning("No pairwise planner is registered; skipping pairwise reconciliation on startup.");
+            return;
+        }
+
+        await planner.ReconcilePairwiseAsync(cancellationToken).ConfigureAwait(false);
     }
 }

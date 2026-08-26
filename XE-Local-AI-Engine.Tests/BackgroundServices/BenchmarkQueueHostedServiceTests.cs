@@ -74,23 +74,24 @@ public sealed class BenchmarkQueueHostedServiceTests
     /// <summary>
     ///     A kind this build has no executor for is failed CLOSED, not left claimed. Leaving it Running would stall
     ///     the single consumer behind an item nothing will ever finish; succeeding it would publish a measurement
-    ///     nothing took. The Comparison arm is P2 S3's slot, and until it exists this is the honest answer.
+    ///     nothing took. Every kind this build declares now has an arm, so the only way here is an ordinal written by
+    ///     a NEWER build — which is exactly the state the guard exists for.
     /// </summary>
     [Test]
     public async Task ExecuteAsync_WhenAKindHasNoExecutor_TerminalizesItFailedAndKeepsConsuming()
     {
         using var harness = new Harness();
-        var comparison = Work(BenchmarkWorkKind.Comparison);
+        var fromANewerBuild = Work((BenchmarkWorkKind)999);
         var following = Work(BenchmarkWorkKind.Primary);
-        harness.Enqueue(comparison, following);
+        harness.Enqueue(fromANewerBuild, following);
 
         await harness.RunToIdleAsync();
 
-        await harness.Store.Received(1)
-                     .MarkComparisonFailedAsync(comparison.QueueSequence,
-                         comparison.Version,
-                         Arg.Is<string>(reason => reason.Contains("not supported by this build", StringComparison.Ordinal)),
-                         Arg.Any<CancellationToken>());
+        _ = await harness.Store.Received(1)
+                         .MarkFidelityFailedAsync(fromANewerBuild.RunId,
+                             fromANewerBuild.Version,
+                             Arg.Is<string>(reason => reason.Contains("not supported by this build", StringComparison.Ordinal)),
+                             Arg.Any<CancellationToken>());
         await harness.RunExecutor.Received(1).ExecuteAsync(following, Arg.Any<CancellationToken>());
         AssertEx.True(harness.Logger.HasEntry(LogLevel.Error, "unsupported"),
             "An unsupported kind must be reported, not swallowed.");
@@ -137,6 +138,39 @@ public sealed class BenchmarkQueueHostedServiceTests
         throw new OperationCanceledException();
     }
 
+    /// <summary>
+    ///     Startup reconciliation is resolved optionally. A host that composed the queue without a pairwise planner
+    ///     cannot hold pairwise work, and throwing for it would kill the consumer before its first claim — starving
+    ///     every OTHER kind of benchmark work over a leg that had nothing to do.
+    /// </summary>
+    [Test]
+    public async Task ExecuteAsync_WhenNoPairwisePlannerIsRegistered_StillRecoversAndKeepsConsuming()
+    {
+        using var harness = new Harness();
+        var work = Work(BenchmarkWorkKind.Primary);
+        harness.Enqueue(work);
+
+        await harness.RunToIdleAsync();
+
+        _ = await harness.Store.Received(1).RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>());
+        await harness.RunExecutor.Received(1).ExecuteAsync(work, Arg.Any<CancellationToken>());
+        AssertEx.True(harness.Logger.HasEntry(LogLevel.Warning, "pairwise reconciliation"),
+            "A skipped reconciliation must be reported, not silently dropped.");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenAPairwisePlannerIsRegistered_ReconcilesOnStartup()
+    {
+        var planner = Substitute.For<IBenchmarkPairwisePlanner>();
+        using var harness = new Harness(planner);
+
+        await harness.RunToIdleAsync();
+
+        await planner.Received(1).ReconcilePairwiseAsync(Arg.Any<CancellationToken>());
+        AssertEx.False(harness.Logger.HasEntry(LogLevel.Warning, "pairwise reconciliation"),
+            "A registered planner must not report a skip.");
+    }
+
     private static BenchmarkClaimedWork Work(BenchmarkWorkKind kind)
     {
         var runId = Guid.NewGuid();
@@ -173,7 +207,7 @@ public sealed class BenchmarkQueueHostedServiceTests
         private readonly Queue<BenchmarkClaimedWork> _queued = new();
         private readonly ServiceProvider _provider;
 
-        public Harness()
+        public Harness(IBenchmarkPairwisePlanner? pairwisePlanner = null)
         {
             Store.RecoverRunsOnStartupAsync(Arg.Any<CancellationToken>())
                  .Returns(_ => Task.FromResult<IReadOnlyList<BenchmarkRunRecord>>(Recovered));
@@ -188,6 +222,11 @@ public sealed class BenchmarkQueueHostedServiceTests
             _ = services.AddSingleton(Store);
             _ = services.AddSingleton(RunExecutor);
             _ = services.AddSingleton(JudgeExecutor);
+            if (pairwisePlanner is not null)
+            {
+                _ = services.AddSingleton(pairwisePlanner);
+            }
+
             _provider = services.BuildServiceProvider();
         }
 
