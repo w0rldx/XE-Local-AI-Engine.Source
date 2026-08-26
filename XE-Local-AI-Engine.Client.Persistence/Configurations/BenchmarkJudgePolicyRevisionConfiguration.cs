@@ -21,6 +21,7 @@ internal sealed class BenchmarkJudgePolicyRevisionConfiguration : IEntityTypeCon
         builder.Property(entity => entity.PolicyHash).HasColumnName("policy_hash").HasMaxLength(64).IsRequired();
         builder.Property(entity => entity.ReferenceExecutionKey).HasColumnName("reference_execution_key").HasMaxLength(64);
         builder.Property(entity => entity.CohortGeneration).HasColumnName("cohort_generation");
+        builder.Property(entity => entity.ComparisonSetVersion).HasColumnName("comparison_set_version").HasDefaultValue(0);
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
         builder.HasOne<BenchmarkProject>().WithMany().HasForeignKey(entity => entity.ProjectId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(entity => new

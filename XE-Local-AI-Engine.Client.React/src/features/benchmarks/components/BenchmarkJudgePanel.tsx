@@ -1,14 +1,16 @@
 import { Alert, Button, Card, Group, Progress, Stack, Text, Title, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconRefresh, IconScale, IconSquare } from "@tabler/icons-react";
+import { IconAlertTriangle, IconCheck, IconRefresh, IconScale, IconSquare, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkJudgeStateBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
-import type { BenchmarkRunJudge } from "@/features/benchmarks/models/BenchmarkModels";
+import type { BenchmarkJudgeMode, BenchmarkRunJudge } from "@/features/benchmarks/models/BenchmarkModels";
 import { isJudgeActive } from "@/features/benchmarks/models/BenchmarkModels";
 
 interface BenchmarkJudgePanelProps {
 	judge: BenchmarkRunJudge;
+	/** The project's judging mode. Only `pointwise` has a per-run reading; see the note above. */
+	mode?: BenchmarkJudgeMode;
 	/** The primary answer was cut off by the token budget, so this verdict graded a fragment. */
 	primaryTruncated?: boolean;
 	/**
@@ -31,9 +33,15 @@ const maxCriterionScore = 10;
  * per-criterion breakdown, and whether that score still counts towards the ranking. The two currency flags are shown
  * as their own chips rather than folded into the score — a stale score is still a real score, it just cannot be ranked
  * against runs judged under the current policy and judge runtime.
+ *
+ * POINTWISE ONLY. This panel reads one score with one rationale per criterion, which is what the pointwise rubric
+ * judge produces. Pairwise produces no per-run rubric score at all — a verdict matrix and a Bradley-Terry fit — so
+ * that mode renders nothing here. The pairwise reading is `BenchmarkPairwiseMatrix`, mounted ONCE by the page: one
+ * fit covers the whole cohort, so a copy under every open run pane would be the same table repeated.
  */
 export function BenchmarkJudgePanel({
 	judge,
+	mode = "pointwise",
 	canRejudge,
 	primaryTruncated = false,
 	outputTokens = null,
@@ -44,6 +52,11 @@ export function BenchmarkJudgePanel({
 	const { t } = useTranslation();
 	const active = isJudgeActive(judge.state);
 	const explanation = t(`pages.benchmarks.judge.explanations.${judge.state}`, "");
+	const verifiers = new Map(judge.verifiers.map((verifier) => [verifier.id, verifier]));
+
+	if (mode !== "pointwise") {
+		return null;
+	}
 
 	return (
 		<Card withBorder={true} radius="md" padding="md" data-testid="benchmark-judge-panel">
@@ -114,26 +127,52 @@ export function BenchmarkJudgePanel({
 				{judge.summary ? <Text size="sm">{judge.summary}</Text> : null}
 				{judge.criteria.length > 0 ? (
 					<Stack gap="xs" data-testid="benchmark-judge-criteria">
-						{judge.criteria.map((criterion) => (
-							<Stack key={criterion.id} gap={2}>
-								<Group justify="space-between" gap="xs">
-									<Text size="sm" fw={600}>
-										{criterion.id}
+						{judge.criteria.map((criterion) => {
+							// A verifiable criterion's score was DECIDED, not judged: the badge says which side produced it,
+							// so a 10 that came from a regex match is not read as a model's opinion that happened to agree.
+							const verifier = verifiers.get(criterion.id);
+							return (
+								<Stack key={criterion.id} gap={2}>
+									<Group justify="space-between" gap="xs">
+										<Group gap={6} wrap="nowrap">
+											<Text size="sm" fw={600}>
+												{criterion.id}
+											</Text>
+											{verifier === undefined ? null : (
+												<StatusBadge
+													color={verifier.passed ? "green" : "red"}
+													label={t(`pages.benchmarks.verifier.kinds.${verifier.kind}`, verifier.kind)}
+													data-testid={`benchmark-judge-verifier-${criterion.id}`}
+												/>
+											)}
+										</Group>
+										<Text size="sm">
+											{t("pages.benchmarks.judge.criterionScore", "{{score}} / 10", { score: criterion.score })}
+										</Text>
+									</Group>
+									<Progress
+										value={(Math.min(criterion.score, maxCriterionScore) / maxCriterionScore) * 100}
+										aria-label={criterion.id}
+										size="sm"
+									/>
+									{verifier === undefined ? null : (
+										<Group gap={4} wrap="nowrap" align="center">
+											{verifier.passed ? (
+												<IconCheck size={14} color="var(--mantine-color-green-6)" />
+											) : (
+												<IconX size={14} color="var(--mantine-color-red-6)" />
+											)}
+											<Text size="xs" c="dimmed" data-testid={`benchmark-judge-verifier-detail-${criterion.id}`}>
+												{verifier.detail}
+											</Text>
+										</Group>
+									)}
+									<Text size="xs" c="dimmed">
+										{criterion.rationale}
 									</Text>
-									<Text size="sm">
-										{t("pages.benchmarks.judge.criterionScore", "{{score}} / 10", { score: criterion.score })}
-									</Text>
-								</Group>
-								<Progress
-									value={(Math.min(criterion.score, maxCriterionScore) / maxCriterionScore) * 100}
-									aria-label={criterion.id}
-									size="sm"
-								/>
-								<Text size="xs" c="dimmed">
-									{criterion.rationale}
-								</Text>
-							</Stack>
-						))}
+								</Stack>
+							);
+						})}
 					</Stack>
 				) : null}
 				{judge.state === "failed" && judge.errorMessage ? (

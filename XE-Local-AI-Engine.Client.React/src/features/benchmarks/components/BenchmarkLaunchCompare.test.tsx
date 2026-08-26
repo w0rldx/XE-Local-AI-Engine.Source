@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import type { BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
 import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkRunDetailFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import { benchmarkFidelityFixture, benchmarkRunDetailFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // Two runs of the same task are only worth reading side by side if the operator can see how their launches differed.
@@ -41,15 +41,16 @@ function detail(id: string, overrides: Partial<BenchmarkRunDetail> = {}): Benchm
 	});
 }
 
-// The two runs are already in the pane's cache by the time the compare block renders, so the test seeds that cache and
+// The runs are already in the pane's cache by the time the compare block renders, so the test seeds that cache and
 // keeps it fresh rather than re-serving the reads.
-function renderCompare(left: BenchmarkRunDetail, right: BenchmarkRunDetail) {
+function renderCompare(...runs: BenchmarkRunDetail[]) {
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: Number.POSITIVE_INFINITY } },
 	});
-	queryClient.setQueryData(["benchmarks", "runs", left.id], left);
-	queryClient.setQueryData(["benchmarks", "runs", right.id], right);
-	return renderWithProviders(<BenchmarkLaunchCompare leftRunId={left.id} rightRunId={right.id} />, { queryClient });
+	for (const run of runs) {
+		queryClient.setQueryData(["benchmarks", "runs", run.id], run);
+	}
+	return renderWithProviders(<BenchmarkLaunchCompare runIds={runs.map((run) => run.id)} />, { queryClient });
 }
 
 describe("BenchmarkLaunchCompare", () => {
@@ -135,5 +136,64 @@ describe("BenchmarkLaunchCompare", () => {
 		);
 
 		expect(screen.queryByTestId("benchmark-primary-launch-differs")).toBeNull();
+	});
+});
+
+// E2: the cap is the caller's, but the table has to render N columns honestly — one per run, in the order asked for,
+// with a row flagged when ANY of them disagrees rather than only the first pair.
+describe("BenchmarkLaunchCompare across more than two runs", () => {
+	afterEach(cleanup);
+
+	const thirdId = "cccccccc-0000-4000-8000-000000000003";
+
+	it("renders one column per compared run and says how many are being compared", () => {
+		renderCompare(detail(leftId), detail(rightId), detail(thirdId));
+
+		expect(screen.getByTestId("benchmark-compare-count").textContent).toContain("3");
+		const header = screen.getByTestId("benchmark-launch-compare");
+		expect(header.querySelectorAll('[data-testid^="benchmark-launch-line-"]')).toHaveLength(3);
+	});
+
+	it("flags a field the third run alone disagrees on", () => {
+		const third = detail(thirdId, {
+			primaryLaunch: { ...detail(thirdId).primaryLaunch, effectiveBackend: "vulkan" },
+		});
+		renderCompare(detail(leftId), detail(rightId), third);
+
+		const table = screen.getByTestId("benchmark-primary-launch-diff");
+		const differing = [...table.querySelectorAll('tr[data-differs="true"]')].map((row) => row.textContent ?? "");
+		expect(differing.some((row) => row.includes("launch.effectiveBackend"))).toBe(true);
+		// Four cells: the field name plus one value per run. A pairwise table would render three.
+		const backendRow = [...table.querySelectorAll("tr")].find((row) => row.textContent?.startsWith("launch.effectiveBackend"));
+		expect(backendRow?.querySelectorAll("td")).toHaveLength(4);
+	});
+
+	it("renders nothing until every selected run has arrived, so an absent column cannot read as a difference", () => {
+		const queryClient = new QueryClient({
+			defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: Number.POSITIVE_INFINITY } },
+		});
+		queryClient.setQueryData(["benchmarks", "runs", leftId], detail(leftId));
+		queryClient.setQueryData(["benchmarks", "runs", rightId], detail(rightId));
+		renderWithProviders(<BenchmarkLaunchCompare runIds={[leftId, rightId, thirdId]} />, { queryClient });
+
+		expect(screen.queryByTestId("benchmark-launch-compare")).toBeNull();
+	});
+
+	// Fidelity rides the same diff engine as launch and throughput. Its one extra rule: a KLD the node marked stale is
+	// never rendered as a figure, and a compare table is exactly where a stale figure would do its damage.
+	it("compares perplexity and withholds a stale KLD figure", () => {
+		renderCompare(
+			detail(leftId, { fidelity: benchmarkFidelityFixture({ perplexityMean: 6.7977 }) }),
+			detail(rightId, {
+				fidelity: benchmarkFidelityFixture({ perplexityMean: 6.9497, kldState: "kld-stale", kldMean: 0.0123 }),
+			}),
+		);
+
+		const table = screen.getByTestId("benchmark-fidelity-diff");
+		expect(table.textContent).toContain("6.7977");
+		expect(table.textContent).toContain("6.9497");
+		expect(table.textContent).not.toContain("0.0123");
+		const kldRow = [...table.querySelectorAll("tr")].find((row) => row.textContent?.startsWith("fidelity.kldMean"));
+		expect(kldRow?.textContent).toContain("—");
 	});
 });

@@ -4044,7 +4044,25 @@
 				"invocationTimeout": "Generation timeout (s)",
 				"invocationTimeoutHint": "Seconds; default 900. Raise it for long reasoning runs — a run cancelled by the clock measures the harness, not the model.",
 				"reasoningBudget": "Reasoning budget (tokens)",
-				"reasoningBudgetHint": "Leave empty = as much as the window allows. The context must cover the prompt, this budget AND the max output — a pair that fills the window truncates every run."
+				"reasoningBudgetHint": "Leave empty = as much as the window allows. The context must cover the prompt, this budget AND the max output — a pair that fills the window truncates every run.",
+				"fidelitySection": "Quant fidelity",
+				"fidelityEnabled": "Measure perplexity beside each run",
+				"fidelityEnabledHelp": "Scores a fixed corpus with the run's own frozen placement. Display only — it never ranks a run.",
+				"fidelityChunks": "Chunks to score",
+				"fidelityChunksHelp": "{{min}}–{{max}}; empty uses {{fallback}}.",
+				"fidelityKldEnabled": "Also measure KL divergence",
+				"fidelityKldEnabledHelp": "Needs a cached logit file for the base model — tens of gigabytes. Check the estimate on the project before enabling it.",
+				"fidelityKldBase": "KL-divergence base model",
+				"fidelityKldBaseHelp": "The reference the quants are measured against — normally the unquantized build.",
+				"judgeMode": "Judging mode",
+				"judgeModeHelp": "Pointwise scores each run against the rubric. Pairwise compares runs against each other and ranks them through one fit.",
+				"judgeModes": {
+					"pointwise": "Pointwise (rubric per run)",
+					"pairwise": "Pairwise (run against run)"
+				},
+				"pairwiseConfirmTitle": "Switch this project to pairwise judging?",
+				"pairwiseConfirm": "Every eligible run is judged against every other, in both orders. The comparisons are queued at once and the ranking only appears once the fit completes.",
+				"pairwiseConfirmAccept": "Switch and queue"
 			},
 			"run": {
 				"model": "Primary model",
@@ -4157,7 +4175,9 @@
 				"maxOutputTokens": "Max output tokens must be between 1 and the requested context.",
 				"invocationTimeout": "The generation timeout must be between 60 and 7200 seconds.",
 				"reasoningBudget": "The reasoning budget must be between 1 and the requested context.",
-				"reasoningBudgetSum": "The reasoning and output budgets must leave at least {{reserve}} tokens of the context for the prompt."
+				"reasoningBudgetSum": "The reasoning and output budgets must leave at least {{reserve}} tokens of the context for the prompt.",
+				"fidelityChunks": "Chunks must be between {{min}} and {{max}}.",
+				"fidelityKldBase": "KL divergence requires a base model."
 			},
 			"errors": {
 				"projectsLoad": "Could not load benchmark projects.",
@@ -4174,7 +4194,8 @@
 				"kvUnsupportedHint": "Pick f16 explicitly to run this model on this runtime.",
 				"rejudgeRun": "Could not re-judge this run.",
 				"rejudgeProject": "Could not re-judge this project.",
-				"judgeAttemptsActive": "A judging of this project is still running. Wait for it or cancel it first."
+				"judgeAttemptsActive": "A judging of this project is still running. Wait for it or cancel it first.",
+				"measureFidelity": "Could not queue a fidelity measurement."
 			},
 			"loading": {
 				"projects": "Loading benchmark projects…",
@@ -4237,7 +4258,8 @@
 				"source": {
 					"user": "operator",
 					"judge": "judge",
-					"none": "—"
+					"none": "—",
+					"pairwise": "pairwise"
 				},
 				"exclusion": {
 					"no-score": "No score yet — set an operator score or wait for the judge.",
@@ -4250,7 +4272,15 @@
 					"execution-identity-incomplete": "The judge runtime identity of this judging is incomplete.",
 					"truncated": "The answer was cut off by the token budget, so it is not comparable to a complete one.",
 					"incomplete": "The run produced no answer at all, so there is nothing to compare or grade.",
-					"warmup": "A warm-up run. It is excluded on purpose so the repeats after it are not judged against a cold launch."
+					"warmup": "A warm-up run. It is excluded on purpose so the repeats after it are not judged against a cold launch.",
+					"pairwise-pending": "pairwise judging not finished",
+					"pairwise-insufficient": "too few comparisons to fit",
+					"pairwise-cap": "outside the pairwise cohort cap",
+					"pairwise-stale": "fitted from an older comparison set",
+					"pairwise-unfitted": "not in the active fit",
+					"pairwise-cross-case": "compared under a different task case",
+					"pairwise-execution-mismatch": "fitted under a different judge runtime",
+					"pairwise-execution-identity-incomplete": "judge runtime not fully recorded"
 				},
 				"exclusionShort": {
 					"no-score": "unscored",
@@ -4263,15 +4293,25 @@
 					"execution-identity-incomplete": "identity incomplete",
 					"truncated": "truncated",
 					"incomplete": "no answer",
-					"warmup": "warm-up"
+					"warmup": "warm-up",
+					"pairwise-pending": "pairwise pending",
+					"pairwise-insufficient": "too few pairs",
+					"pairwise-cap": "over cap",
+					"pairwise-stale": "refitting",
+					"pairwise-unfitted": "unfitted",
+					"pairwise-cross-case": "cross-case",
+					"pairwise-execution-mismatch": "runtime differs",
+					"pairwise-execution-identity-incomplete": "runtime unknown"
 				},
 				"action": {
 					"score": "Set an operator score.",
 					"rejudge": "Re-judge to bring it back into the cohort.",
 					"wait": "Wait for the judging to finish.",
 					"rerun": "Rerun it — with more room when it was cut off.",
-					"none": "Nothing to do — a warm-up is meant to sit outside the ranking."
-				}
+					"none": "Nothing to do — a warm-up is meant to sit outside the ranking.",
+					"remove-runs": "Remove runs to bring the cohort under the cap."
+				},
+				"comparing": "Comparing {{count}} runs"
 			},
 			"rubric": {
 				"title": "Rubric",
@@ -4293,7 +4333,148 @@
 					"title": "A title is required (64 characters max).",
 					"description": "A description is required (1024 characters max).",
 					"weight": "The weight must be between 1 and 100."
+				},
+				"presetVerifiable": "Verifiable",
+				"criterionDescriptionVerified": "This criterion is decided server-side, so the text is documentation for the operator rather than an instruction to a model."
+			},
+			"fidelity": {
+				"title": "Quant fidelity (PPL / KLD)",
+				"column": "PPL / KLD",
+				"explanation": "Perplexity and KL divergence measure how far a quantized build drifted from the weights it was made from. Both are display only and neither ever ranks a run.",
+				"displayOnly": "Display only — fidelity never ranks a run.",
+				"measure": "Measure fidelity",
+				"kldStale": "kld-stale",
+				"kldStaleHint": "Measured against a different base model, corpus or chunk count than this project now expects. Re-measure this run to get a comparable number.",
+				"kldLine": "KLD {{mean}} · p99 {{p99}} · {{agreement}}",
+				"pplTooltip": "Perplexity {{value}} over {{chunks}} chunks at a {{window}}-token window ({{corpus}})",
+				"kldTooltip": "KL divergence mean {{mean}}, p99 {{p99}}, top-token agreement {{agreement}}",
+				"noReason": "The node recorded no reason.",
+				"estimate": "KL divergence would cache {{size}} of base logits — {{free}} free, {{cached}} already cached.",
+				"estimateInputs": "{{chunks}} chunks × {{window}} tokens × {{vocab}} vocabulary",
+				"estimateLoading": "Estimating the base-logit cache…",
+				"estimateError": "Could not estimate the KL-divergence cache size.",
+				"estimateTooLarge": "This does not fit on the disk the node writes to. The measurement would be refused rather than half-written — free space or lower the chunk count first.",
+				"clearCache": "Delete cached base logits",
+				"clearCacheHint": "Nothing measured is lost — the runs keep their numbers. The next KL-divergence pass recomputes the base logits.",
+				"cacheCleared": "Cached base logits deleted.",
+				"cacheClearError": "Could not delete the cached base logits.",
+				"status": {
+					"queued": "Fidelity queued",
+					"running": "Measuring fidelity",
+					"succeeded": "Measured",
+					"failed": "Fidelity failed",
+					"cancelled": "Fidelity cancelled",
+					"skipped": "Not measured"
+				},
+				"differs": "Quant fidelity differs: {{fields}}",
+				"onWithKld": "PPL + KLD",
+				"onPplOnly": "PPL",
+				"off": "off",
+				"settings": "Scoring {{chunks}} chunks{{base}}.",
+				"disabled": "Not measured. Enable it in the project settings before the first run.",
+				"measureExisting": "Also measure the runs this project already has",
+				"saved": "Fidelity settings saved.",
+				"savedWithRuns": "Saved. Queued {{count}} measurements.",
+				"saveError": "Could not save the fidelity settings.",
+				"remeasureNote": "Changing the base model or chunk count deletes nothing, but it mints a new comparability digest — figures measured under the old one start reading kld-stale until each run is re-measured."
+			},
+			"charts": {
+				"title": "Charts",
+				"show": "Show charts",
+				"hide": "Hide charts",
+				"loading": "Loading charts…",
+				"empty": "No measured runs to chart yet.",
+				"throughputTitle": "Decode speed per repeat",
+				"repeatAxis": "Repeat",
+				"cohortsHidden": "Showing {{shown}} of {{total}} repeat cohorts.",
+				"speedTitle": "Prefill and decode speed per model",
+				"ttftTitle": "Time to first token per model",
+				"perplexityTitle": "Perplexity per quant — {{model}}",
+				"perplexity": "Perplexity",
+				"kldTitle": "KL divergence per quant — {{model}}",
+				"kld": "KL divergence",
+				"reasoningBudgetTitle": "Quality against the frozen reasoning budget",
+				"reasoningBudgetNote": "Across the runs currently selected for comparison."
+			},
+			"verifier": {
+				"kind": "Decided by",
+				"kindHelp": "Anything but the model is checked server-side, with no inference.",
+				"kinds": {
+					"llm": "The judge model",
+					"exact": "Exact answer",
+					"regex": "Regular expression",
+					"jsonSchema": "JSON schema",
+					"mathAnswer": "Numeric answer",
+					"constraint": "Structural constraints"
+				},
+				"expected": "Expected answer",
+				"normalize": {
+					"trim": "Trim",
+					"collapseWhitespace": "Collapse whitespace",
+					"caseInsensitive": "Ignore case",
+					"stripMarkdown": "Strip markdown"
+				},
+				"pattern": "Pattern",
+				"patternHelp": "Matched in linear time: lookaround, backreferences and atomic groups are refused when the judge is saved.",
+				"mustMatch": "The answer must match",
+				"schema": "Schema",
+				"schemaHelp": "Enforced keywords: {{keywords}}. Anything else is refused.",
+				"expectedNumber": "Expected value",
+				"expectedNumberHelp": "A number or a fraction such as 3/4.",
+				"relativeTolerance": "Relative tolerance",
+				"absoluteTolerance": "Absolute tolerance",
+				"minWords": "Minimum words",
+				"maxWords": "Maximum words",
+				"mustContain": "Must contain",
+				"mustNotContain": "Must not contain",
+				"format": "Format",
+				"formats": {
+					"json": "JSON",
+					"markdownList": "Markdown list",
+					"noMarkdown": "No markdown"
+				},
+				"issues": {
+					"llmConfig": "A criterion judged by the model carries no configuration.",
+					"expectedRequired": "State the expected answer.",
+					"patternRequired": "State a pattern.",
+					"patternTooLong": "A pattern may be at most 512 characters.",
+					"patternInvalid": "That is not a valid regular expression.",
+					"schemaRequired": "State a schema object.",
+					"schemaInvalidJson": "That is not valid JSON.",
+					"schemaKeyword": "This build enforces only type, properties, required, items, enum, const and additionalProperties.",
+					"mathExpected": "State a number or a fraction such as 3/4.",
+					"toleranceInvalid": "A tolerance must be a number at or above zero.",
+					"constraintEmpty": "State at least one constraint.",
+					"constraintWords": "The word bounds are inconsistent.",
+					"constraintContains": "A contains entry cannot be empty.",
+					"constraintFormat": "That format is not supported."
 				}
+			},
+			"pairwise": {
+				"title": "Pairwise verdicts",
+				"cohort": "gen {{generation}} · set v{{version}}",
+				"loading": "Loading pairwise verdicts…",
+				"loadError": "Could not load the pairwise verdicts.",
+				"empty": "No comparisons yet. They are queued when the project judges.",
+				"staleFit": "These scores were fitted from a different comparison set than the project now has. They refit on the next judging pass.",
+				"fitSummary": "{{iterations}} iterations · {{replicates}} bootstrap replicates",
+				"comparisonCount": "{{count}} comparisons",
+				"pair": "Pair",
+				"orderA": "A shown first",
+				"orderB": "B shown first",
+				"tie": "tie",
+				"status": {
+					"Queued": "queued",
+					"Running": "running",
+					"Succeeded": "succeeded",
+					"Failed": "failed",
+					"Cancelled": "cancelled"
+				},
+				"estimate": "{{runs}} runs pair into {{calls}} judge calls.",
+				"estimateDuration": "Roughly {{duration}}.",
+				"estimateCapped": "{{capped}} runs are left out — the cohort caps at {{maximum}}. They rank as pairwise-cap until removed.",
+				"truncated": "truncated",
+				"truncatedHint": "One of the two answers was cut off by the token budget, so this verdict compared a fragment."
 			}
 		},
 		"customTools": {

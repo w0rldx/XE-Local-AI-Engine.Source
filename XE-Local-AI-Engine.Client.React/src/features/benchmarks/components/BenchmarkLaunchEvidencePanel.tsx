@@ -26,18 +26,16 @@ function IntendedEffectiveAlert({ launch, message, testId }: IntendedEffectiveAl
 	const rows: BenchmarkEvidenceDiffRow[] = [
 		{
 			key: "launch.launchIdentity",
-			left: launch.intendedLaunchIdentity,
-			right: launch.effectiveLaunchIdentity,
+			values: [launch.intendedLaunchIdentity, launch.effectiveLaunchIdentity],
 			differs: launch.intendedLaunchIdentity !== launch.effectiveLaunchIdentity,
 		},
 		{
 			key: "launch.executableSha256",
-			left: launch.intendedExecutableSha256,
-			right: launch.executableSha256,
+			values: [launch.intendedExecutableSha256, launch.executableSha256],
 			differs: launch.intendedExecutableSha256 !== launch.executableSha256,
 		},
 	];
-	if (!rows.some((row) => row.differs && row.left !== null && row.right !== null)) {
+	if (!rows.some((row) => row.differs && row.values.every((value) => value !== null))) {
 		return null;
 	}
 	return (
@@ -46,8 +44,7 @@ function IntendedEffectiveAlert({ launch, message, testId }: IntendedEffectiveAl
 				{message}
 				<BenchmarkEvidenceDiffTable
 					rows={rows}
-					leftLabel={t("pages.benchmarks.launch.intended", "Intended")}
-					rightLabel={t("pages.benchmarks.launch.effective", "Effective")}
+					labels={[t("pages.benchmarks.launch.intended", "Intended"), t("pages.benchmarks.launch.effective", "Effective")]}
 					data-testid={`${testId}-table`}
 				/>
 			</Stack>

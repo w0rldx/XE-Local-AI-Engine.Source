@@ -2,16 +2,20 @@ import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse as JudgePolicyResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse as ProjectDetailResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse as ProjectSummaryResponse,
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse as FidelityResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse as RankCohortResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto as RubricResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse as RunDetailResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse as RunSummaryResponse,
+	XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsResponse as ComparisonsResponse,
+	XeLocalAiEngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstimateResponse as PairwiseEstimateResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkModelResponse as EligibleModelResponse,
 } from "@/core/api/generated";
 import type {
 	BenchmarkEligibleModel,
 	BenchmarkEvidenceObject,
 	BenchmarkFlashAttentionMode,
+	BenchmarkRunFidelity,
 	BenchmarkJudgeCriterionScore,
 	BenchmarkJudgePolicy,
 	BenchmarkKvCacheTypeSource,
@@ -20,19 +24,28 @@ import type {
 	BenchmarkOutputPart,
 	BenchmarkPrimaryStatus,
 	BenchmarkProjectDetail,
+	BenchmarkProjectFidelity,
 	BenchmarkProjectSummary,
+	BenchmarkComparisonList,
+	BenchmarkPairwiseEstimate,
 	BenchmarkRankCohort,
 	BenchmarkRubric,
+	BenchmarkRunVerifier,
 	BenchmarkRunDetail,
 	BenchmarkRunJudge,
 	BenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import {
+	benchmarkFidelityChunkLimits,
 	benchmarkRubricLimits,
+	toBenchmarkFidelityKldState,
+	toBenchmarkFidelityStatus,
+	toBenchmarkJudgeMode,
 	toBenchmarkJudgeState,
 	toBenchmarkQualityScoreSource,
 	toBenchmarkRepeatMode,
 	toBenchmarkRankExclusionReason,
+	toBenchmarkVerdict,
 } from "@/features/benchmarks/models/BenchmarkModels";
 
 // The generated OpenAPI shapes intentionally keep most response members optional. These boundary mappers supply
@@ -72,6 +85,11 @@ export function toBenchmarkRubric(value: RubricResponse | null | undefined): Ben
 			title: criterion.title ?? "",
 			description: criterion.description ?? "",
 			weight: criterion.weight ?? benchmarkRubricLimits.minWeight,
+			// Preserved rather than defaulted: the editor sends the mapped rubric straight back, so a dropped `kind`
+			// would re-save a deterministically verified criterion as an LLM-judged one and change the project's
+			// meaning without the operator touching it.
+			kind: criterion.kind ?? null,
+			config: criterion.config ?? null,
 		})),
 	};
 }
@@ -79,6 +97,7 @@ export function toBenchmarkRubric(value: RubricResponse | null | undefined): Ben
 function toBenchmarkJudgePolicy(value: JudgePolicyResponse | undefined): BenchmarkJudgePolicy {
 	return {
 		enabled: value?.enabled === true,
+		mode: toBenchmarkJudgeMode(value?.mode),
 		policyRevision: value?.policyRevision ?? null,
 		policyHash: value?.policyHash ?? null,
 		modelName: value?.modelName ?? null,
@@ -91,11 +110,26 @@ function toBenchmarkJudgePolicy(value: JudgePolicyResponse | undefined): Benchma
 	};
 }
 
+// `chunksEffective` is what runs; `chunks` is what the operator typed. Keeping both is the difference between a form
+// that shows "200" as if it had been chosen and one that shows the default is in force.
+function toBenchmarkProjectFidelity(value: ProjectDetailResponse): BenchmarkProjectFidelity {
+	return {
+		enabled: value.fidelityEnabled === true,
+		kldEnabled: value.fidelityKldEnabled === true,
+		chunks: value.fidelityChunks ?? null,
+		chunksEffective: numberValue(value.fidelityChunksEffective, benchmarkFidelityChunkLimits.default),
+		kldBaseModelName: value.fidelityKldBaseModelName ?? null,
+		kldBaseFingerprint: value.fidelityKldBaseFingerprint ?? null,
+		kldExpectedDigest: value.fidelityKldExpectedDigest ?? null,
+	};
+}
+
 export function toBenchmarkProjectDetail(value: ProjectDetailResponse): BenchmarkProjectDetail {
 	return {
 		...toBenchmarkProjectSummary(value),
 		coreTask: value.coreTask,
 		judge: toBenchmarkJudgePolicy(value.judge),
+		fidelity: toBenchmarkProjectFidelity(value),
 	};
 }
 
@@ -106,6 +140,17 @@ function judgeCriteria(value: RunSummaryResponse["judge"]): BenchmarkJudgeCriter
 		id: criterion.id,
 		score: criterion.score ?? 0,
 		rationale: criterion.rationale,
+	}));
+}
+
+// The node sends evidence only for verifiable criteria, so an empty list is the ordinary case for an all-LLM rubric.
+function judgeVerifiers(value: RunSummaryResponse["judge"]): BenchmarkRunVerifier[] {
+	return (value?.verifiers ?? []).map((verifier) => ({
+		id: verifier.id,
+		kind: verifier.kind,
+		// Fail closed: an absent flag reads as "did not pass", never as a pass the node never asserted.
+		passed: verifier.passed === true,
+		detail: verifier.detail,
 	}));
 }
 
@@ -122,7 +167,34 @@ function toBenchmarkRunJudge(value: RunSummaryResponse["judge"]): BenchmarkRunJu
 		executionCurrent: value?.executionCurrent === true,
 		errorMessage: value?.errorMessage ?? null,
 		summary: value?.summary ?? null,
+		verifiers: judgeVerifiers(value),
 		criteria: judgeCriteria(value),
+	};
+}
+
+/**
+ * A run's fidelity numbers. The KLD trio is read through {@link toBenchmarkFidelityKldState}: the node already withholds
+ * the figures unless the run's stored base-logit digest is the one the project now expects, and the state is carried
+ * through unchanged so the UI can say WHY a number is missing rather than showing a bare dash.
+ */
+export function toBenchmarkRunFidelity(value: FidelityResponse | null | undefined): BenchmarkRunFidelity | null {
+	if (!value) {
+		return null;
+	}
+	return {
+		status: toBenchmarkFidelityStatus(value.status),
+		attemptId: value.attemptId ?? null,
+		perplexityMean: value.perplexityMean ?? null,
+		perplexityStdErr: value.perplexityStdErr ?? null,
+		perplexityChunks: value.perplexityChunks ?? null,
+		perplexityContextTokens: value.perplexityContextTokens ?? null,
+		perplexityCorpusId: value.perplexityCorpusId ?? null,
+		kldState: toBenchmarkFidelityKldState(value.kldState),
+		kldMean: value.kldMean ?? null,
+		kldP99: value.kldP99 ?? null,
+		topTokenAgreement: value.topTokenAgreement ?? null,
+		kldBaseFingerprint: value.kldBaseFingerprint ?? null,
+		errorMessage: value.errorMessage ?? null,
 	};
 }
 
@@ -135,6 +207,71 @@ export function toBenchmarkRankCohort(value: RankCohortResponse | undefined): Be
 		totalScored: numberValue(value?.totalScored),
 	};
 }
+
+/**
+ * The verdicts and the fit as ONE read. `isCurrent` is carried through untouched: a fit that no longer describes the
+ * cohort is the `pairwise-stale` case, and the caller must be able to refuse the score rather than be handed a number
+ * with no way to tell.
+ */
+export function toBenchmarkComparisonList(value: ComparisonsResponse): BenchmarkComparisonList {
+	const fit = value.fit;
+	return {
+		cohortGeneration: numberValue(value.cohortGeneration),
+		comparisonSetVersion: numberValue(value.comparisonSetVersion),
+		referenceExecutionKey: value.referenceExecutionKey ?? null,
+		items: (value.items ?? []).map((item) => ({
+			id: item.id ?? "",
+			runAId: item.runAId ?? "",
+			runBId: item.runBId ?? "",
+			order: numberValue(item.order),
+			attemptSequence: numberValue(item.attemptSequence),
+			sequence: numberValue(item.sequence),
+			taskCaseId: item.taskCaseId ?? null,
+			status: item.status,
+			verdict: toBenchmarkVerdict(item.verdict),
+			answerATruncated: item.answerATruncated === true,
+			answerBTruncated: item.answerBTruncated === true,
+			judgeExecutionKey: item.judgeExecutionKey ?? null,
+			errorMessage: item.errorMessage ?? null,
+			enqueuedAtUtc: numberValue(item.enqueuedAtUtc),
+			completedAtUtc: item.completedAtUtc ?? null,
+		})),
+		fit:
+			fit == null
+				? null
+				: {
+						fitKey: fit.fitKey,
+						judgeExecutionKey: fit.judgeExecutionKey,
+						comparisonSetVersion: numberValue(fit.comparisonSetVersion),
+						cohortGeneration: numberValue(fit.cohortGeneration),
+						iterations: numberValue(fit.iterations),
+						bootstrapReplicates: numberValue(fit.bootstrapReplicates),
+						// Fail closed: an absent flag reads as "not current", so a score is withheld rather than shown stale.
+						isCurrent: fit.isCurrent === true,
+						createdAtUtc: numberValue(fit.createdAtUtc),
+						scores: (fit.scores ?? []).map((score) => ({
+							runId: score.runId ?? "",
+							score: score.score ?? null,
+							ciLow: score.ciLow ?? null,
+							ciHigh: score.ciHigh ?? null,
+							comparisons: numberValue(score.comparisons),
+							bootstrapAppearances: numberValue(score.bootstrapAppearances),
+							reason: score.reason ?? null,
+						})),
+					},
+	};
+}
+
+export const toBenchmarkPairwiseEstimate = (value: PairwiseEstimateResponse): BenchmarkPairwiseEstimate => ({
+	eligibleRuns: numberValue(value.eligibleRuns),
+	pairedRuns: numberValue(value.pairedRuns),
+	cappedRuns: numberValue(value.cappedRuns),
+	judgeCalls: numberValue(value.judgeCalls),
+	// Null stays null: the caller omits the ETA entirely rather than rendering "0 s", which would read as instant.
+	estimatedSeconds: value.estimatedSeconds ?? null,
+	warn: value.warn === true,
+	maximumRuns: numberValue(value.maximumRuns),
+});
 
 const text = (value: unknown): string | null => (typeof value === "string" && value.length > 0 ? value : null);
 const count = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
@@ -187,6 +324,7 @@ export function toBenchmarkRunSummary(value: RunSummaryResponse): BenchmarkRunSu
 		requestedContextTokens: numberValue(value.requestedContextTokens),
 		primaryStatus: primaryStatus(value.primaryStatus),
 		judge: toBenchmarkRunJudge(value.judge),
+		fidelity: toBenchmarkRunFidelity(value.fidelity),
 		qualityScore: value.qualityScore ?? null,
 		qualityScoreSource: toBenchmarkQualityScoreSource(value.qualityScoreSource),
 		rank: value.rank ?? null,

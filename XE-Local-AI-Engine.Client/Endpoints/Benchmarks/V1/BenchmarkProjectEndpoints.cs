@@ -157,7 +157,11 @@ public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService 
     {
         var draft = req.Policy is null
             ? null
-            : new BenchmarkJudgePolicyDraft(req.Policy.ModelName, req.Policy.ContextTokens, req.Policy.Rubric.ToRubric(), req.Policy.ReferenceAnswer);
+            : new BenchmarkJudgePolicyDraft(req.Policy.ModelName,
+                req.Policy.ContextTokens,
+                req.Policy.Rubric.ToRubric(),
+                req.Policy.ReferenceAnswer,
+                req.Policy.Mode);
         var change = await _projects.UpdateJudgePolicyAsync(req.ProjectId, req.ExpectedVersion, draft, req.ConfirmRejudge, ct).ConfigureAwait(false);
         await Send.OkAsync(await ToResponseAsync(_store, change, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
     }
@@ -212,7 +216,8 @@ public sealed class GetBenchmarkRubricPresetsEndpoint : EndpointWithoutRequest<B
         {
             Default = BenchmarkJudgeRubricDefaults.Default().ToDto(),
             Programming = BenchmarkJudgeRubricDefaults.Programming().ToDto(),
-            Reasoning = BenchmarkJudgeRubricDefaults.Reasoning().ToDto()
+            Reasoning = BenchmarkJudgeRubricDefaults.Reasoning().ToDto(),
+            Verifiable = BenchmarkJudgeRubricDefaults.Verifiable().ToDto()
         }, ct);
 }
 

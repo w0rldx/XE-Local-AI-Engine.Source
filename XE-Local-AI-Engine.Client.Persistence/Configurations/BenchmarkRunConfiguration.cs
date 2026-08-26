@@ -57,6 +57,22 @@ internal sealed class BenchmarkRunConfiguration : IEntityTypeConfiguration<Bench
         builder.Property(entity => entity.SamplingSeed).HasColumnName("sampling_seed").HasMaxLength(32);
         builder.Property(entity => entity.SamplingTemperature).HasColumnName("sampling_temperature");
         builder.Property(entity => entity.CurrentJudgeAttemptId).HasColumnName("current_judge_attempt_id");
+
+        // The fidelity projection: plaintext numerics, same posture as tokens_per_second above. Display only —
+        // ranking never reads them. The encrypted fidelity receipt lives on the attempt row, not here.
+        builder.Property(entity => entity.FidelityAttemptId).HasColumnName("fidelity_attempt_id");
+        builder.Property(entity => entity.PerplexityMean).HasColumnName("perplexity_mean");
+        builder.Property(entity => entity.PerplexityStdErr).HasColumnName("perplexity_std_err");
+        builder.Property(entity => entity.PerplexityChunks).HasColumnName("perplexity_chunks");
+        builder.Property(entity => entity.PerplexityContextTokens).HasColumnName("perplexity_context_tokens");
+        builder.Property(entity => entity.PerplexityCorpusId).HasColumnName("perplexity_corpus_id").HasMaxLength(64);
+        builder.Property(entity => entity.KldMean).HasColumnName("kld_mean");
+        builder.Property(entity => entity.KldP99).HasColumnName("kld_p99");
+        builder.Property(entity => entity.TopTokenAgreement).HasColumnName("top_token_agreement");
+        builder.Property(entity => entity.KldBaseFingerprint).HasColumnName("kld_base_fingerprint").HasMaxLength(67);
+        builder.Property(entity => entity.KldBaseLogitsDigest).HasColumnName("kld_base_logits_digest").HasMaxLength(67);
+        builder.Property(entity => entity.FidelityStatus).HasColumnName("fidelity_status").HasMaxLength(16);
+        builder.Property(entity => entity.FidelityErrorMessage).HasColumnName("fidelity_error_message").HasMaxLength(1024);
         builder.Property(entity => entity.PrimaryVariant).HasColumnName("primary_variant").HasMaxLength(32);
         builder.Property(entity => entity.PrimaryKvCacheType).HasColumnName("primary_kv_cache_type").HasMaxLength(32);
         builder.Property(entity => entity.PrimaryKvCacheTypeSource).HasColumnName("primary_kv_cache_type_source").HasMaxLength(16);

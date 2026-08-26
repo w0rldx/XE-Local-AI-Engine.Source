@@ -3628,6 +3628,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse = 
 	runs?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse>;
 	repeatGroups?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGroupResponse>;
 	llamaBench?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchRowResponse>;
+	pairwiseFit?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseFitResponse | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectResponse = {
@@ -3656,6 +3657,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyRespon
 	requestedContextTokens?: number | null;
 	rubric?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto | null;
 	referenceAnswer?: string | null;
+	mode?: string | null;
 	cohortGeneration?: number | null;
 	referenceExecutionKey?: string | null;
 	promptVersion?: number | null;
@@ -3672,6 +3674,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricCriterionDt
 	title?: string;
 	description?: string;
 	weight?: number;
+	kind?: string | null;
+	config?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse = {
@@ -3706,6 +3710,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	requestedContextTokens?: number;
 	primaryStatus?: XeLocalAiEngineClientPersistenceEntitiesBenchmarkPrimaryStatus;
 	judge: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunJudgeResponse;
+	fidelity?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse | null;
 	qualityScore?: number | null;
 	qualityScoreSource: string;
 	rank?: number | null;
@@ -3771,12 +3776,36 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunJudgeResponse 
 	errorMessage?: string | null;
 	summary?: string | null;
 	criteria?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeCriterionScoreResponse> | null;
+	verifiers?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeVerifierResponse> | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeCriterionScoreResponse = {
 	id: string;
 	score?: number;
 	rationale: string;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeVerifierResponse = {
+	id: string;
+	kind: string;
+	passed?: boolean;
+	detail: string;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse = {
+	status: string;
+	attemptId?: string | null;
+	perplexityMean?: number | null;
+	perplexityStdErr?: number | null;
+	perplexityChunks?: number | null;
+	perplexityContextTokens?: number | null;
+	perplexityCorpusId?: string | null;
+	kldState: string;
+	kldMean?: number | null;
+	kldP99?: number | null;
+	topTokenAgreement?: number | null;
+	kldBaseFingerprint?: string | null;
+	errorMessage?: string | null;
 };
 
 export type XeLocalAiEngineClientPersistenceEntitiesBenchmarkRepeatMode = "Throughput" | "AnswerVariance";
@@ -3815,13 +3844,66 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchR
 	modelName: string;
 };
 
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseFitResponse = {
+	id?: string;
+	fitKey: string;
+	judgeExecutionKey: string;
+	cohortGeneration?: number;
+	comparisonSetVersion?: number;
+	iterations?: number;
+	bootstrapReplicates?: number;
+	createdAtUtc?: number;
+	fittedSetJson: string;
+	scores?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseScoreResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseScoreResponse = {
+	runId?: string;
+	score?: number | null;
+	ciLow?: number | null;
+	ciHigh?: number | null;
+	comparisons?: number;
+	bootstrapAppearances?: number;
+	reason?: string | null;
+};
+
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest = {
 	[key: string]: never;
 };
 
-export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkProjectsResponse = {
-	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse>;
+export type XeLocalAiEngineClientEndpointsBenchmarksV1GetKldDiskEstimateResponse = {
+	estimatedBytes?: number;
+	freeDiskBytes?: number;
+	cachedBytes?: number;
+	chunks?: number;
+	contextTokens?: number;
+	vocabSize?: number;
+	formula: string;
+	fitsOnDisk?: boolean;
 };
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1GetKldDiskEstimateRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectFidelityChangeResponse = {
+	project: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse;
+	enqueuedRunIds?: Array<string>;
+	enqueuedCount?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse =
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse & {
+		coreTask: string;
+		judge: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse;
+		fidelityEnabled?: boolean;
+		fidelityKldEnabled?: boolean;
+		fidelityChunks?: number | null;
+		fidelityChunksEffective?: number;
+		fidelityKldBaseModelName?: string | null;
+		fidelityKldBaseFingerprint?: string | null;
+		fidelityKldExpectedDigest?: string | null;
+	};
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse = {
 	id?: string;
@@ -3839,11 +3921,119 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryRes
 	updatedAtUtc?: number;
 };
 
-export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse =
-	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse & {
-		coreTask: string;
-		judge: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse;
-	};
+export type XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectFidelityRequest = {
+	expectedVersion?: number;
+	fidelityEnabled?: boolean;
+	fidelityKldEnabled?: boolean;
+	fidelityChunks?: number | null;
+	fidelityKldBaseModelName?: string | null;
+	measureExisting?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1StartRunFidelityRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityAttemptResponse = {
+	id?: string;
+	sequence?: number;
+	kind: string;
+	status: string;
+	perplexityMean?: number | null;
+	perplexityStdErr?: number | null;
+	perplexityChunks?: number | null;
+	perplexityContextTokens?: number | null;
+	corpusId?: string | null;
+	kldMean?: number | null;
+	kldP99?: number | null;
+	topTokenAgreement?: number | null;
+	baseModelName?: string | null;
+	baseModelContentFingerprint?: string | null;
+	baseLogitsDigest?: string | null;
+	errorMessage?: string | null;
+	enqueuedAtUtc?: number;
+	startedAtUtc?: number | null;
+	completedAtUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsResponse = {
+	cohortGeneration?: number;
+	comparisonSetVersion?: number;
+	referenceExecutionKey?: string | null;
+	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkComparisonResponse>;
+	fit?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairwiseFitResponse | null;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkComparisonResponse = {
+	id?: string;
+	runAId?: string;
+	runBId?: string;
+	order?: number;
+	attemptSequence?: number;
+	sequence?: number;
+	taskCaseId?: string | null;
+	status: string;
+	verdict?: string | null;
+	answerATruncated?: boolean;
+	answerBTruncated?: boolean;
+	judgeExecutionKey?: string | null;
+	errorMessage?: string | null;
+	enqueuedAtUtc?: number;
+	completedAtUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairwiseFitResponse = {
+	fitKey: string;
+	judgeExecutionKey: string;
+	comparisonSetVersion?: number;
+	cohortGeneration?: number;
+	iterations?: number;
+	bootstrapReplicates?: number;
+	isCurrent?: boolean;
+	createdAtUtc?: number;
+	fittedSetJson: string;
+	scores?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairwiseRunScoreResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairwiseRunScoreResponse = {
+	runId?: string;
+	score?: number | null;
+	ciLow?: number | null;
+	ciHigh?: number | null;
+	comparisons?: number;
+	bootstrapAppearances?: number;
+	reason?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstimateResponse = {
+	eligibleRuns?: number;
+	pairedRuns?: number;
+	cappedRuns?: number;
+	judgeCalls?: number;
+	estimatedSeconds?: number | null;
+	warn?: boolean;
+	maximumRuns?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstimateRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkProjectsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse>;
+};
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRequest = {
 	name?: string;
@@ -3858,6 +4048,10 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRe
 	judgeContextTokens?: number | null;
 	rubric?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto | null;
 	referenceAnswer?: string | null;
+	fidelityEnabled?: boolean;
+	fidelityKldEnabled?: boolean;
+	fidelityChunks?: number | null;
+	fidelityKldBaseModelName?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectRequest =
@@ -3884,6 +4078,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkJudgePolicy
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyDraftDto = {
 	modelName?: string;
 	contextTokens?: number;
+	mode?: string | null;
 	rubric?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto | null;
 	referenceAnswer?: string | null;
 };
@@ -3896,6 +4091,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricPresetsResp
 	default: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
 	programming: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
 	reasoning: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
+	verifiable: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkRunsResponse = {
@@ -13100,6 +13296,266 @@ export type ExportBenchmarkProjectCsvResponses = {
 };
 
 export type ExportBenchmarkProjectCsvResponse = ExportBenchmarkProjectCsvResponses[keyof ExportBenchmarkProjectCsvResponses];
+
+export type GetBenchmarkKldDiskEstimateData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: {
+		chunks?: number | null;
+	};
+	url: "/api/local/v1/benchmarks/projects/{projectId}/fidelity/kld-estimate";
+};
+
+export type GetBenchmarkKldDiskEstimateErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type GetBenchmarkKldDiskEstimateError = GetBenchmarkKldDiskEstimateErrors[keyof GetBenchmarkKldDiskEstimateErrors];
+
+export type GetBenchmarkKldDiskEstimateResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1GetKldDiskEstimateResponse;
+};
+
+export type GetBenchmarkKldDiskEstimateResponse =
+	GetBenchmarkKldDiskEstimateResponses[keyof GetBenchmarkKldDiskEstimateResponses];
+
+export type UpdateBenchmarkProjectFidelityData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectFidelityRequest;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/fidelity";
+};
+
+export type UpdateBenchmarkProjectFidelityErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type UpdateBenchmarkProjectFidelityError =
+	UpdateBenchmarkProjectFidelityErrors[keyof UpdateBenchmarkProjectFidelityErrors];
+
+export type UpdateBenchmarkProjectFidelityResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectFidelityChangeResponse;
+};
+
+export type UpdateBenchmarkProjectFidelityResponse =
+	UpdateBenchmarkProjectFidelityResponses[keyof UpdateBenchmarkProjectFidelityResponses];
+
+export type StartBenchmarkRunFidelityData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/runs/{runId}/fidelity";
+};
+
+export type StartBenchmarkRunFidelityErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type StartBenchmarkRunFidelityError = StartBenchmarkRunFidelityErrors[keyof StartBenchmarkRunFidelityErrors];
+
+export type StartBenchmarkRunFidelityResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type StartBenchmarkRunFidelityResponse = StartBenchmarkRunFidelityResponses[keyof StartBenchmarkRunFidelityResponses];
+
+export type ListBenchmarkFidelityAttemptsData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/runs/{runId}/fidelity/attempts";
+};
+
+export type ListBenchmarkFidelityAttemptsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ListBenchmarkFidelityAttemptsError = ListBenchmarkFidelityAttemptsErrors[keyof ListBenchmarkFidelityAttemptsErrors];
+
+export type ListBenchmarkFidelityAttemptsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsResponse;
+};
+
+export type ListBenchmarkFidelityAttemptsResponse =
+	ListBenchmarkFidelityAttemptsResponses[keyof ListBenchmarkFidelityAttemptsResponses];
+
+export type ClearBenchmarkFidelityCacheData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/fidelity/cache";
+};
+
+export type ClearBenchmarkFidelityCacheErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ClearBenchmarkFidelityCacheError = ClearBenchmarkFidelityCacheErrors[keyof ClearBenchmarkFidelityCacheErrors];
+
+export type ClearBenchmarkFidelityCacheResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type ClearBenchmarkFidelityCacheResponse =
+	ClearBenchmarkFidelityCacheResponses[keyof ClearBenchmarkFidelityCacheResponses];
+
+export type ListBenchmarkComparisonsData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/comparisons";
+};
+
+export type ListBenchmarkComparisonsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ListBenchmarkComparisonsError = ListBenchmarkComparisonsErrors[keyof ListBenchmarkComparisonsErrors];
+
+export type ListBenchmarkComparisonsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsResponse;
+};
+
+export type ListBenchmarkComparisonsResponse = ListBenchmarkComparisonsResponses[keyof ListBenchmarkComparisonsResponses];
+
+export type GetBenchmarkPairwiseEstimateData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/pairwise-estimate";
+};
+
+export type GetBenchmarkPairwiseEstimateErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type GetBenchmarkPairwiseEstimateError = GetBenchmarkPairwiseEstimateErrors[keyof GetBenchmarkPairwiseEstimateErrors];
+
+export type GetBenchmarkPairwiseEstimateResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstimateResponse;
+};
+
+export type GetBenchmarkPairwiseEstimateResponse =
+	GetBenchmarkPairwiseEstimateResponses[keyof GetBenchmarkPairwiseEstimateResponses];
 
 export type ListBenchmarkProjectsData = {
 	body?: never;

@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildService, IDisposable
 {
     private const string ManagedFitParamsFileName = "llama-fit-params";
+    private const string ManagedPerplexityFileName = LlamaCppToolBinaries.PerplexityName;
     private const string ManagedQuantizeFileName = LlamaCppToolBinaries.QuantizerName;
     private const string ManagedServerFileName = "llama-server";
     private const string ManifestFileName = ".source-build-manifest.json";
@@ -431,7 +432,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             SetPhase(LlamaCppSourceBuildPhase.Building);
             var jobs = Math.Max(1, Math.Min(Environment.ProcessorCount, MaxBuildJobs));
             var buildExit = await RunStreamingStepAsync("cmake",
-                ["--build", buildDir, "--target", ManagedServerFileName, ManagedFitParamsFileName, ManagedQuantizeFileName, "-j", jobs.ToString()],
+                ["--build", buildDir, "--target", ManagedServerFileName, ManagedFitParamsFileName, ManagedQuantizeFileName, ManagedPerplexityFileName, "-j", jobs.ToString()],
                 environment,
                 cloneDir,
                 BuildTimeout,
@@ -462,6 +463,13 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             {
                 AppendLog("The build produced no llama-quantize helper; training exports will not be able to quantize with this runtime.");
                 _logger.LogWarning("The source build produced no {Quantizer} helper.", ManagedQuantizeFileName);
+            }
+
+            // Same posture for the perplexity tool: only a benchmark fidelity measurement needs it.
+            if (LlamaCppToolBinaries.TryResolvePerplexity(builtBin) is null)
+            {
+                AppendLog("The build produced no llama-perplexity helper; benchmark fidelity cannot be measured with this runtime.");
+                _logger.LogWarning("The source build produced no {Perplexity} helper.", ManagedPerplexityFileName);
             }
 
             // Stage the placed tree at a sibling dir (same filesystem → atomic moves) and harden it there.

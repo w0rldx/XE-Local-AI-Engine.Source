@@ -1,13 +1,17 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
 	cancelBenchmarkRun,
+	clearBenchmarkFidelityCache,
 	clearBenchmarkRunScore,
 	createBenchmarkProject,
 	deleteBenchmarkRun,
+	getBenchmarkKldDiskEstimate,
+	getBenchmarkPairwiseEstimate,
 	getBenchmarkProject,
 	getBenchmarkRubricPresets,
 	getBenchmarkRun,
+	listBenchmarkComparisons,
 	listBenchmarkProjects,
 	listBenchmarkRuns,
 	listEligibleBenchmarkModels,
@@ -16,8 +20,10 @@ import {
 	scoreBenchmarkRun,
 	startBenchmarkRun,
 	startBenchmarkRunBatch,
+	startBenchmarkRunFidelity,
 	updateBenchmarkJudgePolicy,
 	updateBenchmarkProject,
+	updateBenchmarkProjectFidelity,
 } from "@/core/api/generated";
 import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyDraftDto as JudgePolicyDraft,
@@ -25,8 +31,11 @@ import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest as StartBenchmarkRunRequest,
 } from "@/core/api/generated";
 import { callWithResponseValidation } from "@/core/api/ResponseValidation";
+import { isFidelityActive } from "@/features/benchmarks/models/BenchmarkFidelity";
 import {
+	toBenchmarkComparisonList,
 	toBenchmarkEligibleModel,
+	toBenchmarkPairwiseEstimate,
 	toBenchmarkProjectDetail,
 	toBenchmarkProjectSummary,
 	toBenchmarkRankCohort,
@@ -35,7 +44,10 @@ import {
 	toBenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkMappers";
 import type {
+	BenchmarkComparisonList,
+	BenchmarkProjectFidelityDraft,
 	BenchmarkEligibleModel,
+	BenchmarkPairwiseEstimate,
 	BenchmarkKvCacheType,
 	BenchmarkRepeatMode,
 	BenchmarkProjectDetail,
@@ -59,7 +71,12 @@ const benchmarkQueryKeys = {
 	project: (id: string) => ["benchmarks", "projects", id] as const,
 	runs: (projectId: string) => ["benchmarks", "projects", projectId, "runs"] as const,
 	run: (id: string) => ["benchmarks", "runs", id] as const,
+	/** The prefix every {@link benchmarkQueryKeys.run} entry sits under, for the rare change that touches runs it cannot name. */
+	runDetails: ["benchmarks", "runs"] as const,
 	models: (contextTokens?: number) => ["benchmarks", "eligible-models", contextTokens] as const,
+	kldEstimate: (projectId: string, chunks?: number) => ["benchmarks", "projects", projectId, "kld-estimate", chunks] as const,
+	comparisons: (projectId: string) => ["benchmarks", "projects", projectId, "comparisons"] as const,
+	pairwiseEstimate: (projectId: string) => ["benchmarks", "projects", projectId, "pairwise-estimate"] as const,
 	rubricPresets: ["benchmarks", "rubric-presets"] as const,
 };
 
@@ -75,15 +92,24 @@ export interface BenchmarkRunList {
 	totalCount: number;
 }
 
-/** The three rubrics the node offers as starting points. */
+/**
+ * The rubrics the node offers as starting points. `verifiable` is the one whose every criterion is decided
+ * server-side, so a project judging under it spawns no llama-server at all.
+ */
 export interface BenchmarkRubricPresets {
 	default: BenchmarkRubric | null;
 	programming: BenchmarkRubric | null;
 	reasoning: BenchmarkRubric | null;
+	verifiable: BenchmarkRubric | null;
 }
 
-const isRunActive = (run: Pick<BenchmarkRunSummary, "primaryStatus" | "judge">): boolean =>
-	["Queued", "Running", "CancelRequested"].includes(run.primaryStatus) || isJudgeActive(run.judge.state);
+// Three things can still change a run's row, and the poll has to survive all three. Fidelity is the one that is easy to
+// miss: it is measured on its own queue AFTER the primary and the judge are both terminal, so a predicate reading only
+// those two stops polling the instant a measurement is queued and the finished numbers never arrive on their own.
+const isRunActive = (run: Pick<BenchmarkRunSummary, "primaryStatus" | "judge" | "fidelity">): boolean =>
+	["Queued", "Running", "CancelRequested"].includes(run.primaryStatus) ||
+	isJudgeActive(run.judge.state) ||
+	isFidelityActive(run.fidelity);
 
 function hasActiveRun(list: BenchmarkRunList | undefined): boolean {
 	return list?.items.some(isRunActive) ?? false;
@@ -162,14 +188,33 @@ export function useBenchmarkRuns(projectId: string | null) {
 	return { ...query, loadMore: query.fetchNextPage };
 }
 
+// Shared by the single-run hook and the N-run one so both read through ONE cache entry per run: the compare view, the
+// charts and the live pane all want the same run's detail, and three query keys for it would be three polls of it.
+const benchmarkRunDetailQuery = (runId: string) => ({
+	queryKey: benchmarkQueryKeys.run(runId),
+	refetchInterval: (query: { state: { data?: BenchmarkRunDetail } }) =>
+		query.state.data && isRunActive(query.state.data) ? activeRunPollIntervalMs : (false as const),
+	queryFn: async ({ signal }: { signal: AbortSignal }): Promise<BenchmarkRunDetail> => {
+		const { data } = await callWithResponseValidation(getBenchmarkRun({ path: { runId }, signal, throwOnError: true }));
+		return toBenchmarkRunDetail(data);
+	},
+});
+
 export function useBenchmarkRun(runId: string) {
-	return useQuery<BenchmarkRunDetail>({
-		queryKey: benchmarkQueryKeys.run(runId),
-		refetchInterval: (query) => (query.state.data && isRunActive(query.state.data) ? activeRunPollIntervalMs : false),
-		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(getBenchmarkRun({ path: { runId }, signal, throwOnError: true }));
-			return toBenchmarkRunDetail(data);
-		},
+	return useQuery<BenchmarkRunDetail>(benchmarkRunDetailQuery(runId));
+}
+
+/**
+ * Several runs' details at once, in the order asked for. Nothing extra is fetched: the query keys are the ones
+ * {@link useBenchmarkRun} already uses, so a run whose pane is open is read from that entry rather than re-requested.
+ */
+export function useBenchmarkRunDetails(runIds: readonly string[]) {
+	return useQueries({
+		queries: runIds.map((runId) => benchmarkRunDetailQuery(runId)),
+		combine: (results) => ({
+			runs: results.map((result) => result.data).filter((run): run is BenchmarkRunDetail => run !== undefined),
+			isLoading: results.some((result) => result.isLoading),
+		}),
 	});
 }
 
@@ -181,6 +226,123 @@ export function useEligibleBenchmarkModels(contextTokens?: number) {
 				listEligibleBenchmarkModels({ query: contextTokens ? { contextTokens } : undefined, signal, throwOnError: true }),
 			);
 			return (data.items ?? []).map(toBenchmarkEligibleModel);
+		},
+	});
+}
+
+/**
+ * What enabling KL divergence would cost this project in disk. Read BEFORE the operator commits, never after: the base
+ * logits are ~1.75 bytes per logit and 200 chunks of a 150k-vocabulary model is 25 GB, which is not a number to
+ * discover once the write has already started (plan §2 #3).
+ */
+export interface BenchmarkKldDiskEstimate {
+	estimatedBytes: number;
+	freeDiskBytes: number;
+	/** What the cache already holds for this base model — the estimate is not all new spend. */
+	cachedBytes: number;
+	chunks: number;
+	contextTokens: number;
+	vocabSize: number;
+	/** The arithmetic, verbatim from the node, so the number is checkable rather than trusted. */
+	formula: string;
+	/** The node's own verdict on the reservation. Fail-closed: an absent flag reads as "does not fit". */
+	fitsOnDisk: boolean;
+}
+
+/**
+ * The KLD disk estimate for one project. `enabled` is the caller's: it is only worth asking while the operator is
+ * actually looking at the fidelity settings, and the answer moves whenever the disk does.
+ */
+export function useBenchmarkKldDiskEstimate(projectId: string | null, chunks?: number, enabled = true) {
+	return useQuery<BenchmarkKldDiskEstimate>({
+		queryKey: benchmarkQueryKeys.kldEstimate(projectId ?? "", chunks),
+		enabled: enabled && Boolean(projectId),
+		queryFn: async ({ signal }) => {
+			const { data } = await callWithResponseValidation(
+				getBenchmarkKldDiskEstimate({
+					path: { projectId: projectId as string },
+					...(chunks === undefined ? {} : { query: { chunks } }),
+					signal,
+					throwOnError: true,
+				}),
+			);
+			return {
+				estimatedBytes: data.estimatedBytes ?? 0,
+				freeDiskBytes: data.freeDiskBytes ?? 0,
+				cachedBytes: data.cachedBytes ?? 0,
+				chunks: data.chunks ?? 0,
+				contextTokens: data.contextTokens ?? 0,
+				vocabSize: data.vocabSize ?? 0,
+				formula: data.formula,
+				fitsOnDisk: data.fitsOnDisk === true,
+			};
+		},
+	});
+}
+
+/**
+ * What the ranked reading of a pairwise project was computed from: which fit produced the scores, whether that fit still
+ * describes the cohort, and which cohort/comparison set it was fitted over. Every one of those changes the number a run's
+ * row shows; a verdict merely landing does not.
+ */
+const pairwiseFitSignature = (list: BenchmarkComparisonList): string =>
+	[list.fit?.fitKey ?? "", list.fit?.isCurrent ?? false, list.comparisonSetVersion, list.cohortGeneration].join("|");
+
+/**
+ * The verdict matrix and the fit read out of it. Polls while any comparison is still working, for the same reason the
+ * runs list does: a pairwise cohort finishes one pair at a time and the fit only appears after the last one.
+ */
+export function useBenchmarkComparisons(projectId: string | null, enabled = true) {
+	const queryClient = useQueryClient();
+	const queryKey = benchmarkQueryKeys.comparisons(projectId ?? "");
+	return useQuery<BenchmarkComparisonList>({
+		queryKey,
+		enabled: enabled && Boolean(projectId),
+		refetchInterval: (query) =>
+			query.state.data?.items.some((item) => item.status === "Queued" || item.status === "Running")
+				? activeRunPollIntervalMs
+				: false,
+		queryFn: async ({ signal }) => {
+			const { data } = await callWithResponseValidation(
+				listBenchmarkComparisons({ path: { projectId: projectId as string }, signal, throwOnError: true }),
+			);
+			const list = toBenchmarkComparisonList(data);
+			// A pairwise project's scores and ranks are read out of the FIT, and this poll is the only thing watching for
+			// one: the runs list polls on run activity, which a pairwise judging leaves untouched, so it would keep showing
+			// null scores until something unrelated refetched it. Compared against what this cache already holds, so a poll
+			// that merely advances the verdicts invalidates nothing — and the comparison of a first read against nothing
+			// invalidates nothing either, since the list it would refresh was loaded from the same node state.
+			// The project carries the cohort generation the judge panel shows, so it goes with them.
+			const previous = queryClient.getQueryData<BenchmarkComparisonList>(queryKey);
+			if (previous !== undefined && pairwiseFitSignature(previous) !== pairwiseFitSignature(list)) {
+				// Not awaited: the verdicts are already in hand and must not wait on a second round trip. A failed refresh
+				// is reported as that query's own error state, exactly as the paged `loadMore` above leaves it.
+				// `exact` on the project is load-bearing: its key is a PREFIX of this very query's key, so a prefix
+				// invalidation would refetch the comparisons too — and that refetch would see the same difference again
+				// and invalidate again, forever.
+				queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.runs(projectId as string) }).catch(() => undefined);
+				queryClient
+					.invalidateQueries({ queryKey: benchmarkQueryKeys.project(projectId as string), exact: true })
+					.catch(() => undefined);
+			}
+			return list;
+		},
+	});
+}
+
+/**
+ * What switching this project to pairwise would cost. Read BEFORE the save: 12 runs is 132 judge calls, and that is
+ * not a number to discover once the queue is full.
+ */
+export function useBenchmarkPairwiseEstimate(projectId: string | null, enabled = true) {
+	return useQuery<BenchmarkPairwiseEstimate>({
+		queryKey: benchmarkQueryKeys.pairwiseEstimate(projectId ?? ""),
+		enabled: enabled && Boolean(projectId),
+		queryFn: async ({ signal }) => {
+			const { data } = await callWithResponseValidation(
+				getBenchmarkPairwiseEstimate({ path: { projectId: projectId as string }, signal, throwOnError: true }),
+			);
+			return toBenchmarkPairwiseEstimate(data);
 		},
 	});
 }
@@ -197,6 +359,7 @@ export function useBenchmarkRubricPresets(enabled: boolean) {
 				default: toBenchmarkRubric(data.default),
 				programming: toBenchmarkRubric(data.programming),
 				reasoning: toBenchmarkRubric(data.reasoning),
+				verifiable: toBenchmarkRubric(data.verifiable),
 			};
 		},
 	});
@@ -232,10 +395,20 @@ const projectMutationBody = (draft: BenchmarkProjectDraft) => ({
 	...(draft.invocationTimeoutSeconds === null ? {} : { invocationTimeoutSeconds: draft.invocationTimeoutSeconds }),
 	agentDefinitionId: draft.agentDefinitionId,
 	judgeEnabled: draft.judgeEnabled,
+	// `judgeMode` is deliberately NOT here: the project write does not carry it, only `PUT .../judge` does. That is
+	// also the only path where the mode matters — pairwise needs runs to compare, and a project with runs is frozen,
+	// which is exactly when the judge-policy route is the one used.
 	judgeModelName: draft.judgeModelName,
 	judgeContextTokens: draft.judgeContextTokens,
 	...(draft.rubric === null ? {} : { rubric: draft.rubric }),
 	...(draft.referenceAnswer === null ? {} : { referenceAnswer: draft.referenceAnswer }),
+	fidelityEnabled: draft.fidelityEnabled,
+	fidelityKldEnabled: draft.fidelityKldEnabled,
+	// Omitted rather than null when unset, exactly as the token budgets above: absent means "the node's default", and
+	// the node clamps what it accepts. `fidelityKldBaseFingerprint` is deliberately NOT sent — the node resolves it
+	// from the base model, and a caller-supplied one could make two incomparable figures compare equal.
+	...(draft.fidelityChunks === null ? {} : { fidelityChunks: draft.fidelityChunks }),
+	fidelityKldBaseModelName: draft.fidelityKldBaseModelName,
 });
 
 export function useCreateBenchmarkProject() {
@@ -310,6 +483,65 @@ export function useUpdateBenchmarkJudgePolicy() {
 			return { project: toBenchmarkProjectDetail(data.project), enqueuedRunIds, enqueuedRunCount: enqueuedRunIds.length };
 		},
 		onSuccess: (change) => invalidate(change.project.id, ...change.enqueuedRunIds),
+	});
+}
+
+/** What a fidelity change did: the refreshed project plus the runs it queued a measurement for. */
+export interface BenchmarkFidelityChange {
+	project: BenchmarkProjectDetail;
+	enqueuedCount: number;
+}
+
+/**
+ * The fidelity settings on their OWN route, with their own CAS. That is what lets them change on a frozen project:
+ * the ordinary project write is refused once runs exist, and fidelity is exactly the setting an operator wants to
+ * revisit after seeing some.
+ *
+ * `measureExisting` is opt-in because enabling fidelity should not silently spend GPU on a project's whole history.
+ * Pressing it twice queues nothing the second time — runs with an attempt already are skipped by the node.
+ */
+export function useUpdateBenchmarkProjectFidelity() {
+	const invalidate = useBenchmarkInvalidation();
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: async ({
+			projectId,
+			expectedVersion,
+			draft,
+			measureExisting,
+		}: {
+			projectId: string;
+			expectedVersion: number;
+			draft: BenchmarkProjectFidelityDraft;
+			measureExisting: boolean;
+		}): Promise<BenchmarkFidelityChange> => {
+			const { data } = await callWithResponseValidation(
+				updateBenchmarkProjectFidelity({
+					path: { projectId },
+					body: {
+						expectedVersion,
+						fidelityEnabled: draft.fidelityEnabled,
+						fidelityKldEnabled: draft.fidelityKldEnabled,
+						// Omitted rather than null when unset, so an absent value means the node's default.
+						...(draft.fidelityChunks === null ? {} : { fidelityChunks: draft.fidelityChunks }),
+						fidelityKldBaseModelName: draft.fidelityKldBaseModelName,
+						measureExisting,
+					},
+					throwOnError: true,
+				}),
+			);
+			return { project: toBenchmarkProjectDetail(data.project), enqueuedCount: data.enqueuedCount ?? 0 };
+		},
+		// The refreshed runs carry their measurement as `queued`, which is what puts the list back on the two-second poll.
+		// The response counts the runs it enqueued but does not name them, so an OPEN detail pane — whose own query stopped
+		// polling when the run went terminal — is reached by invalidating the run details as a family. Only when something
+		// was actually enqueued: a save that measured nothing must not sweep every open pane.
+		onSuccess: async (change) => {
+			await invalidate(change.project.id);
+			if (change.enqueuedCount > 0) {
+				await queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.runDetails });
+			}
+		},
 	});
 }
 
@@ -479,6 +711,34 @@ export function useRejudgeBenchmarkRun() {
 			return toBenchmarkRunDetail(data);
 		},
 		onSuccess: (run) => invalidate(run.projectId, run.id),
+	});
+}
+
+/**
+ * Re-measures one run's quant fidelity. The node inserts a NEW immutable attempt rather than overwriting: the previous
+ * numbers survive a failed re-measure, which is why this is safe to offer as a plain menu action.
+ */
+export function useStartBenchmarkRunFidelity() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async (run: BenchmarkRunRef) => {
+			await callWithResponseValidation(startBenchmarkRunFidelity({ path: { runId: run.id }, throwOnError: true }));
+		},
+		onSuccess: (_, run) => invalidate(run.projectId, run.id),
+	});
+}
+
+/**
+ * Drops this project's cached base logits. Nothing measured is lost — the cache is a derived file, and the runs keep
+ * the numbers that were computed from it — but the next KLD measurement pays the full base pass again.
+ */
+export function useClearBenchmarkFidelityCache() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async (projectId: string) => {
+			await callWithResponseValidation(clearBenchmarkFidelityCache({ path: { projectId }, throwOnError: true }));
+		},
+		onSuccess: (_, projectId) => invalidate(projectId),
 	});
 }
 

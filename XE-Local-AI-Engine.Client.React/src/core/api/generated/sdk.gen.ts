@@ -99,6 +99,9 @@ import type {
 	CancelWorkSessionData,
 	CancelWorkSessionErrors,
 	CancelWorkSessionResponses,
+	ClearBenchmarkFidelityCacheData,
+	ClearBenchmarkFidelityCacheErrors,
+	ClearBenchmarkFidelityCacheResponses,
 	ClearBenchmarkRunScoreData,
 	ClearBenchmarkRunScoreErrors,
 	ClearBenchmarkRunScoreResponses,
@@ -387,6 +390,12 @@ import type {
 	GetBaseArtifactLicenseErrors,
 	GetBaseArtifactLicenseResponses,
 	GetBaseArtifactResponses,
+	GetBenchmarkKldDiskEstimateData,
+	GetBenchmarkKldDiskEstimateErrors,
+	GetBenchmarkKldDiskEstimateResponses,
+	GetBenchmarkPairwiseEstimateData,
+	GetBenchmarkPairwiseEstimateErrors,
+	GetBenchmarkPairwiseEstimateResponses,
 	GetBenchmarkProjectData,
 	GetBenchmarkProjectErrors,
 	GetBenchmarkProjectResponses,
@@ -615,6 +624,12 @@ import type {
 	ListBaseArtifactsData,
 	ListBaseArtifactsErrors,
 	ListBaseArtifactsResponses,
+	ListBenchmarkComparisonsData,
+	ListBenchmarkComparisonsErrors,
+	ListBenchmarkComparisonsResponses,
+	ListBenchmarkFidelityAttemptsData,
+	ListBenchmarkFidelityAttemptsErrors,
+	ListBenchmarkFidelityAttemptsResponses,
 	ListBenchmarkProjectsData,
 	ListBenchmarkProjectsErrors,
 	ListBenchmarkProjectsResponses,
@@ -924,6 +939,9 @@ import type {
 	StartBenchmarkRunBatchResponses,
 	StartBenchmarkRunData,
 	StartBenchmarkRunErrors,
+	StartBenchmarkRunFidelityData,
+	StartBenchmarkRunFidelityErrors,
+	StartBenchmarkRunFidelityResponses,
 	StartBenchmarkRunResponses,
 	StartCudaBuildData,
 	StartCudaBuildErrors,
@@ -978,6 +996,9 @@ import type {
 	UpdateBenchmarkJudgePolicyResponses,
 	UpdateBenchmarkProjectData,
 	UpdateBenchmarkProjectErrors,
+	UpdateBenchmarkProjectFidelityData,
+	UpdateBenchmarkProjectFidelityErrors,
+	UpdateBenchmarkProjectFidelityResponses,
 	UpdateBenchmarkProjectResponses,
 	UpdateCustomToolData,
 	UpdateCustomToolErrors,
@@ -1090,6 +1111,8 @@ import {
 	zCancelTrainingRunResponse,
 	zCancelWorkSessionPath,
 	zCancelWorkSessionResponse,
+	zClearBenchmarkFidelityCachePath,
+	zClearBenchmarkFidelityCacheResponse,
 	zClearBenchmarkRunScoreBody,
 	zClearBenchmarkRunScorePath,
 	zClearBenchmarkRunScoreResponse,
@@ -1284,6 +1307,11 @@ import {
 	zGetBaseArtifactLicenseResponse,
 	zGetBaseArtifactPath,
 	zGetBaseArtifactResponse,
+	zGetBenchmarkKldDiskEstimatePath,
+	zGetBenchmarkKldDiskEstimateQuery,
+	zGetBenchmarkKldDiskEstimateResponse,
+	zGetBenchmarkPairwiseEstimatePath,
+	zGetBenchmarkPairwiseEstimateResponse,
 	zGetBenchmarkProjectPath,
 	zGetBenchmarkProjectResponse,
 	zGetBenchmarkRubricPresetsResponse,
@@ -1409,6 +1437,10 @@ import {
 	zListAgentPlaybookActionsResponse,
 	zListAgentTemplatesResponse,
 	zListBaseArtifactsResponse,
+	zListBenchmarkComparisonsPath,
+	zListBenchmarkComparisonsResponse,
+	zListBenchmarkFidelityAttemptsPath,
+	zListBenchmarkFidelityAttemptsResponse,
 	zListBenchmarkProjectsResponse,
 	zListBenchmarkRunsPath,
 	zListBenchmarkRunsQuery,
@@ -1607,6 +1639,8 @@ import {
 	zStartBenchmarkRunBatchPath,
 	zStartBenchmarkRunBatchResponse,
 	zStartBenchmarkRunBody,
+	zStartBenchmarkRunFidelityPath,
+	zStartBenchmarkRunFidelityResponse,
 	zStartBenchmarkRunPath,
 	zStartBenchmarkRunResponse,
 	zStartCudaBuildResponse,
@@ -1644,6 +1678,9 @@ import {
 	zUpdateBenchmarkJudgePolicyPath,
 	zUpdateBenchmarkJudgePolicyResponse,
 	zUpdateBenchmarkProjectBody,
+	zUpdateBenchmarkProjectFidelityBody,
+	zUpdateBenchmarkProjectFidelityPath,
+	zUpdateBenchmarkProjectFidelityResponse,
 	zUpdateBenchmarkProjectPath,
 	zUpdateBenchmarkProjectResponse,
 	zUpdateCustomToolBody,
@@ -10496,6 +10533,218 @@ export const exportBenchmarkProjectCsv = <ThrowOnError extends boolean = false>(
 			},
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/export.csv",
+		...options,
+	});
+
+export const getBenchmarkKldDiskEstimate = <ThrowOnError extends boolean = false>(
+	options: Options<GetBenchmarkKldDiskEstimateData, ThrowOnError>,
+): RequestResult<GetBenchmarkKldDiskEstimateResponses, GetBenchmarkKldDiskEstimateErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetBenchmarkKldDiskEstimateResponses, GetBenchmarkKldDiskEstimateErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetBenchmarkKldDiskEstimatePath,
+					query: zGetBenchmarkKldDiskEstimateQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetBenchmarkKldDiskEstimateResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/fidelity/kld-estimate",
+		...options,
+	});
+
+export const updateBenchmarkProjectFidelity = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateBenchmarkProjectFidelityData, ThrowOnError>,
+): RequestResult<UpdateBenchmarkProjectFidelityResponses, UpdateBenchmarkProjectFidelityErrors, ThrowOnError> =>
+	(options.client ?? client).patch<UpdateBenchmarkProjectFidelityResponses, UpdateBenchmarkProjectFidelityErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateBenchmarkProjectFidelityBody,
+					path: zUpdateBenchmarkProjectFidelityPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateBenchmarkProjectFidelityResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/fidelity",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const startBenchmarkRunFidelity = <ThrowOnError extends boolean = false>(
+	options: Options<StartBenchmarkRunFidelityData, ThrowOnError>,
+): RequestResult<StartBenchmarkRunFidelityResponses, StartBenchmarkRunFidelityErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartBenchmarkRunFidelityResponses, StartBenchmarkRunFidelityErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zStartBenchmarkRunFidelityPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zStartBenchmarkRunFidelityResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/runs/{runId}/fidelity",
+		...options,
+	});
+
+export const listBenchmarkFidelityAttempts = <ThrowOnError extends boolean = false>(
+	options: Options<ListBenchmarkFidelityAttemptsData, ThrowOnError>,
+): RequestResult<ListBenchmarkFidelityAttemptsResponses, ListBenchmarkFidelityAttemptsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListBenchmarkFidelityAttemptsResponses, ListBenchmarkFidelityAttemptsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListBenchmarkFidelityAttemptsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListBenchmarkFidelityAttemptsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/runs/{runId}/fidelity/attempts",
+		...options,
+	});
+
+export const clearBenchmarkFidelityCache = <ThrowOnError extends boolean = false>(
+	options: Options<ClearBenchmarkFidelityCacheData, ThrowOnError>,
+): RequestResult<ClearBenchmarkFidelityCacheResponses, ClearBenchmarkFidelityCacheErrors, ThrowOnError> =>
+	(options.client ?? client).delete<ClearBenchmarkFidelityCacheResponses, ClearBenchmarkFidelityCacheErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zClearBenchmarkFidelityCachePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zClearBenchmarkFidelityCacheResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/fidelity/cache",
+		...options,
+	});
+
+export const listBenchmarkComparisons = <ThrowOnError extends boolean = false>(
+	options: Options<ListBenchmarkComparisonsData, ThrowOnError>,
+): RequestResult<ListBenchmarkComparisonsResponses, ListBenchmarkComparisonsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListBenchmarkComparisonsResponses, ListBenchmarkComparisonsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListBenchmarkComparisonsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListBenchmarkComparisonsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/comparisons",
+		...options,
+	});
+
+export const getBenchmarkPairwiseEstimate = <ThrowOnError extends boolean = false>(
+	options: Options<GetBenchmarkPairwiseEstimateData, ThrowOnError>,
+): RequestResult<GetBenchmarkPairwiseEstimateResponses, GetBenchmarkPairwiseEstimateErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetBenchmarkPairwiseEstimateResponses, GetBenchmarkPairwiseEstimateErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetBenchmarkPairwiseEstimatePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetBenchmarkPairwiseEstimateResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/pairwise-estimate",
 		...options,
 	});
 

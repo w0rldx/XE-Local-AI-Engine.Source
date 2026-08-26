@@ -266,6 +266,22 @@ public static class LocalApiRoutes
         // change, and doing so re-judges every run, so it never rides along on the project PUT.
         public const string ProjectJudge = "benchmarks/projects/{projectId}/judge";
         public const string ProjectRejudge = "benchmarks/projects/{projectId}/rejudge";
+
+        // Quant fidelity is a display-only axis measured by its own work kind, so it gets its own sub-resources
+        // rather than flags on the run or project routes.
+        // The one part of a FROZEN project's configuration an operator may still change: it decides what gets
+        // measured next, not what the existing runs were measured against. Its own sub-resource for the same reason
+        // the judge has one — it never rides the project PUT, which the freeze refuses.
+        public const string ProjectFidelity = "benchmarks/projects/{projectId}/fidelity";
+
+        public const string ProjectKldEstimate = "benchmarks/projects/{projectId}/fidelity/kld-estimate";
+        public const string ProjectFidelityCache = "benchmarks/projects/{projectId}/fidelity/cache";
+        public const string RunFidelity = "benchmarks/runs/{runId}/fidelity";
+        public const string RunFidelityAttempts = "benchmarks/runs/{runId}/fidelity/attempts";
+        // The verdict matrix and the fit it produced are ONE question: a score shown beside a verdict set that did
+        // not produce it is undetectable from the client, so they are never split across two routes.
+        public const string ProjectComparisons = "benchmarks/projects/{projectId}/comparisons";
+        public const string ProjectPairwiseEstimate = "benchmarks/projects/{projectId}/pairwise-estimate";
         public const string RubricPresets = "benchmarks/rubric-presets";
         public const string EligibleAgents = "benchmarks/eligible-agents";
         public const string EligibleModels = "benchmarks/eligible-models";

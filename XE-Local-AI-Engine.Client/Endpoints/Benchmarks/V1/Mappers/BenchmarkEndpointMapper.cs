@@ -21,7 +21,11 @@ internal static class BenchmarkEndpointMapper
                 : null,
             request.MaxOutputTokens,
             request.InvocationTimeoutSeconds,
-            request.ReasoningBudgetTokens);
+            request.ReasoningBudgetTokens,
+            request.FidelityEnabled,
+            request.FidelityKldEnabled,
+            request.FidelityChunks,
+            request.FidelityKldBaseModelName);
 
     public static BenchmarkProjectSummaryResponse ToSummary(this BenchmarkProjectRecord project, int runCount) =>
         new()
@@ -65,10 +69,23 @@ internal static class BenchmarkEndpointMapper
             IsFrozen = project.IsFrozen,
             Version = project.Version,
             CreatedAtUtc = project.CreatedAtUtc,
-            UpdatedAtUtc = project.UpdatedAtUtc
+            UpdatedAtUtc = project.UpdatedAtUtc,
+            FidelityEnabled = project.FidelityEnabled,
+            FidelityKldEnabled = project.FidelityKldEnabled,
+            FidelityChunks = project.FidelityChunks,
+            FidelityChunksEffective = BenchmarkFidelityPolicy.ClampChunks(project.FidelityChunks),
+            FidelityKldBaseModelName = project.FidelityKldBaseModelName,
+            FidelityKldBaseFingerprint = project.FidelityKldBaseFingerprint,
+            // The ONE digest expression, through the same helper every run's display gate reads — a second copy is
+            // the bug the architecture test exists to catch.
+            FidelityKldExpectedDigest = BenchmarkEndpointSupport.ExpectedKldDigest(project)
         };
 
-    public static BenchmarkRunSummaryResponse ToSummary(this BenchmarkRunRecord run)
+    /// <param name="expectedKldBaseLogitsDigest">
+    ///     The digest the project's CURRENT KL-divergence settings recompute, or null when the project does not
+    ///     measure it. A stored KLD figure is served only while the two match; see <see cref="ToFidelity" />.
+    /// </param>
+    public static BenchmarkRunSummaryResponse ToSummary(this BenchmarkRunRecord run, string? expectedKldBaseLogitsDigest = null)
     {
         var summary = new BenchmarkRunSummaryResponse
         {
@@ -82,6 +99,7 @@ internal static class BenchmarkEndpointMapper
             RequestedContextTokens = run.RequestedContextTokens,
             PrimaryStatus = run.PrimaryStatus,
             Judge = run.ToJudge(),
+            Fidelity = run.ToFidelity(expectedKldBaseLogitsDigest),
             QualityScore = run.QualityScore,
             QualityScoreSource = run.QualityScoreSource ?? BenchmarkQualityScoreSources.None,
             Rank = run.Rank,
@@ -115,8 +133,53 @@ internal static class BenchmarkEndpointMapper
         return summary;
     }
 
+    /// <summary>
+    ///     Projects a run's fidelity numbers, WITHHOLDING the KL-divergence trio unless the digest they were measured
+    ///     under is the one the project's current settings recompute. The gate is the whole cache key rather than the
+    ///     base model's fingerprint: the corpus, the chunk count and the format version all move without the
+    ///     fingerprint moving, and p99 in particular is strongly chunk-count dependent, so a fingerprint-only check
+    ///     would serve a figure measured over 50 chunks beside one measured over 200 as if they compared.
+    /// </summary>
+    public static BenchmarkFidelityResponse? ToFidelity(this BenchmarkRunRecord run, string? expectedKldBaseLogitsDigest)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        if (run.Fidelity is not { } fidelity)
+        {
+            return null;
+        }
+
+        var comparable = BenchmarkKldCacheKey.IsComparable(fidelity.KldBaseLogitsDigest, expectedKldBaseLogitsDigest);
+        string kldState;
+        if (fidelity.KldMean is null)
+        {
+            kldState = BenchmarkFidelityKldStates.None;
+        }
+        else
+        {
+            kldState = comparable ? BenchmarkFidelityKldStates.Ok : BenchmarkFidelityKldStates.Stale;
+        }
+        return new BenchmarkFidelityResponse
+        {
+            Status = fidelity.Status ?? "queued",
+            AttemptId = fidelity.AttemptId,
+            PerplexityMean = fidelity.PerplexityMean,
+            PerplexityStdErr = fidelity.PerplexityStdErr,
+            PerplexityChunks = fidelity.PerplexityChunks,
+            PerplexityContextTokens = fidelity.PerplexityContextTokens,
+            PerplexityCorpusId = fidelity.PerplexityCorpusId,
+            KldState = kldState,
+            KldMean = comparable ? fidelity.KldMean : null,
+            KldP99 = comparable ? fidelity.KldP99 : null,
+            TopTokenAgreement = comparable ? fidelity.TopTokenAgreement : null,
+            KldBaseFingerprint = fidelity.KldBaseFingerprint,
+            ErrorMessage = fidelity.ErrorMessage
+        };
+    }
+
     /// <param name="verdict">The decrypted rubric verdict of the run's current attempt, or null when it has none.</param>
-    public static BenchmarkRunDetailResponse ToDetail(this BenchmarkRunRecord run, BenchmarkJudgeResultV2? verdict = null)
+    public static BenchmarkRunDetailResponse ToDetail(this BenchmarkRunRecord run,
+        BenchmarkJudgeResultV2? verdict = null,
+        string? expectedKldBaseLogitsDigest = null)
     {
         var (reasoningBudgetTokens, reasoningBudgetApplicable) = ReadReasoningBudget(run.RuntimeSnapshotJson);
         var detail = new BenchmarkRunDetailResponse
@@ -131,6 +194,7 @@ internal static class BenchmarkEndpointMapper
             RequestedContextTokens = run.RequestedContextTokens,
             PrimaryStatus = run.PrimaryStatus,
             Judge = run.ToJudge(verdict),
+            Fidelity = run.ToFidelity(expectedKldBaseLogitsDigest),
             QualityScore = run.QualityScore,
             QualityScoreSource = run.QualityScoreSource ?? BenchmarkQualityScoreSources.None,
             Rank = run.Rank,
@@ -237,7 +301,15 @@ internal static class BenchmarkEndpointMapper
                                   Score = criterion.Score,
                                   Rationale = criterion.Rationale
                               })
-                              .ToArray()
+                              .ToArray(),
+            Verifiers = verdict?.Verifiers?.Select(static verifier => new BenchmarkJudgeVerifierResponse
+                               {
+                                   Id = verifier.Id,
+                                   Kind = verifier.Kind,
+                                   Passed = verifier.Passed,
+                                   Detail = verifier.Detail
+                               })
+                               .ToArray()
         };
     }
 
@@ -250,7 +322,9 @@ internal static class BenchmarkEndpointMapper
                                  Id = criterion.Id,
                                  Title = criterion.Title,
                                  Description = criterion.Description,
-                                 Weight = criterion.Weight
+                                 Weight = criterion.Weight,
+                                 Kind = BenchmarkJudgeCriterionKinds.Normalize(criterion.Kind),
+                                 Config = criterion.Config
                              })
                              .ToArray()
         };
@@ -262,7 +336,9 @@ internal static class BenchmarkEndpointMapper
                 dto.Criteria.Select(static criterion => new BenchmarkJudgeRubricCriterionV1(criterion.Id,
                        criterion.Title,
                        criterion.Description,
-                       criterion.Weight))
+                       criterion.Weight,
+                       BenchmarkJudgeCriterionKinds.Normalize(criterion.Kind),
+                       criterion.Config))
                    .ToArray());
 
     /// <summary>
@@ -285,6 +361,7 @@ internal static class BenchmarkEndpointMapper
                 RequestedContextTokens = policy.RequestedContextTokens,
                 Rubric = policy.Rubric.ToDto(),
                 ReferenceAnswer = policy.ReferenceAnswer,
+                Mode = BenchmarkJudgePolicyModes.Normalize(policy.Mode),
                 CohortGeneration = revision.CohortGeneration,
                 ReferenceExecutionKey = revision.ReferenceExecutionKey,
                 PromptVersion = policy.PromptVersion,

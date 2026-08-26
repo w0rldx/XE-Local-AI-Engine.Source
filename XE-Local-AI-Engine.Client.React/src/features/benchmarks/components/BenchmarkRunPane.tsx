@@ -12,7 +12,7 @@ import {
 	BenchmarkStatusBadge,
 	BenchmarkTruncatedBadge,
 } from "@/features/benchmarks/components/BenchmarkStatusBadge";
-import type { BenchmarkOutputPart, BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
+import type { BenchmarkJudgeMode, BenchmarkOutputPart, BenchmarkRunDetail } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	isBenchmarkRunIncomplete,
 	isBenchmarkRunReasoningExhausted,
@@ -26,6 +26,8 @@ import { MessageParts } from "@/features/chat/components/MessageParts";
 
 interface BenchmarkRunPaneProps {
 	run: BenchmarkRunDetail;
+	/** The project's judging mode; the judge panel has a reading only for `pointwise`. */
+	judgeMode?: BenchmarkJudgeMode;
 	parts: BenchmarkOutputPart[];
 	isConnected: boolean;
 	isReconnecting: boolean;
@@ -97,6 +99,7 @@ function formatDuration(durationMs: number | null): string {
 
 export function BenchmarkRunPane({
 	run,
+	judgeMode,
 	parts,
 	isConnected,
 	isReconnecting,
@@ -221,6 +224,7 @@ export function BenchmarkRunPane({
 				/>
 				<BenchmarkJudgePanel
 					judge={run.judge}
+					mode={judgeMode}
 					primaryTruncated={truncated}
 					// The DECODED token count, not run.totalTokens — that one is prompt + output + reasoning, so a long
 					// question would inflate the answer length the judge is counterweighted against. Null on a run whose

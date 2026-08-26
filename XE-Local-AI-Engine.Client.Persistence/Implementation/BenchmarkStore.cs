@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -9,7 +10,19 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IBenchmarkStore
 {
     private const string InterruptedMessage = "Interrupted by application restart.";
+    internal const string FidelityKindPerplexity = "ppl";
+    internal const string FidelityKindKld = "kld";
     private const string UnresolvedJudgeRuntimeMessage = "judge runtime unresolved";
+    private const string VerdictA = "a";
+    private const string VerdictB = "b";
+    private const string VerdictTie = "tie";
+
+    /// <summary>Both presentation orders of every pair, always: the swap is what cancels the judge's position bias.</summary>
+    private static readonly int[] ComparisonOrders = [0, 1];
+
+    /// <summary>Web defaults, matching the canonical writer the fit's scores were serialized with.</summary>
+    private static readonly JsonSerializerOptions PairwiseScoreOptions = new(JsonSerializerDefaults.Web);
+
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -29,6 +42,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             ReasoningBudgetTokens = input.ReasoningBudgetTokens,
             InvocationTimeoutSeconds = input.InvocationTimeoutSeconds,
             AgentDefinitionId = input.AgentDefinitionId,
+            FidelityEnabled = input.FidelityEnabled,
+            FidelityKldEnabled = input.FidelityKldEnabled,
+            FidelityChunks = input.FidelityChunks,
+            FidelityKldBaseModelName = input.FidelityKldBaseModelName,
+            FidelityKldBaseFingerprint = input.FidelityKldBaseFingerprint,
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -94,6 +112,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         project.ReasoningBudgetTokens = input.ReasoningBudgetTokens;
         project.InvocationTimeoutSeconds = input.InvocationTimeoutSeconds;
         project.AgentDefinitionId = input.AgentDefinitionId;
+        project.FidelityEnabled = input.FidelityEnabled;
+        project.FidelityKldEnabled = input.FidelityKldEnabled;
+        project.FidelityChunks = input.FidelityChunks;
+        project.FidelityKldBaseModelName = input.FidelityKldBaseModelName;
+        project.FidelityKldBaseFingerprint = input.FidelityKldBaseFingerprint;
         project.Version++;
         project.UpdatedAtUtc = now;
         if (judgePolicyChange is not null)
@@ -220,6 +243,22 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 Version = 1,
                 EnqueuedAtUtc = now
             });
+
+            // Fidelity is NOT queued here. A measurement enqueued at freeze outlives the run it belongs to: when the
+            // primary then fails or is cancelled, hours of GPU work stay queued against a run that has no answer to
+            // measure. It is seeded on primary SUCCESS instead, exactly where the judge attempt is seeded.
+            //
+            // What freeze does record is the cells that will never be measured. One fidelity item per measured CELL,
+            // not per repeat: perplexity is deterministic given the same weights and the same arguments, so N repeats
+            // of one cell would produce N identical numbers at N times the cost, and a warm-up is never measured at
+            // all — it exists to absorb first-launch costs, not to be compared.
+            if (project.FidelityEnabled && !IsFidelityMeasuredCell(run))
+            {
+                // Recorded rather than left null: "this cell's repeats are covered by repeat 1" and "fidelity was
+                // never asked for" are different facts, and the UI shows a different thing for each.
+                run.FidelityStatus = "skipped";
+            }
+
             runs.Add(run);
         }
 
@@ -449,38 +488,100 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             _dbContext.ChangeTracker.Clear();
             var work = await _dbContext.BenchmarkWorkItems.AsNoTracking().SingleAsync(entity => entity.QueueSequence == candidate.QueueSequence, cancellationToken).ConfigureAwait(false);
             var run = await RequireRunAsync(work.RunId, tracking: true, cancellationToken).ConfigureAwait(false);
-            if (work.Kind == BenchmarkWorkKind.Primary)
+            // One explicit arm per kind. A bare `else` here would send a Fidelity or Comparison item down the judge
+            // path, where it would dereference a null JudgeAttemptId, throw InvalidJudgeTransition and stall the
+            // single-consumer queue behind an item it can never claim.
+            switch (work.Kind)
             {
-                if (run.PrimaryStatus != BenchmarkPrimaryStatus.Queued)
+                case BenchmarkWorkKind.Primary:
+                    if (run.PrimaryStatus != BenchmarkPrimaryStatus.Queued)
+                    {
+                        throw new BenchmarkConflictException("InvalidPrimaryTransition");
+                    }
+
+                    run.PrimaryStatus = BenchmarkPrimaryStatus.Running;
+                    run.StartedAtUtc = now;
+                    break;
+                case BenchmarkWorkKind.Judge:
                 {
-                    throw new BenchmarkConflictException("InvalidPrimaryTransition");
+                    // The judging's whole lifecycle lives on its attempt; the run only bumps its version so a reader
+                    // polling the run still sees that something about it changed.
+                    var attempt = await RequireJudgeAttemptAsync(work.JudgeAttemptId ?? throw new BenchmarkConflictException("InvalidJudgeTransition"),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
+                    {
+                        throw new BenchmarkConflictException("InvalidJudgeTransition");
+                    }
+
+                    attempt.Status = BenchmarkJudgeAttemptStatus.Running;
+                    attempt.StartedAtUtc = now;
+                    attempt.Version++;
+                    break;
                 }
 
-                run.PrimaryStatus = BenchmarkPrimaryStatus.Running;
-                run.StartedAtUtc = now;
-            }
-            else
-            {
-                // The judging's whole lifecycle lives on its attempt; the run only bumps its version so a reader
-                // polling the run still sees that something about it changed.
-                var attempt = await RequireJudgeAttemptAsync(work.JudgeAttemptId ?? throw new BenchmarkConflictException("InvalidJudgeTransition"),
-                        cancellationToken)
-                    .ConfigureAwait(false);
-                if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
+                case BenchmarkWorkKind.Fidelity:
                 {
-                    throw new BenchmarkConflictException("InvalidJudgeTransition");
+                    var attempt = await RequireFidelityAttemptAsync(work.FidelityAttemptId ?? throw new BenchmarkConflictException("InvalidFidelityTransition"),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
+                    {
+                        throw new BenchmarkConflictException("InvalidFidelityTransition");
+                    }
+
+                    attempt.Status = BenchmarkJudgeAttemptStatus.Running;
+                    attempt.StartedAtUtc = now;
+                    attempt.Version++;
+
+                    // The projection follows the attempt through every transition, not only the terminal ones. Left
+                    // reading 'queued' for the hours a measurement actually takes, it says nothing has started.
+                    run.FidelityStatus = ToFidelityStatus(BenchmarkJudgeAttemptStatus.Running);
+                    break;
                 }
 
-                attempt.Status = BenchmarkJudgeAttemptStatus.Running;
-                attempt.StartedAtUtc = now;
-                attempt.Version++;
+                case BenchmarkWorkKind.Comparison:
+                {
+                    var comparison = await RequireComparisonAsync(work.ComparisonId ?? throw new BenchmarkConflictException("InvalidComparisonTransition"),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    if (comparison.Status != BenchmarkJudgeAttemptStatus.Queued)
+                    {
+                        throw new BenchmarkConflictException("InvalidComparisonTransition");
+                    }
+
+                    comparison.Status = BenchmarkJudgeAttemptStatus.Running;
+                    comparison.StartedAtUtc = now;
+                    comparison.Version++;
+                    break;
+                }
+
+                default:
+                    throw new BenchmarkConflictException("UnknownWorkKind");
             }
 
-            run.Version++;
-            run.UpdatedAtUtc = now;
+            // Every per-run kind bumps the run's version, so a reader polling the run sees that something about it
+            // changed. A comparison is NOT an event in a run's life: it names two runs and its work item names only
+            // the canonical first, so bumping that one invalidated its CAS token on every pairwise claim — scoring,
+            // deleting or re-measuring it returned VersionConflict throughout a tournament, and the other run of the
+            // pair never heard about it anyway. The fit's own publication is what refreshes a pairwise reader.
+            if (work.Kind != BenchmarkWorkKind.Comparison)
+            {
+                run.Version++;
+                run.UpdatedAtUtc = now;
+            }
+
             await SaveAsync(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return new BenchmarkClaimedWork(work.QueueSequence, work.RunId, work.Kind, work.Attempt, work.Version, ToRecord(run), work.JudgeAttemptId);
+            return new BenchmarkClaimedWork(work.QueueSequence,
+                work.RunId,
+                work.Kind,
+                work.Attempt,
+                work.Version,
+                ToRecord(run),
+                work.JudgeAttemptId,
+                work.FidelityAttemptId,
+                work.ComparisonId);
         }
     }
 
@@ -539,14 +640,19 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         run.Version++;
         run.UpdatedAtUtc = now;
         TerminalizeWork(work, BenchmarkWorkStatus.Succeeded, errorMessage: null, now);
-        // Only the pointer column: deciding whether to judge must not decrypt the project's core task. No pointer
-        // means nothing to judge under, and the run simply never gets an attempt.
-        var currentRevisionId = await _dbContext.BenchmarkProjects.AsNoTracking()
-                                                .Where(entity => entity.Id == run.ProjectId)
-                                                .Select(entity => entity.CurrentJudgePolicyRevisionId)
-                                                .SingleOrDefaultAsync(cancellationToken)
-                                                .ConfigureAwait(false);
-        if (currentRevisionId is { } revisionId)
+        // Flat columns only: deciding whether to judge or to measure must not decrypt the project's core task. No
+        // revision pointer means nothing to judge under, and the run simply never gets an attempt.
+        var settings = await _dbContext.BenchmarkProjects.AsNoTracking()
+                                       .Where(entity => entity.Id == run.ProjectId)
+                                       .Select(entity => new
+                                       {
+                                           entity.CurrentJudgePolicyRevisionId,
+                                           entity.FidelityEnabled,
+                                           entity.FidelityKldEnabled
+                                       })
+                                       .SingleOrDefaultAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+        if (settings?.CurrentJudgePolicyRevisionId is { } revisionId)
         {
             var seed = command.JudgeAttempt;
 
@@ -568,10 +674,28 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 .ConfigureAwait(false);
         }
 
+        // Seeded here rather than at freeze, for the judge attempt's own reason: a measurement is queued against an
+        // answer, so it must not exist until there IS one. The eligibility rule is the per-cell one shared with the
+        // freeze marker and with EnqueueMissingFidelityAsync — the current project settings decide it, because the
+        // fidelity settings deliberately write through the freeze.
+        if (settings is { FidelityEnabled: true } && IsFidelityMeasuredCell(run))
+        {
+            _ = await AppendFidelityWorkAsync(run, settings.FidelityKldEnabled ? FidelityKindKld : FidelityKindPerplexity, now, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    ///     The measured cell of a repeat group: non-warm-up, first of its group. One rule, three callers — freeze's
+    ///     "skipped" marker, the seed on primary success, and the measure-existing sweep — because a cell measured by
+    ///     one of them and a cell measured by another must mean the same thing. <c>EnqueueMissingFidelityAsync</c>
+    ///     re-expresses this rule as an EF predicate because a method cannot be translated; the two must change together.
+    /// </summary>
+    private static bool IsFidelityMeasuredCell(BenchmarkRun run) => !run.IsWarmup && run.RepeatIndex is null or 1;
 
     public Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId, long expectedRunVersion, string errorMessage, CancellationToken cancellationToken = default) =>
         TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Failed, BenchmarkWorkStatus.Failed, errorMessage,
@@ -615,6 +739,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 {
                     attempt.ResultJson = command.JudgeResultJson.ToArray();
                     attempt.Score = command.Score;
+
+                    // A judging with no spawn never reached MarkJudgeLaunchReadyAsync, so its key is set here. NULL
+                    // stays the only thing this can fill: a measured identity is written once, at launch, and an
+                    // incomplete one must never be repaired into a rankable one afterwards.
+                    attempt.JudgeExecutionKey ??= command.VerifiedExecutionKey;
                     return promote;
                 },
                 cancellationToken)
@@ -706,6 +835,737 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
     }
+
+    public async Task<BenchmarkFidelityAttemptRecord?> GetFidelityAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default)
+    {
+        var attempt = await _dbContext.BenchmarkFidelityAttempts.AsNoTracking()
+                                      .SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken)
+                                      .ConfigureAwait(false);
+        return attempt is null ? null : ToRecord(attempt);
+    }
+
+    public async Task<IReadOnlyList<BenchmarkFidelityAttemptRecord>> ListFidelityAttemptsAsync(Guid runId, CancellationToken cancellationToken = default)
+    {
+        var attempts = await _dbContext.BenchmarkFidelityAttempts.AsNoTracking()
+                                       .Where(entity => entity.RunId == runId)
+                                       .OrderByDescending(entity => entity.Sequence)
+                                       .ToListAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+        return [.. attempts.Select(ToRecord)];
+    }
+
+    public async Task<IReadOnlySet<string>> ListLiveFidelityDigestsAsync(CancellationToken cancellationToken = default)
+    {
+        var digests = await _dbContext.BenchmarkFidelityAttempts.AsNoTracking()
+                                      .Where(entity => (entity.Status == BenchmarkJudgeAttemptStatus.Queued || entity.Status == BenchmarkJudgeAttemptStatus.Running)
+                                                       && entity.BaseLogitsDigest != null)
+                                      .Select(entity => entity.BaseLogitsDigest!)
+                                      .ToListAsync(cancellationToken)
+                                      .ConfigureAwait(false);
+        return digests.ToHashSet(StringComparer.Ordinal);
+    }
+
+    public Task<bool> HasLiveFidelityWorkAsync(CancellationToken cancellationToken = default) =>
+        _dbContext.BenchmarkWorkItems.AsNoTracking()
+                  .AnyAsync(entity => entity.Kind == BenchmarkWorkKind.Fidelity
+                                      && (entity.Status == BenchmarkWorkStatus.Queued || entity.Status == BenchmarkWorkStatus.Running),
+                      cancellationToken);
+
+    public async Task<Guid> EnqueueFidelityAsync(Guid runId, string kind, CancellationToken cancellationToken = default)
+    {
+        if (kind is not (FidelityKindPerplexity or FidelityKindKld))
+        {
+            throw new BenchmarkValidationException("Benchmark fidelity kind must be 'ppl' or 'kld'.");
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        if (await _dbContext.BenchmarkWorkItems.AnyAsync(entity => entity.RunId == runId
+                                                                   && entity.Kind == BenchmarkWorkKind.Fidelity
+                                                                   && (entity.Status == BenchmarkWorkStatus.Queued || entity.Status == BenchmarkWorkStatus.Running),
+                    cancellationToken)
+                .ConfigureAwait(false))
+        {
+            throw new BenchmarkConflictException("FidelityAlreadyQueued");
+        }
+
+        var attempt = await AppendFidelityWorkAsync(run, kind, Now(), cancellationToken).ConfigureAwait(false);
+        run.Version++;
+        run.UpdatedAtUtc = Now();
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return attempt.Id;
+    }
+
+    /// <summary>
+    ///     Inserts the attempt-plus-work-item pair, WITHOUT owning a transaction, so freeze can append it inside the
+    ///     one transaction that already inserts the run and its primary item.
+    /// </summary>
+    private async Task<BenchmarkFidelityAttempt> AppendFidelityWorkAsync(BenchmarkRun run, string kind, long now, CancellationToken cancellationToken)
+    {
+        var lastSequence = await _dbContext.BenchmarkFidelityAttempts
+                                           .Where(entity => entity.RunId == run.Id)
+                                           .MaxAsync(entity => (int?)entity.Sequence, cancellationToken)
+                                           .ConfigureAwait(false)
+                           ?? 0;
+        var attempt = new BenchmarkFidelityAttempt
+        {
+            Id = Guid.NewGuid(),
+            RunId = run.Id,
+            Sequence = lastSequence + 1,
+            Kind = kind,
+            Status = BenchmarkJudgeAttemptStatus.Queued,
+            EnqueuedAtUtc = now,
+            Version = 1
+        };
+        _dbContext.BenchmarkFidelityAttempts.Add(attempt);
+        _dbContext.BenchmarkWorkItems.Add(new BenchmarkWorkItem
+        {
+            RunId = run.Id,
+            Kind = BenchmarkWorkKind.Fidelity,
+            FidelityAttemptId = attempt.Id,
+            Status = BenchmarkWorkStatus.Queued,
+            Attempt = 1,
+            Version = 1,
+            EnqueuedAtUtc = now
+        });
+        run.FidelityStatus = "queued";
+        run.FidelityErrorMessage = null;
+        return attempt;
+    }
+
+    public Task<BenchmarkRunRecord> MarkFidelitySucceededAsync(BenchmarkFidelitySuccessCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        return TerminalizeFidelityAsync(command.RunId,
+            command.ExpectedWorkVersion,
+            BenchmarkJudgeAttemptStatus.Succeeded,
+            BenchmarkWorkStatus.Succeeded,
+            errorMessage: null,
+            command,
+            cancellationToken);
+    }
+
+    public Task<BenchmarkRunRecord> MarkFidelityFailedAsync(Guid runId, long expectedWorkVersion, string errorMessage, CancellationToken cancellationToken = default) =>
+        TerminalizeFidelityAsync(runId, expectedWorkVersion, BenchmarkJudgeAttemptStatus.Failed, BenchmarkWorkStatus.Failed, Sanitize(errorMessage),
+            success: null, cancellationToken);
+
+    public Task<BenchmarkRunRecord> MarkFidelityCancelledAsync(Guid runId, long expectedWorkVersion, CancellationToken cancellationToken = default) =>
+        TerminalizeFidelityAsync(runId, expectedWorkVersion, BenchmarkJudgeAttemptStatus.Cancelled, BenchmarkWorkStatus.Cancelled, errorMessage: null,
+            success: null, cancellationToken);
+
+    public async Task<BenchmarkRunRecord> RequeueFidelityAsync(Guid runId,
+        long expectedWorkVersion,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Fidelity, expectedWorkVersion, cancellationToken).ConfigureAwait(false);
+        _dbContext.ChangeTracker.Clear();
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Fidelity, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(work.Version, expectedWorkVersion);
+        var attempt = work.FidelityAttemptId is { } attemptId
+            ? await _dbContext.BenchmarkFidelityAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken).ConfigureAwait(false)
+            : null;
+        if (attempt is null || IsAttemptTerminal(attempt.Status))
+        {
+            // Something already finished this measurement. Re-queueing it would run a second one nobody asked for.
+            return ToRecord(run);
+        }
+
+        // The CHECK pins attempt = 1, so a requeue is a status reset and not a retry counter: the work item goes back
+        // to the head of its own queue slot and the consumer picks it up again on the next claim.
+        var now = Now();
+        var sanitized = Sanitize(reason);
+        work.Status = BenchmarkWorkStatus.Queued;
+        work.StartedAtUtc = null;
+        work.ErrorMessage = sanitized;
+        work.Version++;
+        attempt.Status = BenchmarkJudgeAttemptStatus.Queued;
+        attempt.StartedAtUtc = null;
+        attempt.ErrorMessage = sanitized;
+        attempt.Version++;
+
+        // Still 'queued' rather than 'failed', with the reason beside it: the difference is exactly what a reader
+        // needs to tell "this measurement is waiting on another process" from "this measurement will not happen".
+        run.FidelityStatus = "queued";
+        run.FidelityErrorMessage = sanitized;
+        run.Version++;
+        run.LastStreamSequence = checked(run.LastStreamSequence + 1);
+        run.UpdatedAtUtc = now;
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return ToRecord(run);
+    }
+
+    public Task MarkComparisonFailedAsync(long queueSequence, long expectedWorkVersion, string errorMessage, CancellationToken cancellationToken = default) =>
+        TerminalizeComparisonWorkAsync(queueSequence, expectedWorkVersion, BenchmarkJudgeAttemptStatus.Failed, BenchmarkWorkStatus.Failed,
+            Sanitize(errorMessage), success: null, cancellationToken);
+
+    public Task MarkComparisonCancelledAsync(long queueSequence, long expectedWorkVersion, CancellationToken cancellationToken = default) =>
+        TerminalizeComparisonWorkAsync(queueSequence, expectedWorkVersion, BenchmarkJudgeAttemptStatus.Cancelled, BenchmarkWorkStatus.Cancelled,
+            errorMessage: null, success: null, cancellationToken);
+
+    public Task MarkComparisonSucceededAsync(BenchmarkComparisonSuccessCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (command.Verdict is not (VerdictA or VerdictB or VerdictTie))
+        {
+            throw new BenchmarkValidationException("A pairwise verdict must be 'a', 'b' or 'tie'.");
+        }
+
+        return TerminalizeComparisonWorkAsync(command.QueueSequence, command.ExpectedWorkVersion, BenchmarkJudgeAttemptStatus.Succeeded,
+            BenchmarkWorkStatus.Succeeded, errorMessage: null, command, cancellationToken);
+    }
+
+    private async Task TerminalizeComparisonWorkAsync(long queueSequence,
+        long expectedWorkVersion,
+        BenchmarkJudgeAttemptStatus comparisonStatus,
+        BenchmarkWorkStatus workStatus,
+        string? errorMessage,
+        BenchmarkComparisonSuccessCommand? success,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var work = await _dbContext.BenchmarkWorkItems.SingleOrDefaultAsync(entity => entity.QueueSequence == queueSequence, cancellationToken).ConfigureAwait(false)
+                   ?? throw new BenchmarkNotFoundException("Benchmark work item was not found.");
+        if (work.Kind != BenchmarkWorkKind.Comparison)
+        {
+            throw new BenchmarkConflictException("InvalidComparisonTransition");
+        }
+
+        EnsureVersion(work.Version, expectedWorkVersion);
+        var now = Now();
+        TerminalizeWork(work, workStatus, errorMessage, now);
+        var comparison = await TerminalizeComparisonAsync(work.ComparisonId, comparisonStatus, errorMessage, now, cancellationToken).ConfigureAwait(false);
+        if (comparison is not null && success is not null)
+        {
+            comparison.Verdict = success.Verdict;
+            comparison.ResultJson = success.ResultJson is { IsEmpty: false } result ? result.ToArray() : null;
+            comparison.AnswerATruncated = success.AnswerATruncated;
+            comparison.AnswerBTruncated = success.AnswerBTruncated;
+
+            // The cohort is claimed by the first SUCCESS of the live generation, exactly as a pointwise attempt claims
+            // it — and it MUST be claimed here, because a pairwise cohort has no judge attempts to claim it instead:
+            // an unclaimed reference key refuses every fit over the cohort as execution-identity-incomplete.
+            if (comparison.JudgeExecutionKey is { Length: > 0 } executionKey)
+            {
+                _ = await TryPromoteReferenceExecutionKeyAsync(comparison.PolicyRevisionId, comparison.CohortGeneration, executionKey, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+        }
+
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<BenchmarkPairwiseCohortState> GetPairwiseCohortAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        var project = await _dbContext.BenchmarkProjects.AsNoTracking()
+                                      .Select(entity => new
+                                      {
+                                          entity.Id,
+                                          entity.Version,
+                                          entity.CurrentJudgePolicyRevisionId
+                                      })
+                                      .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
+                                      .ConfigureAwait(false)
+                      ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
+        if (project.CurrentJudgePolicyRevisionId is not { } revisionId)
+        {
+            return new BenchmarkPairwiseCohortState(null, 0, 0, null, project.Version, [], []);
+        }
+
+        var revision = await _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking()
+                                       .Select(entity => new
+                                       {
+                                           entity.Id,
+                                           entity.CohortGeneration,
+                                           entity.ComparisonSetVersion,
+                                           entity.ReferenceExecutionKey
+                                       })
+                                       .SingleAsync(entity => entity.Id == revisionId, cancellationToken)
+                                       .ConfigureAwait(false);
+
+        // Flat columns only: eligibility is decided from the stop reason through the SHARED predicates, which are C#
+        // and are therefore applied after the read rather than translated into a second, drifting copy of the rule.
+        var runs = await _dbContext.BenchmarkRuns.AsNoTracking()
+                                   .Where(entity => entity.ProjectId == projectId
+                                                    && entity.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
+                                                    && !entity.IsWarmup
+                                                    && entity.OutputPartsJson != null)
+                                   .OrderBy(entity => entity.CreatedAtUtc)
+                                   .ThenBy(entity => entity.Id)
+                                   .Select(entity => new
+                                   {
+                                       entity.Id,
+                                       entity.PrimaryStopReason
+                                   })
+                                   .ToArrayAsync(cancellationToken)
+                                   .ConfigureAwait(false);
+        var candidates = runs.Where(static run => !BenchmarkPrimaryStopReasons.IsTruncated(run.PrimaryStopReason)
+                                                  && !BenchmarkPrimaryStopReasons.IsIncomplete(run.PrimaryStopReason))
+                             .Select(static run => new BenchmarkPairwiseCandidate(run.Id, TaskCaseId: null, TaskInputHash: string.Empty))
+                             .ToArray();
+        var comparisons = await ProjectComparisons(_dbContext.BenchmarkComparisons.AsNoTracking()
+                                                             .Where(entity => entity.PolicyRevisionId == revisionId
+                                                                              && entity.CohortGeneration == revision.CohortGeneration)
+                                                             .OrderBy(entity => entity.Sequence))
+                                .ToArrayAsync(cancellationToken)
+                                .ConfigureAwait(false);
+        return new BenchmarkPairwiseCohortState(revision.Id,
+            revision.CohortGeneration,
+            revision.ComparisonSetVersion,
+            revision.ReferenceExecutionKey,
+            project.Version,
+            candidates,
+            comparisons);
+    }
+
+    public async Task<int> EnsureComparisonsAsync(Guid projectId,
+        IReadOnlyList<BenchmarkPairwiseSlot> slots,
+        ReadOnlyMemory<byte>? judgeRuntimeJson,
+        BenchmarkRunLaunchIntent? launchIntent,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(slots);
+        if (slots.Count == 0)
+        {
+            return 0;
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        if (project.CurrentJudgePolicyRevisionId is not { } revisionId)
+        {
+            return 0;
+        }
+
+        var revision = await RequireJudgePolicyRevisionAsync(revisionId, cancellationToken).ConfigureAwait(false);
+        var existing = await _dbContext.BenchmarkComparisons.AsNoTracking()
+                                       .Where(entity => entity.PolicyRevisionId == revisionId && entity.CohortGeneration == revision.CohortGeneration)
+                                       .Select(entity => new
+                                       {
+                                           entity.RunAId,
+                                           entity.RunBId,
+                                           entity.Order,
+                                           entity.Status,
+                                           entity.Sequence,
+                                           entity.AttemptSequence
+                                       })
+                                       .ToArrayAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+
+        // A slot is taken while it holds a live-or-succeeded comparison. A terminal FAILED one leaves it free, which
+        // is the whole reason the live-slot uniqueness index is filtered on status: a cancelled comparison must be
+        // re-enqueueable at the next attempt sequence, or its cohort never completes and never publishes a score.
+        var taken = existing.Where(static entry => entry.Status is BenchmarkJudgeAttemptStatus.Queued
+                                        or BenchmarkJudgeAttemptStatus.Running
+                                        or BenchmarkJudgeAttemptStatus.Succeeded)
+                            .Select(static entry => (entry.RunAId, entry.RunBId, entry.Order))
+                            .ToHashSet();
+        var sequence = existing.Length == 0 ? 0 : existing.Max(static entry => entry.Sequence);
+        var now = Now();
+        var created = 0;
+        foreach (var slot in slots)
+        {
+            foreach (var order in ComparisonOrders)
+            {
+                if (taken.Contains((slot.RunAId, slot.RunBId, order)))
+                {
+                    continue;
+                }
+
+                var attemptSequence = existing.Where(entry => entry.RunAId == slot.RunAId && entry.RunBId == slot.RunBId && entry.Order == order)
+                                              .Select(static entry => entry.AttemptSequence)
+                                              .DefaultIfEmpty(0)
+                                              .Max()
+                                      + 1;
+                var comparison = new BenchmarkJudgeComparison
+                {
+                    Id = Guid.NewGuid(),
+                    ProjectId = projectId,
+                    PolicyRevisionId = revisionId,
+                    CohortGeneration = revision.CohortGeneration,
+                    TaskCaseId = slot.TaskCaseId,
+                    TaskInputHash = slot.TaskInputHash,
+                    RunAId = slot.RunAId,
+                    RunBId = slot.RunBId,
+                    Order = order,
+                    AttemptSequence = attemptSequence,
+                    Sequence = ++sequence,
+                    JudgeRuntimeJson = judgeRuntimeJson?.ToArray(),
+                    Status = BenchmarkJudgeAttemptStatus.Queued,
+                    Variant = launchIntent?.Variant,
+                    KvCacheType = launchIntent?.KvCacheType,
+                    KvCacheTypeSource = launchIntent?.KvCacheTypeSource,
+                    KvAutoReason = launchIntent?.KvAutoReason,
+                    FlashAttentionMode = launchIntent?.FlashAttentionMode,
+                    IntendedLaunchIdentity = launchIntent?.IntendedLaunchIdentity,
+                    IntendedExecutableSha256 = launchIntent?.IntendedExecutableSha256,
+                    EnqueuedAtUtc = now,
+                    Version = 1
+                };
+                _dbContext.BenchmarkComparisons.Add(comparison);
+
+                // A comparison names two runs, so its work item names the canonical first one and every comparison
+                // lifecycle call is keyed by queue sequence instead — "the run's comparison item" is not well formed.
+                _dbContext.BenchmarkWorkItems.Add(new BenchmarkWorkItem
+                {
+                    RunId = slot.RunAId,
+                    Kind = BenchmarkWorkKind.Comparison,
+                    ComparisonId = comparison.Id,
+                    Status = BenchmarkWorkStatus.Queued,
+                    Attempt = 1,
+                    Version = 1,
+                    EnqueuedAtUtc = now
+                });
+                created++;
+            }
+        }
+
+        if (created == 0)
+        {
+            return 0;
+        }
+
+        revision.ComparisonSetVersion = checked(revision.ComparisonSetVersion + 1);
+        try
+        {
+            await SaveAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (BenchmarkConflictException conflict) when (string.Equals(conflict.Code, "DuplicateWork", StringComparison.Ordinal))
+        {
+            // A concurrent caller created the same slots. The transaction is abandoned and the cohort is whatever that
+            // caller committed — re-reading is the caller's next step, and the whole pass is idempotent by design.
+            _dbContext.ChangeTracker.Clear();
+            return 0;
+        }
+
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return created;
+    }
+
+    public async Task<BenchmarkComparisonRecord?> GetComparisonAsync(Guid comparisonId, CancellationToken cancellationToken = default)
+    {
+        var comparison = await _dbContext.BenchmarkComparisons.AsNoTracking()
+                                         .SingleOrDefaultAsync(entity => entity.Id == comparisonId, cancellationToken)
+                                         .ConfigureAwait(false);
+        return comparison is null ? null : ToRecord(comparison, CopyOptional(comparison.JudgeRuntimeJson));
+    }
+
+    public async Task<bool> MarkComparisonLaunchReadyAsync(Guid comparisonId,
+        long workItemId,
+        long claimedWorkVersion,
+        BenchmarkLaunchReceiptCommand command,
+        string? judgeExecutionKey,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var work = await _dbContext.BenchmarkWorkItems.AsNoTracking()
+                                   .SingleOrDefaultAsync(entity => entity.QueueSequence == workItemId, cancellationToken)
+                                   .ConfigureAwait(false);
+        if (work is null
+            || work.Kind != BenchmarkWorkKind.Comparison
+            || work.ComparisonId != comparisonId
+            || !((work.Status == BenchmarkWorkStatus.Running && work.Version == claimedWorkVersion)
+                 || (work.Status == BenchmarkWorkStatus.Cancelled && work.Version == claimedWorkVersion + 1)))
+        {
+            return false;
+        }
+
+        var comparison = await RequireComparisonAsync(comparisonId, cancellationToken).ConfigureAwait(false);
+        if (comparison.LaunchReceiptJson is not null || comparison.EnvironmentFactsJson is not null)
+        {
+            return false;
+        }
+
+        comparison.LaunchReceiptJson = command.ReceiptJson is null ? null : Encoding.UTF8.GetBytes(command.ReceiptJson);
+        comparison.EnvironmentFactsJson = Encoding.UTF8.GetBytes(command.EnvironmentFactsJson);
+        comparison.ReceiptHash = command.ReceiptHash;
+        comparison.EnvironmentFactsHash = command.EnvironmentFactsHash;
+        comparison.EffectiveLaunchIdentity = command.EffectiveLaunchIdentity;
+        comparison.EffectiveBackend = command.EffectiveBackend;
+        comparison.PlacementOffloaded = command.PlacementOffloaded;
+        comparison.PlacementTotal = command.PlacementTotal;
+        comparison.LaunchExecutableSha256 = command.ExecutableSha256;
+        comparison.LaunchHasAuxAssets = command.HasAuxAssets;
+        comparison.LaunchKvCacheTypeSource = command.KvCacheTypeSource;
+
+        // Same posture as the judge attempt: NULL stays NULL. An execution this node cannot fully describe never
+        // joins a cohort, and a fit over one mismatched comparison is refused whole rather than quietly trimmed.
+        comparison.JudgeExecutionKey = judgeExecutionKey;
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    public async Task<bool> PublishPairwiseFitAsync(BenchmarkPairwiseFitCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var scope = await _dbContext.BenchmarkPairwiseFits
+                                    .Where(entity => entity.PolicyRevisionId == command.PolicyRevisionId
+                                                     && entity.CohortGeneration == command.CohortGeneration
+                                                     && entity.IsActive)
+                                    .ToListAsync(cancellationToken)
+                                    .ConfigureAwait(false);
+        foreach (var previous in scope.Where(entity => entity.TaskCaseId == command.TaskCaseId))
+        {
+            previous.IsActive = false;
+            previous.Version++;
+        }
+
+        _dbContext.BenchmarkPairwiseFits.Add(new BenchmarkPairwiseFit
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = command.ProjectId,
+            PolicyRevisionId = command.PolicyRevisionId,
+            CohortGeneration = command.CohortGeneration,
+            TaskCaseId = command.TaskCaseId,
+            FitKey = command.FitKey,
+            JudgeExecutionKey = command.JudgeExecutionKey,
+            ComparisonSetVersion = command.ComparisonSetVersion,
+            FittedSetJson = command.FittedSetJson,
+            ScoresJson = command.ScoresJson,
+            Iterations = command.Iterations,
+            BootstrapReplicates = command.BootstrapReplicates,
+            IsActive = true,
+            CreatedAtUtc = Now(),
+            Version = 1
+        });
+        try
+        {
+            await SaveAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (BenchmarkConflictException conflict) when (string.Equals(conflict.Code, "DuplicateWork", StringComparison.Ordinal))
+        {
+            // Another terminalization computed the same fit key from the same inputs and published first: same set,
+            // same numbers. The whole transaction is abandoned and the standing row is left exactly as it is.
+            _dbContext.ChangeTracker.Clear();
+            return false;
+        }
+
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    public async Task<BenchmarkPairwiseFitRecord?> GetActivePairwiseFitAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        var revisionId = await _dbContext.BenchmarkProjects.AsNoTracking()
+                                         .Where(entity => entity.Id == projectId)
+                                         .Select(entity => entity.CurrentJudgePolicyRevisionId)
+                                         .SingleOrDefaultAsync(cancellationToken)
+                                         .ConfigureAwait(false);
+        if (revisionId is not { } currentRevisionId)
+        {
+            return null;
+        }
+
+        var generation = await _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking()
+                                         .Where(entity => entity.Id == currentRevisionId)
+                                         .Select(entity => entity.CohortGeneration)
+                                         .SingleAsync(cancellationToken)
+                                         .ConfigureAwait(false);
+        return await ActiveFitAsync(currentRevisionId, generation, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The scope's active fit: one indexed read narrowed to the case in memory. At most one row per case survives
+    ///     the filtered unique index, so this is a handful of rows and never a scan of the comparisons behind them.
+    /// </summary>
+    private async Task<BenchmarkPairwiseFitRecord?> ActiveFitAsync(Guid revisionId, int generation, CancellationToken cancellationToken)
+    {
+        var fits = await _dbContext.BenchmarkPairwiseFits.AsNoTracking()
+                                   .Where(entity => entity.PolicyRevisionId == revisionId && entity.CohortGeneration == generation && entity.IsActive)
+                                   .ToArrayAsync(cancellationToken)
+                                   .ConfigureAwait(false);
+        var fit = Array.Find(fits, static entity => entity.TaskCaseId is null);
+        return fit is null
+            ? null
+            : new BenchmarkPairwiseFitRecord(fit.Id,
+                fit.ProjectId,
+                fit.PolicyRevisionId,
+                fit.CohortGeneration,
+                fit.TaskCaseId,
+                fit.FitKey,
+                fit.JudgeExecutionKey,
+                fit.ComparisonSetVersion,
+                fit.FittedSetJson,
+                fit.ScoresJson,
+                fit.Iterations,
+                fit.BootstrapReplicates,
+                fit.CreatedAtUtc);
+    }
+
+    public async Task<double?> GetMedianJudgeDurationSecondsAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        var durations = await (from attempt in _dbContext.BenchmarkJudgeAttempts.AsNoTracking()
+                join run in _dbContext.BenchmarkRuns.AsNoTracking() on attempt.RunId equals run.Id
+                where run.ProjectId == projectId
+                      && attempt.Status == BenchmarkJudgeAttemptStatus.Succeeded
+                      && attempt.StartedAtUtc != null
+                      && attempt.CompletedAtUtc != null
+                select attempt.CompletedAtUtc!.Value - attempt.StartedAtUtc!.Value).ToArrayAsync(cancellationToken)
+            .ConfigureAwait(false);
+        if (durations.Length == 0)
+        {
+            return null;
+        }
+
+        Array.Sort(durations);
+        var middle = durations.Length / 2;
+        var milliseconds = durations.Length % 2 == 1 ? durations[middle] : (durations[middle - 1] + durations[middle]) / 2.0;
+        return milliseconds / 1000.0;
+    }
+
+    public async Task<IReadOnlyList<Guid>> ListJudgedProjectIdsAsync(CancellationToken cancellationToken = default) =>
+        await _dbContext.BenchmarkProjects.AsNoTracking()
+                        .Where(entity => entity.CurrentJudgePolicyRevisionId != null)
+                        .Select(entity => entity.Id)
+                        .ToArrayAsync(cancellationToken)
+                        .ConfigureAwait(false);
+
+    /// <summary>
+    ///     Comparison rows WITHOUT the encrypted judge runtime: a verdict matrix must not decrypt one payload per row.
+    ///     The single-comparison read adds it back for the executor.
+    /// </summary>
+    private static IQueryable<BenchmarkComparisonRecord> ProjectComparisons(IQueryable<BenchmarkJudgeComparison> query) =>
+        query.Select(entity => new BenchmarkComparisonRecord(entity.Id,
+            entity.ProjectId,
+            entity.PolicyRevisionId,
+            entity.CohortGeneration,
+            entity.TaskCaseId,
+            entity.TaskInputHash,
+            entity.RunAId,
+            entity.RunBId,
+            entity.Order,
+            entity.AttemptSequence,
+            entity.Sequence,
+            entity.Status,
+            entity.Verdict,
+            entity.AnswerATruncated,
+            entity.AnswerBTruncated,
+            entity.JudgeExecutionKey,
+            entity.ErrorMessage,
+            null,
+            entity.EnqueuedAtUtc,
+            entity.StartedAtUtc,
+            entity.CompletedAtUtc,
+            entity.Version));
+
+    private static BenchmarkComparisonRecord ToRecord(BenchmarkJudgeComparison entity, ReadOnlyMemory<byte>? judgeRuntimeJson) =>
+        new(entity.Id,
+            entity.ProjectId,
+            entity.PolicyRevisionId,
+            entity.CohortGeneration,
+            entity.TaskCaseId,
+            entity.TaskInputHash,
+            entity.RunAId,
+            entity.RunBId,
+            entity.Order,
+            entity.AttemptSequence,
+            entity.Sequence,
+            entity.Status,
+            entity.Verdict,
+            entity.AnswerATruncated,
+            entity.AnswerBTruncated,
+            entity.JudgeExecutionKey,
+            entity.ErrorMessage,
+            judgeRuntimeJson,
+            entity.EnqueuedAtUtc,
+            entity.StartedAtUtc,
+            entity.CompletedAtUtc,
+            entity.Version);
+
+    private async Task<BenchmarkRunRecord> TerminalizeFidelityAsync(Guid runId,
+        long expectedWorkVersion,
+        BenchmarkJudgeAttemptStatus attemptStatus,
+        BenchmarkWorkStatus workStatus,
+        string? errorMessage,
+        BenchmarkFidelitySuccessCommand? success,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Fidelity, expectedWorkVersion, cancellationToken).ConfigureAwait(false);
+        _dbContext.ChangeTracker.Clear();
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Fidelity, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(work.Version, expectedWorkVersion);
+        var now = Now();
+        TerminalizeWork(work, workStatus, errorMessage, now);
+        var attempt = await TerminalizeFidelityAttemptAsync(work.FidelityAttemptId, attemptStatus, errorMessage, now, cancellationToken).ConfigureAwait(false);
+        if (attempt is null)
+        {
+            // Already terminal: repeating a terminalization must not write a second measurement.
+            return ToRecord(run);
+        }
+
+        if (success is not null)
+        {
+            attempt.PerplexityMean = success.PerplexityMean;
+            attempt.PerplexityStdErr = success.PerplexityStdErr;
+            attempt.PerplexityChunks = success.PerplexityChunks;
+            attempt.PerplexityContextTokens = success.PerplexityContextTokens;
+            attempt.CorpusId = success.CorpusId;
+            attempt.KldMean = success.KldMean;
+            attempt.KldP99 = success.KldP99;
+            attempt.TopTokenAgreement = success.TopTokenAgreement;
+            attempt.BaseModelName = success.BaseModelName;
+            attempt.BaseModelContentFingerprint = success.BaseModelContentFingerprint;
+            attempt.BaseLogitsDigest = success.BaseLogitsDigest;
+            attempt.ReceiptJson = success.ReceiptJson.IsEmpty ? null : success.ReceiptJson.ToArray();
+        }
+
+        run.FidelityStatus = ToFidelityStatus(attemptStatus);
+        run.FidelityErrorMessage = errorMessage;
+        if (attemptStatus == BenchmarkJudgeAttemptStatus.Succeeded && await IsLatestSucceededFidelityAsync(attempt, cancellationToken).ConfigureAwait(false))
+        {
+            // The projection is a copy of the LATEST succeeded attempt. Guarding on the sequence rather than on
+            // arrival order is what makes a re-measurement that lands out of order harmless instead of last-writer-wins.
+            run.FidelityAttemptId = attempt.Id;
+            run.PerplexityMean = attempt.PerplexityMean;
+            run.PerplexityStdErr = attempt.PerplexityStdErr;
+            run.PerplexityChunks = attempt.PerplexityChunks;
+            run.PerplexityContextTokens = attempt.PerplexityContextTokens;
+            run.PerplexityCorpusId = attempt.CorpusId;
+            run.KldMean = attempt.KldMean;
+            run.KldP99 = attempt.KldP99;
+            run.TopTokenAgreement = attempt.TopTokenAgreement;
+            run.KldBaseFingerprint = attempt.BaseModelContentFingerprint;
+            run.KldBaseLogitsDigest = attempt.BaseLogitsDigest;
+        }
+
+        run.Version++;
+        run.LastStreamSequence = checked(run.LastStreamSequence + 1);
+        run.UpdatedAtUtc = now;
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return ToRecord(run);
+    }
+
+    private async Task<bool> IsLatestSucceededFidelityAsync(BenchmarkFidelityAttempt attempt, CancellationToken cancellationToken)
+    {
+        var highest = await _dbContext.BenchmarkFidelityAttempts
+                                      .Where(entity => entity.RunId == attempt.RunId
+                                                       && entity.Status == BenchmarkJudgeAttemptStatus.Succeeded
+                                                       && entity.Id != attempt.Id)
+                                      .MaxAsync(entity => (int?)entity.Sequence, cancellationToken)
+                                      .ConfigureAwait(false);
+        return highest is null || attempt.Sequence > highest;
+    }
+
+    private static string ToFidelityStatus(BenchmarkJudgeAttemptStatus status) =>
+        status switch
+        {
+            BenchmarkJudgeAttemptStatus.Succeeded => "succeeded",
+            BenchmarkJudgeAttemptStatus.Failed => "failed",
+            BenchmarkJudgeAttemptStatus.Cancelled => "cancelled",
+            BenchmarkJudgeAttemptStatus.Running => "running",
+            _ => "queued"
+        };
 
     public async Task<bool> MarkPrimaryLaunchReadyAsync(Guid runId,
         long workItemId,
@@ -907,6 +1767,45 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             attempt.Version++;
         }
 
+        // Two sibling sweeps, for the same reason: a fidelity attempt or a comparison left Running by a killed
+        // process whose work item a previous partial recovery already terminalized would otherwise stay Running
+        // forever, with nothing left to reach it.
+        var interruptedFidelity = await _dbContext.BenchmarkFidelityAttempts
+                                                  .Where(entity => entity.Status == BenchmarkJudgeAttemptStatus.Running)
+                                                  .ToListAsync(cancellationToken)
+                                                  .ConfigureAwait(false);
+        foreach (var attempt in interruptedFidelity)
+        {
+            attempt.Status = BenchmarkJudgeAttemptStatus.Failed;
+            attempt.ErrorMessage = InterruptedMessage;
+            attempt.CompletedAtUtc = now;
+            attempt.Version++;
+
+            // The run's fidelity NUMBERS are deliberately untouched — the last attempt that actually succeeded still
+            // stands. Its STATUS is not: left reading 'queued'/'running' with no attempt and no work item behind it,
+            // every API reports an active measurement forever, the poller never stops and the UI keeps re-measure
+            // disabled on a run nothing is measuring.
+            var owner = await _dbContext.BenchmarkRuns.SingleAsync(entity => entity.Id == attempt.RunId, cancellationToken).ConfigureAwait(false);
+            owner.FidelityStatus = ToFidelityStatus(BenchmarkJudgeAttemptStatus.Failed);
+            owner.FidelityErrorMessage = InterruptedMessage;
+            owner.Version++;
+            owner.LastStreamSequence = checked(owner.LastStreamSequence + 1);
+            owner.UpdatedAtUtc = now;
+            _ = recoveredRunIds.Add(owner.Id);
+        }
+
+        var interruptedComparisons = await _dbContext.BenchmarkComparisons
+                                                     .Where(entity => entity.Status == BenchmarkJudgeAttemptStatus.Running)
+                                                     .ToListAsync(cancellationToken)
+                                                     .ConfigureAwait(false);
+        foreach (var comparison in interruptedComparisons)
+        {
+            comparison.Status = BenchmarkJudgeAttemptStatus.Failed;
+            comparison.ErrorMessage = InterruptedMessage;
+            comparison.CompletedAtUtc = now;
+            comparison.Version++;
+        }
+
         foreach (var work in activeWork)
         {
             var run = await _dbContext.BenchmarkRuns.SingleAsync(entity => entity.Id == work.RunId, cancellationToken).ConfigureAwait(false);
@@ -916,15 +1815,26 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             work.ErrorMessage = cancelledPrimary ? null : InterruptedMessage;
             work.FinishedAtUtc = now;
             work.Version++;
-            if (work.Kind == BenchmarkWorkKind.Primary)
+            switch (work.Kind)
             {
-                run.PrimaryStatus = cancelledPrimary ? BenchmarkPrimaryStatus.Cancelled : BenchmarkPrimaryStatus.Failed;
-                run.PrimaryErrorMessage = cancelledPrimary ? null : InterruptedMessage;
-                run.PrimaryCompletedAtUtc = now;
-            }
-            else
-            {
-                _ = await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken).ConfigureAwait(false);
+                case BenchmarkWorkKind.Primary:
+                    run.PrimaryStatus = cancelledPrimary ? BenchmarkPrimaryStatus.Cancelled : BenchmarkPrimaryStatus.Failed;
+                    run.PrimaryErrorMessage = cancelledPrimary ? null : InterruptedMessage;
+                    run.PrimaryCompletedAtUtc = now;
+                    break;
+                case BenchmarkWorkKind.Judge:
+                    _ = await TerminalizeJudgeAttemptAsync(work, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken).ConfigureAwait(false);
+                    break;
+                case BenchmarkWorkKind.Fidelity:
+                    _ = await TerminalizeFidelityAttemptAsync(work.FidelityAttemptId, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken)
+                        .ConfigureAwait(false);
+                    break;
+                case BenchmarkWorkKind.Comparison:
+                    _ = await TerminalizeComparisonAsync(work.ComparisonId, BenchmarkJudgeAttemptStatus.Failed, InterruptedMessage, now, cancellationToken)
+                        .ConfigureAwait(false);
+                    break;
+                default:
+                    throw new BenchmarkConflictException("UnknownWorkKind");
             }
 
             run.Version++;
@@ -962,18 +1872,29 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             || await _dbContext.BenchmarkJudgeAttempts.AnyAsync(entity => entity.RunId == runId
                                                                           && (entity.Status == BenchmarkJudgeAttemptStatus.Queued
                                                                               || entity.Status == BenchmarkJudgeAttemptStatus.Running), cancellationToken)
+                               .ConfigureAwait(false)
+
+            // A comparison names TWO runs and its work item names only the canonical first, so the work-item guard
+            // above sees a live comparison when this run is the A side and is blind to it when the run is the B side.
+            // Asking the comparison rows themselves is the only guard that covers both.
+            || await _dbContext.BenchmarkComparisons.AnyAsync(entity => (entity.RunAId == runId || entity.RunBId == runId)
+                                                                        && (entity.Status == BenchmarkJudgeAttemptStatus.Queued
+                                                                            || entity.Status == BenchmarkJudgeAttemptStatus.Running), cancellationToken)
                                .ConfigureAwait(false))
         {
             throw new BenchmarkConflictException("ActiveRun");
         }
 
         // Foreign keys are not enforced on this database, so the order below IS the referential integrity: the run
-        // stops pointing at its attempt, then work items, then attempts, then the run itself.
+        // stops pointing at its attempt, then comparisons, work items, judge and fidelity attempts, then the run
+        // itself. Anything left out of that list does not error — it simply outlives its run for good.
         var projectId = run.ProjectId;
         run.CurrentJudgeAttemptId = null;
         await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await DeleteComparisonsOfAsync(runId, projectId, cancellationToken).ConfigureAwait(false);
         await _dbContext.BenchmarkWorkItems.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await _dbContext.BenchmarkJudgeAttempts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await _dbContext.BenchmarkFidelityAttempts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         // The deletes intentionally bypass the tracker: this scope may have materialized the required work/run
         // relationship earlier, and mixing ExecuteDelete for the child with tracked Remove for the parent makes EF
         // interpret the already-deleted child as a severed required association.
@@ -988,6 +1909,54 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         }
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Removes every comparison the run took part in — as the A side or the B side — together with the work items
+    ///     that carry them, then bumps each affected revision's <c>ComparisonSetVersion</c> and retires the project's
+    ///     active fits.
+    ///     <para>
+    ///         Deleting only by <see cref="BenchmarkWorkItem.RunId" /> stranded half of them: a comparison's work item
+    ///         names the canonical FIRST run, so deleting the B side left comparison rows pointing at a run that no
+    ///         longer exists and a published fit ranking it. The version bump is what makes the surviving fit read
+    ///         stale; deactivating it is what makes the next planner pass re-fit the cohort that is actually left,
+    ///         because a fit whose fitted set names a deleted run is not a ranking of anything.
+    ///     </para>
+    /// </summary>
+    private async Task DeleteComparisonsOfAsync(Guid runId, Guid projectId, CancellationToken cancellationToken)
+    {
+        var affected = await _dbContext.BenchmarkComparisons.AsNoTracking()
+                                       .Where(entity => entity.RunAId == runId || entity.RunBId == runId)
+                                       .Select(entity => new
+                                       {
+                                           entity.Id,
+                                           entity.PolicyRevisionId
+                                       })
+                                       .ToArrayAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+        if (affected.Length == 0)
+        {
+            return;
+        }
+
+        var comparisonIds = affected.Select(static entry => entry.Id).ToArray();
+        var revisionIds = affected.Select(static entry => entry.PolicyRevisionId).Distinct().ToArray();
+        _ = await _dbContext.BenchmarkWorkItems
+                            .Where(entity => entity.ComparisonId != null && comparisonIds.Contains(entity.ComparisonId.Value))
+                            .ExecuteDeleteAsync(cancellationToken)
+                            .ConfigureAwait(false);
+        _ = await _dbContext.BenchmarkComparisons.Where(entity => comparisonIds.Contains(entity.Id))
+                            .ExecuteDeleteAsync(cancellationToken)
+                            .ConfigureAwait(false);
+        _ = await _dbContext.BenchmarkJudgePolicyRevisions.Where(entity => revisionIds.Contains(entity.Id))
+                            .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.ComparisonSetVersion, entity => entity.ComparisonSetVersion + 1),
+                                cancellationToken)
+                            .ConfigureAwait(false);
+        _ = await _dbContext.BenchmarkPairwiseFits.Where(entity => entity.ProjectId == projectId && entity.IsActive)
+                            .ExecuteUpdateAsync(setters => setters
+                                                           .SetProperty(entity => entity.IsActive, false)
+                                                           .SetProperty(entity => entity.Version, entity => entity.Version + 1), cancellationToken)
+                            .ConfigureAwait(false);
     }
 
     public async Task<BenchmarkJudgePolicyActivation> ActivateJudgePolicyAsync(Guid projectId,
@@ -1040,6 +2009,69 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         project.UpdatedAtUtc = Now();
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<BenchmarkProjectFidelityChange> UpdateProjectFidelityAsync(Guid projectId,
+        long expectedProjectVersion,
+        BenchmarkProjectFidelityInput input,
+        bool measureExisting = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(project.Version, expectedProjectVersion);
+
+        // No freeze check, on purpose. See IBenchmarkStore: a frozen project refuses edits to what its runs were
+        // measured AGAINST; these settings decide what gets measured next, and every stored number keeps the
+        // comparability digest it was measured under, so a change here makes old figures stale rather than wrong.
+        var now = Now();
+        project.FidelityEnabled = input.FidelityEnabled;
+        project.FidelityKldEnabled = input.FidelityKldEnabled;
+        project.FidelityChunks = input.FidelityChunks;
+        project.FidelityKldBaseModelName = input.FidelityKldBaseModelName;
+        project.FidelityKldBaseFingerprint = input.FidelityKldBaseFingerprint;
+        project.Version++;
+        project.UpdatedAtUtc = now;
+
+        var frozen = await _dbContext.BenchmarkRuns.AnyAsync(entity => entity.ProjectId == projectId, cancellationToken).ConfigureAwait(false);
+        var enqueued = measureExisting && input.FidelityEnabled
+            ? await EnqueueMissingFidelityAsync(project, now, cancellationToken).ConfigureAwait(false)
+            : [];
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return new BenchmarkProjectFidelityChange(ToRecord(project, frozen), enqueued);
+    }
+
+    /// <summary>
+    ///     Queues one fidelity measurement per succeeded cell that has none. The eligibility rule is freeze's own —
+    ///     non-warm-up, first of its repeat group — because a cell measured here and a cell measured at freeze must
+    ///     mean the same thing. Runs that already have an attempt are skipped rather than re-measured: a re-measure is
+    ///     the per-run route's job and costs GPU the operator did not ask for here.
+    /// </summary>
+    private async Task<IReadOnlyList<Guid>> EnqueueMissingFidelityAsync(BenchmarkProject project, long now, CancellationToken cancellationToken)
+    {
+        var kind = project.FidelityKldEnabled ? FidelityKindKld : FidelityKindPerplexity;
+        var candidates = await _dbContext.BenchmarkRuns
+                                         .Where(entity => entity.ProjectId == project.Id
+                                                          && entity.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
+                                                          && !entity.IsWarmup
+                                                          && (entity.RepeatIndex == null || entity.RepeatIndex == 1)
+                                                          && !_dbContext.BenchmarkFidelityAttempts.Any(attempt => attempt.RunId == entity.Id))
+                                         .OrderBy(entity => entity.CreatedAtUtc)
+                                         .ToListAsync(cancellationToken)
+                                         .ConfigureAwait(false);
+        foreach (var run in candidates)
+        {
+            // AppendFidelityWorkAsync already sets the projection to 'queued' and clears the error, which is exactly
+            // what an enqueued measurement is. Resetting it to null here undid that in the same transaction and left
+            // the run reading as "fidelity was never asked for" while its item sat in the queue.
+            _ = await AppendFidelityWorkAsync(run, kind, now, cancellationToken).ConfigureAwait(false);
+            run.Version++;
+            run.UpdatedAtUtc = now;
+        }
+
+        return [.. candidates.Select(static run => run.Id)];
     }
 
     public async Task<BenchmarkJudgeAttemptRecord?> GetJudgeAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default) =>
@@ -1344,6 +2376,75 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     }
 
     /// <summary>
+    ///     Moves a fidelity attempt to its terminal state and returns it, or <see langword="null" /> when there is
+    ///     nothing to move. The run's fidelity projection is NOT touched here: a failed re-measurement must leave the
+    ///     numbers from the last attempt that succeeded exactly where they are.
+    /// </summary>
+    private async Task<BenchmarkFidelityAttempt?> TerminalizeFidelityAttemptAsync(Guid? attemptId,
+        BenchmarkJudgeAttemptStatus status,
+        string? errorMessage,
+        long now,
+        CancellationToken cancellationToken)
+    {
+        if (attemptId is not { } id)
+        {
+            return null;
+        }
+
+        var attempt = await _dbContext.BenchmarkFidelityAttempts.SingleOrDefaultAsync(entity => entity.Id == id, cancellationToken).ConfigureAwait(false);
+        if (attempt is null || IsAttemptTerminal(attempt.Status))
+        {
+            return null;
+        }
+
+        attempt.Status = status;
+        attempt.ErrorMessage = errorMessage;
+        attempt.CompletedAtUtc = now;
+        attempt.Version++;
+        return attempt;
+    }
+
+    /// <summary>Moves a pairwise comparison to its terminal state, never overwriting one that already reached one.</summary>
+    private async Task<BenchmarkJudgeComparison?> TerminalizeComparisonAsync(Guid? comparisonId,
+        BenchmarkJudgeAttemptStatus status,
+        string? errorMessage,
+        long now,
+        CancellationToken cancellationToken)
+    {
+        if (comparisonId is not { } id)
+        {
+            return null;
+        }
+
+        var comparison = await _dbContext.BenchmarkComparisons.SingleOrDefaultAsync(entity => entity.Id == id, cancellationToken).ConfigureAwait(false);
+        if (comparison is null || IsAttemptTerminal(comparison.Status))
+        {
+            return null;
+        }
+
+        comparison.Status = status;
+        comparison.ErrorMessage = errorMessage;
+        comparison.CompletedAtUtc = now;
+        comparison.Version++;
+
+        // The cohort's comparison-set version moves in the SAME transaction as the terminalization. Inserting and
+        // terminalizing are the only two ways the fitted set can change, so a published fit's staleness is one
+        // integer against this row rather than a re-hash of every verdict on every page read.
+        var revision = await _dbContext.BenchmarkJudgePolicyRevisions
+                                       .SingleOrDefaultAsync(entity => entity.Id == comparison.PolicyRevisionId, cancellationToken)
+                                       .ConfigureAwait(false);
+        if (revision is not null)
+        {
+            revision.ComparisonSetVersion = checked(revision.ComparisonSetVersion + 1);
+        }
+
+        return comparison;
+    }
+
+    private static bool IsAttemptTerminal(BenchmarkJudgeAttemptStatus status) =>
+        status is BenchmarkJudgeAttemptStatus.Succeeded or BenchmarkJudgeAttemptStatus.Failed or BenchmarkJudgeAttemptStatus.Cancelled;
+
+    /// <summary>
     ///     Get-or-create by <c>(project, hash)</c>: insert, and on the unique conflict re-query, so two racing
     ///     activations of the same policy converge on one row instead of minting a duplicate revision.
     /// </summary>
@@ -1449,6 +2550,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                      .ToArrayAsync(cancellationToken)
                                      .ConfigureAwait(false);
         var views = await LoadJudgeViewsAsync([.. scored.Select(static run => run.Id)], cancellationToken).ConfigureAwait(false);
+        var current = await GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var pairwise = await LoadPairwiseRankingAsync(current, cancellationToken).ConfigureAwait(false);
 
         var runs = new Dictionary<Guid, BenchmarkRunRanking>(scored.Length);
         var totalScored = 0;
@@ -1457,13 +2560,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             var (judge, qualityScore, source, rankable) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
                 run.UserScore,
                 run.IsWarmup,
-                run.PrimaryStopReason);
+                run.PrimaryStopReason,
+                ToPairwiseRunView(pairwise, run.Id));
 
             // The denominator counts only runs a score could ever rank: a project's "n of m ranked" must not carry a
             // gap nothing the operator does can close. `rankable` is the exclusion method's OWN verdict rather than a
             // second copy of the rule — a warm-up and a truncated run without an operator override are both
             // permanently unrankable, and re-judging cannot un-truncate one.
-            if (rankable && (run.UserScore is not null || judge.Score is not null))
+            if (rankable && (run.UserScore is not null || judge.Score is not null || PairwiseScoreFor(pairwise, run.Id)?.Score is not null))
             {
                 totalScored++;
             }
@@ -1489,7 +2593,6 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             }
         }
 
-        var current = await GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
         return new BenchmarkProjectRanking(runs,
             new BenchmarkRankCohort(current?.Revision,
                 current?.ReferenceExecutionKey,
@@ -1517,16 +2620,30 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     ///     Whether a score on this run could ever rank it. Returned rather than re-derived by the caller so the
     ///     ranking's denominator cannot drift from the exclusions themselves.
     /// </param>
+    /// <param name="pairwise">
+    ///     This run's place in the project's active pairwise fit, or <see langword="null" /> when the project judges
+    ///     pointwise. In pairwise mode the run's rank exclusion is entirely a property of the fit — there is no judge
+    ///     attempt behind a pairwise score to derive one from.
+    /// </param>
     private static (BenchmarkRunJudgeView Judge, int? QualityScore, string Source, bool Rankable) ApplyRunExclusions(BenchmarkRunJudgeView judge,
         int? userScore,
         bool isWarmup,
-        string? primaryStopReason)
+        string? primaryStopReason,
+        PairwiseRunView? pairwise = null)
     {
         var unanswered = isWarmup || userScore is not null ? null : UnansweredReason(primaryStopReason);
         if (!isWarmup && unanswered is null)
         {
-            var (score, source) = ComputeQuality(userScore, judge);
-            return (judge, score, source, true);
+            var (score, source) = ComputeQuality(userScore, judge, pairwise);
+            if (pairwise is null)
+            {
+                return (judge, score, source, true);
+            }
+
+            return (judge with
+            {
+                RankExclusionReason = userScore is null ? pairwise.Reason : null
+            }, score, source, true);
         }
 
         return (judge with
@@ -1565,11 +2682,19 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     ///     judging is in the project's current cohort. A score from an outdated policy or a different judge runtime is
     ///     still shown, it just does not rank.
     /// </summary>
-    private static (int? QualityScore, string Source) ComputeQuality(int? userScore, BenchmarkRunJudgeView judge)
+    private static (int? QualityScore, string Source) ComputeQuality(int? userScore, BenchmarkRunJudgeView judge, PairwiseRunView? pairwise = null)
     {
         if (userScore is { } operatorScore)
         {
             return (operatorScore, BenchmarkQualityScoreSources.User);
+        }
+
+        // Pairwise mode ranks through the cohort's active fit and NEVER through a judge attempt: there are no
+        // pointwise attempts in such a cohort, and a leftover one from a previous revision is exactly what the fit
+        // scope exists to keep out of the ranking.
+        if (pairwise is not null)
+        {
+            return pairwise.Score is { } fitted ? (fitted, BenchmarkQualityScoreSources.Pairwise) : (null, BenchmarkQualityScoreSources.None);
         }
 
         var judgeScore = judge is { State: BenchmarkRunJudgeStates.Succeeded, PolicyCurrent: true, ExecutionCurrent: true }
@@ -1578,6 +2703,69 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         return judgeScore is { } score
             ? (score, BenchmarkQualityScoreSources.Judge)
             : (null, BenchmarkQualityScoreSources.None);
+    }
+
+    /// <summary>One run's place in the active fit: the strength that ranks it, or the reason it has none.</summary>
+    private sealed record PairwiseRunView(int? Score, string? Reason);
+
+    /// <summary>The whole project's pairwise ranking input — one parsed fit row, or the reason there is no usable one.</summary>
+    private sealed record PairwiseRanking(IReadOnlyDictionary<Guid, BenchmarkPairwiseScoreEntry> Scores, string? ScopeReason);
+
+    /// <summary>
+    ///     The project's pairwise ranking input, or <see langword="null" /> when it does not judge pairwise.
+    ///     <para>
+    ///         Whether a project judges pairwise is read off the revision's <c>ComparisonSetVersion</c>: it is bumped
+    ///         by the first comparison this revision ever enqueues and never returns to zero, and switching modes
+    ///         changes the policy hash, which mints a different revision starting again at zero. That keeps the mode
+    ///         question on a row the ranking already loads instead of decrypting a policy blob per page fetch.
+    ///     </para>
+    ///     <para>
+    ///         Staleness is the fit's stored <c>ComparisonSetVersion</c> against the revision's current one, plus the
+    ///         promoted execution key. No comparison row is read: the other inputs to the fit key — the policy hash and
+    ///         both pairwise versions — cannot move without minting a revision, which changes the scope this lookup
+    ///         runs in.
+    ///     </para>
+    /// </summary>
+    private async Task<PairwiseRanking?> LoadPairwiseRankingAsync(BenchmarkJudgePolicyRevisionRecord? current, CancellationToken cancellationToken)
+    {
+        if (current is null || current.ComparisonSetVersion == 0)
+        {
+            return null;
+        }
+
+        var fit = await ActiveFitAsync(current.Id, current.CohortGeneration, cancellationToken).ConfigureAwait(false);
+        if (fit is null)
+        {
+            return new PairwiseRanking(new Dictionary<Guid, BenchmarkPairwiseScoreEntry>(), BenchmarkRunJudgeStates.ReasonPairwisePending);
+        }
+
+        if (fit.ComparisonSetVersion != current.ComparisonSetVersion
+            || !string.Equals(fit.JudgeExecutionKey, current.ReferenceExecutionKey ?? string.Empty, StringComparison.Ordinal))
+        {
+            return new PairwiseRanking(new Dictionary<Guid, BenchmarkPairwiseScoreEntry>(), BenchmarkRunJudgeStates.ReasonPairwiseStale);
+        }
+
+        var entries = JsonSerializer.Deserialize<BenchmarkPairwiseScoreEntry[]>(fit.ScoresJson, PairwiseScoreOptions) ?? [];
+        return new PairwiseRanking(entries.ToDictionary(static entry => entry.RunId), ScopeReason: null);
+    }
+
+    private static BenchmarkPairwiseScoreEntry? PairwiseScoreFor(PairwiseRanking? pairwise, Guid runId) =>
+        pairwise is not null && pairwise.Scores.TryGetValue(runId, out var entry) ? entry : null;
+
+    /// <summary>
+    ///     A run's fit view. A run the fit does not mention at all is <c>pairwise-insufficient</c>: it was eligible
+    ///     when the ranking read ran but was not in the set the fit covered.
+    /// </summary>
+    private static PairwiseRunView? ToPairwiseRunView(PairwiseRanking? pairwise, Guid runId)
+    {
+        if (pairwise is null)
+        {
+            return null;
+        }
+
+        var entry = PairwiseScoreFor(pairwise, runId);
+        return new PairwiseRunView(entry?.Score,
+            entry?.Reason ?? pairwise.ScopeReason ?? (entry is null ? BenchmarkRunJudgeStates.ReasonPairwiseInsufficient : null));
     }
 
     private sealed record BenchmarkRunRanking(BenchmarkRunJudgeView Judge, int? QualityScore, string Source, int? Rank);
@@ -1767,6 +2955,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     ///     transaction. Enqueuing here rather than in a follow-up loop is what makes a cohort reset all-or-nothing: a
     ///     reset that committed with only some attempts enqueued would rank a cohort against runs never re-judged.
     ///     No already-applied guard: the caller has just reset the cohort, and every eligible run belongs to it.
+    ///     <para>
+    ///         A seed that clears <see cref="BenchmarkJudgeAttemptSeed.SeedPointwiseAttempts" /> reports the same
+    ///         eligible set and inserts nothing: a pairwise cohort is judged by comparisons, and a pointwise attempt
+    ///         queued beside them is a judging the mode never asked for.
+    ///     </para>
     /// </summary>
     private async Task<IReadOnlyList<Guid>> EnqueueCohortAttemptsAsync(Guid projectId,
         BenchmarkJudgePolicyRevision revision,
@@ -1774,7 +2967,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         long now,
         CancellationToken cancellationToken)
     {
-        if (seed is null)
+        if (seed is null or { SeedPointwiseAttempts: false })
         {
             return await SucceededRunIdsAsync(projectId, cancellationToken).ConfigureAwait(false);
         }
@@ -1851,6 +3044,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     private async Task<BenchmarkJudgeAttempt> RequireJudgeAttemptAsync(Guid attemptId, CancellationToken cancellationToken) =>
         await _dbContext.BenchmarkJudgeAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken).ConfigureAwait(false)
         ?? throw new BenchmarkNotFoundException("Benchmark judge attempt was not found.");
+
+    private async Task<BenchmarkFidelityAttempt> RequireFidelityAttemptAsync(Guid attemptId, CancellationToken cancellationToken) =>
+        await _dbContext.BenchmarkFidelityAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken).ConfigureAwait(false)
+        ?? throw new BenchmarkNotFoundException("Benchmark fidelity attempt was not found.");
+
+    private async Task<BenchmarkJudgeComparison> RequireComparisonAsync(Guid comparisonId, CancellationToken cancellationToken) =>
+        await _dbContext.BenchmarkComparisons.SingleOrDefaultAsync(entity => entity.Id == comparisonId, cancellationToken).ConfigureAwait(false)
+        ?? throw new BenchmarkNotFoundException("Benchmark comparison was not found.");
 
     private static void EnsurePolicyHash([NotNull] string? policyHash)
     {
@@ -2000,7 +3201,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         new(entity.Id, entity.Name, entity.CoreTaskJson.ToArray(), entity.ContextTokens, entity.AgentDefinitionId,
             entity.CurrentJudgePolicyRevisionId is not null, entity.CurrentJudgePolicyRevisionId, frozen,
             entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc, entity.MaxOutputTokens, entity.InvocationTimeoutSeconds,
-            entity.ReasoningBudgetTokens);
+            entity.ReasoningBudgetTokens, entity.FidelityEnabled, entity.FidelityKldEnabled, entity.FidelityChunks,
+            entity.FidelityKldBaseModelName, entity.FidelityKldBaseFingerprint);
 
     // One place writes the six throughput columns, so the success path and the cancel-reset path can never disagree
     // about which of them a run carries.
@@ -2047,7 +3249,35 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             InvocationTimeoutSeconds: entity.InvocationTimeoutSeconds,
             RepeatMode: entity.RepeatMode,
             SamplingSeed: entity.SamplingSeed,
-            SamplingTemperature: entity.SamplingTemperature);
+            SamplingTemperature: entity.SamplingTemperature,
+            Fidelity: ToFidelity(entity));
+
+    /// <summary>
+    ///     Null when nothing has ever been measured, so the API says "no measurement" rather than a projection of
+    ///     thirteen nulls that a reader has to interpret.
+    /// </summary>
+    private static BenchmarkRunFidelity? ToFidelity(BenchmarkRun entity) =>
+        entity.FidelityStatus is null
+            ? null
+            : new BenchmarkRunFidelity(entity.FidelityStatus,
+                entity.FidelityAttemptId,
+                entity.PerplexityMean,
+                entity.PerplexityStdErr,
+                entity.PerplexityChunks,
+                entity.PerplexityContextTokens,
+                entity.PerplexityCorpusId,
+                entity.KldMean,
+                entity.KldP99,
+                entity.TopTokenAgreement,
+                entity.KldBaseFingerprint,
+                entity.KldBaseLogitsDigest,
+                entity.FidelityErrorMessage);
+
+    private static BenchmarkFidelityAttemptRecord ToRecord(BenchmarkFidelityAttempt entity) =>
+        new(entity.Id, entity.RunId, entity.Sequence, entity.Kind, entity.Status, entity.PerplexityMean, entity.PerplexityStdErr,
+            entity.PerplexityChunks, entity.PerplexityContextTokens, entity.CorpusId, entity.KldMean, entity.KldP99,
+            entity.TopTokenAgreement, entity.BaseModelName, entity.BaseModelContentFingerprint, entity.BaseLogitsDigest,
+            entity.ErrorMessage, entity.EnqueuedAtUtc, entity.StartedAtUtc, entity.CompletedAtUtc);
 
     private static BenchmarkRunLaunchIntent? ToIntent(string? variant,
         string? kvCacheType,
@@ -2080,7 +3310,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
     private static BenchmarkJudgePolicyRevisionRecord ToRecord(BenchmarkJudgePolicyRevision entity, bool includePayload) =>
         new(entity.Id, entity.ProjectId, entity.Revision, includePayload ? CopyOptional(entity.PolicyJson) : null, entity.PolicyHash,
-            entity.ReferenceExecutionKey, entity.CohortGeneration, entity.CreatedAtUtc);
+            entity.ReferenceExecutionKey, entity.CohortGeneration, entity.CreatedAtUtc, entity.ComparisonSetVersion);
 
     private static BenchmarkJudgeAttemptRecord ToRecord(BenchmarkJudgeAttempt entity) =>
         new(entity.Id, entity.RunId, entity.Sequence, entity.PolicyRevisionId, entity.CohortGeneration,

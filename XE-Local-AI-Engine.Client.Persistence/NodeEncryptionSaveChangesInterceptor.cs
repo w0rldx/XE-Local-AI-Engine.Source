@@ -377,6 +377,50 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
+        // The fidelity receipt is encrypted for the same reason the launch receipts are: its argv carries host
+        // filesystem paths. The measured numbers themselves stay plaintext on the attempt, so the listing sorts
+        // without decrypting.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkFidelityAttempt>())
+        {
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.ReceiptJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_fidelity_receipt_json",
+                trackedProperties);
+        }
+
+        // A distinct AAD column name per column, as on the judge attempt: a writer cannot present an environment
+        // capture as a receipt, or a rationale as a runtime. The verdict token stays plaintext — it is the rankable
+        // signal, and ranking is a SQL sort.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkJudgeComparison>())
+        {
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.JudgeRuntimeJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_comparison_runtime_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.ResultJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_comparison_result_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.LaunchReceiptJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_comparison_launch_receipt_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.EnvironmentFactsJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_comparison_environment_facts_json",
+                trackedProperties);
+        }
+
         // Training dataset definitions are node-scoped, so the AAD binds the empty conversation id to the definition's
         // own id plus the column name — same layout as benchmark projects.
         foreach (var entry in nodeContext.ChangeTracker.Entries<TrainingDatasetDefinition>())

@@ -17,6 +17,7 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
 {
     private const string SourceOwnerRepo = "ggml-org/llama.cpp";
     private const string ManagedFitParamsFileName = "llama-fit-params";
+    private const string ManagedPerplexityFileName = LlamaCppToolBinaries.PerplexityName;
     private const string ManagedServerFileName = "llama-server";
 
     // Built by interpolation rather than a const literal absolute URI (the source URL+repo are fixed constants).
@@ -292,7 +293,7 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
             SetPhase(CudaBuildPhase.Building);
             var jobs = Math.Max(1, Math.Min(Environment.ProcessorCount, MaxBuildJobs));
             var buildExit = await RunStreamingStepAsync("cmake",
-                ["--build", buildDir, "--target", ManagedServerFileName, ManagedFitParamsFileName, "-j", jobs.ToString()],
+                ["--build", buildDir, "--target", ManagedServerFileName, ManagedFitParamsFileName, ManagedPerplexityFileName, "-j", jobs.ToString()],
                 environment,
                 cloneDir,
                 BuildTimeout,

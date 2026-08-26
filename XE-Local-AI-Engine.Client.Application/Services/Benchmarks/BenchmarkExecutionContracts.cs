@@ -600,11 +600,16 @@ public sealed record BenchmarkEligibleModel(
 ///     new policy revision and — on a project that already has runs — a re-judge.
 /// </summary>
 /// <param name="Rubric">The weighted criteria; <see langword="null" /> takes <see cref="BenchmarkJudgeRubricDefaults.Default" />.</param>
+/// <param name="Mode">
+///     <c>pointwise</c> (the default and the only mode this build executes) or <c>pairwise</c>. Absent means
+///     pointwise, so a caller written before the mode existed keeps working.
+/// </param>
 public sealed record BenchmarkJudgePolicyDraft(
     string ModelName,
     int ContextTokens,
     BenchmarkJudgeRubricV1? Rubric = null,
-    string? ReferenceAnswer = null);
+    string? ReferenceAnswer = null,
+    string? Mode = null);
 
 /// <param name="MaxOutputTokens">
 ///     The per-run output-token budget frozen into every run's sampling, or <see langword="null" /> to leave generation
@@ -615,6 +620,16 @@ public sealed record BenchmarkJudgePolicyDraft(
 ///     bounded only by the effort ladder and the window. Validated as <c>1 &lt;= ReasoningBudgetTokens &lt;
 ///     ContextTokens</c>, and — with an output budget also set — as leaving a prompt reserve inside the context.
 /// </param>
+/// <summary>
+///     The four settable quant-fidelity knobs. The base model's FINGERPRINT is absent on purpose: the service resolves
+///     it from the eligible-model catalog, because it is an input to the KLD comparability digest.
+/// </summary>
+public sealed record BenchmarkProjectFidelitySettings(bool Enabled, bool KldEnabled, int? Chunks, string? KldBaseModelName);
+
+/// <param name="FidelityKldBaseModelName">
+///     The base model KL divergence is measured against. Its FINGERPRINT is never part of a draft: the service
+///     resolves it from the eligible-model catalog, so a caller cannot claim a base identity the node does not have.
+/// </param>
 public sealed record BenchmarkProjectDraft(
     Guid Id,
     string Name,
@@ -624,7 +639,11 @@ public sealed record BenchmarkProjectDraft(
     BenchmarkJudgePolicyDraft? Judge = null,
     int? MaxOutputTokens = null,
     int? InvocationTimeoutSeconds = null,
-    int? ReasoningBudgetTokens = null);
+    int? ReasoningBudgetTokens = null,
+    bool FidelityEnabled = false,
+    bool FidelityKldEnabled = false,
+    int? FidelityChunks = null,
+    string? FidelityKldBaseModelName = null);
 
 public sealed class BenchmarkQueueOptions
 {

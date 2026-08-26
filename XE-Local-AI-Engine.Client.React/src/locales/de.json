@@ -4044,7 +4044,25 @@
 				"invocationTimeout": "Zeitlimit der Generierung (s)",
 				"invocationTimeoutHint": "Sekunden; Standard 900. Erhöhen Sie den Wert für lange Reasoning-Läufe — ein von der Uhr abgebrochener Lauf misst die Testumgebung, nicht das Modell.",
 				"reasoningBudget": "Denkbudget (Token)",
-				"reasoningBudgetHint": "Leer = so viel, wie das Fenster zulässt. Der Kontext muss Prompt, dieses Budget UND die maximale Ausgabe abdecken — ein Paar, das das Fenster füllt, schneidet jeden Lauf ab."
+				"reasoningBudgetHint": "Leer = so viel, wie das Fenster zulässt. Der Kontext muss Prompt, dieses Budget UND die maximale Ausgabe abdecken — ein Paar, das das Fenster füllt, schneidet jeden Lauf ab.",
+				"fidelitySection": "Quantisierungstreue",
+				"fidelityEnabled": "Perplexität neben jedem Lauf messen",
+				"fidelityEnabledHelp": "Bewertet einen festen Korpus mit der eingefrorenen Platzierung des Laufs. Nur zur Anzeige — bewertet nie einen Lauf.",
+				"fidelityChunks": "Zu bewertende Chunks",
+				"fidelityChunksHelp": "{{min}}–{{max}}; leer verwendet {{fallback}}.",
+				"fidelityKldEnabled": "Zusätzlich KL-Divergenz messen",
+				"fidelityKldEnabledHelp": "Benötigt eine zwischengespeicherte Logit-Datei des Basismodells — mehrere zehn Gigabyte. Prüfe vorher die Schätzung im Projekt.",
+				"fidelityKldBase": "Basismodell für KL-Divergenz",
+				"fidelityKldBaseHelp": "Die Referenz, gegen die die Quantisierungen gemessen werden — normalerweise der unquantisierte Build.",
+				"judgeMode": "Bewertungsmodus",
+				"judgeModeHelp": "Pointwise bewertet jeden Lauf anhand der Rubrik. Pairwise vergleicht Läufe untereinander und ordnet sie über eine gemeinsame Anpassung.",
+				"judgeModes": {
+					"pointwise": "Pointwise (Rubrik je Lauf)",
+					"pairwise": "Pairwise (Lauf gegen Lauf)"
+				},
+				"pairwiseConfirmTitle": "Dieses Projekt auf paarweise Bewertung umstellen?",
+				"pairwiseConfirm": "Jeder geeignete Lauf wird gegen jeden anderen bewertet, in beiden Reihenfolgen. Die Vergleiche werden auf einmal eingereiht, und die Rangfolge erscheint erst, wenn die Anpassung abgeschlossen ist.",
+				"pairwiseConfirmAccept": "Umstellen und einreihen"
 			},
 			"run": {
 				"model": "Primärmodell",
@@ -4157,7 +4175,9 @@
 				"maxOutputTokens": "Die maximalen Ausgabe-Tokens müssen zwischen 1 und dem angeforderten Kontext liegen.",
 				"invocationTimeout": "Das Zeitlimit der Generierung muss zwischen 60 und 7200 Sekunden liegen.",
 				"reasoningBudget": "Das Denkbudget muss zwischen 1 und dem angeforderten Kontext liegen.",
-				"reasoningBudgetSum": "Denk- und Ausgabebudget müssen mindestens {{reserve}} Token des Kontexts für den Prompt frei lassen."
+				"reasoningBudgetSum": "Denk- und Ausgabebudget müssen mindestens {{reserve}} Token des Kontexts für den Prompt frei lassen.",
+				"fidelityChunks": "Chunks müssen zwischen {{min}} und {{max}} liegen.",
+				"fidelityKldBase": "KL-Divergenz erfordert ein Basismodell."
 			},
 			"errors": {
 				"projectsLoad": "Benchmark-Projekte konnten nicht geladen werden.",
@@ -4174,7 +4194,8 @@
 				"kvUnsupportedHint": "Wählen Sie ausdrücklich f16, um dieses Modell mit dieser Laufzeit auszuführen.",
 				"rejudgeRun": "Dieser Lauf konnte nicht neu bewertet werden.",
 				"rejudgeProject": "Dieses Projekt konnte nicht neu bewertet werden.",
-				"judgeAttemptsActive": "Eine Bewertung dieses Projekts läuft noch. Warten Sie sie ab oder brechen Sie sie ab."
+				"judgeAttemptsActive": "Eine Bewertung dieses Projekts läuft noch. Warten Sie sie ab oder brechen Sie sie ab.",
+				"measureFidelity": "Es konnte keine Treuemessung eingereiht werden."
 			},
 			"loading": {
 				"projects": "Benchmark-Projekte werden geladen…",
@@ -4237,7 +4258,8 @@
 				"source": {
 					"user": "Betreiber",
 					"judge": "Judge",
-					"none": "—"
+					"none": "—",
+					"pairwise": "paarweise"
 				},
 				"exclusion": {
 					"no-score": "Noch keine Bewertung — vergeben Sie eine Betreiberbewertung oder warten Sie auf den Judge.",
@@ -4250,7 +4272,15 @@
 					"execution-identity-incomplete": "Die Laufzeit-Identität dieser Bewertung ist unvollständig.",
 					"truncated": "Die Antwort wurde vom Token-Budget abgeschnitten und ist deshalb nicht mit einer vollständigen vergleichbar.",
 					"incomplete": "Der Lauf hat überhaupt keine Antwort erzeugt, es gibt also nichts zu vergleichen oder zu bewerten.",
-					"warmup": "Ein Aufwärmlauf. Er wird absichtlich ausgeschlossen, damit die folgenden Wiederholungen nicht gegen einen kalten Start bewertet werden."
+					"warmup": "Ein Aufwärmlauf. Er wird absichtlich ausgeschlossen, damit die folgenden Wiederholungen nicht gegen einen kalten Start bewertet werden.",
+					"pairwise-pending": "paarweise Bewertung nicht abgeschlossen",
+					"pairwise-insufficient": "zu wenige Vergleiche für eine Anpassung",
+					"pairwise-cap": "außerhalb der paarweisen Kohortengrenze",
+					"pairwise-stale": "aus einem älteren Vergleichssatz angepasst",
+					"pairwise-unfitted": "nicht in der aktiven Anpassung",
+					"pairwise-cross-case": "unter einem anderen Aufgabenfall verglichen",
+					"pairwise-execution-mismatch": "unter einer anderen Judge-Laufzeit angepasst",
+					"pairwise-execution-identity-incomplete": "Judge-Laufzeit nicht vollständig erfasst"
 				},
 				"exclusionShort": {
 					"no-score": "unbewertet",
@@ -4263,15 +4293,25 @@
 					"execution-identity-incomplete": "Identität unvollständig",
 					"truncated": "abgeschnitten",
 					"incomplete": "keine Antwort",
-					"warmup": "Aufwärmlauf"
+					"warmup": "Aufwärmlauf",
+					"pairwise-pending": "paarweise ausstehend",
+					"pairwise-insufficient": "zu wenige Paare",
+					"pairwise-cap": "über Grenze",
+					"pairwise-stale": "wird neu angepasst",
+					"pairwise-unfitted": "nicht angepasst",
+					"pairwise-cross-case": "fallübergreifend",
+					"pairwise-execution-mismatch": "Laufzeit weicht ab",
+					"pairwise-execution-identity-incomplete": "Laufzeit unbekannt"
 				},
 				"action": {
 					"score": "Vergeben Sie eine Betreiberbewertung.",
 					"rejudge": "Neu bewerten, um ihn wieder in die Kohorte zu holen.",
 					"wait": "Warten Sie, bis die Bewertung fertig ist.",
 					"rerun": "Erneut starten — mit mehr Raum, falls er abgeschnitten wurde.",
-					"none": "Nichts zu tun — ein Aufwärmlauf soll außerhalb der Wertung stehen."
-				}
+					"none": "Nichts zu tun — ein Aufwärmlauf soll außerhalb der Wertung stehen.",
+					"remove-runs": "Entferne Läufe, damit die Kohorte unter der Grenze liegt."
+				},
+				"comparing": "{{count}} Läufe im Vergleich"
 			},
 			"rubric": {
 				"title": "Bewertungsraster",
@@ -4293,7 +4333,148 @@
 					"title": "Ein Titel ist erforderlich (höchstens 64 Zeichen).",
 					"description": "Eine Beschreibung ist erforderlich (höchstens 1024 Zeichen).",
 					"weight": "Das Gewicht muss zwischen 1 und 100 liegen."
+				},
+				"presetVerifiable": "Verifizierbar",
+				"criterionDescriptionVerified": "Dieses Kriterium wird serverseitig entschieden; der Text ist Dokumentation für den Betreiber und keine Anweisung an ein Modell."
+			},
+			"fidelity": {
+				"title": "Quantisierungstreue (PPL / KLD)",
+				"column": "PPL / KLD",
+				"explanation": "Perplexität und KL-Divergenz messen, wie weit ein quantisierter Build von den Gewichten abweicht, aus denen er entstand. Beide dienen nur der Anzeige und fließen nie in eine Rangfolge ein.",
+				"displayOnly": "Nur zur Anzeige — die Treue bewertet keinen Lauf.",
+				"measure": "Treue messen",
+				"kldStale": "kld-stale",
+				"kldStaleHint": "Gegen ein anderes Basismodell, einen anderen Korpus oder eine andere Chunk-Anzahl gemessen, als dieses Projekt jetzt erwartet. Miss diesen Lauf erneut, um eine vergleichbare Zahl zu erhalten.",
+				"kldLine": "KLD {{mean}} · p99 {{p99}} · {{agreement}}",
+				"pplTooltip": "Perplexität {{value}} über {{chunks}} Chunks bei einem Fenster von {{window}} Tokens ({{corpus}})",
+				"kldTooltip": "KL-Divergenz Mittelwert {{mean}}, p99 {{p99}}, Top-Token-Übereinstimmung {{agreement}}",
+				"noReason": "Der Knoten hat keinen Grund vermerkt.",
+				"estimate": "KL-Divergenz würde {{size}} Basis-Logits zwischenspeichern — {{free}} frei, {{cached}} bereits zwischengespeichert.",
+				"estimateInputs": "{{chunks}} Chunks × {{window}} Tokens × {{vocab}} Vokabular",
+				"estimateLoading": "Größe des Basis-Logit-Caches wird geschätzt…",
+				"estimateError": "Die Größe des KL-Divergenz-Caches konnte nicht geschätzt werden.",
+				"estimateTooLarge": "Das passt nicht auf den Datenträger, auf den der Knoten schreibt. Die Messung würde abgelehnt statt halb geschrieben — schaffe Platz oder senke die Chunk-Anzahl.",
+				"clearCache": "Zwischengespeicherte Basis-Logits löschen",
+				"clearCacheHint": "Es geht nichts Gemessenes verloren — die Läufe behalten ihre Zahlen. Der nächste KL-Divergenz-Durchlauf berechnet die Basis-Logits neu.",
+				"cacheCleared": "Zwischengespeicherte Basis-Logits gelöscht.",
+				"cacheClearError": "Die zwischengespeicherten Basis-Logits konnten nicht gelöscht werden.",
+				"status": {
+					"queued": "Treue in Warteschlange",
+					"running": "Treue wird gemessen",
+					"succeeded": "Gemessen",
+					"failed": "Treuemessung fehlgeschlagen",
+					"cancelled": "Treuemessung abgebrochen",
+					"skipped": "Nicht gemessen"
+				},
+				"differs": "Quantisierungstreue unterscheidet sich: {{fields}}",
+				"onWithKld": "PPL + KLD",
+				"onPplOnly": "PPL",
+				"off": "aus",
+				"settings": "{{chunks}} Chunks werden bewertet{{base}}.",
+				"disabled": "Nicht gemessen. Aktiviere es in den Projekteinstellungen vor dem ersten Lauf.",
+				"measureExisting": "Auch die Läufe messen, die dieses Projekt bereits hat",
+				"saved": "Treue-Einstellungen gespeichert.",
+				"savedWithRuns": "Gespeichert. {{count}} Messungen eingereiht.",
+				"saveError": "Die Treue-Einstellungen konnten nicht gespeichert werden.",
+				"remeasureNote": "Das Ändern von Basismodell oder Chunk-Anzahl löscht nichts, erzeugt aber einen neuen Vergleichbarkeits-Digest — unter dem alten gemessene Werte lesen sich dann als kld-stale, bis jeder Lauf neu gemessen wurde."
+			},
+			"charts": {
+				"title": "Diagramme",
+				"show": "Diagramme anzeigen",
+				"hide": "Diagramme ausblenden",
+				"loading": "Diagramme werden geladen…",
+				"empty": "Noch keine gemessenen Läufe zum Darstellen.",
+				"throughputTitle": "Dekodiergeschwindigkeit je Wiederholung",
+				"repeatAxis": "Wiederholung",
+				"cohortsHidden": "{{shown}} von {{total}} Wiederholungskohorten werden angezeigt.",
+				"speedTitle": "Prefill- und Dekodiergeschwindigkeit je Modell",
+				"ttftTitle": "Zeit bis zum ersten Token je Modell",
+				"perplexityTitle": "Perplexität je Quantisierung — {{model}}",
+				"perplexity": "Perplexität",
+				"kldTitle": "KL-Divergenz je Quantisierung — {{model}}",
+				"kld": "KL-Divergenz",
+				"reasoningBudgetTitle": "Qualität gegenüber dem eingefrorenen Reasoning-Budget",
+				"reasoningBudgetNote": "Über die aktuell zum Vergleich ausgewählten Läufe."
+			},
+			"verifier": {
+				"kind": "Entschieden durch",
+				"kindHelp": "Alles außer dem Modell wird serverseitig geprüft, ohne Inferenz.",
+				"kinds": {
+					"llm": "Das Judge-Modell",
+					"exact": "Exakte Antwort",
+					"regex": "Regulärer Ausdruck",
+					"jsonSchema": "JSON-Schema",
+					"mathAnswer": "Numerische Antwort",
+					"constraint": "Strukturelle Vorgaben"
+				},
+				"expected": "Erwartete Antwort",
+				"normalize": {
+					"trim": "Leerzeichen kürzen",
+					"collapseWhitespace": "Leerraum zusammenfassen",
+					"caseInsensitive": "Groß-/Kleinschreibung ignorieren",
+					"stripMarkdown": "Markdown entfernen"
+				},
+				"pattern": "Muster",
+				"patternHelp": "Wird in linearer Zeit ausgewertet: Lookaround, Rückwärtsverweise und atomare Gruppen werden beim Speichern des Judge abgelehnt.",
+				"mustMatch": "Die Antwort muss übereinstimmen",
+				"schema": "Schema",
+				"schemaHelp": "Durchgesetzte Schlüsselwörter: {{keywords}}. Alles andere wird abgelehnt.",
+				"expectedNumber": "Erwarteter Wert",
+				"expectedNumberHelp": "Eine Zahl oder ein Bruch wie 3/4.",
+				"relativeTolerance": "Relative Toleranz",
+				"absoluteTolerance": "Absolute Toleranz",
+				"minWords": "Mindestanzahl Wörter",
+				"maxWords": "Höchstanzahl Wörter",
+				"mustContain": "Muss enthalten",
+				"mustNotContain": "Darf nicht enthalten",
+				"format": "Format",
+				"formats": {
+					"json": "JSON",
+					"markdownList": "Markdown-Liste",
+					"noMarkdown": "Kein Markdown"
+				},
+				"issues": {
+					"llmConfig": "Ein vom Modell bewertetes Kriterium trägt keine Konfiguration.",
+					"expectedRequired": "Gib die erwartete Antwort an.",
+					"patternRequired": "Gib ein Muster an.",
+					"patternTooLong": "Ein Muster darf höchstens 512 Zeichen lang sein.",
+					"patternInvalid": "Das ist kein gültiger regulärer Ausdruck.",
+					"schemaRequired": "Gib ein Schema-Objekt an.",
+					"schemaInvalidJson": "Das ist kein gültiges JSON.",
+					"schemaKeyword": "Dieser Build setzt nur type, properties, required, items, enum, const und additionalProperties durch.",
+					"mathExpected": "Gib eine Zahl oder einen Bruch wie 3/4 an.",
+					"toleranceInvalid": "Eine Toleranz muss eine Zahl ab null sein.",
+					"constraintEmpty": "Gib mindestens eine Vorgabe an.",
+					"constraintWords": "Die Wortgrenzen widersprechen sich.",
+					"constraintContains": "Ein Eintrag darf nicht leer sein.",
+					"constraintFormat": "Dieses Format wird nicht unterstützt."
 				}
+			},
+			"pairwise": {
+				"title": "Paarweise Urteile",
+				"cohort": "Gen {{generation}} · Satz v{{version}}",
+				"loading": "Paarweise Urteile werden geladen…",
+				"loadError": "Die paarweisen Urteile konnten nicht geladen werden.",
+				"empty": "Noch keine Vergleiche. Sie werden eingereiht, wenn das Projekt bewertet.",
+				"staleFit": "Diese Werte wurden aus einem anderen Vergleichssatz angepasst als dem, den das Projekt jetzt hat. Sie werden beim nächsten Bewertungsdurchlauf neu angepasst.",
+				"fitSummary": "{{iterations}} Iterationen · {{replicates}} Bootstrap-Wiederholungen",
+				"comparisonCount": "{{count}} Vergleiche",
+				"pair": "Paar",
+				"orderA": "A zuerst gezeigt",
+				"orderB": "B zuerst gezeigt",
+				"tie": "unentschieden",
+				"status": {
+					"Queued": "in Warteschlange",
+					"Running": "läuft",
+					"Succeeded": "erfolgreich",
+					"Failed": "fehlgeschlagen",
+					"Cancelled": "abgebrochen"
+				},
+				"estimate": "{{runs}} Läufe ergeben {{calls}} Judge-Aufrufe.",
+				"estimateDuration": "Etwa {{duration}}.",
+				"estimateCapped": "{{capped}} Läufe bleiben außen vor — die Kohorte ist auf {{maximum}} begrenzt. Sie gelten als pairwise-cap, bis sie entfernt werden.",
+				"truncated": "abgeschnitten",
+				"truncatedHint": "Eine der beiden Antworten wurde vom Token-Budget abgeschnitten; dieses Urteil verglich also ein Fragment."
 			}
 		},
 		"customTools": {

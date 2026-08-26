@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
-import { act, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import type { BenchmarkProjectDraft } from "@/features/benchmarks/models/BenchmarkModels";
 import {
+	useBenchmarkComparisons,
 	useBenchmarkProject,
 	useBenchmarkProjects,
 	useBenchmarkRun,
@@ -17,6 +18,7 @@ import {
 	useStartBenchmarkRun,
 	useUpdateBenchmarkJudgePolicy,
 	useUpdateBenchmarkProject,
+	useUpdateBenchmarkProjectFidelity,
 } from "@/features/benchmarks/queries/useBenchmarks";
 import { domainErrorRoute, jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -71,6 +73,12 @@ function runRow(overrides: Record<string, unknown> = {}) {
 	};
 }
 
+/** The hooks' own poll cadence, mirrored so a timing assertion says which interval it is waiting past. */
+const activeComparisonPollMs = 2_000;
+
+/** A fidelity row as the node sends it: `kldState` rides along even when nothing was measured against a base. */
+const fidelityRow = (status: string) => ({ status, kldState: "none" });
+
 const draft: BenchmarkProjectDraft = {
 	name: "Summarisation",
 	coreTask: "Summarise the attached text.",
@@ -80,13 +88,22 @@ const draft: BenchmarkProjectDraft = {
 	invocationTimeoutSeconds: null,
 	agentDefinitionId: "cccccccc-0000-4000-8000-000000000003",
 	judgeEnabled: false,
+	judgeMode: "pointwise",
 	judgeModelName: null,
 	judgeContextTokens: null,
 	rubric: null,
 	referenceAnswer: null,
+	fidelityEnabled: false,
+	fidelityKldEnabled: false,
+	fidelityChunks: null,
+	fidelityKldBaseModelName: null,
 };
 
 describe("benchmark queries over the real client", () => {
+	// Without this the hooks of a finished test stay mounted, and any of them left polling keeps hitting the NEXT test's
+	// handlers — which is a silent read count from nowhere in every assertion that counts requests.
+	afterEach(cleanup);
+
 	it("maps the project list through the boundary mapper", async () => {
 		server.use(jsonRoute("get", "benchmarks/projects", { items: [projectRow()] }));
 		const { wrapper } = createProvidersWrapper();
@@ -484,6 +501,190 @@ describe("benchmark queries over the real client", () => {
 
 		await waitFor(() => expect(runReads).toBeGreaterThan(1));
 	});
+
+	// Fidelity is measured on its OWN queue and only starts once the run itself is terminal, so a poll predicate reading
+	// just the primary and the judge goes quiet the instant a measurement is queued — and the numbers it queued for never
+	// arrive. Both runs below are terminal on primary and judge and differ ONLY in their fidelity row, so one elapsed
+	// clock separates the two behaviours: whatever kept the first one reading cannot have been the run's own state.
+	it("keeps polling a run whose fidelity measurement is in flight and leaves a measured one alone", async () => {
+		const measuredRunId = "bbbbbbbb-0000-4000-8000-000000000009";
+		const reads = { queued: 0, measured: 0 };
+		server.use(
+			http.get(localApiPath(`benchmarks/runs/${runId}`), () => {
+				reads.queued += 1;
+				return HttpResponse.json(runRow({ fidelity: fidelityRow("queued") }));
+			}),
+			http.get(localApiPath(`benchmarks/runs/${measuredRunId}`), () => {
+				reads.measured += 1;
+				return HttpResponse.json(runRow({ id: measuredRunId, fidelity: { ...fidelityRow("succeeded"), perplexityMean: 7.5 } }));
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => ({ queued: useBenchmarkRun(runId), measured: useBenchmarkRun(measuredRunId) }), {
+			wrapper,
+		});
+		await waitFor(() => expect(result.current.measured.isSuccess).toBe(true));
+
+		await waitFor(() => expect(reads.queued).toBeGreaterThan(1), { timeout: 8_000 });
+		expect(result.current.queued.data?.fidelity?.status).toBe("queued");
+		// Same wall clock, same terminal primary and judge: a settled measurement must not have brought a second read.
+		expect(reads.measured).toBe(1);
+	});
+
+	// The ranked table reads the same rows, and it is where the operator watches a batch of measurements finish.
+	it("keeps polling the runs list while a row's fidelity measurement is in flight", async () => {
+		const quietProjectId = "aaaaaaaa-0000-4000-8000-000000000008";
+		const reads = { active: 0, quiet: 0 };
+		const page = (status: string) => ({
+			items: [runRow({ fidelity: fidelityRow(status) })],
+			rankCohort: { rankedCount: 0, totalScored: 0 },
+		});
+		server.use(
+			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), () => {
+				reads.active += 1;
+				return HttpResponse.json(page("running"));
+			}),
+			http.get(localApiPath(`benchmarks/projects/${quietProjectId}/runs`), () => {
+				reads.quiet += 1;
+				return HttpResponse.json(page("skipped"));
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => ({ active: useBenchmarkRuns(projectId), quiet: useBenchmarkRuns(quietProjectId) }), {
+			wrapper,
+		});
+		await waitFor(() => expect(result.current.quiet.isSuccess).toBe(true));
+
+		await waitFor(() => expect(reads.active).toBeGreaterThan(1), { timeout: 8_000 });
+		// `skipped` is a terminal answer, not a pending one: nothing more is coming, so nothing should keep asking.
+		expect(reads.quiet).toBe(1);
+	});
+
+	// Enabling fidelity with `measureExisting` queues a measurement per existing run, but the response only COUNTS them.
+	// Every affected run is terminal, so its own detail query stopped polling long ago and nothing else would tell it to
+	// look again — the refreshed rows are what put both the list and the pane back on the poll.
+	it("refreshes the runs list and the open run details when existing runs are queued for measurement", async () => {
+		const reads = { detail: 0, list: 0 };
+		let enqueuedCount = 2;
+		server.use(
+			http.get(localApiPath(`benchmarks/runs/${runId}`), () => {
+				reads.detail += 1;
+				return HttpResponse.json(runRow());
+			}),
+			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), () => {
+				reads.list += 1;
+				return HttpResponse.json({ items: [runRow()], rankCohort: { rankedCount: 0, totalScored: 0 } });
+			}),
+			http.patch(localApiPath(`benchmarks/projects/${projectId}/fidelity`), () =>
+				HttpResponse.json({ project: projectDetail({ version: 3, fidelityEnabled: true }), enqueuedCount }),
+			),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(
+			() => ({
+				detail: useBenchmarkRun(runId),
+				runs: useBenchmarkRuns(projectId),
+				save: useUpdateBenchmarkProjectFidelity(),
+			}),
+			{ wrapper },
+		);
+		await waitFor(() => expect(result.current.detail.isSuccess).toBe(true));
+		await waitFor(() => expect(result.current.runs.isSuccess).toBe(true));
+		expect(reads.detail).toBe(1);
+
+		const fidelityDraft = {
+			fidelityEnabled: true,
+			fidelityKldEnabled: false,
+			fidelityChunks: null,
+			fidelityKldBaseModelName: null,
+		};
+		result.current.save.mutate({ projectId, expectedVersion: 2, draft: fidelityDraft, measureExisting: true });
+
+		await waitFor(() => expect(reads.list).toBeGreaterThan(1));
+		await waitFor(() => expect(reads.detail).toBeGreaterThan(1));
+
+		// A save that measured nothing must NOT sweep every open pane: the list still refreshes (the project changed),
+		// and the detail read count staying put is what says the family-wide invalidation was gated on the count.
+		enqueuedCount = 0;
+		const detailReadsAfterQueue = reads.detail;
+		const listReadsAfterQueue = reads.list;
+		result.current.save.mutate({ projectId, expectedVersion: 3, draft: fidelityDraft, measureExisting: true });
+
+		await waitFor(() => expect(reads.list).toBeGreaterThan(listReadsAfterQueue));
+		expect(reads.detail).toBe(detailReadsAfterQueue);
+	});
+
+	// A pairwise project's scores and ranks are read out of the FIT, and the comparisons poll is the only thing watching
+	// for one: the runs list polls on RUN activity, which a pairwise judging leaves untouched, so the ranked table would
+	// keep showing null scores against the very verdicts that produced them. The stages below are served one per poll,
+	// so the cohort advances exactly the way it does on the node — a pair at a time, the fit only after the last one.
+	it("refreshes the ranked runs when a pairwise fit arrives, and not while the verdicts merely progress", async () => {
+		const comparison = (id: string, status: string, verdict: string | null) => ({
+			id,
+			runAId: runId,
+			runBId: "bbbbbbbb-0000-4000-8000-000000000007",
+			order: 0,
+			status,
+			verdict,
+		});
+		const pending = comparison("cccccccc-0000-4000-8000-00000000000c", "Running", null);
+		const judged = comparison("cccccccc-0000-4000-8000-00000000000c", "Succeeded", "a");
+		const second = comparison("dddddddd-0000-4000-8000-00000000000d", "Running", null);
+		const fit = {
+			fitKey: "fit-1",
+			judgeExecutionKey: "exec-1",
+			comparisonSetVersion: 1,
+			cohortGeneration: 1,
+			isCurrent: true,
+			fittedSetJson: "[]",
+			scores: [{ runId, score: 72, ciLow: 61, ciHigh: 83 }],
+		};
+		const cohort = { cohortGeneration: 1, comparisonSetVersion: 1 };
+		const stages = [
+			{ ...cohort, items: [pending, second], fit: null },
+			// One verdict further along, same cohort and same comparison set: progress, not a new reading.
+			{ ...cohort, items: [judged, second], fit: null },
+			{ ...cohort, items: [judged, { ...second, status: "Succeeded", verdict: "b" }], fit },
+		];
+		let comparisonReads = 0;
+		let listReads = 0;
+		server.use(
+			http.get(localApiPath(`benchmarks/projects/${projectId}/comparisons`), () => {
+				comparisonReads += 1;
+				return HttpResponse.json(stages[Math.min(comparisonReads - 1, stages.length - 1)]);
+			}),
+			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), () => {
+				listReads += 1;
+				return HttpResponse.json({ items: [runRow()], rankCohort: { rankedCount: 0, totalScored: 0 } });
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(
+			() => ({ comparisons: useBenchmarkComparisons(projectId), runs: useBenchmarkRuns(projectId) }),
+			{ wrapper },
+		);
+		await waitFor(() => expect(result.current.runs.isSuccess).toBe(true));
+		await waitFor(() => expect(result.current.comparisons.isSuccess).toBe(true));
+		// The first read has nothing to compare against, and the list it would refresh came from the same node state.
+		expect(listReads).toBe(1);
+
+		await waitFor(() => expect(comparisonReads).toBeGreaterThanOrEqual(2), { timeout: 8_000 });
+		expect(listReads).toBe(1);
+
+		await waitFor(() => expect(listReads).toBe(2), { timeout: 8_000 });
+		expect(result.current.comparisons.data?.fit?.fitKey).toBe("fit-1");
+
+		// Every comparison is terminal now, so the verdicts stop being re-read and the table stops being refreshed with
+		// them: one fit, one refresh. A predicate that fired on any change instead would keep the table on the wire.
+		const readsAtFit = comparisonReads;
+		await new Promise((resolve) => setTimeout(resolve, activeComparisonPollMs + 500));
+		expect(comparisonReads).toBe(readsAtFit);
+		expect(listReads).toBe(2);
+	}, 30_000);
 
 	it("re-judges a whole project and reports how many runs were enqueued", async () => {
 		let observedBody: unknown;

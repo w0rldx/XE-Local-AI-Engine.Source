@@ -15,6 +15,7 @@ import {
 } from "@mantine/core";
 import {
 	IconAlertTriangle,
+	IconChartHistogram,
 	IconFlask,
 	IconLock,
 	IconPlus,
@@ -24,7 +25,7 @@ import {
 	IconScale,
 	IconSettings,
 } from "@tabler/icons-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -37,9 +38,12 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
 import { BenchmarkBatchProgressAlert } from "@/features/benchmarks/components/BenchmarkBatchProgressAlert";
 import { BenchmarkExportButtons } from "@/features/benchmarks/components/BenchmarkExportButtons";
+import { BenchmarkFidelityPanel } from "@/features/benchmarks/components/BenchmarkFidelityPanel";
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import type { BenchmarkMatrixSelection } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkLaunchMatrix } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
+import { BenchmarkPairwiseEstimateNote } from "@/features/benchmarks/components/BenchmarkPairwiseEstimateNote";
+import { BenchmarkPairwiseMatrix } from "@/features/benchmarks/components/BenchmarkPairwiseMatrix";
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
 import { BenchmarkRepeatModePicker } from "@/features/benchmarks/components/BenchmarkRepeatModePicker";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
@@ -56,12 +60,16 @@ import {
 	benchmarkErrorCode,
 	benchmarkKvCacheTypes,
 	isUnsupportedKvCacheTypeError,
+	maxComparedBenchmarkRuns,
+	toggleBenchmarkRunSelection,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { hasActiveJudgeAttempt, succeededRunCount } from "@/features/benchmarks/models/BenchmarkRanking";
 import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarks";
 import {
+	useBenchmarkComparisons,
 	useBenchmarkProject,
 	useBenchmarkProjects,
+	useBenchmarkRunDetails,
 	useBenchmarkRubricPresets,
 	useBenchmarkRuns,
 	useCreateBenchmarkProject,
@@ -71,9 +79,14 @@ import {
 	useRejudgeBenchmarkRun,
 	useStartBenchmarkRun,
 	useStartBenchmarkRunBatch,
+	useStartBenchmarkRunFidelity,
 	useUpdateBenchmarkJudgePolicy,
 	useUpdateBenchmarkProject,
 } from "@/features/benchmarks/queries/useBenchmarks";
+
+// recharts is ~400 kB of JavaScript that a route's first paint has no reason to pay for: the charts sit below the
+// runs table, and a project with no measured run never renders them at all.
+const BenchmarkCharts = lazy(() => import("@/features/benchmarks/components/BenchmarkCharts"));
 
 const emptyProject: BenchmarkProjectDraft = {
 	name: "",
@@ -84,15 +97,20 @@ const emptyProject: BenchmarkProjectDraft = {
 	invocationTimeoutSeconds: null,
 	agentDefinitionId: "",
 	judgeEnabled: false,
+	judgeMode: "pointwise",
 	judgeModelName: null,
 	judgeContextTokens: null,
 	rubric: null,
 	referenceAnswer: null,
+	fidelityEnabled: false,
+	fidelityKldEnabled: false,
+	fidelityChunks: null,
+	fidelityKldBaseModelName: null,
 };
 
 type EditorMode = "create" | "edit" | null;
 /** Which confirmation the operator is being asked for; both re-score every succeeded run of the project. */
-type ConfirmMode = "judgePolicy" | "rejudgeAll" | null;
+type ConfirmMode = "judgePolicy" | "rejudgeAll" | "pairwise" | null;
 /** The picker's "Auto" entry is a UI-only value: it is sent as an omitted `kvCacheType`, which the node resolves. */
 const autoKvCacheType = "auto";
 
@@ -109,6 +127,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const [editorMode, setEditorMode] = useState<EditorMode>(null);
 	const [confirmMode, setConfirmMode] = useState<ConfirmMode>(null);
 	const [pendingPolicy, setPendingPolicy] = useState<JudgePolicyDraft | null>(null);
+	const [pendingProjectDraft, setPendingProjectDraft] = useState<BenchmarkProjectDraft | null>(null);
 	// The node's own refusal of the last save, shown inside the editor. A toast would outlive the dialog and leave the
 	// operator re-reading it next to fields it no longer describes.
 	const [saveError, setSaveError] = useState<string | null>(null);
@@ -136,7 +155,12 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const deleteRun = useDeleteBenchmarkRun();
 	const startRun = useStartBenchmarkRun();
 	const startBatch = useStartBenchmarkRunBatch();
+	const measureFidelity = useStartBenchmarkRunFidelity();
+	// Already in cache for the compare view and the live panes; read here for the frozen reasoning budget, which the
+	// list projection does not carry.
+	const selectedRunDetails = useBenchmarkRunDetails(selectedRunIds);
 	const runs = useMemo(() => runsQuery.data?.items ?? [], [runsQuery.data]);
+	const [chartsOpen, setChartsOpen] = useState(false);
 	const batchProgress = useMemo(
 		() => (batchLaunch && batchLaunch.projectId === selectedProjectId ? benchmarkBatchProgress(runs, batchLaunch.runIds) : null),
 		[batchLaunch, selectedProjectId, runs],
@@ -172,9 +196,9 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 		setSelectedRunIds((current) => {
 			const valid = current.filter((id) => runs.some((run) => run.id === id));
 			if (latest[0] && !valid.includes(latest[0])) {
-				return [latest[0], ...valid].slice(0, 2);
+				return [latest[0], ...valid].slice(0, maxComparedBenchmarkRuns);
 			}
-			return valid.length > 0 ? valid.slice(0, 2) : latest;
+			return valid.length > 0 ? valid.slice(0, maxComparedBenchmarkRuns) : latest;
 		});
 	}, [runs, linkedRunIds]);
 
@@ -196,10 +220,15 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						invocationTimeoutSeconds: detail.invocationTimeoutSeconds,
 						agentDefinitionId: detail.agentDefinitionId,
 						judgeEnabled: detail.judge.enabled,
+						judgeMode: detail.judge.mode,
 						judgeModelName: detail.judge.modelName,
 						judgeContextTokens: detail.judge.requestedContextTokens,
 						rubric: detail.judge.rubric,
 						referenceAnswer: detail.judge.referenceAnswer,
+						fidelityEnabled: detail.fidelity.enabled,
+						fidelityKldEnabled: detail.fidelity.kldEnabled,
+						fidelityChunks: detail.fidelity.chunks,
+						fidelityKldBaseModelName: detail.fidelity.kldBaseModelName,
 					}
 				: emptyProject,
 		[detail],
@@ -268,12 +297,20 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 
 	const saveProject = (draft: BenchmarkProjectDraft): void => {
 		setSaveError(null);
+		// Switching a project INTO pairwise commits its queue to a quadratic number of judge calls, so it is confirmed
+		// against the node's own estimate rather than saved on the click that selected the mode.
+		if (editorMode === "edit" && detail && draft.judgeEnabled && draft.judgeMode === "pairwise" && detail.judge.mode !== "pairwise") {
+			setPendingProjectDraft(draft);
+			setConfirmMode("pairwise");
+			return;
+		}
 		if (editorMode === "edit" && detail?.isFrozen) {
 			saveJudgePolicy(
 				draft.judgeEnabled
 					? {
 							modelName: draft.judgeModelName ?? "",
 							contextTokens: draft.judgeContextTokens ?? 0,
+							mode: draft.judgeMode,
 							rubric: draft.rubric,
 							referenceAnswer: draft.referenceAnswer,
 						}
@@ -313,10 +350,10 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	// started run is the newest one), so prepending it unguarded selected the same run twice: two identical detail
 	// panes, and a launch comparison of a run against itself.
 	const selectRun = (id: string): void => {
-		setSelectedRunIds((current) => [id, ...current.filter((item) => item !== id)].slice(0, 2));
+		setSelectedRunIds((current) => [id, ...current.filter((item) => item !== id)].slice(0, maxComparedBenchmarkRuns));
 	};
 	const toggleRun = (id: string): void => {
-		setSelectedRunIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [id, ...current].slice(0, 2)));
+		setSelectedRunIds((current) => toggleBenchmarkRunSelection(current, id));
 	};
 	const rejudgeAll = (): void => {
 		if (!detail) {
@@ -348,6 +385,23 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 					toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.rejudgeRun", "Could not re-judge this run."))),
 			},
 		);
+	};
+	// Only read while the project actually judges pairwise; shares the query key the matrix below uses, so the two are
+	// one request. A fit that is not current yields no intervals — a stale band is worse than none.
+	const isPairwise = projectQuery.data?.judge.mode === "pairwise";
+	const comparisonsQuery = useBenchmarkComparisons(selectedProjectId, isPairwise);
+	const pairwiseScores = useMemo(() => {
+		const fit = comparisonsQuery.data?.fit;
+		return fit?.isCurrent ? new Map(fit.scores.map((score) => [score.runId, score])) : undefined;
+	}, [comparisonsQuery.data]);
+
+	const measureRunFidelity = (run: BenchmarkRunSummary): void => {
+		measureFidelity.mutate(run, {
+			onError: (error) =>
+				toast.error(
+					apiErrorMessage(error, t("pages.benchmarks.errors.measureFidelity", "Could not queue a fidelity measurement.")),
+				),
+		});
 	};
 	// One request for the whole matrix. The node answers per cell, so a refused combination is reported in the dialog
 	// beside the ones that started rather than failing everything the operator picked.
@@ -598,6 +652,12 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										{t("pages.benchmarks.matrix.open", "Batch runs…")}
 									</Button>
 								</Group>
+								<BenchmarkFidelityPanel
+									projectId={detail.id}
+									fidelity={detail.fidelity}
+									projectVersion={detail.version}
+									models={allModelsQuery.data ?? []}
+								/>
 								<BenchmarkRepeatModePicker
 									mode={repeatMode}
 									temperature={answerVarianceTemperature}
@@ -623,18 +683,48 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 				<SectionCard title={t("pages.benchmarks.runs", "Runs")}>
 					<BenchmarkRunsTable
 						runs={runs}
+						pairwiseScores={pairwiseScores}
 						cohort={runsQuery.data.cohort}
 						selectedRunIds={selectedRunIds}
 						totalCount={runsQuery.data.totalCount}
 						isLoadingMore={runsQuery.isFetchingNextPage}
 						onLoadMore={runsQuery.loadMore}
-						isActionPending={rejudgeRun.isPending || deleteRun.isPending}
+						isActionPending={rejudgeRun.isPending || deleteRun.isPending || measureFidelity.isPending}
 						onToggleRun={toggleRun}
 						onRejudgeRun={rejudgeOne}
+						onMeasureFidelity={measureRunFidelity}
 						onDeleteRun={removeRun}
 					/>
-					{selectedRunIds.length === 2 && selectedRunIds[0] && selectedRunIds[1] ? (
-						<BenchmarkLaunchCompare leftRunId={selectedRunIds[0]} rightRunId={selectedRunIds[1]} />
+					{/* One fit covers the cohort, so the matrix is mounted once here rather than under each run pane. */}
+					{detail?.judge.mode === "pairwise" ? <BenchmarkPairwiseMatrix projectId={detail.id} /> : null}
+					{selectedRunIds.length >= 2 ? <BenchmarkLaunchCompare runIds={selectedRunIds} /> : null}
+					{/* Opened on demand: mounting the charts pulls the charting library, and an operator reading the table
+					    has not asked for it. */}
+					<Group>
+						<Button
+							variant="subtle"
+							size="xs"
+							leftSection={<IconChartHistogram size={14} />}
+							onClick={() => setChartsOpen((current) => !current)}
+							aria-expanded={chartsOpen}
+							data-testid="benchmark-charts-toggle"
+						>
+							{chartsOpen
+								? t("pages.benchmarks.charts.hide", "Hide charts")
+								: t("pages.benchmarks.charts.show", "Show charts")}
+						</Button>
+					</Group>
+					{chartsOpen ? (
+						<Suspense
+							fallback={
+								<Group gap="sm">
+									<Loader size="sm" />
+									<Text c="dimmed">{t("pages.benchmarks.charts.loading", "Loading charts…")}</Text>
+								</Group>
+							}
+						>
+							<BenchmarkCharts runs={runs} selectedRuns={selectedRunDetails.runs} />
+						</Suspense>
 					) : null}
 					<SimpleGrid cols={{ base: 1, lg: selectedRunIds.length > 1 ? 2 : 1 }}>
 						{selectedRunIds.map((runId) => (
@@ -668,6 +758,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 				<BenchmarkProjectForm
 					key={`${editorMode}-${detail?.id ?? "new"}`}
 					initialValues={editorDraft}
+					projectId={editorMode === "edit" ? detail?.id : undefined}
 					agents={(agentsQuery.data ?? []).filter((agent) => agent.kind === "Single")}
 					models={allModelsQuery.data ?? []}
 					presets={presetsQuery.data}
@@ -698,13 +789,23 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 			<DialogShell
 				opened={confirmMode !== null}
 				onClose={() => setConfirmMode(null)}
-				title={t("pages.benchmarks.project.rejudgeConfirmTitle", "Re-judge this project?")}
+				title={
+					confirmMode === "pairwise"
+						? t("pages.benchmarks.project.pairwiseConfirmTitle", "Switch this project to pairwise judging?")
+						: t("pages.benchmarks.project.rejudgeConfirmTitle", "Re-judge this project?")
+				}
 				size="md"
 				data-testid="benchmark-rejudge-confirm"
 			>
 				<Stack gap="md">
+					{confirmMode === "pairwise" && detail ? <BenchmarkPairwiseEstimateNote projectId={detail.id} /> : null}
 					<Text>
-						{confirmMode === "judgePolicy"
+						{confirmMode === "pairwise"
+							? t(
+									"pages.benchmarks.project.pairwiseConfirm",
+									"Every eligible run is judged against every other, in both orders. The comparisons are queued at once and the ranking only appears once the fit completes.",
+								)
+							: confirmMode === "judgePolicy"
 							? t(
 									"pages.benchmarks.project.rejudgeConfirmPolicy",
 									"Changing the judge re-scores this project. All {{count}} succeeded runs will be re-judged and the ranking is rebuilt from the new cohort.",
@@ -722,10 +823,32 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						</Button>
 						<Button
 							loading={updateJudge.isPending || rejudgeProject.isPending}
-							onClick={() => (confirmMode === "judgePolicy" ? saveJudgePolicy(pendingPolicy, true) : rejudgeAll())}
+							onClick={() => {
+							if (confirmMode === "pairwise") {
+								const draft = pendingProjectDraft;
+								setConfirmMode(null);
+								setPendingProjectDraft(null);
+								if (draft && detail) {
+									saveJudgePolicy(
+										{
+											modelName: draft.judgeModelName ?? "",
+											contextTokens: draft.judgeContextTokens ?? 0,
+											mode: draft.judgeMode,
+											rubric: draft.rubric,
+											referenceAnswer: draft.referenceAnswer,
+										},
+										true,
+									);
+								}
+								return;
+							}
+							confirmMode === "judgePolicy" ? saveJudgePolicy(pendingPolicy, true) : rejudgeAll();
+						}}
 							data-testid="benchmark-rejudge-confirm-accept"
 						>
-							{t("pages.benchmarks.project.rejudgeConfirmAccept", "Re-judge")}
+							{confirmMode === "pairwise"
+							? t("pages.benchmarks.project.pairwiseConfirmAccept", "Switch and queue")
+							: t("pages.benchmarks.project.rejudgeConfirmAccept", "Re-judge")}
 						</Button>
 					</Group>
 				</Stack>

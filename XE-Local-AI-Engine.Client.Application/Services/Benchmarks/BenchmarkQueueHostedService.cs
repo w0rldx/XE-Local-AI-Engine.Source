@@ -46,17 +46,31 @@ public sealed class BenchmarkQueueHostedService(
                     await using var executionScope = scopeFactory.CreateAsyncScope();
                     try
                     {
-                        if (work.Kind == BenchmarkWorkKind.Primary)
+                        switch (work.Kind)
                         {
-                            await executionScope.ServiceProvider.GetRequiredService<IBenchmarkRunExecutor>()
-                                                .ExecuteAsync(work, stoppingToken)
-                                                .ConfigureAwait(false);
-                        }
-                        else
-                        {
-                            await executionScope.ServiceProvider.GetRequiredService<IBenchmarkJudgeExecutor>()
-                                                .ExecuteAsync(work, stoppingToken)
-                                                .ConfigureAwait(false);
+                            case BenchmarkWorkKind.Primary:
+                                await executionScope.ServiceProvider.GetRequiredService<IBenchmarkRunExecutor>()
+                                                    .ExecuteAsync(work, stoppingToken)
+                                                    .ConfigureAwait(false);
+                                break;
+                            case BenchmarkWorkKind.Judge:
+                                await executionScope.ServiceProvider.GetRequiredService<IBenchmarkJudgeExecutor>()
+                                                    .ExecuteAsync(work, stoppingToken)
+                                                    .ConfigureAwait(false);
+                                break;
+                            case BenchmarkWorkKind.Fidelity:
+                                await executionScope.ServiceProvider.GetRequiredService<IBenchmarkFidelityExecutor>()
+                                                    .ExecuteAsync(work, stoppingToken)
+                                                    .ConfigureAwait(false);
+                                break;
+                            case BenchmarkWorkKind.Comparison:
+                                await executionScope.ServiceProvider.GetRequiredService<IBenchmarkComparisonExecutor>()
+                                                    .ExecuteAsync(work, stoppingToken)
+                                                    .ConfigureAwait(false);
+                                break;
+                            default:
+                                await TerminalizeUnsupportedAsync(executionScope.ServiceProvider, work, stoppingToken).ConfigureAwait(false);
+                                break;
                         }
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -83,6 +97,29 @@ public sealed class BenchmarkQueueHostedService(
         }
     }
 
+    /// <summary>
+    ///     A work kind this build has no executor for. It is terminalized as failed rather than left claimed: a
+    ///     Running item nothing will ever finish stalls the single-consumer queue behind it forever, and an item that
+    ///     silently succeeded would publish a measurement nothing took.
+    ///     <para>
+    ///         Every kind this build knows has an arm above, so reaching here means a database written by a NEWER
+    ///         build. That is a real state, and it fails closed with a reason an operator can act on.
+    ///     </para>
+    /// </summary>
+    private async Task TerminalizeUnsupportedAsync(IServiceProvider services, BenchmarkClaimedWork work, CancellationToken cancellationToken)
+    {
+        var reason = $"Benchmark work of kind {work.Kind} is not supported by this build.";
+        logger.LogError("Benchmark queue claimed unsupported {Kind} work for run {RunId}; failing it closed.", work.Kind, work.RunId);
+        var store = services.GetRequiredService<IBenchmarkStore>();
+        if (work.Kind == BenchmarkWorkKind.Comparison)
+        {
+            await store.MarkComparisonFailedAsync(work.QueueSequence, work.Version, reason, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        _ = await store.MarkFidelityFailedAsync(work.RunId, work.Version, reason, cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task RecoverAsync(CancellationToken cancellationToken)
     {
         await using var scope = scopeFactory.CreateAsyncScope();
@@ -94,5 +131,21 @@ public sealed class BenchmarkQueueHostedService(
         }
 
         logger.LogInformation("Recovered {RunCount} interrupted benchmark runs.", recovered.Count);
+
+        // The sweep above terminalizes what the kill interrupted; this re-enqueues what it left missing. A crash
+        // between a primary succeeding and its pairs being enqueued would otherwise leave a cohort permanently one
+        // comparison short, with every run in it stuck pending and nothing that would ever notice.
+        //
+        // Resolved optionally, unlike the executors in the loop: this runs BEFORE the first claim, so a host that
+        // composed the queue without a planner would die here at startup and starve EVERY kind of benchmark work over
+        // a leg that had nothing to do — a host with no planner cannot have enqueued pairwise work either.
+        var planner = scope.ServiceProvider.GetService<IBenchmarkPairwisePlanner>();
+        if (planner is null)
+        {
+            logger.LogWarning("No pairwise planner is registered; skipping pairwise reconciliation on startup.");
+            return;
+        }
+
+        await planner.ReconcilePairwiseAsync(cancellationToken).ConfigureAwait(false);
     }
 }

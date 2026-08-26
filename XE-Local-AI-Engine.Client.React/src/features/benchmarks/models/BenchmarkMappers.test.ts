@@ -5,7 +5,9 @@ import {
 	toBenchmarkProjectDetail,
 	toBenchmarkProjectSummary,
 	toBenchmarkRankCohort,
+	toBenchmarkRubric,
 	toBenchmarkRunDetail,
+	toBenchmarkRunFidelity,
 	toBenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkMappers";
 import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
@@ -63,6 +65,8 @@ describe("toBenchmarkProjectDetail", () => {
 		expect(mapped).toMatchObject({ name: "X", coreTask: "Summarise the text." });
 		expect(mapped.judge).toEqual({
 			enabled: false,
+			// An absent mode is the node's own default, which is pointwise — never "unknown".
+			mode: "pointwise",
 			policyRevision: null,
 			policyHash: null,
 			modelName: null,
@@ -103,7 +107,7 @@ describe("toBenchmarkProjectDetail", () => {
 		});
 		expect(withRubric.judge.rubric).toEqual({
 			version: 1,
-			criteria: [{ id: "accuracy", title: "Accuracy", description: "Facts", weight: 50 }],
+			criteria: [{ id: "accuracy", title: "Accuracy", description: "Facts", weight: 50, kind: null, config: null }],
 		});
 
 		const withoutRubric = toBenchmarkProjectDetail(partial({ name: "X", coreTask: "T", judge: { enabled: true } }));
@@ -506,5 +510,64 @@ describe("toBenchmarkRankCohort", () => {
 			rankedCount: 2,
 			totalScored: 5,
 		});
+	});
+});
+
+// The KLD gate lives on the node, but the mapper is where a contract addition would first leak a figure the reader
+// must not compare — so the state is carried through verbatim rather than collapsed to a boolean.
+describe("toBenchmarkRunFidelity", () => {
+	it("is null for a run the node reports no fidelity row for", () => {
+		expect(toBenchmarkRunFidelity(null)).toBeNull();
+		expect(toBenchmarkRunFidelity(undefined)).toBeNull();
+	});
+
+	it("maps a succeeded perplexity measurement with its comparability facts", () => {
+		const fidelity = toBenchmarkRunFidelity({
+			status: "succeeded",
+			attemptId: "attempt-1",
+			perplexityMean: 6.7977,
+			perplexityStdErr: 0.07405,
+			perplexityChunks: 200,
+			perplexityContextTokens: 512,
+			perplexityCorpusId: "wikitext2-raw-test@abc123def456",
+			kldState: "none",
+		});
+
+		expect(fidelity).toMatchObject({
+			status: "succeeded",
+			perplexityMean: 6.7977,
+			perplexityChunks: 200,
+			perplexityContextTokens: 512,
+			kldState: "none",
+			kldMean: null,
+		});
+	});
+
+	it("fails closed on an unrecognized kldState, so an unknown answer never reads as comparable", () => {
+		expect(toBenchmarkRunFidelity({ status: "succeeded", kldState: "something-new" })?.kldState).toBe("none");
+	});
+
+	it("falls back to the node's own default for an unrecognized status", () => {
+		expect(toBenchmarkRunFidelity({ status: "reticulating", kldState: "none" })?.status).toBe("queued");
+	});
+});
+
+// The editor sends the mapped rubric straight back on save, so anything the mapper drops is silently deleted from the
+// project. `kind` and `config` decide whether a criterion is checked deterministically or read by an LLM — losing
+// them on a round-trip would change what the project measures without the operator touching that criterion.
+describe("toBenchmarkRubric criterion verifier members", () => {
+	it("preserves a criterion's kind and config", () => {
+		const rubric = toBenchmarkRubric({
+			version: 1,
+			criteria: [{ id: "answer", title: "Answer", description: "", weight: 50, kind: "regex", config: '{"pattern":"^42$"}' }],
+		});
+
+		expect(rubric?.criteria[0]).toMatchObject({ kind: "regex", config: '{"pattern":"^42$"}' });
+	});
+
+	it("reads an absent kind as null, which is the LLM judge", () => {
+		const rubric = toBenchmarkRubric({ version: 1, criteria: [{ id: "answer", title: "Answer", description: "", weight: 50 }] });
+
+		expect(rubric?.criteria[0]).toMatchObject({ kind: null, config: null });
 	});
 });

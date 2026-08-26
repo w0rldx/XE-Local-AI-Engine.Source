@@ -104,6 +104,33 @@ public sealed class BenchmarkJudgeExecutor(
                 throw new BenchmarkExecutionException("The primary benchmark result is unavailable for judging.");
             }
 
+            // Verifiable criteria are decided HERE — before the model lease, before capacity admission, before any
+            // spawn — because a rubric that needs no model must cost no GPU. A verifier that cannot run throws and
+            // fails the attempt (R5); it never contributes a 0, which is a score an answer can genuinely earn.
+            var graded = BenchmarkOutputParts.ForJudge(BenchmarkExecutionSerialization.DeserializeParts(output.Span),
+                Math.Min(runtime.RequestedContextTokens, runtime.Runtime.ContextTokens));
+            var verifiable = policy.Rubric.Criteria.Where(static criterion => BenchmarkJudgeCriterionKinds.IsVerifiable(criterion.Kind)).ToArray();
+            IReadOnlyList<BenchmarkJudgeVerifierResultV1> verifierResults = verifiable.Length == 0
+                ? []
+                : [.. verifiable.Select(criterion => BenchmarkJudgeVerifiers.Verify(criterion, BenchmarkJudgeVerifiers.AnswerText(graded)))];
+            if (verifiable.Length == policy.Rubric.Criteria.Count)
+            {
+                await CompleteVerifiedAsync(work, policy, verifierResults, token).ConfigureAwait(false);
+                return;
+            }
+
+            // Mixed rubric: the model is shown ONLY its own criteria, because BenchmarkJudgeResultParser.ReadCriteria
+            // demands the array length match the rubric it parses against. The verified scores are merged back and
+            // BenchmarkJudgeScoreCalculator.Compute re-checks the union against the FULL rubric, so the merge is
+            // checked rather than trusted.
+            var judgedPolicy = policy with
+            {
+                Rubric = policy.Rubric with
+                {
+                    Criteria = [.. policy.Rubric.Criteria.Where(static criterion => !BenchmarkJudgeCriterionKinds.IsVerifiable(criterion.Kind))]
+                }
+            };
+
             await using var modelLease = await installedModels.AcquireAsync(runtime.Model.ModelName, token).ConfigureAwait(false);
             if (!BenchmarkSnapshotModelComparer.Matches(runtime.Model, modelLease.Snapshot))
             {
@@ -140,7 +167,7 @@ public sealed class BenchmarkJudgeExecutor(
             // the judging still runs — a truncated answer is a real answer that scored badly, and an absent one is a
             // real result too — but both the payload and the system prompt say which it is, and ranking must exclude
             // exactly the runs the judge was told about.
-            var package = BuildJudgePackage(snapshot, policy, runtime, output.Span,
+            var package = BuildJudgePackage(snapshot, judgedPolicy, runtime, graded,
                 BenchmarkPrimaryStopReasons.IsTruncated(work.Run.PrimaryStopReason),
                 BenchmarkPrimaryStopReasons.IsIncomplete(work.Run.PrimaryStopReason));
             var admission = new BenchmarkContextAdmissionPolicy(runtime.RequestedContextTokens);
@@ -185,7 +212,9 @@ public sealed class BenchmarkJudgeExecutor(
 
             // Fail-closed parse against the attempt's own rubric, then the SERVER computes 0..100 — the judge only ever
             // scores individual criteria, so a model cannot hand itself an overall.
-            var parsed = BenchmarkJudgeResultParser.Parse(terminal.StreamedContent, policy.Rubric, runtime.Model.ModelContentFingerprint);
+            var parsed = Merge(BenchmarkJudgeResultParser.Parse(terminal.StreamedContent, judgedPolicy.Rubric, runtime.Model.ModelContentFingerprint),
+                policy.Rubric,
+                verifierResults);
             var terminalEvent = events.Reserve(work.RunId,
                 BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
                 new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Succeeded, RunVersion: work.Run.Version + 1));
@@ -226,17 +255,18 @@ public sealed class BenchmarkJudgeExecutor(
         }
     }
 
+    /// <param name="graded">
+    ///     The stored transcript reduced to its visible answer (see <see cref="BenchmarkOutputParts.ForJudge" />) and
+    ///     bounded against the frozen judge window — the raw per-delta transcript of a thinking model does not fit it.
+    ///     Computed by the caller so the verifiers and the model grade byte-identical text.
+    /// </param>
     private RuntimePackage BuildJudgePackage(BenchmarkRuntimeSnapshotV1 snapshot,
         BenchmarkJudgePolicyV1 policy,
         BenchmarkJudgeRuntimeV1 runtime,
-        ReadOnlySpan<byte> outputParts,
+        IReadOnlyList<BenchmarkOutputPart> graded,
         bool primaryOutputTruncated,
         bool primaryOutputIncomplete)
     {
-        // What the judge grades: the stored transcript reduced to its visible answer (see BenchmarkOutputParts.ForJudge)
-        // and bounded against the frozen judge window — the raw per-delta transcript of a thinking model does not fit it.
-        var graded = BenchmarkOutputParts.ForJudge(BenchmarkExecutionSerialization.DeserializeParts(outputParts),
-            Math.Min(runtime.RequestedContextTokens, runtime.Runtime.ContextTokens));
         var promptPayload = BenchmarkJudgePromptV2.BuildUserPayloadJson(JsonSerializer.Serialize(snapshot.CoreTask),
             policy.ReferenceAnswer,
             policy.Rubric,
@@ -268,6 +298,75 @@ public sealed class BenchmarkJudgeExecutor(
             // three against a small model. Constraining the decode makes the two agree instead of hoping they do; the
             // response-format schema drops the string-length bounds the parser still enforces (see the constant).
             ResponseJsonSchema: JudgeResponseFormatSchema));
+    }
+
+    /// <summary>
+    ///     Terminalizes a judging every one of whose criteria was decided server-side. Nothing is leased, admitted or
+    ///     spawned, so the attempt carries no launch receipt and no measured execution identity — it gets the
+    ///     <see cref="BenchmarkJudgeExecutionKey.VerifiedSentinel" /> instead, which joins its cohort deterministically.
+    /// </summary>
+    private async Task CompleteVerifiedAsync(BenchmarkClaimedWork work,
+        BenchmarkJudgePolicyV1 policy,
+        IReadOnlyList<BenchmarkJudgeVerifierResultV1> verifiers,
+        CancellationToken token)
+    {
+        events.Append(work.RunId,
+            BenchmarkRunStreamEventKind.JudgeState,
+            new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Running));
+        token.ThrowIfCancellationRequested();
+        var passed = verifiers.Count(static verifier => verifier.Passed);
+        var result = Merge(new BenchmarkJudgeResultV2(BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+                [],
+                $"{passed} of {verifiers.Count} verifiable criteria passed. No judge model was run.",
+                Score: 0,
+                policy.Model.ModelContentFingerprint),
+            policy.Rubric,
+            verifiers);
+        var terminalEvent = events.Reserve(work.RunId,
+            BenchmarkRunStreamEventKind.TerminalSnapshotAvailable,
+            new BenchmarkRunStreamPayload(State: BenchmarkRunJudgeStates.Succeeded, RunVersion: work.Run.Version + 1));
+        var persisted = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(work.RunId,
+                                       work.Version,
+                                       BenchmarkJudgeSerialization.SerializeResult(result),
+                                       terminalEvent.Sequence,
+                                       result.Score,
+                                       BenchmarkJudgeExecutionKey.VerifiedSentinel), CancellationToken.None)
+                                   .ConfigureAwait(false);
+        events.PublishReserved(terminalEvent with
+        {
+            Payload = terminalEvent.Payload with
+            {
+                RunVersion = persisted.Version
+            }
+        });
+        events.EvictPlaintext(work.RunId);
+    }
+
+    /// <summary>
+    ///     Folds the verified criteria into whatever the model scored and recomputes the 0..100 against the FULL
+    ///     rubric. A verified criterion is worth 10 or 0; the rubric's own weights do the rest, through the same
+    ///     calculator a purely model-judged rubric goes through — which also rejects a merge that does not cover the
+    ///     rubric exactly.
+    /// </summary>
+    private static BenchmarkJudgeResultV2 Merge(BenchmarkJudgeResultV2 judged,
+        BenchmarkJudgeRubricV1 fullRubric,
+        IReadOnlyList<BenchmarkJudgeVerifierResultV1> verifiers)
+    {
+        if (verifiers.Count == 0)
+        {
+            return judged;
+        }
+
+        List<BenchmarkJudgeCriterionScoreV2> merged = [.. judged.Criteria];
+        merged.AddRange(verifiers.Select(static verifier => new BenchmarkJudgeCriterionScoreV2(verifier.Id,
+            verifier.Passed ? BenchmarkJudgeVerifiers.PassScore : BenchmarkJudgeVerifiers.FailScore,
+            verifier.Detail)));
+        return judged with
+        {
+            Criteria = merged,
+            Score = BenchmarkJudgeScoreCalculator.Compute(fullRubric, merged),
+            Verifiers = verifiers
+        };
     }
 
     /// <summary>

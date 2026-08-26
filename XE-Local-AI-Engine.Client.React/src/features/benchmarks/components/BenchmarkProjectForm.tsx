@@ -3,14 +3,17 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { BenchmarkPairwiseEstimateNote } from "@/features/benchmarks/components/BenchmarkPairwiseEstimateNote";
 import { BenchmarkRubricEditor } from "@/features/benchmarks/components/BenchmarkRubricEditor";
 import type {
 	BenchmarkEligibleModel,
+	BenchmarkJudgeMode,
 	BenchmarkProjectDraft,
 	BenchmarkRubric,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkInvocationTimeoutLimits,
+	benchmarkJudgeModes,
 	benchmarkPromptReserveTokens,
 	benchmarkRubricIssue,
 	benchmarkRubricLimits,
@@ -24,6 +27,8 @@ interface BenchmarkAgentOption {
 
 interface BenchmarkProjectFormProps {
 	initialValues: BenchmarkProjectDraft;
+	/** The project the judging-mode estimate is read for. Absent while creating, which has no runs to compare. */
+	projectId?: string;
 	agents: BenchmarkAgentOption[];
 	models: BenchmarkEligibleModel[];
 	presets?: BenchmarkRubricPresets;
@@ -41,6 +46,7 @@ interface BenchmarkProjectFormProps {
 
 export function BenchmarkProjectForm({
 	initialValues,
+	projectId,
 	agents,
 	models,
 	presets,
@@ -259,6 +265,38 @@ export function BenchmarkProjectForm({
 				/>
 				{values.judgeEnabled ? (
 					<Stack gap="md">
+						{/* Only the judge-policy route carries the mode, and only a frozen project takes that route. That is
+						    not a gap: pairwise compares runs against each other, so a project with none has nothing to
+						    compare and no mode worth choosing. */}
+						{frozen ? (
+							<Stack gap={4}>
+								<Select
+									w={260}
+									label={t("pages.benchmarks.project.judgeMode", "Judging mode")}
+									description={t(
+										"pages.benchmarks.project.judgeModeHelp",
+										"Pointwise scores each run against the rubric. Pairwise compares runs against each other and ranks them through one fit.",
+									)}
+									allowDeselect={false}
+									data={benchmarkJudgeModes.map((mode) => ({
+										value: mode,
+										label: t(`pages.benchmarks.project.judgeModes.${mode}`, mode),
+									}))}
+									value={values.judgeMode}
+									onChange={(value) =>
+										setValues((current) => ({
+											...current,
+											judgeMode: (benchmarkJudgeModes.find((mode) => mode === value) ?? "pointwise") as BenchmarkJudgeMode,
+										}))
+									}
+									data-testid="benchmark-judge-mode"
+								/>
+								{/* Read BEFORE the save that commits to it: 12 runs is 132 judge calls. */}
+								{values.judgeMode === "pairwise" && projectId !== undefined ? (
+									<BenchmarkPairwiseEstimateNote projectId={projectId} />
+								) : null}
+							</Stack>
+						) : null}
 						<Group grow={true} align="flex-start">
 							<Select
 								label={t("pages.benchmarks.project.judgeModel", "Judge model")}

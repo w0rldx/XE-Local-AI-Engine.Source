@@ -61,7 +61,7 @@ export function groupBenchmarkRunsByModel(runs: readonly BenchmarkRunSummary[]):
  * What the operator can do about an exclusion. `wait` = the node is already working on it, `rerun` = re-judging cannot
  * help because the measurement itself is incomplete.
  */
-export type BenchmarkRankExclusionAction = "score" | "rejudge" | "wait" | "rerun" | "none";
+export type BenchmarkRankExclusionAction = "score" | "rejudge" | "wait" | "rerun" | "remove-runs" | "none";
 
 export function rankExclusionAction(reason: BenchmarkRankExclusionReason): BenchmarkRankExclusionAction {
 	switch (reason) {
@@ -79,6 +79,18 @@ export function rankExclusionAction(reason: BenchmarkRankExclusionReason): Bench
 		// The only reason that is not a problem: a warm-up is excluded because that is what it is for.
 		case "warmup":
 			return "none";
+		// Pairwise. The node is already working (`pending`) or already fixing itself (`stale` refits on the next pass),
+		// so both are waits; the rest name what the operator has to change.
+		case "pairwise-pending":
+		case "pairwise-stale":
+			return "wait";
+		case "pairwise-insufficient":
+		case "pairwise-unfitted":
+			return "rerun";
+		case "pairwise-cap":
+			return "remove-runs";
+		case "pairwise-cross-case":
+			return "rejudge";
 		default:
 			return "rejudge";
 	}

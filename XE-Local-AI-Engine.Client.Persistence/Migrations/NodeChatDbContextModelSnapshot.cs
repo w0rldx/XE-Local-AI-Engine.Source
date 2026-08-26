@@ -739,6 +739,126 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("agent_work_session_tasks", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkFidelityAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BaseLogitsDigest")
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("base_logits_digest");
+
+                    b.Property<string>("BaseModelContentFingerprint")
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("base_model_content_fingerprint");
+
+                    b.Property<string>("BaseModelName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("base_model_name");
+
+                    b.Property<long?>("CompletedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<string>("CorpusId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("corpus_id");
+
+                    b.Property<long>("EnqueuedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enqueued_at_utc");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<double?>("KldMean")
+                        .HasColumnType("REAL")
+                        .HasColumnName("kld_mean");
+
+                    b.Property<double?>("KldP99")
+                        .HasColumnType("REAL")
+                        .HasColumnName("kld_p99");
+
+                    b.Property<int?>("PerplexityChunks")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("perplexity_chunks");
+
+                    b.Property<int?>("PerplexityContextTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("perplexity_context_tokens");
+
+                    b.Property<double?>("PerplexityMean")
+                        .HasColumnType("REAL")
+                        .HasColumnName("perplexity_mean");
+
+                    b.Property<double?>("PerplexityStdErr")
+                        .HasColumnType("REAL")
+                        .HasColumnName("perplexity_std_err");
+
+                    b.Property<byte[]>("ReceiptJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("receipt_json");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<double?>("TopTokenAgreement")
+                        .HasColumnType("REAL")
+                        .HasColumnName("top_token_agreement");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ux_benchmark_fidelity_attempts_run_sequence");
+
+                    b.HasIndex("RunId", "Status")
+                        .HasDatabaseName("ix_benchmark_fidelity_attempts_run_status");
+
+                    b.ToTable("benchmark_fidelity_attempts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_benchmark_fidelity_attempts_kind", "kind IN ('ppl', 'kld')");
+
+                            t.HasCheckConstraint("CK_benchmark_fidelity_attempts_sequence", "sequence > 0");
+
+                            t.HasCheckConstraint("CK_benchmark_fidelity_attempts_status", "status IN ('Queued', 'Running', 'Succeeded', 'Failed', 'Cancelled')");
+                        });
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgeAttempt", b =>
                 {
                     b.Property<Guid>("Id")
@@ -918,6 +1038,219 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         });
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgeComparison", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AnswerATruncated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("answer_a_truncated");
+
+                    b.Property<bool>("AnswerBTruncated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("answer_b_truncated");
+
+                    b.Property<int>("AttemptSequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attempt_sequence");
+
+                    b.Property<int>("CohortGeneration")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("cohort_generation");
+
+                    b.Property<long?>("CompletedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("completed_at_utc");
+
+                    b.Property<string>("EffectiveBackend")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("effective_backend");
+
+                    b.Property<string>("EffectiveLaunchIdentity")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("effective_launch_identity");
+
+                    b.Property<long>("EnqueuedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("enqueued_at_utc");
+
+                    b.Property<string>("EnvironmentFactsHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("environment_facts_hash");
+
+                    b.Property<byte[]>("EnvironmentFactsJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("environment_facts_json");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("FlashAttentionMode")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("flash_attention_mode");
+
+                    b.Property<string>("IntendedExecutableSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("intended_executable_sha256");
+
+                    b.Property<string>("IntendedLaunchIdentity")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("intended_launch_identity");
+
+                    b.Property<string>("JudgeExecutionKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_execution_key");
+
+                    b.Property<byte[]>("JudgeRuntimeJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("judge_runtime_json");
+
+                    b.Property<string>("KvAutoReason")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kv_auto_reason");
+
+                    b.Property<string>("KvCacheType")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kv_cache_type");
+
+                    b.Property<string>("KvCacheTypeSource")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kv_cache_type_source");
+
+                    b.Property<string>("LaunchExecutableSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("launch_executable_sha256");
+
+                    b.Property<bool?>("LaunchHasAuxAssets")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("launch_has_aux_assets");
+
+                    b.Property<string>("LaunchKvCacheTypeSource")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("launch_kv_cache_type_source");
+
+                    b.Property<byte[]>("LaunchReceiptJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("launch_receipt_json");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("order");
+
+                    b.Property<int?>("PlacementOffloaded")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("placement_offloaded");
+
+                    b.Property<int?>("PlacementTotal")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("placement_total");
+
+                    b.Property<Guid>("PolicyRevisionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("policy_revision_id");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("ReceiptHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("receipt_hash");
+
+                    b.Property<byte[]>("ResultJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("result_json");
+
+                    b.Property<Guid>("RunAId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_a_id");
+
+                    b.Property<Guid>("RunBId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_b_id");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("TaskCaseId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("task_case_id");
+
+                    b.Property<string>("TaskInputHash")
+                        .IsRequired()
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("task_input_hash");
+
+                    b.Property<string>("Variant")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("variant");
+
+                    b.Property<string>("Verdict")
+                        .HasMaxLength(8)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("verdict");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PolicyRevisionId");
+
+                    b.HasIndex("ProjectId", "CohortGeneration")
+                        .HasDatabaseName("ix_benchmark_comparisons_project_generation");
+
+                    b.ToTable("benchmark_comparisons", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_benchmark_comparisons_cohort_generation", "cohort_generation > 0");
+
+                            t.HasCheckConstraint("CK_benchmark_comparisons_pair_order", "run_a_id < run_b_id AND \"order\" IN (0, 1)");
+
+                            t.HasCheckConstraint("CK_benchmark_comparisons_sequence", "sequence > 0 AND attempt_sequence > 0");
+
+                            t.HasCheckConstraint("CK_benchmark_comparisons_status", "status IN ('Queued', 'Running', 'Succeeded', 'Failed', 'Cancelled')");
+
+                            t.HasCheckConstraint("CK_benchmark_comparisons_verdict", "verdict IS NULL OR verdict IN ('a', 'b', 'tie')");
+                        });
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgePolicyRevision", b =>
                 {
                     b.Property<Guid>("Id")
@@ -928,6 +1261,12 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<int>("CohortGeneration")
                         .HasColumnType("INTEGER")
                         .HasColumnName("cohort_generation");
+
+                    b.Property<int>("ComparisonSetVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0)
+                        .HasColumnName("comparison_set_version");
 
                     b.Property<long>("CreatedAtUtc")
                         .HasColumnType("INTEGER")
@@ -975,6 +1314,97 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         });
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkPairwiseFit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<int>("BootstrapReplicates")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("bootstrap_replicates");
+
+                    b.Property<int>("CohortGeneration")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("cohort_generation");
+
+                    b.Property<int>("ComparisonSetVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("comparison_set_version");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("FitKey")
+                        .IsRequired()
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("fit_key");
+
+                    b.Property<string>("FittedSetJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("fitted_set_json");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_active");
+
+                    b.Property<int>("Iterations")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("iterations");
+
+                    b.Property<string>("JudgeExecutionKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("judge_execution_key");
+
+                    b.Property<Guid>("PolicyRevisionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("policy_revision_id");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("ScoresJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("scores_json");
+
+                    b.Property<Guid?>("TaskCaseId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("task_case_id");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FitKey")
+                        .IsUnique()
+                        .HasDatabaseName("ux_benchmark_pairwise_fits_key");
+
+                    b.HasIndex("PolicyRevisionId");
+
+                    b.HasIndex("ProjectId", "IsActive")
+                        .HasDatabaseName("ix_benchmark_pairwise_fits_project");
+
+                    b.ToTable("benchmark_pairwise_fits", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_benchmark_pairwise_fits_cohort_generation", "cohort_generation > 0");
+
+                            t.HasCheckConstraint("CK_benchmark_pairwise_fits_iterations", "iterations > 0 AND bootstrap_replicates > 0");
+                        });
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkProject", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1002,6 +1432,32 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<Guid?>("CurrentJudgePolicyRevisionId")
                         .HasColumnType("TEXT")
                         .HasColumnName("current_judge_policy_revision_id");
+
+                    b.Property<int?>("FidelityChunks")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("fidelity_chunks");
+
+                    b.Property<bool>("FidelityEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("fidelity_enabled");
+
+                    b.Property<string>("FidelityKldBaseFingerprint")
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("fidelity_kld_base_fingerprint");
+
+                    b.Property<string>("FidelityKldBaseModelName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("fidelity_kld_base_model_name");
+
+                    b.Property<bool>("FidelityKldEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("fidelity_kld_enabled");
 
                     b.Property<int?>("InvocationTimeoutSeconds")
                         .HasColumnType("INTEGER")
@@ -1084,6 +1540,20 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("effective_context_tokens");
 
+                    b.Property<Guid?>("FidelityAttemptId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("fidelity_attempt_id");
+
+                    b.Property<string>("FidelityErrorMessage")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("fidelity_error_message");
+
+                    b.Property<string>("FidelityStatus")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("fidelity_status");
+
                     b.Property<double?>("GenerationMs")
                         .HasColumnType("REAL")
                         .HasColumnName("generation_ms");
@@ -1102,6 +1572,24 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasDefaultValue(false)
                         .HasColumnName("is_warmup");
 
+                    b.Property<string>("KldBaseFingerprint")
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kld_base_fingerprint");
+
+                    b.Property<string>("KldBaseLogitsDigest")
+                        .HasMaxLength(67)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kld_base_logits_digest");
+
+                    b.Property<double?>("KldMean")
+                        .HasColumnType("REAL")
+                        .HasColumnName("kld_mean");
+
+                    b.Property<double?>("KldP99")
+                        .HasColumnType("REAL")
+                        .HasColumnName("kld_p99");
+
                     b.Property<long>("LastStreamSequence")
                         .HasColumnType("INTEGER")
                         .HasColumnName("last_stream_sequence");
@@ -1115,6 +1603,27 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.Property<byte[]>("OutputPartsJson")
                         .HasColumnType("BLOB")
                         .HasColumnName("output_parts_json");
+
+                    b.Property<int?>("PerplexityChunks")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("perplexity_chunks");
+
+                    b.Property<int?>("PerplexityContextTokens")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("perplexity_context_tokens");
+
+                    b.Property<string>("PerplexityCorpusId")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("perplexity_corpus_id");
+
+                    b.Property<double?>("PerplexityMean")
+                        .HasColumnType("REAL")
+                        .HasColumnName("perplexity_mean");
+
+                    b.Property<double?>("PerplexityStdErr")
+                        .HasColumnType("REAL")
+                        .HasColumnName("perplexity_std_err");
 
                     b.Property<long?>("PrimaryCompletedAtUtc")
                         .HasColumnType("INTEGER")
@@ -1290,6 +1799,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("REAL")
                         .HasColumnName("tokens_per_second");
 
+                    b.Property<double?>("TopTokenAgreement")
+                        .HasColumnType("REAL")
+                        .HasColumnName("top_token_agreement");
+
                     b.Property<int?>("TotalTokens")
                         .HasColumnType("INTEGER")
                         .HasColumnName("total_tokens");
@@ -1343,6 +1856,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("INTEGER")
                         .HasColumnName("attempt");
 
+                    b.Property<Guid?>("ComparisonId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("comparison_id");
+
                     b.Property<long>("EnqueuedAtUtc")
                         .HasColumnType("INTEGER")
                         .HasColumnName("enqueued_at_utc");
@@ -1351,6 +1868,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasMaxLength(1024)
                         .HasColumnType("TEXT")
                         .HasColumnName("error_message");
+
+                    b.Property<Guid?>("FidelityAttemptId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("fidelity_attempt_id");
 
                     b.Property<long?>("FinishedAtUtc")
                         .HasColumnType("INTEGER")
@@ -1387,6 +1908,16 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
 
                     b.HasKey("QueueSequence");
 
+                    b.HasIndex("ComparisonId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_benchmark_work_items_comparison")
+                        .HasFilter("kind = 'Comparison'");
+
+                    b.HasIndex("FidelityAttemptId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_benchmark_work_items_fidelity")
+                        .HasFilter("kind = 'Fidelity'");
+
                     b.HasIndex("JudgeAttemptId")
                         .IsUnique()
                         .HasDatabaseName("ux_benchmark_work_items_judge_attempt")
@@ -1404,7 +1935,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         {
                             t.HasCheckConstraint("CK_benchmark_work_items_attempt", "attempt = 1");
 
-                            t.HasCheckConstraint("CK_benchmark_work_items_judge_attempt", "(kind = 'Primary' AND judge_attempt_id IS NULL) OR (kind = 'Judge' AND judge_attempt_id IS NOT NULL)");
+                            t.HasCheckConstraint("CK_benchmark_work_items_judge_attempt", "(kind = 'Primary' AND judge_attempt_id IS NULL AND comparison_id IS NULL AND fidelity_attempt_id IS NULL) OR (kind = 'Judge' AND judge_attempt_id IS NOT NULL AND comparison_id IS NULL AND fidelity_attempt_id IS NULL) OR (kind = 'Fidelity' AND judge_attempt_id IS NULL AND comparison_id IS NULL AND fidelity_attempt_id IS NOT NULL) OR (kind = 'Comparison' AND judge_attempt_id IS NULL AND comparison_id IS NOT NULL AND fidelity_attempt_id IS NULL)");
                         });
                 });
 
@@ -5073,6 +5604,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkFidelityAttempt", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgeAttempt", b =>
                 {
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgePolicyRevision", null)
@@ -5088,8 +5628,38 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgeComparison", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgePolicyRevision", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkProject", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgePolicyRevision", b =>
                 {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkProject", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkPairwiseFit", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkJudgePolicyRevision", null)
+                        .WithMany()
+                        .HasForeignKey("PolicyRevisionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.BenchmarkProject", null)
                         .WithMany()
                         .HasForeignKey("ProjectId")

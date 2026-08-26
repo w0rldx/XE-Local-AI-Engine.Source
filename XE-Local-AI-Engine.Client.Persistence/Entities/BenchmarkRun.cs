@@ -106,6 +106,44 @@ internal sealed record class BenchmarkRun
     public Guid? CurrentJudgeAttemptId { get; set; }
 
     /// <summary>
+    ///     The quant-fidelity projection: a denormalized copy of the LATEST succeeded
+    ///     <see cref="BenchmarkFidelityAttempt" /> of this run, so the listing stays a flat-column scan and never
+    ///     decrypts. Plaintext numerics, same posture as <see cref="TokensPerSecond" />. Display only — perplexity and
+    ///     KL-divergence are never ranking inputs. <see cref="FidelityAttemptId" /> is both the audit link back to the
+    ///     attempt these numbers came from and the CAS target the refresh guards on.
+    /// </summary>
+    public Guid? FidelityAttemptId { get; set; }
+
+    public double? PerplexityMean { get; set; }
+    public double? PerplexityStdErr { get; set; }
+    public int? PerplexityChunks { get; set; }
+
+    /// <summary>The window perplexity was measured at — pinned to 512, recorded so a future change is visible.</summary>
+    public int? PerplexityContextTokens { get; set; }
+
+    public string? PerplexityCorpusId { get; set; }
+    public double? KldMean { get; set; }
+    public double? KldP99 { get; set; }
+    public double? TopTokenAgreement { get; set; }
+
+    /// <summary>The base model's content fingerprint. Evidence, NOT the comparability gate — the next column is.</summary>
+    public string? KldBaseFingerprint { get; set; }
+
+    /// <summary>
+    ///     The comparability gate, copied from the attempt's <c>BaseLogitsDigest</c>: the digest over the WHOLE
+    ///     base-logit cache key. A KLD figure is displayed, and two are compared, only while this equals the digest
+    ///     recomputed from the project's current KLD settings — the base fingerprint alone would pass a number
+    ///     measured on 50 chunks off as comparable with one measured on 200. A mismatch renders a stale badge, never
+    ///     a number.
+    /// </summary>
+    public string? KldBaseLogitsDigest { get; set; }
+
+    /// <summary><c>queued</c>/<c>running</c>/<c>succeeded</c>/<c>failed</c>/<c>cancelled</c>/<c>skipped</c>.</summary>
+    public string? FidelityStatus { get; set; }
+
+    public string? FidelityErrorMessage { get; set; }
+
+    /// <summary>
     ///     What freeze INTENDED this run to launch, per phase. All null for rows created before launch evidence
     ///     existed (they are displayed as "—", never inferred).
     /// </summary>

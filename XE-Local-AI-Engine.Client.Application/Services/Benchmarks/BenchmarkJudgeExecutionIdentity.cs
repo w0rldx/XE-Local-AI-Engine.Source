@@ -89,6 +89,19 @@ public sealed record BenchmarkJudgeExecutionIdentityV1(
 public static class BenchmarkJudgeExecutionKey
 {
     /// <summary>
+    ///     The cohort key of a judging that ran NO model because every rubric criterion was decided server-side. A
+    ///     constant, not a hash: such an attempt has no runtime to describe, and having none is not the same as having
+    ///     an incomplete description of one — <c>execution-identity-incomplete</c> would unrank it forever.
+    ///     <para>
+    ///         <b>Safe only because the judging MODE and every criterion's kind and config are inside
+    ///         <c>ComputePolicyHash</c>.</b> That is what makes one policy revision provably one rubric composition, so
+    ///         a constant key cannot merge attempts that were graded differently. If any of those ever moved out of the
+    ///         policy hash, this sentinel starts joining unlike things and must be revisited with them.
+    ///     </para>
+    /// </summary>
+    public const string VerifiedSentinel = "verified:v1";
+
+    /// <summary>
     ///     The identity for this judging, or <see langword="null" /> when it cannot be completed. Returns null for an
     ///     <c>unknown</c> backend (where the work ran was never measured) and for any launch that loaded a LoRA,
     ///     projector or draft model (the adapter/base closure is not identified yet, so two such launches cannot be

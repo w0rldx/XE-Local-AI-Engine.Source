@@ -198,6 +198,240 @@ public sealed class BenchmarkProjectServiceTests
     }
 
     [Test]
+    public async Task Create_CarriesTheFidelitySettingsAndResolvesTheBaseFingerprintServerSide()
+    {
+        // The fingerprint is an INPUT to the KLD comparability digest, so accepting one from the caller would let two
+        // sets of numbers measured against different weights compare as if they were the same measurement. It is read
+        // from the eligible-model catalog, which also proves the named base is an eligible local model at all.
+        var context = new ServiceContext();
+
+        _ = await context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityEnabled = true,
+            FidelityKldEnabled = true,
+            FidelityChunks = 50,
+            FidelityKldBaseModelName = $"  {ServiceContext.BaseModelName}  "
+        });
+
+        var input = AssertEx.NotNull(context.CreatedInput);
+        AssertEx.True(input.FidelityEnabled);
+        AssertEx.True(input.FidelityKldEnabled);
+        AssertEx.Equal<int?>(50, input.FidelityChunks);
+        AssertEx.Equal(ServiceContext.BaseModelName, input.FidelityKldBaseModelName);
+        AssertEx.Equal(ServiceContext.BaseFingerprint, input.FidelityKldBaseFingerprint);
+    }
+
+    [Test]
+    public async Task Create_WithNoFidelitySettings_PersistsNoBaseModelAndNoFingerprint()
+    {
+        var context = new ServiceContext();
+
+        _ = await context.Service.CreateAsync(Draft(context));
+
+        var input = AssertEx.NotNull(context.CreatedInput);
+        AssertEx.False(input.FidelityEnabled);
+        AssertEx.False(input.FidelityKldEnabled);
+        AssertEx.Null(input.FidelityChunks);
+        AssertEx.Null(input.FidelityKldBaseModelName);
+        AssertEx.Null(input.FidelityKldBaseFingerprint);
+        _ = context.Catalog.DidNotReceive().ListEligibleModelsAsync(Arg.Any<int?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Create_WithAnUnusableFidelityConfiguration_IsRefused()
+    {
+        var context = new ServiceContext();
+
+        var tooFew = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityChunks = BenchmarkFidelityPolicy.MinimumChunks - 1
+        }));
+        var tooMany = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityChunks = BenchmarkFidelityPolicy.MaximumChunks + 1
+        }));
+        var noBase = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityEnabled = true,
+            FidelityKldEnabled = true
+        }));
+        var unknownBase = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityKldEnabled = true,
+            FidelityKldBaseModelName = "not-installed.gguf"
+        }));
+
+        AssertEx.Contains(tooFew.Message, "chunk count");
+        AssertEx.Contains(tooMany.Message, "chunk count");
+        AssertEx.Contains(noBase.Message, "requires a base model");
+        AssertEx.Contains(unknownBase.Message, "not an eligible local model");
+        AssertEx.Equal(BenchmarkFidelityPolicy.MinimumChunks, 50);
+        AssertEx.Equal(BenchmarkFidelityPolicy.MaximumChunks, 655);
+    }
+
+    [Test]
+    public async Task Create_AtTheChunkBoundaries_IsAccepted()
+    {
+        var context = new ServiceContext();
+
+        _ = await context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityChunks = BenchmarkFidelityPolicy.MinimumChunks
+        });
+        _ = await context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityChunks = BenchmarkFidelityPolicy.MaximumChunks
+        });
+
+        AssertEx.Equal<int?>(BenchmarkFidelityPolicy.MaximumChunks, AssertEx.NotNull(context.CreatedInput).FidelityChunks);
+    }
+
+    [Test]
+    public async Task UpdateFidelity_ResolvesTheFingerprintValidatesAndWakesTheQueueOnlyWhenItQueuedSomething()
+    {
+        // Same validation as the project write, through the same resolver — a second copy is how the two paths drift
+        // into disagreeing about what a valid base model is.
+        var context = new ServiceContext();
+        BenchmarkProjectFidelityInput? input = null;
+        context.Store.UpdateProjectFidelityAsync(ProjectId, 1, Arg.Do<BenchmarkProjectFidelityInput>(value => input = value),
+                   Arg.Any<bool>(), Arg.Any<CancellationToken>())
+               .Returns(call => new BenchmarkProjectFidelityChange(ServiceContext.CurrentProject(), call.ArgAt<bool>(3) ? [Guid.NewGuid()] : []));
+
+        var quiet = await context.Service.UpdateFidelityAsync(ProjectId, 1,
+            new BenchmarkProjectFidelitySettings(Enabled: true, KldEnabled: true, Chunks: 50, $"  {ServiceContext.BaseModelName}  "));
+
+        AssertEx.Empty(quiet.EnqueuedRunIds);
+        AssertEx.Equal(ServiceContext.BaseModelName, AssertEx.NotNull(input).FidelityKldBaseModelName);
+        AssertEx.Equal(ServiceContext.BaseFingerprint, input!.FidelityKldBaseFingerprint);
+        AssertEx.Equal<int?>(50, input.FidelityChunks);
+
+        var measured = await context.Service.UpdateFidelityAsync(ProjectId, 1,
+            new BenchmarkProjectFidelitySettings(Enabled: true, KldEnabled: false, Chunks: null, null),
+            measureExisting: true);
+
+        AssertEx.Equal(1, measured.EnqueuedRunIds.Count);
+        AssertEx.Null(AssertEx.NotNull(input).FidelityKldBaseFingerprint, "No base named, so nothing to resolve.");
+    }
+
+    [Test]
+    public async Task UpdateFidelity_WithAnUnusableConfiguration_IsRefusedBeforeTheStoreIsTouched()
+    {
+        var context = new ServiceContext();
+
+        var tooMany = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.UpdateFidelityAsync(ProjectId, 1,
+            new BenchmarkProjectFidelitySettings(Enabled: true, KldEnabled: false, BenchmarkFidelityPolicy.MaximumChunks + 1, null)));
+        var noBase = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.UpdateFidelityAsync(ProjectId, 1,
+            new BenchmarkProjectFidelitySettings(Enabled: true, KldEnabled: true, Chunks: null, null)));
+        var unknownBase = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.UpdateFidelityAsync(ProjectId, 1,
+            new BenchmarkProjectFidelitySettings(Enabled: true, KldEnabled: true, Chunks: null, "not-installed.gguf")));
+
+        AssertEx.Contains(tooMany.Message, "chunk count");
+        AssertEx.Contains(noBase.Message, "requires a base model");
+        AssertEx.Contains(unknownBase.Message, "not an eligible local model");
+        _ = context.Store.DidNotReceiveWithAnyArgs().UpdateProjectFidelityAsync(Guid.Empty, 0, null!, false, CancellationToken.None);
+    }
+
+    private static BenchmarkProjectDraft Draft(ServiceContext context) =>
+        new(ProjectId, "Benchmark", "task", 4096, context.AgentId);
+
+    [Test]
+    public async Task UpdateJudgePolicy_InPairwiseMode_ActivatesLikeAnyOtherMode()
+    {
+        // The mode is inside the policy hash, so switching to it mints a revision and re-judges the project — which is
+        // the whole cost of the switch, and the pre-flight estimate is what puts that number in front of the operator.
+        var context = new ServiceContext();
+
+        _ = await context.Service.UpdateJudgePolicyAsync(ProjectId,
+            1,
+            new BenchmarkJudgePolicyDraft("judge-model", 4096, Mode: BenchmarkJudgePolicyModes.Pairwise),
+            confirmRejudge: false);
+
+        _ = context.Store.Received(1).ActivateJudgePolicyAsync(ProjectId, Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
+            Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UpdateJudgePolicy_SwitchingAProjectWithRunsToPairwise_SeedsNoPointwiseAttempts()
+    {
+        // The activation runs BEFORE the planner enqueues a single comparison, so a seed that still carried a runtime
+        // would queue one pointwise judging of every succeeded run — a second, cheaper answer to a question the
+        // operator moved to pairwise precisely to stop asking that way.
+        var context = new ServiceContext(runCount: 2, succeededRunIds: [Guid.NewGuid(), Guid.NewGuid()]);
+        context.SetCurrentRevision("f" + new string('0', count: 63));
+
+        _ = await context.Service.UpdateJudgePolicyAsync(ProjectId,
+            1,
+            new BenchmarkJudgePolicyDraft("judge-model", 4096, Mode: BenchmarkJudgePolicyModes.Pairwise),
+            confirmRejudge: true);
+
+        var seed = AssertEx.NotNull(context.ActivatedSeed);
+        AssertEx.False(seed.SeedPointwiseAttempts, "A pairwise cohort holds comparisons, never pointwise attempts.");
+        AssertEx.Null(seed.RuntimeJson, "And the planner resolves the judge runtime itself, so activation does not pay for it twice.");
+    }
+
+    [Test]
+    public async Task UpdateJudgePolicy_SwitchingBackToPointwise_SeedsAttemptsAgainAndPlansNoComparisons()
+    {
+        // The reverse of the case above, and the reason the flag lives on the seed rather than on the store call: a
+        // project coming back to pointwise must get its attempts, and the planner must stay a no-op for it.
+        var context = new ServiceContext(runCount: 2, succeededRunIds: [Guid.NewGuid(), Guid.NewGuid()]);
+        await context.SetCurrentPolicyAsync(new BenchmarkJudgePolicyDraft("judge-model", 4096, Mode: BenchmarkJudgePolicyModes.Pairwise));
+
+        _ = await context.Service.UpdateJudgePolicyAsync(ProjectId,
+            1,
+            new BenchmarkJudgePolicyDraft("judge-model", 4096, Mode: BenchmarkJudgePolicyModes.Pointwise),
+            confirmRejudge: true);
+
+        var seed = AssertEx.NotNull(context.ActivatedSeed);
+        AssertEx.True(seed.SeedPointwiseAttempts, "Pointwise is judged by attempts, so the cohort reset must enqueue them.");
+        AssertEx.True(seed.RuntimeJson is not null, "And every attempt of the cohort carries one runtime resolved once.");
+    }
+
+    [Test]
+    public async Task RejudgeProject_InPairwiseMode_ResetsTheCohortWithoutQueueingPointwiseAttempts()
+    {
+        var context = new ServiceContext(runCount: 2, succeededRunIds: [Guid.NewGuid(), Guid.NewGuid()]);
+        await context.SetCurrentPolicyAsync(new BenchmarkJudgePolicyDraft("judge-model", 4096, Mode: BenchmarkJudgePolicyModes.Pairwise));
+
+        _ = await context.Service.RejudgeProjectAsync(ProjectId, 1);
+
+        var seed = AssertEx.NotNull(context.RejudgeSeed);
+        AssertEx.False(seed.SeedPointwiseAttempts);
+        AssertEx.Equal(RevisionId, seed.ExpectedJudgePolicyRevisionId, "The revision pin survives: it is what rolls a straddled re-judge back.");
+    }
+
+    [Test]
+    public async Task UpdateJudgePolicy_WithAnAllVerifiableRubric_ActivatesAndStoresTheConfig()
+    {
+        var context = new ServiceContext();
+
+        var change = await context.Service.UpdateJudgePolicyAsync(ProjectId,
+            1,
+            new BenchmarkJudgePolicyDraft("judge-model", 4096, BenchmarkJudgeRubricDefaults.Verifiable()),
+            confirmRejudge: false);
+
+        AssertEx.NotNull(change);
+        _ = context.Store.Received(1).ActivateJudgePolicyAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
+            Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UpdateJudgePolicy_WithAnUnrunnableVerifierConfig_IsRefusedAtActivation()
+    {
+        var context = new ServiceContext();
+        var rubric = new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
+        [
+            new BenchmarkJudgeRubricCriterionV1("c0", "Title", "Description", 100, BenchmarkJudgeCriterionKinds.Regex,
+                """{"pattern":"(?=lookahead)"}""")
+        ]);
+
+        var exception = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.UpdateJudgePolicyAsync(ProjectId, 1, new BenchmarkJudgePolicyDraft("judge-model", 4096, rubric), confirmRejudge: false));
+
+        AssertEx.Contains(exception.Message, "linear time");
+    }
+
+    [Test]
     public async Task UpdateJudgePolicy_WithADifferentHashOnAProjectWithRuns_RequiresConfirmation()
     {
         var context = new ServiceContext(runCount: 2);
@@ -374,8 +608,20 @@ public sealed class BenchmarkProjectServiceTests
                             : throw new BenchmarkEligibilityException("judge runtime is unavailable");
                     });
 
-            Service = new BenchmarkProjectService(Store, agents, Models, runtimes);
+            Catalog = Substitute.For<IBenchmarkCatalogService>();
+            Catalog.ListEligibleModelsAsync(Arg.Any<int?>(), Arg.Any<CancellationToken>())
+                   .Returns<IReadOnlyList<BenchmarkEligibleModel>>(_ =>
+                   [
+                       new BenchmarkEligibleModel(BaseModelName, 32768, null, null, BaseFingerprint, SupportsTools: true)
+                   ]);
+
+            Service = new BenchmarkProjectService(Store, agents, Models, runtimes, Catalog);
         }
+
+        public const string BaseModelName = "base.gguf";
+        public const string BaseFingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+        public IBenchmarkCatalogService Catalog { get; }
 
         public Guid AgentId { get; }
         public IBenchmarkStore Store { get; }
@@ -423,10 +669,14 @@ public sealed class BenchmarkProjectServiceTests
                 BenchmarkJudgePolicyVersions.OutputSchemaVersion,
                 BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
                 draft.Rubric ?? BenchmarkJudgeRubricDefaults.Default(),
-                draft.ReferenceAnswer);
+                draft.ReferenceAnswer,
+
+                // The mode is inside the policy hash, so a harness that dropped it would store a POINTWISE revision for
+                // a pairwise draft and every mode-switch assertion below would be made against the wrong stored policy.
+                BenchmarkJudgePolicyModes.Normalize(draft.Mode));
         }
 
-        private static BenchmarkProjectRecord CurrentProject() =>
+        internal static BenchmarkProjectRecord CurrentProject() =>
             new(ProjectId, "Benchmark", Encoding.UTF8.GetBytes("\"task\""), 4096, Guid.NewGuid(), JudgeEnabled: true, RevisionId, IsFrozen: true, 1, 1, 1);
 
         private static BenchmarkJudgePolicyRevisionRecord Revision(string? policyHash) =>

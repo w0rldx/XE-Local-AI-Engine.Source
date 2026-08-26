@@ -51,15 +51,24 @@ export const benchmarkRankExclusionReasons = [
 	"truncated",
 	"incomplete",
 	"warmup",
+	// Pairwise: a fitted score is read THROUGH the active fit, so every way that read can fail is its own reason.
+	"pairwise-pending",
+	"pairwise-insufficient",
+	"pairwise-cap",
+	"pairwise-stale",
+	"pairwise-unfitted",
+	"pairwise-cross-case",
+	"pairwise-execution-mismatch",
+	"pairwise-execution-identity-incomplete",
 ] as const;
 export type BenchmarkRankExclusionReason = (typeof benchmarkRankExclusionReasons)[number];
 export const toBenchmarkRankExclusionReason = (value: unknown): BenchmarkRankExclusionReason | null =>
 	benchmarkRankExclusionReasons.find((reason) => reason === value) ?? null;
 
 /** Which side produced `qualityScore`: the operator's override wins over the judge, and `none` means unscored. */
-export type BenchmarkQualityScoreSource = "user" | "judge" | "none";
+export type BenchmarkQualityScoreSource = "user" | "judge" | "pairwise" | "none";
 export const toBenchmarkQualityScoreSource = (value: unknown): BenchmarkQualityScoreSource =>
-	value === "user" || value === "judge" ? value : "none";
+	value === "user" || value === "judge" || value === "pairwise" ? value : "none";
 
 export type BenchmarkOrigin = XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin | null;
 
@@ -81,6 +90,18 @@ export interface BenchmarkRubricCriterion {
 	title: string;
 	description: string;
 	weight: number;
+	/**
+	 * How this criterion is decided: null (or absent) is the LLM judge reading the rubric, and a named kind is a
+	 * deterministic verifier the node runs with no model in the loop. Carried through the editor UNREAD: the editor
+	 * does not offer the choice yet, and dropping the member on a round-trip would silently turn a verifiable
+	 * criterion back into a judged one — the operator's project quietly changing meaning because a form re-saved it.
+	 *
+	 * follow-up: the per-criterion kind + config editor (plan §7.3 / §9's `BenchmarkVerifierEditor`) is the slice that
+	 * makes these two members editable rather than merely preserved.
+	 */
+	kind?: string | null;
+	/** The verifier's configuration, verbatim JSON from the node. Opaque here for the same reason `kind` is. */
+	config?: string | null;
 }
 
 export interface BenchmarkRubric {
@@ -98,9 +119,20 @@ export function toBenchmarkCriterionId(title: string): string {
 		.slice(0, benchmarkRubricLimits.maxIdLength);
 }
 
+/**
+ * How the judge decides. `pointwise` scores each run against the rubric on its own and stays the default;
+ * `pairwise` compares runs against each other and ranks them through a Bradley-Terry fit of the verdicts.
+ */
+export const benchmarkJudgeModes = ["pointwise", "pairwise"] as const;
+export type BenchmarkJudgeMode = (typeof benchmarkJudgeModes)[number];
+/** An absent mode is the node's own default, which is pointwise. */
+export const toBenchmarkJudgeMode = (value: unknown): BenchmarkJudgeMode =>
+	benchmarkJudgeModes.find((mode) => mode === value) ?? "pointwise";
+
 /** The project's current judge policy revision, or a disabled judge. Read-only: it is edited through a draft. */
 export interface BenchmarkJudgePolicy {
 	enabled: boolean;
+	mode: BenchmarkJudgeMode;
 	policyRevision: number | null;
 	policyHash: string | null;
 	modelName: string | null;
@@ -135,9 +167,34 @@ export interface BenchmarkProjectSummary {
 	updatedAtUtc: number;
 }
 
+/** Chunks the node will score, and the bounds it refuses outside of. */
+export const benchmarkFidelityChunkLimits = { min: 50, max: 655, default: 200 } as const;
+
+/**
+ * What the project measures beside the answer. Detail-only: the listing does not carry these, and the KLD half is
+ * opt-in because the base-logit cache it needs is tens of gigabytes.
+ */
+export interface BenchmarkProjectFidelity {
+	enabled: boolean;
+	kldEnabled: boolean;
+	/** What the operator picked, or null for the node's default. Edit this one. */
+	chunks: number | null;
+	/** What actually runs. Render this one — it resolves the null above. */
+	chunksEffective: number;
+	kldBaseModelName: string | null;
+	/** Resolved server-side from the base model. Read-only: a caller-supplied value could make two figures compare that do not. */
+	kldBaseFingerprint: string | null;
+	/**
+	 * The comparability digest the project currently expects. A run whose stored digest differs renders `kld-stale`.
+	 * Null while KLD is off or no base is selected. Never recomputed client-side — the node owns this expression.
+	 */
+	kldExpectedDigest: string | null;
+}
+
 export interface BenchmarkProjectDetail extends BenchmarkProjectSummary {
 	coreTask: string;
 	judge: BenchmarkJudgePolicy;
+	fidelity: BenchmarkProjectFidelity;
 }
 
 /** What the project form edits. A null `rubric` means "use the node's default rubric", never "no rubric". */
@@ -150,10 +207,25 @@ export interface BenchmarkProjectDraft {
 	invocationTimeoutSeconds: number | null;
 	agentDefinitionId: string;
 	judgeEnabled: boolean;
+	judgeMode: BenchmarkJudgeMode;
 	judgeModelName: string | null;
 	judgeContextTokens: number | null;
 	rubric: BenchmarkRubric | null;
 	referenceAnswer: string | null;
+	fidelityEnabled: boolean;
+	fidelityKldEnabled: boolean;
+	/** Null = the node's default. Outside 50..655 the node answers 400. */
+	fidelityChunks: number | null;
+	/** A `modelName` from the eligible-models list. Required by the node whenever KLD is on. */
+	fidelityKldBaseModelName: string | null;
+}
+
+/** The four settable fidelity members, shared by the create request and the fidelity PATCH. */
+export interface BenchmarkProjectFidelityDraft {
+	fidelityEnabled: boolean;
+	fidelityKldEnabled: boolean;
+	fidelityChunks: number | null;
+	fidelityKldBaseModelName: string | null;
 }
 
 export interface BenchmarkEligibleModel {
@@ -163,6 +235,19 @@ export interface BenchmarkEligibleModel {
 	origin: BenchmarkOrigin;
 	modelContentFingerprint: string;
 	supportsTools: boolean;
+}
+
+/**
+ * One server-side criterion's evidence: what the verifier checked and whether the answer passed it. Present only for
+ * verifiable criteria, and only on a detail response — a pointwise LLM criterion has a rationale instead.
+ */
+export interface BenchmarkRunVerifier {
+	/** The criterion id this evidence belongs to. */
+	id: string;
+	kind: string;
+	passed: boolean;
+	/** The node's own sentence about what it checked. Evidence, not a verdict to re-derive. */
+	detail: string;
 }
 
 export interface BenchmarkJudgeCriterionScore {
@@ -188,6 +273,8 @@ export interface BenchmarkRunJudge {
 	executionCurrent: boolean;
 	errorMessage: string | null;
 	summary: string | null;
+	/** Server-side verifier evidence, one entry per verifiable criterion. Detail-only, like the criteria themselves. */
+	verifiers: BenchmarkRunVerifier[];
 	/** Detail-only; the list projection omits it. */
 	criteria: BenchmarkJudgeCriterionScore[];
 }
@@ -203,10 +290,88 @@ export const noBenchmarkRunJudge: BenchmarkRunJudge = {
 	executionCurrent: false,
 	errorMessage: null,
 	summary: null,
+	verifiers: [],
 	criteria: [],
 };
 
 /** What the project's ranking is computed against, so the table can say "n of m ranked" honestly. */
+/** Which answer the judge preferred, already normalized to the canonical pair — never to the order it was shown in. */
+export const benchmarkVerdicts = ["a", "b", "tie"] as const;
+export type BenchmarkVerdict = (typeof benchmarkVerdicts)[number];
+export const toBenchmarkVerdict = (value: unknown): BenchmarkVerdict | null =>
+	benchmarkVerdicts.find((verdict) => verdict === value) ?? null;
+
+/**
+ * One judged pair. `order` is the position the answers were SHOWN in (0 = A first), which is the whole point of the
+ * swap: the same pair is judged both ways so a position preference cancels instead of becoming a verdict.
+ */
+export interface BenchmarkComparison {
+	id: string;
+	runAId: string;
+	runBId: string;
+	order: number;
+	attemptSequence: number;
+	sequence: number;
+	taskCaseId: string | null;
+	status: string;
+	verdict: BenchmarkVerdict | null;
+	answerATruncated: boolean;
+	answerBTruncated: boolean;
+	judgeExecutionKey: string | null;
+	errorMessage: string | null;
+	enqueuedAtUtc: number;
+	completedAtUtc: number | null;
+}
+
+/** One run's fitted score. The interval is the bootstrap CI; a score with no interval is not a rankable reading. */
+export interface BenchmarkPairwiseRunScore {
+	runId: string;
+	score: number | null;
+	ciLow: number | null;
+	ciHigh: number | null;
+	comparisons: number;
+	bootstrapAppearances: number;
+	reason: string | null;
+}
+
+/**
+ * The Bradley-Terry fit the scores were read out of. `isCurrent` false is the `pairwise-stale` case: the fit exists
+ * but does not describe the cohort as it now stands, and a score from it must not be rendered as a current one.
+ */
+export interface BenchmarkPairwiseFit {
+	fitKey: string;
+	judgeExecutionKey: string;
+	comparisonSetVersion: number;
+	cohortGeneration: number;
+	iterations: number;
+	bootstrapReplicates: number;
+	isCurrent: boolean;
+	createdAtUtc: number;
+	scores: BenchmarkPairwiseRunScore[];
+}
+
+/** The verdicts and the fit they produced, as one read — a score beside verdicts that did not produce it is a lie. */
+export interface BenchmarkComparisonList {
+	cohortGeneration: number;
+	comparisonSetVersion: number;
+	referenceExecutionKey: string | null;
+	items: BenchmarkComparison[];
+	fit: BenchmarkPairwiseFit | null;
+}
+
+/** What switching a project to pairwise would cost, shown BEFORE the save that commits to it. */
+export interface BenchmarkPairwiseEstimate {
+	eligibleRuns: number;
+	pairedRuns: number;
+	/** Runs left out because the cohort is above `maximumRuns`. */
+	cappedRuns: number;
+	judgeCalls: number;
+	/** Null when the node cannot estimate one. Rendered as absent, never as 0. */
+	estimatedSeconds: number | null;
+	warn: boolean;
+	maximumRuns: number;
+}
+
 export interface BenchmarkRankCohort {
 	policyRevision: number | null;
 	executionKey: string | null;
@@ -304,6 +469,58 @@ export const noBenchmarkLaunchFacts: BenchmarkLaunchFacts = {
 export type BenchmarkEvidenceObject = Readonly<Record<string, unknown>>;
 
 /**
+ * The fidelity measurement's own lifecycle, verbatim from the wire. `skipped` is a real terminal answer, not a failure:
+ * the project did not ask for a measurement, so there is nothing to report and nothing to fix.
+ */
+export const benchmarkFidelityStatuses = ["queued", "running", "succeeded", "failed", "cancelled", "skipped"] as const;
+export type BenchmarkFidelityStatus = (typeof benchmarkFidelityStatuses)[number];
+/** An unrecognized status reads as `queued` — the node's own default for a fidelity row it has not terminalized. */
+export const toBenchmarkFidelityStatus = (value: unknown): BenchmarkFidelityStatus =>
+	benchmarkFidelityStatuses.find((status) => status === value) ?? "queued";
+
+/**
+ * Whether a run's KL-divergence figures are comparable against what the project currently expects. Three answers rather
+ * than a boolean, because "never measured" and "measured against something else" are different facts and the UI says
+ * different things: the first renders a dash, the second a `kld-stale` badge with a re-measure hint.
+ */
+export const benchmarkFidelityKldStates = ["none", "ok", "kld-stale"] as const;
+export type BenchmarkFidelityKldState = (typeof benchmarkFidelityKldStates)[number];
+/** Fail-closed: an unknown state reads as "nothing measured", never as a comparable number. */
+export const toBenchmarkFidelityKldState = (value: unknown): BenchmarkFidelityKldState =>
+	benchmarkFidelityKldStates.find((state) => state === value) ?? "none";
+
+/**
+ * How far one quantized build drifted from the weights it was made from: perplexity over a fixed corpus at a pinned
+ * 512-token window, and optionally KL divergence against a base model's logits. Both are DISPLAY ONLY and neither ever
+ * enters `rank` — a quant that answers the frozen task better is the better quant regardless of how far its logits moved.
+ *
+ * Two perplexity numbers only compare when {@link BenchmarkRunFidelity.perplexityCorpusId} and
+ * {@link BenchmarkRunFidelity.perplexityContextTokens} match, and the KLD trio is withheld by the node outright unless
+ * {@link BenchmarkRunFidelity.kldState} is `ok`.
+ */
+export interface BenchmarkRunFidelity {
+	status: BenchmarkFidelityStatus;
+	/** The immutable attempt these numbers came from; a re-measure inserts a new one rather than overwriting. */
+	attemptId: string | null;
+	perplexityMean: number | null;
+	/** Standard error of the mean over the scored chunks. Without it a perplexity difference cannot be read as real. */
+	perplexityStdErr: number | null;
+	perplexityChunks: number | null;
+	/** Pinned to 512 by the node: perplexity is only comparable at a fixed window. */
+	perplexityContextTokens: number | null;
+	/** `wikitext2-raw-test@<sha256-12>` — two perplexity numbers compare only when this matches. */
+	perplexityCorpusId: string | null;
+	kldState: BenchmarkFidelityKldState;
+	kldMean: number | null;
+	kldP99: number | null;
+	/** How often the quant's most likely token is the base model's, as a 0..1 fraction. */
+	topTokenAgreement: number | null;
+	/** The base model's content fingerprint. Evidence for the operator, NOT the comparability gate. */
+	kldBaseFingerprint: string | null;
+	errorMessage: string | null;
+}
+
+/**
  * The separated throughput facts of one run. `tg` is DECODE speed and `pp` is PREFILL speed; the node measures and
  * reports them apart because the single blended figure they replaced conflated the two, making the same model's runs on
  * a long and a short prompt incomparable. Every member is null for a runtime that reports no per-request timings (every
@@ -385,6 +602,8 @@ export interface BenchmarkRunSummary {
 	/** Decode throughput (tg) when the runtime timed prefill and decode apart, otherwise the blended fallback. */
 	tokensPerSecond: number | null;
 	throughput: BenchmarkRunThroughput;
+	/** Null when the node has no fidelity row for this run at all — a project that never asked for one, or a legacy row. */
+	fidelity: BenchmarkRunFidelity | null;
 	userScore: number | null;
 	lastStreamSequence: number;
 	version: number;
@@ -674,6 +893,26 @@ export function benchmarkBaseModelLabel(modelName: string): string {
 export function benchmarkQuantTag(modelName: string): string {
 	const separator = modelName.lastIndexOf(":");
 	return separator < 0 || separator === modelName.length - 1 ? "" : modelName.slice(separator + 1);
+}
+
+/**
+ * How many runs may be compared at once. A hard cap rather than a scrollable table: the compare view is one column per
+ * run over a field set in the hundreds, and the live pane under it renders a full transcript each. Six covers the case
+ * the cap exists for — one model's quant ladder — and the operator deselects to look at a seventh.
+ */
+export const maxComparedBenchmarkRuns = 6;
+
+/**
+ * Adds or removes one run from the compare selection, newest-first and capped. Selecting past the cap drops the OLDEST
+ * selection rather than refusing the click: an operator working down a quant ladder means "and this one too", and a
+ * silently ignored checkbox reads as a broken table.
+ */
+export function toggleBenchmarkRunSelection(
+	current: readonly string[],
+	runId: string,
+	cap = maxComparedBenchmarkRuns,
+): string[] {
+	return current.includes(runId) ? current.filter((id) => id !== runId) : [runId, ...current].slice(0, cap);
 }
 
 export const isPrimaryActive = (status: BenchmarkPrimaryStatus): boolean =>

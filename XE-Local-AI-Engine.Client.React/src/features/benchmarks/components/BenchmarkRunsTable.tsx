@@ -1,5 +1,5 @@
 import { ActionIcon, Button, Checkbox, Group, Menu, Stack, Switch, Table, Text, Tooltip } from "@mantine/core";
-import { IconChevronDown, IconChevronRight, IconDots, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { IconChevronDown, IconChevronRight, IconDots, IconRefresh, IconRuler2, IconTrash } from "@tabler/icons-react";
 import { Fragment, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -13,7 +13,14 @@ import {
 	BenchmarkStatusBadge,
 	BenchmarkTruncatedBadge,
 } from "@/features/benchmarks/components/BenchmarkStatusBadge";
-import type { BenchmarkRankCohort, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
+import {
+	canMeasureFidelity,
+	formatKldValue,
+	formatPerplexity,
+	formatTopTokenAgreement,
+	isKldComparable,
+} from "@/features/benchmarks/models/BenchmarkFidelity";
+import type { BenchmarkPairwiseRunScore, BenchmarkRankCohort, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkBaseModelLabel,
 	benchmarkQuantTag,
@@ -34,6 +41,8 @@ import {
 
 interface BenchmarkRunsTableProps {
 	runs: readonly BenchmarkRunSummary[];
+	/** Bootstrap intervals by run id, when the project judges pairwise. The score itself rides `qualityScore`. */
+	pairwiseScores?: ReadonlyMap<string, BenchmarkPairwiseRunScore>;
 	cohort: BenchmarkRankCohort;
 	selectedRunIds: readonly string[];
 	/** Runs the project has in total. More than `runs.length` means the table shows one page of them. */
@@ -43,6 +52,7 @@ interface BenchmarkRunsTableProps {
 	isActionPending?: boolean;
 	onToggleRun: (runId: string) => void;
 	onRejudgeRun: (run: BenchmarkRunSummary) => void;
+	onMeasureFidelity: (run: BenchmarkRunSummary) => void;
 	onDeleteRun: (run: BenchmarkRunSummary) => void;
 }
 
@@ -110,16 +120,117 @@ function ThroughputCell({ run, stats }: { run: BenchmarkRunSummary; stats?: Benc
 	);
 }
 
-function QualityScoreCell({ run }: { run: BenchmarkRunSummary }) {
+/**
+ * How far this build drifted from the weights it was made from. Perplexity leads because it needs no second model;
+ * KLD rides under it when the project opted in. Display only, and the copy never calls a number good or bad — a lower
+ * perplexity is not a better answer, which is exactly why neither figure ranks anything.
+ *
+ * A KLD measured against something the project no longer expects renders `kld-stale` — a BADGE, never a greyed number.
+ * A figure a reader can still see is a figure they will compare, and one taken over a different corpus, chunk count or
+ * base model means something different from the one beside it.
+ */
+function FidelityCell({ run }: { run: BenchmarkRunSummary }) {
+	const { t } = useTranslation();
+	const fidelity = run.fidelity;
+	if (fidelity === null || fidelity.status === "skipped") {
+		return <Text size="sm">—</Text>;
+	}
+	if (fidelity.status === "queued" || fidelity.status === "running") {
+		return (
+			<StatusBadge
+				color="blue"
+				inProgress={true}
+				label={t(`pages.benchmarks.fidelity.status.${fidelity.status}`, fidelity.status)}
+				data-testid={`benchmark-fidelity-status-${run.id}`}
+			/>
+		);
+	}
+	if (fidelity.status === "failed" || fidelity.status === "cancelled") {
+		return (
+			<Tooltip
+				label={fidelity.errorMessage ?? t("pages.benchmarks.fidelity.noReason", "The node recorded no reason.")}
+				multiline={true}
+				w={280}
+			>
+				<span>
+					<StatusBadge
+						color={fidelity.status === "failed" ? "red" : "gray"}
+						label={t(`pages.benchmarks.fidelity.status.${fidelity.status}`, fidelity.status)}
+						data-testid={`benchmark-fidelity-status-${run.id}`}
+					/>
+				</span>
+			</Tooltip>
+		);
+	}
+	const perplexity = formatPerplexity(fidelity);
+	const comparable = isKldComparable(fidelity);
+	const tooltip = [
+		perplexity === null
+			? null
+			: t("pages.benchmarks.fidelity.pplTooltip", "Perplexity {{value}} over {{chunks}} chunks at a {{window}}-token window ({{corpus}})", {
+					value: perplexity,
+					chunks: fidelity.perplexityChunks ?? "—",
+					window: fidelity.perplexityContextTokens ?? "—",
+					corpus: fidelity.perplexityCorpusId ?? "—",
+				}),
+		comparable && fidelity.kldMean !== null
+			? t("pages.benchmarks.fidelity.kldTooltip", "KL divergence mean {{mean}}, p99 {{p99}}, top-token agreement {{agreement}}", {
+					mean: formatKldValue(fidelity.kldMean) ?? "—",
+					p99: formatKldValue(fidelity.kldP99) ?? "—",
+					agreement: formatTopTokenAgreement(fidelity.topTokenAgreement) ?? "—",
+				})
+			: null,
+		t("pages.benchmarks.fidelity.displayOnly", "Display only — fidelity never ranks a run."),
+	]
+		.filter((line): line is string => line !== null)
+		.join("\n");
+	return (
+		<Tooltip label={tooltip} multiline={true} w={320}>
+			<Stack gap={0} data-testid={`benchmark-fidelity-${run.id}`}>
+				<Text size="sm">{perplexity ?? "—"}</Text>
+				{fidelity.kldState === "kld-stale" ? (
+					<StatusBadge
+						color="orange"
+						label={t("pages.benchmarks.fidelity.kldStale", "kld-stale")}
+						data-testid={`benchmark-fidelity-kld-stale-${run.id}`}
+					/>
+				) : comparable && fidelity.kldMean !== null ? (
+					<Text size="xs" c="dimmed" data-testid={`benchmark-fidelity-kld-${run.id}`}>
+						{t("pages.benchmarks.fidelity.kldLine", "KLD {{mean}} · p99 {{p99}} · {{agreement}}", {
+							mean: formatKldValue(fidelity.kldMean),
+							p99: formatKldValue(fidelity.kldP99) ?? "—",
+							agreement: formatTopTokenAgreement(fidelity.topTokenAgreement) ?? "—",
+						})}
+					</Text>
+				) : null}
+			</Stack>
+		</Tooltip>
+	);
+}
+
+function QualityScoreCell({ run, pairwise }: { run: BenchmarkRunSummary; pairwise?: BenchmarkPairwiseRunScore }) {
 	const { t } = useTranslation();
 	if (run.qualityScore === null) {
 		return <Text size="sm">—</Text>;
 	}
+	// A fitted score without its interval is not a comparison an operator can make: two runs whose bands overlap are
+	// not separated by the difference in their point estimates, however large it looks.
+	const interval =
+		pairwise === undefined || pairwise.ciLow === null || pairwise.ciHigh === null
+			? null
+			: `${pairwise.ciLow.toFixed(1)}–${pairwise.ciHigh.toFixed(1)}`;
 	return (
 		<Group gap={6} wrap="nowrap">
-			<Text size="sm" fw={700}>
-				{run.qualityScore}
-			</Text>
+			<Stack gap={0}>
+				<Text size="sm" fw={700}>
+					{run.qualityScore}
+				</Text>
+				{interval === null ? null : (
+					<Text size="xs" c="dimmed" data-testid={`benchmark-pairwise-ci-${run.id}`}>
+						{interval}
+					</Text>
+				)}
+			</Stack>
 			<StatusBadge
 				color={run.qualityScoreSource === "user" ? "grape" : "blue"}
 				label={t(`pages.benchmarks.rank.source.${run.qualityScoreSource}`, run.qualityScoreSource)}
@@ -170,8 +281,10 @@ interface RunRowProps {
 	/** A group leader shows the BASE model; every other row shows the exact model name it ran. */
 	modelName?: string;
 	stats?: BenchmarkRepeatStats;
+	pairwise?: BenchmarkPairwiseRunScore;
 	onToggleRun: (runId: string) => void;
 	onRejudgeRun: (run: BenchmarkRunSummary) => void;
+	onMeasureFidelity: (run: BenchmarkRunSummary) => void;
 	onDeleteRun: (run: BenchmarkRunSummary) => void;
 }
 
@@ -184,8 +297,10 @@ function RunRow({
 	modelLabel,
 	modelName,
 	stats,
+	pairwise,
 	onToggleRun,
 	onRejudgeRun,
+	onMeasureFidelity,
 	onDeleteRun,
 }: RunRowProps) {
 	const { t } = useTranslation();
@@ -238,7 +353,7 @@ function RunRow({
 				</Stack>
 			</Table.Td>
 			<Table.Td>
-				<QualityScoreCell run={run} />
+				<QualityScoreCell run={run} pairwise={pairwise} />
 			</Table.Td>
 			<Table.Td>
 				<Text size="sm">{run.judge.score ?? "—"}</Text>
@@ -248,6 +363,9 @@ function RunRow({
 			</Table.Td>
 			<Table.Td>
 				<ThroughputCell run={run} stats={stats} />
+			</Table.Td>
+			<Table.Td>
+				<FidelityCell run={run} />
 			</Table.Td>
 			<Table.Td>
 				<Text size="sm">{formatDuration(run.durationMs)}</Text>
@@ -298,6 +416,16 @@ function RunRow({
 						>
 							{t("pages.benchmarks.judge.rejudge", "Re-judge run")}
 						</Menu.Item>
+						{/* A re-measure inserts a new immutable attempt, so the previous numbers survive one that fails —
+						    which is what makes this safe to offer without a confirmation. */}
+						<Menu.Item
+							leftSection={<IconRuler2 size={14} />}
+							disabled={isActionPending || !canMeasureFidelity(run)}
+							onClick={() => onMeasureFidelity(run)}
+							data-testid={`benchmark-measure-fidelity-${run.id}`}
+						>
+							{t("pages.benchmarks.fidelity.measure", "Measure fidelity")}
+						</Menu.Item>
 						<Menu.Item
 							color="red"
 							leftSection={<IconTrash size={14} />}
@@ -320,6 +448,7 @@ function RunRow({
  */
 export function BenchmarkRunsTable({
 	runs,
+	pairwiseScores,
 	cohort,
 	selectedRunIds,
 	totalCount,
@@ -328,6 +457,7 @@ export function BenchmarkRunsTable({
 	isActionPending = false,
 	onToggleRun,
 	onRejudgeRun,
+	onMeasureFidelity,
 	onDeleteRun,
 }: BenchmarkRunsTableProps) {
 	const { t } = useTranslation();
@@ -339,7 +469,8 @@ export function BenchmarkRunsTable({
 	// narrower than a group and never wider, so scoping it to the rendered group would only recompute the same thing.
 	const stats = useMemo(() => benchmarkRepeatStats(runs), [runs]);
 	const statsFor = (run: BenchmarkRunSummary): BenchmarkRepeatStats | undefined => stats.get(benchmarkRepeatCohortKey(run));
-	const rowProps = { isActionPending, onToggleRun, onRejudgeRun, onDeleteRun };
+	const pairwiseFor = (run: BenchmarkRunSummary): BenchmarkPairwiseRunScore | undefined => pairwiseScores?.get(run.id);
+	const rowProps = { isActionPending, onToggleRun, onRejudgeRun, onMeasureFidelity, onDeleteRun };
 
 	if (runs.length === 0) {
 		return <EmptyState message={t("pages.benchmarks.rank.empty", "No runs yet. Start one to populate the ranking.")} size="sm" />;
@@ -375,7 +506,7 @@ export function BenchmarkRunsTable({
 					data-testid="benchmark-group-by-model"
 				/>
 			</Group>
-			<Table.ScrollContainer minWidth={1200}>
+			<Table.ScrollContainer minWidth={1360}>
 				<Table striped={true} highlightOnHover={true} verticalSpacing="sm" data-testid="benchmark-runs-table">
 					<Table.Thead>
 						<Table.Tr>
@@ -386,6 +517,7 @@ export function BenchmarkRunsTable({
 							<Table.Th>{t("pages.benchmarks.rank.judgeScore", "Judge")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.userScore", "Operator")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.metrics.speedColumn", "tok/s (tg)")}</Table.Th>
+							<Table.Th>{t("pages.benchmarks.fidelity.column", "PPL / KLD")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.metrics.duration", "Duration")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.launch", "KV / context")}</Table.Th>
 							<Table.Th>{t("pages.benchmarks.rank.created", "Created")}</Table.Th>
@@ -404,6 +536,7 @@ export function BenchmarkRunsTable({
 												run={group.leader}
 												selected={selectedRunIds.includes(group.leader.id)}
 												stats={statsFor(group.leader)}
+												pairwise={pairwiseFor(group.leader)}
 												modelName={benchmarkBaseModelLabel(group.leader.primaryModelName)}
 												modelLabel={t("pages.benchmarks.rank.groupCount", "{{count}} runs of this model", {
 													count: group.runs.length,
@@ -437,6 +570,7 @@ export function BenchmarkRunsTable({
 																run={run}
 																selected={selectedRunIds.includes(run.id)}
 																stats={statsFor(run)}
+																pairwise={pairwiseFor(run)}
 																nested={true}
 															/>
 														))
@@ -445,7 +579,14 @@ export function BenchmarkRunsTable({
 									);
 								})
 							: ordered.map((run) => (
-									<RunRow {...rowProps} key={run.id} run={run} selected={selectedRunIds.includes(run.id)} stats={statsFor(run)} />
+									<RunRow
+										{...rowProps}
+										key={run.id}
+										run={run}
+										selected={selectedRunIds.includes(run.id)}
+										stats={statsFor(run)}
+										pairwise={pairwiseFor(run)}
+									/>
 								))}
 					</Table.Tbody>
 				</Table>

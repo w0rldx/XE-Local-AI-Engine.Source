@@ -145,6 +145,43 @@ public sealed class BenchmarkExportResponse
 
     /// <summary>The same measurements translated into <c>llama-bench -o json</c> field names.</summary>
     public IReadOnlyList<BenchmarkExportLlamaBenchRowResponse> LlamaBench { get; init; } = [];
+
+    /// <summary>The active Bradley-Terry fit the project ranked through, or null when it judges pointwise.</summary>
+    public BenchmarkExportPairwiseFitResponse? PairwiseFit { get; init; }
+}
+
+/// <summary>
+///     The published fit a pairwise project's scores were read out of. Exported as ONE object rather than smeared over
+///     the runs, because that is what it is: a fit is a single immutable row whose identity (<see cref="FitKey" />)
+///     covers the whole comparison set. Per-run strengths stay on the run rows, where every other score already is.
+/// </summary>
+public sealed class BenchmarkExportPairwiseFitResponse
+{
+    public Guid Id { get; init; }
+    public required string FitKey { get; init; }
+    public required string JudgeExecutionKey { get; init; }
+    public int CohortGeneration { get; init; }
+    public int ComparisonSetVersion { get; init; }
+    public int Iterations { get; init; }
+    public int BootstrapReplicates { get; init; }
+    public long CreatedAtUtc { get; init; }
+
+    /// <summary>The ordered verdicts actually fitted — the auditable answer to "which comparisons produced this".</summary>
+    public required string FittedSetJson { get; init; }
+
+    public IReadOnlyList<BenchmarkExportPairwiseScoreResponse> Scores { get; init; } = [];
+}
+
+/// <summary>One run's fitted strength and its bootstrap interval.</summary>
+public sealed class BenchmarkExportPairwiseScoreResponse
+{
+    public Guid RunId { get; init; }
+    public int? Score { get; init; }
+    public int? CiLow { get; init; }
+    public int? CiHigh { get; init; }
+    public int Comparisons { get; init; }
+    public int BootstrapAppearances { get; init; }
+    public string? Reason { get; init; }
 }
 
 /// <summary>
@@ -177,6 +214,11 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimePr
 
         var now = _timeProvider.GetUtcNow();
         var (records, rankCohort) = await BenchmarkExportProjection.ListAllForExportAsync(_store, req.ProjectId, ct).ConfigureAwait(false);
+
+        // The same gate the live read applies. Without it every exported KLD figure carries kldState "stale" with its
+        // numbers nulled, because a null expected digest matches nothing — the export would silently disagree with the
+        // project page it was downloaded from.
+        var expectedKldDigest = BenchmarkEndpointSupport.ExpectedKldDigest(project);
         var runs = new List<BenchmarkRunDetailResponse>(records.Count);
 
         // Grouped BEFORE the loop so the facts read below is scoped to the runs that actually need it: LlamaBenchRows
@@ -200,7 +242,7 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimePr
             runs.Add((full with
             {
                 Rank = summary.Rank
-            }).ToDetail(verdict));
+            }).ToDetail(verdict, expectedKldDigest));
             if (firstOfGroup.Contains(full.Id))
             {
                 facts[full.Id] = ReadFacts(full);
@@ -232,7 +274,8 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkStore store, TimePr
                       RankCohort = BenchmarkExportProjection.ToResponse(rankCohort),
                       Runs = runs,
                       RepeatGroups = groups,
-                      LlamaBench = BenchmarkExportStatistics.LlamaBenchRows(groups, facts)
+                      LlamaBench = BenchmarkExportStatistics.LlamaBenchRows(groups, facts),
+                      PairwiseFit = BenchmarkExportProjection.ToResponse(await _store.GetActivePairwiseFitAsync(req.ProjectId, ct).ConfigureAwait(false))
                   }, ct)
                   .ConfigureAwait(false);
     }
@@ -318,7 +361,9 @@ public sealed class ExportBenchmarkProjectCsvEndpoint(IBenchmarkStore store, Tim
 
         var now = _timeProvider.GetUtcNow();
         var (records, _) = await BenchmarkExportProjection.ListAllForExportAsync(_store, req.ProjectId, ct).ConfigureAwait(false);
-        var csv = BenchmarkExportCsv.Render(records);
+        var csv = BenchmarkExportCsv.Render(records,
+            BenchmarkEndpointSupport.ExpectedKldDigest(project),
+            await _store.GetActivePairwiseFitAsync(req.ProjectId, ct).ConfigureAwait(false));
         await Send.BytesAsync(Encoding.UTF8.GetBytes(csv),
                       BenchmarkExportProjection.FileName(project.Name, now, "csv"),
                       "text/csv",
@@ -466,7 +511,42 @@ internal static class BenchmarkExportProjection
     ///     2 since the export gained <c>repeatGroups</c> and <c>llamaBench</c>. Additive — every v1 member is present
     ///     and unchanged — but a consumer that keys off the version needs to see that there is more to read.
     /// </summary>
-    public const int SchemaVersion = 2;
+    /// <summary>
+    ///     3 since the P2 axes joined the record: the fidelity block on every run, and the pairwise fit the project
+    ///     ranked through. Both are additive — a version 2 reader still finds every column it knew.
+    /// </summary>
+    public const int SchemaVersion = 3;
+
+    public static BenchmarkExportPairwiseFitResponse? ToResponse(BenchmarkPairwiseFitRecord? fit) =>
+        fit is null
+            ? null
+            : new BenchmarkExportPairwiseFitResponse
+            {
+                Id = fit.Id,
+                FitKey = fit.FitKey,
+                JudgeExecutionKey = fit.JudgeExecutionKey,
+                CohortGeneration = fit.CohortGeneration,
+                ComparisonSetVersion = fit.ComparisonSetVersion,
+                Iterations = fit.Iterations,
+                BootstrapReplicates = fit.BootstrapReplicates,
+                CreatedAtUtc = fit.CreatedAtUtc,
+                FittedSetJson = fit.FittedSetJson,
+                Scores =
+                [
+                    .. BenchmarkExportPairwise.Scores(fit)
+                                              .Values.OrderBy(static entry => entry.RunId)
+                                              .Select(static entry => new BenchmarkExportPairwiseScoreResponse
+                                              {
+                                                  RunId = entry.RunId,
+                                                  Score = entry.Score,
+                                                  CiLow = entry.CiLow,
+                                                  CiHigh = entry.CiHigh,
+                                                  Comparisons = entry.Comparisons,
+                                                  BootstrapAppearances = entry.BootstrapAppearances,
+                                                  Reason = entry.Reason
+                                              })
+                ]
+            };
 
     private const int MaxSlugLength = 40;
 
@@ -532,6 +612,34 @@ internal static class BenchmarkExportProjection
 }
 
 /// <summary>RFC 4180 rendering of the flat run columns.</summary>
+internal static class BenchmarkExportPairwise
+{
+    /// <summary>Same options the store wrote the blob with, so a member name cannot bind on one side only.</summary>
+    private static readonly JsonSerializerOptions ScoreOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    ///     The fit's per-run entries, indexed by run. Non-throwing: a blob that cannot be parsed exports as no
+    ///     pairwise columns rather than failing the whole download, exactly as a bad snapshot does for llama-bench.
+    /// </summary>
+    public static IReadOnlyDictionary<Guid, BenchmarkPairwiseScoreEntry> Scores(BenchmarkPairwiseFitRecord? fit)
+    {
+        if (fit is null)
+        {
+            return new Dictionary<Guid, BenchmarkPairwiseScoreEntry>();
+        }
+
+        try
+        {
+            var entries = JsonSerializer.Deserialize<BenchmarkPairwiseScoreEntry[]>(fit.ScoresJson, ScoreOptions) ?? [];
+            return entries.GroupBy(static entry => entry.RunId).ToDictionary(static group => group.Key, static group => group.First());
+        }
+        catch (JsonException)
+        {
+            return new Dictionary<Guid, BenchmarkPairwiseScoreEntry>();
+        }
+    }
+}
+
 internal static class BenchmarkExportCsv
 {
     private const string Header =
@@ -542,15 +650,29 @@ internal static class BenchmarkExportCsv
 
         // APPENDED, never inserted. A CSV consumer that reads by column INDEX — which is most of them, and the whole
         // reason this export is flat — breaks silently on an inserted column and reads a seed as a token count.
-        + "repeatMode,samplingSeed,samplingTemperature";
+        + "repeatMode,samplingSeed,samplingTemperature,"
 
-    public static string Render(IReadOnlyList<BenchmarkRunRecord> runs)
+        // Appended again, same rule. The P2 axes: quant fidelity (display-only, never a rank input) and the pairwise
+        // fit's per-run interval. The strength itself is already in qualityScore with qualityScoreSource "pairwise".
+        + "fidelityStatus,perplexityMean,perplexityStdErr,perplexityChunks,perplexityContextTokens,perplexityCorpusId,"
+        + "kldState,kldMean,kldP99,topTokenAgreement,kldBaseFingerprint,kldBaseLogitsDigest,"
+        + "pairwiseScore,pairwiseCiLow,pairwiseCiHigh,pairwiseComparisons,pairwiseFitKey";
+
+    /// <param name="expectedKldBaseLogitsDigest">
+    ///     The digest the project's CURRENT settings recompute. A run whose stored digest differs exports
+    ///     <c>kldState=stale</c> with its KLD cells EMPTY — the same withholding the API does, because a number a
+    ///     reader can still see is a number they will still compare.
+    /// </param>
+    public static string Render(IReadOnlyList<BenchmarkRunRecord> runs,
+        string? expectedKldBaseLogitsDigest = null,
+        BenchmarkPairwiseFitRecord? pairwiseFit = null)
     {
         ArgumentNullException.ThrowIfNull(runs);
+        var scores = BenchmarkExportPairwise.Scores(pairwiseFit);
         var builder = new StringBuilder(Header).Append("\r\n");
         foreach (var run in runs)
         {
-            AppendRow(builder, run);
+            AppendRow(builder, run, expectedKldBaseLogitsDigest, pairwiseFit, scores);
         }
 
         return builder.ToString();
@@ -582,7 +704,11 @@ internal static class BenchmarkExportCsv
         return value.AsSpan().IndexOfAny(",\"\r\n") < 0 ? value : $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
     }
 
-    private static void AppendRow(StringBuilder builder, BenchmarkRunRecord run)
+    private static void AppendRow(StringBuilder builder,
+        BenchmarkRunRecord run,
+        string? expectedKldBaseLogitsDigest,
+        BenchmarkPairwiseFitRecord? pairwiseFit,
+        IReadOnlyDictionary<Guid, BenchmarkPairwiseScoreEntry> scores)
     {
         var intent = run.PrimaryLaunchIntent;
         var evidence = run.PrimaryLaunchEvidence;
@@ -662,11 +788,78 @@ internal static class BenchmarkExportCsv
                .Append(Field(run.SamplingSeed))
                .Append(',')
                .Append(Rate(run.SamplingTemperature))
-               .Append("\r\n");
+               .Append(',');
+        AppendFidelity(builder, run, expectedKldBaseLogitsDigest);
+        AppendPairwise(builder, run, pairwiseFit, scores);
+        _ = builder.Append("\r\n");
+    }
+
+    private static void AppendFidelity(StringBuilder builder, BenchmarkRunRecord run, string? expectedKldBaseLogitsDigest)
+    {
+        var fidelity = run.Fidelity;
+        var comparable = fidelity is not null
+                         && BenchmarkKldCacheKey.IsComparable(fidelity.KldBaseLogitsDigest, expectedKldBaseLogitsDigest);
+        var measured = comparable ? BenchmarkFidelityKldStates.Ok : BenchmarkFidelityKldStates.Stale;
+        var kldState = fidelity?.KldMean is null ? BenchmarkFidelityKldStates.None : measured;
+        _ = builder.Append(Field(fidelity?.Status))
+                   .Append(',')
+                   .Append(Precise(fidelity?.PerplexityMean))
+                   .Append(',')
+                   .Append(Precise(fidelity?.PerplexityStdErr))
+                   .Append(',')
+                   .Append(Number(fidelity?.PerplexityChunks))
+                   .Append(',')
+                   .Append(Number(fidelity?.PerplexityContextTokens))
+                   .Append(',')
+                   .Append(Field(fidelity?.PerplexityCorpusId))
+                   .Append(',')
+                   .Append(Field(fidelity is null ? null : kldState))
+                   .Append(',')
+                   .Append(Precise(comparable ? fidelity?.KldMean : null))
+                   .Append(',')
+                   .Append(Precise(comparable ? fidelity?.KldP99 : null))
+                   .Append(',')
+                   .Append(Precise(comparable ? fidelity?.TopTokenAgreement : null))
+                   .Append(',')
+                   .Append(Field(fidelity?.KldBaseFingerprint))
+                   .Append(',')
+
+                   // The digest is exported even when the figure is withheld: it is the EVIDENCE for the withholding,
+                   // and a reader comparing it against the project's current one can see exactly what moved.
+                   .Append(Field(fidelity?.KldBaseLogitsDigest))
+                   .Append(',');
+    }
+
+    private static void AppendPairwise(StringBuilder builder,
+        BenchmarkRunRecord run,
+        BenchmarkPairwiseFitRecord? pairwiseFit,
+        IReadOnlyDictionary<Guid, BenchmarkPairwiseScoreEntry> scores)
+    {
+        _ = scores.TryGetValue(run.Id, out var entry);
+        _ = builder.Append(Number(entry?.Score))
+                   .Append(',')
+                   .Append(Number(entry?.CiLow))
+                   .Append(',')
+                   .Append(Number(entry?.CiHigh))
+                   .Append(',')
+                   .Append(Number(entry?.Comparisons))
+                   .Append(',')
+
+                   // On every row of the cohort, not once at the top: a flat CSV has nowhere else to put it, and a
+                   // reader filtering rows would otherwise lose which fit the numbers came from.
+                   .Append(Field(entry is null ? null : pairwiseFit?.FitKey));
     }
 
     private static string Rate(double? value) =>
         value?.ToString("0.###", CultureInfo.InvariantCulture) ?? string.Empty;
+
+    /// <summary>
+    ///     Six decimals, for the fidelity numbers. <see cref="Rate" />'s three are right for a token rate and wrong
+    ///     here: the measured Q4_K_M/UD-Q3_K_XL perplexity gap is 6.7977 vs 6.9497 with standard errors around 0.074,
+    ///     so rounding at three decimals throws away the digits that decide whether two quants separate at all.
+    /// </summary>
+    private static string Precise(double? value) =>
+        value?.ToString("0.######", CultureInfo.InvariantCulture) ?? string.Empty;
 
     private static string Number(int? value) =>
         value?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;

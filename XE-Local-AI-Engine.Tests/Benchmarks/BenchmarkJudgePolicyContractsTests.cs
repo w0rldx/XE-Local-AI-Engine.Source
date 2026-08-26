@@ -20,6 +20,19 @@ public sealed class BenchmarkJudgePolicyContractsTests
     }
 
     [Test]
+    public void VerifiablePreset_ActivatesAndNeedsNoJudgeModel()
+    {
+        var rubric = BenchmarkJudgeRubricDefaults.Verifiable();
+
+        BenchmarkJudgePolicyValidator.Validate(Policy(rubric));
+
+        AssertEx.Equal(100, rubric.Criteria.Sum(static criterion => criterion.Weight));
+        AssertEx.True(rubric.Criteria.All(static criterion => BenchmarkJudgeCriterionKinds.IsVerifiable(criterion.Kind)),
+            "Every criterion must be verifiable, or the preset still spawns a judge.");
+        AssertEx.True(rubric.Criteria.All(static criterion => BenchmarkJudgeVerifierConfig.Parse(criterion.Kind, criterion.Config) is not null));
+    }
+
+    [Test]
     public void Validator_RejectsCriterionCountOutOfRange()
     {
         var empty = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() => BenchmarkJudgePolicyValidator.Validate(Policy(Rubric([]))));
@@ -184,7 +197,7 @@ public sealed class BenchmarkJudgePolicyContractsTests
         AssertEx.Contains(canonical, $"\"promptVersion\":{BenchmarkJudgePolicyVersions.PromptVersion}");
         using var document = JsonDocument.Parse(canonical);
         AssertEx.True(document.RootElement.EnumerateObject().Select(static property => property.Name)
-                              .SequenceEqual(["model", "requestedContextTokens", "promptVersion", "outputSchemaVersion", "sampling", "rubric", "referenceAnswer"], StringComparer.Ordinal));
+                              .SequenceEqual(PolicyMemberNames, StringComparer.Ordinal));
     }
 
     [Test]
@@ -222,15 +235,24 @@ public sealed class BenchmarkJudgePolicyContractsTests
                               .SequenceEqual(Encoding.UTF8.GetBytes(BenchmarkJudgePolicyCanonicalizer.ToCanonicalJson(rebuilt))));
         using var document = JsonDocument.Parse(canonical);
         var root = document.RootElement;
-        AssertEx.True(Names(root).SequenceEqual(["model", "requestedContextTokens", "promptVersion", "outputSchemaVersion", "sampling", "rubric", "referenceAnswer"], StringComparer.Ordinal));
+        AssertEx.True(Names(root).SequenceEqual(PolicyMemberNames, StringComparer.Ordinal));
         AssertEx.True(Names(root.GetProperty("model")).SequenceEqual(["modelName", "modelContentFingerprint", "memberHashes"], StringComparer.Ordinal));
         AssertEx.True(Names(root.GetProperty("sampling")).SequenceEqual(
             ["temperature", "topP", "topK", "minP", "maxOutputTokens", "repeatPenalty", "repeatLastN", "presencePenalty", "frequencyPenalty", "stop", "seedPolicy", "seedValue"],
             StringComparer.Ordinal));
         AssertEx.True(Names(root.GetProperty("rubric")).SequenceEqual(["version", "criteria"], StringComparer.Ordinal));
-        AssertEx.True(Names(root.GetProperty("rubric").GetProperty("criteria")[0]).SequenceEqual(["id", "title", "description", "weight"], StringComparer.Ordinal));
+        AssertEx.True(Names(root.GetProperty("rubric").GetProperty("criteria")[0]).SequenceEqual(CriterionMemberNames, StringComparer.Ordinal));
         AssertEx.Equal("alpha", root.GetProperty("rubric").GetProperty("criteria")[0].GetProperty("id").GetString());
     }
+
+    /// <summary>The canonical policy member order, pinned once so the two shape tests cannot drift apart.</summary>
+    internal static readonly string[] PolicyMemberNames =
+    [
+        "model", "requestedContextTokens", "promptVersion", "outputSchemaVersion", "sampling", "rubric", "referenceAnswer",
+        "mode", "pairwisePromptVersion", "pairwiseOutputSchemaVersion"
+    ];
+
+    internal static readonly string[] CriterionMemberNames = ["id", "title", "description", "weight", "kind", "config"];
 
     private static IEnumerable<string> Names(JsonElement element) =>
         element.EnumerateObject().Select(static property => property.Name);
@@ -362,6 +384,144 @@ public sealed class BenchmarkJudgePolicyContractsTests
         var read = BenchmarkJudgeSerialization.DeserializePolicy(BenchmarkJudgeSerialization.SerializePolicy(stored));
 
         AssertEx.Equal(BenchmarkJudgePolicyVersions.PromptVersion - 1, read.PromptVersion);
+    }
+
+    [Test]
+    public void Mode_DefaultsToPointwiseAndOnlyAnUnknownModeIsRefused()
+    {
+        var baseline = Policy(BenchmarkJudgeRubricDefaults.Default());
+
+        AssertEx.Equal(BenchmarkJudgePolicyModes.Pointwise, baseline.Mode, "A policy built without a mode judges pointwise.");
+        BenchmarkJudgePolicyValidator.Validate(baseline);
+
+        // Pairwise is executable now, so it validates like any other mode; only an unknown mode is refused.
+        BenchmarkJudgePolicyValidator.Validate(baseline with
+        {
+            Mode = BenchmarkJudgePolicyModes.Pairwise
+        });
+        var nonsense = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() => BenchmarkJudgePolicyValidator.Validate(baseline with
+        {
+            Mode = "coinflip"
+        }));
+        var pairwiseVersion = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() => BenchmarkJudgePolicyValidator.Validate(baseline with
+        {
+            PairwisePromptVersion = BenchmarkJudgePolicyVersions.PairwisePromptVersion + 1
+        }));
+
+        AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.ModeUnsupported, nonsense.Code);
+        AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.PairwiseVersionUnsupported, pairwiseVersion.Code);
+    }
+
+    [Test]
+    public void Validate_OnRead_ToleratesAModeAndAPairwiseVersionItWouldRefuseToWrite()
+    {
+        // Same rule the prompt version lives under: a row this build could one day have written must stay READABLE,
+        // or the project header disappears from the UI along with the control that heals it.
+        var stored = Policy(BenchmarkJudgeRubricDefaults.Default()) with
+        {
+            Mode = BenchmarkJudgePolicyModes.Pairwise,
+            PairwiseOutputSchemaVersion = BenchmarkJudgePolicyVersions.PairwiseOutputSchemaVersion + 1
+        };
+
+        BenchmarkJudgePolicyValidator.Validate(stored, strictVersions: false);
+    }
+
+    [Test]
+    public void LegacyPolicyJson_WithoutModeOrKind_DeserializesToTheDefaults()
+    {
+        // The exact bytes a pre-P2 build wrote: no mode, no pairwise versions, no criterion kind or config.
+        const string LegacyJson =
+            """
+            {"model":{"modelName":"judge-model","modelContentFingerprint":"v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","memberHashes":["aaa","bbb"]},"requestedContextTokens":4096,"promptVersion":3,"outputSchemaVersion":2,"sampling":{"temperature":0,"topP":null,"topK":null,"minP":null,"maxOutputTokens":null,"repeatPenalty":null,"repeatLastN":null,"presencePenalty":null,"frequencyPenalty":null,"stop":[],"seedPolicy":"fixed","seedValue":"0"},"rubric":{"version":1,"criteria":[{"id":"correctness","title":"T","description":"D","weight":100}]},"referenceAnswer":null}
+            """;
+
+        var read = BenchmarkJudgeSerialization.DeserializePolicy(Encoding.UTF8.GetBytes(LegacyJson));
+
+        AssertEx.Equal(BenchmarkJudgePolicyModes.Pointwise, read.Mode);
+        AssertEx.Equal(BenchmarkJudgePolicyVersions.PairwisePromptVersion, read.PairwisePromptVersion);
+        AssertEx.Equal(BenchmarkJudgePolicyVersions.PairwiseOutputSchemaVersion, read.PairwiseOutputSchemaVersion);
+        AssertEx.Equal(BenchmarkJudgeCriterionKinds.Llm, read.Rubric.Criteria[0].Kind);
+        AssertEx.Null(read.Rubric.Criteria[0].Config);
+    }
+
+    [Test]
+    public void ComputePolicyHash_SeparatesModeAndEveryCriterionKindAndConfig()
+    {
+        // The precondition the `verified:v1` sentinel rests on (plan §7.3, §20 nit): one policy revision provably
+        // means ONE rubric composition, because the mode, every criterion kind and every criterion config are inside
+        // the hash. If any of them ever left it, a constant execution key would start merging attempts that were
+        // graded differently and the sentinel would have to be revisited with it.
+        var baseline = Policy(BenchmarkJudgeRubricDefaults.Default());
+        var hash = BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(baseline);
+        var verifiable = baseline with
+        {
+            Rubric = Rubric([Criterion("correctness") with
+            {
+                Kind = BenchmarkJudgeCriterionKinds.Exact,
+                Config = """{"expected":"4"}"""
+            }])
+        };
+
+        AssertEx.NotEqual(hash, BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(baseline with
+        {
+            Mode = BenchmarkJudgePolicyModes.Pairwise
+        }));
+        AssertEx.NotEqual(hash, BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(baseline with
+        {
+            PairwisePromptVersion = 2
+        }));
+        AssertEx.NotEqual(hash, BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(baseline with
+        {
+            PairwiseOutputSchemaVersion = 2
+        }));
+        AssertEx.NotEqual(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(verifiable),
+            BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(verifiable with
+            {
+                Rubric = Rubric([Criterion("correctness") with
+                {
+                    Kind = BenchmarkJudgeCriterionKinds.Exact,
+                    Config = """{"expected":"5"}"""
+                }])
+            }),
+            "Editing a verifier's expected answer must mint a new revision.");
+        AssertEx.NotEqual(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(verifiable),
+            BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(baseline with
+            {
+                Rubric = Rubric([Criterion("correctness")])
+            }));
+    }
+
+    [Test]
+    public void Canonicalizer_NormalizesTheKindAndTheConfigItHashes()
+    {
+        var spaced = Policy(Rubric([Criterion("c0") with
+        {
+            Kind = BenchmarkJudgeCriterionKinds.Exact,
+            Config = """{ "normalize" : { "trim" : true } , "expected" : "4" }"""
+        }]));
+        var compact = Policy(Rubric([Criterion("c0") with
+        {
+            Kind = BenchmarkJudgeCriterionKinds.Exact,
+            Config = """{"expected":"4","normalize":{"trim":true}}"""
+        }]));
+
+        AssertEx.Equal(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(spaced), BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(compact));
+    }
+
+    [Test]
+    public void ValidateRubric_ParsesEveryVerifiableConfigAtActivationOnly()
+    {
+        var broken = Policy(Rubric([Criterion("c0") with
+        {
+            Kind = BenchmarkJudgeCriterionKinds.Regex,
+            Config = """{"pattern":"(?=a)b"}"""
+        }]));
+
+        var write = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() => BenchmarkJudgePolicyValidator.Validate(broken));
+
+        AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid, write.Code);
+        // Read stays tolerant: a revision stored under an older build must still open.
+        BenchmarkJudgePolicyValidator.Validate(broken, strictVersions: false);
     }
 
     internal static BenchmarkJudgeRubricCriterionV1 Criterion(string id, int weight = 10) =>

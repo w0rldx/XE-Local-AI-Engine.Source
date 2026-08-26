@@ -28,6 +28,11 @@ internal sealed class BenchmarkProjectConfiguration : IEntityTypeConfiguration<B
         builder.Property(entity => entity.InvocationTimeoutSeconds).HasColumnName("invocation_timeout_seconds");
         builder.Property(entity => entity.AgentDefinitionId).HasColumnName("agent_definition_id");
         builder.Property(entity => entity.CurrentJudgePolicyRevisionId).HasColumnName("current_judge_policy_revision_id");
+        builder.Property(entity => entity.FidelityEnabled).HasColumnName("fidelity_enabled").HasDefaultValue(false);
+        builder.Property(entity => entity.FidelityKldEnabled).HasColumnName("fidelity_kld_enabled").HasDefaultValue(false);
+        builder.Property(entity => entity.FidelityChunks).HasColumnName("fidelity_chunks");
+        builder.Property(entity => entity.FidelityKldBaseModelName).HasColumnName("fidelity_kld_base_model_name").HasMaxLength(256);
+        builder.Property(entity => entity.FidelityKldBaseFingerprint).HasColumnName("fidelity_kld_base_fingerprint").HasMaxLength(67);
         builder.Property(entity => entity.Version).HasColumnName("version").IsConcurrencyToken();
         builder.Property(entity => entity.CreatedAtUtc).HasColumnName("created_at_utc");
         builder.Property(entity => entity.UpdatedAtUtc).HasColumnName("updated_at_utc");

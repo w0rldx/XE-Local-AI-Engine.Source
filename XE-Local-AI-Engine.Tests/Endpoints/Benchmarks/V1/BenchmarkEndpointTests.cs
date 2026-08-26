@@ -34,6 +34,7 @@ public sealed class BenchmarkEndpointTests
     [Arguments("DELETE", "/runs/00000000-0000-0000-0000-000000000002/score")]
     [Arguments("POST", "/runs/00000000-0000-0000-0000-000000000002/rejudge")]
     [Arguments("PUT", "/projects/00000000-0000-0000-0000-000000000001/judge")]
+    [Arguments("PATCH", "/projects/00000000-0000-0000-0000-000000000001/fidelity")]
     [Arguments("POST", "/projects/00000000-0000-0000-0000-000000000001/rejudge")]
     [Arguments("GET", "/rubric-presets")]
     [Arguments("GET", "/eligible-agents?modelName=model")]
@@ -43,7 +44,7 @@ public sealed class BenchmarkEndpointTests
         await using var context = CreateContext();
         using var client = context.Factory.CreateClient();
         using var request = new HttpRequestMessage(new HttpMethod(method), Api + path);
-        if (method is "POST" or "PUT" or "DELETE")
+        if (method is "POST" or "PUT" or "PATCH" or "DELETE")
         {
             request.Content = JsonContent.Create(new
             {
@@ -884,6 +885,103 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
+    public async Task GetProject_ServesTheFidelitySettingsAndTheDigestTheyRecompute()
+    {
+        // The five persisted columns plus two derived reads: the chunk count that actually runs when the operator
+        // left it at the default, and the comparability digest a stored KLD figure is gated against. The digest is
+        // taken from the ONE builder every other display gate reads; a second expression here is the bug that lets
+        // numbers measured against different corpora compare as equal.
+        await using var context = CreateContext();
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false, fidelity: true));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var project = document.RootElement;
+        AssertEx.True(project.GetProperty("fidelityEnabled").GetBoolean());
+        AssertEx.True(project.GetProperty("fidelityKldEnabled").GetBoolean());
+        AssertEx.Equal(JsonValueKind.Null, project.GetProperty("fidelityChunks").ValueKind);
+        AssertEx.Equal(BenchmarkFidelityPolicy.DefaultChunks, project.GetProperty("fidelityChunksEffective").GetInt32());
+        AssertEx.Equal(BaseModelName, project.GetProperty("fidelityKldBaseModelName").GetString());
+        AssertEx.Equal(BaseFingerprint, project.GetProperty("fidelityKldBaseFingerprint").GetString());
+        AssertEx.Equal(BenchmarkKldCacheKey.Create(BaseFingerprint, BenchmarkFidelityCorpus.Require().Sha256, BenchmarkFidelityPolicy.DefaultChunks).Digest,
+            project.GetProperty("fidelityKldExpectedDigest").GetString());
+    }
+
+    [Test]
+    public async Task GetProject_WithoutKldEnabled_ServesNoExpectedDigest()
+    {
+        // Null is the honest answer: a project that measures no KL divergence has nothing for a stored figure to be
+        // compared against, and an emitted digest would invite a comparison that means nothing.
+        await using var context = CreateContext();
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: false));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + $"/projects/{ProjectId}");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        using var document = JsonDocument.Parse(body);
+        AssertEx.False(document.RootElement.GetProperty("fidelityEnabled").GetBoolean());
+        AssertEx.Equal(JsonValueKind.Null, document.RootElement.GetProperty("fidelityKldExpectedDigest").ValueKind);
+    }
+
+    [Test]
+    public async Task ListProjects_DoesNotCarryTheFidelitySettings()
+    {
+        // The listing stays a flat scan. The fidelity block is detail-only, exactly as coreTask and the judge are.
+        await using var context = CreateContext();
+        context.Store.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns([Project(isFrozen: false, fidelity: true)]);
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, Api + "/projects");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.False(body.Contains("fidelity", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Test]
+    public async Task PatchProjectFidelity_OnAFrozenProject_SucceedsAndReportsWhatItQueued()
+    {
+        // The one project write the freeze does not refuse. If this ever starts 409-ing, an operator whose project
+        // has runs can never turn fidelity on at all, which is the hole this route exists to close.
+        await using var context = CreateContext();
+        var queued = Guid.NewGuid();
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: true, fidelity: true));
+        context.Store.CountRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(3);
+        BenchmarkProjectFidelitySettings? settings = null;
+        var measureExisting = false;
+        context.Projects.UpdateFidelityAsync(ProjectId, 4, Arg.Do<BenchmarkProjectFidelitySettings>(value => settings = value),
+                   Arg.Do<bool>(value => measureExisting = value), Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkProjectFidelityChange(Project(isFrozen: true, fidelity: true), [queued]));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Patch, Api + $"/projects/{ProjectId}/fidelity",
+            new
+            {
+                projectId = ProjectId,
+                expectedVersion = 4,
+                fidelityEnabled = true,
+                fidelityKldEnabled = false,
+                measureExisting = true
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(1, document.RootElement.GetProperty("enqueuedCount").GetInt32());
+        AssertEx.Equal(queued, document.RootElement.GetProperty("enqueuedRunIds")[0].GetGuid());
+        AssertEx.True(document.RootElement.GetProperty("project").GetProperty("isFrozen").GetBoolean());
+        AssertEx.True(document.RootElement.GetProperty("project").GetProperty("fidelityEnabled").GetBoolean());
+        AssertEx.True(AssertEx.NotNull(settings).Enabled);
+        AssertEx.False(settings!.KldEnabled);
+        AssertEx.True(measureExisting, "The flag must reach the service, or the operator's opt-in silently does nothing.");
+    }
+
+    [Test]
     public async Task GetProject_WhenMissing_ReturnsProblemDetailsNotFound()
     {
         await using var context = CreateContext();
@@ -958,9 +1056,17 @@ public sealed class BenchmarkEndpointTests
             expectedVersion
         };
 
-    private static BenchmarkProjectRecord Project(bool isFrozen, int? maxOutputTokens = null, int? invocationTimeoutSeconds = null) =>
+    private const string BaseModelName = "base.gguf";
+    private const string BaseFingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    private static BenchmarkProjectRecord Project(bool isFrozen,
+        int? maxOutputTokens = null,
+        int? invocationTimeoutSeconds = null,
+        bool fidelity = false) =>
         new(ProjectId, "Project", Encoding.UTF8.GetBytes("\"Answer exactly.\""), 4096, AgentId, JudgeEnabled: false,
-            CurrentJudgePolicyRevisionId: null, isFrozen, 4, 10, 20, maxOutputTokens, invocationTimeoutSeconds);
+            CurrentJudgePolicyRevisionId: null, isFrozen, 4, 10, 20, maxOutputTokens, invocationTimeoutSeconds,
+            ReasoningBudgetTokens: null, fidelity, fidelity, FidelityChunks: null,
+            fidelity ? BaseModelName : null, fidelity ? BaseFingerprint : null);
 
     private static BenchmarkRunRecord Run(BenchmarkPrimaryStatus primary = BenchmarkPrimaryStatus.Queued,
         string judgeState = BenchmarkRunJudgeStates.None,

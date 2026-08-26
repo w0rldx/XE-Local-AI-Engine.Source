@@ -145,3 +145,63 @@ describe("BenchmarkJudgePanel", () => {
 		expect(screen.queryByRole("button", { name: "Re-judge run" })).toBeNull();
 	});
 });
+
+// C4: a verifiable criterion's score was DECIDED server-side, not judged. The panel says which side produced it, so a
+// 10 that came from a regex match is not read as a model's opinion that happened to agree with one.
+describe("BenchmarkJudgePanel verifier evidence", () => {
+	afterEach(cleanup);
+
+	const judged = benchmarkJudgeFixture({
+		state: "succeeded",
+		score: 90,
+		criteria: [
+			{ id: "answer", score: 10, rationale: "Matched the expected value." },
+			{ id: "tone", score: 7, rationale: "Reads a little brusque." },
+		],
+		verifiers: [{ id: "answer", kind: "exact", passed: true, detail: "The answer equalled '42' after trimming." }],
+	});
+
+	it("labels the criterion the node decided with the kind that decided it", () => {
+		renderPanel(judged);
+
+		expect(screen.getByTestId("benchmark-judge-verifier-answer").textContent).toBe("Exact answer");
+		expect(screen.getByTestId("benchmark-judge-verifier-detail-answer").textContent).toContain("42");
+	});
+
+	it("leaves an LLM-judged criterion without a verifier badge", () => {
+		renderPanel(judged);
+
+		expect(screen.queryByTestId("benchmark-judge-verifier-tone")).toBeNull();
+	});
+
+	it("shows a failed verifier's evidence rather than only its score", () => {
+		renderPanel(
+			benchmarkJudgeFixture({
+				state: "succeeded",
+				score: 0,
+				criteria: [{ id: "answer", score: 0, rationale: "" }],
+				verifiers: [{ id: "answer", kind: "regex", passed: false, detail: "The answer did not match /^42$/." }],
+			}),
+		);
+
+		expect(screen.getByTestId("benchmark-judge-verifier-detail-answer").textContent).toContain("did not match");
+	});
+});
+
+// Pairwise produces no per-run rubric score at all — a verdict matrix and a fitted number instead. Rendering pointwise
+// chrome for it would present a score shape the policy does not produce.
+describe("BenchmarkJudgePanel judging mode", () => {
+	afterEach(cleanup);
+
+	it("renders the pointwise reading by default", () => {
+		renderPanel(benchmarkJudgeFixture({ state: "succeeded", score: 88 }));
+
+		expect(screen.getByTestId("benchmark-judge-panel")).toBeTruthy();
+	});
+
+	it("renders nothing for a pairwise policy, whose reading this panel does not have", () => {
+		renderPanel(benchmarkJudgeFixture({ state: "succeeded", score: 88 }), { mode: "pairwise" });
+
+		expect(screen.queryByTestId("benchmark-judge-panel")).toBeNull();
+	});
+});

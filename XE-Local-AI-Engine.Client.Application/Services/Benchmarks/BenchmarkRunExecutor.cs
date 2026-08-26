@@ -27,6 +27,7 @@ public sealed class BenchmarkRunExecutor(
     IBenchmarkCancellationRegistry cancellations,
     IRuntimeEnvironmentFactsProvider environmentFacts,
     IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
+    IBenchmarkPairwisePlanner pairwisePlanner,
     BenchmarkAdmissionRetry admissionRetry,
     ILogger<BenchmarkRunExecutor> logger) : IBenchmarkRunExecutor
 {
@@ -188,6 +189,11 @@ public sealed class BenchmarkRunExecutor(
                 }
             });
             events.EvictPlaintext(work.RunId);
+
+            // A newly succeeded run is newly eligible to be compared against every other one. In pointwise mode this
+            // is a no-op; in pairwise mode it is the second of the three places a cohort grows, and it is incremental
+            // — one more run enqueues 2N comparisons, not the whole tournament again.
+            _ = await pairwisePlanner.EnsurePairsAsync(work.Run.ProjectId, CancellationToken.None).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

@@ -40,6 +40,7 @@ import {
 	cancelTrainingDataset,
 	cancelTrainingRun,
 	cancelWorkSession,
+	clearBenchmarkFidelityCache,
 	clearBenchmarkRunScore,
 	clearCloudSettings,
 	codexLogin,
@@ -136,6 +137,8 @@ import {
 	getAppUpdateStatus,
 	getBaseArtifact,
 	getBaseArtifactLicense,
+	getBenchmarkKldDiskEstimate,
+	getBenchmarkPairwiseEstimate,
 	getBenchmarkProject,
 	getBenchmarkRubricPresets,
 	getBenchmarkRun,
@@ -212,6 +215,8 @@ import {
 	listAgentPlaybookActions,
 	listAgentTemplates,
 	listBaseArtifacts,
+	listBenchmarkComparisons,
+	listBenchmarkFidelityAttempts,
 	listBenchmarkProjects,
 	listBenchmarkRuns,
 	listComparisons,
@@ -317,6 +322,7 @@ import {
 	setNodeChatSelectedPath,
 	startBenchmarkRun,
 	startBenchmarkRunBatch,
+	startBenchmarkRunFidelity,
 	startCudaBuild,
 	startDevelopmentNextAction,
 	startGgufDownload,
@@ -335,6 +341,7 @@ import {
 	updateAgentDefinition,
 	updateBenchmarkJudgePolicy,
 	updateBenchmarkProject,
+	updateBenchmarkProjectFidelity,
 	updateCustomTool,
 	updateLlamaCppRuntime,
 	updateMcpServer,
@@ -421,6 +428,9 @@ import type {
 	CancelWorkSessionData,
 	CancelWorkSessionError,
 	CancelWorkSessionResponse,
+	ClearBenchmarkFidelityCacheData,
+	ClearBenchmarkFidelityCacheError,
+	ClearBenchmarkFidelityCacheResponse,
 	ClearBenchmarkRunScoreData,
 	ClearBenchmarkRunScoreError,
 	ClearBenchmarkRunScoreResponse,
@@ -655,6 +665,12 @@ import type {
 	GetBaseArtifactLicenseError,
 	GetBaseArtifactLicenseResponse,
 	GetBaseArtifactResponse,
+	GetBenchmarkKldDiskEstimateData,
+	GetBenchmarkKldDiskEstimateError,
+	GetBenchmarkKldDiskEstimateResponse,
+	GetBenchmarkPairwiseEstimateData,
+	GetBenchmarkPairwiseEstimateError,
+	GetBenchmarkPairwiseEstimateResponse,
 	GetBenchmarkProjectData,
 	GetBenchmarkProjectError,
 	GetBenchmarkProjectResponse,
@@ -816,6 +832,12 @@ import type {
 	ListAgentTemplatesResponse,
 	ListBaseArtifactsData,
 	ListBaseArtifactsResponse,
+	ListBenchmarkComparisonsData,
+	ListBenchmarkComparisonsError,
+	ListBenchmarkComparisonsResponse,
+	ListBenchmarkFidelityAttemptsData,
+	ListBenchmarkFidelityAttemptsError,
+	ListBenchmarkFidelityAttemptsResponse,
 	ListBenchmarkProjectsData,
 	ListBenchmarkProjectsResponse,
 	ListBenchmarkRunsData,
@@ -1063,6 +1085,9 @@ import type {
 	StartBenchmarkRunBatchResponse,
 	StartBenchmarkRunData,
 	StartBenchmarkRunError,
+	StartBenchmarkRunFidelityData,
+	StartBenchmarkRunFidelityError,
+	StartBenchmarkRunFidelityResponse,
 	StartBenchmarkRunResponse,
 	StartCudaBuildData,
 	StartCudaBuildError,
@@ -1111,6 +1136,9 @@ import type {
 	UpdateBenchmarkJudgePolicyResponse,
 	UpdateBenchmarkProjectData,
 	UpdateBenchmarkProjectError,
+	UpdateBenchmarkProjectFidelityData,
+	UpdateBenchmarkProjectFidelityError,
+	UpdateBenchmarkProjectFidelityResponse,
 	UpdateBenchmarkProjectResponse,
 	UpdateCustomToolData,
 	UpdateCustomToolResponse,
@@ -7077,6 +7105,166 @@ export const exportBenchmarkProjectCsvOptions = (options: Options<ExportBenchmar
 			return data;
 		},
 		queryKey: exportBenchmarkProjectCsvQueryKey(options),
+	});
+
+export const getBenchmarkKldDiskEstimateQueryKey = (options: Options<GetBenchmarkKldDiskEstimateData>) =>
+	createQueryKey("getBenchmarkKldDiskEstimate", options);
+
+export const getBenchmarkKldDiskEstimateOptions = (options: Options<GetBenchmarkKldDiskEstimateData>) =>
+	queryOptions<
+		GetBenchmarkKldDiskEstimateResponse,
+		AxiosError<GetBenchmarkKldDiskEstimateError>,
+		GetBenchmarkKldDiskEstimateResponse,
+		ReturnType<typeof getBenchmarkKldDiskEstimateQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getBenchmarkKldDiskEstimate({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getBenchmarkKldDiskEstimateQueryKey(options),
+	});
+
+export const updateBenchmarkProjectFidelityMutation = (
+	options?: Partial<Options<UpdateBenchmarkProjectFidelityData>>,
+): UseMutationOptions<
+	UpdateBenchmarkProjectFidelityResponse,
+	AxiosError<UpdateBenchmarkProjectFidelityError>,
+	Options<UpdateBenchmarkProjectFidelityData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateBenchmarkProjectFidelityResponse,
+		AxiosError<UpdateBenchmarkProjectFidelityError>,
+		Options<UpdateBenchmarkProjectFidelityData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateBenchmarkProjectFidelity({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startBenchmarkRunFidelityMutation = (
+	options?: Partial<Options<StartBenchmarkRunFidelityData>>,
+): UseMutationOptions<
+	StartBenchmarkRunFidelityResponse,
+	AxiosError<StartBenchmarkRunFidelityError>,
+	Options<StartBenchmarkRunFidelityData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartBenchmarkRunFidelityResponse,
+		AxiosError<StartBenchmarkRunFidelityError>,
+		Options<StartBenchmarkRunFidelityData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startBenchmarkRunFidelity({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listBenchmarkFidelityAttemptsQueryKey = (options: Options<ListBenchmarkFidelityAttemptsData>) =>
+	createQueryKey("listBenchmarkFidelityAttempts", options);
+
+export const listBenchmarkFidelityAttemptsOptions = (options: Options<ListBenchmarkFidelityAttemptsData>) =>
+	queryOptions<
+		ListBenchmarkFidelityAttemptsResponse,
+		AxiosError<ListBenchmarkFidelityAttemptsError>,
+		ListBenchmarkFidelityAttemptsResponse,
+		ReturnType<typeof listBenchmarkFidelityAttemptsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listBenchmarkFidelityAttempts({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listBenchmarkFidelityAttemptsQueryKey(options),
+	});
+
+export const clearBenchmarkFidelityCacheMutation = (
+	options?: Partial<Options<ClearBenchmarkFidelityCacheData>>,
+): UseMutationOptions<
+	ClearBenchmarkFidelityCacheResponse,
+	AxiosError<ClearBenchmarkFidelityCacheError>,
+	Options<ClearBenchmarkFidelityCacheData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ClearBenchmarkFidelityCacheResponse,
+		AxiosError<ClearBenchmarkFidelityCacheError>,
+		Options<ClearBenchmarkFidelityCacheData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await clearBenchmarkFidelityCache({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listBenchmarkComparisonsQueryKey = (options: Options<ListBenchmarkComparisonsData>) =>
+	createQueryKey("listBenchmarkComparisons", options);
+
+export const listBenchmarkComparisonsOptions = (options: Options<ListBenchmarkComparisonsData>) =>
+	queryOptions<
+		ListBenchmarkComparisonsResponse,
+		AxiosError<ListBenchmarkComparisonsError>,
+		ListBenchmarkComparisonsResponse,
+		ReturnType<typeof listBenchmarkComparisonsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listBenchmarkComparisons({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listBenchmarkComparisonsQueryKey(options),
+	});
+
+export const getBenchmarkPairwiseEstimateQueryKey = (options: Options<GetBenchmarkPairwiseEstimateData>) =>
+	createQueryKey("getBenchmarkPairwiseEstimate", options);
+
+export const getBenchmarkPairwiseEstimateOptions = (options: Options<GetBenchmarkPairwiseEstimateData>) =>
+	queryOptions<
+		GetBenchmarkPairwiseEstimateResponse,
+		AxiosError<GetBenchmarkPairwiseEstimateError>,
+		GetBenchmarkPairwiseEstimateResponse,
+		ReturnType<typeof getBenchmarkPairwiseEstimateQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getBenchmarkPairwiseEstimate({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getBenchmarkPairwiseEstimateQueryKey(options),
 	});
 
 export const listBenchmarkProjectsQueryKey = (options?: Options<ListBenchmarkProjectsData>) =>

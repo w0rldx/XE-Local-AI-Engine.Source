@@ -54,7 +54,7 @@ const environment = (overrides: Record<string, unknown> = {}): BenchmarkEvidence
 const diffOf = (
 	left: [BenchmarkLaunchFacts, BenchmarkEvidenceObject | null, BenchmarkEvidenceObject | null],
 	right: [BenchmarkLaunchFacts, BenchmarkEvidenceObject | null, BenchmarkEvidenceObject | null],
-): string[] => differingEvidenceKeys(diffLaunchEvidence(launchEvidenceEntries(...left), launchEvidenceEntries(...right)));
+): string[] => differingEvidenceKeys(diffLaunchEvidence([launchEvidenceEntries(...left), launchEvidenceEntries(...right)]));
 
 describe("flattenEvidence", () => {
 	it("walks nested objects and arrays into dotted leaf paths", () => {
@@ -136,24 +136,26 @@ describe("diffLaunchEvidence", () => {
 	});
 
 	it("reports a field only one side recorded, without dropping it", () => {
-		const rows = diffLaunchEvidence(
+		const rows = diffLaunchEvidence([
 			launchEvidenceEntries(facts(), receipt(), null),
 			launchEvidenceEntries(facts(), receipt({ benchmarkLaunchPolicy: "benchmark" }), environment()),
-		);
+		]);
 
-		expect(rows.some((row) => row.key === "receipt.benchmarkLaunchPolicy" && row.left === null && row.differs)).toBe(true);
+		expect(
+			rows.some((row) => row.key === "receipt.benchmarkLaunchPolicy" && row.values[0] === null && row.differs),
+		).toBe(true);
 		expect(rows.some((row) => row.key === "environment.llamaRuntime.version" && row.differs)).toBe(true);
 	});
 
 	// The capture timestamp differs on every run by construction; counting it would make every comparison "differ".
 	it("renders the capture timestamp without counting it as a difference", () => {
-		const rows = diffLaunchEvidence(
+		const rows = diffLaunchEvidence([
 			launchEvidenceEntries(facts(), receipt(), environment({ capturedAtUtc: 1 })),
 			launchEvidenceEntries(facts(), receipt(), environment({ capturedAtUtc: 2 })),
-		);
+		]);
 		const captured = rows.find((row) => row.key === "environment.capturedAtUtc");
 
-		expect(captured).toMatchObject({ left: 1, right: 2, differs: false });
+		expect(captured).toMatchObject({ values: [1, 2], differs: false });
 		expect(differingEvidenceKeys(rows)).toEqual([]);
 	});
 
@@ -174,5 +176,54 @@ describe("formatEvidenceValue", () => {
 		expect(formatEvidenceValue("environment.runtimeBundle.files.0.sizeBytes", 512)).toBe("512 B");
 		expect(formatEvidenceValue("receipt.executableSha256", "a".repeat(64))).toBe(`${"a".repeat(12)}…`);
 		expect(formatEvidenceValue("receipt.launchProjection.contextTokens", 4096)).toBe("4096");
+	});
+});
+
+// E2: the engine compares a SET, not a pair. A pairwise engine run N-1 times would report each row against whichever
+// run happened to be first rather than against the set — which is the difference between "these three disagree" and
+// "these two disagree with the one on the left".
+describe("diffLaunchEvidence across more than two runs", () => {
+	const side = (version: string, backend: string) =>
+		launchEvidenceEntries(facts({ effectiveBackend: backend }), receipt(), environment({ llamaRuntime: { version } }));
+
+	it("gives every side its own column, in the order asked for", () => {
+		const rows = diffLaunchEvidence([side("b1", "cuda"), side("b2", "cuda"), side("b3", "cuda")]);
+		const runtime = rows.find((row) => row.key === "environment.llamaRuntime.version");
+
+		expect(runtime?.values).toEqual(["b1", "b2", "b3"]);
+	});
+
+	it("flags a field where any one of the sides disagrees, not only the first pair", () => {
+		const rows = diffLaunchEvidence([side("b1", "cuda"), side("b1", "cuda"), side("b1", "vulkan")]);
+
+		expect(differingEvidenceKeys(rows)).toContain("launch.effectiveBackend");
+	});
+
+	it("flags nothing when every side agrees", () => {
+		expect(differingEvidenceKeys(diffLaunchEvidence([side("b1", "cuda"), side("b1", "cuda"), side("b1", "cuda")]))).toEqual(
+			[],
+		);
+	});
+
+	// A field only one run recorded is a real difference, and it must not shift the other runs' columns: column N is
+	// side N whether or not side N carries the field.
+	it("pads a side that never recorded a field rather than leaving a hole", () => {
+		const rows = diffLaunchEvidence([
+			launchEvidenceEntries(facts(), receipt(), null),
+			launchEvidenceEntries(facts(), receipt(), environment()),
+			launchEvidenceEntries(facts(), receipt(), environment()),
+		]);
+		const runtime = rows.find((row) => row.key === "environment.llamaRuntime.version");
+
+		expect(runtime?.values).toHaveLength(3);
+		expect(runtime?.values[0]).toBeNull();
+		expect(runtime?.differs).toBe(true);
+	});
+
+	it("treats one side as a degenerate case: every row renders, nothing differs", () => {
+		const rows = diffLaunchEvidence([side("b1", "cuda")]);
+
+		expect(rows.length).toBeGreaterThan(0);
+		expect(differingEvidenceKeys(rows)).toEqual([]);
 	});
 });

@@ -21,6 +21,18 @@ public interface IBenchmarkProjectService
         bool confirmRejudge,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Changes the quant-fidelity settings of a project that may already be frozen, and optionally queues a
+    ///     measurement for every succeeded cell that has none. A base-model or chunk-count change mints a new expected
+    ///     comparability digest, which makes previously stored KLD figures read as stale — no attempt is deleted or
+    ///     rewritten.
+    /// </summary>
+    Task<BenchmarkProjectFidelityChange> UpdateFidelityAsync(Guid projectId,
+        long expectedVersion,
+        BenchmarkProjectFidelitySettings settings,
+        bool measureExisting = false,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Judges one succeeded run again under the project's current policy.</summary>
     Task<BenchmarkJudgeAttemptRecord> RejudgeRunAsync(Guid runId, long expectedRunVersion, bool force, CancellationToken cancellationToken = default);
 
@@ -42,8 +54,12 @@ public sealed class BenchmarkProjectService(
     IAgentDefinitionStore agentDefinitionStore,
     IBenchmarkInstalledModelLeaseProvider installedModels,
     IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
-    IBenchmarkQueueSignal? queueSignal = null) : IBenchmarkProjectService
+    IBenchmarkCatalogService catalog,
+    IBenchmarkQueueSignal? queueSignal = null,
+    IBenchmarkPairwisePlanner? pairwisePlanner = null) : IBenchmarkProjectService
 {
+    private readonly IBenchmarkCatalogService _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+
     private readonly IBenchmarkStore _benchmarkStore = benchmarkStore ?? throw new ArgumentNullException(nameof(benchmarkStore));
     private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels = installedModels ?? throw new ArgumentNullException(nameof(installedModels));
@@ -52,6 +68,7 @@ public sealed class BenchmarkProjectService(
         judgeRuntimeResolver ?? throw new ArgumentNullException(nameof(judgeRuntimeResolver));
 
     private readonly IBenchmarkQueueSignal? _queueSignal = queueSignal;
+    private readonly IBenchmarkPairwisePlanner? _pairwisePlanner = pairwisePlanner;
 
     public async Task<BenchmarkProjectRecord> CreateAsync(BenchmarkProjectDraft draft, CancellationToken cancellationToken = default)
     {
@@ -81,6 +98,33 @@ public sealed class BenchmarkProjectService(
                                         ToPolicyChange(policy) ?? BenchmarkJudgePolicyChangeInput.Disabled,
                                         cancellationToken)
                                     .ConfigureAwait(false);
+    }
+
+    public async Task<BenchmarkProjectFidelityChange> UpdateFidelityAsync(Guid projectId,
+        long expectedVersion,
+        BenchmarkProjectFidelitySettings settings,
+        bool measureExisting = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var baseModelName = NormalizeModelName(settings.KldBaseModelName);
+        var change = await _benchmarkStore.UpdateProjectFidelityAsync(projectId,
+                                              expectedVersion,
+                                              new BenchmarkProjectFidelityInput(settings.Enabled,
+                                                  settings.KldEnabled,
+                                                  settings.Chunks,
+                                                  baseModelName,
+                                                  await ResolveKldBaseFingerprintAsync(settings.KldEnabled, settings.Chunks, baseModelName, cancellationToken)
+                                                      .ConfigureAwait(false)),
+                                              measureExisting,
+                                              cancellationToken)
+                                          .ConfigureAwait(false);
+        if (change.EnqueuedRunIds.Count > 0)
+        {
+            _queueSignal?.Wake();
+        }
+
+        return change;
     }
 
     public async Task<BenchmarkJudgePolicyChange> UpdateJudgePolicyAsync(Guid projectId,
@@ -137,7 +181,8 @@ public sealed class BenchmarkProjectService(
                                                   await BuildCohortSeedAsync(policy, expectedRevisionId: null, cancellationToken).ConfigureAwait(false),
                                                   cancellationToken)
                                               .ConfigureAwait(false);
-        return WakeAndDescribe(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false), activation);
+        return await WakeAndDescribeAsync(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false), activation, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<BenchmarkJudgeAttemptRecord> RejudgeRunAsync(Guid runId,
@@ -177,7 +222,8 @@ public sealed class BenchmarkProjectService(
                                                   await BuildCohortSeedAsync(policy, revision.Id, cancellationToken).ConfigureAwait(false),
                                                   cancellationToken)
                                               .ConfigureAwait(false);
-        return WakeAndDescribe(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false), activation);
+        return await WakeAndDescribeAsync(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false), activation, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     internal static string DecodeCoreTask(ReadOnlySpan<byte> payload)
@@ -197,18 +243,39 @@ public sealed class BenchmarkProjectService(
     ///     Resolves the judge runtime ONCE for the revision, for the store to seed every eligible run's attempt with.
     ///     The runtime depends only on the policy, so resolving it per run would repeat identical work and could
     ///     straddle a runtime swap mid-loop, splitting one re-judge across two cohorts.
+    ///     <para>
+    ///         A PAIRWISE policy seeds no attempt at all. Its cohort is judged by the comparisons
+    ///         <see cref="IBenchmarkPairwisePlanner.EnsurePairsAsync" /> plans immediately after this activation, so a
+    ///         pointwise attempt per run would queue a second judging of every run that the mode never asked for — and
+    ///         the planner resolves the runtime itself, which is why this does not even take the verifying lease. The
+    ///         seed is still returned, because it is what pins the revision the caller resolved against.
+    ///     </para>
     /// </summary>
     private async Task<BenchmarkJudgeAttemptSeed> BuildCohortSeedAsync(BenchmarkJudgePolicyV1 policy,
         Guid? expectedRevisionId,
         CancellationToken cancellationToken)
     {
+        if (string.Equals(BenchmarkJudgePolicyModes.Normalize(policy.Mode), BenchmarkJudgePolicyModes.Pairwise, StringComparison.Ordinal))
+        {
+            return new BenchmarkJudgeAttemptSeed(expectedRevisionId, SeedPointwiseAttempts: false);
+        }
+
         var resolved = await TryResolveRuntimeAsync(policy, cancellationToken).ConfigureAwait(false);
         return new BenchmarkJudgeAttemptSeed(expectedRevisionId, resolved.RuntimeJson, resolved.UnresolvedReason, resolved.Intent);
     }
 
     /// <summary>Wakes the queue for the attempts the store just enqueued and reports them to the caller.</summary>
-    private BenchmarkJudgePolicyChange WakeAndDescribe(BenchmarkProjectRecord project, BenchmarkJudgePolicyActivation activation)
+    private async Task<BenchmarkJudgePolicyChange> WakeAndDescribeAsync(BenchmarkProjectRecord project,
+        BenchmarkJudgePolicyActivation activation,
+        CancellationToken cancellationToken)
     {
+        // Activation is the FIRST of the three places a pairwise cohort grows: switching a project to pairwise must
+        // seed its comparisons now, not at the next primary success or the next restart. A no-op in pointwise mode.
+        if (_pairwisePlanner is not null)
+        {
+            _ = await _pairwisePlanner.EnsurePairsAsync(project.Id, cancellationToken).ConfigureAwait(false);
+        }
+
         if (activation.SucceededRunIds.Count > 0)
         {
             _queueSignal?.Wake();
@@ -268,6 +335,11 @@ public sealed class BenchmarkProjectService(
             throw new BenchmarkValidationException("An existing Single agent definition is required.");
         }
 
+        var baseFingerprint = await ResolveKldBaseFingerprintAsync(draft.FidelityKldEnabled,
+                                        draft.FidelityChunks,
+                                        NormalizeModelName(draft.FidelityKldBaseModelName),
+                                        cancellationToken)
+                                    .ConfigureAwait(false);
         var policy = draft.Judge is null ? null : await BuildPolicyAsync(draft.Judge, cancellationToken).ConfigureAwait(false);
         return (new BenchmarkProjectInput(draft.Id,
                 draft.Name.Trim(),
@@ -276,9 +348,59 @@ public sealed class BenchmarkProjectService(
                 draft.AgentDefinitionId,
                 draft.MaxOutputTokens,
                 draft.InvocationTimeoutSeconds,
-                draft.ReasoningBudgetTokens),
+                draft.ReasoningBudgetTokens,
+                draft.FidelityEnabled,
+                draft.FidelityKldEnabled,
+                draft.FidelityChunks,
+                NormalizeModelName(draft.FidelityKldBaseModelName),
+                baseFingerprint),
             policy);
     }
+
+    /// <summary>
+    ///     The base model's content fingerprint, read from the eligible-model catalog rather than taken from the
+    ///     caller. Two reasons it is not client-writable: it is an input to the KLD comparability digest, so a wrong
+    ///     value would make incomparable numbers compare equal; and resolving it here is what proves the named model
+    ///     is an eligible local GGUF at all.
+    ///     <para>
+    ///         The catalog reads recorded registry facts without re-hashing every member file, which is why selecting
+    ///         a 25 GB base model does not cost a minute of hashing on save. The fidelity executor re-verifies the
+    ///         fingerprint against a verifying lease before it measures anything, so a file swapped under an unchanged
+    ///         name fails there rather than being silently measured.
+    ///     </para>
+    /// </summary>
+    private async Task<string?> ResolveKldBaseFingerprintAsync(bool kldEnabled,
+        int? chunks,
+        string? baseModelName,
+        CancellationToken cancellationToken)
+    {
+        ValidateFidelityChunks(chunks);
+        if (baseModelName is null)
+        {
+            if (kldEnabled)
+            {
+                throw new BenchmarkValidationException("KL divergence requires a base model.");
+            }
+
+            return null;
+        }
+
+        var models = await _catalog.ListEligibleModelsAsync(contextTokens: null, cancellationToken).ConfigureAwait(false);
+        return models.FirstOrDefault(model => string.Equals(model.ModelName, baseModelName, StringComparison.Ordinal))?.ModelContentFingerprint
+               ?? throw new BenchmarkValidationException("The KL-divergence base model is not an eligible local model.");
+    }
+
+    private static void ValidateFidelityChunks(int? chunks)
+    {
+        if (chunks is { } value && value is < BenchmarkFidelityPolicy.MinimumChunks or > BenchmarkFidelityPolicy.MaximumChunks)
+        {
+            throw new BenchmarkValidationException(
+                $"The fidelity chunk count must be between {BenchmarkFidelityPolicy.MinimumChunks} and {BenchmarkFidelityPolicy.MaximumChunks}.");
+        }
+    }
+
+    private static string? NormalizeModelName(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>
     ///     Builds the hashable policy from the operator's draft: the judge model's identity as installed right now, the
@@ -326,7 +448,8 @@ public sealed class BenchmarkProjectService(
             BenchmarkJudgePolicyVersions.OutputSchemaVersion,
             BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
             draft.Rubric ?? BenchmarkJudgeRubricDefaults.Default(),
-            NormalizeReferenceAnswer(draft.ReferenceAnswer));
+            NormalizeReferenceAnswer(draft.ReferenceAnswer),
+            BenchmarkJudgePolicyModes.Normalize(draft.Mode));
         return string.Equals(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(candidate), current.PolicyHash, StringComparison.Ordinal);
     }
 
@@ -349,7 +472,8 @@ public sealed class BenchmarkProjectService(
                 BenchmarkJudgePolicyVersions.OutputSchemaVersion,
                 BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
                 draft.Rubric ?? BenchmarkJudgeRubricDefaults.Default(),
-                NormalizeReferenceAnswer(draft.ReferenceAnswer));
+                NormalizeReferenceAnswer(draft.ReferenceAnswer),
+                BenchmarkJudgePolicyModes.Normalize(draft.Mode));
             BenchmarkJudgePolicyValidator.Validate(policy);
             return policy;
         }

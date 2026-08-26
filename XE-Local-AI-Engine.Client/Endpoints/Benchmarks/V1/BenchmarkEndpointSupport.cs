@@ -33,6 +33,16 @@ internal static class BenchmarkEndpointSupport
         return BenchmarkJudgeSerialization.DeserializeResult(attempt?.ResultJson);
     }
 
+    /// <summary>
+    ///     The base-logit digest a project's CURRENT settings recompute, or null when it does not measure KL
+    ///     divergence. Every endpoint that serves a run's fidelity block passes it: a stored KLD figure is displayed
+    ///     only while the two match, and the whole cache key — not the base model's fingerprint — is the gate.
+    /// </summary>
+    public static string? ExpectedKldDigest(BenchmarkProjectRecord? project) =>
+        project is { FidelityKldEnabled: true, FidelityKldBaseFingerprint: { Length: > 0 } fingerprint }
+            ? BenchmarkKldCacheKey.Create(fingerprint, BenchmarkFidelityCorpus.Require().Sha256, BenchmarkFidelityPolicy.ClampChunks(project.FidelityChunks)).Digest
+            : null;
+
     public static IResult Error(Exception exception)
     {
         var (statusCode, code, message) = Classify(exception);
@@ -50,6 +60,7 @@ internal static class BenchmarkEndpointSupport
             BenchmarkNotFoundException or KeyNotFoundException => (StatusCodes.Status404NotFound, BenchmarkErrorCode.NotFound,
                 "The requested benchmark resource was not found."),
             BenchmarkValidationException => (StatusCodes.Status400BadRequest, BenchmarkErrorCode.InvalidRequest, exception.Message),
+
             BenchmarkEligibilityException => (StatusCodes.Status422UnprocessableEntity, ClassifyEligibility(exception.Message), exception.Message),
             BenchmarkUnsupportedKvCacheTypeException => (StatusCodes.Status422UnprocessableEntity, BenchmarkErrorCode.UnsupportedKvCacheType,
                 exception.Message),

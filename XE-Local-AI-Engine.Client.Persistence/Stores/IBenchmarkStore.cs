@@ -120,6 +120,100 @@ public interface IBenchmarkStore
 
     Task<BenchmarkRunRecord> MarkJudgeCancelledAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Enqueues one fidelity measurement of a run: a <c>Queued</c> attempt at the next sequence plus its work
+    ///     item, in one transaction. Re-measuring inserts a NEW attempt rather than reusing the previous one, so the
+    ///     numbers a KLD figure was measured against survive a corpus or chunk-count change.
+    /// </summary>
+    Task<Guid> EnqueueFidelityAsync(Guid runId, string kind, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Terminalizes a fidelity work item and its attempt, and — only when the attempt succeeded AND is the
+    ///     highest-sequenced succeeded attempt of the run — refreshes the run's fidelity projection from it. A stale
+    ///     re-measurement therefore cannot overwrite newer numbers, and a failed one leaves the previous numbers alone.
+    /// </summary>
+    Task<BenchmarkRunRecord> MarkFidelitySucceededAsync(BenchmarkFidelitySuccessCommand command, CancellationToken cancellationToken = default);
+
+    Task<BenchmarkRunRecord> MarkFidelityFailedAsync(Guid runId, long expectedWorkVersion, string errorMessage, CancellationToken cancellationToken = default);
+
+    Task<BenchmarkRunRecord> MarkFidelityCancelledAsync(Guid runId, long expectedWorkVersion, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Returns a claimed fidelity item — work item AND attempt — to <c>Queued</c>, carrying the reason it could not
+    ///     proceed yet. For a blocker that clears itself, such as a base-logit file another process is still writing:
+    ///     the work item pins <c>attempt = 1</c>, so terminalizing it as failed is terminal in the literal sense and
+    ///     the "it will be retried" the operator was promised has nothing behind it. A no-op once the attempt is
+    ///     terminal, so a requeue racing a completion cannot start a second measurement.
+    /// </summary>
+    Task<BenchmarkRunRecord> RequeueFidelityAsync(Guid runId, long expectedWorkVersion, string reason, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Terminalizes a comparison work item and its comparison as failed. Keyed by queue sequence rather than by
+    ///     run, because a comparison names TWO runs and "the run's comparison work item" is not a well-formed lookup.
+    /// </summary>
+    Task MarkComparisonFailedAsync(long queueSequence, long expectedWorkVersion, string errorMessage, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="MarkComparisonFailedAsync" />
+    Task MarkComparisonCancelledAsync(long queueSequence, long expectedWorkVersion, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Everything the pairwise planner, the fitter and the pre-flight estimate read: the project's current cohort
+    ///     scope, the runs eligible to be paired inside it, and the comparisons that already exist. One read, because
+    ///     all three questions are about the same consistent moment.
+    /// </summary>
+    Task<BenchmarkPairwiseCohortState> GetPairwiseCohortAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Inserts BOTH presentation orders of every slot that has no live-or-succeeded comparison yet, plus their work
+    ///     items, in ONE transaction, and bumps the revision's <c>ComparisonSetVersion</c> in the same one. Idempotent:
+    ///     a slot a concurrent caller already created violates the filtered unique index, and the violation is
+    ///     swallowed — a half-created cohort is a cohort that never completes and therefore never publishes a score.
+    /// </summary>
+    /// <returns>How many comparison rows this call created.</returns>
+    Task<int> EnsureComparisonsAsync(Guid projectId,
+        IReadOnlyList<BenchmarkPairwiseSlot> slots,
+        ReadOnlyMemory<byte>? judgeRuntimeJson,
+        BenchmarkRunLaunchIntent? launchIntent,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>One comparison by id, payloads included, or null when it is gone.</summary>
+    Task<BenchmarkComparisonRecord?> GetComparisonAsync(Guid comparisonId, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="MarkJudgeLaunchReadyAsync" />
+    Task<bool> MarkComparisonLaunchReadyAsync(Guid comparisonId,
+        long workItemId,
+        long claimedWorkVersion,
+        BenchmarkLaunchReceiptCommand command,
+        string? judgeExecutionKey,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Records one comparison's verdict and terminalizes its work item, bumping the cohort's
+    ///     <c>ComparisonSetVersion</c> in the same transaction — inserting and terminalizing are the only two ways the
+    ///     fitted set can change, so they are the only two places that bump it.
+    /// </summary>
+    Task MarkComparisonSucceededAsync(BenchmarkComparisonSuccessCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Publishes a fit as ONE pointer switch: deactivate the scope's active row and insert the new one, in one
+    ///     transaction. A duplicate publication violates <c>ux_benchmark_pairwise_fits_key</c> and no-ops, and the
+    ///     filtered active index makes two active fits in one scope unrepresentable rather than merely unlikely.
+    /// </summary>
+    /// <returns><see langword="true" /> when this call published; <see langword="false" /> when it was a duplicate.</returns>
+    Task<bool> PublishPairwiseFitAsync(BenchmarkPairwiseFitCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>The active fit of the project's current cohort scope, or null when nothing has published one.</summary>
+    Task<BenchmarkPairwiseFitRecord?> GetActivePairwiseFitAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The median wall-clock seconds a completed judge attempt of this project took, or null when none has
+    ///     completed. The pre-flight ETA is omitted rather than guessed when this is null.
+    /// </summary>
+    Task<double?> GetMedianJudgeDurationSecondsAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Every project that currently points at a judge policy revision — the startup reconciliation's set.</summary>
+    Task<IReadOnlyList<Guid>> ListJudgedProjectIdsAsync(CancellationToken cancellationToken = default);
+
     Task<BenchmarkRunRecord> MarkJudgeCancelledAsync(Guid runId,
         long expectedRunVersion,
         long lastStreamSequence,
@@ -173,6 +267,16 @@ public interface IBenchmarkStore
         return [];
     }
 
+    /// <summary>
+    ///     Removes a terminal run and everything that pointed at it: work items, judge attempts, fidelity attempts,
+    ///     and every pairwise comparison it took part in on EITHER side. Refused while any of those is Queued or
+    ///     Running — including a comparison whose canonical first run is the other one, which no work item names.
+    ///     <para>
+    ///         Deleting comparisons bumps the affected revisions' <c>ComparisonSetVersion</c> and deactivates the
+    ///         project's active pairwise fits, because a fit whose fitted set names a deleted run ranks something that
+    ///         is not there. The next planner pass re-fits whatever cohort is left.
+    ///     </para>
+    /// </summary>
     Task DeleteRunAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -202,8 +306,39 @@ public interface IBenchmarkStore
     /// </summary>
     Task DisableJudgePolicyAsync(Guid projectId, long expectedProjectVersion, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Writes the project's quant-fidelity settings, and ONLY those, deliberately ignoring the freeze the ordinary
+    ///     project write honours. A frozen project refuses every other edit because its runs were measured against the
+    ///     task, context and agent it carries; the fidelity settings are none of those — they decide what gets
+    ///     measured NEXT, and every number already stored keeps its own comparability digest.
+    ///     <para>
+    ///         <paramref name="measureExisting" /> additionally enqueues a fidelity item for every succeeded,
+    ///         non-warm-up, first-of-its-repeat-group run that has no fidelity attempt yet, in the same transaction —
+    ///         the same rule freeze applies per cell. The count is reported so the operator sees what they started.
+    ///     </para>
+    /// </summary>
+    Task<BenchmarkProjectFidelityChange> UpdateProjectFidelityAsync(Guid projectId,
+        long expectedProjectVersion,
+        BenchmarkProjectFidelityInput input,
+        bool measureExisting = false,
+        CancellationToken cancellationToken = default);
+
     /// <summary>One judge attempt by id, payloads included, or null when it is gone.</summary>
     Task<BenchmarkJudgeAttemptRecord?> GetJudgeAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default);
+
+    Task<BenchmarkFidelityAttemptRecord?> GetFidelityAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default);
+
+    /// <summary>Every fidelity attempt of a run, newest sequence first — the audit trail behind the projection.</summary>
+    Task<IReadOnlyList<BenchmarkFidelityAttemptRecord>> ListFidelityAttemptsAsync(Guid runId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The base-logit digests a queued or running fidelity attempt is about to read. Cache eviction must not
+    ///     delete a file a measurement is on its way to using.
+    /// </summary>
+    Task<IReadOnlySet<string>> ListLiveFidelityDigestsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Whether any fidelity work item is queued or running — the guard on clearing the base cache.</summary>
+    Task<bool> HasLiveFidelityWorkAsync(CancellationToken cancellationToken = default);
 
     /// <summary>One judge policy revision by id, payload included, or null when it is gone.</summary>
     Task<BenchmarkJudgePolicyRevisionRecord?> GetJudgePolicyRevisionAsync(Guid revisionId, CancellationToken cancellationToken = default);
@@ -272,7 +407,12 @@ public sealed record BenchmarkProjectInput(
     Guid AgentDefinitionId,
     int? MaxOutputTokens = null,
     int? InvocationTimeoutSeconds = null,
-    int? ReasoningBudgetTokens = null);
+    int? ReasoningBudgetTokens = null,
+    bool FidelityEnabled = false,
+    bool FidelityKldEnabled = false,
+    int? FidelityChunks = null,
+    string? FidelityKldBaseModelName = null,
+    string? FidelityKldBaseFingerprint = null);
 
 /// <summary>
 ///     The judge half of a project write, applied in the project's own transaction. A <see langword="null" /> instance
@@ -378,11 +518,18 @@ public sealed record BenchmarkRunThroughput(
 ///     The judge's frozen launch configuration. <see langword="null" /> means resolution failed, and the attempt is
 ///     inserted directly as Failed together with a terminal work item.
 /// </param>
+/// <param name="SeedPointwiseAttempts">
+///     Whether a cohort-wide reset inserts one POINTWISE attempt per eligible run. False for a pairwise policy, whose
+///     cohort is judged by comparisons the planner enqueues instead: a pairwise cohort carrying pointwise attempts
+///     judges every run a second way and ranks off whichever source answered. The seed is still supplied, because
+///     <see cref="ExpectedJudgePolicyRevisionId" /> is what pins the revision the caller resolved against.
+/// </param>
 public sealed record BenchmarkJudgeAttemptSeed(
     Guid? ExpectedJudgePolicyRevisionId = null,
     ReadOnlyMemory<byte>? RuntimeJson = null,
     string? RuntimeUnresolvedReason = null,
-    BenchmarkRunLaunchIntent? LaunchIntent = null);
+    BenchmarkRunLaunchIntent? LaunchIntent = null,
+    bool SeedPointwiseAttempts = true);
 
 /// <inheritdoc cref="IBenchmarkStore.EnqueueJudgeAttemptAsync" />
 /// <param name="Force">Bypasses the already-applied guard for a deliberate operator re-judge.</param>
@@ -395,6 +542,113 @@ public sealed record BenchmarkEnqueueJudgeAttemptCommand(
     bool Force = false,
     BenchmarkRunLaunchIntent? LaunchIntent = null);
 
+/// <summary>
+///     One run that may be paired against another. <paramref name="TaskCaseId" /> and <paramref name="TaskInputHash" />
+///     are the identity of WHAT WAS ASKED: pairs form only inside one of them, because "which answer is better" is
+///     meaningless when the two answers are to different questions. In P2 a project is one case, so both are the
+///     constant below and the grouping is a no-op — it is the contract P3 widens, and the columns already carry it.
+/// </summary>
+public sealed record BenchmarkPairwiseCandidate(Guid RunId, Guid? TaskCaseId, string TaskInputHash);
+
+/// <summary>One unordered pair to compare, canonical (<paramref name="RunAId" /> &lt; <paramref name="RunBId" />).</summary>
+public sealed record BenchmarkPairwiseSlot(Guid RunAId, Guid RunBId, Guid? TaskCaseId, string TaskInputHash);
+
+/// <summary>
+///     One pairwise judging, as the planner, the fitter and the verdict-matrix read see it. The encrypted rationale is
+///     read only by the detail path; a list never decrypts one.
+/// </summary>
+public sealed record BenchmarkComparisonRecord(
+    Guid Id,
+    Guid ProjectId,
+    Guid PolicyRevisionId,
+    int CohortGeneration,
+    Guid? TaskCaseId,
+    string TaskInputHash,
+    Guid RunAId,
+    Guid RunBId,
+    int Order,
+    int AttemptSequence,
+    int Sequence,
+    BenchmarkJudgeAttemptStatus Status,
+    string? Verdict,
+    bool AnswerATruncated,
+    bool AnswerBTruncated,
+    string? JudgeExecutionKey,
+    string? ErrorMessage,
+    ReadOnlyMemory<byte>? JudgeRuntimeJson,
+    long EnqueuedAtUtc,
+    long? StartedAtUtc,
+    long? CompletedAtUtc,
+    long Version);
+
+/// <summary>The whole pairwise picture of one project at one consistent moment.</summary>
+/// <param name="PolicyRevisionId">Null when judging is off — there is no cohort to pair inside.</param>
+public sealed record BenchmarkPairwiseCohortState(
+    Guid? PolicyRevisionId,
+    int CohortGeneration,
+    int ComparisonSetVersion,
+    string? ReferenceExecutionKey,
+    long ProjectVersion,
+    IReadOnlyList<BenchmarkPairwiseCandidate> Candidates,
+    IReadOnlyList<BenchmarkComparisonRecord> Comparisons);
+
+/// <param name="Verdict"><c>a</c>, <c>b</c> or <c>tie</c>, already normalized back to the canonical pair.</param>
+public sealed record BenchmarkComparisonSuccessCommand(
+    long QueueSequence,
+    long ExpectedWorkVersion,
+    string Verdict,
+    ReadOnlyMemory<byte>? ResultJson,
+    bool AnswerATruncated,
+    bool AnswerBTruncated);
+
+/// <inheritdoc cref="IBenchmarkStore.PublishPairwiseFitAsync" />
+public sealed record BenchmarkPairwiseFitCommand(
+    Guid ProjectId,
+    Guid PolicyRevisionId,
+    int CohortGeneration,
+    Guid? TaskCaseId,
+    string FitKey,
+    string JudgeExecutionKey,
+    int ComparisonSetVersion,
+    string FittedSetJson,
+    string ScoresJson,
+    int Iterations,
+    int BootstrapReplicates);
+
+/// <summary>
+///     One run's row inside a fit's <c>ScoresJson</c> — one entry per ELIGIBLE run, not per fitted one, because a run
+///     the cap left out or the comparison graph stranded must be able to say why it has no score from this row alone.
+/// </summary>
+/// <param name="Reason">
+///     Null when <paramref name="Score" /> ranks. Otherwise the <see cref="BenchmarkRunJudgeStates" /> pairwise reason:
+///     a whole-fit refusal puts the same one on every entry, so a refusal reaches the ranking read without it having
+///     to open a single comparison row.
+/// </param>
+public sealed record BenchmarkPairwiseScoreEntry(
+    Guid RunId,
+    int? Score,
+    int? CiLow,
+    int? CiHigh,
+    int Comparisons,
+    int BootstrapAppearances,
+    string? Reason);
+
+/// <summary>One published fit. <see cref="ScoresJson" /> is the rank input, so it is plaintext and read once per page.</summary>
+public sealed record BenchmarkPairwiseFitRecord(
+    Guid Id,
+    Guid ProjectId,
+    Guid PolicyRevisionId,
+    int CohortGeneration,
+    Guid? TaskCaseId,
+    string FitKey,
+    string JudgeExecutionKey,
+    int ComparisonSetVersion,
+    string FittedSetJson,
+    string ScoresJson,
+    int Iterations,
+    int BootstrapReplicates,
+    long CreatedAtUtc);
+
 /// <param name="PolicyJson">Null on a listing, which never decrypts the payload.</param>
 public sealed record BenchmarkJudgePolicyRevisionRecord(
     Guid Id,
@@ -404,7 +658,8 @@ public sealed record BenchmarkJudgePolicyRevisionRecord(
     string PolicyHash,
     string? ReferenceExecutionKey,
     int CohortGeneration,
-    long CreatedAtUtc);
+    long CreatedAtUtc,
+    int ComparisonSetVersion = 0);
 
 /// <param name="SucceededRunIds">
 ///     The project's succeeded runs with stored output — the complete eligible set. With a cohort attempt seed these
@@ -435,12 +690,54 @@ public sealed record BenchmarkJudgeAttemptRecord(
     BenchmarkRunLaunchEvidence? LaunchEvidence = null);
 
 /// <param name="Score">The server-computed 0..100 rubric score stored on the attempt, plaintext and sortable.</param>
+/// <summary>
+///     One succeeded fidelity measurement, as it is written down. <paramref name="ReceiptJson" /> is the REDUCED
+///     evidence block (executable, argv, corpus, environment facts) — llama-perplexity has no readiness probe, so
+///     there is no launch receipt to record, and presenting the reduced block as one would be exactly the drift the
+///     display-only axes exist to prevent.
+/// </summary>
+public sealed record BenchmarkFidelitySuccessCommand(
+    Guid RunId,
+    long ExpectedWorkVersion,
+    Guid FidelityAttemptId,
+    double? PerplexityMean = null,
+    double? PerplexityStdErr = null,
+    int? PerplexityChunks = null,
+    int? PerplexityContextTokens = null,
+    string? CorpusId = null,
+    double? KldMean = null,
+    double? KldP99 = null,
+    double? TopTokenAgreement = null,
+    string? BaseModelName = null,
+    string? BaseModelContentFingerprint = null,
+    string? BaseLogitsDigest = null,
+    ReadOnlyMemory<byte> ReceiptJson = default);
+
+/// <param name="VerifiedExecutionKey">
+///     The cohort key for a judging that ran no model at all because every rubric criterion was verified
+///     server-side. Applied only when the attempt has none — a measured key, written at launch, is never overwritten.
+/// </param>
+/// <param name="FidelityKldBaseFingerprint">
+///     Resolved by the service from the eligible-model catalog, never by a caller: it is an input to the KLD
+///     comparability digest, so a supplied value could make numbers measured against different weights compare equal.
+/// </param>
+public sealed record BenchmarkProjectFidelityInput(
+    bool FidelityEnabled,
+    bool FidelityKldEnabled,
+    int? FidelityChunks,
+    string? FidelityKldBaseModelName,
+    string? FidelityKldBaseFingerprint);
+
+/// <param name="EnqueuedRunIds">The runs a <c>measureExisting</c> write queued a measurement for; empty otherwise.</param>
+public sealed record BenchmarkProjectFidelityChange(BenchmarkProjectRecord Project, IReadOnlyList<Guid> EnqueuedRunIds);
+
 public sealed record BenchmarkJudgeSuccessCommand(
     Guid RunId,
     long ExpectedWorkVersion,
     ReadOnlyMemory<byte> JudgeResultJson,
     long LastStreamSequence = 0,
-    int? Score = null);
+    int? Score = null,
+    string? VerifiedExecutionKey = null);
 
 /// <param name="JudgeEnabled">Derived: the project judges exactly while it points at a policy revision.</param>
 public sealed record BenchmarkProjectRecord(
@@ -457,7 +754,12 @@ public sealed record BenchmarkProjectRecord(
     long UpdatedAtUtc,
     int? MaxOutputTokens = null,
     int? InvocationTimeoutSeconds = null,
-    int? ReasoningBudgetTokens = null);
+    int? ReasoningBudgetTokens = null,
+    bool FidelityEnabled = false,
+    bool FidelityKldEnabled = false,
+    int? FidelityChunks = null,
+    string? FidelityKldBaseModelName = null,
+    string? FidelityKldBaseFingerprint = null);
 
 /// <param name="Judge">
 ///     The derived judge view. Everything judge-related is now attempt-owned: a run is judged many times, so nothing
@@ -501,7 +803,51 @@ public sealed record BenchmarkRunRecord(
     int? InvocationTimeoutSeconds = null,
     BenchmarkRepeatMode RepeatMode = BenchmarkRepeatMode.Throughput,
     string? SamplingSeed = null,
-    double? SamplingTemperature = null);
+    double? SamplingTemperature = null,
+    BenchmarkRunFidelity? Fidelity = null);
+
+/// <summary>
+///     A run's quant-fidelity projection: a copy of the latest succeeded measurement. Display only — perplexity and
+///     KL divergence are never ranking inputs, and a KLD figure is shown only while
+///     <paramref name="KldBaseLogitsDigest" /> equals the digest the project's current settings recompute.
+/// </summary>
+public sealed record BenchmarkRunFidelity(
+    string? Status,
+    Guid? AttemptId,
+    double? PerplexityMean,
+    double? PerplexityStdErr,
+    int? PerplexityChunks,
+    int? PerplexityContextTokens,
+    string? PerplexityCorpusId,
+    double? KldMean,
+    double? KldP99,
+    double? TopTokenAgreement,
+    string? KldBaseFingerprint,
+    string? KldBaseLogitsDigest,
+    string? ErrorMessage);
+
+/// <summary>One immutable fidelity measurement of one run, as the attempt-history read serves it.</summary>
+public sealed record BenchmarkFidelityAttemptRecord(
+    Guid Id,
+    Guid RunId,
+    int Sequence,
+    string Kind,
+    BenchmarkJudgeAttemptStatus Status,
+    double? PerplexityMean,
+    double? PerplexityStdErr,
+    int? PerplexityChunks,
+    int? PerplexityContextTokens,
+    string? CorpusId,
+    double? KldMean,
+    double? KldP99,
+    double? TopTokenAgreement,
+    string? BaseModelName,
+    string? BaseModelContentFingerprint,
+    string? BaseLogitsDigest,
+    string? ErrorMessage,
+    long EnqueuedAtUtc,
+    long? StartedAtUtc,
+    long? CompletedAtUtc);
 
 /// <summary>
 ///     What freeze decided one phase of a run would launch with, before anything was spawned. Compared against the
@@ -683,6 +1029,40 @@ public static class BenchmarkRunJudgeStates
     ///     every other reason here, an operator score does not override it: a warm-up is not a contender.
     /// </summary>
     public const string ReasonWarmup = "warmup";
+
+    /// <summary>Pairwise mode, comparisons of this cohort still outstanding. Waiting is all it needs.</summary>
+    public const string ReasonPairwisePending = "pairwise-pending";
+
+    /// <summary>
+    ///     Pairwise mode, and this run carries no fitted strength: fewer than two verdicts, a minority component of a
+    ///     disconnected comparison graph, or a cohort too truncated to aggregate. More runs, or more comparisons.
+    /// </summary>
+    public const string ReasonPairwiseInsufficient = "pairwise-insufficient";
+
+    /// <summary>
+    ///     Pairwise mode, and this run is past the per-cohort cap, so nothing was ever compared against it. Removing
+    ///     runs is the fix — a sampled subset of the tournament would be a silently biased one.
+    /// </summary>
+    public const string ReasonPairwiseCap = "pairwise-cap";
+
+    /// <summary>The active fit was fit over a set the cohort has since changed. Re-fitting is automatic; this is transient.</summary>
+    public const string ReasonPairwiseStale = "pairwise-stale";
+
+    /// <summary>The Bradley–Terry sweep did not converge, so no strength was published rather than a half-fit one.</summary>
+    public const string ReasonPairwiseUnfitted = "pairwise-unfitted";
+
+    /// <summary>Two answers to different questions were never comparable. Unreachable in P2, where a project is one case.</summary>
+    public const string ReasonPairwiseCrossCase = "pairwise-cross-case";
+
+    /// <summary>
+    ///     A comparison in the fitted set was judged by a runtime other than the one the cohort was claimed with. The
+    ///     whole fit is refused rather than fitted over the matching subset: dropping comparisons changes the graph and
+    ///     can disconnect it, publishing a number over a set the operator never chose. Re-judging heals it.
+    /// </summary>
+    public const string ReasonPairwiseExecutionMismatch = "pairwise-execution-mismatch";
+
+    /// <summary>Nothing has promoted a reference execution key yet, so no fit can be shown to belong to a cohort.</summary>
+    public const string ReasonPairwiseExecutionIdentityIncomplete = "pairwise-execution-identity-incomplete";
 }
 
 /// <summary>
@@ -704,6 +1084,10 @@ public static class BenchmarkQualityScoreSources
 {
     public const string User = "user";
     public const string Judge = "judge";
+
+    /// <summary>The Bradley–Terry strength read out of the cohort's active fit, in a project judging pairwise.</summary>
+    public const string Pairwise = "pairwise";
+
     public const string None = "none";
 }
 
@@ -714,7 +1098,9 @@ public sealed record BenchmarkClaimedWork(
     int Attempt,
     long Version,
     BenchmarkRunRecord Run,
-    Guid? JudgeAttemptId = null);
+    Guid? JudgeAttemptId = null,
+    Guid? FidelityAttemptId = null,
+    Guid? ComparisonId = null);
 
 public abstract class BenchmarkStoreException(string message) : InvalidOperationException(message);
 
