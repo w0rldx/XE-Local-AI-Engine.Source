@@ -114,6 +114,16 @@ public sealed class BenchmarkFreezeScope : IAsyncDisposable
     }
 }
 
+/// <summary>
+///     One model's freeze, decided but NOT written. Every read a freeze takes — the verified model lease, the
+///     eligibility, the agent resolution, the project version — has already happened and produced these commands;
+///     <see cref="IBenchmarkRunFreezeService.CommitAsync" /> is the only step that touches the database. That split is
+///     what lets a PAIR be validated on both sides before either side exists: committing one side first left the
+///     caller with queued runs it was never told the ids of when the other side then failed, and the only retry
+///     available duplicated the committed side.
+/// </summary>
+public sealed record BenchmarkFrozenRunPlan(Guid ProjectId, long ExpectedProjectVersion, IReadOnlyList<BenchmarkStartRunCommand> Commands);
+
 public interface IBenchmarkRunFreezeService
 {
     /// <returns>
@@ -140,6 +150,25 @@ public interface IBenchmarkRunFreezeService
     /// </param>
     Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkRunStartRequest request,
         BenchmarkFreezeScope? scope = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The decide half of <see cref="StartAsync" />: everything that can refuse the request — the verified model
+    ///     lease, the eligibility, the agent resolution, the project version, the run-count ceiling — with nothing
+    ///     written. Use it with <see cref="CommitAsync" /> when SEVERAL models must be validated before ANY of them is
+    ///     queued; a single launch wants <see cref="StartAsync" />, which is the two halves back to back.
+    /// </summary>
+    Task<BenchmarkFrozenRunPlan> FreezeAsync(BenchmarkRunStartRequest request,
+        BenchmarkFreezeScope? scope = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Writes whole plans in ONE all-or-nothing insert: one transaction, one compare-and-swap on the project
+    ///     version they were all frozen against, the runs queued in plan order. Every plan must name the same project
+    ///     at the same expected version, because nothing is committed between them.
+    /// </summary>
+    /// <returns>The created runs, one list per plan, in the order the plans were given.</returns>
+    Task<IReadOnlyList<IReadOnlyList<BenchmarkRunRecord>>> CommitAsync(IReadOnlyList<BenchmarkFrozenRunPlan> plans,
         CancellationToken cancellationToken = default);
 }
 
@@ -206,6 +235,63 @@ public sealed class BenchmarkRunFreezeService(
         BenchmarkFreezeScope? scope = null,
         CancellationToken cancellationToken = default)
     {
+        // A scope of our own when the caller passed none, so the freeze and the commit of one launch stay inside one
+        // scope exactly as they always did. A caller-supplied scope outlives this call and is NOT disposed here.
+        await using var ownedScope = scope is null ? new BenchmarkFreezeScope() : null;
+        var plan = await FreezeAsync(request, scope ?? ownedScope!, cancellationToken).ConfigureAwait(false);
+        return (await CommitAsync([plan], cancellationToken).ConfigureAwait(false))[0];
+    }
+
+    public async Task<IReadOnlyList<IReadOnlyList<BenchmarkRunRecord>>> CommitAsync(IReadOnlyList<BenchmarkFrozenRunPlan> plans,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(plans);
+        if (plans.Count == 0)
+        {
+            throw new ArgumentException("At least one frozen plan must be committed.", nameof(plans));
+        }
+
+        var first = plans[0];
+        foreach (var plan in plans)
+        {
+            // One insert takes ONE compare-and-swap, so a plan frozen against a different project or a different
+            // version cannot be part of it — committing it under someone else's version would skip its own check.
+            if (plan.ProjectId != first.ProjectId || plan.ExpectedProjectVersion != first.ExpectedProjectVersion)
+            {
+                throw new ArgumentException("Every plan of one commit must name the same project at the same expected version.", nameof(plans));
+            }
+        }
+
+        var commands = plans.SelectMany(static plan => plan.Commands).ToArray();
+
+        // The ceiling bounds the INSERT, and several plans are now one insert. Each plan was already checked on its
+        // own inside the freeze, so this only bites a multi-plan commit whose sides are individually legal.
+        if (commands.Length > MaxRunsPerRequest)
+        {
+            throw new BenchmarkValidationException(
+                $"This request would start {commands.Length} runs across {plans.Count} models. The maximum is {MaxRunsPerRequest}.");
+        }
+
+        var runs = await _benchmarkStore.StartRunsAsync(commands, first.ExpectedProjectVersion, cancellationToken).ConfigureAwait(false);
+        _queueSignal?.Wake();
+
+        // Split back per plan. StartRunsAsync returns the runs in the order the commands were given, so each plan's
+        // slice starts where the previous one ended — which is how a pair's caller learns which ids are which side's.
+        var byPlan = new List<IReadOnlyList<BenchmarkRunRecord>>(plans.Count);
+        var offset = 0;
+        foreach (var count in plans.Select(static plan => plan.Commands.Count))
+        {
+            byPlan.Add([.. runs.Skip(offset).Take(count)]);
+            offset += count;
+        }
+
+        return byPlan;
+    }
+
+    public async Task<BenchmarkFrozenRunPlan> FreezeAsync(BenchmarkRunStartRequest request,
+        BenchmarkFreezeScope? scope = null,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(request);
         var primaryModelName = request.PrimaryModelName;
 
@@ -238,8 +324,9 @@ public sealed class BenchmarkRunFreezeService(
         var warmup = request.Warmup;
         var expectedProjectVersion = request.ExpectedProjectVersion;
 
-        // A scope of our own when the caller passed none, so the single-run path keeps behaving exactly as it did:
-        // acquire, freeze, release. A caller-supplied scope outlives this call and is NOT disposed here.
+        // A scope of our own when the caller passed none, so a bare freeze still behaves as it did: acquire, verify,
+        // release. A caller-supplied scope outlives this call and is NOT disposed here — which is what lets a pair
+        // hold its leases across two freezes and one commit.
         await using var ownedScope = scope is null ? new BenchmarkFreezeScope() : null;
         var freezeScope = scope ?? ownedScope!;
         var trimmedPrimary = primaryModelName.Trim();
@@ -438,10 +525,7 @@ public sealed class BenchmarkRunFreezeService(
                            item.Item.InputHash,
                            project.TaskItemSetHash)))
                        .ToArray();
-        var runs = await _benchmarkStore.StartRunsAsync(commands, expectedProjectVersion, cancellationToken).ConfigureAwait(false);
-
-        _queueSignal?.Wake();
-        return runs;
+        return new BenchmarkFrozenRunPlan(project.Id, expectedProjectVersion, commands);
     }
 
     /// <summary>

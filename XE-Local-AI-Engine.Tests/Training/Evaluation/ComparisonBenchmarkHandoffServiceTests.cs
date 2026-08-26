@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     <see cref="ComparisonBenchmarkHandoffService" /> tests: the hand-off creates the benchmark project for a training
 ///     comparison and enqueues the paired base/tuned runs against it (same task, same KV type, same repeat count, one
-///     shared freeze scope, the project version chained across the pair); it reuses a project already named for the
+///     shared freeze scope, both sides frozen against the same project version and committed together); it reuses a project already named for the
 ///     comparison instead of scattering near-duplicates; the benchmark task is REQUIRED from the operator; a tuned side
 ///     that is still a staged artifact — not yet an installed model with a <c>Trained</c> origin — is refused with that
 ///     reason rather than failing inside the freeze; and the freeze's bare <see cref="KeyNotFoundException" /> for an
@@ -49,13 +49,18 @@ public sealed class ComparisonBenchmarkHandoffServiceTests
         AssertEx.Equal("q8_0", harness.FreezeCalls[0].KvCacheType!);
         AssertEx.Equal("q8_0", harness.FreezeCalls[1].KvCacheType!);
         AssertEx.Equal(harness.FreezeCalls[0].RepeatCount, harness.FreezeCalls[1].RepeatCount);
-        // A group insert is all-or-nothing, so the tuned side presents the base side's run count.
+        // Nothing is committed between the two freezes, so both sides present the SAME project version.
         AssertEx.Equal(expected: 0L, harness.FreezeCalls[0].ExpectedProjectVersion);
-        AssertEx.Equal(expected: 2L, harness.FreezeCalls[1].ExpectedProjectVersion);
+        AssertEx.Equal(expected: 0L, harness.FreezeCalls[1].ExpectedProjectVersion);
         // One scope for the pair: the tuned side cannot be frozen against different bytes than the base side was.
         AssertEx.Equal(expected: 1, harness.FreezeScopes.Distinct().Count());
 
-        AssertEx.Equal(expected: 4, result.RunIds.Count);
+        // ONE insert carrying both groups, and the response names each side's ids rather than one flat list.
+        AssertEx.Equal(expected: 1, harness.CommittedBatches.Count);
+        AssertEx.Equal(expected: 2, harness.CommittedBatches[0].Count);
+        AssertEx.Equal(expected: 2, result.BaseRunIds.Count);
+        AssertEx.Equal(expected: 2, result.TunedRunIds.Count);
+        AssertEx.Equal(expected: 0, result.BaseRunIds.Intersect(result.TunedRunIds).Count());
         // The project carries the operator's task, not the comparison's evaluation prompt.
         AssertEx.Equal(CoreTask, harness.CreatedDraft!.CoreTask);
         AssertEx.Equal("Tuned vs base", harness.CreatedDraft.Name);
@@ -74,7 +79,7 @@ public sealed class ComparisonBenchmarkHandoffServiceTests
         AssertEx.Equal(existing.Id, result.ProjectId);
         AssertEx.Null(harness.CreatedDraft);
         AssertEx.Equal(expected: 7L, harness.FreezeCalls[0].ExpectedProjectVersion);
-        AssertEx.Equal(expected: 9L, harness.FreezeCalls[1].ExpectedProjectVersion);
+        AssertEx.Equal(expected: 7L, harness.FreezeCalls[1].ExpectedProjectVersion);
     }
 
     [Test]
@@ -169,6 +174,21 @@ public sealed class ComparisonBenchmarkHandoffServiceTests
         AssertEx.Contains(exception.Message, "is not installed on this node", StringComparison.Ordinal);
     }
 
+    [Test]
+    public async Task CreateAsync_WhenTheTunedSideCannotBeFrozen_CommitsNothing()
+    {
+        var harness = new Harness();
+        harness.FailingModelName = TunedModelName;
+        harness.FreezeFailure = new BenchmarkEligibilityException("The selected model could not be verified against its installed registry entry.");
+
+        await AssertEx.ThrowsAsync<BenchmarkEligibilityException>(() => harness.Service.CreateAsync(Command(), CancellationToken.None));
+
+        // The base side is frozen by the time the tuned side is refused. Committing it anyway queued an hour of GPU
+        // time the caller was never told the ids of, and the only retry available then queued a SECOND base group.
+        AssertEx.Equal(expected: 2, harness.FreezeCalls.Count);
+        AssertEx.Equal(expected: 0, harness.CommittedBatches.Count);
+    }
+
     private static CreateBenchmarkFromComparisonCommand Command() =>
         new(ComparisonId, CoreTask, ContextTokens: 8192, AgentDefinitionId, "Tuned vs base", "q8_0", RepeatCount: 2);
 
@@ -227,19 +247,28 @@ public sealed class ComparisonBenchmarkHandoffServiceTests
                         CreatedDraft = callInfo.Arg<BenchmarkProjectDraft>();
                         return Task.FromResult(Project(CreatedProjectId, CreatedDraft.Name, version: 0));
                     });
-            Freeze.StartAsync(Arg.Any<BenchmarkRunStartRequest>(), Arg.Any<BenchmarkFreezeScope?>(), Arg.Any<CancellationToken>())
+            Freeze.FreezeAsync(Arg.Any<BenchmarkRunStartRequest>(), Arg.Any<BenchmarkFreezeScope?>(), Arg.Any<CancellationToken>())
                   .Returns(callInfo =>
                   {
                       var request = callInfo.Arg<BenchmarkRunStartRequest>();
                       FreezeCalls.Add(request);
                       FreezeScopes.Add(callInfo.ArgAt<BenchmarkFreezeScope?>(1));
-                      if (FreezeFailure is { } failure)
+                      if (FreezeFailure is { } failure && request.PrimaryModelName == FailingModelName)
                       {
                           throw failure;
                       }
 
-                      return Task.FromResult<IReadOnlyList<BenchmarkRunRecord>>(
-                          [.. Enumerable.Range(0, request.RepeatCount).Select(static _ => Run())]);
+                      return Task.FromResult(new BenchmarkFrozenRunPlan(request.ProjectId,
+                          request.ExpectedProjectVersion,
+                          [.. Enumerable.Range(0, request.RepeatCount).Select(_ => FrozenCommand(request))]));
+                  });
+            Freeze.CommitAsync(Arg.Any<IReadOnlyList<BenchmarkFrozenRunPlan>>(), Arg.Any<CancellationToken>())
+                  .Returns(callInfo =>
+                  {
+                      var plans = callInfo.Arg<IReadOnlyList<BenchmarkFrozenRunPlan>>();
+                      CommittedBatches.Add(plans);
+                      return Task.FromResult<IReadOnlyList<IReadOnlyList<BenchmarkRunRecord>>>(
+                          [.. plans.Select(static plan => (IReadOnlyList<BenchmarkRunRecord>)[.. plan.Commands.Select(static _ => Run())])]);
                   });
 
             Service = new ComparisonBenchmarkHandoffService(Evaluations, Runs, Benchmarks, Projects, Freeze);
@@ -265,7 +294,12 @@ public sealed class ComparisonBenchmarkHandoffServiceTests
 
         public List<BenchmarkFreezeScope?> FreezeScopes { get; } = [];
 
+        public List<IReadOnlyList<BenchmarkFrozenRunPlan>> CommittedBatches { get; } = [];
+
         public Exception? FreezeFailure { get; set; }
+
+        /// <summary>Which side <see cref="FreezeFailure" /> belongs to. The base model by default.</summary>
+        public string FailingModelName { get; set; } = BaseModelName;
 
         private static TrainingEvaluationRecord EvaluationRecord(Guid id,
             string modelName,
@@ -292,6 +326,19 @@ public sealed class ComparisonBenchmarkHandoffServiceTests
                 TrainingWorkStatus.Succeeded,
                 targetKind,
                 sourceArtifactId);
+
+        /// <summary>A placeholder frozen command: only the COUNT is load-bearing in these tests.</summary>
+        private static BenchmarkStartRunCommand FrozenCommand(BenchmarkRunStartRequest request) =>
+            new(Guid.NewGuid(),
+                request.ProjectId,
+                request.ExpectedProjectVersion,
+                ReadOnlyMemory<byte>.Empty,
+                request.PrimaryModelName,
+                null,
+                "fingerprint",
+                "agent",
+                1,
+                8192);
 
         private static BenchmarkRunRecord Run() =>
             new(Guid.NewGuid(),

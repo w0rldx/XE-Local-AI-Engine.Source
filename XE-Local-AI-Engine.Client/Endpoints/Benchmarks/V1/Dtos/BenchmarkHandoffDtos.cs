@@ -33,11 +33,18 @@ public sealed class CreateBenchmarkFromComparisonRequest
     public bool Warmup { get; init; }
 }
 
-/// <param name="RunIds">The base runs first, then the tuned ones, in the order they were enqueued.</param>
+/// <summary>
+///     The pair, named per side. One flat run list could not say which id belonged to which model, and the two groups
+///     go in as one all-or-nothing insert, so either both are here or the request failed and nothing was queued.
+/// </summary>
 public sealed class CreateBenchmarkFromComparisonResponse
 {
     public required Guid ProjectId { get; init; }
     public required string BaseModelName { get; init; }
     public required string TunedModelName { get; init; }
-    public required IReadOnlyList<Guid> RunIds { get; init; }
+
+    /// <summary>The base model's runs, in the order they were enqueued. The tuned group follows them in the queue.</summary>
+    public required IReadOnlyList<Guid> BaseRunIds { get; init; }
+
+    public required IReadOnlyList<Guid> TunedRunIds { get; init; }
 }

@@ -693,6 +693,36 @@ public sealed class BenchmarkRunFreezeServiceTests
     }
 
     /// <summary>
+    ///     Several frozen plans go in as ONE insert. A caller that must validate two models before queuing either —
+    ///     the training comparison hand-off — froze and committed one side at a time, so a second side that then
+    ///     failed left the first queued with the caller holding an error and no ids.
+    /// </summary>
+    [Test]
+    public async Task CommitAsync_WithSeveralPlans_InsertsThemAllInOneCall()
+    {
+        var harness = new FreezeHarness();
+        await using var scope = new BenchmarkFreezeScope();
+
+        var first = await harness.FreezeAsync(scope);
+        var second = await harness.FreezeAsync(scope);
+
+        // A freeze writes nothing, which is why both plans present the SAME project version.
+        AssertEx.Equal(0, harness.StoreCalls, "Freezing decides; it does not queue.");
+        AssertEx.Equal(first.ExpectedProjectVersion, second.ExpectedProjectVersion);
+
+        var committed = await harness.CommitAsync([first, second]);
+
+        AssertEx.Equal(1, harness.StoreCalls, "One insert, one compare-and-swap, all or nothing.");
+        AssertEx.Equal(expected: 2, harness.Commands.Count);
+        AssertEx.Equal(first.ExpectedProjectVersion, harness.ExpectedVersions.Single());
+
+        // Split back per plan, so each side learns its OWN run ids out of one flat insert.
+        AssertEx.Equal(expected: 2, committed.Count);
+        AssertEx.Equal(expected: 1, committed[0].Count);
+        AssertEx.Equal(expected: 1, committed[1].Count);
+    }
+
+    /// <summary>
     ///     One freeze wired end to end. Everything but the KV decision is held constant so a matrix test reads as the
     ///     single input it varies.
     /// </summary>
@@ -831,6 +861,12 @@ public sealed class BenchmarkRunFreezeServiceTests
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(int repeatCount, bool warmup) =>
             _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version, KvCacheType: null, repeatCount, warmup));
+
+        public Task<BenchmarkFrozenRunPlan> FreezeAsync(BenchmarkFreezeScope scope) =>
+            _service.FreezeAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version), scope);
+
+        public Task<IReadOnlyList<IReadOnlyList<BenchmarkRunRecord>>> CommitAsync(IReadOnlyList<BenchmarkFrozenRunPlan> plans) =>
+            _service.CommitAsync(plans);
 
         public Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(BenchmarkFreezeScope scope) =>
             _service.StartAsync(new BenchmarkRunStartRequest(_project.Id, _primaryModel, _project.Version), scope);

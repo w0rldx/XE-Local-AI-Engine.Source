@@ -19,8 +19,12 @@ public sealed record CreateBenchmarkFromComparisonCommand(
     int RepeatCount = 1,
     bool Warmup = false);
 
-/// <param name="RunIds">The base runs first, then the tuned ones, in the order they were enqueued.</param>
-public sealed record ComparisonBenchmarkHandoff(Guid ProjectId, string BaseModelName, string TunedModelName, IReadOnlyList<Guid> RunIds);
+/// <param name="BaseRunIds">The base model's runs, in the order they were enqueued. The tuned group follows them.</param>
+public sealed record ComparisonBenchmarkHandoff(Guid ProjectId,
+    string BaseModelName,
+    string TunedModelName,
+    IReadOnlyList<Guid> BaseRunIds,
+    IReadOnlyList<Guid> TunedRunIds);
 
 public interface IComparisonBenchmarkHandoffService
 {
@@ -40,6 +44,11 @@ public interface IComparisonBenchmarkHandoffService
 ///         agent), with the same KV-cache type and the same repeat count, through one shared
 ///         <see cref="BenchmarkFreezeScope" /> — so the two sides differ in the model and nothing else, which is the only
 ///         condition under which their scores may be subtracted.
+///     </para>
+///     <para>
+///         <b>Both sides or neither.</b> The pair is frozen — resolved, verified, checked against the project version —
+///         on both sides before a single run is written, and then inserted in ONE all-or-nothing commit. A failure on
+///         the tuned side therefore leaves nothing queued, so a retry cannot duplicate the base group.
 ///     </para>
 ///     <para>
 ///         <b>Installed models only.</b> A comparison's tuned side is usually a STAGED artifact, which the benchmark
@@ -101,18 +110,23 @@ public sealed class ComparisonBenchmarkHandoffService(
         // One scope for the pair, exactly as the matrix batch does: one capability probe, one verified lease per model,
         // and the lease held so the tuned side cannot be frozen against different bytes than the base side was.
         await using var scope = new BenchmarkFreezeScope();
-        var runIds = new List<Guid>();
-        var expectedVersion = project.Version;
+
+        // BOTH sides are decided — model resolved and verified, eligibility applied, project version checked — before
+        // EITHER is written. Committing the base group first meant a tuned side that failed any of those checks left
+        // an hour of base runs queued while the caller got an error carrying no ids, so the only retry available
+        // queued a SECOND base group. One commit and one compare-and-swap: on any failure nothing is persisted.
+        var plans = new List<BenchmarkFrozenRunPlan>(2);
         foreach (var modelName in new[] { baseModelName, tunedModelName })
         {
-            var created = await StartAsync(project.Id, modelName, expectedVersion, kvCacheType, command, scope, cancellationToken).ConfigureAwait(false);
-
-            // Every group insert is all-or-nothing, so the version the tuned side presents is the base side's count.
-            expectedVersion += created.Count;
-            runIds.AddRange(created.Select(static run => run.Id));
+            plans.Add(await FreezeAsync(project.Id, modelName, project.Version, kvCacheType, command, scope, cancellationToken).ConfigureAwait(false));
         }
 
-        return new ComparisonBenchmarkHandoff(project.Id, baseModelName, tunedModelName, runIds);
+        var started = await _freeze.CommitAsync(plans, cancellationToken).ConfigureAwait(false);
+        return new ComparisonBenchmarkHandoff(project.Id,
+            baseModelName,
+            tunedModelName,
+            [.. started[0].Select(static run => run.Id)],
+            [.. started[1].Select(static run => run.Id)]);
     }
 
     /// <summary>
@@ -139,7 +153,11 @@ public sealed class ComparisonBenchmarkHandoffService(
                               .ConfigureAwait(false);
     }
 
-    private async Task<IReadOnlyList<BenchmarkRunRecord>> StartAsync(Guid projectId,
+    /// <summary>
+    ///     Freezes ONE side. Nothing is written — the pair is committed together — but every refusal a side can raise
+    ///     happens here, which is what lets the message name the side's model.
+    /// </summary>
+    private async Task<BenchmarkFrozenRunPlan> FreezeAsync(Guid projectId,
         string modelName,
         long expectedVersion,
         string? kvCacheType,
@@ -149,7 +167,7 @@ public sealed class ComparisonBenchmarkHandoffService(
     {
         try
         {
-            return await _freeze.StartAsync(new BenchmarkRunStartRequest(projectId,
+            return await _freeze.FreezeAsync(new BenchmarkRunStartRequest(projectId,
                                      modelName,
                                      expectedVersion,
                                      kvCacheType,

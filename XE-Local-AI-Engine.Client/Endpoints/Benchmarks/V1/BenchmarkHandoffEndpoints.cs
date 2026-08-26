@@ -50,7 +50,8 @@ public sealed class CreateBenchmarkFromComparisonEndpoint(IComparisonBenchmarkHa
             ProjectId = created.ProjectId,
             BaseModelName = created.BaseModelName,
             TunedModelName = created.TunedModelName,
-            RunIds = created.RunIds
+            BaseRunIds = created.BaseRunIds,
+            TunedRunIds = created.TunedRunIds
         })).ConfigureAwait(false);
     }
 }
