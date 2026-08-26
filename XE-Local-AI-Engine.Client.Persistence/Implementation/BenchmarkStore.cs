@@ -2014,9 +2014,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                          .ConfigureAwait(false);
         foreach (var run in candidates)
         {
+            // AppendFidelityWorkAsync already sets the projection to 'queued' and clears the error, which is exactly
+            // what an enqueued measurement is. Resetting it to null here undid that in the same transaction and left
+            // the run reading as "fidelity was never asked for" while its item sat in the queue.
             _ = await AppendFidelityWorkAsync(run, kind, now, cancellationToken).ConfigureAwait(false);
-            run.FidelityStatus = null;
-            run.FidelityErrorMessage = null;
             run.Version++;
             run.UpdatedAtUtc = now;
         }

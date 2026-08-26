@@ -204,6 +204,31 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     [Test]
+    public async Task UpdateProjectFidelity_WithMeasureExisting_LeavesEveryQueuedCellReadingQueued()
+    {
+        var databasePath = GetDatabasePath("project-fidelity-queued-projection.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+        var run = await store.StartRunAsync(CreateRun(project));
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
+            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 120));
+
+        var latest = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        _ = await store.UpdateProjectFidelityAsync(latest.Id, latest.Version,
+            new BenchmarkProjectFidelityInput(FidelityEnabled: true, FidelityKldEnabled: false, FidelityChunks: null, null, null),
+            measureExisting: true);
+
+        // 'queued' and null are different facts — "a measurement is on its way" versus "fidelity was never asked for" —
+        // and the UI renders a different thing for each. The enqueue set the first; nothing may then write the second.
+        var measured = AssertEx.NotNull(await store.GetRunAsync(run.Id));
+        AssertEx.Equal("queued", AssertEx.NotNull(measured.Fidelity).Status);
+    }
+
+    [Test]
     public async Task UpdateProjectFidelity_OnAStaleVersion_Conflicts()
     {
         var databasePath = GetDatabasePath("project-fidelity-cas.sqlite");
