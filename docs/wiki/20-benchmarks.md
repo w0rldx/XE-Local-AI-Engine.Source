@@ -226,6 +226,15 @@ Ranking reads the scores out of the active fit while its `FitKey` still matches.
 
 The whole rank read is a **flat-column scan** across four tables — nothing is decrypted to answer "is this run ranked?".
 
+### 6.1 Comparing two cells — the paired-difference interval
+
+`GET benchmarks/projects/{projectId}/compare?cellKeys=…&cellKeys=…` (Operator, 2..6 distinct keys) returns the named cells in the shape `GET …/cells` already serves, plus one `pairedDeltas` entry per unordered pair. The difference is a **read-time projection over the cell table** — nothing about a comparison is stored, `IBenchmarkStore` gained no member for it, and the number is always recomputed from the scores the project holds now.
+
+- **The resampling unit is the item, drawn with both cells' scores for it** (`BenchmarkPairedBootstrap`): `δₖ = qualityA(k) − qualityB(k)` over the shared items, B = 2000 replicates, percentile 2.5 / 97.5, seeded at 0 like the Bradley–Terry bootstrap and using the same nearest-rank percentile. Resampling the two cells independently would discard the pairing and re-inflate the interval by exactly the between-item variance a task suite exists to hold constant.
+- **A shared item needs a rankable score on both sides.** `item-revised`, `item-set-revised`, truncated and unjudged runs carry a null quality and take their item *out* of the comparison rather than into it with a guessed number — so a cell excluded wholesale shares nothing with anybody and yields no delta at all.
+- **Below three shared items there is no entry, not a zero.** A delta of 0 with no interval is indistinguishable from a measured tie, so the absence is the contract: the client renders "too few shared items" from the missing entry and **"not separated by this suite"** from `separated: false`, and re-derives neither from the bounds.
+- Quality only, like every other ranking read: throughput, perplexity and KL divergence never enter a delta.
+
 ---
 
 ## 7. Export
