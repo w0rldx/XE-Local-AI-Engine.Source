@@ -76,6 +76,11 @@ export function toBenchmarkRubric(value: RubricResponse | null | undefined): Ben
 			title: criterion.title ?? "",
 			description: criterion.description ?? "",
 			weight: criterion.weight ?? benchmarkRubricLimits.minWeight,
+			// Preserved rather than defaulted: the editor sends the mapped rubric straight back, so a dropped `kind`
+			// would re-save a deterministically verified criterion as an LLM-judged one and change the project's
+			// meaning without the operator touching it.
+			kind: criterion.kind ?? null,
+			config: criterion.config ?? null,
 		})),
 	};
 }

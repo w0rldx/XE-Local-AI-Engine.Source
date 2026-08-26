@@ -81,6 +81,18 @@ export interface BenchmarkRubricCriterion {
 	title: string;
 	description: string;
 	weight: number;
+	/**
+	 * How this criterion is decided: null (or absent) is the LLM judge reading the rubric, and a named kind is a
+	 * deterministic verifier the node runs with no model in the loop. Carried through the editor UNREAD: the editor
+	 * does not offer the choice yet, and dropping the member on a round-trip would silently turn a verifiable
+	 * criterion back into a judged one — the operator's project quietly changing meaning because a form re-saved it.
+	 *
+	 * follow-up: the per-criterion kind + config editor (plan §7.3 / §9's `BenchmarkVerifierEditor`) is the slice that
+	 * makes these two members editable rather than merely preserved.
+	 */
+	kind?: string | null;
+	/** The verifier's configuration, verbatim JSON from the node. Opaque here for the same reason `kind` is. */
+	config?: string | null;
 }
 
 export interface BenchmarkRubric {

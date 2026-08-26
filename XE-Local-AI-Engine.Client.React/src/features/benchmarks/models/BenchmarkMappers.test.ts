@@ -5,6 +5,7 @@ import {
 	toBenchmarkProjectDetail,
 	toBenchmarkProjectSummary,
 	toBenchmarkRankCohort,
+	toBenchmarkRubric,
 	toBenchmarkRunDetail,
 	toBenchmarkRunFidelity,
 	toBenchmarkRunSummary,
@@ -104,7 +105,7 @@ describe("toBenchmarkProjectDetail", () => {
 		});
 		expect(withRubric.judge.rubric).toEqual({
 			version: 1,
-			criteria: [{ id: "accuracy", title: "Accuracy", description: "Facts", weight: 50 }],
+			criteria: [{ id: "accuracy", title: "Accuracy", description: "Facts", weight: 50, kind: null, config: null }],
 		});
 
 		const withoutRubric = toBenchmarkProjectDetail(partial({ name: "X", coreTask: "T", judge: { enabled: true } }));
@@ -546,5 +547,25 @@ describe("toBenchmarkRunFidelity", () => {
 
 	it("falls back to the node's own default for an unrecognized status", () => {
 		expect(toBenchmarkRunFidelity({ status: "reticulating", kldState: "none" })?.status).toBe("queued");
+	});
+});
+
+// The editor sends the mapped rubric straight back on save, so anything the mapper drops is silently deleted from the
+// project. `kind` and `config` decide whether a criterion is checked deterministically or read by an LLM — losing
+// them on a round-trip would change what the project measures without the operator touching that criterion.
+describe("toBenchmarkRubric criterion verifier members", () => {
+	it("preserves a criterion's kind and config", () => {
+		const rubric = toBenchmarkRubric({
+			version: 1,
+			criteria: [{ id: "answer", title: "Answer", description: "", weight: 50, kind: "regex", config: '{"pattern":"^42$"}' }],
+		});
+
+		expect(rubric?.criteria[0]).toMatchObject({ kind: "regex", config: '{"pattern":"^42$"}' });
+	});
+
+	it("reads an absent kind as null, which is the LLM judge", () => {
+		const rubric = toBenchmarkRubric({ version: 1, criteria: [{ id: "answer", title: "Answer", description: "", weight: 50 }] });
+
+		expect(rubric?.criteria[0]).toMatchObject({ kind: null, config: null });
 	});
 });
