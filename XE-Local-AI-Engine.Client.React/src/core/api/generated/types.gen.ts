@@ -3628,6 +3628,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse = 
 	runs?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse>;
 	repeatGroups?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGroupResponse>;
 	llamaBench?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchRowResponse>;
+	pairwiseFit?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseFitResponse | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectResponse = {
@@ -3841,6 +3842,29 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchR
 	samples?: number;
 	repeatGroupId?: string | null;
 	modelName: string;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseFitResponse = {
+	id?: string;
+	fitKey: string;
+	judgeExecutionKey: string;
+	cohortGeneration?: number;
+	comparisonSetVersion?: number;
+	iterations?: number;
+	bootstrapReplicates?: number;
+	createdAtUtc?: number;
+	fittedSetJson: string;
+	scores?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseScoreResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseScoreResponse = {
+	runId?: string;
+	score?: number | null;
+	ciLow?: number | null;
+	ciHigh?: number | null;
+	comparisons?: number;
+	bootstrapAppearances?: number;
+	reason?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest = {

@@ -30137,6 +30137,14 @@
             "items": {
               "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchRowResponse"
             }
+          },
+          "pairwiseFit": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseFitResponse"
+              }
+            ]
           }
         }
       },
@@ -30970,6 +30978,92 @@
           },
           "modelName": {
             "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseFitResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fitKey",
+          "judgeExecutionKey",
+          "fittedSetJson"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "fitKey": {
+            "type": "string"
+          },
+          "judgeExecutionKey": {
+            "type": "string"
+          },
+          "cohortGeneration": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comparisonSetVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iterations": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "bootstrapReplicates": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "fittedSetJson": {
+            "type": "string"
+          },
+          "scores": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseScoreResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseScoreResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "score": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "ciLow": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "ciHigh": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "comparisons": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "bootstrapAppearances": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
