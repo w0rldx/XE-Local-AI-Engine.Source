@@ -215,7 +215,8 @@ public sealed class GetBenchmarkRubricPresetsEndpoint : EndpointWithoutRequest<B
             Default = BenchmarkJudgeRubricDefaults.Default().ToDto(),
             Programming = BenchmarkJudgeRubricDefaults.Programming().ToDto(),
             Reasoning = BenchmarkJudgeRubricDefaults.Reasoning().ToDto(),
-            Verifiable = BenchmarkJudgeRubricDefaults.Verifiable().ToDto()
+            Verifiable = BenchmarkJudgeRubricDefaults.Verifiable().ToDto(),
+            CodeExecution = BenchmarkJudgeRubricDefaults.CodeExecution().ToDto()
         }, ct);
 }
 

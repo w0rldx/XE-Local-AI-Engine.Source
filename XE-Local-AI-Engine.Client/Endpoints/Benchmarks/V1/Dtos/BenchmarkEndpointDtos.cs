@@ -481,6 +481,14 @@ public sealed class BenchmarkRubricPresetsResponse
 
     /// <summary>The all-verifiable preset: judged server-side, with no llama-server spawn at all.</summary>
     public required BenchmarkRubricDto Verifiable { get; init; }
+
+    /// <summary>
+    ///     The execution preset: one <c>pythonTests</c> criterion that RUNS the answer's code against the operator's
+    ///     hidden tests in the compute sandbox. Both the test code and the exported names ship as placeholders to edit.
+    ///     It needs <c>Compute:Enabled</c> on a node whose sandbox can isolate and can enforce resource ceilings;
+    ///     where it cannot, runs are left unranked rather than scored 0.
+    /// </summary>
+    public required BenchmarkRubricDto CodeExecution { get; init; }
 }
 
 /// <summary>One verifiable criterion's server-side evidence. Detail responses only.</summary>

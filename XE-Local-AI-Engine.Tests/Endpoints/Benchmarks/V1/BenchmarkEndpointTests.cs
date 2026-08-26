@@ -1391,6 +1391,16 @@ public sealed class BenchmarkEndpointTests
             AssertEx.Equal(expected: 5, criteria.GetArrayLength(), $"The {preset} preset must offer the full rubric.");
             AssertEx.Equal("correctness", criteria[0].GetProperty("id").GetString());
         }
+
+        // The two server-side presets do NOT share those ids and weights, because a verifiable criterion is a
+        // different question. codeExecution is a single criterion on purpose: the hidden tests pass or they do not.
+        var verifiable = document.RootElement.GetProperty("verifiable").GetProperty("criteria");
+        AssertEx.True(verifiable.GetArrayLength() > 0);
+
+        var execution = document.RootElement.GetProperty("codeExecution").GetProperty("criteria");
+        AssertEx.Equal(expected: 1, execution.GetArrayLength());
+        AssertEx.Equal("pythonTests", execution[0].GetProperty("kind").GetString());
+        AssertEx.Equal(expected: 100, execution[0].GetProperty("weight").GetInt32());
     }
 
     [Test]
