@@ -76,7 +76,7 @@ public sealed class BenchmarkProjectService(
 
         // Project and judge in one store call, so a failure between them cannot persist a project with judging off
         // that the operator could only retry into a duplicate.
-        return await _benchmarkStore.CreateProjectAsync(input, ToPolicyChange(policy), cancellationToken).ConfigureAwait(false);
+        return await _benchmarkStore.CreateProjectAsync(input, ToPolicyChange(policy), cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<BenchmarkProjectRecord> UpdateAsync(Guid projectId,

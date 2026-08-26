@@ -40,7 +40,7 @@ public sealed class BenchmarkProjectServiceTests
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
             context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId)));
 
-        _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<CancellationToken>());
+        _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -55,7 +55,7 @@ public sealed class BenchmarkProjectServiceTests
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
             context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId, MaxOutputTokens: 0)));
         _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(),
-            Arg.Any<CancellationToken>());
+            Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
 
         _ = await context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId, MaxOutputTokens: 2048));
         AssertEx.Equal<int?>(2048, AssertEx.NotNull(context.CreatedInput).MaxOutputTokens);
@@ -81,7 +81,7 @@ public sealed class BenchmarkProjectServiceTests
             context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId, MaxOutputTokens: 2048,
                 ReasoningBudgetTokens: 2000)));
         _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(),
-            Arg.Any<CancellationToken>());
+            Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
 
         _ = await context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId, MaxOutputTokens: 1024,
             ReasoningBudgetTokens: 2048));
@@ -106,7 +106,7 @@ public sealed class BenchmarkProjectServiceTests
             context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId,
                 InvocationTimeoutSeconds: 7201)));
         _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(),
-            Arg.Any<CancellationToken>());
+            Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
 
         _ = await context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId,
             InvocationTimeoutSeconds: 1800));
@@ -165,7 +165,7 @@ public sealed class BenchmarkProjectServiceTests
 
         AssertEx.True(exception.Message.Contains("auxiliary asset", StringComparison.Ordinal),
             "A judging from an aux-asset model can never be ranked, so it is refused at the policy.");
-        _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<CancellationToken>());
+        _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -179,8 +179,8 @@ public sealed class BenchmarkProjectServiceTests
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
             incomplete.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, incomplete.AgentId, new BenchmarkJudgePolicyDraft("   ", 4096))));
 
-        _ = missing.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<CancellationToken>());
-        _ = incomplete.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<CancellationToken>());
+        _ = missing.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
+        _ = incomplete.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -549,6 +549,7 @@ public sealed class BenchmarkProjectServiceTests
             Store = Substitute.For<IBenchmarkStore>();
             Store.CreateProjectAsync(Arg.Do<BenchmarkProjectInput>(input => CreatedInput = input),
                      Arg.Do<BenchmarkJudgePolicyChangeInput?>(change => CreatedPolicy = change),
+                     Arg.Do<IReadOnlyList<BenchmarkTaskItemInput>?>(items => CreatedItems = items),
                      Arg.Any<CancellationToken>())
                  .Returns(call => Project(call.Arg<BenchmarkProjectInput>()));
             Store.UpdateProjectAsync(ProjectId,
@@ -628,6 +629,7 @@ public sealed class BenchmarkProjectServiceTests
         public IBenchmarkInstalledModelLeaseProvider Models { get; }
         public IBenchmarkProjectService Service { get; }
         public BenchmarkProjectInput? CreatedInput { get; private set; }
+        public IReadOnlyList<BenchmarkTaskItemInput>? CreatedItems { get; private set; }
         public BenchmarkJudgePolicyChangeInput? CreatedPolicy { get; private set; }
         public BenchmarkJudgePolicyChangeInput? UpdatedPolicy { get; private set; }
         public ReadOnlyMemory<byte>? ActivatedPolicyJson { get; private set; }
