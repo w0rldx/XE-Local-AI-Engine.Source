@@ -592,6 +592,72 @@ public sealed class BenchmarkRunExecutorTests
     }
 
     [Test]
+    public async Task Execute_GrowsThePairwiseCohortOnSuccessOnly_NotOnACancellation()
+    {
+        // Every other test here hands the executor a bare planner substitute, so "the planner is never called" would
+        // pass all of them. This is the one that would fail if the EnsurePairsAsync call were deleted — and the one
+        // that would fail if it moved out of the success path, where a cancelled run would start enqueueing
+        // comparisons against an answer that does not exist.
+        var planner = Substitute.For<IBenchmarkPairwisePlanner>();
+        var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
+        var installed = Installed("model.gguf", 'a');
+        var store = Substitute.For<IBenchmarkStore>();
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        store.MarkPrimarySucceededAsync(Arg.Any<BenchmarkPrimarySuccessCommand>(), Arg.Any<CancellationToken>())
+             .Returns(run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Succeeded,
+                 Version = 3
+             });
+        store.MarkPrimaryCancelledAsync(run.Id, run.Version, Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(run with
+             {
+                 PrimaryStatus = BenchmarkPrimaryStatus.Cancelled,
+                 Version = 3
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Any<RuntimePackage>(), Arg.Any<CancellationToken>()).Returns(assignment);
+        var cancellations = new BenchmarkCancellationRegistry();
+        var cancelNext = false;
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(async call =>
+              {
+                  if (cancelNext)
+                  {
+                      AssertEx.True(cancellations.TryCancel(run.Id, BenchmarkWorkKind.Primary));
+                      await Task.FromCanceled(call.ArgAt<CancellationToken>(1)).ConfigureAwait(false);
+                      return;
+                  }
+
+                  var execution = call.Arg<InvocationExecutionContext>();
+                  var invocationId = execution.Package.InvocationId;
+                  _ = await AssertEx.NotNull(execution.GenerationAdmissionPolicy).EvaluateAsync(new InvocationGenerationAdmissionContext
+                  {
+                      InvocationId = invocationId,
+                      RequestedContextTokens = 8192,
+                      EffectiveContextTokens = 8192,
+                      ModelId = "model.gguf",
+                      ProviderName = "llamacpp"
+                  });
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(State(invocationId, InvocationStatus.Completed, "answer", 20, 100, "stop")));
+              });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, Snapshot(installed), lease, new RecordingCapacityService(), dispatcher, runner, cancellations,
+            pairwisePlanner: planner);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+        _ = await planner.Received(1).EnsurePairsAsync(run.ProjectId, Arg.Any<CancellationToken>());
+
+        cancelNext = true;
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(1, run.Id, BenchmarkWorkKind.Primary, 1, 2, run), CancellationToken.None);
+
+        _ = await planner.Received(1).EnsurePairsAsync(run.ProjectId, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task Execute_WhenHostStops_LeavesRunningWorkForStartupRecovery()
     {
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2);
@@ -921,7 +987,8 @@ public sealed class BenchmarkRunExecutorTests
         ILlamaServerProcessSupervisor? supervisor = null,
         IRuntimeEnvironmentFactsProvider? environmentFacts = null,
         ILogger<BenchmarkRunExecutor>? logger = null,
-        BenchmarkAdmissionRetry? admissionRetry = null) =>
+        BenchmarkAdmissionRetry? admissionRetry = null,
+        IBenchmarkPairwisePlanner? pairwisePlanner = null) =>
         new(store,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
@@ -936,7 +1003,7 @@ public sealed class BenchmarkRunExecutorTests
             cancellations,
             environmentFacts ?? new RecordingEnvironmentFacts(),
             Substitute.For<IBenchmarkJudgeRuntimeResolver>(),
-            Substitute.For<IBenchmarkPairwisePlanner>(),
+            pairwisePlanner ?? Substitute.For<IBenchmarkPairwisePlanner>(),
             // Default: decide ONCE and never wait, so every test but the wait tests stays instant.
             admissionRetry ?? new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
             logger ?? NullLogger<BenchmarkRunExecutor>.Instance);
