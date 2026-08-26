@@ -4340,6 +4340,33 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkCellsRespon
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkCellsRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse = z.object({
+	aCellKey: z.string(),
+	bCellKey: z.string(),
+	sharedItemCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	delta: z.number().optional(),
+	ciLow: z.number().optional(),
+	ciHigh: z.number().optional(),
+	separated: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsResponse = z.object({
+	cells: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse).optional(),
+	rankCohort: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse,
+	scorableItemCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	pairedDeltas: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportAgentResponse = z.object({
 	name: z.string(),
 	version: z.int().optional(),
@@ -8315,6 +8342,19 @@ export const zListBenchmarkCellsPath = z.object({
  * Success
  */
 export const zListBenchmarkCellsResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkCellsResponse;
+
+export const zCompareBenchmarkCellsPath = z.object({
+	projectId: z.guid(),
+});
+
+export const zCompareBenchmarkCellsQuery = z.object({
+	cellKeys: z.array(z.string()),
+});
+
+/**
+ * Success
+ */
+export const zCompareBenchmarkCellsResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsResponse;
 
 export const zExportBenchmarkProjectPath = z.object({
 	projectId: z.guid(),

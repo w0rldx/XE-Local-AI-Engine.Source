@@ -13932,6 +13932,87 @@
         ]
       }
     },
+    "/api/local/v1/benchmarks/projects/{projectId}/compare": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "compareBenchmarkCells",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "cellKeys",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "required": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "example": [
+              ""
+            ]
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1CompareBenchmarkCellsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/benchmarks/projects/{projectId}/export": {
       "get": {
         "tags": [
@@ -30809,6 +30890,73 @@
         }
       },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkCellsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1CompareBenchmarkCellsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rankCohort"
+        ],
+        "properties": {
+          "cells": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkCellResponse"
+            }
+          },
+          "rankCohort": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse"
+          },
+          "scorableItemCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pairedDeltas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "aCellKey",
+          "bCellKey"
+        ],
+        "properties": {
+          "aCellKey": {
+            "type": "string"
+          },
+          "bCellKey": {
+            "type": "string"
+          },
+          "sharedItemCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "delta": {
+            "type": "number",
+            "format": "double"
+          },
+          "ciLow": {
+            "type": "number",
+            "format": "double"
+          },
+          "ciHigh": {
+            "type": "number",
+            "format": "double"
+          },
+          "separated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1CompareBenchmarkCellsRequest": {
         "type": "object",
         "additionalProperties": false
       },

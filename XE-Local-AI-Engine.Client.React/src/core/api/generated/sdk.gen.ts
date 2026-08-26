@@ -123,6 +123,9 @@ import type {
 	CompactNodeChatConversationData,
 	CompactNodeChatConversationErrors,
 	CompactNodeChatConversationResponses,
+	CompareBenchmarkCellsData,
+	CompareBenchmarkCellsErrors,
+	CompareBenchmarkCellsResponses,
 	ConfirmDevelopmentContainerRuntimeData,
 	ConfirmDevelopmentContainerRuntimeErrors,
 	ConfirmDevelopmentContainerRuntimeResponses,
@@ -1146,6 +1149,9 @@ import {
 	zCompactNodeChatConversationBody,
 	zCompactNodeChatConversationPath,
 	zCompactNodeChatConversationResponse,
+	zCompareBenchmarkCellsPath,
+	zCompareBenchmarkCellsQuery,
+	zCompareBenchmarkCellsResponse,
 	zConfirmDevelopmentContainerRuntimeBody,
 	zConfirmDevelopmentContainerRuntimeResponse,
 	zConnectConnectionResponse,
@@ -10543,6 +10549,36 @@ export const listBenchmarkCells = <ThrowOnError extends boolean = false>(
 			},
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/cells",
+		...options,
+	});
+
+export const compareBenchmarkCells = <ThrowOnError extends boolean = false>(
+	options: Options<CompareBenchmarkCellsData, ThrowOnError>,
+): RequestResult<CompareBenchmarkCellsResponses, CompareBenchmarkCellsErrors, ThrowOnError> =>
+	(options.client ?? client).get<CompareBenchmarkCellsResponses, CompareBenchmarkCellsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCompareBenchmarkCellsPath,
+					query: zCompareBenchmarkCellsQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCompareBenchmarkCellsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/compare",
 		...options,
 	});
 

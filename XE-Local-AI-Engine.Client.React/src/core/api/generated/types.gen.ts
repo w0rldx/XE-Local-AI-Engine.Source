@@ -3660,6 +3660,27 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkCellsRequest 
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsResponse = {
+	cells?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse>;
+	rankCohort: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse;
+	scorableItemCount?: number;
+	pairedDeltas?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse = {
+	aCellKey: string;
+	bCellKey: string;
+	sharedItemCount?: number;
+	delta?: number;
+	ciLow?: number;
+	ciHigh?: number;
+	separated?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse = {
 	schemaVersion?: number;
 	exportedAtUtc?: number;
@@ -13374,6 +13395,47 @@ export type ListBenchmarkCellsResponses = {
 };
 
 export type ListBenchmarkCellsResponse = ListBenchmarkCellsResponses[keyof ListBenchmarkCellsResponses];
+
+export type CompareBenchmarkCellsData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query: {
+		cellKeys: Array<string>;
+	};
+	url: "/api/local/v1/benchmarks/projects/{projectId}/compare";
+};
+
+export type CompareBenchmarkCellsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type CompareBenchmarkCellsError = CompareBenchmarkCellsErrors[keyof CompareBenchmarkCellsErrors];
+
+export type CompareBenchmarkCellsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1CompareBenchmarkCellsResponse;
+};
+
+export type CompareBenchmarkCellsResponse = CompareBenchmarkCellsResponses[keyof CompareBenchmarkCellsResponses];
 
 export type ExportBenchmarkProjectData = {
 	body?: never;

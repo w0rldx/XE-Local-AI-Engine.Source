@@ -48,6 +48,7 @@ import {
 	codexStatus,
 	commitSkillImport,
 	compactNodeChatConversation,
+	compareBenchmarkCells,
 	confirmDevelopmentContainerRuntime,
 	connectConnection,
 	continuePreviewRun,
@@ -454,6 +455,9 @@ import type {
 	CompactNodeChatConversationData,
 	CompactNodeChatConversationError,
 	CompactNodeChatConversationResponse,
+	CompareBenchmarkCellsData,
+	CompareBenchmarkCellsError,
+	CompareBenchmarkCellsResponse,
 	ConfirmDevelopmentContainerRuntimeData,
 	ConfirmDevelopmentContainerRuntimeResponse,
 	ConnectConnectionData,
@@ -7111,6 +7115,28 @@ export const listBenchmarkCellsOptions = (options: Options<ListBenchmarkCellsDat
 			return data;
 		},
 		queryKey: listBenchmarkCellsQueryKey(options),
+	});
+
+export const compareBenchmarkCellsQueryKey = (options: Options<CompareBenchmarkCellsData>) =>
+	createQueryKey("compareBenchmarkCells", options);
+
+export const compareBenchmarkCellsOptions = (options: Options<CompareBenchmarkCellsData>) =>
+	queryOptions<
+		CompareBenchmarkCellsResponse,
+		AxiosError<CompareBenchmarkCellsError>,
+		CompareBenchmarkCellsResponse,
+		ReturnType<typeof compareBenchmarkCellsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await compareBenchmarkCells({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: compareBenchmarkCellsQueryKey(options),
 	});
 
 export const exportBenchmarkProjectQueryKey = (options: Options<ExportBenchmarkProjectData>) =>
