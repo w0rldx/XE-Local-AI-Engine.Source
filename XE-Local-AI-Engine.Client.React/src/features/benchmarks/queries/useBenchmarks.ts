@@ -79,11 +79,15 @@ export interface BenchmarkRunList {
 	totalCount: number;
 }
 
-/** The three rubrics the node offers as starting points. */
+/**
+ * The rubrics the node offers as starting points. `verifiable` is the one whose every criterion is decided
+ * server-side, so a project judging under it spawns no llama-server at all.
+ */
 export interface BenchmarkRubricPresets {
 	default: BenchmarkRubric | null;
 	programming: BenchmarkRubric | null;
 	reasoning: BenchmarkRubric | null;
+	verifiable: BenchmarkRubric | null;
 }
 
 const isRunActive = (run: Pick<BenchmarkRunSummary, "primaryStatus" | "judge">): boolean =>
@@ -270,6 +274,7 @@ export function useBenchmarkRubricPresets(enabled: boolean) {
 				default: toBenchmarkRubric(data.default),
 				programming: toBenchmarkRubric(data.programming),
 				reasoning: toBenchmarkRubric(data.reasoning),
+				verifiable: toBenchmarkRubric(data.verifiable),
 			};
 		},
 	});

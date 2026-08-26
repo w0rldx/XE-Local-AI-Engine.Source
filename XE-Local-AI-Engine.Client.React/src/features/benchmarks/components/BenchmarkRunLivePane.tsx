@@ -8,6 +8,7 @@ import { BenchmarkRunPane } from "@/features/benchmarks/components/BenchmarkRunP
 import { useBenchmarkRunHub } from "@/features/benchmarks/hooks/useBenchmarkRunHub";
 import { applyBenchmarkLiveOverlay } from "@/features/benchmarks/models/BenchmarkModels";
 import {
+	useBenchmarkProject,
 	useBenchmarkRun,
 	useCancelBenchmarkRun,
 	useClearBenchmarkRunScore,
@@ -19,6 +20,9 @@ import {
 export function BenchmarkRunLivePane({ runId }: { runId: string }) {
 	const { t } = useTranslation();
 	const runQuery = useBenchmarkRun(runId);
+	// Read through the query key the page already holds, so this costs no request: the judging MODE belongs to the
+	// project, not to the run, and the pane below cannot pick its reading without it.
+	const projectQuery = useBenchmarkProject(runQuery.data?.projectId ?? null);
 	const cancel = useCancelBenchmarkRun();
 	const score = useScoreBenchmarkRun();
 	const clearScore = useClearBenchmarkRunScore();
@@ -51,6 +55,7 @@ export function BenchmarkRunLivePane({ runId }: { runId: string }) {
 	return (
 		<BenchmarkRunPane
 			run={displayed}
+			judgeMode={projectQuery.data?.judge.mode}
 			parts={live.parts}
 			isConnected={live.isConnected}
 			isReconnecting={live.isReconnecting}

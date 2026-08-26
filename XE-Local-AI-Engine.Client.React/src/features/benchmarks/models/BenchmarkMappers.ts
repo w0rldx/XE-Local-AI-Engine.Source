@@ -25,6 +25,7 @@ import type {
 	BenchmarkProjectSummary,
 	BenchmarkRankCohort,
 	BenchmarkRubric,
+	BenchmarkRunVerifier,
 	BenchmarkRunDetail,
 	BenchmarkRunJudge,
 	BenchmarkRunSummary,
@@ -33,6 +34,7 @@ import {
 	benchmarkRubricLimits,
 	toBenchmarkFidelityKldState,
 	toBenchmarkFidelityStatus,
+	toBenchmarkJudgeMode,
 	toBenchmarkJudgeState,
 	toBenchmarkQualityScoreSource,
 	toBenchmarkRepeatMode,
@@ -88,6 +90,7 @@ export function toBenchmarkRubric(value: RubricResponse | null | undefined): Ben
 function toBenchmarkJudgePolicy(value: JudgePolicyResponse | undefined): BenchmarkJudgePolicy {
 	return {
 		enabled: value?.enabled === true,
+		mode: toBenchmarkJudgeMode(value?.mode),
 		policyRevision: value?.policyRevision ?? null,
 		policyHash: value?.policyHash ?? null,
 		modelName: value?.modelName ?? null,
@@ -118,6 +121,17 @@ function judgeCriteria(value: RunSummaryResponse["judge"]): BenchmarkJudgeCriter
 	}));
 }
 
+// The node sends evidence only for verifiable criteria, so an empty list is the ordinary case for an all-LLM rubric.
+function judgeVerifiers(value: RunSummaryResponse["judge"]): BenchmarkRunVerifier[] {
+	return (value?.verifiers ?? []).map((verifier) => ({
+		id: verifier.id,
+		kind: verifier.kind,
+		// Fail closed: an absent flag reads as "did not pass", never as a pass the node never asserted.
+		passed: verifier.passed === true,
+		detail: verifier.detail,
+	}));
+}
+
 // `policyCurrent`/`executionCurrent` fail closed: an absent flag means "cannot be ranked", never "ranked by default".
 function toBenchmarkRunJudge(value: RunSummaryResponse["judge"]): BenchmarkRunJudge {
 	return {
@@ -131,6 +145,7 @@ function toBenchmarkRunJudge(value: RunSummaryResponse["judge"]): BenchmarkRunJu
 		executionCurrent: value?.executionCurrent === true,
 		errorMessage: value?.errorMessage ?? null,
 		summary: value?.summary ?? null,
+		verifiers: judgeVerifiers(value),
 		criteria: judgeCriteria(value),
 	};
 }

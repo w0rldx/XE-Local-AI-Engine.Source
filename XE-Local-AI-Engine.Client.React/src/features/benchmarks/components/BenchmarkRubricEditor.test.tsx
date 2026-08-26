@@ -22,7 +22,12 @@ const rubric = (count: number): BenchmarkRubric => ({
 	version: 1,
 	criteria: Array.from({ length: count }, (_, index) => criterion(index)),
 });
-const presets: BenchmarkRubricPresets = { default: rubric(1), programming: rubric(2), reasoning: rubric(1) };
+const presets: BenchmarkRubricPresets = {
+	default: rubric(1),
+	programming: rubric(2),
+	reasoning: rubric(1),
+	verifiable: rubric(1),
+};
 
 function renderEditor(props: Partial<React.ComponentProps<typeof BenchmarkRubricEditor>> = {}) {
 	const onChange = vi.fn();
@@ -85,6 +90,45 @@ describe("BenchmarkRubricEditor", () => {
 		expect(onChange).toHaveBeenCalledWith({
 			version: 1,
 			criteria: [criterion(0), { ...criterion(1), weight: 42 }],
+		});
+	});
+});
+
+// C4: each criterion now says HOW it is decided. The rubric editor's own job here is narrow — mount the per-criterion
+// verifier editor and report the preset that makes every criterion server-decided.
+describe("BenchmarkRubricEditor verifiable criteria", () => {
+	afterEach(cleanup);
+
+	it("offers the all-verifiable preset, which judges with no llama-server spawn at all", () => {
+		const { onChange } = renderEditor();
+
+		fireEvent.click(screen.getByTestId("benchmark-rubric-preset-verifiable"));
+
+		expect(onChange).toHaveBeenCalledWith(presets.verifiable);
+	});
+
+	it("mounts a kind selector on every criterion", () => {
+		renderEditor();
+
+		expect(screen.getByTestId("benchmark-verifier-0-kind")).toBeTruthy();
+		expect(screen.getByTestId("benchmark-verifier-1-kind")).toBeTruthy();
+	});
+
+	it("carries a criterion's kind and config back to the caller unchanged apart from the edit", () => {
+		const { onChange } = renderEditor({
+			rubric: {
+				version: 1,
+				criteria: [{ id: "answer", title: "Answer", description: "", weight: 10, kind: "exact", config: '{"expected":""}' }],
+			},
+		});
+
+		fireEvent.change(screen.getByTestId("benchmark-verifier-0-expected"), { target: { value: "42" } });
+
+		expect(onChange).toHaveBeenCalledWith({
+			version: 1,
+			criteria: [
+				{ id: "answer", title: "Answer", description: "", weight: 10, kind: "exact", config: '{"expected":"42"}' },
+			],
 		});
 	});
 });

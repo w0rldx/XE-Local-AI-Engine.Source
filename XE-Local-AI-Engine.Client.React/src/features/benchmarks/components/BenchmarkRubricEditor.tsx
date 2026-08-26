@@ -2,8 +2,10 @@ import { ActionIcon, Button, Card, Group, NumberInput, Stack, Text, Textarea, Te
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { BenchmarkVerifierEditor } from "@/features/benchmarks/components/BenchmarkVerifierEditor";
 import type { BenchmarkRubric, BenchmarkRubricCriterion, BenchmarkRubricIssue } from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkRubricLimits, toBenchmarkCriterionId } from "@/features/benchmarks/models/BenchmarkModels";
+import { isVerifiableCriterionKind, toBenchmarkCriterionKind, verifierConfigIssue } from "@/features/benchmarks/models/BenchmarkVerifier";
 import type { BenchmarkRubricPresets } from "@/features/benchmarks/queries/useBenchmarks";
 
 interface BenchmarkRubricEditorProps {
@@ -14,7 +16,7 @@ interface BenchmarkRubricEditorProps {
 	onChange: (rubric: BenchmarkRubric) => void;
 }
 
-const emptyCriterion: BenchmarkRubricCriterion = { id: "", title: "", description: "", weight: 25 };
+const emptyCriterion: BenchmarkRubricCriterion = { id: "", title: "", description: "", weight: 25, kind: "llm", config: null };
 
 /**
  * The criteria the judge scores against, 0..10 each, rolled up by weight into the run's 0..100 judge score. Bounds
@@ -40,6 +42,11 @@ export function BenchmarkRubricEditor({ rubric, presets, issue, onChange }: Benc
 			rubric: presets?.programming ?? null,
 		},
 		{ key: "reasoning", label: t("pages.benchmarks.rubric.presetReasoning", "Reasoning"), rubric: presets?.reasoning ?? null },
+		{
+			key: "verifiable",
+			label: t("pages.benchmarks.rubric.presetVerifiable", "Verifiable"),
+			rubric: presets?.verifiable ?? null,
+		},
 	];
 
 	return (
@@ -127,6 +134,14 @@ export function BenchmarkRubricEditor({ rubric, presets, issue, onChange }: Benc
 						</Group>
 						<Textarea
 							label={t("pages.benchmarks.rubric.criterionDescription", "What the judge should look for")}
+							description={
+								isVerifiableCriterionKind(toBenchmarkCriterionKind(criterion.kind))
+									? t(
+											"pages.benchmarks.rubric.criterionDescriptionVerified",
+											"This criterion is decided server-side, so the text is documentation for the operator rather than an instruction to a model.",
+										)
+									: undefined
+							}
 							autosize={true}
 							minRows={2}
 							maxLength={benchmarkRubricLimits.maxDescriptionLength}
@@ -136,6 +151,13 @@ export function BenchmarkRubricEditor({ rubric, presets, issue, onChange }: Benc
 								const description = event.currentTarget.value;
 								replace(index, { description });
 							}}
+						/>
+						<BenchmarkVerifierEditor
+							kind={toBenchmarkCriterionKind(criterion.kind)}
+							config={criterion.config ?? null}
+							issue={verifierConfigIssue(toBenchmarkCriterionKind(criterion.kind), criterion.config)}
+							onChange={(patch) => replace(index, patch)}
+							testId={`benchmark-verifier-${index}`}
 						/>
 					</Stack>
 				</Card>

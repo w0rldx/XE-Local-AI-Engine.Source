@@ -110,9 +110,20 @@ export function toBenchmarkCriterionId(title: string): string {
 		.slice(0, benchmarkRubricLimits.maxIdLength);
 }
 
+/**
+ * How the judge decides. `pointwise` scores each run against the rubric on its own and is the only mode this build
+ * executes; `pairwise` compares runs against each other and is refused at save with `PairwiseNotAvailable`.
+ */
+export const benchmarkJudgeModes = ["pointwise", "pairwise"] as const;
+export type BenchmarkJudgeMode = (typeof benchmarkJudgeModes)[number];
+/** An absent mode is the node's own default, which is pointwise. */
+export const toBenchmarkJudgeMode = (value: unknown): BenchmarkJudgeMode =>
+	benchmarkJudgeModes.find((mode) => mode === value) ?? "pointwise";
+
 /** The project's current judge policy revision, or a disabled judge. Read-only: it is edited through a draft. */
 export interface BenchmarkJudgePolicy {
 	enabled: boolean;
+	mode: BenchmarkJudgeMode;
 	policyRevision: number | null;
 	policyHash: string | null;
 	modelName: string | null;
@@ -177,6 +188,19 @@ export interface BenchmarkEligibleModel {
 	supportsTools: boolean;
 }
 
+/**
+ * One server-side criterion's evidence: what the verifier checked and whether the answer passed it. Present only for
+ * verifiable criteria, and only on a detail response — a pointwise LLM criterion has a rationale instead.
+ */
+export interface BenchmarkRunVerifier {
+	/** The criterion id this evidence belongs to. */
+	id: string;
+	kind: string;
+	passed: boolean;
+	/** The node's own sentence about what it checked. Evidence, not a verdict to re-derive. */
+	detail: string;
+}
+
 export interface BenchmarkJudgeCriterionScore {
 	id: string;
 	/** 0..10 per criterion; the weighted roll-up is the 0..100 `score` on the judging itself. */
@@ -200,6 +224,8 @@ export interface BenchmarkRunJudge {
 	executionCurrent: boolean;
 	errorMessage: string | null;
 	summary: string | null;
+	/** Server-side verifier evidence, one entry per verifiable criterion. Detail-only, like the criteria themselves. */
+	verifiers: BenchmarkRunVerifier[];
 	/** Detail-only; the list projection omits it. */
 	criteria: BenchmarkJudgeCriterionScore[];
 }
@@ -215,6 +241,7 @@ export const noBenchmarkRunJudge: BenchmarkRunJudge = {
 	executionCurrent: false,
 	errorMessage: null,
 	summary: null,
+	verifiers: [],
 	criteria: [],
 };
 

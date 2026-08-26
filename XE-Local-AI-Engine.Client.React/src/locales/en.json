@@ -4295,7 +4295,9 @@
 					"title": "A title is required (64 characters max).",
 					"description": "A description is required (1024 characters max).",
 					"weight": "The weight must be between 1 and 100."
-				}
+				},
+				"presetVerifiable": "Verifiable",
+				"criterionDescriptionVerified": "This criterion is decided server-side, so the text is documentation for the operator rather than an instruction to a model."
 			},
 			"fidelity": {
 				"title": "Quant fidelity (PPL / KLD)",
@@ -4345,6 +4347,60 @@
 				"kld": "KL divergence",
 				"reasoningBudgetTitle": "Quality against the frozen reasoning budget",
 				"reasoningBudgetNote": "Across the runs currently selected for comparison."
+			},
+			"verifier": {
+				"kind": "Decided by",
+				"kindHelp": "Anything but the model is checked server-side, with no inference.",
+				"kinds": {
+					"llm": "The judge model",
+					"exact": "Exact answer",
+					"regex": "Regular expression",
+					"jsonSchema": "JSON schema",
+					"mathAnswer": "Numeric answer",
+					"constraint": "Structural constraints"
+				},
+				"expected": "Expected answer",
+				"normalize": {
+					"trim": "Trim",
+					"collapseWhitespace": "Collapse whitespace",
+					"caseInsensitive": "Ignore case",
+					"stripMarkdown": "Strip markdown"
+				},
+				"pattern": "Pattern",
+				"patternHelp": "Matched in linear time: lookaround, backreferences and atomic groups are refused when the judge is saved.",
+				"mustMatch": "The answer must match",
+				"schema": "Schema",
+				"schemaHelp": "Enforced keywords: {{keywords}}. Anything else is refused.",
+				"expectedNumber": "Expected value",
+				"expectedNumberHelp": "A number or a fraction such as 3/4.",
+				"relativeTolerance": "Relative tolerance",
+				"absoluteTolerance": "Absolute tolerance",
+				"minWords": "Minimum words",
+				"maxWords": "Maximum words",
+				"mustContain": "Must contain",
+				"mustNotContain": "Must not contain",
+				"format": "Format",
+				"formats": {
+					"json": "JSON",
+					"markdownList": "Markdown list",
+					"noMarkdown": "No markdown"
+				},
+				"issues": {
+					"llmConfig": "A criterion judged by the model carries no configuration.",
+					"expectedRequired": "State the expected answer.",
+					"patternRequired": "State a pattern.",
+					"patternTooLong": "A pattern may be at most 512 characters.",
+					"patternInvalid": "That is not a valid regular expression.",
+					"schemaRequired": "State a schema object.",
+					"schemaInvalidJson": "That is not valid JSON.",
+					"schemaKeyword": "This build enforces only type, properties, required, items, enum, const and additionalProperties.",
+					"mathExpected": "State a number or a fraction such as 3/4.",
+					"toleranceInvalid": "A tolerance must be a number at or above zero.",
+					"constraintEmpty": "State at least one constraint.",
+					"constraintWords": "The word bounds are inconsistent.",
+					"constraintContains": "A contains entry cannot be empty.",
+					"constraintFormat": "That format is not supported."
+				}
 			}
 		},
 		"customTools": {

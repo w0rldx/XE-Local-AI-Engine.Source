@@ -1,14 +1,16 @@
 import { Alert, Button, Card, Group, Progress, Stack, Text, Title, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconRefresh, IconScale, IconSquare } from "@tabler/icons-react";
+import { IconAlertTriangle, IconCheck, IconRefresh, IconScale, IconSquare, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkJudgeStateBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
-import type { BenchmarkRunJudge } from "@/features/benchmarks/models/BenchmarkModels";
+import type { BenchmarkJudgeMode, BenchmarkRunJudge } from "@/features/benchmarks/models/BenchmarkModels";
 import { isJudgeActive } from "@/features/benchmarks/models/BenchmarkModels";
 
 interface BenchmarkJudgePanelProps {
 	judge: BenchmarkRunJudge;
+	/** The project's judging mode. Only `pointwise` has a reading this panel can render. */
+	mode?: BenchmarkJudgeMode;
 	/** The primary answer was cut off by the token budget, so this verdict graded a fragment. */
 	primaryTruncated?: boolean;
 	/**
@@ -33,17 +35,18 @@ const maxCriterionScore = 10;
  * against runs judged under the current policy and judge runtime.
  *
  * POINTWISE ONLY, and deliberately so. This panel reads one score with one rationale per criterion, which is exactly
- * what the pointwise rubric judge produces. The opt-in pairwise mode is a different reading: no per-run rubric score
- * at all, but a verdict matrix over run pairs and a Bradley-Terry fit whose per-run number carries a bootstrap CI, and
- * a `pairwise-pending` / `pairwise-insufficient` exclusion vocabulary the ranking helper does not know yet.
+ * what the pointwise rubric judge produces. Pairwise is a different reading: no per-run rubric score at all, but a
+ * verdict matrix over run pairs and a Bradley-Terry fit whose per-run number carries a bootstrap CI, plus a
+ * `pairwise-pending` / `pairwise-insufficient` exclusion vocabulary the ranking helper does not know.
  *
- * follow-up: when the judge policy gains its `mode` member (`Pointwise` | `Pairwise`, plan §7.4-§7.5, backend slice
- * S3), branch HERE on `project.judge.mode` — render this panel for `Pointwise` and a `BenchmarkPairwiseMatrix` for
- * `Pairwise`, rather than growing this one to mean both. Nothing in the contract carries that member today, so there
- * is no flag to read and no dead branch left behind pretending there is.
+ * The caller passes `mode` and gets nothing back for `pairwise` — that arm renders a `BenchmarkPairwiseMatrix` when
+ * the backend slice that executes it lands (plan §7.4-§7.5). Refusing to render is the honest answer meanwhile:
+ * showing pointwise chrome for a pairwise policy would present a score shape the policy does not produce. The node
+ * refuses to SAVE a pairwise policy today (422 `PairwiseNotAvailable`), so no stored run reaches this arm.
  */
 export function BenchmarkJudgePanel({
 	judge,
+	mode = "pointwise",
 	canRejudge,
 	primaryTruncated = false,
 	outputTokens = null,
@@ -54,6 +57,12 @@ export function BenchmarkJudgePanel({
 	const { t } = useTranslation();
 	const active = isJudgeActive(judge.state);
 	const explanation = t(`pages.benchmarks.judge.explanations.${judge.state}`, "");
+	// follow-up: render <BenchmarkPairwiseMatrix /> here once the pairwise executor ships (plan §7.5).
+	const verifiers = new Map(judge.verifiers.map((verifier) => [verifier.id, verifier]));
+
+	if (mode !== "pointwise") {
+		return null;
+	}
 
 	return (
 		<Card withBorder={true} radius="md" padding="md" data-testid="benchmark-judge-panel">
@@ -124,26 +133,52 @@ export function BenchmarkJudgePanel({
 				{judge.summary ? <Text size="sm">{judge.summary}</Text> : null}
 				{judge.criteria.length > 0 ? (
 					<Stack gap="xs" data-testid="benchmark-judge-criteria">
-						{judge.criteria.map((criterion) => (
-							<Stack key={criterion.id} gap={2}>
-								<Group justify="space-between" gap="xs">
-									<Text size="sm" fw={600}>
-										{criterion.id}
+						{judge.criteria.map((criterion) => {
+							// A verifiable criterion's score was DECIDED, not judged: the badge says which side produced it,
+							// so a 10 that came from a regex match is not read as a model's opinion that happened to agree.
+							const verifier = verifiers.get(criterion.id);
+							return (
+								<Stack key={criterion.id} gap={2}>
+									<Group justify="space-between" gap="xs">
+										<Group gap={6} wrap="nowrap">
+											<Text size="sm" fw={600}>
+												{criterion.id}
+											</Text>
+											{verifier === undefined ? null : (
+												<StatusBadge
+													color={verifier.passed ? "green" : "red"}
+													label={t(`pages.benchmarks.verifier.kinds.${verifier.kind}`, verifier.kind)}
+													data-testid={`benchmark-judge-verifier-${criterion.id}`}
+												/>
+											)}
+										</Group>
+										<Text size="sm">
+											{t("pages.benchmarks.judge.criterionScore", "{{score}} / 10", { score: criterion.score })}
+										</Text>
+									</Group>
+									<Progress
+										value={(Math.min(criterion.score, maxCriterionScore) / maxCriterionScore) * 100}
+										aria-label={criterion.id}
+										size="sm"
+									/>
+									{verifier === undefined ? null : (
+										<Group gap={4} wrap="nowrap" align="center">
+											{verifier.passed ? (
+												<IconCheck size={14} color="var(--mantine-color-green-6)" />
+											) : (
+												<IconX size={14} color="var(--mantine-color-red-6)" />
+											)}
+											<Text size="xs" c="dimmed" data-testid={`benchmark-judge-verifier-detail-${criterion.id}`}>
+												{verifier.detail}
+											</Text>
+										</Group>
+									)}
+									<Text size="xs" c="dimmed">
+										{criterion.rationale}
 									</Text>
-									<Text size="sm">
-										{t("pages.benchmarks.judge.criterionScore", "{{score}} / 10", { score: criterion.score })}
-									</Text>
-								</Group>
-								<Progress
-									value={(Math.min(criterion.score, maxCriterionScore) / maxCriterionScore) * 100}
-									aria-label={criterion.id}
-									size="sm"
-								/>
-								<Text size="xs" c="dimmed">
-									{criterion.rationale}
-								</Text>
-							</Stack>
-						))}
+								</Stack>
+							);
+						})}
 					</Stack>
 				) : null}
 				{judge.state === "failed" && judge.errorMessage ? (

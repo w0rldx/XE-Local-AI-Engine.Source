@@ -65,6 +65,8 @@ describe("toBenchmarkProjectDetail", () => {
 		expect(mapped).toMatchObject({ name: "X", coreTask: "Summarise the text." });
 		expect(mapped.judge).toEqual({
 			enabled: false,
+			// An absent mode is the node's own default, which is pointwise — never "unknown".
+			mode: "pointwise",
 			policyRevision: null,
 			policyHash: null,
 			modelName: null,

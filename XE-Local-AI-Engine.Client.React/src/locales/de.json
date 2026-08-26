@@ -4295,7 +4295,9 @@
 					"title": "Ein Titel ist erforderlich (höchstens 64 Zeichen).",
 					"description": "Eine Beschreibung ist erforderlich (höchstens 1024 Zeichen).",
 					"weight": "Das Gewicht muss zwischen 1 und 100 liegen."
-				}
+				},
+				"presetVerifiable": "Verifizierbar",
+				"criterionDescriptionVerified": "Dieses Kriterium wird serverseitig entschieden; der Text ist Dokumentation für den Betreiber und keine Anweisung an ein Modell."
 			},
 			"fidelity": {
 				"title": "Quantisierungstreue (PPL / KLD)",
@@ -4345,6 +4347,60 @@
 				"kld": "KL-Divergenz",
 				"reasoningBudgetTitle": "Qualität gegenüber dem eingefrorenen Reasoning-Budget",
 				"reasoningBudgetNote": "Über die aktuell zum Vergleich ausgewählten Läufe."
+			},
+			"verifier": {
+				"kind": "Entschieden durch",
+				"kindHelp": "Alles außer dem Modell wird serverseitig geprüft, ohne Inferenz.",
+				"kinds": {
+					"llm": "Das Judge-Modell",
+					"exact": "Exakte Antwort",
+					"regex": "Regulärer Ausdruck",
+					"jsonSchema": "JSON-Schema",
+					"mathAnswer": "Numerische Antwort",
+					"constraint": "Strukturelle Vorgaben"
+				},
+				"expected": "Erwartete Antwort",
+				"normalize": {
+					"trim": "Leerzeichen kürzen",
+					"collapseWhitespace": "Leerraum zusammenfassen",
+					"caseInsensitive": "Groß-/Kleinschreibung ignorieren",
+					"stripMarkdown": "Markdown entfernen"
+				},
+				"pattern": "Muster",
+				"patternHelp": "Wird in linearer Zeit ausgewertet: Lookaround, Rückwärtsverweise und atomare Gruppen werden beim Speichern des Judge abgelehnt.",
+				"mustMatch": "Die Antwort muss übereinstimmen",
+				"schema": "Schema",
+				"schemaHelp": "Durchgesetzte Schlüsselwörter: {{keywords}}. Alles andere wird abgelehnt.",
+				"expectedNumber": "Erwarteter Wert",
+				"expectedNumberHelp": "Eine Zahl oder ein Bruch wie 3/4.",
+				"relativeTolerance": "Relative Toleranz",
+				"absoluteTolerance": "Absolute Toleranz",
+				"minWords": "Mindestanzahl Wörter",
+				"maxWords": "Höchstanzahl Wörter",
+				"mustContain": "Muss enthalten",
+				"mustNotContain": "Darf nicht enthalten",
+				"format": "Format",
+				"formats": {
+					"json": "JSON",
+					"markdownList": "Markdown-Liste",
+					"noMarkdown": "Kein Markdown"
+				},
+				"issues": {
+					"llmConfig": "Ein vom Modell bewertetes Kriterium trägt keine Konfiguration.",
+					"expectedRequired": "Gib die erwartete Antwort an.",
+					"patternRequired": "Gib ein Muster an.",
+					"patternTooLong": "Ein Muster darf höchstens 512 Zeichen lang sein.",
+					"patternInvalid": "Das ist kein gültiger regulärer Ausdruck.",
+					"schemaRequired": "Gib ein Schema-Objekt an.",
+					"schemaInvalidJson": "Das ist kein gültiges JSON.",
+					"schemaKeyword": "Dieser Build setzt nur type, properties, required, items, enum, const und additionalProperties durch.",
+					"mathExpected": "Gib eine Zahl oder einen Bruch wie 3/4 an.",
+					"toleranceInvalid": "Eine Toleranz muss eine Zahl ab null sein.",
+					"constraintEmpty": "Gib mindestens eine Vorgabe an.",
+					"constraintWords": "Die Wortgrenzen widersprechen sich.",
+					"constraintContains": "Ein Eintrag darf nicht leer sein.",
+					"constraintFormat": "Dieses Format wird nicht unterstützt."
+				}
 			}
 		},
 		"customTools": {

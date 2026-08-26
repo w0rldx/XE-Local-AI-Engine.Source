@@ -35,6 +35,9 @@ const presets: BenchmarkRubricPresets = {
 	default: defaultRubric,
 	programming: rubric([{ id: "correctness", title: "Correctness", description: "Does the code run?", weight: 60 }]),
 	reasoning: rubric([{ id: "steps", title: "Steps", description: "Is the chain sound?", weight: 40 }]),
+	verifiable: rubric([
+		{ id: "answer", title: "Answer", description: "Exactly the expected answer.", weight: 100, kind: "exact", config: '{"expected":"42"}' },
+	]),
 };
 
 function draft(overrides: Partial<BenchmarkProjectDraft> = {}): BenchmarkProjectDraft {
