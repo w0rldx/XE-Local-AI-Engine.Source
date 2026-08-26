@@ -4086,7 +4086,8 @@
 				"answerVarianceTemperatureHelp": "Above 0, at most {{max}}. Seeds vary per repeat.",
 				"samplingTemperature": "Temperature",
 				"samplingSeed": "Seed",
-				"reasoningBudgetNotApplicable": "not applied — model has no thinking mode"
+				"reasoningBudgetNotApplicable": "not applied — model has no thinking mode",
+				"estimate": "One start = {{count}} runs, one per task item"
 			},
 			"matrix": {
 				"open": "Batch runs…",
@@ -4097,11 +4098,13 @@
 				"repeatCountHelp": "Sampling is deterministic, so repeats do not change the answer — they measure how much the speed moves between launches. Each repeat is its own model load.",
 				"warmup": "Warm-up run first",
 				"warmupHelp": "Adds one extra run per combination that is never ranked and never counted in the spread.",
-				"summary": "{{cells}} combinations × {{perCell}} runs = {{total}} runs",
+				"summary": "{{cells}} combinations × {{items}} task items × {{perCell}} runs = {{total}} runs",
 				"rejected": "{{count}} combinations were not started",
 				"start": "Start {{count}} runs",
 				"progress": "Batch: {{done}} of {{total}} done ({{running}} running, {{queued}} queued, {{failed}} failed)",
-				"repeatCountVarianceHelp": "Each repeat samples its own answer, so the repeats measure how much the ANSWER moves. Each repeat is still its own model load."
+				"repeatCountVarianceHelp": "Each repeat samples its own answer, so the repeats measure how much the ANSWER moves. Each repeat is still its own model load.",
+				"estimate": "about {{duration}}",
+				"overCap": "The node refuses more than {{max}} runs in one request. Pick fewer combinations, fewer repeats, or split the matrix."
 			},
 			"metrics": {
 				"duration": "Duration",

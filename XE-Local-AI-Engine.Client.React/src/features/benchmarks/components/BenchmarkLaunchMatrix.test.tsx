@@ -26,6 +26,8 @@ function renderMatrix(props: Partial<React.ComponentProps<typeof BenchmarkLaunch
 	const view = renderWithProviders(
 		<BenchmarkLaunchMatrix
 			models={[model("owner/Repo:Q4_K_M"), model("owner/Repo:Q8_0")]}
+			leafItemCount={1}
+			medianRunMs={null}
 			rejected={[]}
 			isSubmitting={false}
 			onSubmit={onSubmit}
@@ -38,6 +40,41 @@ function renderMatrix(props: Partial<React.ComponentProps<typeof BenchmarkLaunch
 
 describe("BenchmarkLaunchMatrix", () => {
 	afterEach(cleanup);
+
+	// A suite multiplies the whole matrix: four combinations of a three-item project is twelve model loads, and the
+	// dialog is the only place that arithmetic is done before the GPU-hours are committed.
+	it("multiplies the combinations by the project's task items and extrapolates the time", () => {
+		renderMatrix({ leafItemCount: 3, medianRunMs: 30_000 });
+
+		fireEvent.click(screen.getByTestId("benchmark-matrix-model-owner/Repo:Q4_K_M"));
+		fireEvent.click(screen.getByTestId("benchmark-matrix-model-owner/Repo:Q8_0"));
+
+		const summary = screen.getByTestId("benchmark-matrix-summary").textContent ?? "";
+		expect(summary).toContain("2 combinations × 3 task items × 1 runs = 6 runs");
+		expect(summary).toContain("about 3m 0s");
+	});
+
+	// The node refuses the whole freeze above its per-request cap, so the dialog refuses it rather than sending a
+	// request that comes back naming a number the operator never saw computed.
+	it("refuses a matrix past the node's per-request run cap", () => {
+		renderMatrix({ leafItemCount: 20 });
+
+		fireEvent.click(screen.getByTestId("benchmark-matrix-model-owner/Repo:Q4_K_M"));
+		fireEvent.click(screen.getByTestId("benchmark-matrix-model-owner/Repo:Q8_0"));
+		fireEvent.change(screen.getByTestId("benchmark-matrix-repeat-count"), { target: { value: "5" } });
+
+		expect(screen.getByTestId("benchmark-matrix-over-cap")).toBeTruthy();
+		expect((screen.getByTestId("benchmark-matrix-start") as HTMLButtonElement).disabled).toBe(true);
+	});
+
+	// An extrapolation with nothing to extrapolate from is omitted rather than guessed.
+	it("says nothing about time on a project with no completed run", () => {
+		renderMatrix({ leafItemCount: 2, medianRunMs: null });
+
+		fireEvent.click(screen.getByTestId("benchmark-matrix-model-owner/Repo:Q4_K_M"));
+
+		expect(screen.getByTestId("benchmark-matrix-summary").textContent).not.toContain("about");
+	});
 
 	it("submits the cross product of the selected models and KV types", () => {
 		const { onSubmit } = renderMatrix();
@@ -68,10 +105,10 @@ describe("BenchmarkLaunchMatrix", () => {
 		renderMatrix();
 
 		fireEvent.click(screen.getByTestId("benchmark-matrix-model-owner/Repo:Q4_K_M"));
-		expect(screen.getByTestId("benchmark-matrix-summary").textContent).toBe("1 combinations × 1 runs = 1 runs");
+		expect(screen.getByTestId("benchmark-matrix-summary").textContent).toBe("1 combinations × 1 task items × 1 runs = 1 runs");
 
 		fireEvent.click(screen.getByTestId("benchmark-matrix-warmup"));
-		expect(screen.getByTestId("benchmark-matrix-summary").textContent).toBe("1 combinations × 2 runs = 2 runs");
+		expect(screen.getByTestId("benchmark-matrix-summary").textContent).toBe("1 combinations × 1 task items × 2 runs = 2 runs");
 	});
 
 	// Submitting nothing would send an empty batch the node answers with a 400 — the button says so instead.

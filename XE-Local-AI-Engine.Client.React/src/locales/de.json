@@ -4086,7 +4086,8 @@
 				"answerVarianceTemperatureHelp": "Über 0, höchstens {{max}}. Seeds variieren je Wiederholung.",
 				"samplingTemperature": "Temperatur",
 				"samplingSeed": "Seed",
-				"reasoningBudgetNotApplicable": "nicht angewendet — Modell hat keinen Denkmodus"
+				"reasoningBudgetNotApplicable": "nicht angewendet — Modell hat keinen Denkmodus",
+				"estimate": "Ein Start = {{count}} Läufe, einer je Aufgabe"
 			},
 			"matrix": {
 				"open": "Mehrere Läufe…",
@@ -4097,11 +4098,13 @@
 				"repeatCountHelp": "Das Sampling ist deterministisch, Wiederholungen ändern die Antwort also nicht — sie messen, wie stark die Geschwindigkeit zwischen Starts schwankt. Jede Wiederholung lädt das Modell erneut.",
 				"warmup": "Zuerst ein Aufwärmlauf",
 				"warmupHelp": "Fügt je Kombination einen zusätzlichen Lauf hinzu, der nie gewertet und nie in die Streuung eingerechnet wird.",
-				"summary": "{{cells}} Kombinationen × {{perCell}} Läufe = {{total}} Läufe",
+				"summary": "{{cells}} Kombinationen × {{items}} Aufgaben × {{perCell}} Läufe = {{total}} Läufe",
 				"rejected": "{{count}} Kombinationen wurden nicht gestartet",
 				"start": "{{count}} Läufe starten",
 				"progress": "Stapel: {{done}} von {{total}} fertig ({{running}} laufend, {{queued}} wartend, {{failed}} fehlgeschlagen)",
-				"repeatCountVarianceHelp": "Jede Wiederholung sampelt ihre eigene Antwort, die Wiederholungen messen also, wie stark die ANTWORT schwankt. Jede Wiederholung lädt das Modell weiterhin neu."
+				"repeatCountVarianceHelp": "Jede Wiederholung sampelt ihre eigene Antwort, die Wiederholungen messen also, wie stark die ANTWORT schwankt. Jede Wiederholung lädt das Modell weiterhin neu.",
+				"estimate": "etwa {{duration}}",
+				"overCap": "Der Node lehnt mehr als {{max}} Läufe in einer Anfrage ab. Wählen Sie weniger Kombinationen oder Wiederholungen, oder teilen Sie die Matrix auf."
 			},
 			"metrics": {
 				"duration": "Dauer",

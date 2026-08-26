@@ -65,6 +65,12 @@ import {
 	toggleBenchmarkRunSelection,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { hasActiveJudgeAttempt, succeededRunCount } from "@/features/benchmarks/models/BenchmarkRanking";
+import {
+	benchmarkRunEstimate,
+	formatBenchmarkDuration,
+	medianBenchmarkRunDurationMs,
+} from "@/features/benchmarks/models/BenchmarkRunEstimate";
+import { leafBenchmarkTaskItems } from "@/features/benchmarks/models/BenchmarkTaskItems";
 import { isVerifiableCriterionKind, toBenchmarkCriterionKind } from "@/features/benchmarks/models/BenchmarkVerifier";
 import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarks";
 import {
@@ -74,6 +80,7 @@ import {
 	useBenchmarkRunDetails,
 	useBenchmarkRubricPresets,
 	useBenchmarkRuns,
+	useBenchmarkTaskItems,
 	useCreateBenchmarkProject,
 	useDeleteBenchmarkRun,
 	useEligibleBenchmarkModels,
@@ -162,6 +169,14 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	// list projection does not carry.
 	const selectedRunDetails = useBenchmarkRunDetails(selectedRunIds);
 	const runs = useMemo(() => runsQuery.data?.items ?? [], [runsQuery.data]);
+	// The suite multiplies every launch: one "start run" click is one run per task item, and the matrix is that again
+	// per combination. Both entry points state the arithmetic before the operator commits GPU-hours to it.
+	const taskItemsQuery = useBenchmarkTaskItems(selectedProjectId);
+	// A project always holds at least one item, so an unloaded list reads as the single-item case rather than as zero
+	// runs — which would print "0 runs" on a button that is about to start one.
+	const leafItemCount = Math.max(leafBenchmarkTaskItems(taskItemsQuery.data?.items ?? []).length, 1);
+	const medianRunMs = useMemo(() => medianBenchmarkRunDurationMs(runs), [runs]);
+	const singleRunEstimate = benchmarkRunEstimate({ cellCount: 1, leafItemCount, repeatCount: 1, warmup: false }, medianRunMs);
 	const [chartsOpen, setChartsOpen] = useState(false);
 	const batchProgress = useMemo(
 		() => (batchLaunch && batchLaunch.projectId === selectedProjectId ? benchmarkBatchProgress(runs, batchLaunch.runIds) : null),
@@ -666,6 +681,16 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										{t("pages.benchmarks.matrix.open", "Batch runs…")}
 									</Button>
 								</Group>
+								<Text size="xs" c="dimmed" data-testid="benchmark-single-run-estimate">
+									{t("pages.benchmarks.run.estimate", "One start = {{count}} runs, one per task item", {
+										count: singleRunEstimate.totalRuns,
+									})}
+									{singleRunEstimate.estimatedMs === null
+										? ""
+										: ` · ${t("pages.benchmarks.matrix.estimate", "about {{duration}}", {
+												duration: formatBenchmarkDuration(singleRunEstimate.estimatedMs),
+											})}`}
+								</Text>
 								<BenchmarkFidelityPanel
 									projectId={detail.id}
 									fidelity={detail.fidelity}
@@ -791,6 +816,8 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 			>
 				<BenchmarkLaunchMatrix
 					models={modelsQuery.data ?? []}
+					leafItemCount={leafItemCount}
+					medianRunMs={medianRunMs}
 					rejected={matrixRejections}
 					isSubmitting={startBatch.isPending}
 					onSubmit={startMatrix}

@@ -5,8 +5,14 @@ import { useTranslation } from "react-i18next";
 
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkRepeatModePicker } from "@/features/benchmarks/components/BenchmarkRepeatModePicker";
-import type { BenchmarkEligibleModel, BenchmarkKvCacheType, BenchmarkRepeatMode } from "@/features/benchmarks/models/BenchmarkModels";
+import type {
+	BenchmarkEligibleModel,
+	BenchmarkKvCacheType,
+	BenchmarkRepeatMode,
+} from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkBaseModelLabel, benchmarkKvCacheTypes, benchmarkQuantTag } from "@/features/benchmarks/models/BenchmarkModels";
+import { benchmarkRunEstimate, formatBenchmarkDuration } from "@/features/benchmarks/models/BenchmarkRunEstimate";
+import { benchmarkTaskItemLimits } from "@/features/benchmarks/models/BenchmarkTaskItems";
 import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarks";
 
 /** The picker's "Auto" entry is a UI-only value; it is sent as an omitted `kvCacheType`, which the node resolves. */
@@ -28,6 +34,10 @@ export interface BenchmarkMatrixSelection {
 
 interface BenchmarkLaunchMatrixProps {
 	models: readonly BenchmarkEligibleModel[];
+	/** The project's leaf task items. Every combination runs each of them, so this multiplies the whole matrix. */
+	leafItemCount: number;
+	/** The project's median completed run, for the time estimate. Null when it has none to extrapolate from. */
+	medianRunMs: number | null;
 	/** The cells the node refused on the last submit, shown in place rather than as a toast that scrolls away. */
 	rejected: readonly BenchmarkBatchRejection[];
 	isSubmitting: boolean;
@@ -44,7 +54,15 @@ interface BenchmarkLaunchMatrixProps {
  * The submit is ONE request, and the node answers per cell — so a model that turns out to be ineligible is reported
  * here beside the others rather than failing the whole matrix.
  */
-export function BenchmarkLaunchMatrix({ models, rejected, isSubmitting, onSubmit, onCancel }: BenchmarkLaunchMatrixProps) {
+export function BenchmarkLaunchMatrix({
+	models,
+	leafItemCount,
+	medianRunMs,
+	rejected,
+	isSubmitting,
+	onSubmit,
+	onCancel,
+}: BenchmarkLaunchMatrixProps) {
 	const { t } = useTranslation();
 	const [selectedModels, setSelectedModels] = useState<string[]>([]);
 	const [selectedKvTypes, setSelectedKvTypes] = useState<string[]>([autoKvCacheType]);
@@ -53,17 +71,20 @@ export function BenchmarkLaunchMatrix({ models, rejected, isSubmitting, onSubmit
 	const [repeatMode, setRepeatMode] = useState<BenchmarkRepeatMode>("Throughput");
 	const [answerVarianceTemperature, setAnswerVarianceTemperature] = useState<number | null>(null);
 
-	const runsPerCell = repeatCount + (warmup ? 1 : 0);
 	const cellCount = selectedModels.length * selectedKvTypes.length;
-	const totalRuns = cellCount * runsPerCell;
-	const canSubmit = cellCount > 0 && !isSubmitting;
+	const estimate = benchmarkRunEstimate({ cellCount, leafItemCount, repeatCount, warmup }, medianRunMs);
+	const totalRuns = estimate.totalRuns;
+	// The node refuses the whole freeze above its per-request cap, so the dialog refuses it here rather than sending a
+	// request that comes back naming a number the operator never saw computed.
+	const canSubmit = cellCount > 0 && !estimate.exceedsCap && !isSubmitting;
 
 	// Sorted by base model so a model's quants sit together in the picker, which is the comparison the matrix is for.
 	const options = useMemo(
 		() =>
-			[...models].sort((left, right) =>
-				benchmarkBaseModelLabel(left.modelName).localeCompare(benchmarkBaseModelLabel(right.modelName)) ||
-				left.modelName.localeCompare(right.modelName),
+			[...models].sort(
+				(left, right) =>
+					benchmarkBaseModelLabel(left.modelName).localeCompare(benchmarkBaseModelLabel(right.modelName)) ||
+					left.modelName.localeCompare(right.modelName),
 			),
 		[models],
 	);
@@ -178,13 +199,29 @@ export function BenchmarkLaunchMatrix({ models, rejected, isSubmitting, onSubmit
 				/>
 			</Group>
 
-			<Text size="sm" c="dimmed" data-testid="benchmark-matrix-summary">
-				{t("pages.benchmarks.matrix.summary", "{{cells}} combinations × {{perCell}} runs = {{total}} runs", {
-					cells: cellCount,
-					perCell: runsPerCell,
-					total: totalRuns,
-				})}
-			</Text>
+			<Stack gap={2}>
+				<Text size="sm" c="dimmed" data-testid="benchmark-matrix-summary">
+					{t(
+						"pages.benchmarks.matrix.summary",
+						"{{cells}} combinations × {{items}} task items × {{perCell}} runs = {{total}} runs",
+						{ cells: cellCount, items: leafItemCount, perCell: estimate.runsPerItem, total: totalRuns },
+					)}
+					{estimate.estimatedMs === null
+						? ""
+						: ` · ${t("pages.benchmarks.matrix.estimate", "about {{duration}}", {
+								duration: formatBenchmarkDuration(estimate.estimatedMs),
+							})}`}
+				</Text>
+				{estimate.exceedsCap ? (
+					<Text size="sm" c="red" data-testid="benchmark-matrix-over-cap">
+						{t(
+							"pages.benchmarks.matrix.overCap",
+							"The node refuses more than {{max}} runs in one request. Pick fewer combinations, fewer repeats, or split the matrix.",
+							{ max: benchmarkTaskItemLimits.maxRunsPerRequest },
+						)}
+					</Text>
+				) : null}
+			</Stack>
 
 			{rejected.length > 0 ? (
 				<Alert color="orange" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-matrix-rejected">
