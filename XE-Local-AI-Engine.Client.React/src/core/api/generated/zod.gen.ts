@@ -4998,7 +4998,8 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromCompa
 	projectId: z.guid(),
 	baseModelName: z.string(),
 	tunedModelName: z.string(),
-	runIds: z.array(z.guid()),
+	baseRunIds: z.array(z.guid()),
+	tunedRunIds: z.array(z.guid()),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest = z.object({

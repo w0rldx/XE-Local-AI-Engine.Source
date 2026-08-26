@@ -32341,7 +32341,8 @@
           "projectId",
           "baseModelName",
           "tunedModelName",
-          "runIds"
+          "baseRunIds",
+          "tunedRunIds"
         ],
         "properties": {
           "projectId": {
@@ -32354,7 +32355,14 @@
           "tunedModelName": {
             "type": "string"
           },
-          "runIds": {
+          "baseRunIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          "tunedRunIds": {
             "type": "array",
             "items": {
               "type": "string",

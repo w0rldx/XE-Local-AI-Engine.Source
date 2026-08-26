@@ -4051,7 +4051,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromCompari
 	projectId: string;
 	baseModelName: string;
 	tunedModelName: string;
-	runIds: Array<string>;
+	baseRunIds: Array<string>;
+	tunedRunIds: Array<string>;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest = {
