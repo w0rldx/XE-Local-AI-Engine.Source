@@ -111,8 +111,8 @@ export function toBenchmarkCriterionId(title: string): string {
 }
 
 /**
- * How the judge decides. `pointwise` scores each run against the rubric on its own and is the only mode this build
- * executes; `pairwise` compares runs against each other and is refused at save with `PairwiseNotAvailable`.
+ * How the judge decides. `pointwise` scores each run against the rubric on its own and stays the default;
+ * `pairwise` compares runs against each other and ranks them through a Bradley-Terry fit of the verdicts.
  */
 export const benchmarkJudgeModes = ["pointwise", "pairwise"] as const;
 export type BenchmarkJudgeMode = (typeof benchmarkJudgeModes)[number];

@@ -3896,6 +3896,73 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttem
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsResponse = {
+	cohortGeneration?: number;
+	comparisonSetVersion?: number;
+	referenceExecutionKey?: string | null;
+	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkComparisonResponse>;
+	fit?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairwiseFitResponse | null;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkComparisonResponse = {
+	id?: string;
+	runAId?: string;
+	runBId?: string;
+	order?: number;
+	attemptSequence?: number;
+	sequence?: number;
+	taskCaseId?: string | null;
+	status: string;
+	verdict?: string | null;
+	answerATruncated?: boolean;
+	answerBTruncated?: boolean;
+	judgeExecutionKey?: string | null;
+	errorMessage?: string | null;
+	enqueuedAtUtc?: number;
+	completedAtUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairwiseFitResponse = {
+	fitKey: string;
+	judgeExecutionKey: string;
+	comparisonSetVersion?: number;
+	cohortGeneration?: number;
+	iterations?: number;
+	bootstrapReplicates?: number;
+	isCurrent?: boolean;
+	createdAtUtc?: number;
+	fittedSetJson: string;
+	scores?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairwiseRunScoreResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairwiseRunScoreResponse = {
+	runId?: string;
+	score?: number | null;
+	ciLow?: number | null;
+	ciHigh?: number | null;
+	comparisons?: number;
+	bootstrapAppearances?: number;
+	reason?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstimateResponse = {
+	eligibleRuns?: number;
+	pairedRuns?: number;
+	cappedRuns?: number;
+	judgeCalls?: number;
+	estimatedSeconds?: number | null;
+	warn?: boolean;
+	maximumRuns?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstimateRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkProjectsResponse = {
 	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse>;
 };
@@ -13337,6 +13404,77 @@ export type ClearBenchmarkFidelityCacheResponses = {
 
 export type ClearBenchmarkFidelityCacheResponse =
 	ClearBenchmarkFidelityCacheResponses[keyof ClearBenchmarkFidelityCacheResponses];
+
+export type ListBenchmarkComparisonsData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/comparisons";
+};
+
+export type ListBenchmarkComparisonsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ListBenchmarkComparisonsError = ListBenchmarkComparisonsErrors[keyof ListBenchmarkComparisonsErrors];
+
+export type ListBenchmarkComparisonsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsResponse;
+};
+
+export type ListBenchmarkComparisonsResponse = ListBenchmarkComparisonsResponses[keyof ListBenchmarkComparisonsResponses];
+
+export type GetBenchmarkPairwiseEstimateData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/pairwise-estimate";
+};
+
+export type GetBenchmarkPairwiseEstimateErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type GetBenchmarkPairwiseEstimateError = GetBenchmarkPairwiseEstimateErrors[keyof GetBenchmarkPairwiseEstimateErrors];
+
+export type GetBenchmarkPairwiseEstimateResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstimateResponse;
+};
+
+export type GetBenchmarkPairwiseEstimateResponse =
+	GetBenchmarkPairwiseEstimateResponses[keyof GetBenchmarkPairwiseEstimateResponses];
 
 export type ListBenchmarkProjectsData = {
 	body?: never;

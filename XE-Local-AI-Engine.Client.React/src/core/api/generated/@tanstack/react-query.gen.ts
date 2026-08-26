@@ -138,6 +138,7 @@ import {
 	getBaseArtifact,
 	getBaseArtifactLicense,
 	getBenchmarkKldDiskEstimate,
+	getBenchmarkPairwiseEstimate,
 	getBenchmarkProject,
 	getBenchmarkRubricPresets,
 	getBenchmarkRun,
@@ -214,6 +215,7 @@ import {
 	listAgentPlaybookActions,
 	listAgentTemplates,
 	listBaseArtifacts,
+	listBenchmarkComparisons,
 	listBenchmarkFidelityAttempts,
 	listBenchmarkProjects,
 	listBenchmarkRuns,
@@ -665,6 +667,9 @@ import type {
 	GetBenchmarkKldDiskEstimateData,
 	GetBenchmarkKldDiskEstimateError,
 	GetBenchmarkKldDiskEstimateResponse,
+	GetBenchmarkPairwiseEstimateData,
+	GetBenchmarkPairwiseEstimateError,
+	GetBenchmarkPairwiseEstimateResponse,
 	GetBenchmarkProjectData,
 	GetBenchmarkProjectError,
 	GetBenchmarkProjectResponse,
@@ -826,6 +831,9 @@ import type {
 	ListAgentTemplatesResponse,
 	ListBaseArtifactsData,
 	ListBaseArtifactsResponse,
+	ListBenchmarkComparisonsData,
+	ListBenchmarkComparisonsError,
+	ListBenchmarkComparisonsResponse,
 	ListBenchmarkFidelityAttemptsData,
 	ListBenchmarkFidelityAttemptsError,
 	ListBenchmarkFidelityAttemptsResponse,
@@ -7186,6 +7194,50 @@ export const clearBenchmarkFidelityCacheMutation = (
 	};
 	return mutationOptions;
 };
+
+export const listBenchmarkComparisonsQueryKey = (options: Options<ListBenchmarkComparisonsData>) =>
+	createQueryKey("listBenchmarkComparisons", options);
+
+export const listBenchmarkComparisonsOptions = (options: Options<ListBenchmarkComparisonsData>) =>
+	queryOptions<
+		ListBenchmarkComparisonsResponse,
+		AxiosError<ListBenchmarkComparisonsError>,
+		ListBenchmarkComparisonsResponse,
+		ReturnType<typeof listBenchmarkComparisonsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listBenchmarkComparisons({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listBenchmarkComparisonsQueryKey(options),
+	});
+
+export const getBenchmarkPairwiseEstimateQueryKey = (options: Options<GetBenchmarkPairwiseEstimateData>) =>
+	createQueryKey("getBenchmarkPairwiseEstimate", options);
+
+export const getBenchmarkPairwiseEstimateOptions = (options: Options<GetBenchmarkPairwiseEstimateData>) =>
+	queryOptions<
+		GetBenchmarkPairwiseEstimateResponse,
+		AxiosError<GetBenchmarkPairwiseEstimateError>,
+		GetBenchmarkPairwiseEstimateResponse,
+		ReturnType<typeof getBenchmarkPairwiseEstimateQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getBenchmarkPairwiseEstimate({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getBenchmarkPairwiseEstimateQueryKey(options),
+	});
 
 export const listBenchmarkProjectsQueryKey = (options?: Options<ListBenchmarkProjectsData>) =>
 	createQueryKey("listBenchmarkProjects", options);

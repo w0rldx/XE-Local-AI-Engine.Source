@@ -192,13 +192,6 @@ public static class BenchmarkJudgePolicyValidationCodes
     public const string ModeUnsupported = "judge-policy-mode-unsupported";
     public const string PairwiseVersionUnsupported = "judge-policy-pairwise-version-unsupported";
 
-    /// <summary>
-    ///     The policy names <c>pairwise</c>, which this build cannot execute: the pairwise planner, executor and
-    ///     Bradley-Terry fit are S3. The MODE ships in S2 regardless, because it is inside <c>ComputePolicyHash</c>
-    ///     and every policy schema change costs the operator a forced re-judge — two slices would cost two.
-    ///     follow-up: S3 deletes this refusal when the pairwise pipeline lands.
-    /// </summary>
-    public const string PairwiseNotAvailable = "judge-policy-pairwise-not-available";
 }
 
 public sealed class BenchmarkJudgePolicyValidationException(string code, string message) : InvalidOperationException(message)
@@ -275,12 +268,6 @@ public static class BenchmarkJudgePolicyValidator
         if (mode is not (BenchmarkJudgePolicyModes.Pointwise or BenchmarkJudgePolicyModes.Pairwise))
         {
             throw Invalid(BenchmarkJudgePolicyValidationCodes.ModeUnsupported, "The judge policy mode is not supported.");
-        }
-
-        if (string.Equals(mode, BenchmarkJudgePolicyModes.Pairwise, StringComparison.Ordinal))
-        {
-            throw Invalid(BenchmarkJudgePolicyValidationCodes.PairwiseNotAvailable,
-                "Pairwise judging is not available in this build. Save the judge in pointwise mode.");
         }
 
         if (policy.PairwisePromptVersion != BenchmarkJudgePolicyVersions.PairwisePromptVersion

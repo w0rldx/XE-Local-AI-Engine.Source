@@ -43,7 +43,8 @@ public sealed class BenchmarkProjectService(
     IBenchmarkInstalledModelLeaseProvider installedModels,
     IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
     IBenchmarkCatalogService catalog,
-    IBenchmarkQueueSignal? queueSignal = null) : IBenchmarkProjectService
+    IBenchmarkQueueSignal? queueSignal = null,
+    IBenchmarkPairwisePlanner? pairwisePlanner = null) : IBenchmarkProjectService
 {
     private readonly IBenchmarkCatalogService _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
 
@@ -55,6 +56,7 @@ public sealed class BenchmarkProjectService(
         judgeRuntimeResolver ?? throw new ArgumentNullException(nameof(judgeRuntimeResolver));
 
     private readonly IBenchmarkQueueSignal? _queueSignal = queueSignal;
+    private readonly IBenchmarkPairwisePlanner? _pairwisePlanner = pairwisePlanner;
 
     public async Task<BenchmarkProjectRecord> CreateAsync(BenchmarkProjectDraft draft, CancellationToken cancellationToken = default)
     {
@@ -140,7 +142,8 @@ public sealed class BenchmarkProjectService(
                                                   await BuildCohortSeedAsync(policy, expectedRevisionId: null, cancellationToken).ConfigureAwait(false),
                                                   cancellationToken)
                                               .ConfigureAwait(false);
-        return WakeAndDescribe(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false), activation);
+        return await WakeAndDescribeAsync(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false), activation, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task<BenchmarkJudgeAttemptRecord> RejudgeRunAsync(Guid runId,
@@ -180,7 +183,8 @@ public sealed class BenchmarkProjectService(
                                                   await BuildCohortSeedAsync(policy, revision.Id, cancellationToken).ConfigureAwait(false),
                                                   cancellationToken)
                                               .ConfigureAwait(false);
-        return WakeAndDescribe(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false), activation);
+        return await WakeAndDescribeAsync(await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false), activation, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     internal static string DecodeCoreTask(ReadOnlySpan<byte> payload)
@@ -210,8 +214,17 @@ public sealed class BenchmarkProjectService(
     }
 
     /// <summary>Wakes the queue for the attempts the store just enqueued and reports them to the caller.</summary>
-    private BenchmarkJudgePolicyChange WakeAndDescribe(BenchmarkProjectRecord project, BenchmarkJudgePolicyActivation activation)
+    private async Task<BenchmarkJudgePolicyChange> WakeAndDescribeAsync(BenchmarkProjectRecord project,
+        BenchmarkJudgePolicyActivation activation,
+        CancellationToken cancellationToken)
     {
+        // Activation is the FIRST of the three places a pairwise cohort grows: switching a project to pairwise must
+        // seed its comparisons now, not at the next primary success or the next restart. A no-op in pointwise mode.
+        if (_pairwisePlanner is not null)
+        {
+            _ = await _pairwisePlanner.EnsurePairsAsync(project.Id, cancellationToken).ConfigureAwait(false);
+        }
+
         if (activation.SucceededRunIds.Count > 0)
         {
             _queueSignal?.Wake();
@@ -421,11 +434,7 @@ public sealed class BenchmarkProjectService(
                 Source = exception.Source
             };
         }
-        // A pairwise refusal is deliberately NOT flattened into the generic invalid-request code: it is the one
-        // validation failure whose fix is "wait for the pairwise slice", not "correct the field", and the UI needs to
-        // say so. follow-up: S3 removes the refusal and this arm with it.
         catch (BenchmarkJudgePolicyValidationException exception)
-            when (!string.Equals(exception.Code, BenchmarkJudgePolicyValidationCodes.PairwiseNotAvailable, StringComparison.Ordinal))
         {
             throw new BenchmarkValidationException(exception.Message)
             {

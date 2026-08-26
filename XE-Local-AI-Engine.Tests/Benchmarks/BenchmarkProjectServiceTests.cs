@@ -290,21 +290,18 @@ public sealed class BenchmarkProjectServiceTests
         new(ProjectId, "Benchmark", "task", 4096, context.AgentId);
 
     [Test]
-    public async Task UpdateJudgePolicy_InPairwiseMode_IsRefusedWithItsOwnCodeUntilTheSliceLands()
+    public async Task UpdateJudgePolicy_InPairwiseMode_ActivatesLikeAnyOtherMode()
     {
-        // The mode ships inside the policy hash now — every schema change costs one project-wide re-judge, so the
-        // pairwise members ride along with the verifiable ones. Executing it is S3, and the refusal says so rather
-        // than reading as "your judge configuration is malformed".
+        // The mode is inside the policy hash, so switching to it mints a revision and re-judges the project — which is
+        // the whole cost of the switch, and the pre-flight estimate is what puts that number in front of the operator.
         var context = new ServiceContext();
 
-        var exception = await AssertEx.ThrowsAsync<BenchmarkJudgePolicyValidationException>(() =>
-            context.Service.UpdateJudgePolicyAsync(ProjectId,
-                1,
-                new BenchmarkJudgePolicyDraft("judge-model", 4096, Mode: BenchmarkJudgePolicyModes.Pairwise),
-                confirmRejudge: false));
+        _ = await context.Service.UpdateJudgePolicyAsync(ProjectId,
+            1,
+            new BenchmarkJudgePolicyDraft("judge-model", 4096, Mode: BenchmarkJudgePolicyModes.Pairwise),
+            confirmRejudge: false);
 
-        AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.PairwiseNotAvailable, exception.Code);
-        _ = context.Store.DidNotReceive().ActivateJudgePolicyAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
+        _ = context.Store.Received(1).ActivateJudgePolicyAsync(ProjectId, Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
             Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>());
     }
 

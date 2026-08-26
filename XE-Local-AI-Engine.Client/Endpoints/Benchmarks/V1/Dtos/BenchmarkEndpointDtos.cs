@@ -27,12 +27,6 @@ public enum BenchmarkErrorCode
     JudgeDisabled,
     PrimaryNotSucceeded,
 
-    /// <summary>
-    ///     The judge policy names pairwise mode, which this build cannot execute. The policy is otherwise valid — the
-    ///     operator's fix is to save it pointwise, not to correct a field.
-    /// </summary>
-    PairwiseNotAvailable,
-
     /// <summary>Batch only: the cell never reached the freeze because an earlier cell stopped the batch.</summary>
     NotAttempted,
 
@@ -360,8 +354,8 @@ public sealed class BenchmarkJudgePolicyDraftDto
     public int ContextTokens { get; init; }
 
     /// <summary>
-    ///     <c>pointwise</c> (the default an omitted value takes) or <c>pairwise</c>. Saving <c>pairwise</c> is
-    ///     currently refused with <see cref="BenchmarkErrorCode.PairwiseNotAvailable" />.
+    ///     <c>pointwise</c> (the default an omitted value takes) or <c>pairwise</c>. Switching modes changes the policy
+    ///     hash, so it mints a revision and re-judges the project — the pre-flight estimate says what that costs.
     /// </summary>
     public string? Mode { get; init; }
 

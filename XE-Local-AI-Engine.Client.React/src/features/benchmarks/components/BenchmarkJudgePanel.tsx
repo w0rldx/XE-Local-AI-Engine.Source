@@ -39,10 +39,10 @@ const maxCriterionScore = 10;
  * verdict matrix over run pairs and a Bradley-Terry fit whose per-run number carries a bootstrap CI, plus a
  * `pairwise-pending` / `pairwise-insufficient` exclusion vocabulary the ranking helper does not know.
  *
- * The caller passes `mode` and gets nothing back for `pairwise` — that arm renders a `BenchmarkPairwiseMatrix` when
- * the backend slice that executes it lands (plan §7.4-§7.5). Refusing to render is the honest answer meanwhile:
- * showing pointwise chrome for a pairwise policy would present a score shape the policy does not produce. The node
- * refuses to SAVE a pairwise policy today (422 `PairwiseNotAvailable`), so no stored run reaches this arm.
+ * The caller passes `mode` and gets nothing back for `pairwise` — that arm renders a `BenchmarkPairwiseMatrix` off
+ * `GET benchmarks/projects/{projectId}/comparisons`, which serves the verdict matrix and the fit it produced
+ * together. Refusing to render meanwhile is the honest answer: showing pointwise chrome for a pairwise policy would
+ * present a score shape the policy does not produce.
  */
 export function BenchmarkJudgePanel({
 	judge,

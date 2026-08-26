@@ -393,6 +393,9 @@ import type {
 	GetBenchmarkKldDiskEstimateData,
 	GetBenchmarkKldDiskEstimateErrors,
 	GetBenchmarkKldDiskEstimateResponses,
+	GetBenchmarkPairwiseEstimateData,
+	GetBenchmarkPairwiseEstimateErrors,
+	GetBenchmarkPairwiseEstimateResponses,
 	GetBenchmarkProjectData,
 	GetBenchmarkProjectErrors,
 	GetBenchmarkProjectResponses,
@@ -621,6 +624,9 @@ import type {
 	ListBaseArtifactsData,
 	ListBaseArtifactsErrors,
 	ListBaseArtifactsResponses,
+	ListBenchmarkComparisonsData,
+	ListBenchmarkComparisonsErrors,
+	ListBenchmarkComparisonsResponses,
 	ListBenchmarkFidelityAttemptsData,
 	ListBenchmarkFidelityAttemptsErrors,
 	ListBenchmarkFidelityAttemptsResponses,
@@ -1301,6 +1307,8 @@ import {
 	zGetBenchmarkKldDiskEstimatePath,
 	zGetBenchmarkKldDiskEstimateQuery,
 	zGetBenchmarkKldDiskEstimateResponse,
+	zGetBenchmarkPairwiseEstimatePath,
+	zGetBenchmarkPairwiseEstimateResponse,
 	zGetBenchmarkProjectPath,
 	zGetBenchmarkProjectResponse,
 	zGetBenchmarkRubricPresetsResponse,
@@ -1426,6 +1434,8 @@ import {
 	zListAgentPlaybookActionsResponse,
 	zListAgentTemplatesResponse,
 	zListBaseArtifactsResponse,
+	zListBenchmarkComparisonsPath,
+	zListBenchmarkComparisonsResponse,
 	zListBenchmarkFidelityAttemptsPath,
 	zListBenchmarkFidelityAttemptsResponse,
 	zListBenchmarkProjectsResponse,
@@ -10635,6 +10645,66 @@ export const clearBenchmarkFidelityCache = <ThrowOnError extends boolean = false
 			},
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/fidelity/cache",
+		...options,
+	});
+
+export const listBenchmarkComparisons = <ThrowOnError extends boolean = false>(
+	options: Options<ListBenchmarkComparisonsData, ThrowOnError>,
+): RequestResult<ListBenchmarkComparisonsResponses, ListBenchmarkComparisonsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListBenchmarkComparisonsResponses, ListBenchmarkComparisonsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListBenchmarkComparisonsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListBenchmarkComparisonsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/comparisons",
+		...options,
+	});
+
+export const getBenchmarkPairwiseEstimate = <ThrowOnError extends boolean = false>(
+	options: Options<GetBenchmarkPairwiseEstimateData, ThrowOnError>,
+): RequestResult<GetBenchmarkPairwiseEstimateResponses, GetBenchmarkPairwiseEstimateErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetBenchmarkPairwiseEstimateResponses, GetBenchmarkPairwiseEstimateErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetBenchmarkPairwiseEstimatePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetBenchmarkPairwiseEstimateResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/pairwise-estimate",
 		...options,
 	});
 

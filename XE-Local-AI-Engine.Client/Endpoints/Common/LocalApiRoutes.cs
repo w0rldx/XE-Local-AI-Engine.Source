@@ -273,6 +273,10 @@ public static class LocalApiRoutes
         public const string ProjectFidelityCache = "benchmarks/projects/{projectId}/fidelity/cache";
         public const string RunFidelity = "benchmarks/runs/{runId}/fidelity";
         public const string RunFidelityAttempts = "benchmarks/runs/{runId}/fidelity/attempts";
+        // The verdict matrix and the fit it produced are ONE question: a score shown beside a verdict set that did
+        // not produce it is undetectable from the client, so they are never split across two routes.
+        public const string ProjectComparisons = "benchmarks/projects/{projectId}/comparisons";
+        public const string ProjectPairwiseEstimate = "benchmarks/projects/{projectId}/pairwise-estimate";
         public const string RubricPresets = "benchmarks/rubric-presets";
         public const string EligibleAgents = "benchmarks/eligible-agents";
         public const string EligibleModels = "benchmarks/eligible-models";

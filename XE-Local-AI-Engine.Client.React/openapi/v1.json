@@ -14222,6 +14222,116 @@
         ]
       }
     },
+    "/api/local/v1/benchmarks/projects/{projectId}/comparisons": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "listBenchmarkComparisons",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/benchmarks/projects/{projectId}/pairwise-estimate": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "getBenchmarkPairwiseEstimate",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstimateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/benchmarks/projects": {
       "get": {
         "tags": [
@@ -30929,6 +31039,231 @@
         }
       },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "cohortGeneration": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comparisonSetVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "referenceExecutionKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkComparisonResponse"
+            }
+          },
+          "fit": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkPairwiseFitResponse"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkComparisonResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "runAId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "runBId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "order": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "attemptSequence": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "taskCaseId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "nullable": true
+          },
+          "answerATruncated": {
+            "type": "boolean"
+          },
+          "answerBTruncated": {
+            "type": "boolean"
+          },
+          "judgeExecutionKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "enqueuedAtUtc": {
+            "type": "integer"
+          },
+          "completedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkPairwiseFitResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fitKey",
+          "judgeExecutionKey",
+          "fittedSetJson"
+        ],
+        "properties": {
+          "fitKey": {
+            "type": "string"
+          },
+          "judgeExecutionKey": {
+            "type": "string"
+          },
+          "comparisonSetVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cohortGeneration": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "iterations": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "bootstrapReplicates": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isCurrent": {
+            "type": "boolean"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "fittedSetJson": {
+            "type": "string"
+          },
+          "scores": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkPairwiseRunScoreResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkPairwiseRunScoreResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "score": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "ciLow": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "ciHigh": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "comparisons": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "bootstrapAppearances": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstimateResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "eligibleRuns": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pairedRuns": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cappedRuns": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "judgeCalls": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "estimatedSeconds": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "warn": {
+            "type": "boolean"
+          },
+          "maximumRuns": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstimateRequest": {
         "type": "object",
         "additionalProperties": false
       },

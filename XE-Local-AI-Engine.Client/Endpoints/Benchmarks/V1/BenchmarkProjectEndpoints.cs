@@ -273,8 +273,5 @@ internal static class BenchmarkExceptionFilter
 {
     public static bool IsHandled(Exception exception) =>
         exception is BenchmarkNotFoundException or BenchmarkValidationException or BenchmarkConflictException or BenchmarkEligibilityException
-                or BenchmarkUnsupportedKvCacheTypeException or BenchmarkJudgePolicyChangedException
-            // The pairwise refusal is the one policy-validation failure the service does not flatten into a validation
-            // exception, because it carries its own operator-facing code. follow-up: S3 removes it.
-            or BenchmarkJudgePolicyValidationException { Code: BenchmarkJudgePolicyValidationCodes.PairwiseNotAvailable };
+            or BenchmarkUnsupportedKvCacheTypeException or BenchmarkJudgePolicyChangedException;
 }

@@ -394,10 +394,11 @@ public sealed class BenchmarkJudgePolicyContractsTests
         AssertEx.Equal(BenchmarkJudgePolicyModes.Pointwise, baseline.Mode, "A policy built without a mode judges pointwise.");
         BenchmarkJudgePolicyValidator.Validate(baseline);
 
-        var pairwise = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() => BenchmarkJudgePolicyValidator.Validate(baseline with
+        // Pairwise is executable now, so it validates like any other mode; only an unknown mode is refused.
+        BenchmarkJudgePolicyValidator.Validate(baseline with
         {
             Mode = BenchmarkJudgePolicyModes.Pairwise
-        }));
+        });
         var nonsense = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() => BenchmarkJudgePolicyValidator.Validate(baseline with
         {
             Mode = "coinflip"
@@ -407,7 +408,6 @@ public sealed class BenchmarkJudgePolicyContractsTests
             PairwisePromptVersion = BenchmarkJudgePolicyVersions.PairwisePromptVersion + 1
         }));
 
-        AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.PairwiseNotAvailable, pairwise.Code);
         AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.ModeUnsupported, nonsense.Code);
         AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.PairwiseVersionUnsupported, pairwiseVersion.Code);
     }
