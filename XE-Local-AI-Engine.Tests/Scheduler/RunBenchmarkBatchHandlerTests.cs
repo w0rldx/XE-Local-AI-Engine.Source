@@ -122,7 +122,7 @@ public sealed class RunBenchmarkBatchHandlerTests
     public async Task ExecuteAsync_WhenProjectStillHasQueuedWork_SkipsTheFireWithoutFreezing()
     {
         var harness = new Harness();
-        harness.SetExistingRuns(BenchmarkPrimaryStatus.Succeeded, BenchmarkPrimaryStatus.Queued);
+        harness.SetActiveWork((BenchmarkWorkKind.Primary, 1));
         var context = harness.Fire(TwoByTwoMatrix());
 
         await harness.Handler.ExecuteAsync(context, CancellationToken.None);
@@ -130,18 +130,38 @@ public sealed class RunBenchmarkBatchHandlerTests
         // A nightly matrix that fires while the previous night's is still draining must not queue a second matrix.
         AssertEx.Equal(expected: 0, harness.FreezeCalls.Count);
         AssertEx.Contains(harness.Progress.Single(), "Skipped", StringComparison.Ordinal);
-        AssertEx.Contains(harness.Progress.Single(), "1 run(s) queued or running", StringComparison.Ordinal);
+        AssertEx.Contains(harness.Progress.Single(), "1 work item(s) queued or running", StringComparison.Ordinal);
 
         // A busy-skip must say so on the run row too — it is a Succeeded run that did nothing.
         AssertEx.Contains(context.Summary!, "Skipped", StringComparison.Ordinal);
-        AssertEx.Contains(context.Summary!, "1 run(s) queued or running", StringComparison.Ordinal);
+        AssertEx.Contains(context.Summary!, "1 work item(s) queued or running", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    ///     The previous matrix's RUNS all read Succeeded while its judging is still draining the queue and the GPU.
+    ///     A guard that counted only <c>PrimaryStatus</c> called that project idle and enqueued a second matrix on top.
+    /// </summary>
+    [Test]
+    public async Task ExecuteAsync_WhenOnlyJudgeWorkIsStillActive_SkipsTheFireNamingIt()
+    {
+        var harness = new Harness();
+        harness.SetActiveWork((BenchmarkWorkKind.Judge, 2));
+        var context = harness.Fire(TwoByTwoMatrix());
+
+        await harness.Handler.ExecuteAsync(context, CancellationToken.None);
+
+        AssertEx.Equal(expected: 0, harness.FreezeCalls.Count);
+        AssertEx.Contains(context.Summary!, "Skipped", StringComparison.Ordinal);
+        AssertEx.Contains(context.Summary!, "2 work item(s) queued or running", StringComparison.Ordinal);
+        // "Still busy" and "still busy JUDGING" are different operator actions, so the summary names the kind.
+        AssertEx.Contains(context.Summary!, "Judge 2", StringComparison.Ordinal);
     }
 
     [Test]
     public async Task ExecuteAsync_WhenProjectHasOnlyTerminalRuns_StillEnqueues()
     {
         var harness = new Harness();
-        harness.SetExistingRuns(BenchmarkPrimaryStatus.Succeeded, BenchmarkPrimaryStatus.Failed, BenchmarkPrimaryStatus.Cancelled);
+        harness.SetActiveWork();
 
         await harness.Handler.ExecuteAsync(harness.Fire(TwoByTwoMatrix()), CancellationToken.None);
 
@@ -267,7 +287,7 @@ public sealed class RunBenchmarkBatchHandlerTests
                      Version: 5,
                      CreatedAtUtc: 0,
                      UpdatedAtUtc: 0));
-            SetExistingRuns();
+            SetActiveWork();
 
             Freeze.StartAsync(Arg.Any<BenchmarkRunStartRequest>(), Arg.Any<BenchmarkFreezeScope?>(), Arg.Any<CancellationToken>())
                   .Returns(callInfo =>
@@ -306,10 +326,11 @@ public sealed class RunBenchmarkBatchHandlerTests
 
         public List<string> Progress { get; } = [];
 
-        public void SetExistingRuns(params BenchmarkPrimaryStatus[] statuses)
+        /// <summary>The project's active (queued or running) work per kind. No call at all means an idle project.</summary>
+        public void SetActiveWork(params (BenchmarkWorkKind Kind, int Count)[] work)
         {
-            Store.ListAllRunsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-                 .Returns(new BenchmarkRunPage([.. statuses.Select(Run)], statuses.Length));
+            Store.CountActiveWorkAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+                 .Returns<IReadOnlyDictionary<BenchmarkWorkKind, int>>(work.ToDictionary(static entry => entry.Kind, static entry => entry.Count));
         }
 
         public void FailModel(string modelName, Exception exception) =>

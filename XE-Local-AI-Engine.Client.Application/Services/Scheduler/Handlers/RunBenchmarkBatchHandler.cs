@@ -20,8 +20,9 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     </para>
 ///     <para>
 ///         <b>Refuses to pile up.</b> A nightly matrix that fires while the previous night's is still draining would
-///         queue a second matrix behind the first and measure the same project twice. A fire that finds queued, running
-///         or cancelling work on the project is recorded as a SKIPPED fire with that reason — not a failure, because
+///         queue a second matrix behind the first and measure the same project twice. A fire that finds queued or
+///         running WORK of any kind on the project — primary, judge, fidelity or pairwise comparison, all of which
+///         outlive the runs they belong to — is recorded as a SKIPPED fire naming what is still busy — not a failure, because
 ///         nothing is wrong: the node is simply still busy. <see cref="SchedulerMisfirePolicy.SkipMissed" /> covers the
 ///         other half, a node that was off when the trigger was due.
 ///     </para>
@@ -169,19 +170,22 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
         }
 
         // Refuse to pile up (R-7). Reported as a skipped fire, not a failure: the schedule is fine, the node is busy.
-        // ponytail: one whole-project read per fire rather than a status-filtered store query — a fire happens nightly,
-        // not per request. Add a CountActiveRunsAsync to IBenchmarkStore if a project ever grows past a few thousand runs.
-        var existing = await store.ListAllRunsAsync(parameters.ProjectId, cancellationToken).ConfigureAwait(false);
-        var activeCount = existing.Items.Count(static run => run.PrimaryStatus is BenchmarkPrimaryStatus.Queued
-                                                   or BenchmarkPrimaryStatus.Running
-                                                   or BenchmarkPrimaryStatus.CancelRequested);
+        // Counted over WORK ITEMS of every kind, not over run statuses: judging, fidelity and pairwise work outlives
+        // the run it belongs to, so the previous matrix can hold the single-consumer queue and the GPU for hours while
+        // every one of its runs already reads Succeeded — and the next fire piled a second matrix on top of it.
+        var active = await store.CountActiveWorkAsync(parameters.ProjectId, cancellationToken).ConfigureAwait(false);
+        var activeCount = active.Values.Sum();
         if (activeCount > 0)
         {
-            _logger.LogInformation("Scheduled benchmark batch for project {ProjectId} was skipped: {ActiveCount} run(s) of that project are still queued or running.",
+            // Named per kind, because "still busy" and "still busy JUDGING" are different operator actions.
+            var breakdown = string.Join(", ", active.OrderBy(static entry => entry.Key).Select(static entry => $"{entry.Key} {entry.Value}"));
+            _logger.LogInformation(
+                "Scheduled benchmark batch for project {ProjectId} was skipped: {ActiveCount} work item(s) of that project are still queued or running ({Breakdown}).",
                 parameters.ProjectId,
-                activeCount);
+                activeCount,
+                breakdown);
             await ReportAsync(context,
-                    $"Skipped: benchmark project {parameters.ProjectId} still has {activeCount} run(s) queued or running, so no cells were enqueued.",
+                    $"Skipped: benchmark project {parameters.ProjectId} still has {activeCount} work item(s) queued or running ({breakdown}), so no cells were enqueued.",
                     cancellationToken)
                 .ConfigureAwait(false);
             return;

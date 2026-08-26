@@ -169,6 +169,14 @@ public interface IBenchmarkStore
     /// <summary>How many runs a project has, counted in the database.</summary>
     Task<int> CountRunsAsync(Guid projectId, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     The project's ACTIVE work — queued or running — counted per kind, empty when the project is idle. A run's
+    ///     <see cref="BenchmarkRunRecord.PrimaryStatus" /> does not answer this: a judged, measured or pairwise-compared
+    ///     matrix keeps the single-consumer queue and the GPU busy long after every run of it reads
+    ///     <see cref="BenchmarkPrimaryStatus.Succeeded" />.
+    /// </summary>
+    Task<IReadOnlyDictionary<BenchmarkWorkKind, int>> CountActiveWorkAsync(Guid projectId, CancellationToken cancellationToken = default);
+
     Task<BenchmarkClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default);
 
     Task<BenchmarkRunRecord> MarkPrimarySucceededAsync(BenchmarkPrimarySuccessCommand command, CancellationToken cancellationToken = default);

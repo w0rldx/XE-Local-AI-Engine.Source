@@ -909,6 +909,21 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     public Task<int> CountRunsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
         _dbContext.BenchmarkRuns.AsNoTracking().CountAsync(entity => entity.ProjectId == projectId, cancellationToken);
 
+    public async Task<IReadOnlyDictionary<BenchmarkWorkKind, int>> CountActiveWorkAsync(Guid projectId,
+        CancellationToken cancellationToken = default) =>
+        (await _dbContext.BenchmarkWorkItems.AsNoTracking()
+                         .Where(item => (item.Status == BenchmarkWorkStatus.Queued || item.Status == BenchmarkWorkStatus.Running)
+                                        && _dbContext.BenchmarkRuns.Any(run => run.Id == item.RunId && run.ProjectId == projectId))
+                         .GroupBy(item => item.Kind)
+                         .Select(group => new
+                         {
+                             Kind = group.Key,
+                             Count = group.Count()
+                         })
+                         .ToListAsync(cancellationToken)
+                         .ConfigureAwait(false))
+        .ToDictionary(static entry => entry.Kind, static entry => entry.Count);
+
     public async Task<BenchmarkClaimedWork?> ClaimNextAsync(CancellationToken cancellationToken = default)
     {
         while (true)
