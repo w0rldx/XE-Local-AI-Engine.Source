@@ -4589,7 +4589,9 @@
 				"selectRun": "Den Lauf dieser Aufgabe in der Detailansicht zeigen",
 				"missing": "Nie beantwortet: {{items}}",
 				"legacyItem": "die Aufgabe des Projekts",
-				"unknownItem": "Aufgabe {{index}}"
+				"unknownItem": "Aufgabe {{index}}",
+				"displayOnly": "Keine Aufgabe dieses Projekts zählt zur Bewertung, daher wird keine Kombination gewertet. Recall ist hier die Messung.",
+				"displayOnlyCell": "Hier zählt nichts zur Bewertung, also gibt es nichts zu werten."
 			},
 			"paired": {
 				"title": "Gepaarte Differenz",
@@ -4602,7 +4604,7 @@
 				"separated": "getrennt",
 				"notSeparated": "nicht getrennt",
 				"notSeparatedHelp": "Null liegt im Intervall: diese Sammlung trennt die beiden nicht.",
-				"detail": "Über die {{count}} von beiden beantworteten Aufgaben, 95-%-Bootstrap-Intervall."
+				"detail": "Über die {{count}} von beiden beantworteten bewerteten Aufgaben, 95-%-Bootstrap-Intervall."
 			}
 		},
 		"customTools": {

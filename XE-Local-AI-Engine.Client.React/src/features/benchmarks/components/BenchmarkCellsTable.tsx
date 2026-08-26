@@ -52,6 +52,10 @@ export function BenchmarkCellsTable({
 	const [expanded, setExpanded] = useState<string[]>([]);
 	const ordered = useMemo(() => sortBenchmarkCells(cells), [cells]);
 	const scorable = useMemo(() => scorableBenchmarkTaskItems(items), [items]);
+	// A project whose every leaf is on its own axis — a pure long-context probe — has nothing to take a mean OF, so the
+	// node excludes its cells as `no-score`. The ordinary reading of that reason ("set an operator score") is wrong
+	// here: no score an operator could give would enter a mean that does not exist. The recall column IS the reading.
+	const displayOnly = scorableItemCount === 0;
 
 	if (cells.length === 0) {
 		return <EmptyState message={t("pages.benchmarks.cells.empty", "No measured combinations yet.")} size="sm" />;
@@ -59,6 +63,14 @@ export function BenchmarkCellsTable({
 
 	return (
 		<Stack gap="sm" data-testid="benchmark-cells">
+			{displayOnly ? (
+				<Text size="sm" c="dimmed" data-testid="benchmark-cells-display-only">
+					{t(
+						"pages.benchmarks.cells.displayOnly",
+						"No task item of this project counts toward a score, so no combination is ranked. Recall is the measurement here.",
+					)}
+				</Text>
+			) : null}
 			<Text size="sm" c="dimmed" data-testid="benchmark-cells-cohort">
 				{t("pages.benchmarks.cells.cohort", "{{ranked}} of {{scored}} combinations ranked, each over {{items}} scored items", {
 					ranked: cohort.rankedCount,
@@ -110,19 +122,26 @@ export function BenchmarkCellsTable({
 											{cell.rank === null ? (
 												<Tooltip
 													label={
-														cell.rankExclusionReason === null
-															? t("pages.benchmarks.cells.unranked", "Not ranked.")
-															: `${t(`pages.benchmarks.rank.exclusion.${cell.rankExclusionReason}`, cell.rankExclusionReason)} — ${t(
-																	`pages.benchmarks.rank.action.${rankExclusionAction(cell.rankExclusionReason)}`,
-																	"",
-																)}`
+														// On a display-only project the reason is real but its ACTION is not, so the
+														// sentence stops at what is true: there is nothing to rank.
+														displayOnly
+															? t(
+																	"pages.benchmarks.cells.displayOnlyCell",
+																	"Nothing here counts toward a score, so there is nothing to rank.",
+																)
+															: cell.rankExclusionReason === null
+																? t("pages.benchmarks.cells.unranked", "Not ranked.")
+																: `${t(`pages.benchmarks.rank.exclusion.${cell.rankExclusionReason}`, cell.rankExclusionReason)} — ${t(
+																		`pages.benchmarks.rank.action.${rankExclusionAction(cell.rankExclusionReason)}`,
+																		"",
+																	)}`
 													}
 													multiline={true}
 													w={280}
 												>
 													<Group gap={6} wrap="nowrap">
 														<Text size="sm">—</Text>
-														{cell.rankExclusionReason === null ? null : (
+														{cell.rankExclusionReason === null || displayOnly ? null : (
 															<StatusBadge
 																color="orange"
 																label={t(

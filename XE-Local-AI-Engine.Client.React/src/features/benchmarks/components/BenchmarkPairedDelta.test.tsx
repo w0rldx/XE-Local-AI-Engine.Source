@@ -58,7 +58,7 @@ describe("BenchmarkPairedDelta", () => {
 
 		expect((await screen.findByTestId("benchmark-paired-value")).textContent).toBe("A − B = +6.2 [+1.4, +13.9]");
 		expect(screen.getByTestId("benchmark-paired-separated").textContent).toContain("separated");
-		expect(screen.getByTestId("benchmark-paired-detail").textContent).toContain("5 items");
+		expect(screen.getByTestId("benchmark-paired-detail").textContent).toContain("5 scored items");
 	});
 
 	// Rendered from the flag, never re-derived from the bounds — and the sentence is the whole point of the panel.

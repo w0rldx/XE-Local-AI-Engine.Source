@@ -145,6 +145,30 @@ describe("BenchmarkCellsTable", () => {
 		expect(screen.getByTestId("benchmark-cell-quality-cell:niah:1").textContent).toBe("80");
 	});
 
+	// A pure long-context probe project has nothing to take a mean OF, so the node excludes its cells as `no-score`.
+	// The ordinary reading of that reason — "set an operator score" — is wrong there: no score an operator could give
+	// would enter a mean that does not exist.
+	it("does not tell an operator to score a project where nothing counts", () => {
+		const unscored = benchmarkCellFixture({
+			cellKey: "cell:probe",
+			quality: null,
+			rank: null,
+			rankExclusionReason: "no-score",
+			items: [
+				{ runId: "r1", taskItemId: "n1", taskItemIndex: 0, qualityScore: 100, primaryStopReason: "stop", rankExclusionReason: null },
+			],
+		});
+		render({
+			cells: [unscored],
+			items: [benchmarkTaskItemFixture({ id: "n1", kind: "niahCase", countsTowardScore: false })],
+			scorableItemCount: 0,
+		});
+
+		expect(screen.getByTestId("benchmark-cells-display-only").textContent).toContain("Recall is the measurement here");
+		expect(screen.queryByTestId("benchmark-cell-exclusion-cell:probe")).toBeNull();
+		expect(screen.getByTestId("benchmark-cell-recall-cell:probe").textContent).toBe("1 of 1 needles");
+	});
+
 	it("says so when a project has nothing measured yet", () => {
 		render({ cells: [] });
 

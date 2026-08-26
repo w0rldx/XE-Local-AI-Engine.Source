@@ -4589,7 +4589,9 @@
 				"selectRun": "Show this item's run in the detail view",
 				"missing": "Never answered: {{items}}",
 				"legacyItem": "the project's task",
-				"unknownItem": "item {{index}}"
+				"unknownItem": "item {{index}}",
+				"displayOnly": "No task item of this project counts toward a score, so no combination is ranked. Recall is the measurement here.",
+				"displayOnlyCell": "Nothing here counts toward a score, so there is nothing to rank."
 			},
 			"paired": {
 				"title": "Paired difference",
@@ -4602,7 +4604,7 @@
 				"separated": "separated",
 				"notSeparated": "not separated",
 				"notSeparatedHelp": "Zero is inside the interval: this suite does not separate them.",
-				"detail": "Over the {{count}} items both answered, 95 % bootstrap interval."
+				"detail": "Over the {{count}} scored items both answered, 95 % bootstrap interval."
 			}
 		},
 		"customTools": {

@@ -92,7 +92,7 @@ export function BenchmarkPairedDelta({ projectId, cells }: BenchmarkPairedDeltaP
 						/>
 					</Group>
 					<Text size="xs" c="dimmed" data-testid="benchmark-paired-detail">
-						{t("pages.benchmarks.paired.detail", "Over the {{count}} items both answered, 95 % bootstrap interval.", {
+						{t("pages.benchmarks.paired.detail", "Over the {{count}} scored items both answered, 95 % bootstrap interval.", {
 							count: delta.sharedItemCount,
 						})}
 						{delta.separated
