@@ -501,12 +501,17 @@ public sealed record BenchmarkFidelitySuccessCommand(
     string? BaseLogitsDigest = null,
     ReadOnlyMemory<byte> ReceiptJson = default);
 
+/// <param name="VerifiedExecutionKey">
+///     The cohort key for a judging that ran no model at all because every rubric criterion was verified
+///     server-side. Applied only when the attempt has none — a measured key, written at launch, is never overwritten.
+/// </param>
 public sealed record BenchmarkJudgeSuccessCommand(
     Guid RunId,
     long ExpectedWorkVersion,
     ReadOnlyMemory<byte> JudgeResultJson,
     long LastStreamSequence = 0,
-    int? Score = null);
+    int? Score = null,
+    string? VerifiedExecutionKey = null);
 
 /// <param name="JudgeEnabled">Derived: the project judges exactly while it points at a policy revision.</param>
 public sealed record BenchmarkProjectRecord(

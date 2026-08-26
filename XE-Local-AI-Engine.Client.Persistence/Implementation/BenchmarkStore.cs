@@ -682,6 +682,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 {
                     attempt.ResultJson = command.JudgeResultJson.ToArray();
                     attempt.Score = command.Score;
+
+                    // A judging with no spawn never reached MarkJudgeLaunchReadyAsync, so its key is set here. NULL
+                    // stays the only thing this can fill: a measured identity is written once, at launch, and an
+                    // incomplete one must never be repaired into a rankable one afterwards.
+                    attempt.JudgeExecutionKey ??= command.VerifiedExecutionKey;
                     return promote;
                 },
                 cancellationToken)

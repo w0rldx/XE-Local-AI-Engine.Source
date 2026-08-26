@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
@@ -324,6 +325,53 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         _ = otherModel;
     }
 
+    [Test]
+    public async Task VerifiedJudging_JoinsTheCohortOnTheSentinelKeyAndRanks()
+    {
+        // A judging whose rubric was entirely verified server-side has no runtime to describe — which is not the same
+        // as having an incomplete description of one, and execution-identity-incomplete would unrank it forever. The
+        // constant key makes every such attempt of one revision share a cohort deterministically.
+        await using var context = await CreateDatabaseAsync("rank-verified-sentinel.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+
+        var high = await JudgedRunAsync(store, project, revision, score: 90, executionKey: null,
+            verifiedExecutionKey: BenchmarkJudgeExecutionKey.VerifiedSentinel).ConfigureAwait(false);
+        var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        var low = await JudgedRunAsync(store, refreshed, revision, score: 40, executionKey: null,
+            verifiedExecutionKey: BenchmarkJudgeExecutionKey.VerifiedSentinel).ConfigureAwait(false);
+
+        var runs = await store.ListRunsAsync(project.Id, skip: 0, take: 200).ConfigureAwait(false);
+        var byId = runs.Items.ToDictionary(static run => run.Id);
+        var current = AssertEx.NotNull(await store.GetJudgePolicyRevisionAsync(revision.Id).ConfigureAwait(false));
+
+        AssertEx.Equal(BenchmarkJudgeExecutionKey.VerifiedSentinel, current.ReferenceExecutionKey,
+            "The first success claims the cohort, exactly as a measured key does.");
+        AssertEx.Equal<int?>(expected: 1, byId[high].Rank);
+        AssertEx.Equal<int?>(expected: 2, byId[low].Rank);
+        AssertEx.Null(byId[high].Judge?.RankExclusionReason);
+        AssertEx.True(AssertEx.NotNull(byId[low].Judge).ExecutionCurrent);
+    }
+
+    [Test]
+    public async Task VerifiedSentinel_NeverOverwritesAMeasuredExecutionKey()
+    {
+        // The key is written once, at launch. A success command carrying the sentinel must not be able to repair or
+        // replace a measured identity — that is how two different executions would end up in one cohort.
+        await using var context = await CreateDatabaseAsync("rank-verified-no-overwrite.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+
+        var measured = await JudgedRunAsync(store, project, revision, score: 70, executionKey: "measured-key",
+            verifiedExecutionKey: BenchmarkJudgeExecutionKey.VerifiedSentinel).ConfigureAwait(false);
+
+        var runs = await store.ListRunsAsync(project.Id, skip: 0, take: 200).ConfigureAwait(false);
+        var judge = AssertEx.NotNull(runs.Items.Single(run => run.Id == measured).Judge);
+
+        AssertEx.Equal("measured-key", judge.ExecutionKey);
+        AssertEx.Equal("measured-key", AssertEx.NotNull(await store.GetJudgePolicyRevisionAsync(revision.Id).ConfigureAwait(false)).ReferenceExecutionKey);
+    }
+
     private static async Task<long> CurrentVersionAsync(BenchmarkStore store, Guid projectId) =>
         AssertEx.NotNull(await store.GetProjectAsync(projectId).ConfigureAwait(false)).Version;
 
@@ -340,7 +388,8 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         BenchmarkJudgePolicyRevisionRecord revision,
         int score,
         string? executionKey,
-        string stopReason = "stop")
+        string stopReason = "stop",
+        string? verifiedExecutionKey = null)
     {
         var run = await store.StartRunAsync(NewRun(project)).ConfigureAwait(false);
         var primary = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
@@ -356,7 +405,12 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
                            .ConfigureAwait(false);
         }
 
-        _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id, judge.Version, Encoding.UTF8.GetBytes("{}"), 5, score))
+        _ = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id,
+                           judge.Version,
+                           Encoding.UTF8.GetBytes("{}"),
+                           5,
+                           score,
+                           verifiedExecutionKey))
                        .ConfigureAwait(false);
         return run.Id;
     }

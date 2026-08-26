@@ -466,6 +466,183 @@ public sealed class BenchmarkJudgeExecutorTests
                  .MarkJudgeLaunchReadyAsync(AttemptId, 2, 2, Arg.Any<BenchmarkLaunchReceiptCommand>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }
 
+    // ------------------------------------------------------------------------------------------------------------
+    // C4 — verifiable criteria. The run's stored transcript is a thinking model's: reasoning parts around the single
+    // visible answer part "answer" (see Run below), so every fixture here verifies against exactly that text.
+    // ------------------------------------------------------------------------------------------------------------
+
+    [Test]
+    public async Task Execute_WhenEveryCriterionIsVerifiable_SpawnsNothingAndJoinsTheCohortOnTheSentinel()
+    {
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed, rubric: VerifiableRubric());
+        BenchmarkJudgeSuccessCommand? command = null;
+        store.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
+                 Version = 5
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var runner = Substitute.For<IInvocationRunner>();
+        var capacity = new JudgeCapacityService(CapacityVerdict.Allow);
+        var supervisor = PassthroughSupervisor();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, capacity, dispatcher, runner, supervisor);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
+
+        _ = supervisor.DidNotReceive()
+                      .RunExclusiveBenchmarkAsync(Arg.Any<string>(),
+                          Arg.Any<ModelRole>(),
+                          Arg.Any<ResolvedLaunchArguments>(),
+                          Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
+                          Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+                          Arg.Any<CancellationToken>());
+        _ = runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default);
+        AssertEx.Equal(0, capacity.DecisionCount, "A rubric that needs no model must not reserve capacity either.");
+        AssertEx.False(lease.Disposed, "The judge model was never leased, so there is nothing to dispose.");
+
+        var success = AssertEx.NotNull(command);
+        AssertEx.Equal(BenchmarkJudgeExecutionKey.VerifiedSentinel, success.VerifiedExecutionKey);
+
+        // exact(40) passes on "answer", constraint(60) fails its minWords: 40*10*10 / 100 = 40.
+        AssertEx.Equal(40, success.Score);
+        var result = AssertEx.NotNull(BenchmarkJudgeSerialization.DeserializeResult(success.JudgeResultJson));
+        var verifiers = AssertEx.NotNull(result.Verifiers);
+        AssertEx.Equal(2, verifiers.Count);
+        AssertEx.True(verifiers.Single(static verifier => verifier.Id == "exact_answer").Passed);
+        AssertEx.False(verifiers.Single(static verifier => verifier.Id == "long_enough").Passed);
+        AssertEx.Equal(BenchmarkJudgeCriterionKinds.Constraint, verifiers.Single(static verifier => verifier.Id == "long_enough").Kind);
+        AssertEx.Equal(10, result.Criteria.Single(static score => score.Id == "exact_answer").Score);
+        AssertEx.Equal(0, result.Criteria.Single(static score => score.Id == "long_enough").Score);
+        AssertEx.Contains(result.Summary, "No judge model was run");
+    }
+
+    [Test]
+    public async Task Execute_ForAMixedRubric_ShowsTheModelOnlyItsOwnCriteriaAndMergesTheRest()
+    {
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed, rubric: MixedRubric());
+        BenchmarkJudgeSuccessCommand? command = null;
+        store.MarkJudgeSucceededAsync(Arg.Do<BenchmarkJudgeSuccessCommand>(value => command = value), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Succeeded),
+                 Version = 5
+             });
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        RuntimePackage? assignedPackage = null;
+        await using var assignment = new TrackingAsyncDisposable();
+        dispatcher.ReportInvocationAssignedAsync(Arg.Do<RuntimePackage>(value => assignedPackage = value), Arg.Any<CancellationToken>())
+                  .Returns(assignment);
+        var runner = Substitute.For<IInvocationRunner>();
+        runner.RunAsync(Arg.Any<InvocationExecutionContext>(), Arg.Any<CancellationToken>())
+              .Returns(call =>
+              {
+                  var invocationId = call.Arg<InvocationExecutionContext>().Package.InvocationId;
+                  dispatcher.InvocationStateChanged += Raise.EventWith(dispatcher,
+                      new InvocationStateChangedEventArgs(State(invocationId, JudgeReply)));
+                  return Task.CompletedTask;
+              });
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store, snapshot, lease, new JudgeCapacityService(CapacityVerdict.Allow), dispatcher, runner, PassthroughSupervisor());
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
+
+        // The parser demands the reply's criteria array match the rubric it parses against exactly, so the model must
+        // be handed the FILTERED rubric — a one-criterion reply against a two-criterion rubric is a failed judging.
+        using var promptPayload = JsonDocument.Parse(AssertEx.NotNull(assignedPackage).ConversationContext[0].Content);
+        var shown = promptPayload.RootElement.GetProperty("rubric").GetProperty("criteria");
+        AssertEx.Equal(1, shown.GetArrayLength());
+        AssertEx.Equal("correctness", shown[0].GetProperty("id").GetString());
+
+        var success = AssertEx.NotNull(command);
+        AssertEx.Null(success.VerifiedExecutionKey, "A judging that spawned a model keys on the runtime it measured.");
+
+        // correctness(40) scored 5 by the model, exact_answer(60) verified as a pass:
+        // (40*5*10 + 60*10*10) / 100 = 80.
+        AssertEx.Equal(80, success.Score);
+        var result = AssertEx.NotNull(BenchmarkJudgeSerialization.DeserializeResult(success.JudgeResultJson));
+        AssertEx.Equal(2, result.Criteria.Count);
+        AssertEx.Equal(5, result.Criteria.Single(static score => score.Id == "correctness").Score);
+        AssertEx.Equal(10, result.Criteria.Single(static score => score.Id == "exact_answer").Score);
+        AssertEx.Equal(1, AssertEx.NotNull(result.Verifiers).Count);
+        AssertEx.Equal("good enough", result.Summary);
+    }
+
+    [Test]
+    public async Task Execute_WhenAVerifierCannotRun_FailsTheAttemptAndNeverScoresIt()
+    {
+        // R5. The config is one the strict validator would have refused, so reaching the executor means it arrived
+        // some other way — a hand-edited row, a policy stored by a future build. Either way the honest answer is a
+        // failed judging with a reason, not a 0 that reads as "the answer was bad".
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4);
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store,
+            installed,
+            rubric: new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
+            [
+                new BenchmarkJudgeRubricCriterionV1("broken", "Broken", "A config no validator would have passed.", 100,
+                    BenchmarkJudgeCriterionKinds.MathAnswer, """{"expected":"not a number"}""")
+            ]));
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        string? failureMessage = null;
+        store.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Failed),
+                 Version = 5
+             });
+        var supervisor = PassthroughSupervisor();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store,
+            snapshot,
+            lease,
+            new JudgeCapacityService(CapacityVerdict.Allow),
+            Substitute.For<IWorkerEventDispatcher>(),
+            Substitute.For<IInvocationRunner>(),
+            supervisor);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
+
+        _ = await store.DidNotReceiveWithAnyArgs().MarkJudgeSucceededAsync(default!, default);
+        _ = supervisor.DidNotReceive()
+                      .RunExclusiveBenchmarkAsync(Arg.Any<string>(),
+                          Arg.Any<ModelRole>(),
+                          Arg.Any<ResolvedLaunchArguments>(),
+                          Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
+                          Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+                          Arg.Any<CancellationToken>());
+        AssertEx.Contains(AssertEx.NotNull(failureMessage), "cannot be verified");
+    }
+
+    /// <summary>Every criterion decided server-side: one that passes on the fixture answer and one that does not.</summary>
+    private static BenchmarkJudgeRubricV1 VerifiableRubric() =>
+        new(BenchmarkJudgePolicyVersions.RubricVersion,
+        [
+            new BenchmarkJudgeRubricCriterionV1("exact_answer", "Exact", "The answer text is exact.", 40,
+                BenchmarkJudgeCriterionKinds.Exact, """{"expected":"answer"}"""),
+            new BenchmarkJudgeRubricCriterionV1("long_enough", "Length", "The answer is long enough.", 60,
+                BenchmarkJudgeCriterionKinds.Constraint, """{"minWords":5}""")
+        ]);
+
+    private static BenchmarkJudgeRubricV1 MixedRubric() =>
+        new(BenchmarkJudgePolicyVersions.RubricVersion,
+        [
+            new BenchmarkJudgeRubricCriterionV1("correctness", "Correctness", "Is the answer right?", 40),
+            new BenchmarkJudgeRubricCriterionV1("exact_answer", "Exact", "The answer text is exact.", 60,
+                BenchmarkJudgeCriterionKinds.Exact, """{"expected":"answer"}""")
+        ]);
+
     private static BenchmarkJudgeExecutor Executor(IBenchmarkStore store,
         BenchmarkRuntimeSnapshotV1 snapshot,
         FakeLease lease,
@@ -498,10 +675,14 @@ public sealed class BenchmarkJudgeExecutorTests
     ///     Wires the reads the executor makes before it spawns: the attempt it was handed and the policy revision that
     ///     attempt was enqueued under. Both carry the payloads the executor deserializes.
     /// </summary>
-    private static void StubJudgeAttempt(IBenchmarkStore store, InstalledModelSnapshot installed, string? kvCacheType = null, int? promptVersion = null)
+    private static void StubJudgeAttempt(IBenchmarkStore store,
+        InstalledModelSnapshot installed,
+        string? kvCacheType = null,
+        int? promptVersion = null,
+        BenchmarkJudgeRubricV1? rubric = null)
     {
         store.GetJudgeAttemptAsync(AttemptId, Arg.Any<CancellationToken>()).Returns(Attempt(installed, kvCacheType));
-        store.GetJudgePolicyRevisionAsync(RevisionId, Arg.Any<CancellationToken>()).Returns(Revision(promptVersion));
+        store.GetJudgePolicyRevisionAsync(RevisionId, Arg.Any<CancellationToken>()).Returns(Revision(promptVersion, rubric));
     }
 
     private static BenchmarkJudgeAttemptRecord Attempt(InstalledModelSnapshot installed, string? kvCacheType = null) =>
@@ -527,16 +708,16 @@ public sealed class BenchmarkJudgeExecutorTests
             new BenchmarkRunLaunchIntent("cpu", BenchmarkKvCacheType.F16, BenchmarkKvCacheType.SourceAuto, "cpu-variant",
                 LlamaServerLaunchProjection.FlashAttentionAuto, "intended", null));
 
-    private static BenchmarkJudgePolicyRevisionRecord Revision(int? promptVersion = null) =>
-        new(RevisionId, Guid.NewGuid(), 1, BenchmarkJudgeSerialization.SerializePolicy(Policy(promptVersion)), PolicyHash, null, 1, 1);
+    private static BenchmarkJudgePolicyRevisionRecord Revision(int? promptVersion = null, BenchmarkJudgeRubricV1? rubric = null) =>
+        new(RevisionId, Guid.NewGuid(), 1, BenchmarkJudgeSerialization.SerializePolicy(Policy(promptVersion, rubric)), PolicyHash, null, 1, 1);
 
-    private static BenchmarkJudgePolicyV1 Policy(int? promptVersion = null) =>
+    private static BenchmarkJudgePolicyV1 Policy(int? promptVersion = null, BenchmarkJudgeRubricV1? rubric = null) =>
         new(new BenchmarkJudgePolicyModelV1("judge.gguf", V1('c'), [new string('b', 64)]),
             4096,
             promptVersion ?? BenchmarkJudgePolicyVersions.PromptVersion,
             BenchmarkJudgePolicyVersions.OutputSchemaVersion,
             BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
-            new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
+            rubric ?? new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
             [
                 new BenchmarkJudgeRubricCriterionV1("correctness", "Correctness", "Is the answer right?", 40)
             ]),
