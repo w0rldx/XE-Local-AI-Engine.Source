@@ -173,16 +173,88 @@ public sealed class BenchmarkExportEndpointTests
                        + "repeatGroupId,repeatIndex,isWarmup,totalTokens,tokensPerSecond,ttftMs,promptTokens,promptTokensPerSecond,"
                        + "generationTokens,generationTokensPerSecond,cachedPromptTokens,segmentCount,durationMs,qualityScore,qualityScoreSource,"
                        + "judgeScore,userScore,rankExclusionReason,launchIdentity,receiptHash,"
-                       + "repeatMode,samplingSeed,samplingTemperature",
+                       + "repeatMode,samplingSeed,samplingTemperature,"
+                       + "fidelityStatus,perplexityMean,perplexityStdErr,perplexityChunks,perplexityContextTokens,perplexityCorpusId,"
+                       + "kldState,kldMean,kldP99,topTokenAgreement,kldBaseFingerprint,kldBaseLogitsDigest,"
+                       + "pairwiseScore,pairwiseCiLow,pairwiseCiHigh,pairwiseComparisons,pairwiseFitKey",
             lines[0]);
 
         // pp is 123 tokens over 500 ms = 246, tg is 89 over 2000 ms = 44.5. The group key is the base model, so the
         // quant is dropped from it and kept in its own column.
         AssertEx.Equal("1,\"owner/My,Model-GGUF\",\"owner/My,Model-GGUF:Q4_K_M\",Q4_K_M,,,,,4096,succeeded,,"
                        + "50000000-0000-0000-0000-000000000005,2,false,"
-                       + "512,41.5,180.25,123,246,89,44.5,7,2,12340,73,judge,,,,,,answerVariance,3,0.7",
+                       + "512,41.5,180.25,123,246,89,44.5,7,2,12340,73,judge,,,,,,answerVariance,3,0.7"
+
+                       // A run with no fidelity attempt and no pairwise fit still writes every cell, empty. A short
+                       // row is what breaks an index-reading consumer, which is the whole reason these were appended.
+                       + new string(',', count: 17),
             lines[1]);
     }
+
+    [Test]
+    public async Task ExportCsv_CarriesFidelityAndThePairwiseInterval_AndWithholdsAStaleKldFigure()
+    {
+        // Two runs measured against DIFFERENT base-logit digests. Only the one matching the project's current
+        // settings may show its KLD numbers; the other exports kldState=stale with those three cells empty. Its
+        // digest is still written, because that is the evidence for the withholding.
+        await using var context = CreateContext();
+        var stale = Guid.Parse("60000000-0000-0000-0000-000000000006");
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(Project() with
+               {
+                   FidelityEnabled = true,
+                   FidelityKldEnabled = true,
+                   FidelityKldBaseModelName = "base.gguf",
+                   FidelityKldBaseFingerprint = BaseFingerprint
+               });
+        var expected = BenchmarkKldCacheKey.Create(BaseFingerprint, BenchmarkFidelityCorpus.Require().Sha256,
+            BenchmarkFidelityPolicy.DefaultChunks).Digest;
+        ArrangeRuns(context,
+            Run(BenchmarkPrimaryStatus.Succeeded) with
+            {
+                Fidelity = Fidelity(expected)
+            },
+            Run(BenchmarkPrimaryStatus.Succeeded, runId: stale) with
+            {
+                Fidelity = Fidelity("v1:" + new string('9', 64))
+            });
+        context.Store.GetActivePairwiseFitAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(Fit(RunId, stale));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var lines = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(expected: 3, lines.Length);
+        AssertEx.Contains(lines[1], $"succeeded,6.7977,0.074,200,512,wikitext2,ok,0.012,0.31,0.94,{BaseFingerprint},{expected},");
+        AssertEx.Contains(lines[1], "62,55,69,6,fit-key-1");
+
+        // Same measurement, incomparable digest: the three KLD cells are EMPTY, PPL is untouched (its own corpus id
+        // is its comparability), and the digest that no longer matches is still there to explain why.
+        AssertEx.Contains(lines[2], "succeeded,6.7977,0.074,200,512,wikitext2,kld-stale,,,,");
+        AssertEx.Contains(lines[2], "41,33,49,6,fit-key-1");
+    }
+
+    /// <summary>The options the store writes the blob with; a per-call instance is what CA1869 is about.</summary>
+    private static readonly JsonSerializerOptions PairwiseScoreOptions = new(JsonSerializerDefaults.Web);
+
+    private const string BaseFingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    private static BenchmarkRunFidelity Fidelity(string digest) =>
+        new("succeeded", Guid.NewGuid(), 6.7977, 0.074, 200, 512, "wikitext2", 0.012, 0.31, 0.94, BaseFingerprint, digest, null);
+
+    private static BenchmarkPairwiseFitRecord Fit(Guid first, Guid second) =>
+        new(Guid.NewGuid(), ProjectId, Guid.NewGuid(), 3, null, "fit-key-1", "judge-key", 7,
+            "[]",
+            JsonSerializer.Serialize(new[]
+            {
+                new BenchmarkPairwiseScoreEntry(first, 62, 55, 69, 6, 1000, null),
+                new BenchmarkPairwiseScoreEntry(second, 41, 33, 49, 6, 1000, null)
+            }, PairwiseScoreOptions),
+            42, 1000, 99);
 
     [Test]
     public async Task ExportCsv_ForAValueASpreadsheetWouldEvaluate_EscapesItAsText()
