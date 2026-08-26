@@ -31,6 +31,16 @@ const maxCriterionScore = 10;
  * per-criterion breakdown, and whether that score still counts towards the ranking. The two currency flags are shown
  * as their own chips rather than folded into the score — a stale score is still a real score, it just cannot be ranked
  * against runs judged under the current policy and judge runtime.
+ *
+ * POINTWISE ONLY, and deliberately so. This panel reads one score with one rationale per criterion, which is exactly
+ * what the pointwise rubric judge produces. The opt-in pairwise mode is a different reading: no per-run rubric score
+ * at all, but a verdict matrix over run pairs and a Bradley-Terry fit whose per-run number carries a bootstrap CI, and
+ * a `pairwise-pending` / `pairwise-insufficient` exclusion vocabulary the ranking helper does not know yet.
+ *
+ * follow-up: when the judge policy gains its `mode` member (`Pointwise` | `Pairwise`, plan §7.4-§7.5, backend slice
+ * S3), branch HERE on `project.judge.mode` — render this panel for `Pointwise` and a `BenchmarkPairwiseMatrix` for
+ * `Pairwise`, rather than growing this one to mean both. Nothing in the contract carries that member today, so there
+ * is no flag to read and no dead branch left behind pretending there is.
  */
 export function BenchmarkJudgePanel({
 	judge,
