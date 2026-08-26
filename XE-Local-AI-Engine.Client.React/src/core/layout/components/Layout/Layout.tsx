@@ -7,6 +7,11 @@ import { lazy, Suspense } from "react";
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { DesktopNavigationBar } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar";
 import { HeaderBar } from "@/core/layout/components/HeaderBar/HeaderBar";
+import {
+	DESKTOP_NAV_BREAKPOINT,
+	SIDEBAR_WIDTH_COLLAPSED,
+	SIDEBAR_WIDTH_EXPANDED,
+} from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNavigationBarStore";
 import { ChatConnectionStatusChip } from "@/features/chat/components/ChatConnectionStatusChip";
@@ -27,20 +32,18 @@ export function Layout() {
 	// `width` reflects the real window, so there is no flash in practice, but SSR/prerender
 	// would briefly render the mobile (100%) layout. Keeping it here avoids duplicating the
 	// breakpoint across JS and CSS and keeps margin/width as a single source of truth.
+	// The cutoff and the two widths come from LayoutBreakpoints so this and DesktopNavigationBar's own
+	// framer-motion widths cannot drift apart; the `md:` UnoCSS class below is the same 768px.
 	const { width } = useWindowDimensions();
-	const isDesktopViewport = width >= 768;
+	const isDesktopViewport = width >= DESKTOP_NAV_BREAKPOINT;
 
 	let contentMarginLeft = "0px";
 	let contentWidth = "100%";
 
 	if (isDesktopViewport) {
-		if (sideBarCollapsed) {
-			contentMarginLeft = "56px";
-			contentWidth = "calc(100% - 56px)";
-		} else {
-			contentMarginLeft = "220px";
-			contentWidth = "calc(100% - 220px)";
-		}
+		const sidebarWidth = sideBarCollapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED;
+		contentMarginLeft = `${sidebarWidth}px`;
+		contentWidth = `calc(100% - ${sidebarWidth}px)`;
 	}
 
 	return (

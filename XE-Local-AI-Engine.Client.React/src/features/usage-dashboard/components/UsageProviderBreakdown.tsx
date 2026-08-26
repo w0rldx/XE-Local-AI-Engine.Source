@@ -47,30 +47,37 @@ export function UsageProviderBreakdown({ byProvider }: { readonly byProvider: re
 					) : (
 						<Text c="dimmed">{t("pages.usage.providers.noTokens", "No token usage recorded for any provider in this range.")}</Text>
 					)}
-					<Table style={{ minWidth: 280, flex: 1 }} verticalSpacing="xs">
-						<Table.Thead>
-							<Table.Tr>
-								<Table.Th>{t("pages.usage.providers.columns.provider", "Provider")}</Table.Th>
-								<Table.Th>{t("pages.usage.providers.columns.runs", "Runs")}</Table.Th>
-								<Table.Th>{t("pages.usage.providers.columns.totalTokens", "Total tokens")}</Table.Th>
-								<Table.Th>{t("pages.usage.providers.columns.estimatedCost", "Est. cost")}</Table.Th>
-							</Table.Tr>
-						</Table.Thead>
-						<Table.Tbody>
-							{rows.map((entry) => (
-								<Table.Tr key={entry.provider} data-testid={`usage-provider-row-${entry.provider}`}>
-									<Table.Td>{providerLabel(entry.provider, t)}</Table.Td>
-									<Table.Td>{formatCount(entry.runCount)}</Table.Td>
-									<Table.Td>
-										<Text aria-label={formatCount(entry.totalTokens)}>{formatTokensCompact(entry.totalTokens)}</Text>
-									</Table.Td>
-									<Table.Td>
-										<Text data-testid={`usage-provider-cost-${entry.provider}`}>{formatCostUsd(entry.estimatedCostUsd)}</Text>
-									</Table.Td>
+					{/*
+					 * `minWidth` on the table itself only made the four columns overflow the card silently. Moving the
+					 * floor onto a ScrollContainer keeps the same minimum but gives the overflow somewhere to go, so on a
+					 * phone the cost column is reachable by scrolling instead of clipped.
+					 */}
+					<Table.ScrollContainer minWidth={280} style={{ flex: 1, minWidth: 0 }}>
+						<Table verticalSpacing="xs">
+							<Table.Thead>
+								<Table.Tr>
+									<Table.Th>{t("pages.usage.providers.columns.provider", "Provider")}</Table.Th>
+									<Table.Th>{t("pages.usage.providers.columns.runs", "Runs")}</Table.Th>
+									<Table.Th>{t("pages.usage.providers.columns.totalTokens", "Total tokens")}</Table.Th>
+									<Table.Th>{t("pages.usage.providers.columns.estimatedCost", "Est. cost")}</Table.Th>
 								</Table.Tr>
-							))}
-						</Table.Tbody>
-					</Table>
+							</Table.Thead>
+							<Table.Tbody>
+								{rows.map((entry) => (
+									<Table.Tr key={entry.provider} data-testid={`usage-provider-row-${entry.provider}`}>
+										<Table.Td>{providerLabel(entry.provider, t)}</Table.Td>
+										<Table.Td>{formatCount(entry.runCount)}</Table.Td>
+										<Table.Td>
+											<Text aria-label={formatCount(entry.totalTokens)}>{formatTokensCompact(entry.totalTokens)}</Text>
+										</Table.Td>
+										<Table.Td>
+											<Text data-testid={`usage-provider-cost-${entry.provider}`}>{formatCostUsd(entry.estimatedCostUsd)}</Text>
+										</Table.Td>
+									</Table.Tr>
+								))}
+							</Table.Tbody>
+						</Table>
+					</Table.ScrollContainer>
 				</Group>
 			</Stack>
 		</Card>

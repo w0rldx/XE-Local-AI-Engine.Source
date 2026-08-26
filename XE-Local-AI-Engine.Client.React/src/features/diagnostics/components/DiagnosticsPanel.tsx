@@ -33,6 +33,10 @@ function errorMessage(snapshot: Snapshot): string {
 	return snapshot.error?.message ?? "—";
 }
 
+// Columns that must not give up width: the timestamp (a wrapped date/time is unreadable) and the row actions. The
+// error column is the one deliberately left wrapping, so it absorbs whatever width is left.
+const nowrapCell = { whiteSpace: "nowrap" as const };
+
 export function DiagnosticsPanel() {
 	const { t } = useTranslation();
 	const { data: snapshots, isLoading, isError } = useSnapshots();
@@ -139,21 +143,27 @@ export function DiagnosticsPanel() {
 
 			{!isLoading && !isError && snapshots && snapshots.length > 0 && (
 				<SectionCard>
-					<Table.ScrollContainer minWidth={720}>
+					{/*
+					 * The three row actions are ~300px of buttons on their own; at the old 720 floor the error column
+					 * (which is allowed to wrap) took the slack and pushed View/Export/Delete past the right edge with
+					 * nothing to scroll to — live-observed at 390px. The floor now covers the actions column at its
+					 * natural width, and that column is held `nowrap` so the scroll actually reaches all three buttons.
+					 */}
+					<Table.ScrollContainer minWidth={900}>
 						<Table striped={true} highlightOnHover={true}>
 							<Table.Thead>
 								<Table.Tr>
-									<Table.Th>{t("diagnostics.columns.time")}</Table.Th>
+									<Table.Th style={nowrapCell}>{t("diagnostics.columns.time")}</Table.Th>
 									<Table.Th>{t("diagnostics.columns.kind")}</Table.Th>
 									<Table.Th>{t("diagnostics.columns.route")}</Table.Th>
 									<Table.Th>{t("diagnostics.columns.error")}</Table.Th>
-									<Table.Th>{t("diagnostics.columns.actions")}</Table.Th>
+									<Table.Th style={nowrapCell}>{t("diagnostics.columns.actions")}</Table.Th>
 								</Table.Tr>
 							</Table.Thead>
 							<Table.Tbody>
 								{snapshots.map((snapshot) => (
 									<Table.Tr key={snapshot.id}>
-										<Table.Td>{new Date(snapshot.createdAt).toLocaleString()}</Table.Td>
+										<Table.Td style={nowrapCell}>{new Date(snapshot.createdAt).toLocaleString()}</Table.Td>
 										<Table.Td>
 											<Badge color={snapshot.kind === "error" ? "red" : "blue"} variant="light">
 												{t(`diagnostics.kind.${snapshot.kind}`)}
@@ -161,7 +171,7 @@ export function DiagnosticsPanel() {
 										</Table.Td>
 										<Table.Td>{snapshot.env.route}</Table.Td>
 										<Table.Td style={{ wordBreak: "break-word" }}>{errorMessage(snapshot)}</Table.Td>
-										<Table.Td>
+										<Table.Td style={nowrapCell}>
 											<Group gap="xs" wrap="nowrap">
 												<Button
 													size="xs"

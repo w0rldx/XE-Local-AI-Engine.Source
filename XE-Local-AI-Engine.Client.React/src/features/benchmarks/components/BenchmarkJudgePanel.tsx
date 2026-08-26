@@ -134,8 +134,10 @@ export function BenchmarkJudgePanel({
 							return (
 								<Stack key={criterion.id} gap={2}>
 									<Group justify="space-between" gap="xs">
-										<Group gap={6} wrap="nowrap">
-											<Text size="sm" fw={600}>
+										{/* The id is operator-authored and can be long; it gives way to an ellipsis so the score
+										    on the far side of the row stays on screen at phone width. */}
+										<Group gap={6} wrap="nowrap" miw={0}>
+											<Text size="sm" fw={600} truncate="end">
 												{criterion.id}
 											</Text>
 											{verifier === undefined ? null : (

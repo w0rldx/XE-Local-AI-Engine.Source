@@ -8,7 +8,7 @@ export function AppErrorFallback({ error, onRetry }: AppErrorFallbackProps) {
 	const errorMessage = apiErrorMessage(error, "Unknown error");
 
 	return (
-		<Center mih="100vh" p="md">
+		<Center mih="100dvh" p="md">
 			<Paper withBorder={true} radius="md" p="xl" maw={560} w="100%">
 				<Stack gap="md">
 					<Alert icon={<IconAlertCircle size={18} />} color="red" title="Something went wrong" variant="light">

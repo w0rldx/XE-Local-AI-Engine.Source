@@ -29,7 +29,19 @@ function LocalToolRow({ tool }: LocalToolRowProps) {
 			<Stack gap={4}>
 				<Group gap="xs" wrap="nowrap" align="center">
 					{toolIcon(tool.name)}
-					<Text size="sm" fw={600} ff="monospace" style={{ flex: 1 }}>
+					{/* The name is the only element in this nowrap row that may give up width. `flex: 1` alone is not
+					    enough: a flex item's default `min-width: auto` refuses to shrink below its content, so a long
+					    MCP tool name held the row open and pushed the badges past the right edge of the Paper on a
+					    390px viewport (the source badge is `flexShrink: 0`, so the approval badge absorbed the squeeze
+					    and got clipped). `minWidth: 0` lets it shrink and `truncate` ends it in an ellipsis. */}
+					<Text
+						size="sm"
+						fw={600}
+						ff="monospace"
+						truncate="end"
+						style={{ flex: 1, minWidth: 0 }}
+						data-testid={`local-tool-name-${tool.name}`}
+					>
 						{toToolDisplayName(tool.name)}
 					</Text>
 					<ToolSourceBadge source={tool.source} />
@@ -37,6 +49,9 @@ function LocalToolRow({ tool }: LocalToolRowProps) {
 						size="xs"
 						variant="light"
 						color={tool.requiresApproval ? "orange" : "teal"}
+						// Never shrink, for the same reason ToolSourceBadge does not: "requires approval" is the row's
+						// risk signal, and a squeezed badge reads as "requires appro…" or vanishes entirely.
+						style={{ flexShrink: 0 }}
 						data-testid={`local-tool-approval-badge-${tool.name}`}
 					>
 						{tool.requiresApproval

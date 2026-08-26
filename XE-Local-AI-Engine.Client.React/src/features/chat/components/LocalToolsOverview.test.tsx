@@ -143,6 +143,31 @@ describe("LocalToolsOverview", () => {
 		expect(screen.getByText("MCP · filesystem-tools")).toBeTruthy();
 	});
 
+	// Regression guard for a live 390px squeeze: the row is `wrap="nowrap"`, and once ToolSourceBadge stopped
+	// shrinking the only item left able to absorb the overflow was the approval badge, which got clipped. The name
+	// has to be the element that yields (minWidth: 0 defeats the flex item's default `min-width: auto`, truncate
+	// gives it an ellipsis) and the approval badge has to hold its width.
+	it("lets a long tool name shrink so the badges next to it stay intact", () => {
+		const longNameTool: ToolCatalogEntry = {
+			...mcpTool,
+			name: "mcp__filesystem-tools__read_a_very_long_file_path_from_the_workspace_root",
+		};
+		useToolCatalogMock.mockReturnValue({ data: [longNameTool], isLoading: false, error: null });
+
+		renderWithProviders(<LocalToolsOverview />);
+
+		const name = screen.getByTestId(`local-tool-name-${longNameTool.name}`);
+		expect(name.style.minWidth).toBe("0px");
+		expect(name.getAttribute("data-truncate")).toBe("end");
+
+		const approvalBadge = screen.getByTestId(`local-tool-approval-badge-${longNameTool.name}`);
+		expect(approvalBadge.style.flexShrink).toBe("0");
+		expect(approvalBadge.textContent).toBe("requires approval");
+
+		// The source badge it sits beside already refuses to shrink; both badges keeping their width is the contract.
+		expect(screen.getByTestId("tool-source-badge-mcp").style.flexShrink).toBe("0");
+	});
+
 	it("shows a loading state while the catalog is fetching", () => {
 		useToolCatalogMock.mockReturnValue({ data: undefined, isLoading: true, error: null });
 

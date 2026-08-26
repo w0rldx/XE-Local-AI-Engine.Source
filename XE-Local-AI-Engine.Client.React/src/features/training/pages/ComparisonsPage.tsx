@@ -120,34 +120,36 @@ function ComparisonReportCard({ report, onDelete }: { report: ComparisonReport; 
 						<Text fw={500} size="sm">
 							{t("training.comparisons.report.accuracy", "Hold-out accuracy")}
 						</Text>
-						<Table striped={true} withTableBorder={true}>
-							<Table.Thead>
-								<Table.Tr>
-									<Table.Th>{t("training.comparisons.report.kind", "Sample kind")}</Table.Th>
-									<Table.Th>{t("training.comparisons.report.base", "Base")}</Table.Th>
-									<Table.Th>{t("training.comparisons.report.tuned", "Tuned")}</Table.Th>
-									<Table.Th>{t("training.comparisons.report.delta", "Delta")}</Table.Th>
-								</Table.Tr>
-							</Table.Thead>
-							<Table.Tbody>
-								{deltas.perKind.map((kind) => (
-									<Table.Tr key={kind.kind}>
-										<Table.Td>{kind.kind}</Table.Td>
-										<Table.Td>{formatAccuracy(kind.baseAccuracy, kind.baseTotal)}</Table.Td>
-										<Table.Td>{formatAccuracy(kind.tunedAccuracy, kind.tunedTotal)}</Table.Td>
-										<Table.Td c={kind.accuracyDelta >= 0 ? "green" : "red"}>{formatDelta(kind.accuracyDelta)}</Table.Td>
+						<Table.ScrollContainer minWidth={520}>
+							<Table striped={true} withTableBorder={true} data-testid="training-comparison-accuracy-table">
+								<Table.Thead>
+									<Table.Tr>
+										<Table.Th>{t("training.comparisons.report.kind", "Sample kind")}</Table.Th>
+										<Table.Th>{t("training.comparisons.report.base", "Base")}</Table.Th>
+										<Table.Th>{t("training.comparisons.report.tuned", "Tuned")}</Table.Th>
+										<Table.Th>{t("training.comparisons.report.delta", "Delta")}</Table.Th>
 									</Table.Tr>
-								))}
-								<Table.Tr>
-									<Table.Td fw={600}>{t("training.comparisons.report.overall", "Overall")}</Table.Td>
-									<Table.Td fw={600}>{formatAccuracy(deltas.baseAccuracy, deltas.baseScoredCount)}</Table.Td>
-									<Table.Td fw={600}>{formatAccuracy(deltas.tunedAccuracy, deltas.tunedScoredCount)}</Table.Td>
-									<Table.Td c={deltas.accuracyDelta >= 0 ? "green" : "red"} fw={600}>
-										{formatDelta(deltas.accuracyDelta)}
-									</Table.Td>
-								</Table.Tr>
-							</Table.Tbody>
-						</Table>
+								</Table.Thead>
+								<Table.Tbody>
+									{deltas.perKind.map((kind) => (
+										<Table.Tr key={kind.kind}>
+											<Table.Td>{kind.kind}</Table.Td>
+											<Table.Td>{formatAccuracy(kind.baseAccuracy, kind.baseTotal)}</Table.Td>
+											<Table.Td>{formatAccuracy(kind.tunedAccuracy, kind.tunedTotal)}</Table.Td>
+											<Table.Td c={kind.accuracyDelta >= 0 ? "green" : "red"}>{formatDelta(kind.accuracyDelta)}</Table.Td>
+										</Table.Tr>
+									))}
+									<Table.Tr>
+										<Table.Td fw={600}>{t("training.comparisons.report.overall", "Overall")}</Table.Td>
+										<Table.Td fw={600}>{formatAccuracy(deltas.baseAccuracy, deltas.baseScoredCount)}</Table.Td>
+										<Table.Td fw={600}>{formatAccuracy(deltas.tunedAccuracy, deltas.tunedScoredCount)}</Table.Td>
+										<Table.Td c={deltas.accuracyDelta >= 0 ? "green" : "red"} fw={600}>
+											{formatDelta(deltas.accuracyDelta)}
+										</Table.Td>
+									</Table.Tr>
+								</Table.Tbody>
+							</Table>
+						</Table.ScrollContainer>
 						<Group gap="lg">
 							<Text c="dimmed" size="xs">
 								{`${deltas.baseModelName} · ${t("training.comparisons.report.samples", "{{passed}} of {{scored}} samples", {
@@ -170,34 +172,36 @@ function ComparisonReportCard({ report, onDelete }: { report: ComparisonReport; 
 						<Text fw={500} size="sm">
 							{t("training.comparisons.report.benchmark", "Benchmark deltas")}
 						</Text>
-						<Table striped={true} withTableBorder={true}>
-							<Table.Tbody>
-								<BenchmarkRow
-									base={deltas.benchmark.baseTokensPerSecond}
-									delta={deltas.benchmark.tokensPerSecondDelta}
-									label={t("training.comparisons.report.tokensPerSecond", "Tokens per second")}
-									tuned={deltas.benchmark.tunedTokensPerSecond}
-								/>
-								<BenchmarkRow
-									base={deltas.benchmark.baseDurationMs}
-									delta={null}
-									label={t("training.comparisons.report.duration", "Duration (ms)")}
-									tuned={deltas.benchmark.tunedDurationMs}
-								/>
-								<BenchmarkRow
-									base={deltas.benchmark.baseUserScore}
-									delta={deltas.benchmark.userScoreDelta}
-									label={t("training.comparisons.report.userScore", "Your score")}
-									tuned={deltas.benchmark.tunedUserScore}
-								/>
-								<BenchmarkRow
-									base={deltas.benchmark.baseJudgeScore}
-									delta={deltas.benchmark.judgeScoreDelta}
-									label={t("training.comparisons.report.judgeScore", "Judge score")}
-									tuned={deltas.benchmark.tunedJudgeScore}
-								/>
-							</Table.Tbody>
-						</Table>
+						<Table.ScrollContainer minWidth={480}>
+							<Table striped={true} withTableBorder={true} data-testid="training-comparison-benchmark-table">
+								<Table.Tbody>
+									<BenchmarkRow
+										base={deltas.benchmark.baseTokensPerSecond}
+										delta={deltas.benchmark.tokensPerSecondDelta}
+										label={t("training.comparisons.report.tokensPerSecond", "Tokens per second")}
+										tuned={deltas.benchmark.tunedTokensPerSecond}
+									/>
+									<BenchmarkRow
+										base={deltas.benchmark.baseDurationMs}
+										delta={null}
+										label={t("training.comparisons.report.duration", "Duration (ms)")}
+										tuned={deltas.benchmark.tunedDurationMs}
+									/>
+									<BenchmarkRow
+										base={deltas.benchmark.baseUserScore}
+										delta={deltas.benchmark.userScoreDelta}
+										label={t("training.comparisons.report.userScore", "Your score")}
+										tuned={deltas.benchmark.tunedUserScore}
+									/>
+									<BenchmarkRow
+										base={deltas.benchmark.baseJudgeScore}
+										delta={deltas.benchmark.judgeScoreDelta}
+										label={t("training.comparisons.report.judgeScore", "Judge score")}
+										tuned={deltas.benchmark.tunedJudgeScore}
+									/>
+								</Table.Tbody>
+							</Table>
+						</Table.ScrollContainer>
 						{/*
 						  * Carries both model names so the benchmarks page opens on the two runs this report is about.
 						  * `Link` is used directly rather than through `Anchor component={Link}`: Mantine's polymorphic

@@ -262,7 +262,9 @@ interface EditorSectionProps {
 }
 
 // Parameter builder: rows of name / type / description / required, editing the declared inputs a Parameterized tool
-// exposes to the model. Rows are keyed by index — a controlled append/remove list on an operator form.
+// exposes to the model. Rows are keyed by index — a controlled append/remove list on an operator form. Five controls
+// never fit one phone-width line, so the row wraps: each input carries a flex basis and the checkbox and remove button
+// keep their intrinsic width.
 function ParameterBuilder({ values, errors, update }: EditorSectionProps) {
 	const { t } = useTranslation();
 
@@ -298,20 +300,20 @@ function ParameterBuilder({ values, errors, update }: EditorSectionProps) {
 			) : null}
 			{values.parameters.map((parameter, index) => (
 				// biome-ignore lint/suspicious/noArrayIndexKey: controlled operator list; rows have no stable id.
-				<Group key={index} gap="xs" align="flex-start" wrap="nowrap">
+				<Group key={index} gap="xs" align="flex-start" data-testid={`custom-tool-form-parameter-row-${index}`}>
 					<TextInput
 						placeholder={t("pages.customTools.form.parameters.namePlaceholder", "city")}
 						value={parameter.name}
 						error={errorAt(errors, `parameters.${index}.name`) ? t("pages.customTools.form.parameters.nameInvalid", "Identifier only") : undefined}
 						onChange={(event) => patchRow(index, { name: event.currentTarget.value })}
-						style={{ flex: 2 }}
+						style={{ flex: "2 1 140px" }}
 						data-testid={`custom-tool-form-parameter-name-${index}`}
 					/>
 					<Select
 						value={parameter.type}
 						data={CUSTOM_TOOL_PARAMETER_TYPES.map((type) => ({ label: type, value: type }))}
 						onChange={(value) => patchRow(index, { type: (value ?? "string") as CustomToolParameterType })}
-						style={{ flex: 1 }}
+						style={{ flex: "1 1 110px" }}
 						allowDeselect={false}
 						data-testid={`custom-tool-form-parameter-type-${index}`}
 					/>
@@ -319,7 +321,7 @@ function ParameterBuilder({ values, errors, update }: EditorSectionProps) {
 						placeholder={t("pages.customTools.form.parameters.descriptionPlaceholder", "description")}
 						value={parameter.description}
 						onChange={(event) => patchRow(index, { description: event.currentTarget.value })}
-						style={{ flex: 3 }}
+						style={{ flex: "3 1 200px" }}
 						data-testid={`custom-tool-form-parameter-description-${index}`}
 					/>
 					<Checkbox
@@ -327,6 +329,7 @@ function ParameterBuilder({ values, errors, update }: EditorSectionProps) {
 						checked={parameter.required}
 						onChange={(event) => patchRow(index, { required: event.currentTarget.checked })}
 						mt={8}
+						style={{ flexShrink: 0 }}
 						data-testid={`custom-tool-form-parameter-required-${index}`}
 					/>
 					<ActionIcon
@@ -335,6 +338,7 @@ function ParameterBuilder({ values, errors, update }: EditorSectionProps) {
 						aria-label={t("pages.customTools.form.parameters.remove", "Remove parameter")}
 						onClick={() => removeRow(index)}
 						mt={4}
+						style={{ flexShrink: 0 }}
 						data-testid={`custom-tool-form-parameter-remove-${index}`}
 					>
 						<IconTrash size={16} />
@@ -529,6 +533,7 @@ interface SecretRowsProps {
 // Shared name/value/isSecret row editor for HTTP headers and command env. A stored secret comes back as the sentinel;
 // the row shows a "stored" hint and leaves it in place so an unedited save keeps the secret. Editing the value replaces
 // it. Marking a fresh row secret only affects how it is stored — the value input stays plain (operator on own node).
+// Like the parameter rows, the row wraps at narrow widths instead of squeezing the inputs past their content.
 function SecretRows({ title, addLabel, emptyLabel, testid, rows, onAdd, onRemove, onPatch }: SecretRowsProps) {
 	const { t } = useTranslation();
 
@@ -551,12 +556,12 @@ function SecretRows({ title, addLabel, emptyLabel, testid, rows, onAdd, onRemove
 				const isStoredSecret = row.isSecret && row.value === CUSTOM_TOOL_SECRET_SENTINEL;
 				return (
 					// biome-ignore lint/suspicious/noArrayIndexKey: controlled operator list; rows have no stable id.
-					<Group key={index} gap="xs" align="flex-start" wrap="nowrap">
+					<Group key={index} gap="xs" align="flex-start" data-testid={`${testid}-row-${index}`}>
 						<TextInput
 							placeholder={t("pages.customTools.form.secretRows.namePlaceholder", "Name")}
 							value={row.name}
 							onChange={(event) => onPatch(index, { name: event.currentTarget.value })}
-							style={{ flex: 2 }}
+							style={{ flex: "2 1 140px" }}
 							data-testid={`${testid}-name-${index}`}
 						/>
 						<TextInput
@@ -567,7 +572,7 @@ function SecretRows({ title, addLabel, emptyLabel, testid, rows, onAdd, onRemove
 							}
 							value={isStoredSecret ? "" : row.value}
 							onChange={(event) => onPatch(index, { value: event.currentTarget.value })}
-							style={{ flex: 3 }}
+							style={{ flex: "3 1 200px" }}
 							data-testid={`${testid}-value-${index}`}
 						/>
 						<Checkbox
@@ -580,6 +585,7 @@ function SecretRows({ title, addLabel, emptyLabel, testid, rows, onAdd, onRemove
 								onPatch(index, { isSecret: checked, value: nextValue });
 							}}
 							mt={8}
+							style={{ flexShrink: 0 }}
 							data-testid={`${testid}-secret-${index}`}
 						/>
 						<ActionIcon
@@ -588,6 +594,7 @@ function SecretRows({ title, addLabel, emptyLabel, testid, rows, onAdd, onRemove
 							aria-label={t("pages.customTools.form.secretRows.remove", "Remove")}
 							onClick={() => onRemove(index)}
 							mt={4}
+							style={{ flexShrink: 0 }}
 							data-testid={`${testid}-remove-${index}`}
 						>
 							<IconTrash size={16} />
@@ -649,7 +656,9 @@ function HostList({ value, onChange }: { value: readonly string[]; onChange: (ne
 
 // ProgramLaunch selector: the operator enters (or pastes) an absolute executable path and probes it. The probe is a
 // desktop-only endpoint that resolves the path and rejects shells/interpreters/symlinks; its ok/reason is shown so the
-// operator sees the verdict before committing. On a non-desktop node the probe errors and the reason surfaces.
+// operator sees the verdict before committing. On a non-desktop node the probe errors and the reason surfaces. The
+// path input and its Validate button wrap at narrow widths — an input cannot shrink below its intrinsic width, so
+// forcing one line pushed the button off-screen.
 function ProgramLaunchSelector({ value, error, onChange }: { value: string; error?: string; onChange: (next: string) => void }) {
 	const { t } = useTranslation();
 	const probe = useValidateExecutable();
@@ -657,7 +666,7 @@ function ProgramLaunchSelector({ value, error, onChange }: { value: string; erro
 
 	return (
 		<Stack gap={4} data-testid="custom-tool-form-program-launch">
-			<Group gap="xs" align="flex-end" wrap="nowrap">
+			<Group gap="xs" align="flex-end" data-testid="custom-tool-form-program-launch-row">
 				<TextInput
 					label={t("pages.customTools.form.command.executable", "Executable")}
 					description={t("pages.customTools.form.command.executableHint", "Absolute path to a regular program. Shells and interpreters (sh, bash, python, node…) are rejected.")}
@@ -666,7 +675,7 @@ function ProgramLaunchSelector({ value, error, onChange }: { value: string; erro
 					required={true}
 					error={error}
 					onChange={(event) => onChange(event.currentTarget.value)}
-					style={{ flex: 1 }}
+					style={{ flex: "1 1 220px" }}
 					data-testid="custom-tool-form-command-executable"
 				/>
 				<Button
@@ -674,6 +683,7 @@ function ProgramLaunchSelector({ value, error, onChange }: { value: string; erro
 					onClick={() => probe.mutate({ body: { path: value } })}
 					loading={probe.isPending}
 					disabled={value.trim().length === 0}
+					style={{ flexShrink: 0 }}
 					data-testid="custom-tool-form-program-launch-validate"
 				>
 					{t("pages.customTools.form.command.validate", "Validate")}

@@ -1,4 +1,4 @@
-import { Alert, Button, Group, NumberInput, Select, Stack, Textarea } from "@mantine/core";
+import { Alert, Button, Group, NumberInput, Select, SimpleGrid, Stack, Textarea } from "@mantine/core";
 import { IconSparkles } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -196,7 +196,10 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 				/>
 			</Group>
 
-			<Group grow={true} align="flex-start">
+			{/* Sampler/seed go two-up only from `lg`. This app overrides Mantine's breakpoints (theme.json: md = 768,
+			 lg = 1024), and 768 is exactly the width where a half-width column left the sampler Select too narrow for its
+			 longest option — "Euler a" rendered as "Eule". Numbers survive a half-width column; a name does not. */}
+			<SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md" verticalSpacing="xs" data-testid="image-form-sampler-row">
 				<Select
 					label={t("pages.images.form.sampler.label", "Sampler")}
 					data={samplerData}
@@ -216,7 +219,7 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 					onChange={(value) => setValues((current) => ({ ...current, seed: typeof value === "number" ? value : current.seed }))}
 					data-testid="image-form-seed"
 				/>
-			</Group>
+			</SimpleGrid>
 
 			{!hasModels ? (
 				<Alert color="yellow" data-testid="image-form-no-models">

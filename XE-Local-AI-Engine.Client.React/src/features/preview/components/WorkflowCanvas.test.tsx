@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { WorkflowCanvas } from "@/features/preview/components/WorkflowCanvas";
@@ -10,6 +10,13 @@ import type { PreviewWorkflowGraph } from "@/features/preview/models/PreviewWork
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({ t: (_key: string, defaultValue?: string) => defaultValue ?? _key }),
+}));
+
+// The config form pulls agent definitions and local models through the query layer; the layout tests below care only
+// about WHERE it is rendered, so stub it out rather than standing up a QueryClient. The tests that never select a
+// node are unaffected — the form is not mounted for them either way.
+vi.mock("@/features/preview/components/AgentNodeForm", () => ({
+	AgentNodeForm: () => <div data-testid="agent-node-form" />,
 }));
 
 // React Flow renders into a measured container; jsdom reports 0×0, which only suppresses the viewport (the
@@ -96,6 +103,33 @@ function installJsdomEnvironmentMocks(): void {
 	});
 }
 
+// useWindowDimensions reads window.innerWidth, so the layout branch is driven by setting it. jsdom defaults to 1024
+// — the two-pane layout — which is what the tests above assume.
+function setWindowWidth(width: number): void {
+	Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: width });
+	fireEvent(window, new Event("resize"));
+}
+
+// Renders a canvas whose Agent node starts selected, so the per-node config panel is mounted.
+function renderCanvasWithSelectedAgent() {
+	const { nodes, edges } = graphToCanvas(VALID_GRAPH);
+	return render(
+		<MantineProvider>
+			<WorkflowCanvas
+				initialNodes={nodes.map((node) => (node.data.kind === "Agent" ? { ...node, selected: true } : node))}
+				initialEdges={edges}
+				initialStartText={VALID_GRAPH.startText}
+				runState={{ isRunning: false, isPaused: false }}
+				isControlBusy={false}
+				onExecute={vi.fn()}
+				onCancel={vi.fn()}
+				onContinue={vi.fn()}
+				onGraphChange={vi.fn()}
+			/>
+		</MantineProvider>,
+	);
+}
+
 describe("WorkflowCanvas", () => {
 	beforeEach(installJsdomEnvironmentMocks);
 	afterEach(cleanup);
@@ -159,5 +193,55 @@ describe("WorkflowCanvas", () => {
 		const lastGraph = lastCall?.[0] as { nodes: Array<{ kind: string }> };
 		const agentNodes = lastGraph?.nodes.filter((n) => n.kind === "Agent") ?? [];
 		expect(agentNodes.length).toBeGreaterThanOrEqual(1);
+	});
+});
+
+describe("WorkflowCanvas responsive layout", () => {
+	beforeEach(installJsdomEnvironmentMocks);
+	afterEach(() => {
+		cleanup();
+		setWindowWidth(1024);
+	});
+
+	it("keeps the config panel beside the canvas at the two-pane width", () => {
+		setWindowWidth(1280);
+		renderCanvasWithSelectedAgent();
+
+		expect(screen.queryByTestId("preview-node-config")).not.toBeNull();
+		expect(screen.queryByTestId("preview-node-config-drawer")).toBeNull();
+	});
+
+	// The regression this guards: the open/close effect used to depend on useDisclosure's HANDLERS OBJECT, which
+	// Mantine rebuilds every render. That made the effect run on every render, so the re-render caused by a manual
+	// close immediately re-opened the drawer and it could not be dismissed while an Agent block stayed selected.
+	it("keeps the drawer closed after the operator dismisses it, and reopens it from the toolbar", async () => {
+		setWindowWidth(390);
+		renderCanvasWithSelectedAgent();
+
+		await screen.findByTestId("preview-node-config-drawer");
+
+		fireEvent.click(screen.getByRole("button", { name: "Close" }));
+
+		// waitFor, not an immediate assertion: the Drawer unmounts through its exit transition. With the bug the
+		// element never leaves, because the close's own re-render re-opened it.
+		await waitFor(() => {
+			expect(screen.queryByTestId("preview-node-config-drawer")).toBeNull();
+		});
+
+		// The selection is untouched, so the toolbar keeps offering the way back in.
+		fireEvent.click(screen.getByTestId("preview-node-config-toggle"));
+		expect(await screen.findByTestId("preview-node-config-drawer")).toBeTruthy();
+	});
+
+	it("moves the config panel into a drawer below the two-pane width", async () => {
+		setWindowWidth(390);
+		renderCanvasWithSelectedAgent();
+
+		// findBy, not getBy: the Drawer mounts through a Mantine transition, so it lands a frame after the effect that
+		// follows the selection opens it.
+		const drawer = await screen.findByTestId("preview-node-config-drawer");
+		expect(drawer.contains(screen.getByTestId("preview-node-config"))).toBe(true);
+		// The canvas keeps the whole row to itself rather than sharing it with a 360px panel beside it.
+		expect(screen.getByTestId("preview-canvas").parentElement?.contains(drawer)).toBe(false);
 	});
 });

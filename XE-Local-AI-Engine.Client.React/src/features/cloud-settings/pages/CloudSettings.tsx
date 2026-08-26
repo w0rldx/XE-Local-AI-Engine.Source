@@ -4,6 +4,7 @@ import {
 	Badge,
 	Button,
 	Card,
+	Flex,
 	Group,
 	Loader,
 	PasswordInput,
@@ -53,6 +54,13 @@ type CloudSettings = SaveCloudSettingsResponse;
 function errorMessage(error: unknown): string {
 	return apiErrorMessage(error, "Unexpected cloud settings error");
 }
+
+// Mantine's segment label is `white-space: nowrap` with `overflow: hidden`, so a label wider than its segment is
+// silently CUT rather than ellipsised into something readable — live-observed at 390px, where "OpenAI v1 (Foundry /
+// gateway)" rendered as a couple of characters. Letting the label wrap (paired with `fullWidth`, which gives every
+// segment an equal share of the row instead of sizing to content) keeps the whole option name on screen; a segmented
+// control taller than one line is the price of the option still being legible.
+const segmentedControlStyles = { label: { whiteSpace: "normal" as const } };
 
 // Always show at least one (blank) deployment row so the user has somewhere to type on a fresh connection.
 function withAtLeastOneRow(models: CloudFoundryModelDraft[]): CloudFoundryModelDraft[] {
@@ -470,6 +478,8 @@ export function CloudSettings() {
 						{t("pages.cloudSettings.azure.authModeLabel", "Authentication")}
 					</Text>
 					<SegmentedControl
+						fullWidth={true}
+						styles={segmentedControlStyles}
 						data-testid="cloud-settings-auth-mode"
 						value={formValues.authMode}
 						onChange={(value) => dispatch({ type: "setAuthMode", value: value as CloudAuthMode })}
@@ -489,6 +499,8 @@ export function CloudSettings() {
 						{t("pages.cloudSettings.azure.apiSurfaceLabel", "API surface")}
 					</Text>
 					<SegmentedControl
+						fullWidth={true}
+						styles={segmentedControlStyles}
 						data-testid="cloud-settings-api-surface"
 						value={formValues.apiSurface}
 						onChange={(value) => dispatch({ type: "setApiSurface", value: value as CloudApiSurface })}
@@ -549,29 +561,36 @@ export function CloudSettings() {
 					{formValues.models.map((model, index) => (
 						// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and have no stable id; index is the row identity.
 						<Group key={index} align="flex-end" gap="xs" wrap="nowrap">
-							<TextInput
-								style={{ flex: 1 }}
-								aria-label={t("pages.cloudSettings.azure.deploymentNameLabel", "Deployment name")}
-								label={index === 0 ? t("pages.cloudSettings.azure.deploymentNameLabel", "Deployment name") : undefined}
-								placeholder={t("pages.cloudSettings.azure.deploymentNamePlaceholder", "gpt-4o")}
-								value={model.deploymentName}
-								onChange={(event) => {
-									const value = event.currentTarget.value;
-									dispatch({ type: "setModelField", index, field: "deploymentName", value });
-								}}
-								onBlur={() => dispatch({ type: "touchField", field: "models" })}
-							/>
-							<TextInput
-								style={{ flex: 1 }}
-								aria-label={t("pages.cloudSettings.azure.displayLabelLabel", "Display label (optional)")}
-								label={index === 0 ? t("pages.cloudSettings.azure.displayLabelLabel", "Display label (optional)") : undefined}
-								placeholder={t("pages.cloudSettings.azure.displayLabelPlaceholder", "GPT-4o")}
-								value={model.displayLabel}
-								onChange={(event) => {
-									const value = event.currentTarget.value;
-									dispatch({ type: "setModelField", index, field: "displayLabel", value });
-								}}
-							/>
+							<Flex
+								direction={{ base: "column", sm: "row" }}
+								gap="xs"
+								align={{ base: "stretch", sm: "flex-end" }}
+								style={{ flex: "1 1 auto", minWidth: 0 }}
+							>
+								<TextInput
+									style={{ flex: "1 1 auto", minWidth: 0 }}
+									aria-label={t("pages.cloudSettings.azure.deploymentNameLabel", "Deployment name")}
+									label={index === 0 ? t("pages.cloudSettings.azure.deploymentNameLabel", "Deployment name") : undefined}
+									placeholder={t("pages.cloudSettings.azure.deploymentNamePlaceholder", "gpt-4o")}
+									value={model.deploymentName}
+									onChange={(event) => {
+										const value = event.currentTarget.value;
+										dispatch({ type: "setModelField", index, field: "deploymentName", value });
+									}}
+									onBlur={() => dispatch({ type: "touchField", field: "models" })}
+								/>
+								<TextInput
+									style={{ flex: "1 1 auto", minWidth: 0 }}
+									aria-label={t("pages.cloudSettings.azure.displayLabelLabel", "Display label (optional)")}
+									label={index === 0 ? t("pages.cloudSettings.azure.displayLabelLabel", "Display label (optional)") : undefined}
+									placeholder={t("pages.cloudSettings.azure.displayLabelPlaceholder", "GPT-4o")}
+									value={model.displayLabel}
+									onChange={(event) => {
+										const value = event.currentTarget.value;
+										dispatch({ type: "setModelField", index, field: "displayLabel", value });
+									}}
+								/>
+							</Flex>
 							<ActionIcon
 								variant="subtle"
 								color="red"
@@ -612,53 +631,65 @@ export function CloudSettings() {
 					{formValues.headers.map((header, index) => (
 						// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional and have no stable id; index is the row identity.
 						<Group key={index} align="flex-end" gap="xs" wrap="nowrap">
-							<TextInput
-								style={{ flex: 1 }}
-								aria-label={t("pages.cloudSettings.azure.headers.nameLabel", "Header name")}
-								label={index === 0 ? t("pages.cloudSettings.azure.headers.nameLabel", "Header name") : undefined}
-								placeholder={t("pages.cloudSettings.azure.headers.namePlaceholder", "Ocp-Apim-Subscription-Key")}
-								value={header.name}
-								onChange={(event) => {
-									const value = event.currentTarget.value;
-									dispatch({ type: "setHeaderField", index, field: "name", value });
-								}}
-								onBlur={() => dispatch({ type: "touchField", field: "headers" })}
-							/>
-							{header.isSecret ? (
-								<PasswordInput
-									style={{ flex: 1 }}
-									aria-label={t("pages.cloudSettings.azure.headers.valueLabel", "Value")}
-									label={index === 0 ? t("pages.cloudSettings.azure.headers.valueLabel", "Value") : undefined}
-									description={header.hasStoredValue ? t("pages.cloudSettings.azure.headers.secretStoredHint") : undefined}
-									placeholder={t("pages.cloudSettings.azure.headers.valuePlaceholder", "value")}
-									value={header.value}
-									onChange={(event) => {
-										const value = event.currentTarget.value;
-										dispatch({ type: "setHeaderField", index, field: "value", value });
-									}}
-									onBlur={() => dispatch({ type: "touchField", field: "headers" })}
-								/>
-							) : (
+							{/*
+							 * Name + value + the Secret switch are four controls wide with the delete button: below sm they
+							 * stack into a column so each keeps a usable width, and from sm up the row is unchanged.
+							 */}
+							<Flex
+								direction={{ base: "column", sm: "row" }}
+								gap="xs"
+								align={{ base: "stretch", sm: "flex-end" }}
+								style={{ flex: "1 1 auto", minWidth: 0 }}
+							>
 								<TextInput
-									style={{ flex: 1 }}
-									aria-label={t("pages.cloudSettings.azure.headers.valueLabel", "Value")}
-									label={index === 0 ? t("pages.cloudSettings.azure.headers.valueLabel", "Value") : undefined}
-									placeholder={t("pages.cloudSettings.azure.headers.valuePlaceholder", "value")}
-									value={header.value}
+									style={{ flex: "1 1 auto", minWidth: 0 }}
+									aria-label={t("pages.cloudSettings.azure.headers.nameLabel", "Header name")}
+									label={index === 0 ? t("pages.cloudSettings.azure.headers.nameLabel", "Header name") : undefined}
+									placeholder={t("pages.cloudSettings.azure.headers.namePlaceholder", "Ocp-Apim-Subscription-Key")}
+									value={header.name}
 									onChange={(event) => {
 										const value = event.currentTarget.value;
-										dispatch({ type: "setHeaderField", index, field: "value", value });
+										dispatch({ type: "setHeaderField", index, field: "name", value });
 									}}
 									onBlur={() => dispatch({ type: "touchField", field: "headers" })}
 								/>
-							)}
-							<Switch
-								data-testid={`cloud-settings-header-secret-${index}`}
-								aria-label={t("pages.cloudSettings.azure.headers.secretLabel", "Secret")}
-								label={index === 0 ? t("pages.cloudSettings.azure.headers.secretLabel", "Secret") : undefined}
-								checked={header.isSecret}
-								onChange={() => dispatch({ type: "toggleHeaderSecret", index })}
-							/>
+								{header.isSecret ? (
+									<PasswordInput
+										style={{ flex: "1 1 auto", minWidth: 0 }}
+										aria-label={t("pages.cloudSettings.azure.headers.valueLabel", "Value")}
+										label={index === 0 ? t("pages.cloudSettings.azure.headers.valueLabel", "Value") : undefined}
+										description={header.hasStoredValue ? t("pages.cloudSettings.azure.headers.secretStoredHint") : undefined}
+										placeholder={t("pages.cloudSettings.azure.headers.valuePlaceholder", "value")}
+										value={header.value}
+										onChange={(event) => {
+											const value = event.currentTarget.value;
+											dispatch({ type: "setHeaderField", index, field: "value", value });
+										}}
+										onBlur={() => dispatch({ type: "touchField", field: "headers" })}
+									/>
+								) : (
+									<TextInput
+										style={{ flex: "1 1 auto", minWidth: 0 }}
+										aria-label={t("pages.cloudSettings.azure.headers.valueLabel", "Value")}
+										label={index === 0 ? t("pages.cloudSettings.azure.headers.valueLabel", "Value") : undefined}
+										placeholder={t("pages.cloudSettings.azure.headers.valuePlaceholder", "value")}
+										value={header.value}
+										onChange={(event) => {
+											const value = event.currentTarget.value;
+											dispatch({ type: "setHeaderField", index, field: "value", value });
+										}}
+										onBlur={() => dispatch({ type: "touchField", field: "headers" })}
+									/>
+								)}
+								<Switch
+									data-testid={`cloud-settings-header-secret-${index}`}
+									aria-label={t("pages.cloudSettings.azure.headers.secretLabel", "Secret")}
+									label={index === 0 ? t("pages.cloudSettings.azure.headers.secretLabel", "Secret") : undefined}
+									checked={header.isSecret}
+									onChange={() => dispatch({ type: "toggleHeaderSecret", index })}
+									style={{ flex: "0 0 auto" }}
+								/>
+							</Flex>
 							<ActionIcon
 								variant="subtle"
 								color="red"

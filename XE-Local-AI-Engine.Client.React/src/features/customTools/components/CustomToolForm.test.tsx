@@ -143,3 +143,40 @@ describe("CustomToolForm", () => {
 		expect(screen.queryByTestId("custom-tool-form-http")).toBeNull();
 	});
 });
+
+// The form's multi-control rows are the ones a phone-width dialog (~358px of body) cannot fit on one line. An <input>
+// will not shrink below its intrinsic width, so a row that forbids wrapping overflows the dialog rather than squeezing.
+// Each row therefore wraps, with a flex basis on the inputs deciding where it breaks.
+describe("CustomToolForm narrow-width row layout", () => {
+	afterEach(cleanup);
+
+	it("lets a parameter row wrap and gives its inputs a flex basis", () => {
+		renderForm({ mode: "Parameterized", parameters: [{ name: "city", type: "string", description: "", required: true }] });
+
+		const row = screen.getByTestId("custom-tool-form-parameter-row-0");
+
+		expect(row.style.getPropertyValue("--group-wrap")).not.toBe("nowrap");
+		expect(row.querySelector<HTMLElement>(".mantine-TextInput-root")?.style.flexBasis).toBe("140px");
+		expect(row.querySelector<HTMLElement>(".mantine-Select-root")?.style.flexBasis).toBe("110px");
+	});
+
+	it("lets a header/secret row wrap and gives its inputs a flex basis", () => {
+		renderForm({ http: { method: "GET", urlTemplate: "", headers: [{ name: "Authorization", value: "", isSecret: true }], bodyTemplate: "", allowedHosts: [] } });
+
+		const row = screen.getByTestId("custom-tool-form-http-headers-row-0");
+		const [name, value] = Array.from(row.querySelectorAll<HTMLElement>(".mantine-TextInput-root"));
+
+		expect(row.style.getPropertyValue("--group-wrap")).not.toBe("nowrap");
+		expect(name?.style.flexBasis).toBe("140px");
+		expect(value?.style.flexBasis).toBe("200px");
+	});
+
+	it("lets the executable path and its Validate button wrap", () => {
+		renderForm({ kind: "Command" });
+
+		const row = screen.getByTestId("custom-tool-form-program-launch-row");
+
+		expect(row.style.getPropertyValue("--group-wrap")).not.toBe("nowrap");
+		expect(row.querySelector<HTMLElement>(".mantine-TextInput-root")?.style.flexBasis).toBe("220px");
+	});
+});

@@ -395,7 +395,9 @@ interface McpEnvEditorProps {
 // Key/value editor for stdio environment variables. env carries secrets, so the value inputs are rendered as
 // plain text here (the user is the operator on their own node) but are encrypted at rest on save. Rows are
 // keyed by their stable client id; the position index is used only to look up the validation error (whose Zod
-// path is positional) and to build deterministic test ids.
+// path is positional) and to build deterministic test ids. Each row wraps rather than forcing one line: the two
+// inputs plus the remove button do not fit a phone-width dialog, so they carry flex bases and break onto a second
+// line instead of overflowing.
 function McpEnvEditor({ rows, errors, onKeyChange, onValueChange, onAdd, onRemove }: McpEnvEditorProps) {
 	const { t } = useTranslation();
 
@@ -413,13 +415,13 @@ function McpEnvEditor({ rows, errors, onKeyChange, onValueChange, onAdd, onRemov
 				<EmptyState size="xs" message={t("pages.mcp.form.env.empty", "No environment variables.")} />
 			) : null}
 			{rows.map((row, index) => (
-				<Group key={row.id} gap="xs" align="flex-start" wrap="nowrap">
+				<Group key={row.id} gap="xs" align="flex-start" data-testid={`mcp-form-env-row-${index}`}>
 					<TextInput
 						placeholder={t("pages.mcp.form.env.keyPlaceholder", "KEY")}
 						value={row.key}
 						error={errors[`env.${index}.key`]}
 						onChange={(event) => onKeyChange(row.id, event.currentTarget.value)}
-						style={{ flex: 1 }}
+						style={{ flex: "1 1 140px" }}
 						data-testid={`mcp-form-env-key-${index}`}
 					/>
 					<TextInput
@@ -430,7 +432,7 @@ function McpEnvEditor({ rows, errors, onKeyChange, onValueChange, onAdd, onRemov
 						}
 						value={row.value === maskedEnvValue ? "" : row.value}
 						onChange={(event) => onValueChange(row.id, event.currentTarget.value)}
-						style={{ flex: 1 }}
+						style={{ flex: "2 1 200px" }}
 						data-testid={`mcp-form-env-value-${index}`}
 					/>
 					<ActionIcon

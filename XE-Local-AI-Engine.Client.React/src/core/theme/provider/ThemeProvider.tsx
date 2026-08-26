@@ -5,6 +5,7 @@ import {
 	defaultVariantColorsResolver,
 	MantineProvider,
 	parseThemeColor,
+	TableScrollContainer,
 	type VariantColorsResolver,
 } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
@@ -54,6 +55,21 @@ export function ThemeProvider({ children }: ThemeProviderProperties) {
 					withBorder: true,
 					radius: "md",
 					padding: "lg",
+				},
+			}),
+			// Every table in the app is wrapped in a Table.ScrollContainer, which renders a Mantine ScrollArea whose
+			// `type` defaults to "hover" — the scrollbar is hidden until a pointer enters the area. A touch device
+			// never fires pointerenter, so on a phone or tablet an overflowing table simply looked clipped: the
+			// columns past the fold and the row-action buttons at the right edge were undiscoverable, with nothing on
+			// screen hinting that the region scrolls at all (live-observed at 390/768/1024px across the app).
+			//
+			// "auto" is Mantine's "scrollbars visible only when content overflows (like CSS overflow: auto)", so the
+			// bar appears for exactly the tables that need one, on every input device. "always" would also be visible
+			// on touch but would paint a permanent bar under tables that fit, which is noise on the majority of them.
+			// The theme key is `TableScrollContainer` (what the component passes to useProps), not "Table.ScrollContainer".
+			TableScrollContainer: TableScrollContainer.extend({
+				defaultProps: {
+					scrollAreaProps: { type: "auto" },
 				},
 			}),
 		},

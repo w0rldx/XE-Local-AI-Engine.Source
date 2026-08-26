@@ -162,6 +162,21 @@ describe("DevelopmentConsentGate", () => {
 		expect(terms).toContain("all capabilities dropped");
 	});
 
+	// The one control that gates the page has to be operable the way people actually use a checkbox — by hitting the
+	// sentence next to it — and has to carry that sentence as its accessible name for anyone not using a pointer.
+	it("associates the confirmation sentence with the checkbox, so clicking the text ticks it", () => {
+		renderGate();
+
+		const checkbox = screen.getByRole("checkbox", {
+			name: "I understand what Development Mode executes on this machine.",
+		}) as HTMLInputElement;
+		expect(checkbox.checked).toBe(false);
+
+		fireEvent.click(screen.getByText("I understand what Development Mode executes on this machine."));
+
+		expect(checkbox.checked).toBe(true);
+	});
+
 	it("says plainly that acknowledging is a disclosure and not a protection", () => {
 		renderGate();
 

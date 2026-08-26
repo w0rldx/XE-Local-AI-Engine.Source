@@ -56,6 +56,17 @@ describe("PageHeader", () => {
 		expect(screen.getByRole("button", { name: "New agent" })).toBeTruthy();
 	});
 
+	it("keeps the icon on the title's line instead of letting it wrap above the heading", () => {
+		renderWithProviders(<PageHeader title="A page title long enough to need the whole row" icon={<svg data-testid="page-icon" />} />);
+
+		// Mantine's Group emits `wrap` as the --group-wrap custom property, so this asserts the rendered flex
+		// behaviour rather than the prop we passed.
+		const titleRow = screen.getByTestId("page-header-title-row");
+		expect(titleRow.style.getPropertyValue("--group-wrap")).toBe("nowrap");
+		expect(titleRow.contains(screen.getByTestId("page-icon"))).toBe(true);
+		expect(titleRow.contains(screen.getByRole("heading", { level: 2 }))).toBe(true);
+	});
+
 	it("forwards data-testid and data-tour to the header root", () => {
 		renderWithProviders(<PageHeader title="Agents" data-testid="agents-header" data-tour="agents" />);
 

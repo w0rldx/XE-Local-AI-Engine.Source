@@ -9,13 +9,14 @@ interface ToolSourceBadgeProps {
 
 // Small badge that labels where a catalog tool comes from: a node built-in, or a specific MCP server (by its
 // slug). Shared by the tool pickers so built-in vs MCP origin is shown consistently. Pure presentation —
-// degrades to a generic "MCP" label when the source carries no server slug.
+// degrades to a generic "MCP" label when the source carries no server slug. The badge never shrinks: it sits in
+// nowrap rows next to a tool name that cannot shrink either, and squeezing clipped the label ("BUILT…") on a phone.
 export function ToolSourceBadge({ source }: ToolSourceBadgeProps) {
 	const { t } = useTranslation();
 
 	if (source.kind === "builtin") {
 		return (
-			<Badge size="xs" variant="light" color="gray" data-testid="tool-source-badge-builtin">
+			<Badge size="xs" variant="light" color="gray" style={{ flexShrink: 0 }} data-testid="tool-source-badge-builtin">
 				{t("components.toolSourceBadge.builtin", "built-in")}
 			</Badge>
 		);
@@ -25,7 +26,7 @@ export function ToolSourceBadge({ source }: ToolSourceBadgeProps) {
 	// not light) to keep its elevated risk visible everywhere the pickers list it.
 	if (source.kind === "custom") {
 		return (
-			<Badge size="xs" variant="filled" color="red" data-testid="tool-source-badge-custom">
+			<Badge size="xs" variant="filled" color="red" style={{ flexShrink: 0 }} data-testid="tool-source-badge-custom">
 				{t("components.toolSourceBadge.custom", "custom")}
 			</Badge>
 		);
@@ -36,7 +37,7 @@ export function ToolSourceBadge({ source }: ToolSourceBadgeProps) {
 		: t("components.toolSourceBadge.mcp", "MCP");
 
 	return (
-		<Badge size="xs" variant="light" color="grape" data-testid="tool-source-badge-mcp">
+		<Badge size="xs" variant="light" color="grape" style={{ flexShrink: 0 }} data-testid="tool-source-badge-mcp">
 			{label}
 		</Badge>
 	);

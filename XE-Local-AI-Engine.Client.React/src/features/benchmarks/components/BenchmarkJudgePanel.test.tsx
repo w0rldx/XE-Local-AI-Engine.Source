@@ -205,3 +205,20 @@ describe("BenchmarkJudgePanel judging mode", () => {
 		expect(screen.queryByTestId("benchmark-judge-panel")).toBeNull();
 	});
 });
+
+// The criterion id is operator-authored and the score sits on the far side of the same row. On a phone the row has
+// no spare width, so the id has to give way to an ellipsis rather than push the score out of view.
+describe("BenchmarkJudgePanel narrow layout", () => {
+	afterEach(cleanup);
+
+	it("truncates a long criterion id instead of shouldering the score off the row", () => {
+		const id = "a-very-long-operator-authored-criterion-identifier";
+		renderPanel(
+			benchmarkJudgeFixture({ state: "succeeded", score: 70, criteria: [{ id, score: 7, rationale: "Fine." }] }),
+		);
+
+		const label = screen.getByText(id);
+		expect(label.getAttribute("data-truncate")).toBe("end");
+		expect((label.parentElement as HTMLElement).style.minWidth).toBe("0rem");
+	});
+});

@@ -82,7 +82,7 @@ export function ImageViewerDialog({ job, opened, onClose }: ImageViewerDialogPro
 						// to 1248px in this dialog (live-observed) — "full size" was upscaling and blurring it. Auto width
 						// renders at natural size, and the two max-* caps scale it back down only when it would overflow.
 						w="auto"
-						mah="calc(100vh - 18rem)"
+						mah="calc(100dvh - 18rem)"
 						maw="100%"
 						mx="auto"
 						data-testid="image-viewer-image"

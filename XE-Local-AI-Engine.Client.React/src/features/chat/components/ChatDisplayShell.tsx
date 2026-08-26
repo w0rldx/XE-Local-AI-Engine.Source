@@ -4,6 +4,7 @@ import { IconInfoCircle, IconLayoutSidebar, IconUpload } from "@tabler/icons-rea
 import { useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
+import { TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
 import { ChatMessageList } from "@/features/chat/components/ChatMessageList";
@@ -87,15 +88,15 @@ export function ChatDisplayShell({
 }: ChatDisplayShellProps) {
 	const { t } = useTranslation();
 	const conversation = conversations.find((item) => item.id === selectedConversationId);
-	// The app shell shows a persistent 220px sidebar from width 768 up (Layout.tsx's own useWindowDimensions
-	// check), so the two-pane grid here (320px conversation list + chat pane) doesn't have room to breathe until
-	// the window is wider than roughly 220 + 320 + ~480 usable chat pane ≈ 1024px. Below that, collapse to a
-	// single full-width column and move the conversation list into an off-canvas Drawer toggled from the header.
-	// useWindowDimensions (unlike useMediaQuery) reads window.innerWidth synchronously on first render, so there
-	// is no undefined-value flash of the desktop grid before it collapses. jsdom defaults innerWidth to 1024, so
-	// `< 1024` (not `<=`) keeps desktop the default under the existing tests.
+	// The app shell shows a persistent expanded sidebar from DESKTOP_NAV_BREAKPOINT up (Layout.tsx's own
+	// useWindowDimensions check), so the two-pane grid here (320px conversation list + chat pane) doesn't have room
+	// to breathe until the window is wider than roughly 220 + 320 + ~480 usable chat pane — TWO_PANE_BREAKPOINT.
+	// Below that, collapse to a single full-width column and move the conversation list into an off-canvas Drawer
+	// toggled from the header. useWindowDimensions (unlike useMediaQuery) reads window.innerWidth synchronously on
+	// first render, so there is no undefined-value flash of the desktop grid before it collapses. jsdom defaults
+	// innerWidth to 1024, so `<` (not `<=`) keeps desktop the default under the existing tests.
 	const { width } = useWindowDimensions();
-	const isMobile = width < 1024;
+	const isMobile = width < TWO_PANE_BREAKPOINT;
 	const [conversationDrawerOpened, { open: openConversationDrawer, close: closeConversationDrawer }] = useDisclosure(false);
 
 	// The sidebar renders only conversation summaries (title, preview, timestamp, pin/archive/origin), never the
@@ -110,7 +111,10 @@ export function ChatDisplayShell({
 				`${item.id}\u0000${item.title}\u0000${item.lastMessagePreview ?? ""}\u0000${item.lastActivity ?? ""}\u0000${item.updatedAt ?? ""}\u0000${item.isPinned ? 1 : 0}${item.isArchived ? 1 : 0}\u0000${item.origin ?? ""}`,
 		)
 		.join("");
-	const stableSidebarRef = useRef<{ signature: string; value: ChatConversationModel[] }>({ signature: sidebarSignature, value: conversations });
+	const stableSidebarRef = useRef<{ signature: string; value: ChatConversationModel[] }>({
+		signature: sidebarSignature,
+		value: conversations,
+	});
 	if (stableSidebarRef.current.signature !== sidebarSignature) {
 		stableSidebarRef.current = { signature: sidebarSignature, value: conversations };
 	}
@@ -215,9 +219,7 @@ export function ChatDisplayShell({
 				minHeight: 0,
 				minWidth: 0,
 				borderRadius:
-					isMobile || hideConversationList
-						? "var(--mantine-radius-md)"
-						: "0 var(--mantine-radius-md) var(--mantine-radius-md) 0",
+					isMobile || hideConversationList ? "var(--mantine-radius-md)" : "0 var(--mantine-radius-md) var(--mantine-radius-md) 0",
 			}}
 		>
 			{isFileDragActive ? (
@@ -317,24 +319,24 @@ export function ChatDisplayShell({
 				{notice}
 				<div style={{ flex: 1, minHeight: 0 }}>{chatPane}</div>
 				{hideConversationList ? null : (
-				<Drawer
-					opened={conversationDrawerOpened}
-					onClose={closeConversationDrawer}
-					position="left"
-					size="85%"
-					padding={0}
-					withCloseButton={true}
-					title={t("pages.chat.conversations", "Conversations")}
-					// On the `content` section, not the root: Mantine spreads an unknown prop onto the Drawer ROOT, which is a
-					// zero-size portal wrapper that Playwright reports as `hidden`, so a visibility wait times out against a
-					// drawer that is on screen. Same rule DialogShell applies for every dialog.
-					attributes={{ content: { "data-testid": "chat-conversations-drawer" } }}
-					// Body padding is 0 so the embedded list controls their own md inset; pad the header inline to match
-					// so the drawer title lines up with the search field + conversation rows below it instead of flush-left.
-					styles={{ header: { paddingInline: "var(--mantine-spacing-md)" } }}
-				>
-					{conversationList}
-				</Drawer>
+					<Drawer
+						opened={conversationDrawerOpened}
+						onClose={closeConversationDrawer}
+						position="left"
+						size="85%"
+						padding={0}
+						withCloseButton={true}
+						title={t("pages.chat.conversations", "Conversations")}
+						// On the `content` section, not the root: Mantine spreads an unknown prop onto the Drawer ROOT, which is a
+						// zero-size portal wrapper that Playwright reports as `hidden`, so a visibility wait times out against a
+						// drawer that is on screen. Same rule DialogShell applies for every dialog.
+						attributes={{ content: { "data-testid": "chat-conversations-drawer" } }}
+						// Body padding is 0 so the embedded list controls their own md inset; pad the header inline to match
+						// so the drawer title lines up with the search field + conversation rows below it instead of flush-left.
+						styles={{ header: { paddingInline: "var(--mantine-spacing-md)" } }}
+					>
+						{conversationList}
+					</Drawer>
 				)}
 			</Stack>
 		);
@@ -343,8 +345,11 @@ export function ChatDisplayShell({
 	return (
 		// mih is a floor, not a fixed height (h="100%" above governs normal sizing) — it exists so the two-pane
 		// grid doesn't collapse below a usable size, but a flat 620px overflows short/landscape desktop windows.
-		// min() caps it at the viewport height (minus a small allowance for whatever sits above this shell).
-		<Stack gap="md" h="100%" mih="min(620px, calc(100dvh - 96px))">
+		// min() caps it at 100% of the frame this shell is given: `calc(100dvh - 96px)` guessed at the chrome above
+		// (header + banners + FullHeightPage padding) and guessed low, so the floor could exceed the frame and push
+		// content past it — an outer scrollbar before FullHeightPage's overflow guard, clipped content after it.
+		// `100%` measures the real frame instead of estimating it, so the floor can never overflow its own parent.
+		<Stack gap="md" h="100%" mih="min(620px, 100%)">
 			{notice}
 			<div
 				style={{
