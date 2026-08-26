@@ -55,6 +55,10 @@ public static class BenchmarkPairedBootstrap
         }
 
         var means = new double[replicates];
+        // Seeded `Random`, exactly as BenchmarkBradleyTerry does: the seeded constructor keeps the legacy sequence for
+        // compatibility, and nothing here is stored anyway — a hypothetical runtime change would move a DISPLAYED
+        // interval, not a persisted score or an input hash. (The NIAH generator makes the opposite call for the
+        // opposite reason: its bytes feed an item's input hash.)
 #pragma warning disable S2245 // A bootstrap must be reproducible: the seed IS the point, and no security decision reads it.
         var random = new Random(0);
 #pragma warning restore S2245

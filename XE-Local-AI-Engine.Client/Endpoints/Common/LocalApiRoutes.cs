@@ -273,6 +273,11 @@ public static class LocalApiRoutes
         // items a cell is MISSING — the absence is the answer.
         public const string ProjectCells = "benchmarks/projects/{projectId}/cells";
 
+        // Two to six named cells and the paired difference between each pair of them. Its own route rather than a
+        // flag on ProjectCells: a comparison is over a SELECTION, and the interval is computed from the items that
+        // selection shares -- a number that does not exist until someone says which cells they mean.
+        public const string ProjectCompare = "benchmarks/projects/{projectId}/compare";
+
         // Reordering is its own verb on its own route: it names the whole order at once, which is also what makes it
         // safe under a concurrent add or delete.
         public const string ProjectTaskItemOrder = "benchmarks/projects/{projectId}/items/order";
