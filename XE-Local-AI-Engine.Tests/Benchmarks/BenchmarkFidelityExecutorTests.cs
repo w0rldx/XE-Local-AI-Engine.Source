@@ -195,6 +195,26 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         _ = await harness.Store.DidNotReceiveWithAnyArgs().MarkFidelitySucceededAsync(default!, default);
     }
 
+    /// <summary>
+    ///     The watchdog's linked token produced an OperationCanceledException that the executor recorded as an
+    ///     operator cancellation with no reason — a two-hour runaway was indistinguishable from someone pressing
+    ///     stop. Classification is derived at mapping time: the caller's token is not cancelled, so it is ours.
+    /// </summary>
+    [Test]
+    public async Task Execute_WhenTheMeasurementWatchdogFires_FailsWithATimeoutReasonRatherThanCancelling()
+    {
+        var harness = new Harness(_root);
+
+        await harness.Executor(new HangingPerplexity(), TimeSpan.FromMilliseconds(50)).ExecuteAsync(harness.Work(), CancellationToken.None);
+
+        _ = await harness.Store.Received(1)
+                         .MarkFidelityFailedAsync(harness.RunId,
+                             Harness.WorkVersion,
+                             BenchmarkFidelityExecutor.MeasurementTimedOutMessage,
+                             Arg.Any<CancellationToken>());
+        _ = await harness.Store.DidNotReceive().MarkFidelityCancelledAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>());
+    }
+
     private const string BasePhaseOutput = """
         0.31.519.491 I perplexity: 7.18 seconds per pass - ETA 5.97 minutes
         1.12.579.214 I Final estimate: PPL = 5.7712 +/- 0.38886
@@ -317,20 +337,21 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
             return capacity;
         }
 
-        public BenchmarkFidelityExecutor Executor() =>
+        public BenchmarkFidelityExecutor Executor(IBenchmarkPerplexityRunner? runner = null, TimeSpan? measurementTimeout = null) =>
             new(Store,
                 new FixedSnapshots(_snapshot),
                 new NamedLeases(_leases),
                 Gguf,
                 AllowingCapacity(),
                 Binaries(Path.Combine(RuntimeHasPerplexityTool ? _withTool : _withoutTool, "llama-server")),
-                new ScriptedPerplexity(() => ScriptedOutputs.Count > 0 ? ScriptedOutputs.Dequeue() : Output),
+                runner ?? new ScriptedPerplexity(() => ScriptedOutputs.Count > 0 ? ScriptedOutputs.Dequeue() : Output),
                 _cache,
                 Options.Create(new BenchmarkKldCacheOptions()),
                 new StubEnvironment(),
                 new BenchmarkCancellationRegistry(),
                 new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
-                NullLogger<BenchmarkFidelityExecutor>.Instance);
+                NullLogger<BenchmarkFidelityExecutor>.Instance,
+                measurementTimeout);
 
         private static InstalledModelSnapshot InstalledModel()
         {
@@ -449,6 +470,18 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
     {
         public InstalledModelSnapshot Snapshot { get; } = snapshot;
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    /// <summary>A child process that never returns on its own — only the watchdog ends it.</summary>
+    private sealed class HangingPerplexity : IBenchmarkPerplexityRunner
+    {
+        public async Task<BenchmarkPerplexityProcessResult> RunAsync(string executablePath,
+            IReadOnlyList<string> arguments,
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            throw new InvalidOperationException("The hanging runner only ever ends by cancellation.");
+        }
     }
 
     private sealed class ScriptedPerplexity(Func<string> output) : IBenchmarkPerplexityRunner

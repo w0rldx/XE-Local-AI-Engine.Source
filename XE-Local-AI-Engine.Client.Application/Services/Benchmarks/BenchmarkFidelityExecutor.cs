@@ -43,7 +43,8 @@ public sealed class BenchmarkFidelityExecutor(
     IRuntimeEnvironmentFactsProvider environmentFacts,
     IBenchmarkCancellationRegistry cancellations,
     BenchmarkAdmissionRetry admissionRetry,
-    ILogger<BenchmarkFidelityExecutor> logger) : IBenchmarkFidelityExecutor
+    ILogger<BenchmarkFidelityExecutor> logger,
+    TimeSpan? measurementTimeout = null) : IBenchmarkFidelityExecutor
 {
     /// <summary>
     ///     Mirrors the quantizer's refusal shape: this runtime cannot do the thing, and the message names the two
@@ -58,12 +59,16 @@ public sealed class BenchmarkFidelityExecutor(
     internal const string UnparseableOutputMessage = "llama-perplexity produced no final estimate. Its last output was:";
     private const string BaseWaitedTooLongMessage = "Another process is still measuring the base-model logits this run needs. It will be retried.";
 
+    internal const string MeasurementTimedOutMessage = "The fidelity measurement exceeded its time limit and was stopped.";
+
     /// <summary>
     ///     Generous next to the real cost: 200 chunks of a 27B is about a minute of prompt evaluation on a 5090, and
     ///     a base-logit pass over a large-vocabulary model on a slower box is a multiple of that. The alternative to
     ///     waiting is killing a measurement that was going to succeed.
     /// </summary>
-    private static readonly TimeSpan MeasurementTimeout = TimeSpan.FromHours(2);
+    private static readonly TimeSpan DefaultMeasurementTimeout = TimeSpan.FromHours(2);
+
+    private readonly TimeSpan _measurementTimeout = measurementTimeout ?? DefaultMeasurementTimeout;
 
     public async Task ExecuteAsync(BenchmarkClaimedWork work, CancellationToken cancellationToken)
     {
@@ -176,9 +181,7 @@ public sealed class BenchmarkFidelityExecutor(
         using var reservation = decision.Reservation;
 
         var arguments = BuildArguments(modelPath, corpus.Path, chunks, snapshot.PrimaryRuntime, kld?.BaseFilePath, isBasePhase: false);
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-        timeout.CancelAfter(MeasurementTimeout);
-        var result = await perplexity.RunAsync(executable, arguments, timeout.Token).ConfigureAwait(false);
+        var result = await RunUnderWatchdogAsync(executable, arguments, token).ConfigureAwait(false);
 
         var reading = BenchmarkPerplexityOutputParser.TryParsePerplexity(result.Output);
         if (result.ExitCode != 0 || reading is null)
@@ -281,9 +284,7 @@ public sealed class BenchmarkFidelityExecutor(
         try
         {
             var arguments = BuildArguments(basePath, corpus.Path, chunks, snapshot.PrimaryRuntime, tempPath, isBasePhase: true);
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
-            timeout.CancelAfter(MeasurementTimeout);
-            var result = await perplexity.RunAsync(executable, arguments, timeout.Token).ConfigureAwait(false);
+            var result = await RunUnderWatchdogAsync(executable, arguments, token).ConfigureAwait(false);
             if (result.ExitCode != 0 || BenchmarkPerplexityOutputParser.TryParsePerplexity(result.Output) is null)
             {
                 throw new BenchmarkExecutionException($"{UnparseableOutputMessage} {BenchmarkPerplexityOutputParser.Tail(result.Output)}");
@@ -300,6 +301,32 @@ public sealed class BenchmarkFidelityExecutor(
 
         _ = cache.Trim(cacheOptions.Value.KldCacheMaxBytes, await store.ListLiveFidelityDigestsAsync(token).ConfigureAwait(false));
         return new KldPreparation(key, cache.PathFor(key), baseModelName, baseFingerprint);
+    }
+
+    /// <summary>
+    ///     Runs one perplexity pass under the measurement watchdog, and classifies the cancellation it may produce.
+    ///     <para>
+    ///         The classification is derived HERE, at mapping time, in the repo's priority order rather than from a
+    ///         registration callback: if the caller's token is not cancelled, the only thing left that could have
+    ///         cancelled the linked one is this method's own timer. A watchdog firing is a FAILED measurement with a
+    ///         reason — recorded as an operator cancellation with none, it was indistinguishable from someone
+    ///         pressing stop, and a two-hour runaway looked like a deliberate abort.
+    ///     </para>
+    /// </summary>
+    private async Task<BenchmarkPerplexityProcessResult> RunUnderWatchdogAsync(string executable,
+        IReadOnlyList<string> arguments,
+        CancellationToken token)
+    {
+        using var watchdog = CancellationTokenSource.CreateLinkedTokenSource(token);
+        watchdog.CancelAfter(_measurementTimeout);
+        try
+        {
+            return await perplexity.RunAsync(executable, arguments, watchdog.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested)
+        {
+            throw new BenchmarkExecutionException(MeasurementTimedOutMessage);
+        }
     }
 
     /// <summary>
