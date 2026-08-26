@@ -1,10 +1,11 @@
-import { Alert, Badge, Button, Card, Group, SimpleGrid, Skeleton, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconPlus } from "@tabler/icons-react";
+import { Alert, Badge, Button, Card, Group, SimpleGrid, Skeleton, Stack, Text } from "@mantine/core";
+import { IconAlertTriangle, IconBriefcase, IconPlus } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { CreateWorkSessionDialog } from "@/features/workSessions/components/CreateWorkSessionDialog";
 import { WorkSessionStatusBadge } from "@/features/workSessions/components/WorkSessionStatusBadge";
@@ -24,17 +25,16 @@ export function WorkSessionsPage() {
 
 	return (
 		<PageShell data-testid="work-sessions-page">
-			<Group justify="space-between" wrap="wrap">
-				<Stack gap={2}>
-					<Title order={2}>{t("pages.workSessions.title", "Work Sessions")}</Title>
-					<Text size="sm" c="dimmed">
-						{t("pages.workSessions.subtitle", "Long-running agent work with its own plan, findings and artifacts.")}
-					</Text>
-				</Stack>
-				<Button leftSection={<IconPlus size={16} />} onClick={() => setDialogOpened(true)} data-testid="work-sessions-create">
-					{t("pages.workSessions.create.open", "New work session")}
-				</Button>
-			</Group>
+			<PageHeader
+				title={t("pages.workSessions.title", "Work Sessions")}
+				icon={<IconBriefcase size={24} />}
+				subtitle={t("pages.workSessions.subtitle", "Long-running agent work with its own plan, findings and artifacts.")}
+				actions={
+					<Button leftSection={<IconPlus size={16} />} onClick={() => setDialogOpened(true)} data-testid="work-sessions-create">
+						{t("pages.workSessions.create.open", "New work session")}
+					</Button>
+				}
+			/>
 
 			{listQuery.isPending ? (
 				<SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} data-testid="work-sessions-loading">

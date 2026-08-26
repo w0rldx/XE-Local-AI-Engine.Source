@@ -554,7 +554,13 @@ export function DevelopmentLivePanel({ attempt, live, artifacts, events }: Devel
 				</Tabs.List>
 
 				<Tabs.Panel value="live" pt="md">
-					<ScrollArea h={260}>
+					{/*
+					 * Viewport-relative rather than a flat 260px: on a short window (a phone in landscape, a split
+					 * desktop pane) a fixed 260 left the live output taller than the space the panel had, so the page
+					 * grew a second scrollbar around a region that already scrolls. `min()` keeps the desktop height
+					 * exactly as it was.
+					 */}
+					<ScrollArea h="min(260px, 40dvh)">
 						<Stack gap="xs">
 							{output.length === 0 ? <Text c="dimmed">{t("pages.development.live.noOutput", "No live output yet.")}</Text> : null}
 							{output.map((update) => (

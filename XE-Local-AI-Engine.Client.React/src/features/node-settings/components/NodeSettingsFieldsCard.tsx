@@ -2,9 +2,11 @@ import {
 	ActionIcon,
 	Button,
 	Card,
+	Flex,
 	Group,
 	NumberInput,
 	Select,
+	SimpleGrid,
 	Stack,
 	Switch,
 	TagsInput,
@@ -553,34 +555,58 @@ export function NodeSettingsFieldsCard({
 							</Group>
 							{form.usageRates.map((row) => (
 								<Group key={row.id} gap="sm" wrap="nowrap" align="flex-start" data-testid="node-settings-usage-rate-row">
-									<TextInput
-										aria-label={t("pages.nodeSettings.fields.usageRates.columns.model", "Model name")}
-										placeholder={t("pages.nodeSettings.fields.usageRates.modelPlaceholder", "e.g. gpt-5")}
-										value={row.modelName}
-										onChange={(event) => updateRateRow(row.id, { modelName: event.currentTarget.value })}
-										style={{ flex: 1 }}
-										data-testid="node-settings-usage-rate-model"
-									/>
-									<NumberInput
-										aria-label={t("pages.nodeSettings.fields.usageRates.columns.input", "Input $/1M")}
-										min={0}
-										step={0.5}
-										decimalScale={4}
-										value={row.inputPer1M}
-										onChange={(value) => updateRateRow(row.id, { inputPer1M: value })}
-										style={{ width: 140 }}
-										data-testid="node-settings-usage-rate-input"
-									/>
-									<NumberInput
-										aria-label={t("pages.nodeSettings.fields.usageRates.columns.output", "Output $/1M")}
-										min={0}
-										step={0.5}
-										decimalScale={4}
-										value={row.outputPer1M}
-										onChange={(value) => updateRateRow(row.id, { outputPer1M: value })}
-										style={{ width: 140 }}
-										data-testid="node-settings-usage-rate-output"
-									/>
+									{/*
+									 * Three inputs plus a delete button do not fit a phone: below sm the two rate fields drop
+									 * under the model name (and grow their own labels, because the column header row above is
+									 * `visibleFrom="sm"`); from sm up they sit inline at the 140px the header reserves for them.
+									 */}
+									<Flex
+										direction={{ base: "column", sm: "row" }}
+										gap="sm"
+										align={{ base: "stretch", sm: "flex-start" }}
+										style={{ flex: "1 1 auto", minWidth: 0 }}
+									>
+										<TextInput
+											aria-label={t("pages.nodeSettings.fields.usageRates.columns.model", "Model name")}
+											placeholder={t("pages.nodeSettings.fields.usageRates.modelPlaceholder", "e.g. gpt-5")}
+											value={row.modelName}
+											onChange={(event) => updateRateRow(row.id, { modelName: event.currentTarget.value })}
+											style={{ flex: "1 1 auto", minWidth: 0 }}
+											data-testid="node-settings-usage-rate-model"
+										/>
+										<SimpleGrid cols={2} spacing="sm" style={{ flex: "0 0 auto" }}>
+											<Stack gap={4}>
+												<Text size="xs" fw={600} c="dimmed" hiddenFrom="sm">
+													{t("pages.nodeSettings.fields.usageRates.columns.input", "Input $/1M")}
+												</Text>
+												<NumberInput
+													aria-label={t("pages.nodeSettings.fields.usageRates.columns.input", "Input $/1M")}
+													min={0}
+													step={0.5}
+													decimalScale={4}
+													value={row.inputPer1M}
+													onChange={(value) => updateRateRow(row.id, { inputPer1M: value })}
+													w={{ base: "100%", sm: 140 }}
+													data-testid="node-settings-usage-rate-input"
+												/>
+											</Stack>
+											<Stack gap={4}>
+												<Text size="xs" fw={600} c="dimmed" hiddenFrom="sm">
+													{t("pages.nodeSettings.fields.usageRates.columns.output", "Output $/1M")}
+												</Text>
+												<NumberInput
+													aria-label={t("pages.nodeSettings.fields.usageRates.columns.output", "Output $/1M")}
+													min={0}
+													step={0.5}
+													decimalScale={4}
+													value={row.outputPer1M}
+													onChange={(value) => updateRateRow(row.id, { outputPer1M: value })}
+													w={{ base: "100%", sm: 140 }}
+													data-testid="node-settings-usage-rate-output"
+												/>
+											</Stack>
+										</SimpleGrid>
+									</Flex>
 									<ActionIcon
 										variant="subtle"
 										color="red"

@@ -3580,6 +3580,10 @@
 					"actions": "Aktionen"
 				}
 			},
+			"nodeConfig": {
+				"title": "Blockeinstellungen",
+				"open": "Blockeinstellungen"
+			},
 			"nodes": {
 				"start": "Start",
 				"agent": "Agent",

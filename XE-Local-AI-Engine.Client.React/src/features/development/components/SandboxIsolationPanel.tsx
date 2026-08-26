@@ -5,6 +5,10 @@ import { useTranslation } from "react-i18next";
 import type { XeLocalAiEngineClientEndpointsDevelopmentV1SandboxIsolationSummaryResponse as SandboxIsolation } from "@/core/api/generated/types.gen";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 
+// The two columns whose value is a single indivisible token — a badge, or "No (required)". Wrapping either mid-word
+// turns the answer into noise, so they keep their width and the container scrolls instead.
+const nowrapCell = { whiteSpace: "nowrap" as const };
+
 interface SandboxIsolationPanelProps {
 	/**
 	 * One entry per sandbox role. Undefined while the capability query is in flight, and empty from a backend that
@@ -76,7 +80,13 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 				)}
 			</Text>
 
-			<Table.ScrollContainer minWidth={640}>
+			{/*
+			 * Eight columns of short-but-not-abbreviatable values. At the old 640 floor the browser stole the width back
+			 * from the narrowest cells, and the Level badge — the column an operator reads first — came out clipped to a
+			 * character or two at 390px. The floor is the width the headers and values actually need; the container
+			 * scrolls horizontally below it rather than compressing them.
+			 */}
+			<Table.ScrollContainer minWidth={960}>
 				<Table striped={true} highlightOnHover={true} withTableBorder={true}>
 					<Table.Caption>
 						{t("pages.development.isolation.caption", "Isolation posture of each sandbox role on this node.")}
@@ -86,9 +96,13 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 							<Table.Th scope="col">{t("pages.development.isolation.role", "Role")}</Table.Th>
 							<Table.Th scope="col">{t("pages.development.isolation.provider", "Provider")}</Table.Th>
 							<Table.Th scope="col">{t("pages.development.isolation.backend", "Backend")}</Table.Th>
-							<Table.Th scope="col">{t("pages.development.isolation.level", "Level")}</Table.Th>
+							<Table.Th scope="col" style={nowrapCell}>
+								{t("pages.development.isolation.level", "Level")}
+							</Table.Th>
 							<Table.Th scope="col">{t("pages.development.isolation.filesystem", "Filesystem")}</Table.Th>
-							<Table.Th scope="col">{t("pages.development.isolation.network", "Network")}</Table.Th>
+							<Table.Th scope="col" style={nowrapCell}>
+								{t("pages.development.isolation.network", "Network")}
+							</Table.Th>
 							<Table.Th scope="col">{t("pages.development.isolation.limits", "Resource limits")}</Table.Th>
 							<Table.Th scope="col">{t("pages.development.isolation.readOnlyMounts", "Read-only mounts")}</Table.Th>
 						</Table.Tr>
@@ -99,7 +113,7 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 								<Table.Th scope="row">{role.role}</Table.Th>
 								<Table.Td data-testid={`sandbox-isolation-provider-${role.role}`}>{role.provider}</Table.Td>
 								<Table.Td data-testid={`sandbox-isolation-backend-${role.role}`}>{role.backend}</Table.Td>
-								<Table.Td>
+								<Table.Td style={nowrapCell}>
 									<Badge color={levelColor(role.level)} data-testid={`sandbox-isolation-level-${role.role}`}>
 										{levelLabel(t, role.level)}
 									</Badge>
@@ -107,7 +121,7 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 								<Table.Td data-testid={`sandbox-isolation-filesystem-${role.role}`}>
 									{yesNo(t, role.filesystemIsolation)}
 								</Table.Td>
-								<Table.Td data-testid={`sandbox-isolation-network-${role.role}`}>
+								<Table.Td style={nowrapCell} data-testid={`sandbox-isolation-network-${role.role}`}>
 									{`${yesNo(t, role.networkIsolation)} (${
 										role.networkIsolationRequired === true
 											? t("pages.development.isolation.egressRequired", "required")

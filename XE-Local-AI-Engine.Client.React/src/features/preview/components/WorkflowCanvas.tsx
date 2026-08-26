@@ -1,5 +1,7 @@
-import { Button, Group, Paper, Stack, Text, TextInput } from "@mantine/core";
+import { Button, Drawer, Group, Paper, Stack, Text, TextInput } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import {
+	IconAdjustments,
 	IconBug,
 	IconFlag,
 	IconFlagCheck,
@@ -26,11 +28,13 @@ import {
 	useNodesState,
 	useReactFlow,
 } from "@xyflow/react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import "@xyflow/react/dist/style.css";
 
+import { TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
+import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { AgentNodeForm } from "@/features/preview/components/AgentNodeForm";
 import { AgentNode, DebugNode, EndNode, PauseNode, StartNode } from "@/features/preview/components/PreviewNodeComponents";
 import { canvasToGraph, type PreviewCanvasNode, type PreviewCanvasNodeData } from "@/features/preview/models/PreviewCanvasModels";
@@ -121,6 +125,17 @@ function WorkflowCanvasInner({
 	const [edges, setEdges] = useEdgesState<Edge>(initialEdges);
 	const [startText, setStartText] = useState(initialStartText);
 	const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+	// The shared two-pane threshold, for the reason it exists: a 360px config panel beside a canvas that needs real
+	// room to drag blocks around has nothing left once the shell's sidebar has taken its 220px. useWindowDimensions
+	// (unlike useMediaQuery) reads innerWidth synchronously on first render, so the two-pane layout never flashes
+	// before collapsing. jsdom defaults innerWidth to 1024, so `<` (not `<=`) keeps two-pane the test default.
+	const { width } = useWindowDimensions();
+	const isNarrow = width < TWO_PANE_BREAKPOINT;
+	// Destructured, NOT kept as the handlers object: useDisclosure returns a fresh object literal on every render (and
+	// its `toggle` is rebuilt whenever `opened` changes), so depending on the object made the effect below run every
+	// render — which re-opened the drawer on the very re-render a manual close caused, making it impossible to dismiss.
+	// `open` and `close` are the useCallback-stable members, so the effect re-runs only when its real inputs change.
+	const [configDrawerOpened, { open: openConfigDrawer, close: closeConfigDrawer }] = useDisclosure(false);
 
 	// Refs mirror the latest committed editing inputs so any single mutation (nodes OR edges OR start text) can build
 	// the lifted graph from the current value of the others without a stale render closure.
@@ -259,6 +274,27 @@ function WorkflowCanvasInner({
 	);
 
 	const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId]);
+	// Only Agent blocks carry editable config; everything else selects without opening a panel.
+	const agentNodeData = selectedNode !== null && selectedNode.data.kind === "Agent" ? selectedNode.data : null;
+	const hasNodeConfig = agentNodeData !== null;
+
+	// Below the two-pane width the config is a Drawer, and selecting an Agent block IS the request to configure it —
+	// so the drawer follows the selection rather than making the operator hunt for a second control. Deselecting (or
+	// widening the window back to the two-pane layout) closes it again; the toolbar button below re-opens it after a
+	// manual dismiss without disturbing the selection.
+	// selectedNodeId is in the dependency list as a re-run TRIGGER, not as a value the effect reads: moving from one
+	// Agent block to another leaves isNarrow and hasNodeConfig unchanged, so without it a drawer the operator dismissed
+	// would stay shut when they pick a different block to configure.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: selectedNodeId is a deliberate re-run trigger (see above)
+	useEffect(() => {
+		if (isNarrow && hasNodeConfig) {
+			openConfigDrawer();
+			return;
+		}
+		closeConfigDrawer();
+	}, [isNarrow, hasNodeConfig, selectedNodeId, openConfigDrawer, closeConfigDrawer]);
+
+	const nodeConfig = agentNodeData === null ? null : <AgentNodeForm data={agentNodeData} onChange={patchSelectedNode} />;
 
 	// Current graph (canvas → wire shape) + client-side validity for the Execute gate. The same derived graph is
 	// passed to onExecute below; the live lift-up to the parent happens in emitGraph from each mutation entry point.
@@ -295,6 +331,16 @@ function WorkflowCanvasInner({
 				</Group>
 
 				<Group gap="xs">
+					{isNarrow && hasNodeConfig ? (
+						<Button
+							variant="light"
+							leftSection={<IconAdjustments size={16} />}
+							onClick={openConfigDrawer}
+							data-testid="preview-node-config-toggle"
+						>
+							{t("pages.preview.nodeConfig.open", "Block settings")}
+						</Button>
+					) : null}
 					<Button
 						leftSection={<IconPlayerPlay size={16} />}
 						disabled={executeDisabled}
@@ -373,17 +419,39 @@ function WorkflowCanvasInner({
 					</ReactFlow>
 				</Paper>
 
-				{selectedNode?.data.kind === "Agent" ? (
+				{!isNarrow && hasNodeConfig ? (
 					<Paper
 						withBorder={true}
 						p="sm"
 						style={{ width: "100%", maxWidth: 360 }}
 						data-testid="preview-node-config"
 					>
-						<AgentNodeForm data={selectedNode.data} onChange={patchSelectedNode} />
+						{nodeConfig}
 					</Paper>
 				) : null}
 			</Group>
+
+			{/*
+			 * Below the two-pane width the same form moves off-canvas instead of squeezing the canvas down to a sliver
+			 * it cannot be edited in — the pattern ChatDisplayShell and the work-session detail page already use. The
+			 * `preview-node-config` test id rides the content in both layouts, so a test (or an operator) finds the
+			 * config in exactly one place whichever branch rendered.
+			 */}
+			{isNarrow ? (
+				<Drawer
+					opened={configDrawerOpened && hasNodeConfig}
+					onClose={closeConfigDrawer}
+					position="right"
+					size="85%"
+					title={t("pages.preview.nodeConfig.title", "Block settings")}
+					// On `content`, not the root: Mantine spreads an unknown prop onto the zero-size portal root, which
+					// Playwright reports as hidden. Same rule DialogShell applies.
+					attributes={{ content: { "data-testid": "preview-node-config-drawer" } }}
+					closeButtonProps={{ "aria-label": t("common.close", "Close") }}
+				>
+					<div data-testid="preview-node-config">{nodeConfig}</div>
+				</Drawer>
+			) : null}
 		</Stack>
 	);
 }

@@ -1,4 +1,4 @@
-import { Box, Button, Group, Loader, Stack, Text } from "@mantine/core";
+import { Box, Button, Group, Loader, ScrollArea, Stack, Text } from "@mantine/core";
 import { IconArrowLeft, IconBinaryTree2, IconDeviceFloppy, IconPlus } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -307,7 +307,12 @@ export function PreviewPage({ routeRunId = null, onRouteRunIdChange }: PreviewPa
 
 	return (
 		<FullHeightPage>
-			<Stack gap="lg" style={{ flex: 1, minHeight: 0 }}>
+			{/*
+			 * PageShell wraps normal pages in a fluid Container, whose `padding-inline: md` is what puts every other
+			 * page's header 16px in from the Layout's own gutter. FullHeightPage owns vertical rhythm only, so without
+			 * this the Open Canvas header sat visibly further left than the header on every page next to it.
+			 */}
+			<Stack gap="lg" px="md" style={{ flex: 1, minHeight: 0 }}>
 				<PageHeader
 					title={t("pages.preview.title", "Open Canvas")}
 					icon={<IconBinaryTree2 size={24} />}
@@ -375,21 +380,31 @@ export function PreviewPage({ routeRunId = null, onRouteRunIdChange }: PreviewPa
 							<Text c="dimmed">{t("pages.preview.listLoading", "Loading workflows…")}</Text>
 						</Group>
 					) : (
-						<Stack gap="lg">
-							<ActiveRunsPanel
-								runs={runsQuery.data ?? []}
-								isCancelling={cancelMutation.isPending || cancelAllMutation.isPending}
-								onReattach={handleReattach}
-								onCancel={handleCancelRun}
-								onCancelAll={handleCancelAll}
-							/>
-							<WorkflowList
-								workflows={workflows}
-								isMutating={deleteMutation.isPending}
-								onOpen={openWorkflow}
-								onDelete={handleDelete}
-							/>
-						</Stack>
+						/*
+						 * The list branch is the one part of this page that grows without bound (a run panel plus every
+						 * saved workflow), and FullHeightPage's contract is that a region INSIDE it scrolls rather than
+						 * the page. Without this the overflow escaped to the Layout's outer scroller — the same
+						 * second-scrollbar shape chat and the work-session detail page already solved — so the run panel
+						 * and page header scrolled away with the list. `offsetScrollbars` keeps the cards from shifting
+						 * when the scrollbar appears.
+						 */
+						<ScrollArea type="hover" scrollbarSize={8} offsetScrollbars="y" style={{ flex: 1, minHeight: 0 }}>
+							<Stack gap="lg">
+								<ActiveRunsPanel
+									runs={runsQuery.data ?? []}
+									isCancelling={cancelMutation.isPending || cancelAllMutation.isPending}
+									onReattach={handleReattach}
+									onCancel={handleCancelRun}
+									onCancelAll={handleCancelAll}
+								/>
+								<WorkflowList
+									workflows={workflows}
+									isMutating={deleteMutation.isPending}
+									onOpen={openWorkflow}
+									onDelete={handleDelete}
+								/>
+							</Stack>
+						</ScrollArea>
 					)}
 				</Box>
 			</Stack>
