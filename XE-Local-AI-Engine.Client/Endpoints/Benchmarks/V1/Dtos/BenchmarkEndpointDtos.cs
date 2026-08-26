@@ -699,8 +699,14 @@ public class BenchmarkRunSummaryResponse
     ///     Why this run is not in the project's ranked cohort, or null when it is ranked. One of <c>no-score</c>,
     ///     <c>judge-pending</c>, <c>judge-failed</c>, <c>judge-cancelled</c>, <c>policy-outdated</c>,
     ///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>,
-    ///     <c>truncated</c>, <c>incomplete</c>, <c>warmup</c>, <c>item-revised</c>, <c>item-set-revised</c>,
-    ///     <c>item-incomplete</c>.
+    ///     <c>verifier-unavailable</c>, <c>override-unmatched</c>, <c>truncated</c>, <c>incomplete</c>,
+    ///     <c>warmup</c>, <c>item-revised</c>, <c>item-set-revised</c>, <c>item-incomplete</c>.
+    ///     <para>
+    ///         <c>verifier-unavailable</c> and <c>override-unmatched</c> are judgings that were REFUSED rather than
+    ///         failed: the first because a deterministic verifier could not run on this node, the second because the
+    ///         run's task item carries a verifier override naming a rubric criterion that no longer exists. Neither
+    ///         yields a score, because grading anyway would measure the answer against another item's expected answer.
+    ///     </para>
     ///     <para>
     ///         The last three are suite-level. <c>item-revised</c>: this run's own task item has been edited since it
     ///         was frozen. <c>item-set-revised</c>: the project's item set has changed since this run's cell was

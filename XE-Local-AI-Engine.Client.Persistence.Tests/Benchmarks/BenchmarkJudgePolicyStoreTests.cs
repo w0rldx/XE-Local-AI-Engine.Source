@@ -502,6 +502,31 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
         AssertEx.Equal(BenchmarkRunJudgeStates.ReasonVerifierUnavailable, judge.RankExclusionReason);
     }
 
+    // And a judging refused because the item's verifier override named a criterion the rubric does not have is a
+    // fourth fact: the run is unranked, and the fix is an edit to the item or the rubric -- not a re-judge, not an
+    // operator action on the node, and emphatically not a score, which is what grading under the policy's own
+    // configuration would have produced.
+    [Test]
+    public async Task RunJudgeView_ReportsAnUnmatchedItemOverrideSeparatelyFromAFailedJudging()
+    {
+        await using var context = await CreateDatabaseAsync("judge-view-override-unmatched.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+
+        var run = await SucceedRunAsync(store, project, revision).ConfigureAwait(false);
+        var work = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = await store.MarkJudgeFailedAsync(run.Id,
+                           work.Version,
+                           BenchmarkRunJudgeStates.OverrideUnmatchedPrefix
+                           + "The task item's verifier override names criterion 'needle', which the judge rubric does not have.")
+                       .ConfigureAwait(false);
+
+        var judge = AssertEx.NotNull(AssertEx.NotNull(await store.GetRunAsync(run.Id).ConfigureAwait(false)).Judge);
+
+        AssertEx.Equal(BenchmarkRunJudgeStates.Failed, judge.State);
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonOverrideUnmatched, judge.RankExclusionReason);
+    }
+
     [Test]
     public async Task ActivatePolicy_WithACohortSeed_EnqueuesEveryEligibleRunInTheNewGeneration()
     {

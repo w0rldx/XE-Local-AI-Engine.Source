@@ -116,6 +116,87 @@ public sealed class BenchmarkTaskItemServiceTests
             () => service.UpdateAsync(ProjectId, Guid.NewGuid(), expectedVersion: 1, new BenchmarkTaskItemDraft("")));
     }
 
+    /// <summary>
+    ///     An override names its criterion by id, and the judge applies it by matching that id against the rubric. A
+    ///     misspelled or deleted id therefore does not fail — it applies NOTHING and the item is graded under the
+    ///     policy's own configuration, against another item's expected answer, with the wrong score indistinguishable
+    ///     from a right one. Refused while the operator is still looking at the form.
+    /// </summary>
+    [Test]
+    public async Task Create_WithAnOverrideNamingACriterionTheRubricDoesNotHave_IsRefused()
+    {
+        var store = StoreWithRubric(new BenchmarkJudgeRubricCriterionV1("correctness", "Correctness", "Is it right?", 40,
+            BenchmarkJudgeCriterionKinds.Exact, """{"expected":"answer"}"""));
+        var service = new BenchmarkTaskItemService(store);
+        using var config = JsonDocument.Parse("""{"correctnes":{"expected":"[1,2,3]"}}""");
+
+        var failure = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId,
+            expectedProjectVersion: 1,
+            new BenchmarkTaskItemDraft("sort", VerifierConfig: config.RootElement)));
+
+        AssertEx.Contains(failure.Message, "correctnes", message: "The refusal names the criterion that matched nothing.");
+        _ = store.DidNotReceive().CreateTaskItemAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkTaskItemInput>(),
+            Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     Matching the id is not enough: an <c>exact</c> configuration handed to an <c>llm</c> criterion is applied,
+    ///     then ignored by a model that never reads a config, and the operator's expected answer is never checked. The
+    ///     policy's OWN parser decides, so an override can never mean something a criterion's config could not.
+    /// </summary>
+    [Test]
+    public async Task Create_WithAnOverrideTheCriterionsKindCannotHonour_IsRefused()
+    {
+        var store = StoreWithRubric(new BenchmarkJudgeRubricCriterionV1("correctness", "Correctness", "Is it right?", 40));
+        var service = new BenchmarkTaskItemService(store);
+        using var config = JsonDocument.Parse("""{"correctness":{"expected":"[1,2,3]"}}""");
+
+        var failure = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId,
+            expectedProjectVersion: 1,
+            new BenchmarkTaskItemDraft("sort", VerifierConfig: config.RootElement)));
+
+        AssertEx.Contains(failure.Message, "correctness");
+        _ = store.DidNotReceive().CreateTaskItemAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkTaskItemInput>(),
+            Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>An override the rubric can honour is written unchanged — the check refuses, it never rewrites.</summary>
+    [Test]
+    public async Task Create_WithAnOverrideTheRubricHonours_IsWritten()
+    {
+        var store = StoreWithRubric(new BenchmarkJudgeRubricCriterionV1("correctness", "Correctness", "Is it right?", 40,
+            BenchmarkJudgeCriterionKinds.Exact, """{"expected":"answer"}"""));
+        BenchmarkTaskItemInput? captured = null;
+        _ = store.CreateTaskItemAsync(ProjectId, Arg.Any<long>(), Arg.Do<BenchmarkTaskItemInput>(input => captured = input),
+                     Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>())
+                 .Returns(call => Record(call.Arg<BenchmarkTaskItemInput>()));
+        var service = new BenchmarkTaskItemService(store);
+        using var config = JsonDocument.Parse("""{"correctness":{"expected":"[1,2,3]"}}""");
+
+        _ = await service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft("sort", VerifierConfig: config.RootElement));
+
+        AssertEx.Equal("""{"correctness":{"expected":"[1,2,3]"}}""",
+            Encoding.UTF8.GetString(AssertEx.NotNull(captured).VerifierConfigJson!.Value.Span));
+    }
+
+    /// <summary>A project with an enabled judge, so an item's override has a rubric to be checked against.</summary>
+    private static IBenchmarkStore StoreWithRubric(params BenchmarkJudgeRubricCriterionV1[] criteria)
+    {
+        var store = Substitute.For<IBenchmarkStore>();
+        _ = store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Array.Empty<BenchmarkTaskItemRecord>());
+        var policy = new BenchmarkJudgePolicyV1(new BenchmarkJudgePolicyModelV1("judge.gguf", "v1:" + new string('c', count: 64), [new string('b', count: 64)]),
+            4096,
+            BenchmarkJudgePolicyVersions.PromptVersion,
+            BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+            BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
+            new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion, criteria),
+            ReferenceAnswer: null);
+        _ = store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
+                 .Returns(new BenchmarkJudgePolicyRevisionRecord(Guid.NewGuid(), ProjectId, 1,
+                     BenchmarkJudgeSerialization.SerializePolicy(policy), new string('0', count: 64), null, 1, 0));
+        return store;
+    }
+
     [Test]
     public void Decode_ReadsBackWhatCreateWrote()
     {

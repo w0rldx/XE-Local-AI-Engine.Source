@@ -438,6 +438,90 @@ public sealed class BenchmarkProjectServiceTests
         AssertEx.Contains(exception.Message, "linear time");
     }
 
+    /// <summary>
+    ///     A task item's verifier override names its criterion by id, so a rubric edit that drops or renames the
+    ///     criterion strands it: the judge would apply nothing and grade that item under the policy's own
+    ///     configuration. Refused, naming both halves of the fix — the rubric is not activated and the operator can
+    ///     still clear the override or keep the criterion.
+    /// </summary>
+    [Test]
+    public async Task UpdateJudgePolicy_WithARubricThatStrandsAnItemsVerifierOverride_IsRefused()
+    {
+        var context = new ServiceContext();
+        context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new[]
+               {
+                   TaskItem(index: 0, verifierConfigJson: null),
+                   TaskItem(index: 1, verifierConfigJson: Encoding.UTF8.GetBytes("""{"needle":{"expected":"AX-991"}}"""))
+               });
+        var rubric = new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
+        [
+            new BenchmarkJudgeRubricCriterionV1("correctness", "Correctness", "Is the answer right?", 100)
+        ]);
+
+        var exception = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.UpdateJudgePolicyAsync(ProjectId, 1, new BenchmarkJudgePolicyDraft("judge-model", 4096, rubric), confirmRejudge: false));
+
+        AssertEx.Contains(exception.Message, "needle", message: "The refusal names the criterion the item's override pointed at.");
+        AssertEx.Contains(exception.Message, "2", message: "And the item, one-based, as the operator sees it in the list.");
+        _ = context.Store.DidNotReceive().ActivateJudgePolicyAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
+            Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>A rubric that keeps the criterion the override names activates as it always did.</summary>
+    [Test]
+    public async Task UpdateJudgePolicy_WithARubricThatKeepsTheOverriddenCriterion_Activates()
+    {
+        var context = new ServiceContext();
+        context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new[]
+               {
+                   TaskItem(index: 0, verifierConfigJson: Encoding.UTF8.GetBytes("""{"needle":{"expected":"AX-991"}}"""))
+               });
+        var rubric = new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
+        [
+            new BenchmarkJudgeRubricCriterionV1("needle", "Needle", "Was the passcode recalled?", 100,
+                BenchmarkJudgeCriterionKinds.Exact, """{"expected":"placeholder"}""")
+        ]);
+
+        _ = await context.Service.UpdateJudgePolicyAsync(ProjectId, 1, new BenchmarkJudgePolicyDraft("judge-model", 4096, rubric), confirmRejudge: false);
+
+        _ = context.Store.Received(1).ActivateJudgePolicyAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
+            Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     The project write carries a judge draft too, so it changes the rubric on exactly the same terms — and owes
+    ///     the item overrides the same check. Missing it, the frozen route would refuse a rubric the unfrozen route
+    ///     accepted.
+    /// </summary>
+    [Test]
+    public async Task Update_WithAJudgeRubricThatStrandsAnItemsVerifierOverride_IsRefused()
+    {
+        var context = new ServiceContext();
+        context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new[]
+               {
+                   TaskItem(index: 0, verifierConfigJson: Encoding.UTF8.GetBytes("""{"needle":{"expected":"AX-991"}}"""))
+               });
+        var rubric = new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
+        [
+            new BenchmarkJudgeRubricCriterionV1("correctness", "Correctness", "Is the answer right?", 100)
+        ]);
+
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.UpdateAsync(ProjectId,
+            1,
+            new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId,
+                new BenchmarkJudgePolicyDraft("judge-model", 4096, rubric))));
+
+        _ = context.Store.DidNotReceive().UpdateProjectAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkProjectInput>(),
+            Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<CancellationToken>());
+    }
+
+    private static BenchmarkTaskItemRecord TaskItem(int index, byte[]? verifierConfigJson) =>
+        new(Guid.NewGuid(), ProjectId, null, index, BenchmarkTaskItemKinds.Prompt, Revision: 1, "v1:hash", CountsTowardScore: true,
+            Encoding.UTF8.GetBytes("\"prompt\""), null, verifierConfigJson, null, Version: 1, CreatedAtUtc: 0, UpdatedAtUtc: 0);
+
     [Test]
     public async Task UpdateJudgePolicy_WithADifferentHashOnAProjectWithRuns_RequiresConfirmation()
     {

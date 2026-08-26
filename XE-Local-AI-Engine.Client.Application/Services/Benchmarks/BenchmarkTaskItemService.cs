@@ -195,9 +195,113 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
             Id: itemId,
             CountsTowardScore: draft.CountsTowardScore);
 
-        return string.Equals(kind, BenchmarkTaskItemKinds.Niah, StringComparison.Ordinal)
-            ? (input, await ExpandAsync(projectId, itemId, draft.GeneratorConfig, cancellationToken).ConfigureAwait(false))
-            : (input, null);
+        var children = string.Equals(kind, BenchmarkTaskItemKinds.Niah, StringComparison.Ordinal)
+            ? await ExpandAsync(projectId, itemId, draft.GeneratorConfig, cancellationToken).ConfigureAwait(false)
+            : null;
+
+        // Checked on the WRITTEN bytes rather than on the draft, so a generator's own override — one `exact` criterion
+        // per case — is held to the same rule as one an operator typed.
+        // Checked on the WRITTEN bytes rather than on the draft, so a generator's own override — one `exact`
+        // criterion per case — is held to the same rule as one an operator typed.
+        await EnsureOverridesFitRubricAsync(projectId,
+                [input, .. children ?? []],
+                cancellationToken)
+            .ConfigureAwait(false);
+        return (input, children);
+    }
+
+    /// <summary>
+    ///     Every verifier override an item carries must name a criterion the project's CURRENT judge rubric has, and
+    ///     must be a configuration that criterion's kind can honour. An override naming a criterion the rubric lacks is
+    ///     not a harmless no-op: the judge would fall back to the POLICY's configuration and grade this item against
+    ///     another item's expected answer, producing a plausible number for the wrong question. Refused here while the
+    ///     operator is still looking at the form, and refused again at judging time — the rubric can move afterwards.
+    ///     <para>
+    ///         A project whose judge is disabled has no rubric to check against and nothing that grades the item;
+    ///         enabling one re-checks every item (see <c>BenchmarkProjectService.UpdateJudgePolicyAsync</c>).
+    ///     </para>
+    /// </summary>
+    private async Task EnsureOverridesFitRubricAsync(Guid projectId,
+        IReadOnlyList<BenchmarkTaskItemInput> written,
+        CancellationToken cancellationToken)
+    {
+        var overridden = written.Where(static item => item.VerifierConfigJson is { IsEmpty: false }).ToArray();
+        if (overridden.Length == 0)
+        {
+            return;
+        }
+
+        var revision = await _benchmarkStore.GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
+        if (revision?.PolicyJson is not { } policyJson)
+        {
+            return;
+        }
+
+        var rubric = BenchmarkJudgeSerialization.DeserializePolicy(policyJson.Span).Rubric;
+        foreach (var item in overridden)
+        {
+            EnsureOverridesFitRubric(item.VerifierConfigJson!.Value, rubric);
+        }
+    }
+
+    /// <summary>
+    ///     One item's overrides against one rubric. Public because the judge-policy write re-runs it over every stored
+    ///     item: a rubric edit that drops or renames a criterion is exactly how a valid override becomes an unmatched
+    ///     one.
+    /// </summary>
+    /// <exception cref="BenchmarkValidationException">
+    ///     The override names a criterion the rubric does not have, or carries a configuration that criterion's kind
+    ///     cannot honour.
+    /// </exception>
+    public static void EnsureOverridesFitRubric(ReadOnlyMemory<byte> verifierConfigJson, BenchmarkJudgeRubricV1 rubric)
+    {
+        ArgumentNullException.ThrowIfNull(rubric);
+        if (DecodeJson(verifierConfigJson) is not { } element)
+        {
+            return;
+        }
+
+        foreach (var (criterionId, config) in ReadOverrides(element))
+        {
+            var criterion = rubric.Criteria.FirstOrDefault(entry => string.Equals(entry.Id, criterionId, StringComparison.Ordinal))
+                            ?? throw new BenchmarkValidationException(
+                                $"The verifier override names criterion '{criterionId}', which the judge rubric does not have.");
+            try
+            {
+                // The policy's own parser, not a second one: an override must never be able to mean something a
+                // criterion's config could not.
+                _ = BenchmarkJudgeVerifierConfig.Parse(criterion.Kind, config);
+            }
+            catch (BenchmarkJudgePolicyValidationException exception)
+            {
+                throw new BenchmarkValidationException(
+                    $"The verifier override for criterion '{criterionId}' is not a valid '{BenchmarkJudgeCriterionKinds.Normalize(criterion.Kind)}' configuration: {exception.Message}")
+                {
+                    Source = exception.Source
+                };
+            }
+        }
+    }
+
+    /// <summary>
+    ///     One item's <c>{criterionId: config}</c> overrides, as raw JSON per criterion — the same string shape a
+    ///     policy criterion's own <c>Config</c> carries. Shared with the judge executor so the write-time check and the
+    ///     judging-time check cannot drift about what an override even is.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> ReadOverrides(JsonElement element)
+    {
+        if (element.ValueKind is not JsonValueKind.Object)
+        {
+            throw new BenchmarkValidationException("The task item's verifier override is not an object of criterion configurations.");
+        }
+
+        var overrides = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var property in element.EnumerateObject())
+        {
+            overrides[property.Name] = property.Value.GetRawText();
+        }
+
+        return overrides;
     }
 
     private async Task<IReadOnlyList<BenchmarkTaskItemInput>> ExpandAsync(Guid projectId,

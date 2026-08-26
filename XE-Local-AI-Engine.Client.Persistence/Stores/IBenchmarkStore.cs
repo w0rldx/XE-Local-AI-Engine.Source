@@ -1298,6 +1298,20 @@ public static class BenchmarkRunJudgeStates
     public const string VerifierUnavailablePrefix = "verifier-unavailable: ";
 
     /// <summary>
+    ///     The run's task item carries a verifier override naming a rubric criterion that no longer exists, so nothing
+    ///     it asked for was applied. Distinct from <see cref="ReasonJudgeFailed" /> because the fix is an edit to the
+    ///     item or to the rubric, and distinct from a score because the alternative — grading the item under the
+    ///     POLICY's configuration — measures it against another item's expected answer and calls the result a number.
+    /// </summary>
+    public const string ReasonOverrideUnmatched = "override-unmatched";
+
+    /// <summary>
+    ///     What a judging refused by an unmatched item override puts in front of its error message, read back by the
+    ///     ranking view exactly as <see cref="VerifierUnavailablePrefix" /> is.
+    /// </summary>
+    public const string OverrideUnmatchedPrefix = "override-unmatched: ";
+
+    /// <summary>
     ///     This run's task item has been edited since it was frozen, so its stored answer answers a question that no
     ///     longer exists. Unlike truncation, an operator score does NOT override it: the score was given for a
     ///     different question and the operator has no way to know it changed.

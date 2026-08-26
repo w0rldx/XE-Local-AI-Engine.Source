@@ -142,6 +142,7 @@ The two stale stamps sit **above** the operator's user-score override; truncatio
 | `item-incomplete` | at least one scorable item of this cell has no rankable answer |
 | `no-score` | nothing in this project counts toward a score |
 | `verifier-unavailable` | a deterministic verifier could not run on this node — the answer was never checked (§5.2) |
+| `override-unmatched` | the item's verifier override names a rubric criterion that no longer exists, so nothing it asked for was applied |
 | `truncated` / `incomplete` | see §7.1 |
 | `pairwise-*` | see §5.3 |
 

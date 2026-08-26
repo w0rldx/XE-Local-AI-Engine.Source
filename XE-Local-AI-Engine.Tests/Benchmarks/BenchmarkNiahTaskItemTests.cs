@@ -172,6 +172,40 @@ public sealed class BenchmarkNiahTaskItemTests
         AssertEx.True(spec.Normalize.CaseInsensitive, "A recall probe asks whether the model found the passcode, not whether it held the shift key.");
     }
 
+    /// <summary>
+    ///     Every case's override targets ONE criterion id, and the probe's whole measurement is that criterion. Named
+    ///     against a rubric that does not have it, the cases would be graded on the policy's own configuration —
+    ///     every needle checked against one shared expected answer — so the probe is refused rather than expanded.
+    /// </summary>
+    [Test]
+    public async Task Create_WhenTheRubricLacksTheCriterionTheCasesOverride_IsRefused()
+    {
+        var store = StoreWith(contextTokens: 16384,
+            rubric: new BenchmarkJudgeRubricCriterionV1("correctness", "Correctness", "Is it right?", 40));
+        var service = new BenchmarkTaskItemService(store);
+
+        var failure = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId,
+            expectedProjectVersion: 1,
+            Draft("{\"contextTokens\":[4096],\"needleDepthPercent\":[50],\"criterionId\":\"needle\"}")));
+
+        AssertEx.Contains(failure.Message, "needle", message: "The refusal names the criterion the cases would have overridden.");
+        _ = store.DidNotReceive().CreateTaskItemAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkTaskItemInput>(),
+            Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>And expands when the rubric does carry it, as the <c>exact</c> criterion the cases configure.</summary>
+    [Test]
+    public async Task Create_WhenTheRubricCarriesTheCriterionAsExact_Expands()
+    {
+        var store = StoreWith(contextTokens: 16384,
+            rubric: new BenchmarkJudgeRubricCriterionV1("needle", "Needle", "Was the passcode recalled?", 100,
+                BenchmarkJudgeCriterionKinds.Exact, """{"expected":"placeholder"}"""));
+
+        var (_, children) = await CreateProbeAsync(store, "{\"contextTokens\":[4096],\"needleDepthPercent\":[50],\"criterionId\":\"needle\"}");
+
+        AssertEx.Equal(1, AssertEx.NotNull(children).Count);
+    }
+
     private static async Task<(BenchmarkTaskItemInput Input, IReadOnlyList<BenchmarkTaskItemInput>? Children)> CreateProbeAsync(
         IBenchmarkStore store,
         string generatorConfigJson)
@@ -197,12 +231,29 @@ public sealed class BenchmarkNiahTaskItemTests
         return new BenchmarkTaskItemDraft("a long-context probe", BenchmarkTaskItemKinds.Niah, GeneratorConfig: document.RootElement.Clone());
     }
 
-    private static IBenchmarkStore StoreWith(int contextTokens, int existingLeaves = 0)
+    private static IBenchmarkStore StoreWith(int contextTokens, int existingLeaves = 0, BenchmarkJudgeRubricCriterionV1? rubric = null)
     {
         var store = Substitute.For<IBenchmarkStore>();
         _ = store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
                  .Returns(Enumerable.Range(0, existingLeaves).Select(_ => Item(Guid.NewGuid(), BenchmarkTaskItemKinds.Prompt, null)).ToArray());
         _ = store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(contextTokens));
+
+        // No revision unless a test asks for one: a disabled judge has no rubric an override can be checked against,
+        // which is the state every case-shape test above is written in.
+        if (rubric is not null)
+        {
+            var policy = new BenchmarkJudgePolicyV1(new BenchmarkJudgePolicyModelV1("judge.gguf", "v1:" + new string('c', count: 64), [new string('b', count: 64)]),
+                4096,
+                BenchmarkJudgePolicyVersions.PromptVersion,
+                BenchmarkJudgePolicyVersions.OutputSchemaVersion,
+                BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
+                new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion, [rubric]),
+                ReferenceAnswer: null);
+            _ = store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
+                     .Returns(new BenchmarkJudgePolicyRevisionRecord(Guid.NewGuid(), ProjectId, 1,
+                         BenchmarkJudgeSerialization.SerializePolicy(policy), new string('0', count: 64), null, 1, 0));
+        }
+
         return store;
     }
 

@@ -301,6 +301,23 @@ public sealed class BenchmarkJudgeExecutor(
 
         var referenceAnswer = BenchmarkTaskItemService.DecodeOptional(item.ReferenceAnswerJson) ?? policy.ReferenceAnswer;
         var overrides = ReadVerifierOverrides(item);
+
+        // An override that matches no criterion is not a no-op. Applying nothing and grading on leaves this item
+        // measured against the POLICY's expected answer — another item's question — and the score would look like any
+        // other. The item write refuses this, so reaching it means the rubric moved afterwards; the run is left
+        // unranked under its own reason rather than scored.
+        // An override that matches no criterion is not a no-op. Applying nothing and grading on leaves this item
+        // measured against the POLICY's expected answer — another item's question — and the score would look like any
+        // other. The item write refuses this, so reaching it means the rubric moved afterwards; the run is left
+        // unranked under its own reason rather than scored.
+        if (overrides.Keys.FirstOrDefault(id => !policy.Rubric.Criteria.Any(criterion => string.Equals(criterion.Id, id, StringComparison.Ordinal)))
+            is { } unmatched)
+        {
+            throw new BenchmarkExecutionException(BenchmarkRunJudgeStates.OverrideUnmatchedPrefix
+                                                  + $"The task item's verifier override names criterion '{unmatched}', which the judge rubric does not have. "
+                                                  + "Edit the item's override or restore the criterion, then re-judge.");
+        }
+
         var criteria = overrides.Count == 0
             ? policy.Rubric.Criteria
             : [.. policy.Rubric.Criteria.Select(criterion => overrides.TryGetValue(criterion.Id, out var config)
@@ -321,34 +338,23 @@ public sealed class BenchmarkJudgeExecutor(
     }
 
     /// <summary>
-    ///     One item's <c>{criterionId: config}</c> overrides, as raw JSON per criterion — the same string shape a
-    ///     policy's own <c>Config</c> carries, so <see cref="BenchmarkJudgeVerifierConfig.Parse" /> reads both through
-    ///     one parser and an override cannot mean something a policy config would not.
+    ///     One item's <c>{criterionId: config}</c> overrides, as raw JSON per criterion — read through
+    ///     <see cref="BenchmarkTaskItemService.ReadOverrides" />, the same call the item write validates with, so the
+    ///     two cannot disagree about what an override is.
     /// </summary>
-    private static Dictionary<string, string> ReadVerifierOverrides(BenchmarkTaskItemRecord item)
+    private static IReadOnlyDictionary<string, string> ReadVerifierOverrides(BenchmarkTaskItemRecord item)
     {
         if (item.VerifierConfigJson is not { IsEmpty: false } payload)
         {
-            return [];
+            return new Dictionary<string, string>(StringComparer.Ordinal);
         }
 
         try
         {
             using var document = JsonDocument.Parse(payload);
-            if (document.RootElement.ValueKind is not JsonValueKind.Object)
-            {
-                throw new BenchmarkExecutionException("The task item's verifier override is not an object of criterion configurations.");
-            }
-
-            var overrides = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var property in document.RootElement.EnumerateObject())
-            {
-                overrides[property.Name] = property.Value.GetRawText();
-            }
-
-            return overrides;
+            return BenchmarkTaskItemService.ReadOverrides(document.RootElement);
         }
-        catch (JsonException exception)
+        catch (Exception exception) when (exception is JsonException or BenchmarkValidationException)
         {
             // Fail the attempt rather than judge under the policy's configuration: silently ignoring the override
             // would grade this item against another item's expected answer and call the result a score.

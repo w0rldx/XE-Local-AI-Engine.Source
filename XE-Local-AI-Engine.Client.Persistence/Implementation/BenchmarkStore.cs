@@ -518,6 +518,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         // before the revisions go, and nothing relies on a cascade that this database does not enforce.
         project.CurrentJudgePolicyRevisionId = null;
         await SaveAsync(cancellationToken).ConfigureAwait(false);
+
         await _dbContext.BenchmarkJudgePolicyRevisions.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         _dbContext.ChangeTracker.Clear();
         _ = await _dbContext.BenchmarkProjects.Where(entity => entity.Id == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
@@ -3579,10 +3580,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             BenchmarkJudgeAttemptStatus.Queued or BenchmarkJudgeAttemptStatus.Running => BenchmarkRunJudgeStates.ReasonJudgePending,
             // A judging that failed because a verifier could not RUN is not the same fact as one whose judge model
             // failed: the run is unranked either way, but only one of them is fixed by an operator action on the node.
-            BenchmarkJudgeAttemptStatus.Failed =>
-                row.ErrorMessage?.StartsWith(BenchmarkRunJudgeStates.VerifierUnavailablePrefix, StringComparison.Ordinal) is true
-                    ? BenchmarkRunJudgeStates.ReasonVerifierUnavailable
-                    : BenchmarkRunJudgeStates.ReasonJudgeFailed,
+            // Nor is one refused because the item's override named a criterion the rubric does not have — that one is
+            // fixed by editing the item or the rubric.
+            BenchmarkJudgeAttemptStatus.Failed => FailedReason(row.ErrorMessage),
             BenchmarkJudgeAttemptStatus.Cancelled => BenchmarkRunJudgeStates.ReasonJudgeCancelled,
             _ when row.Score is null => BenchmarkRunJudgeStates.ReasonNoScore,
             _ when !policyCurrent => BenchmarkRunJudgeStates.ReasonPolicyOutdated,
@@ -3592,6 +3592,20 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             _ => null
         };
     }
+
+    /// <summary>
+    ///     Which failure a failed judging was. The message prefix is the only column carrying it: the executor is the
+    ///     one thing that writes either prefix, and it writes each only for the condition it names.
+    /// </summary>
+    private static string FailedReason(string? errorMessage) =>
+        errorMessage switch
+        {
+            not null when errorMessage.StartsWith(BenchmarkRunJudgeStates.VerifierUnavailablePrefix, StringComparison.Ordinal) =>
+                BenchmarkRunJudgeStates.ReasonVerifierUnavailable,
+            not null when errorMessage.StartsWith(BenchmarkRunJudgeStates.OverrideUnmatchedPrefix, StringComparison.Ordinal) =>
+                BenchmarkRunJudgeStates.ReasonOverrideUnmatched,
+            _ => BenchmarkRunJudgeStates.ReasonJudgeFailed
+        };
 
     /// <summary>The flat columns the derived judge view is computed from. Never leaves this class.</summary>
     private sealed record JudgeViewRow(

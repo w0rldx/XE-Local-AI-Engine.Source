@@ -627,6 +627,64 @@ public sealed class BenchmarkJudgeExecutorTests
         AssertEx.Contains(AssertEx.NotNull(failureMessage), "cannot be verified");
     }
 
+    /// <summary>
+    ///     An item override names its criterion by id. When the rubric no longer has that id — the criterion was
+    ///     renamed or dropped after the item was written — applying the override is a no-op, and judging on would
+    ///     grade this item against the POLICY's expected answer: a plausible score for a question nobody asked. The
+    ///     run is left unranked under its own reason instead, and the model is never leased.
+    /// </summary>
+    [Test]
+    public async Task Execute_WhenAnItemOverrideNamesNoCriterion_FailsTheAttemptRatherThanScoringIt()
+    {
+        var installed = Installed();
+        var snapshot = Snapshot(installed);
+        var itemId = Guid.NewGuid();
+        var run = Run(snapshot, BenchmarkRunJudgeStates.Running, version: 4) with
+        {
+            TaskItemId = itemId
+        };
+        var store = Substitute.For<IBenchmarkStore>();
+        StubJudgeAttempt(store, installed);
+        store.GetRunAsync(run.Id, Arg.Any<CancellationToken>()).Returns(run);
+        store.ListTaskItemsAsync(run.ProjectId, Arg.Any<CancellationToken>())
+             .Returns(new[]
+             {
+                 new BenchmarkTaskItemRecord(itemId, run.ProjectId, null, 0, BenchmarkTaskItemKinds.Prompt, 1, "v1:hash", true,
+                     JsonSerializer.SerializeToUtf8Bytes("a prompt"), null,
+                     Encoding.UTF8.GetBytes("""{"needle":{"expected":"AX-991"}}"""), null, 1, 0, 0)
+             });
+        string? failureMessage = null;
+        store.MarkJudgeFailedAsync(run.Id, Arg.Any<long>(), Arg.Do<string>(value => failureMessage = value), Arg.Any<long>(), Arg.Any<CancellationToken>())
+             .Returns(call => run with
+             {
+                 Judge = JudgeView(BenchmarkRunJudgeStates.Failed, call.ArgAt<string>(2)),
+                 Version = 5
+             });
+        var supervisor = PassthroughSupervisor();
+        await using var lease = new FakeLease(installed);
+        var executor = Executor(store,
+            snapshot,
+            lease,
+            new JudgeCapacityService(CapacityVerdict.Allow),
+            Substitute.For<IWorkerEventDispatcher>(),
+            Substitute.For<IInvocationRunner>(),
+            supervisor);
+
+        await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, 2, run, AttemptId), CancellationToken.None);
+
+        _ = await store.DidNotReceiveWithAnyArgs().MarkJudgeSucceededAsync(default!, default);
+        _ = supervisor.DidNotReceive()
+                      .RunExclusiveBenchmarkAsync(Arg.Any<string>(),
+                          Arg.Any<ModelRole>(),
+                          Arg.Any<ResolvedLaunchArguments>(),
+                          Arg.Any<LlamaServerBenchmarkLaunchPolicy>(),
+                          Arg.Any<Func<LlamaServerProfilingContext, CancellationToken, Task<bool>>>(),
+                          Arg.Any<CancellationToken>());
+        AssertEx.True(AssertEx.NotNull(failureMessage).StartsWith(BenchmarkRunJudgeStates.OverrideUnmatchedPrefix, StringComparison.Ordinal),
+            "The prefix is what the ranking read turns into the override-unmatched exclusion reason.");
+        AssertEx.Contains(failureMessage, "needle", message: "The message names the criterion that matched nothing.");
+    }
+
     /// <summary>Every criterion decided server-side: one that passes on the fixture answer and one that does not.</summary>
     private static BenchmarkJudgeRubricV1 VerifiableRubric() =>
         new(BenchmarkJudgePolicyVersions.RubricVersion,
