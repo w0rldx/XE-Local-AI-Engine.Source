@@ -14310,6 +14310,104 @@
         ]
       }
     },
+    "/api/local/v1/training/comparisons/{comparisonId}/benchmark": {
+      "post": {
+        "tags": [
+          "Training"
+        ],
+        "operationId": "createBenchmarkFromComparison",
+        "parameters": [
+          {
+            "name": "comparisonId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "CreateBenchmarkFromComparisonRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/benchmarks/projects/{projectId}/comparisons": {
       "get": {
         "tags": [
@@ -31381,6 +31479,72 @@
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsRequest": {
         "type": "object",
         "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "projectId",
+          "baseModelName",
+          "tunedModelName",
+          "runIds"
+        ],
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "baseModelName": {
+            "type": "string"
+          },
+          "tunedModelName": {
+            "type": "string"
+          },
+          "runIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "coreTask",
+          "contextTokens",
+          "agentDefinitionId"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "coreTask": {
+            "type": "string"
+          },
+          "contextTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "kvCacheType": {
+            "type": "string",
+            "nullable": true
+          },
+          "repeatCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "warmup": {
+            "type": "boolean"
+          }
+        }
       },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsResponse": {
         "type": "object",

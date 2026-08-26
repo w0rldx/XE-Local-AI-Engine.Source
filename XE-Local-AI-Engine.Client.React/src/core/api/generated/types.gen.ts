@@ -3964,6 +3964,23 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttem
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse = {
+	projectId: string;
+	baseModelName: string;
+	tunedModelName: string;
+	runIds: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest = {
+	name?: string | null;
+	coreTask: string;
+	contextTokens: number;
+	agentDefinitionId: string;
+	kvCacheType?: string | null;
+	repeatCount?: number;
+	warmup?: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsResponse = {
 	cohortGeneration?: number;
 	comparisonSetVersion?: number;
@@ -13485,6 +13502,48 @@ export type ClearBenchmarkFidelityCacheResponses = {
 
 export type ClearBenchmarkFidelityCacheResponse =
 	ClearBenchmarkFidelityCacheResponses[keyof ClearBenchmarkFidelityCacheResponses];
+
+export type CreateBenchmarkFromComparisonData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest;
+	path: {
+		comparisonId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/training/comparisons/{comparisonId}/benchmark";
+};
+
+export type CreateBenchmarkFromComparisonErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+	422: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type CreateBenchmarkFromComparisonError = CreateBenchmarkFromComparisonErrors[keyof CreateBenchmarkFromComparisonErrors];
+
+export type CreateBenchmarkFromComparisonResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse;
+};
+
+export type CreateBenchmarkFromComparisonResponse =
+	CreateBenchmarkFromComparisonResponses[keyof CreateBenchmarkFromComparisonResponses];
 
 export type ListBenchmarkComparisonsData = {
 	body?: never;

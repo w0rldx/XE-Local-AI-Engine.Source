@@ -138,6 +138,9 @@ import type {
 	CreateBaseArtifactData,
 	CreateBaseArtifactErrors,
 	CreateBaseArtifactResponses,
+	CreateBenchmarkFromComparisonData,
+	CreateBenchmarkFromComparisonErrors,
+	CreateBenchmarkFromComparisonResponses,
 	CreateBenchmarkProjectData,
 	CreateBenchmarkProjectErrors,
 	CreateBenchmarkProjectResponses,
@@ -1134,6 +1137,9 @@ import {
 	zCreateAgentDefinitionResponse,
 	zCreateBaseArtifactBody,
 	zCreateBaseArtifactResponse,
+	zCreateBenchmarkFromComparisonBody,
+	zCreateBenchmarkFromComparisonPath,
+	zCreateBenchmarkFromComparisonResponse,
 	zCreateBenchmarkProjectBody,
 	zCreateBenchmarkProjectResponse,
 	zCreateComparisonBody,
@@ -10686,6 +10692,40 @@ export const clearBenchmarkFidelityCache = <ThrowOnError extends boolean = false
 		],
 		url: "/api/local/v1/benchmarks/projects/{projectId}/fidelity/cache",
 		...options,
+	});
+
+export const createBenchmarkFromComparison = <ThrowOnError extends boolean = false>(
+	options: Options<CreateBenchmarkFromComparisonData, ThrowOnError>,
+): RequestResult<CreateBenchmarkFromComparisonResponses, CreateBenchmarkFromComparisonErrors, ThrowOnError> =>
+	(options.client ?? client).post<CreateBenchmarkFromComparisonResponses, CreateBenchmarkFromComparisonErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateBenchmarkFromComparisonBody,
+					path: zCreateBenchmarkFromComparisonPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateBenchmarkFromComparisonResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/training/comparisons/{comparisonId}/benchmark",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const listBenchmarkComparisons = <ThrowOnError extends boolean = false>(

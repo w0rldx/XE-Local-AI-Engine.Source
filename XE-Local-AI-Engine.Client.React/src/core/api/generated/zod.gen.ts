@@ -4863,6 +4863,30 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAtt
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkFidelityAttemptsRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse = z.object({
+	projectId: z.guid(),
+	baseModelName: z.string(),
+	tunedModelName: z.string(),
+	runIds: z.array(z.guid()),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest = z.object({
+	name: z.string().nullish(),
+	coreTask: z.string(),
+	contextTokens: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	agentDefinitionId: z.guid(),
+	kvCacheType: z.string().nullish(),
+	repeatCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	warmup: z.boolean().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkComparisonResponse = z.object({
 	id: z.guid().optional(),
 	runAId: z.guid().optional(),
@@ -8216,6 +8240,18 @@ export const zClearBenchmarkFidelityCachePath = z.object({
  * No Content
  */
 export const zClearBenchmarkFidelityCacheResponse = z.void();
+
+export const zCreateBenchmarkFromComparisonBody = zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonRequest;
+
+export const zCreateBenchmarkFromComparisonPath = z.object({
+	comparisonId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zCreateBenchmarkFromComparisonResponse =
+	zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkFromComparisonResponse;
 
 export const zListBenchmarkComparisonsPath = z.object({
 	projectId: z.guid(),

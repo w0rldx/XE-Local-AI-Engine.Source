@@ -53,6 +53,7 @@ import {
 	continuePreviewRun,
 	createAgentDefinition,
 	createBaseArtifact,
+	createBenchmarkFromComparison,
 	createBenchmarkProject,
 	createComparison,
 	createCustomTool,
@@ -460,6 +461,9 @@ import type {
 	CreateBaseArtifactData,
 	CreateBaseArtifactError,
 	CreateBaseArtifactResponse,
+	CreateBenchmarkFromComparisonData,
+	CreateBenchmarkFromComparisonError,
+	CreateBenchmarkFromComparisonResponse,
 	CreateBenchmarkProjectData,
 	CreateBenchmarkProjectError,
 	CreateBenchmarkProjectResponse,
@@ -7213,6 +7217,30 @@ export const clearBenchmarkFidelityCacheMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await clearBenchmarkFidelityCache({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const createBenchmarkFromComparisonMutation = (
+	options?: Partial<Options<CreateBenchmarkFromComparisonData>>,
+): UseMutationOptions<
+	CreateBenchmarkFromComparisonResponse,
+	AxiosError<CreateBenchmarkFromComparisonError>,
+	Options<CreateBenchmarkFromComparisonData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CreateBenchmarkFromComparisonResponse,
+		AxiosError<CreateBenchmarkFromComparisonError>,
+		Options<CreateBenchmarkFromComparisonData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createBenchmarkFromComparison({
 				...options,
 				...fnOptions,
 				throwOnError: true,
