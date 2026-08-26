@@ -198,6 +198,98 @@ public sealed class BenchmarkProjectServiceTests
     }
 
     [Test]
+    public async Task Create_CarriesTheFidelitySettingsAndResolvesTheBaseFingerprintServerSide()
+    {
+        // The fingerprint is an INPUT to the KLD comparability digest, so accepting one from the caller would let two
+        // sets of numbers measured against different weights compare as if they were the same measurement. It is read
+        // from the eligible-model catalog, which also proves the named base is an eligible local model at all.
+        var context = new ServiceContext();
+
+        _ = await context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityEnabled = true,
+            FidelityKldEnabled = true,
+            FidelityChunks = 50,
+            FidelityKldBaseModelName = $"  {ServiceContext.BaseModelName}  "
+        });
+
+        var input = AssertEx.NotNull(context.CreatedInput);
+        AssertEx.True(input.FidelityEnabled);
+        AssertEx.True(input.FidelityKldEnabled);
+        AssertEx.Equal<int?>(50, input.FidelityChunks);
+        AssertEx.Equal(ServiceContext.BaseModelName, input.FidelityKldBaseModelName);
+        AssertEx.Equal(ServiceContext.BaseFingerprint, input.FidelityKldBaseFingerprint);
+    }
+
+    [Test]
+    public async Task Create_WithNoFidelitySettings_PersistsNoBaseModelAndNoFingerprint()
+    {
+        var context = new ServiceContext();
+
+        _ = await context.Service.CreateAsync(Draft(context));
+
+        var input = AssertEx.NotNull(context.CreatedInput);
+        AssertEx.False(input.FidelityEnabled);
+        AssertEx.False(input.FidelityKldEnabled);
+        AssertEx.Null(input.FidelityChunks);
+        AssertEx.Null(input.FidelityKldBaseModelName);
+        AssertEx.Null(input.FidelityKldBaseFingerprint);
+        _ = context.Catalog.DidNotReceive().ListEligibleModelsAsync(Arg.Any<int?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Create_WithAnUnusableFidelityConfiguration_IsRefused()
+    {
+        var context = new ServiceContext();
+
+        var tooFew = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityChunks = BenchmarkFidelityPolicy.MinimumChunks - 1
+        }));
+        var tooMany = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityChunks = BenchmarkFidelityPolicy.MaximumChunks + 1
+        }));
+        var noBase = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityEnabled = true,
+            FidelityKldEnabled = true
+        }));
+        var unknownBase = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityKldEnabled = true,
+            FidelityKldBaseModelName = "not-installed.gguf"
+        }));
+
+        AssertEx.Contains(tooFew.Message, "chunk count");
+        AssertEx.Contains(tooMany.Message, "chunk count");
+        AssertEx.Contains(noBase.Message, "requires a base model");
+        AssertEx.Contains(unknownBase.Message, "not an eligible local model");
+        AssertEx.Equal(BenchmarkFidelityPolicy.MinimumChunks, 50);
+        AssertEx.Equal(BenchmarkFidelityPolicy.MaximumChunks, 655);
+    }
+
+    [Test]
+    public async Task Create_AtTheChunkBoundaries_IsAccepted()
+    {
+        var context = new ServiceContext();
+
+        _ = await context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityChunks = BenchmarkFidelityPolicy.MinimumChunks
+        });
+        _ = await context.Service.CreateAsync(Draft(context) with
+        {
+            FidelityChunks = BenchmarkFidelityPolicy.MaximumChunks
+        });
+
+        AssertEx.Equal<int?>(BenchmarkFidelityPolicy.MaximumChunks, AssertEx.NotNull(context.CreatedInput).FidelityChunks);
+    }
+
+    private static BenchmarkProjectDraft Draft(ServiceContext context) =>
+        new(ProjectId, "Benchmark", "task", 4096, context.AgentId);
+
+    [Test]
     public async Task UpdateJudgePolicy_InPairwiseMode_IsRefusedWithItsOwnCodeUntilTheSliceLands()
     {
         // The mode ships inside the policy hash now — every schema change costs one project-wide re-judge, so the
@@ -424,8 +516,20 @@ public sealed class BenchmarkProjectServiceTests
                             : throw new BenchmarkEligibilityException("judge runtime is unavailable");
                     });
 
-            Service = new BenchmarkProjectService(Store, agents, Models, runtimes);
+            Catalog = Substitute.For<IBenchmarkCatalogService>();
+            Catalog.ListEligibleModelsAsync(Arg.Any<int?>(), Arg.Any<CancellationToken>())
+                   .Returns<IReadOnlyList<BenchmarkEligibleModel>>(_ =>
+                   [
+                       new BenchmarkEligibleModel(BaseModelName, 32768, null, null, BaseFingerprint, SupportsTools: true)
+                   ]);
+
+            Service = new BenchmarkProjectService(Store, agents, Models, runtimes, Catalog);
         }
+
+        public const string BaseModelName = "base.gguf";
+        public const string BaseFingerprint = "v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+        public IBenchmarkCatalogService Catalog { get; }
 
         public Guid AgentId { get; }
         public IBenchmarkStore Store { get; }

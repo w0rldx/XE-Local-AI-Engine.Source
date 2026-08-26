@@ -3920,6 +3920,13 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResp
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse & {
 		coreTask: string;
 		judge: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse;
+		fidelityEnabled?: boolean;
+		fidelityKldEnabled?: boolean;
+		fidelityChunks?: number | null;
+		fidelityChunksEffective?: number;
+		fidelityKldBaseModelName?: string | null;
+		fidelityKldBaseFingerprint?: string | null;
+		fidelityKldExpectedDigest?: string | null;
 	};
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRequest = {
@@ -3935,6 +3942,10 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRe
 	judgeContextTokens?: number | null;
 	rubric?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto | null;
 	referenceAnswer?: string | null;
+	fidelityEnabled?: boolean;
+	fidelityKldEnabled?: boolean;
+	fidelityChunks?: number | null;
+	fidelityKldBaseModelName?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectRequest =

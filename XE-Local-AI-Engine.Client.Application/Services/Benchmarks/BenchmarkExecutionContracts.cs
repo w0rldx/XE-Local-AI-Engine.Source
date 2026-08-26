@@ -620,6 +620,10 @@ public sealed record BenchmarkJudgePolicyDraft(
 ///     bounded only by the effort ladder and the window. Validated as <c>1 &lt;= ReasoningBudgetTokens &lt;
 ///     ContextTokens</c>, and — with an output budget also set — as leaving a prompt reserve inside the context.
 /// </param>
+/// <param name="FidelityKldBaseModelName">
+///     The base model KL divergence is measured against. Its FINGERPRINT is never part of a draft: the service
+///     resolves it from the eligible-model catalog, so a caller cannot claim a base identity the node does not have.
+/// </param>
 public sealed record BenchmarkProjectDraft(
     Guid Id,
     string Name,
@@ -629,7 +633,11 @@ public sealed record BenchmarkProjectDraft(
     BenchmarkJudgePolicyDraft? Judge = null,
     int? MaxOutputTokens = null,
     int? InvocationTimeoutSeconds = null,
-    int? ReasoningBudgetTokens = null);
+    int? ReasoningBudgetTokens = null,
+    bool FidelityEnabled = false,
+    bool FidelityKldEnabled = false,
+    int? FidelityChunks = null,
+    string? FidelityKldBaseModelName = null);
 
 public sealed class BenchmarkQueueOptions
 {

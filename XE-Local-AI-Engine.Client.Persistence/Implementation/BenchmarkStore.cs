@@ -42,6 +42,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             ReasoningBudgetTokens = input.ReasoningBudgetTokens,
             InvocationTimeoutSeconds = input.InvocationTimeoutSeconds,
             AgentDefinitionId = input.AgentDefinitionId,
+            FidelityEnabled = input.FidelityEnabled,
+            FidelityKldEnabled = input.FidelityKldEnabled,
+            FidelityChunks = input.FidelityChunks,
+            FidelityKldBaseModelName = input.FidelityKldBaseModelName,
+            FidelityKldBaseFingerprint = input.FidelityKldBaseFingerprint,
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -107,6 +112,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         project.ReasoningBudgetTokens = input.ReasoningBudgetTokens;
         project.InvocationTimeoutSeconds = input.InvocationTimeoutSeconds;
         project.AgentDefinitionId = input.AgentDefinitionId;
+        project.FidelityEnabled = input.FidelityEnabled;
+        project.FidelityKldEnabled = input.FidelityKldEnabled;
+        project.FidelityChunks = input.FidelityChunks;
+        project.FidelityKldBaseModelName = input.FidelityKldBaseModelName;
+        project.FidelityKldBaseFingerprint = input.FidelityKldBaseFingerprint;
         project.Version++;
         project.UpdatedAtUtc = now;
         if (judgePolicyChange is not null)

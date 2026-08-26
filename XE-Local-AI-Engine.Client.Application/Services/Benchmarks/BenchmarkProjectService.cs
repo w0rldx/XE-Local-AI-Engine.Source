@@ -42,8 +42,11 @@ public sealed class BenchmarkProjectService(
     IAgentDefinitionStore agentDefinitionStore,
     IBenchmarkInstalledModelLeaseProvider installedModels,
     IBenchmarkJudgeRuntimeResolver judgeRuntimeResolver,
+    IBenchmarkCatalogService catalog,
     IBenchmarkQueueSignal? queueSignal = null) : IBenchmarkProjectService
 {
+    private readonly IBenchmarkCatalogService _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
+
     private readonly IBenchmarkStore _benchmarkStore = benchmarkStore ?? throw new ArgumentNullException(nameof(benchmarkStore));
     private readonly IAgentDefinitionStore _agentDefinitionStore = agentDefinitionStore ?? throw new ArgumentNullException(nameof(agentDefinitionStore));
     private readonly IBenchmarkInstalledModelLeaseProvider _installedModels = installedModels ?? throw new ArgumentNullException(nameof(installedModels));
@@ -268,6 +271,7 @@ public sealed class BenchmarkProjectService(
             throw new BenchmarkValidationException("An existing Single agent definition is required.");
         }
 
+        var baseFingerprint = await ResolveKldBaseFingerprintAsync(draft, cancellationToken).ConfigureAwait(false);
         var policy = draft.Judge is null ? null : await BuildPolicyAsync(draft.Judge, cancellationToken).ConfigureAwait(false);
         return (new BenchmarkProjectInput(draft.Id,
                 draft.Name.Trim(),
@@ -276,9 +280,57 @@ public sealed class BenchmarkProjectService(
                 draft.AgentDefinitionId,
                 draft.MaxOutputTokens,
                 draft.InvocationTimeoutSeconds,
-                draft.ReasoningBudgetTokens),
+                draft.ReasoningBudgetTokens,
+                draft.FidelityEnabled,
+                draft.FidelityKldEnabled,
+                draft.FidelityChunks,
+                NormalizeModelName(draft.FidelityKldBaseModelName),
+                baseFingerprint),
             policy);
     }
+
+    /// <summary>
+    ///     The base model's content fingerprint, read from the eligible-model catalog rather than taken from the
+    ///     caller. Two reasons it is not client-writable: it is an input to the KLD comparability digest, so a wrong
+    ///     value would make incomparable numbers compare equal; and resolving it here is what proves the named model
+    ///     is an eligible local GGUF at all.
+    ///     <para>
+    ///         The catalog reads recorded registry facts without re-hashing every member file, which is why selecting
+    ///         a 25 GB base model does not cost a minute of hashing on save. The fidelity executor re-verifies the
+    ///         fingerprint against a verifying lease before it measures anything, so a file swapped under an unchanged
+    ///         name fails there rather than being silently measured.
+    ///     </para>
+    /// </summary>
+    private async Task<string?> ResolveKldBaseFingerprintAsync(BenchmarkProjectDraft draft, CancellationToken cancellationToken)
+    {
+        ValidateFidelityChunks(draft.FidelityChunks);
+        var baseModelName = NormalizeModelName(draft.FidelityKldBaseModelName);
+        if (baseModelName is null)
+        {
+            if (draft.FidelityKldEnabled)
+            {
+                throw new BenchmarkValidationException("KL divergence requires a base model.");
+            }
+
+            return null;
+        }
+
+        var models = await _catalog.ListEligibleModelsAsync(contextTokens: null, cancellationToken).ConfigureAwait(false);
+        return models.FirstOrDefault(model => string.Equals(model.ModelName, baseModelName, StringComparison.Ordinal))?.ModelContentFingerprint
+               ?? throw new BenchmarkValidationException("The KL-divergence base model is not an eligible local model.");
+    }
+
+    private static void ValidateFidelityChunks(int? chunks)
+    {
+        if (chunks is { } value && value is < BenchmarkFidelityPolicy.MinimumChunks or > BenchmarkFidelityPolicy.MaximumChunks)
+        {
+            throw new BenchmarkValidationException(
+                $"The fidelity chunk count must be between {BenchmarkFidelityPolicy.MinimumChunks} and {BenchmarkFidelityPolicy.MaximumChunks}.");
+        }
+    }
+
+    private static string? NormalizeModelName(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>
     ///     Builds the hashable policy from the operator's draft: the judge model's identity as installed right now, the

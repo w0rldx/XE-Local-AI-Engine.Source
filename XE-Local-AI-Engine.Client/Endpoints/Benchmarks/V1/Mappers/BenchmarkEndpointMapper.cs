@@ -21,7 +21,11 @@ internal static class BenchmarkEndpointMapper
                 : null,
             request.MaxOutputTokens,
             request.InvocationTimeoutSeconds,
-            request.ReasoningBudgetTokens);
+            request.ReasoningBudgetTokens,
+            request.FidelityEnabled,
+            request.FidelityKldEnabled,
+            request.FidelityChunks,
+            request.FidelityKldBaseModelName);
 
     public static BenchmarkProjectSummaryResponse ToSummary(this BenchmarkProjectRecord project, int runCount) =>
         new()
@@ -65,7 +69,16 @@ internal static class BenchmarkEndpointMapper
             IsFrozen = project.IsFrozen,
             Version = project.Version,
             CreatedAtUtc = project.CreatedAtUtc,
-            UpdatedAtUtc = project.UpdatedAtUtc
+            UpdatedAtUtc = project.UpdatedAtUtc,
+            FidelityEnabled = project.FidelityEnabled,
+            FidelityKldEnabled = project.FidelityKldEnabled,
+            FidelityChunks = project.FidelityChunks,
+            FidelityChunksEffective = BenchmarkFidelityPolicy.ClampChunks(project.FidelityChunks),
+            FidelityKldBaseModelName = project.FidelityKldBaseModelName,
+            FidelityKldBaseFingerprint = project.FidelityKldBaseFingerprint,
+            // The ONE digest expression, through the same helper every run's display gate reads — a second copy is
+            // the bug the architecture test exists to catch.
+            FidelityKldExpectedDigest = BenchmarkEndpointSupport.ExpectedKldDigest(project)
         };
 
     /// <param name="expectedKldBaseLogitsDigest">

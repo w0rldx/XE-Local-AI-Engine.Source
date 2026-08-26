@@ -31020,6 +31020,33 @@
               },
               "judge": {
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse"
+              },
+              "fidelityEnabled": {
+                "type": "boolean"
+              },
+              "fidelityKldEnabled": {
+                "type": "boolean"
+              },
+              "fidelityChunks": {
+                "type": "integer",
+                "format": "int32",
+                "nullable": true
+              },
+              "fidelityChunksEffective": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "fidelityKldBaseModelName": {
+                "type": "string",
+                "nullable": true
+              },
+              "fidelityKldBaseFingerprint": {
+                "type": "string",
+                "nullable": true
+              },
+              "fidelityKldExpectedDigest": {
+                "type": "string",
+                "nullable": true
               }
             }
           }
@@ -31079,6 +31106,21 @@
             ]
           },
           "referenceAnswer": {
+            "type": "string",
+            "nullable": true
+          },
+          "fidelityEnabled": {
+            "type": "boolean"
+          },
+          "fidelityKldEnabled": {
+            "type": "boolean"
+          },
+          "fidelityChunks": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "fidelityKldBaseModelName": {
             "type": "string",
             "nullable": true
           }

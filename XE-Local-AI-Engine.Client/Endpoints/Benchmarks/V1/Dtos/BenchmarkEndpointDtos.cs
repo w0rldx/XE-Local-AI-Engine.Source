@@ -71,6 +71,24 @@ public class BenchmarkProjectMutationRequest
     public BenchmarkRubricDto? Rubric { get; init; }
 
     public string? ReferenceAnswer { get; init; }
+
+    /// <summary>Whether freeze enqueues a perplexity measurement beside each measured run. Display-only axis.</summary>
+    public bool FidelityEnabled { get; init; }
+
+    /// <summary>
+    ///     Whether the fidelity pass also measures KL divergence. Opt-in separately: the base-logit cache it needs is
+    ///     tens of gigabytes per base model. Requires <see cref="FidelityKldBaseModelName" />.
+    /// </summary>
+    public bool FidelityKldEnabled { get; init; }
+
+    /// <summary>Chunks scored at the pinned 512-token window; omitted takes the default. Range 50..655.</summary>
+    public int? FidelityChunks { get; init; }
+
+    /// <summary>
+    ///     The eligible local model KL divergence is measured against. Its fingerprint is resolved and persisted
+    ///     server-side and is never accepted from a client — it is an input to the comparability digest.
+    /// </summary>
+    public string? FidelityKldBaseModelName { get; init; }
 }
 
 public sealed class UpdateBenchmarkProjectRequest : BenchmarkProjectMutationRequest
@@ -120,6 +138,26 @@ public sealed class BenchmarkProjectDetailResponse : BenchmarkProjectSummaryResp
 
     /// <summary>The judge configuration this project judges under. <c>Enabled: false</c> when judging is off.</summary>
     public required BenchmarkJudgePolicyResponse Judge { get; init; }
+
+    public bool FidelityEnabled { get; init; }
+    public bool FidelityKldEnabled { get; init; }
+
+    /// <summary>The operator's chunk count, or null for the default. <see cref="FidelityChunksEffective" /> is what runs.</summary>
+    public int? FidelityChunks { get; init; }
+
+    public int FidelityChunksEffective { get; init; }
+    public string? FidelityKldBaseModelName { get; init; }
+
+    /// <summary>The base model's content fingerprint as the node resolved it. Read-only; never accepted on a write.</summary>
+    public string? FidelityKldBaseFingerprint { get; init; }
+
+    /// <summary>
+    ///     The base-logit digest the project's CURRENT settings recompute, or null when it does not measure KL
+    ///     divergence. A stored KLD figure is served only while a run's digest equals this one — the whole cache key
+    ///     is the comparability gate, not the base model's fingerprint, because the corpus, the chunk count and the
+    ///     format version all move without the fingerprint moving.
+    /// </summary>
+    public string? FidelityKldExpectedDigest { get; init; }
 }
 
 public sealed class ListBenchmarkProjectsResponse
@@ -803,4 +841,105 @@ public sealed class EligibleBenchmarkModelResponse
 public sealed class ListEligibleBenchmarkModelsResponse
 {
     public IReadOnlyList<EligibleBenchmarkModelResponse> Items { get; init; } = [];
+}
+
+public sealed class ListBenchmarkComparisonsRequest
+{
+    public Guid ProjectId { get; init; }
+}
+
+/// <summary>One ordered pairwise judging. The verdict is already normalized back to the canonical pair.</summary>
+public sealed class BenchmarkComparisonResponse
+{
+    public Guid Id { get; init; }
+    public Guid RunAId { get; init; }
+    public Guid RunBId { get; init; }
+
+    /// <summary><c>0</c> = A shown first, <c>1</c> = B shown first. Both orders exist for every pair.</summary>
+    public int Order { get; init; }
+
+    public int AttemptSequence { get; init; }
+    public int Sequence { get; init; }
+    public Guid? TaskCaseId { get; init; }
+    public required string Status { get; init; }
+    public string? Verdict { get; init; }
+    public bool AnswerATruncated { get; init; }
+    public bool AnswerBTruncated { get; init; }
+    public string? JudgeExecutionKey { get; init; }
+    public string? ErrorMessage { get; init; }
+    public long EnqueuedAtUtc { get; init; }
+    public long? CompletedAtUtc { get; init; }
+}
+
+/// <summary>One run's fitted strength and its bootstrap interval, or the reason it has neither.</summary>
+public sealed class BenchmarkPairwiseRunScoreResponse
+{
+    public Guid RunId { get; init; }
+    public int? Score { get; init; }
+    public int? CiLow { get; init; }
+    public int? CiHigh { get; init; }
+    public int Comparisons { get; init; }
+    public int BootstrapAppearances { get; init; }
+
+    /// <summary>Null when the score ranks; otherwise the <c>pairwise-*</c> exclusion reason.</summary>
+    public string? Reason { get; init; }
+}
+
+/// <summary>
+///     The active Bradley–Terry fit of the project's current cohort. Served BESIDE the verdicts it was fit from, never
+///     on a route of its own: a score rendered next to a verdict set that did not produce it is a lie the UI cannot
+///     detect.
+/// </summary>
+public sealed class BenchmarkPairwiseFitResponse
+{
+    public required string FitKey { get; init; }
+    public required string JudgeExecutionKey { get; init; }
+    public int ComparisonSetVersion { get; init; }
+    public int CohortGeneration { get; init; }
+    public int Iterations { get; init; }
+    public int BootstrapReplicates { get; init; }
+
+    /// <summary>False when the cohort has changed since this fit, i.e. every run in it reads <c>pairwise-stale</c>.</summary>
+    public bool IsCurrent { get; init; }
+
+    public long CreatedAtUtc { get; init; }
+
+    /// <summary>The ordered <c>(runAId, runBId, order, verdict)</c> tuples the fit actually used, as canonical JSON.</summary>
+    public required string FittedSetJson { get; init; }
+
+    public IReadOnlyList<BenchmarkPairwiseRunScoreResponse> Scores { get; init; } = [];
+}
+
+public sealed class ListBenchmarkComparisonsResponse
+{
+    public int CohortGeneration { get; init; }
+    public int ComparisonSetVersion { get; init; }
+    public string? ReferenceExecutionKey { get; init; }
+    public IReadOnlyList<BenchmarkComparisonResponse> Items { get; init; } = [];
+    public BenchmarkPairwiseFitResponse? Fit { get; init; }
+}
+
+public sealed class GetBenchmarkPairwiseEstimateRequest
+{
+    public Guid ProjectId { get; init; }
+}
+
+/// <summary>
+///     What switching this project to pairwise will cost, before the operator commits. Pairwise judging is quadratic:
+///     twelve runs is 132 judge calls.
+/// </summary>
+public sealed class GetBenchmarkPairwiseEstimateResponse
+{
+    public int EligibleRuns { get; init; }
+    public int PairedRuns { get; init; }
+    public int CappedRuns { get; init; }
+    public int JudgeCalls { get; init; }
+
+    /// <summary>Null when no judge attempt of this project has completed — omitted rather than guessed.</summary>
+    public double? EstimatedSeconds { get; init; }
+
+    /// <summary>Whether the cohort is large enough that the operator should see this before saving.</summary>
+    public bool Warn { get; init; }
+
+    public int MaximumRuns { get; init; }
 }

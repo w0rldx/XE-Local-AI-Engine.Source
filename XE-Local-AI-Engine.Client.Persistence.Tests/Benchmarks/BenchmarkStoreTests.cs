@@ -57,6 +57,56 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     [Test]
+    public async Task ProjectFidelitySettings_SurviveACreateAnUpdateAndAReadBack_AndFreezeWithTheRestOfTheProject()
+    {
+        // BenchmarkProjectInput carried these five from S1 and neither write path assigned them, so every value an
+        // operator picked was accepted by the API and silently dropped. They are on the same write as Name and
+        // ContextTokens, which means they inherit the freeze: a project with runs refuses the whole edit.
+        var databasePath = GetDatabasePath("project-fidelity.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+
+        var created = await store.CreateProjectAsync(CreateProject() with
+        {
+            FidelityEnabled = true,
+            FidelityKldEnabled = true,
+            FidelityChunks = 50,
+            FidelityKldBaseModelName = "base.gguf",
+            FidelityKldBaseFingerprint = "v1:" + new string('b', 64)
+        });
+
+        var readBack = AssertEx.NotNull(await store.GetProjectAsync(created.Id));
+        AssertEx.True(readBack.FidelityEnabled);
+        AssertEx.True(readBack.FidelityKldEnabled);
+        AssertEx.Equal<int?>(50, readBack.FidelityChunks);
+        AssertEx.Equal("base.gguf", readBack.FidelityKldBaseModelName);
+        AssertEx.Equal("v1:" + new string('b', 64), readBack.FidelityKldBaseFingerprint);
+
+        // Changing the base resets what a stored KLD figure is comparable against; the store's job is only to record
+        // the new selection faithfully, and the display gate does the rest from the digest.
+        var updated = await store.UpdateProjectAsync(created.Id, readBack.Version, CreateProject(created.Id) with
+        {
+            FidelityEnabled = true,
+            FidelityChunks = 200,
+            FidelityKldBaseModelName = "other-base.gguf",
+            FidelityKldBaseFingerprint = "v1:" + new string('c', 64)
+        });
+        AssertEx.False(updated.FidelityKldEnabled, "An omitted flag turns it off, exactly as every other project field behaves.");
+        AssertEx.Equal<int?>(200, updated.FidelityChunks);
+        AssertEx.Equal("other-base.gguf", updated.FidelityKldBaseModelName);
+
+        _ = await store.StartRunAsync(CreateRun(updated));
+        var frozen = AssertEx.NotNull(await store.GetProjectAsync(created.Id));
+        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.UpdateProjectAsync(created.Id, frozen.Version, CreateProject(created.Id) with
+        {
+            FidelityEnabled = false
+        }));
+        AssertEx.True(AssertEx.NotNull(await store.GetProjectAsync(created.Id)).FidelityEnabled, "The refused edit changed nothing.");
+    }
+
+    [Test]
     public async Task MarkPrimarySucceeded_RoundTripsTheThroughputSplitAndClearsItOnCancellation()
     {
         // Two halves of one invariant. Written: the six columns survive a read back, so the pp/tg split the runtime
