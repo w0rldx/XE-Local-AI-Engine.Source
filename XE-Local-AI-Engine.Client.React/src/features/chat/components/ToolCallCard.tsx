@@ -154,57 +154,69 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 					onToggle={(event) => handleToggle(event.currentTarget.open)}
 				>
 					<summary className={`${classes["summary"]} mantine-focus-auto`} data-testid={`chat-tool-call-summary-${part.name}`}>
-					<span className={classes["summary-content"]}>
-						<Group gap="xs" wrap="nowrap" align="center" style={{ minWidth: 0 }}>
-							<ThemeIcon size={22} radius="xl" variant="filled" style={{ background: CHAT_ACCENT_SOFT, color: CHAT_ACCENT }}>
-								<IconTool size={11} />
-							</ThemeIcon>
-							<Text
-								component="span"
-								ff="monospace"
-								size="sm"
-								fw={600}
-								c="dimmed"
-								style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-							>
-								{toolName}
-							</Text>
-							{part.requiresApproval ? (
-								<ThemeIcon
-									size={16}
-									radius="xl"
-									color="orange"
-									variant="light"
-									data-testid={`chat-tool-call-approval-${part.name}`}
-								>
-									<IconShieldHalf size={11} />
+						<span className={classes["summary-content"]}>
+							<Group gap="xs" wrap="nowrap" align="center" style={{ minWidth: 0 }}>
+								<ThemeIcon size={22} radius="xl" variant="filled" style={{ background: CHAT_ACCENT_SOFT, color: CHAT_ACCENT }}>
+									<IconTool size={11} />
 								</ThemeIcon>
-							) : null}
-							<Badge size="xs" variant="light" color={stateColor(part.state)} radius="sm">
-								{stateLabel}
-							</Badge>
-							<ToolCategoryBadge category={toolCategory} effectiveRequiresApproval={toolEffectiveApproval} />
-							{isLiveState(part.state) ? (
-								<Text size="xs" c="dimmed">
-									{t("chat.toolCall.live", "live")}
+								<Text
+									component="span"
+									ff="monospace"
+									size="sm"
+									fw={600}
+									c="dimmed"
+									style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+								>
+									{toolName}
 								</Text>
-							) : null}
-						</Group>
-						<m.span
-							style={{ display: "inline-flex" }}
-							animate={{ rotate: expanded ? 0 : -90 }}
-							transition={reduced ? { duration: 0 } : { duration: 0.2 }}
-						>
-							<IconChevronDown size={14} />
-						</m.span>
-					</span>
-				</summary>
+								{part.requiresApproval ? (
+									<ThemeIcon
+										size={16}
+										radius="xl"
+										color="orange"
+										variant="light"
+										data-testid={`chat-tool-call-approval-${part.name}`}
+									>
+										<IconShieldHalf size={11} />
+									</ThemeIcon>
+								) : null}
+								<Badge size="xs" variant="light" color={stateColor(part.state)} radius="sm">
+									{stateLabel}
+								</Badge>
+								<ToolCategoryBadge category={toolCategory} effectiveRequiresApproval={toolEffectiveApproval} />
+								{isLiveState(part.state) ? (
+									<Text size="xs" c="dimmed">
+										{t("chat.toolCall.live", "live")}
+									</Text>
+								) : null}
+							</Group>
+							<m.span
+								style={{ display: "inline-flex" }}
+								animate={{ rotate: expanded ? 0 : -90 }}
+								transition={reduced ? { duration: 0 } : { duration: 0.2 }}
+							>
+								<IconChevronDown size={14} />
+							</m.span>
+						</span>
+					</summary>
 				</details>
 				{part.pendingQuestion ? (
 					<AskUserQuestionCard pending={part.pendingQuestion} />
 				) : awaitingApproval ? (
-					<Group gap="xs" wrap="nowrap" className={classes["tool-body"]} data-testid={`chat-tool-call-approval-actions-${part.name}`}>
-						<Text size="xs" c="dimmed" style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+					// This row MUST wrap. On a 390px viewport the prompt plus Approve / Approve-for-this-session / Deny is
+					// far wider than the card, and `nowrap` pushed the buttons off the right edge of a Paper that does
+					// not scroll — the operator could see that approval was being asked for but could not answer it, and
+					// the turn stalled. Wrapping drops the buttons onto their own line instead; on a wide viewport
+					// everything still fits on one line, so the desktop look is unchanged. (The Text's old
+					// overflow/textOverflow clamp was inert anyway — ellipsis needs `white-space: nowrap` — and would
+					// only hide the prompt now that the row can grow taller.)
+					<Group
+						gap="xs"
+						wrap="wrap"
+						className={classes["tool-body"]}
+						data-testid={`chat-tool-call-approval-actions-${part.name}`}
+					>
+						<Text size="xs" c="dimmed" style={{ minWidth: 0 }}>
 							{t("chat.toolCall.approvalPrompt", "This tool needs your approval to run.")}
 						</Text>
 						<Button
@@ -250,30 +262,30 @@ export const ToolCallCard = memo(function ToolCallCard({ part }: ToolCallCardPro
 					</Group>
 				) : null}
 				<Collapse expanded={expanded} keepMounted={true} transitionDuration={reduced ? 0 : 240}>
-				<Stack gap={6} className={classes["tool-body"]}>
-					{formattedArgs ? (
-						<Stack gap={2}>
-							<Text size="xs" c="dimmed" fw={600}>
-								{t("chat.toolCall.argsLabel", "Arguments")}
+					<Stack gap={6} className={classes["tool-body"]}>
+						{formattedArgs ? (
+							<Stack gap={2}>
+								<Text size="xs" c="dimmed" fw={600}>
+									{t("chat.toolCall.argsLabel", "Arguments")}
+								</Text>
+								<CodeBlock language="json" code={formattedArgs} />
+							</Stack>
+						) : null}
+						{formattedResult ? (
+							<Stack gap={2}>
+								<Text size="xs" c={part.state === "failed" ? "red" : "dimmed"} fw={600}>
+									{part.state === "failed" ? t("chat.toolCall.errorLabel", "Error") : t("chat.toolCall.resultLabel", "Result")}
+								</Text>
+								<div data-testid={`chat-tool-call-result-${part.name}`}>
+									<CodeBlock language="json" code={formattedResult} />
+								</div>
+							</Stack>
+						) : part.state === "received" ? (
+							<Text size="xs" c="dimmed" ff="monospace" data-testid={`chat-tool-call-no-output-${part.name}`}>
+								{t("chat.toolCall.noOutput", "(no output)")}
 							</Text>
-							<CodeBlock language="json" code={formattedArgs} />
-						</Stack>
-					) : null}
-					{formattedResult ? (
-						<Stack gap={2}>
-							<Text size="xs" c={part.state === "failed" ? "red" : "dimmed"} fw={600}>
-								{part.state === "failed" ? t("chat.toolCall.errorLabel", "Error") : t("chat.toolCall.resultLabel", "Result")}
-							</Text>
-							<div data-testid={`chat-tool-call-result-${part.name}`}>
-								<CodeBlock language="json" code={formattedResult} />
-							</div>
-						</Stack>
-					) : part.state === "received" ? (
-						<Text size="xs" c="dimmed" ff="monospace" data-testid={`chat-tool-call-no-output-${part.name}`}>
-							{t("chat.toolCall.noOutput", "(no output)")}
-						</Text>
-					) : null}
-				</Stack>
+						) : null}
+					</Stack>
 				</Collapse>
 			</div>
 		</div>

@@ -1,11 +1,19 @@
 import { ActionIcon, Alert, Anchor, Badge, Drawer, Group, Loader, Menu, Stack, Text, Tooltip } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlertTriangle, IconDotsVertical, IconLayoutSidebar, IconLayoutSidebarRight, IconPencil, IconTrash } from "@tabler/icons-react";
+import {
+	IconAlertTriangle,
+	IconDotsVertical,
+	IconLayoutSidebar,
+	IconLayoutSidebarRight,
+	IconPencil,
+	IconTrash,
+} from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
@@ -16,7 +24,11 @@ import { WorkSessionFollowUpNotice } from "@/features/workSessions/components/Wo
 import { WorkSessionPlanPanel } from "@/features/workSessions/components/WorkSessionPlanPanel";
 import { WorkSessionSidePanel } from "@/features/workSessions/components/WorkSessionSidePanel";
 import { useWorkSessionHub } from "@/features/workSessions/hooks/useWorkSessionHub";
-import { isTerminalWorkSessionStatus, toWorkSessionKind, toWorkSessionStatus } from "@/features/workSessions/models/WorkSessionModels";
+import {
+	isTerminalWorkSessionStatus,
+	toWorkSessionKind,
+	toWorkSessionStatus,
+} from "@/features/workSessions/models/WorkSessionModels";
 import {
 	useDeleteWorkSession,
 	usePostWorkSessionMessage,
@@ -32,17 +44,17 @@ import {
 	workSessionEventsPageSize,
 } from "@/features/workSessions/queries/useWorkSessions";
 
-// The app shell keeps a 220px sidebar from 768 up, so a 320 plan + chat + 380 side-panel row has no room to breathe
-// below roughly 1024 — the same threshold, for the same reason, that ChatDisplayShell records. jsdom defaults
-// innerWidth to 1024, so `< 1024` (not `<=`) keeps the desktop layout the default under the existing tests.
-const DESKTOP_MIN_WIDTH = 1024;
+// The app shell keeps its expanded sidebar from DESKTOP_NAV_BREAKPOINT up, so a 320 plan + chat + 380 side-panel row
+// has no room to breathe below TWO_PANE_BREAKPOINT — the same threshold, for the same reason, that ChatDisplayShell
+// records. jsdom defaults innerWidth to 1024, so `<` (not `<=`) keeps the desktop layout the default under the
+// existing tests.
 
 export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 	const navigate = useNavigate();
 	const { width } = useWindowDimensions();
-	const isMobile = width < DESKTOP_MIN_WIDTH;
+	const isMobile = width < TWO_PANE_BREAKPOINT;
 	const [planDrawerOpened, planDrawer] = useDisclosure(false);
 	const [sideDrawerOpened, sideDrawer] = useDisclosure(false);
 	const [eventsLimit, setEventsLimit] = useState(workSessionEventsPageSize);
@@ -170,7 +182,10 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="work-session-detail-error">
 					<Stack gap="sm" align="flex-start">
 						<Text size="sm">
-							{apiErrorMessage(sessionQuery.error, t("pages.workSessions.detail.notFound", "This work session could not be loaded."))}
+							{apiErrorMessage(
+								sessionQuery.error,
+								t("pages.workSessions.detail.notFound", "This work session could not be loaded."),
+							)}
 						</Text>
 						<Anchor component={Link} to="/work-sessions" size="sm" data-testid="work-session-detail-back">
 							{t("pages.workSessions.detail.back", "Back to work sessions")}
@@ -212,15 +227,15 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 			events={events}
 			hasMoreEvents={eventsQuery.data?.hasMore === true}
 			canLoadMoreEvents={eventsLimit < workSessionEventsMaxLimit}
-			onLoadMoreEvents={() => setEventsLimit((current) => Math.min(current + workSessionEventsPageSize, workSessionEventsMaxLimit))}
+			onLoadMoreEvents={() =>
+				setEventsLimit((current) => Math.min(current + workSessionEventsPageSize, workSessionEventsMaxLimit))
+			}
 		/>
 	);
 
 	const conversationPane = (
 		<Stack gap="xs" h="100%" style={{ minHeight: 0 }} data-testid="work-session-conversation-pane">
-			<div style={{ flex: 1, minHeight: 0 }}>
-				{scope ? <Chat scope={scope} /> : null}
-			</div>
+			<div style={{ flex: 1, minHeight: 0 }}>{scope ? <Chat scope={scope} /> : null}</div>
 			<WorkSessionFollowUpNotice status={status} error={followUpError} />
 		</Stack>
 	);
@@ -231,7 +246,12 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 				<Group gap="xs" wrap="nowrap">
 					{isMobile ? (
 						<Tooltip label={t("pages.workSessions.detail.showPlan", "Show plan")}>
-							<ActionIcon variant="subtle" onClick={planDrawer.open} aria-label={t("pages.workSessions.detail.showPlan", "Show plan")} data-testid="work-session-plan-toggle">
+							<ActionIcon
+								variant="subtle"
+								onClick={planDrawer.open}
+								aria-label={t("pages.workSessions.detail.showPlan", "Show plan")}
+								data-testid="work-session-plan-toggle"
+							>
 								<IconLayoutSidebar size={18} />
 							</ActionIcon>
 						</Tooltip>
@@ -244,7 +264,11 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 					</Badge>
 					<Menu position="bottom-end" withinPortal={true}>
 						<Menu.Target>
-							<ActionIcon variant="subtle" aria-label={t("pages.workSessions.detail.actions", "Session actions")} data-testid="work-session-actions">
+							<ActionIcon
+								variant="subtle"
+								aria-label={t("pages.workSessions.detail.actions", "Session actions")}
+								data-testid="work-session-actions"
+							>
 								<IconDotsVertical size={18} />
 							</ActionIcon>
 						</Menu.Target>
@@ -266,7 +290,12 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 					</Menu>
 					{isMobile ? (
 						<Tooltip label={t("pages.workSessions.detail.showDetails", "Show findings and artifacts")}>
-							<ActionIcon variant="subtle" onClick={sideDrawer.open} aria-label={t("pages.workSessions.detail.showDetails", "Show findings and artifacts")} data-testid="work-session-side-toggle">
+							<ActionIcon
+								variant="subtle"
+								onClick={sideDrawer.open}
+								aria-label={t("pages.workSessions.detail.showDetails", "Show findings and artifacts")}
+								data-testid="work-session-side-toggle"
+							>
 								<IconLayoutSidebarRight size={18} />
 							</ActionIcon>
 						</Tooltip>

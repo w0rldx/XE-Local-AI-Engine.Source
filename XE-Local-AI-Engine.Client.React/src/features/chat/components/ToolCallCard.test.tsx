@@ -155,11 +155,27 @@ describe("ToolCallCard", () => {
 	});
 
 	it("renders Approve/Deny controls while awaiting an approval decision", () => {
-		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />);
+		renderWithProviders(
+			<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />,
+		);
 
 		expect(screen.getByTestId("chat-tool-call-approve-get_time")).toBeTruthy();
 		expect(screen.getByTestId("chat-tool-call-approve-session-get_time")).toBeTruthy();
 		expect(screen.getByTestId("chat-tool-call-deny-get_time")).toBeTruthy();
+	});
+
+	// Regression guard for a live-observed dead end: on a 390px viewport the nowrap approval row pushed Approve /
+	// Approve-for-this-session / Deny past the right edge of a card that does not scroll horizontally, so the operator
+	// could see the prompt but had no reachable way to answer it and the turn stalled. Mantine encodes Group's `wrap`
+	// as the --group-wrap custom property on the row element, so the layout contract is assertable here.
+	it("lets the approval row wrap so the buttons stay reachable on a narrow viewport", () => {
+		renderWithProviders(
+			<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />,
+		);
+
+		const approvalRow = screen.getByTestId("chat-tool-call-approval-actions-get_time");
+
+		expect(approvalRow.style.getPropertyValue("--group-wrap")).toBe("wrap");
 	});
 
 	it("withholds the session button for a tool the node cannot remember a session decision for", () => {
@@ -168,7 +184,12 @@ describe("ToolCallCard", () => {
 		// silently degraded to a plain "Once". Approve/Deny stay — only the promise the node cannot keep is removed.
 		renderWithProviders(
 			<ToolCallCard
-				part={toolPart({ name: "mcp__files__write_file", state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })}
+				part={toolPart({
+					name: "mcp__files__write_file",
+					state: "waiting",
+					requiresApproval: true,
+					pendingApprovalRequestId: "approval-42",
+				})}
 			/>,
 		);
 
@@ -218,7 +239,9 @@ describe("ToolCallCard", () => {
 		// the node tool catalog — and they ARE the original session-scope case. An unknown entry must therefore keep the
 		// pre-catalog fallback of offering the button rather than fail closed and remove a control that works.
 		renderWithProviders(
-			<ToolCallCard part={toolPart({ name: "load_skill", state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />,
+			<ToolCallCard
+				part={toolPart({ name: "load_skill", state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })}
+			/>,
 		);
 
 		expect(screen.getByTestId("chat-tool-call-approve-session-load_skill")).toBeTruthy();
@@ -234,13 +257,17 @@ describe("ToolCallCard", () => {
 
 	it("does not render approval controls once the tool has resolved", () => {
 		// A stale pendingApprovalRequestId on a received card must not resurrect the controls.
-		renderWithProviders(<ToolCallCard part={toolPart({ state: "received", result: "ok", pendingApprovalRequestId: "approval-42" })} />);
+		renderWithProviders(
+			<ToolCallCard part={toolPart({ state: "received", result: "ok", pendingApprovalRequestId: "approval-42" })} />,
+		);
 
 		expect(screen.queryByTestId("chat-tool-call-approve-get_time")).toBeNull();
 	});
 
 	it("posts the operator's approve decision to the resolve endpoint and hides the controls", async () => {
-		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />);
+		renderWithProviders(
+			<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />,
+		);
 
 		fireEvent.click(screen.getByTestId("chat-tool-call-approve-get_time"));
 
@@ -252,16 +279,22 @@ describe("ToolCallCard", () => {
 	});
 
 	it("posts scope Session when the operator approves for the whole session", async () => {
-		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />);
+		renderWithProviders(
+			<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-42" })} />,
+		);
 
 		fireEvent.click(screen.getByTestId("chat-tool-call-approve-session-get_time"));
 
 		await waitFor(() => expect(resolveApprovalSpy).toHaveBeenCalledTimes(1));
-		expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({ body: { requestId: "approval-42", approved: true, scope: "Session" } });
+		expect(resolveApprovalSpy.mock.calls[0]?.[0]).toEqual({
+			body: { requestId: "approval-42", approved: true, scope: "Session" },
+		});
 	});
 
 	it("posts the operator's deny decision with approved=false and never a scope (a denial is not remembered)", async () => {
-		renderWithProviders(<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-77" })} />);
+		renderWithProviders(
+			<ToolCallCard part={toolPart({ state: "waiting", requiresApproval: true, pendingApprovalRequestId: "approval-77" })} />,
+		);
 
 		fireEvent.click(screen.getByTestId("chat-tool-call-deny-get_time"));
 

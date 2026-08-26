@@ -9,6 +9,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import type { ChatConversationModel, ChatDisplayShellProps, ChatMessagePart } from "@/features/chat/models/ChatModels";
+import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
 
 // A streaming tool-call card can fire the resolve-approval TanStack mutation, so the tree needs a
 // QueryClientProvider even for turns that never surface an approval.
@@ -127,9 +128,7 @@ describe("ChatDisplayShell tool-call parts pass-through", () => {
 	it("suppresses the empty-state while the selected conversation's messages are loading", () => {
 		const emptyConversation: ChatConversationModel = { ...conversation, messages: [] };
 
-		renderWithProviders(
-			<ChatDisplayShell {...shellProps({ conversations: [emptyConversation], isLoadingMessages: true })} />,
-		);
+		renderWithProviders(<ChatDisplayShell {...shellProps({ conversations: [emptyConversation], isLoadingMessages: true })} />);
 
 		expect(screen.queryByText("No messages yet.")).toBeNull();
 		expect(screen.getByText("Loading messages…")).toBeTruthy();
@@ -138,9 +137,7 @@ describe("ChatDisplayShell tool-call parts pass-through", () => {
 	it("shows the empty-state once a settled conversation truly has no messages", () => {
 		const emptyConversation: ChatConversationModel = { ...conversation, messages: [] };
 
-		renderWithProviders(
-			<ChatDisplayShell {...shellProps({ conversations: [emptyConversation], isLoadingMessages: false })} />,
-		);
+		renderWithProviders(<ChatDisplayShell {...shellProps({ conversations: [emptyConversation], isLoadingMessages: false })} />);
 
 		expect(screen.getByText("No messages yet.")).toBeTruthy();
 		expect(screen.queryByText("Loading messages…")).toBeNull();
@@ -264,8 +261,7 @@ describe("ChatDisplayShell temporary-chat toggle", () => {
 		const onToggle = vi.fn();
 
 		renderWithProviders(
-			<ChatDisplayShell
-				{...shellProps({ boundAgentMemoryEnabled: true, onToggleConversationMemoryExcluded: onToggle })} />,
+			<ChatDisplayShell {...shellProps({ boundAgentMemoryEnabled: true, onToggleConversationMemoryExcluded: onToggle })} />,
 		);
 
 		fireEvent.click(screen.getByTestId("chat-temporary-toggle"));
@@ -313,7 +309,9 @@ describe("ChatDisplayShell file drag-and-drop", () => {
 	it("does not overlay or upload while the composer is sending", () => {
 		const onUploadFiles = vi.fn();
 		renderWithProviders(
-			<ChatDisplayShell {...shellProps({ capabilities: attachmentsCapabilities, onUploadFiles, inputStatus: { isSending: true } })} />,
+			<ChatDisplayShell
+				{...shellProps({ capabilities: attachmentsCapabilities, onUploadFiles, inputStatus: { isSending: true } })}
+			/>,
 		);
 
 		const pane = screen.getByTestId("chat-pane");
@@ -325,5 +323,60 @@ describe("ChatDisplayShell file drag-and-drop", () => {
 
 		fireEvent.drop(pane, { dataTransfer });
 		expect(onUploadFiles).not.toHaveBeenCalled();
+	});
+});
+
+// The shell swaps its whole layout below TWO_PANE_BREAKPOINT: the two-pane grid collapses to a single column and the
+// conversation list moves into an off-canvas Drawer. That branch had no coverage, so a regression in it would only
+// have surfaced on a real phone. Same viewport-override pattern WorkSessionDetailPage.test.tsx uses for its own
+// mobile branch.
+function setViewportWidth(width: number): void {
+	Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: width });
+}
+
+describe("ChatDisplayShell mobile layout", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+		setViewportWidth(390);
+	});
+
+	afterEach(() => {
+		cleanup();
+		// jsdom's default, and the width the rest of the suite assumes means "desktop".
+		setViewportWidth(1024);
+	});
+
+	it("moves the conversation list into a drawer instead of rendering it beside the chat pane", async () => {
+		renderWithProviders(<ChatDisplayShell {...shellProps()} />);
+
+		// The list is off-canvas until the header toggle opens it, so nothing from it is on screen yet.
+		expect(screen.queryByTestId("chat-conversations-drawer")).toBeNull();
+		expect(screen.getByTestId("chat-pane")).toBeTruthy();
+
+		fireEvent.click(screen.getByTestId("chat-conversations-toggle"));
+
+		// findBy, not getBy: the Drawer mounts through a Mantine transition, so it lands a frame after the click.
+		expect(await screen.findByTestId("chat-conversations-drawer")).toBeTruthy();
+	});
+
+	it("closes the drawer once a conversation is picked, so the chat pane is visible again", async () => {
+		const onSelectConversation = vi.fn();
+		renderWithProviders(<ChatDisplayShell {...shellProps({ onSelectConversation })} />);
+
+		fireEvent.click(screen.getByTestId("chat-conversations-toggle"));
+		const drawer = await screen.findByTestId("chat-conversations-drawer");
+
+		const conversationRow = drawer.querySelector<HTMLElement>('[data-testid="conversation-item-conversation-1"]');
+		expect(conversationRow).not.toBeNull();
+		fireEvent.click(conversationRow as HTMLElement);
+
+		expect(onSelectConversation).toHaveBeenCalledWith("conversation-1");
+	});
+
+	it("offers no conversation toggle when the caller hides the conversation list", () => {
+		renderWithProviders(<ChatDisplayShell {...shellProps({ hideConversationList: true })} />);
+
+		expect(screen.queryByTestId("chat-conversations-toggle")).toBeNull();
+		expect(screen.queryByTestId("chat-conversations-drawer")).toBeNull();
 	});
 });

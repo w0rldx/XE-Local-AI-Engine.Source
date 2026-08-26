@@ -3,6 +3,7 @@ import { Group, Modal, ScrollArea } from "@mantine/core";
 import { type ReactNode, use, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { DESKTOP_NAV_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { DialogTextTitleBar } from "@/core/ui/components/DialogTextTitleBar/DialogTextTitleBar";
 import { ConfirmContext } from "@/core/ui/context/ConfirmContext";
@@ -75,11 +76,11 @@ export function DialogShell({
 	// directly rather than via the throwing useConfirm() hook. Only used when confirmCloseWhen.
 	const confirmContext = use(ConfirmContext);
 	const [isFullScreen, setIsFullScreen] = useState(false);
-	// Below the app shell's 768px cutoff (Layout.tsx / MobileNavigationBar) dialogs go full-screen
-	// automatically: a floating card on a phone wastes gutter space and traps nested scroll areas.
-	// The user-facing toggle is hidden in that state since leaving full-screen isn't meaningful there.
+	// Below the app shell's desktop-navigation cutoff (the same DESKTOP_NAV_BREAKPOINT Layout.tsx branches on)
+	// dialogs go full-screen automatically: a floating card on a phone wastes gutter space and traps nested scroll
+	// areas. The user-facing toggle is hidden in that state since leaving full-screen isn't meaningful there.
 	const { width } = useWindowDimensions();
-	const isMobileViewport = width < 768;
+	const isMobileViewport = width < DESKTOP_NAV_BREAKPOINT;
 	const effectiveFullScreen = isFullScreen || isMobileViewport;
 
 	const toggleFullScreen = useCallback(() => {
