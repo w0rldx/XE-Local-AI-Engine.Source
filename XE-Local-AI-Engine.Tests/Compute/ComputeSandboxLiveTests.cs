@@ -556,7 +556,7 @@ public sealed class ComputeSandboxLiveTests : IDisposable
         var gateway = new ComputeToolGateway(provider,
             new StubIdentityProvider(),
             environment,
-            Options.Create(new ComputeOptions()),
+            Options.Create(Enabled(options: null)),
             Options.Create(new LocalContainerOptions()),
             NullLogger<ComputeToolGateway>.Instance);
 
@@ -576,9 +576,21 @@ public sealed class ComputeSandboxLiveTests : IDisposable
         return new ComputeToolGateway(provider,
             new StubIdentityProvider(),
             _environment,
-            Options.Create(options ?? new ComputeOptions()),
+            Options.Create(Enabled(options)),
             Options.Create(new LocalContainerOptions()),
             NullLogger<ComputeToolGateway>.Instance);
+    }
+
+    /// <summary>
+    ///     Opts the node in. <c>ComputeOptions.Enabled</c> defaults to false — the production fail-closed default — and
+    ///     the kill-switch now lives in the gateway, so a live suite that did not set it would exercise the refusal
+    ///     rather than the sandbox.
+    /// </summary>
+    private static ComputeOptions Enabled(ComputeOptions? options)
+    {
+        options ??= new ComputeOptions();
+        options.Enabled = true;
+        return options;
     }
 
     private static ProcessSandboxRuntimeProvider CreateHostProvider()

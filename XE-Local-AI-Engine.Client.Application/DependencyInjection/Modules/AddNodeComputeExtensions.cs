@@ -8,9 +8,8 @@ using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 
 /// <summary>
 ///     DI wiring for the sandboxed <c>run_python</c> compute tool. Registered unconditionally: the node kill-switch
-///     (<c>Compute:Enabled</c>, off by default) is enforced in the handler rather than by skipping registration, so the
-///     tool answers a disabled node with a clear sentence instead of vanishing from the resolution seam and surfacing as
-///     an unknown-tool error.
+///     (off by default) is enforced in the gateway rather than by skipping registration, so the tool answers a disabled
+///     node with a clear sentence instead of vanishing from the resolution seam and surfacing as an unknown-tool error.
 /// </summary>
 /// <remarks>
 ///     Depends on the sandbox provider roles registered by <see cref="AddNodeAgentHomeExtensions.AddNodeAgentHome" />

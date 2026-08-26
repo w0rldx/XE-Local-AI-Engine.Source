@@ -1,36 +1,28 @@
 namespace XE_Local_AI_Engine.Tests.Compute;
 
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Compute.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Handler-level behavior for <c>run_python</c>, at parity with <c>RunInAgentHomeToolHandlerTests</c>: the node
-///     kill-switch short-circuits before the gateway, arguments are validated before anything executes, and
-///     cancellation propagates as cancellation.
+///     Handler-level behavior for <c>run_python</c>: the JSON envelope is the handler's own responsibility, everything
+///     the request then has to satisfy is the gateway's, and cancellation propagates as cancellation.
+///     <para>
+///         The kill-switch and the request validation used to be asserted here. They now live in
+///         <see cref="IComputeToolGateway.ExecuteDetailedAsync" /> and are asserted in
+///         <see cref="ComputeToolGatewayTests" /> — deliberately, because a check this handler owned was a check no
+///         other caller of the gateway got.
+///     </para>
 /// </summary>
 public sealed class RunPythonToolHandlerTests
 {
     private const string ValidArguments = """{"code":"print(2 + 2)"}""";
 
     [Test]
-    public async Task ExecuteAsync_WhenComputeDisabled_ReturnsDisabledMessage()
+    public async Task ExecuteAsync_WhenTheEnvelopeParses_DelegatesToTheGateway()
     {
         var gateway = new StubGateway("run reached the gateway");
-        var handler = CreateHandler(enabled: false, gateway);
-
-        var result = await handler.ExecuteAsync(ValidArguments);
-
-        AssertEx.Contains(result, "disabled", StringComparison.OrdinalIgnoreCase);
-        AssertEx.False(gateway.WasCalled, "a disabled node must reject before the gateway, so no venv or sandbox work happens");
-    }
-
-    [Test]
-    public async Task ExecuteAsync_WhenEnabledAndValid_DelegatesToGateway()
-    {
-        var gateway = new StubGateway("run reached the gateway");
-        var handler = CreateHandler(enabled: true, gateway);
+        var handler = new RunPythonToolHandler(gateway);
 
         var result = await handler.ExecuteAsync(ValidArguments);
 
@@ -39,42 +31,40 @@ public sealed class RunPythonToolHandlerTests
     }
 
     [Test]
-    public async Task ExecuteAsync_WhenCodeIsMissing_ReturnsValidationErrors()
+    public async Task ExecuteAsync_DelegatesWithoutPreScreening_SoTheGatewayOwnsEveryRefusal()
     {
-        var gateway = new StubGateway("run reached the gateway");
-        var handler = CreateHandler(enabled: true, gateway);
+        // An empty script and an oversized one both reach the gateway now. That IS the contract: the handler holding a
+        // copy of the validation is what let a second caller of the gateway run unvalidated code.
+        var gateway = new StubGateway("run_python arguments are invalid: 'code' is required and must be a non-empty string.");
+        var handler = new RunPythonToolHandler(gateway);
 
         var result = await handler.ExecuteAsync("""{"code":"   "}""");
 
+        AssertEx.True(gateway.WasCalled, "the gateway is the only place the request is judged");
         AssertEx.Contains(result, "invalid", StringComparison.OrdinalIgnoreCase);
-        AssertEx.Contains(result, "code");
-        AssertEx.False(gateway.WasCalled, "invalid arguments must reject before the gateway");
-    }
-
-    [Test]
-    public async Task ExecuteAsync_WhenCodeExceedsTheCeiling_ReturnsValidationErrors()
-    {
-        // The schema carries no maxLength (it would be stripped from the llama.cpp wire anyway), so this handler-side
-        // ceiling is the ONLY thing bounding a submitted script. If it stops being enforced nothing else catches it.
-        var gateway = new StubGateway("run reached the gateway");
-        var handler = CreateHandler(enabled: true, gateway);
-        var oversized = new string('x', ComputeToolDefinition.CodeMaxLength + 1);
-
-        var result = await handler.ExecuteAsync($$"""{"code":"{{oversized}}"}""");
-
-        AssertEx.Contains(result, "invalid", StringComparison.OrdinalIgnoreCase);
-        AssertEx.False(gateway.WasCalled, "an oversized script must reject before the gateway");
     }
 
     [Test]
     public async Task ExecuteAsync_WhenArgumentsAreNotJson_ReturnsAParseMessage()
     {
         var gateway = new StubGateway("run reached the gateway");
-        var handler = CreateHandler(enabled: true, gateway);
+        var handler = new RunPythonToolHandler(gateway);
 
         var result = await handler.ExecuteAsync("{not json");
 
         AssertEx.Contains(result, "valid JSON", StringComparison.OrdinalIgnoreCase);
+        AssertEx.False(gateway.WasCalled, "there is no request to hand on");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_WhenArgumentsAreNull_ReturnsAnEmptyMessage()
+    {
+        var gateway = new StubGateway("run reached the gateway");
+        var handler = new RunPythonToolHandler(gateway);
+
+        var result = await handler.ExecuteAsync("null");
+
+        AssertEx.Contains(result, "empty", StringComparison.OrdinalIgnoreCase);
         AssertEx.False(gateway.WasCalled);
     }
 
@@ -82,7 +72,7 @@ public sealed class RunPythonToolHandlerTests
     public async Task ExecuteAsync_WhenCancelled_Throws()
     {
         var gateway = new StubGateway("run reached the gateway");
-        var handler = CreateHandler(enabled: true, gateway);
+        var handler = new RunPythonToolHandler(gateway);
         using var cancellationTokenSource = new CancellationTokenSource();
         await cancellationTokenSource.CancelAsync();
 
@@ -93,19 +83,11 @@ public sealed class RunPythonToolHandlerTests
     [Test]
     public void Handler_RequiresApproval_AndAdvertisesTheSharedDefinition()
     {
-        var handler = CreateHandler(enabled: true, new StubGateway("unused"));
+        var handler = new RunPythonToolHandler(new StubGateway("unused"));
 
         AssertEx.True(handler.RequiresApproval, "executing model-authored code must stay approval-gated");
         AssertEx.Equal(ComputeToolDefinition.ToolName, handler.ToolName);
         AssertEx.Equal(ComputeToolDefinition.ParameterSchema, handler.ParameterSchema);
-    }
-
-    private static RunPythonToolHandler CreateHandler(bool enabled, IComputeToolGateway gateway)
-    {
-        return new RunPythonToolHandler(Options.Create(new ComputeOptions
-        {
-            Enabled = enabled
-        }), gateway);
     }
 
     private sealed class StubGateway : IComputeToolGateway
@@ -126,6 +108,13 @@ public sealed class RunPythonToolHandlerTests
             WasCalled = true;
             LastRequest = request;
             return Task.FromResult(_result);
+        }
+
+        public Task<ComputeExecutionOutcome> ExecuteDetailedAsync(ComputeRunToolRequest request,
+            bool requireResourceLimits,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException("the handler renders through ExecuteAsync");
         }
     }
 }

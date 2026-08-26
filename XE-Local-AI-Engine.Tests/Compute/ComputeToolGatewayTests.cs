@@ -490,6 +490,146 @@ public sealed class ComputeToolGatewayTests
             }, cancellationTokenSource.Token));
     }
 
+    [Test]
+    public async Task ExecuteDetailedAsync_WhenComputeDisabled_RefusesWithoutProvisioningOrCreatingAJail()
+    {
+        // The kill-switch moved here from RunPythonToolHandler, so this is now the ONLY place it is read — and it has
+        // to refuse before the interpreter is provisioned, exactly as the handler's short-circuit did.
+        var provider = new RecordingSandboxProvider(Contained);
+        var environment = new StubEnvironment("/provisioned/python");
+        var gateway = new ComputeToolGateway(provider,
+            new StubIdentityProvider(),
+            environment,
+            Options.Create(new ComputeOptions()),
+            Options.Create(new LocalContainerOptions()),
+            NullLogger<ComputeToolGateway>.Instance);
+
+        var outcome = await gateway.ExecuteDetailedAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        }, requireResourceLimits: false);
+
+        AssertEx.False(outcome.Ran, "a disabled node must not execute anything");
+        AssertEx.Equal(ComputeRefusalCodes.ComputeDisabled, outcome.RefusalCode);
+        AssertEx.Contains(AssertEx.NotNull(outcome.RefusalMessage), "Compute:Enabled=false");
+        AssertEx.False(environment.Requested, "a disabled node must not provision an interpreter");
+        AssertEx.Null(provider.CreateRequest, "and must not create a jail");
+    }
+
+    [Test]
+    public async Task ExecuteDetailedAsync_ValidatesTheRequest_EvenWhenCalledDirectly()
+    {
+        // The bypass that motivated moving the checks: a caller reaching the gateway straight past the handler used to
+        // get no validation at all. Both bounds are asserted here because both used to live in the handler.
+        var provider = new RecordingSandboxProvider(Contained);
+        var gateway = CreateGateway(provider);
+
+        var blank = await gateway.ExecuteDetailedAsync(new ComputeRunToolRequest
+        {
+            Code = "   "
+        }, requireResourceLimits: false);
+        var oversized = await gateway.ExecuteDetailedAsync(new ComputeRunToolRequest
+        {
+            Code = new string('x', ComputeToolDefinition.CodeMaxLength + 1)
+        }, requireResourceLimits: false);
+
+        AssertEx.Equal(ComputeRefusalCodes.InvalidRequest, blank.RefusalCode);
+        AssertEx.Contains(AssertEx.NotNull(blank.RefusalMessage), "invalid", StringComparison.OrdinalIgnoreCase);
+        AssertEx.Equal(ComputeRefusalCodes.InvalidRequest, oversized.RefusalCode);
+        AssertEx.Null(provider.CreateRequest, "an invalid request must not create a jail");
+    }
+
+    [Test]
+    public async Task ExecuteDetailedAsync_WhenCeilingsAreUnenforceableAndRequired_RefusesWithNoResourceLimits()
+    {
+        // SandboxResourceCeilings.Resolve returns null on a backend without the capability, so the script would run
+        // unbounded in CPU, memory and process count. A caller executing operator-authored code unattended says
+        // requireResourceLimits, and is refused rather than run.
+        var provider = new RecordingSandboxProvider(Contained);
+        var gateway = CreateGateway(provider);
+
+        var outcome = await gateway.ExecuteDetailedAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        }, requireResourceLimits: true);
+
+        AssertEx.False(outcome.Ran);
+        AssertEx.Equal(ComputeRefusalCodes.NoResourceLimits, outcome.RefusalCode);
+        AssertEx.Null(provider.CreateRequest, "the refusal must land before a jail is created");
+    }
+
+    [Test]
+    public async Task RunPython_WithoutResourceLimits_StillRuns_BehaviourUnchanged()
+    {
+        // THE no-regression test for the asymmetry the operator kept: run_python asks for no ceilings, so a host that
+        // cannot impose them keeps running the tool exactly as it does today. Inverting this assertion is what flipping
+        // that decision would look like.
+        var provider = new RecordingSandboxProvider(Contained);
+        var gateway = CreateGateway(provider);
+
+        var rendered = await gateway.ExecuteAsync(new ComputeRunToolRequest
+        {
+            Code = "print(1)"
+        });
+
+        AssertEx.Contains(rendered, "exit_code: 0");
+        AssertEx.NotNull(provider.CommandRequest);
+        AssertEx.Null(AssertEx.NotNull(provider.CreateRequest).ResourceLimits,
+            "a backend without the capability gets no ceilings — and still runs the tool");
+    }
+
+    [Test]
+    public async Task ExecuteDetailedAsync_IsTheOnlyExecutionPathThatReadsComputeEnabled()
+    {
+        // An architecture test, because the failure it guards is a SECOND copy of the flag appearing on an execution
+        // path and then drifting — which is the whole finding this boundary answers. Asserted against the source
+        // rather than against behaviour: a duplicate read is invisible at runtime until the two disagree.
+        //
+        // The allow-list is exactly two entries and both are stated. Anything else appearing here is a decision, not a
+        // tidy-up: it means some other code decided for itself whether this node may execute Python.
+        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            // The boundary itself — the ONE execution gate.
+            Path.Combine("Services", "Compute", "Implementation", "ComputeToolGateway.cs"),
+            // Not an execution gate: it decides whether the seeded mathematician persona is OFFERED run_python at all.
+            // A persona seeded with the tool on a disabled node would still be refused by the gateway; this read only
+            // keeps a dead tool out of the persona.
+            Path.Combine("Services", "Agents", "Implementation", "MathematicianAgentSeeder.cs"),
+            // Not a reader at all: it takes ComputeOptions for the shared sandbox CEILING defaults, and its own
+            // `.Enabled` is AgentHomeOptions'. Listed because the scan below is per file rather than per expression.
+            Path.Combine("Services", "AgentHome", "Implementation", "AgentHomeService.cs")
+        };
+        var application = Path.Combine(RepositoryPaths.Root, "XE-Local-AI-Engine.Client.Application");
+        var readers = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(application, "*.cs", SearchOption.AllDirectories))
+        {
+            // The declaration itself and the options validator are not reads of the node's answer.
+            if (Path.GetFileName(file) is "ComputeOptions.cs" or "ComputeOptionsValidator.cs")
+            {
+                continue;
+            }
+
+            // Comment lines are dropped first: several files legitimately DESCRIBE the kill-switch, and a test that
+            // counted prose would be satisfied by deleting a sentence rather than by deleting a read. What is left is
+            // a per-FILE co-occurrence rather than a per-expression one, which over-reports (see the third allow-list
+            // entry) — deliberately, because under-reporting is the failure that matters here.
+            var code = (await File.ReadAllLinesAsync(file))
+                       .Where(static line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal))
+                       .ToArray();
+            if (code.Any(static line => line.Contains("omputeOptions", StringComparison.Ordinal))
+                && code.Any(static line => line.Contains(".Enabled", StringComparison.Ordinal)))
+            {
+                readers.Add(Path.GetRelativePath(application, file));
+            }
+        }
+
+        AssertEx.True(readers.Contains(Path.Combine("Services", "Compute", "Implementation", "ComputeToolGateway.cs")),
+            "the gateway must read the kill-switch — it is the boundary");
+        AssertEx.Equal(expected: 0,
+            readers.Count(reader => !allowed.Contains(reader)),
+            $"only the compute gateway may gate execution on the kill-switch; unexpected readers: {string.Join(", ", readers.Where(reader => !allowed.Contains(reader)))}");
+    }
+
     private static SandboxCommandResult Completed(int exitCode, string standardOutput, string standardError)
     {
         return new SandboxCommandResult
@@ -507,10 +647,16 @@ public sealed class ComputeToolGatewayTests
         IComputePythonEnvironment? environment = null,
         IAgentHomeIdentityProvider? identityProvider = null)
     {
+        options ??= new ComputeOptions();
+        // Every test in this suite is about a node that has OPTED IN. ComputeOptions.Enabled defaults to false — the
+        // production fail-closed default — and the kill-switch now lives in the gateway rather than in the handler, so
+        // without this line every call here would refuse before reaching the sandbox. The switch itself is asserted by
+        // its own test, which builds a gateway directly rather than through this helper.
+        options.Enabled = true;
         return new ComputeToolGateway(provider,
             identityProvider ?? new StubIdentityProvider(),
             environment ?? new StubEnvironment("/provisioned/python"),
-            Options.Create(options ?? new ComputeOptions()),
+            Options.Create(options),
             Options.Create(new LocalContainerOptions()),
             NullLogger<ComputeToolGateway>.Instance);
     }

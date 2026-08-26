@@ -105,15 +105,47 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    /// <summary>
+    ///     The model-facing projection: <see cref="ExecuteDetailedAsync" /> with no ceiling requirement, rendered as the
+    ///     string a model reads. One execution path, two projections — a second entry point is how a refusal reachable
+    ///     one way stops being reachable the other.
+    /// </summary>
     public async Task<string> ExecuteAsync(ComputeRunToolRequest request, CancellationToken cancellationToken = default)
+    {
+        var outcome = await ExecuteDetailedAsync(request, requireResourceLimits: false, cancellationToken).ConfigureAwait(false);
+        return outcome.Result is { } result
+            ? FormatResult(result)
+            : outcome.RefusalMessage ?? "run_python rejected.";
+    }
+
+    public async Task<ComputeExecutionOutcome> ExecuteDetailedAsync(ComputeRunToolRequest request,
+        bool requireResourceLimits,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // The handler validates this before delegating; stating it here keeps the invariant visible rather than resting
-        // on a null-forgiving operator at the call site.
-        var code = request.Code
-                   ?? throw new ArgumentException("The compute request carries no code.", nameof(request));
+        // The node kill-switch, read HERE and nowhere else. It used to sit in RunPythonToolHandler, which made it a
+        // property of one CALLER rather than of the sandbox: any second caller reaching this gateway executed code on
+        // a node that had never opted in. The sentence is the handler's verbatim — it is what a model has been reading
+        // since the tool shipped.
+        if (!_options.Enabled)
+        {
+            return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.ComputeDisabled,
+                "The Python compute tool is disabled on this node (Compute:Enabled=false).");
+        }
+
+        // Likewise the request validation, and for the same reason: it is now authoritative for every caller rather
+        // than for whichever one remembered to call the validator first.
+        var validationErrors = ComputeRunToolRequestValidator.Validate(request);
+        if (validationErrors.Count > 0)
+        {
+            return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.InvalidRequest,
+                $"run_python arguments are invalid: {string.Join(" ", validationErrors)}");
+        }
+
+        // Non-null by the validation immediately above, which is the only thing that establishes it.
+        var code = request.Code!;
 
         // The boundary is ADVERTISED, so it fails closed — and it fails closed HERE, before the interpreter is
         // provisioned, before the node identity is read and before a jail exists. A refusal any later would have
@@ -131,7 +163,22 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
             _logger.LogWarning(
                 "run_python refused: the '{Provider}' sandbox provider cannot isolate the compute sandbox filesystem on this host, and that boundary is not optional. Install bubblewrap (bwrap) together with the user-namespace support the sandbox containment probe reports as missing, or leave Compute:Enabled off.",
                 _provider.ProviderName);
-            return "run_python rejected: this node cannot isolate the compute sandbox filesystem, and the tool never runs a script that could read or write the rest of the machine.";
+            return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.NoIsolation,
+                "run_python rejected: this node cannot isolate the compute sandbox filesystem, and the tool never runs a script that could read or write the rest of the machine.");
+        }
+
+        // The ceilings are CAPABILITY-gated (SandboxResourceCeilings.Resolve returns null when the backend cannot
+        // impose them), so on a host with no working systemd user scope a script runs unbounded in CPU, memory and
+        // process count. Acceptable for a tool a human approved call by call; not acceptable for code executed
+        // unattended. Only a caller that says so is refused here — which is exactly why this hardening is not a
+        // regression for run_python, which does not ask.
+        if (requireResourceLimits && !_provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits))
+        {
+            _logger.LogWarning(
+                "A compute execution requiring enforceable resource ceilings was refused: the '{Provider}' sandbox provider cannot impose CPU, memory or process limits on this host.",
+                _provider.ProviderName);
+            return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.NoResourceLimits,
+                "run_python rejected: this node's sandbox cannot enforce CPU, memory and process ceilings, and unattended execution is not run without them.");
         }
 
         // One id for everything this invocation owns: its jail and its execution. Both are per call, and killing the
@@ -155,23 +202,26 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
                 _logger.LogWarning(
                     "run_python refused: the '{Provider}' sandbox provider reports no jail root, so there is no host directory to back the sandbox's writable tree or to meter against the disk ceiling.",
                     _provider.ProviderName);
-                return "run_python rejected: this node's sandbox cannot give the script a working directory of its own.";
+                return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.NoJailRoot,
+                    "run_python rejected: this node's sandbox cannot give the script a working directory of its own.");
             }
 
             await EnsureScratchAsync(handle, cancellationToken).ConfigureAwait(false);
             var result = await _provider.ExecuteAsync(handle, BuildCommandRequest(runtime.InterpreterPath, code, invocationId), cancellationToken)
                                         .ConfigureAwait(false);
-            return FormatResult(result);
+            return ComputeExecutionOutcome.Executed(result);
         }
         catch (ComputeEnvironmentException exception)
         {
             // Model-safe by contract (see the exception type), so it is the one class of failure surfaced verbatim.
-            return $"run_python rejected: {exception.Message}";
+            return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.EnvironmentUnavailable,
+                $"run_python rejected: {exception.Message}");
         }
         catch (SandboxCapabilityNotSupportedException exception)
         {
             _logger.LogWarning(exception, "The compute sandbox could not be created with the requested containment.");
-            return "run_python rejected: this node's sandbox cannot provide the containment the compute tool requires.";
+            return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.ContainmentUnavailable,
+                "run_python rejected: this node's sandbox cannot provide the containment the compute tool requires.");
         }
         finally
         {
