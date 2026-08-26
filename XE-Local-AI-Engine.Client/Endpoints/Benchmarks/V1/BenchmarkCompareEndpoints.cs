@@ -52,6 +52,15 @@ public sealed class CompareBenchmarkCellsEndpoint(IBenchmarkStore store)
         }
 
         var page = await _store.ListCellsAsync(req.ProjectId, ct).ConfigureAwait(false);
+
+        // Which leaves count toward a quality number. A NIAH case is judged and carries its own score, but that score
+        // is a recall figure on its own axis and never enters the cell mean, so it must not enter a paired delta
+        // either - a delta is the same class of aggregate. The cell table cannot answer this and only the item rows
+        // can, which costs one extra read whose payloads get decrypted to reach one boolean. That is acceptable on a
+        // compare an operator triggers by hand. If it ever stops being acceptable, surface the scorable id set on the
+        // ranking instead of widening this read.
+        var items = await _store.ListTaskItemsAsync(req.ProjectId, ct).ConfigureAwait(false);
+        var scorable = items.Where(static item => item.IsLeaf && item.CountsTowardScore).Select(static item => item.Id).ToHashSet();
         var byKey = page.Cells.ToDictionary(static cell => cell.CellKey, StringComparer.Ordinal);
         var selected = new List<BenchmarkCellRecord>(requested.Count);
         foreach (var key in requested)
@@ -73,7 +82,7 @@ public sealed class CompareBenchmarkCellsEndpoint(IBenchmarkStore store)
             Cells = listed.Cells,
             RankCohort = listed.RankCohort,
             ScorableItemCount = listed.ScorableItemCount,
-            PairedDeltas = PairedDeltas(selected)
+            PairedDeltas = PairedDeltas(selected, scorable)
         }, ct).ConfigureAwait(false);
     }
 
@@ -82,14 +91,14 @@ public sealed class CompareBenchmarkCellsEndpoint(IBenchmarkStore store)
     ///     <see cref="BenchmarkPairedBootstrap.MinimumSharedItems" /> rankable items produces no entry at all: the
     ///     absence is the answer, and a zero would be indistinguishable from a measured tie.
     /// </summary>
-    private static List<BenchmarkPairedDeltaResponse> PairedDeltas(IReadOnlyList<BenchmarkCellRecord> cells)
+    private static List<BenchmarkPairedDeltaResponse> PairedDeltas(IReadOnlyList<BenchmarkCellRecord> cells, IReadOnlySet<Guid> scorable)
     {
         var deltas = new List<BenchmarkPairedDeltaResponse>();
         for (var left = 0; left < cells.Count; left++)
         {
             for (var right = left + 1; right < cells.Count; right++)
             {
-                var (a, b) = SharedQuality(cells[left], cells[right]);
+                var (a, b) = SharedQuality(cells[left], cells[right], scorable);
                 if (BenchmarkPairedBootstrap.Estimate(a, b) is not { } estimate)
                 {
                     continue;
@@ -113,19 +122,21 @@ public sealed class CompareBenchmarkCellsEndpoint(IBenchmarkStore store)
 
     /// <summary>
     ///     The two cells' quality scores for the items they SHARE, aligned and in task-item order. An item is shared
-    ///     only when both sides answered it rankably: a run the ranking excluded — truncated, item-revised,
-    ///     item-set-revised — carries a null quality and takes its item out of the comparison rather than into it
-    ///     with a guessed number. A run naming no item is a pre-suite singleton and can be shared with nothing.
+    ///     only when both sides answered it rankably AND its item counts toward the score: a run the ranking excluded
+    ///     — truncated, item-revised, item-set-revised — carries a null quality and takes its item out of the
+    ///     comparison rather than into it with a guessed number, and a display-only leaf (a NIAH case) is left out for
+    ///     the same reason it is left out of the cell mean. A run naming no item is a pre-suite singleton and can be
+    ///     shared with nothing.
     /// </summary>
-    private static (int[] A, int[] B) SharedQuality(BenchmarkCellRecord left, BenchmarkCellRecord right)
+    private static (int[] A, int[] B) SharedQuality(BenchmarkCellRecord left, BenchmarkCellRecord right, IReadOnlySet<Guid> scorable)
     {
-        var rightByItem = Rankable(right);
+        var rightByItem = Rankable(right, scorable);
         var a = new List<int>();
         var b = new List<int>();
 
         // Deterministic order: the bootstrap draws by index, so the same two cells must present their shared items
         // the same way every time or the seeded interval is not reproducible.
-        foreach (var (itemId, score) in Rankable(left)
+        foreach (var (itemId, score) in Rankable(left, scorable)
                                         .Where(entry => rightByItem.ContainsKey(entry.Key))
                                         .OrderBy(static entry => entry.Value.Index)
                                         .ThenBy(static entry => entry.Key))
@@ -137,12 +148,12 @@ public sealed class CompareBenchmarkCellsEndpoint(IBenchmarkStore store)
         return ([.. a], [.. b]);
     }
 
-    private static Dictionary<Guid, (int Index, int Quality)> Rankable(BenchmarkCellRecord cell)
+    private static Dictionary<Guid, (int Index, int Quality)> Rankable(BenchmarkCellRecord cell, IReadOnlySet<Guid> scorable)
     {
         var scores = new Dictionary<Guid, (int Index, int Quality)>();
 
         // Both nulls are already excluded by the filter, so the GetValueOrDefault calls cannot reach their defaults.
-        foreach (var item in cell.Items.Where(static item => item is { TaskItemId: not null, QualityScore: not null }))
+        foreach (var item in cell.Items.Where(item => item is { TaskItemId: not null, QualityScore: not null } && scorable.Contains(item.TaskItemId.GetValueOrDefault())))
         {
             scores.TryAdd(item.TaskItemId.GetValueOrDefault(), (item.TaskItemIndex ?? int.MaxValue, item.QualityScore.GetValueOrDefault()));
         }

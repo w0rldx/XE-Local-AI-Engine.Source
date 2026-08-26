@@ -36,9 +36,9 @@ public sealed class BenchmarkCompareEndpointTests
     {
         // A holds a flat +6 over B on all four shared items, so every resample of the paired differences means +6:
         // the interval is degenerate and the two cells ARE separated.
-        await using var context = Seeded(
+        await using var context = Seeded([
             Cell("cell:one", 76, [Item(0, 76), Item(1, 66), Item(2, 86), Item(3, 56)]),
-            Cell("cell:two", 70, [Item(0, 70), Item(1, 60), Item(2, 80), Item(3, 50)]));
+            Cell("cell:two", 70, [Item(0, 70), Item(1, 60), Item(2, 80), Item(3, 50)])]);
 
         var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
 
@@ -61,9 +61,9 @@ public sealed class BenchmarkCompareEndpointTests
     {
         // Item 3 was excluded in A (item-revised) and item 0 in B. A shared item needs a rankable score on BOTH
         // sides, so the comparison falls to the two items that have one — and two cannot support an interval.
-        await using var context = Seeded(
+        await using var context = Seeded([
             Cell("cell:one", null, [Item(0, 76), Item(1, 66), Item(2, 86), Item(3, null, "item-revised")]),
-            Cell("cell:two", null, [Item(0, null, "item-revised"), Item(1, 60), Item(2, 80), Item(3, 50)]));
+            Cell("cell:two", null, [Item(0, null, "item-revised"), Item(1, 60), Item(2, 80), Item(3, 50)])]);
 
         var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
 
@@ -81,9 +81,9 @@ public sealed class BenchmarkCompareEndpointTests
     {
         // An item-set-revised cell carries no quality on any run: it was measured against a suite the project no
         // longer has, and a delta against it would be a difference between two different questions.
-        await using var context = Seeded(
+        await using var context = Seeded([
             Cell("cell:one", 76, [Item(0, 76), Item(1, 66), Item(2, 86)]),
-            Cell("cell:two", null, [Item(0, null), Item(1, null), Item(2, null)], "item-set-revised"));
+            Cell("cell:two", null, [Item(0, null), Item(1, null), Item(2, null)], "item-set-revised")]);
 
         var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
 
@@ -97,10 +97,10 @@ public sealed class BenchmarkCompareEndpointTests
     [Test]
     public async Task Compare_ThreeCells_ReportsEveryUnorderedPairOnce()
     {
-        await using var context = Seeded(
+        await using var context = Seeded([
             Cell("cell:one", 80, [Item(0, 80), Item(1, 80), Item(2, 80)]),
             Cell("cell:two", 70, [Item(0, 70), Item(1, 70), Item(2, 70)]),
-            Cell("cell:three", 60, [Item(0, 60), Item(1, 60), Item(2, 60)]));
+            Cell("cell:three", 60, [Item(0, 60), Item(1, 60), Item(2, 60)])]);
 
         var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two&cellKeys=cell:three").ConfigureAwait(false);
 
@@ -116,9 +116,9 @@ public sealed class BenchmarkCompareEndpointTests
     [Test]
     public async Task Compare_TwoCellsThatTie_IsNotSeparated()
     {
-        await using var context = Seeded(
+        await using var context = Seeded([
             Cell("cell:one", 70, [Item(0, 80), Item(1, 70), Item(2, 60)]),
-            Cell("cell:two", 70, [Item(0, 60), Item(1, 70), Item(2, 80)]));
+            Cell("cell:two", 70, [Item(0, 60), Item(1, 70), Item(2, 80)])]);
 
         var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
 
@@ -130,12 +130,33 @@ public sealed class BenchmarkCompareEndpointTests
     }
 
     [Test]
+    public async Task Compare_ADisplayOnlyLeaf_IsNotInTheDelta()
+    {
+        // Item 3 is a NIAH case: judged, scored, and excluded from every quality aggregate. Both cells answered it,
+        // and A "wins" it by 40 - which must not move the delta at all. The other three items are a flat +6.
+        await using var context = Seeded(
+        [
+            Cell("cell:one", 76, [Item(0, 76), Item(1, 66), Item(2, 86), Item(3, 90)]),
+            Cell("cell:two", 70, [Item(0, 70), Item(1, 60), Item(2, 80), Item(3, 50)])
+        ], displayOnlyIndexes: 3);
+
+        var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, status);
+        using var document = JsonDocument.Parse(content);
+        var delta = document.RootElement.GetProperty("pairedDeltas")[0];
+        AssertEx.Equal(3, delta.GetProperty("sharedItemCount").GetInt32());
+        AssertEx.Equal(6d, delta.GetProperty("delta").GetDouble());
+        AssertEx.Equal(6d, delta.GetProperty("ciHigh").GetDouble());
+    }
+
+    [Test]
     [Arguments("cellKeys=cell:one")]
     [Arguments("")]
     [Arguments("cellKeys=a&cellKeys=b&cellKeys=c&cellKeys=d&cellKeys=e&cellKeys=f&cellKeys=g")]
     public async Task Compare_OutsideTwoToSixCells_Is400(string query)
     {
-        await using var context = Seeded(Cell("cell:one", 70, [Item(0, 70)]));
+        await using var context = Seeded([Cell("cell:one", 70, [Item(0, 70)])]);
 
         var (status, content) = await GetAsync(context, query).ConfigureAwait(false);
 
@@ -146,7 +167,7 @@ public sealed class BenchmarkCompareEndpointTests
     [Test]
     public async Task Compare_WithADuplicateCellKey_Is400()
     {
-        await using var context = Seeded(Cell("cell:one", 70, [Item(0, 70), Item(1, 70), Item(2, 70)]));
+        await using var context = Seeded([Cell("cell:one", 70, [Item(0, 70), Item(1, 70), Item(2, 70)])]);
 
         var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:one").ConfigureAwait(false);
 
@@ -157,7 +178,7 @@ public sealed class BenchmarkCompareEndpointTests
     [Test]
     public async Task Compare_WithAnUnknownCellKey_Is400_NamingIt()
     {
-        await using var context = Seeded(Cell("cell:one", 70, [Item(0, 70), Item(1, 70), Item(2, 70)]));
+        await using var context = Seeded([Cell("cell:one", 70, [Item(0, 70), Item(1, 70), Item(2, 70)])]);
 
         var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:gone").ConfigureAwait(false);
 
@@ -175,14 +196,28 @@ public sealed class BenchmarkCompareEndpointTests
         AssertEx.Equal(HttpStatusCode.NotFound, status);
     }
 
-    private static Context Seeded(params BenchmarkCellRecord[] cells)
+    /// <param name="displayOnlyIndexes">Item indexes whose leaf does NOT count toward the score, as a NIAH case does not.</param>
+    private static Context Seeded(BenchmarkCellRecord[] cells, params int[] displayOnlyIndexes)
     {
         var context = new Context();
+        var indexes = cells.SelectMany(static cell => cell.Items)
+                           .Select(static item => item.TaskItemIndex ?? 0)
+                           .Distinct()
+                           .Order()
+                           .ToArray();
         context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
+        context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns([.. indexes.Select(index => TaskItem(index, !displayOnlyIndexes.Contains(index)))]);
         context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
-               .Returns(new BenchmarkCellPage(cells, new BenchmarkRankCohort(2, "cohort-key", 3, cells.Length, cells.Length), ScorableItemCount: 3));
+               .Returns(new BenchmarkCellPage(cells,
+                   new BenchmarkRankCohort(2, "cohort-key", 3, cells.Length, cells.Length),
+                   ScorableItemCount: indexes.Length - displayOnlyIndexes.Length));
         return context;
     }
+
+    private static BenchmarkTaskItemRecord TaskItem(int index, bool countsTowardScore) =>
+        new(ItemId(index), ProjectId, ParentItemId: null, index, BenchmarkTaskItemKinds.Prompt, Revision: 1, "v1:hash",
+            countsTowardScore, Encoding.UTF8.GetBytes("\"ask\""), null, null, null, Version: 1, CreatedAtUtc: 10, UpdatedAtUtc: 20);
 
     private static async Task<(HttpStatusCode Status, string Content)> GetAsync(Context context, string query)
     {
