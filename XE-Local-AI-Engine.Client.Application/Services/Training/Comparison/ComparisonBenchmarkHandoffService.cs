@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Training.Comparison;
 
+using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
@@ -104,7 +105,9 @@ public sealed class ComparisonBenchmarkHandoffService(
                 "The base and tuned sides of this comparison resolve to the same installed model, so there is nothing to compare. Register the tuned artifact under its own model name first.");
         }
 
-        var name = string.IsNullOrWhiteSpace(command.Name) ? comparison.Name : command.Name.Trim();
+        // Trimmed on both branches because that is what the project service stores, and an untrimmed name would
+        // never match the project it just created.
+        var name = (string.IsNullOrWhiteSpace(command.Name) ? comparison.Name : command.Name).Trim();
         var project = await GetOrCreateProjectAsync(name, command, cancellationToken).ConfigureAwait(false);
 
         // One scope for the pair, exactly as the matrix batch does: one capability probe, one verified lease per model,
@@ -130,27 +133,61 @@ public sealed class ComparisonBenchmarkHandoffService(
     }
 
     /// <summary>
-    ///     Reuses the project named for this comparison when one already exists, so re-running the hand-off after a
-    ///     failed pair adds runs to the same ranking cohort instead of scattering the comparison over near-identical
-    ///     projects. Matched on the exact name, the same ordinal rule the comparison report matches model names by.
+    ///     Reuses the project this comparison already has when one exists, so re-running the hand-off after a failed
+    ///     pair adds runs to the same ranking cohort instead of scattering the comparison over near-identical projects.
     /// </summary>
     private async Task<BenchmarkProjectRecord> GetOrCreateProjectAsync(string name,
         CreateBenchmarkFromComparisonCommand command,
         CancellationToken cancellationToken)
     {
         var existing = await _benchmarks.ListProjectsAsync(cancellationToken).ConfigureAwait(false);
-        var match = existing.FirstOrDefault(project => string.Equals(project.Name, name, StringComparison.Ordinal));
+        var match = existing.FirstOrDefault(project => IsSameBenchmark(project, name, command));
         if (match is not null)
         {
             return match;
         }
 
         return await _projects.CreateAsync(new BenchmarkProjectDraft(Guid.Empty,
-                                   name,
+                                   Disambiguate(name, existing),
                                    command.CoreTask,
                                    command.ContextTokens,
                                    command.AgentDefinitionId), cancellationToken)
                               .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     A project name is NOT an identity: names are not unique and a project carries no comparison id, so matching
+    ///     on the name alone benchmarked the two models against whatever task the first project of that name happened
+    ///     to hold — silently, and against a context window and an agent the operator never asked for. Reuse therefore
+    ///     requires every field this hand-off freezes against to match as well.
+    ///     <para>
+    ///         The judge is deliberately NOT part of the key. The hand-off never sets one, and turning judging on
+    ///         afterwards does not make the project a different benchmark — it changes how its runs are scored, on both
+    ///         sides equally.
+    ///     </para>
+    /// </summary>
+    private static bool IsSameBenchmark(BenchmarkProjectRecord project, string name, CreateBenchmarkFromComparisonCommand command) =>
+        string.Equals(project.Name, name, StringComparison.Ordinal)
+        && project.ContextTokens == command.ContextTokens
+        && project.AgentDefinitionId == command.AgentDefinitionId
+        // Compared as the stored bytes, the same way the store decides a core-task edit is a no-op: a decode would
+        // throw on a payload written by an older shape, turning an unrelated project into a failed hand-off.
+        && project.CoreTaskJson.Span.SequenceEqual(JsonSerializer.SerializeToUtf8Bytes(command.CoreTask));
+
+    /// <summary>
+    ///     A free name, suffixed when the wanted one is taken by a project that benchmarks something else. Two
+    ///     comparisons sharing a name are two cohorts: merging them would rank runs that never shared a task.
+    /// </summary>
+    private static string Disambiguate(string name, IReadOnlyList<BenchmarkProjectRecord> existing)
+    {
+        var suffix = 1;
+        var candidate = name;
+        while (existing.Any(project => string.Equals(project.Name, candidate, StringComparison.Ordinal)))
+        {
+            candidate = $"{name} ({++suffix})";
+        }
+
+        return candidate;
     }
 
     /// <summary>

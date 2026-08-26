@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Training.Evaluation;
 
+using System.Text.Json;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -189,14 +190,51 @@ public sealed class ComparisonBenchmarkHandoffServiceTests
         AssertEx.Equal(expected: 0, harness.CommittedBatches.Count);
     }
 
+    /// <summary>
+    ///     A name is not an identity. Reusing a same-named project that holds a DIFFERENT task benchmarked both models
+    ///     against a question the operator never asked, with nothing saying so.
+    /// </summary>
+    [Test]
+    [Arguments("Answer the support ticket.", 8192)]
+    [Arguments(CoreTask, 32768)]
+    public async Task CreateAsync_WhenTheSameNameHoldsADifferentBenchmark_CreatesADisambiguatedProject(string coreTask, int contextTokens)
+    {
+        var harness = new Harness();
+        var unrelated = Project(Guid.NewGuid(), "Tuned vs base", version: 7, coreTask, contextTokens);
+        harness.Benchmarks.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<BenchmarkProjectRecord>>([unrelated]);
+
+        var result = await harness.Service.CreateAsync(Command(), CancellationToken.None);
+
+        AssertEx.Equal(harness.CreatedProjectId, result.ProjectId);
+        // Suffixed rather than merged: two comparisons under one name are two cohorts.
+        AssertEx.Equal("Tuned vs base (2)", harness.CreatedDraft!.Name);
+        AssertEx.Equal(CoreTask, harness.CreatedDraft.CoreTask);
+    }
+
+    [Test]
+    public async Task CreateAsync_WhenTheSameNameHoldsADifferentAgent_CreatesANewProject()
+    {
+        var harness = new Harness();
+        var unrelated = Project(Guid.NewGuid(), "Tuned vs base", version: 7) with
+        {
+            AgentDefinitionId = Guid.NewGuid()
+        };
+        harness.Benchmarks.ListProjectsAsync(Arg.Any<CancellationToken>()).Returns<IReadOnlyList<BenchmarkProjectRecord>>([unrelated]);
+
+        var result = await harness.Service.CreateAsync(Command(), CancellationToken.None);
+
+        AssertEx.Equal(harness.CreatedProjectId, result.ProjectId);
+        AssertEx.Equal("Tuned vs base (2)", harness.CreatedDraft!.Name);
+    }
+
     private static CreateBenchmarkFromComparisonCommand Command() =>
         new(ComparisonId, CoreTask, ContextTokens: 8192, AgentDefinitionId, "Tuned vs base", "q8_0", RepeatCount: 2);
 
-    private static BenchmarkProjectRecord Project(Guid id, string name, long version) =>
+    private static BenchmarkProjectRecord Project(Guid id, string name, long version, string coreTask = CoreTask, int contextTokens = 8192) =>
         new(id,
             name,
-            ReadOnlyMemory<byte>.Empty,
-            ContextTokens: 8192,
+            JsonSerializer.SerializeToUtf8Bytes(coreTask),
+            contextTokens,
             AgentDefinitionId,
             JudgeEnabled: false,
             CurrentJudgePolicyRevisionId: null,
