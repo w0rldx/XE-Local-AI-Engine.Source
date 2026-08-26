@@ -258,6 +258,16 @@ public interface IBenchmarkStore
         return [];
     }
 
+    /// <summary>
+    ///     Removes a terminal run and everything that pointed at it: work items, judge attempts, and every pairwise
+    ///     comparison it took part in on EITHER side. Refused while any of those is Queued or Running — including a
+    ///     comparison whose canonical first run is the other one, which no work item names.
+    ///     <para>
+    ///         Deleting comparisons bumps the affected revisions' <c>ComparisonSetVersion</c> and deactivates the
+    ///         project's active pairwise fits, because a fit whose fitted set names a deleted run ranks something that
+    ///         is not there. The next planner pass re-fits whatever cohort is left.
+    ///     </para>
+    /// </summary>
     Task DeleteRunAsync(Guid runId, long expectedRunVersion, CancellationToken cancellationToken = default);
 
     /// <summary>

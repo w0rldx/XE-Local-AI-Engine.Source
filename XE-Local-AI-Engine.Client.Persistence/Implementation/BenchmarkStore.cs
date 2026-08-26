@@ -1780,6 +1780,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             || await _dbContext.BenchmarkJudgeAttempts.AnyAsync(entity => entity.RunId == runId
                                                                           && (entity.Status == BenchmarkJudgeAttemptStatus.Queued
                                                                               || entity.Status == BenchmarkJudgeAttemptStatus.Running), cancellationToken)
+                               .ConfigureAwait(false)
+
+            // A comparison names TWO runs and its work item names only the canonical first, so the work-item guard
+            // above sees a live comparison when this run is the A side and is blind to it when the run is the B side.
+            // Asking the comparison rows themselves is the only guard that covers both.
+            || await _dbContext.BenchmarkComparisons.AnyAsync(entity => (entity.RunAId == runId || entity.RunBId == runId)
+                                                                        && (entity.Status == BenchmarkJudgeAttemptStatus.Queued
+                                                                            || entity.Status == BenchmarkJudgeAttemptStatus.Running), cancellationToken)
                                .ConfigureAwait(false))
         {
             throw new BenchmarkConflictException("ActiveRun");
@@ -1790,6 +1798,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var projectId = run.ProjectId;
         run.CurrentJudgeAttemptId = null;
         await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await DeleteComparisonsOfAsync(runId, projectId, cancellationToken).ConfigureAwait(false);
         await _dbContext.BenchmarkWorkItems.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await _dbContext.BenchmarkJudgeAttempts.Where(entity => entity.RunId == runId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         // The deletes intentionally bypass the tracker: this scope may have materialized the required work/run
@@ -1806,6 +1815,54 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         }
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Removes every comparison the run took part in — as the A side or the B side — together with the work items
+    ///     that carry them, then bumps each affected revision's <c>ComparisonSetVersion</c> and retires the project's
+    ///     active fits.
+    ///     <para>
+    ///         Deleting only by <see cref="BenchmarkWorkItem.RunId" /> stranded half of them: a comparison's work item
+    ///         names the canonical FIRST run, so deleting the B side left comparison rows pointing at a run that no
+    ///         longer exists and a published fit ranking it. The version bump is what makes the surviving fit read
+    ///         stale; deactivating it is what makes the next planner pass re-fit the cohort that is actually left,
+    ///         because a fit whose fitted set names a deleted run is not a ranking of anything.
+    ///     </para>
+    /// </summary>
+    private async Task DeleteComparisonsOfAsync(Guid runId, Guid projectId, CancellationToken cancellationToken)
+    {
+        var affected = await _dbContext.BenchmarkComparisons.AsNoTracking()
+                                       .Where(entity => entity.RunAId == runId || entity.RunBId == runId)
+                                       .Select(entity => new
+                                       {
+                                           entity.Id,
+                                           entity.PolicyRevisionId
+                                       })
+                                       .ToArrayAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+        if (affected.Length == 0)
+        {
+            return;
+        }
+
+        var comparisonIds = affected.Select(static entry => entry.Id).ToArray();
+        var revisionIds = affected.Select(static entry => entry.PolicyRevisionId).Distinct().ToArray();
+        _ = await _dbContext.BenchmarkWorkItems
+                            .Where(entity => entity.ComparisonId != null && comparisonIds.Contains(entity.ComparisonId.Value))
+                            .ExecuteDeleteAsync(cancellationToken)
+                            .ConfigureAwait(false);
+        _ = await _dbContext.BenchmarkComparisons.Where(entity => comparisonIds.Contains(entity.Id))
+                            .ExecuteDeleteAsync(cancellationToken)
+                            .ConfigureAwait(false);
+        _ = await _dbContext.BenchmarkJudgePolicyRevisions.Where(entity => revisionIds.Contains(entity.Id))
+                            .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.ComparisonSetVersion, entity => entity.ComparisonSetVersion + 1),
+                                cancellationToken)
+                            .ConfigureAwait(false);
+        _ = await _dbContext.BenchmarkPairwiseFits.Where(entity => entity.ProjectId == projectId && entity.IsActive)
+                            .ExecuteUpdateAsync(setters => setters
+                                                           .SetProperty(entity => entity.IsActive, false)
+                                                           .SetProperty(entity => entity.Version, entity => entity.Version + 1), cancellationToken)
+                            .ConfigureAwait(false);
     }
 
     public async Task<BenchmarkJudgePolicyActivation> ActivateJudgePolicyAsync(Guid projectId,

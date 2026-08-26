@@ -231,6 +231,81 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
         AssertEx.False(reason?.StartsWith("pairwise-", StringComparison.Ordinal) == true, "A pointwise project must never read a pairwise reason.");
     }
 
+    [Test]
+    public async Task DeleteRunAsync_WhileAComparisonNamingItIsQueued_IsRefusedFromEitherSideOfThePair()
+    {
+        await using var context = await CreateSchemaAsync("delete-live-comparison.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, _, runs) = await SeedCohortAsync(store, runCount: 2).ConfigureAwait(false);
+        _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null).ConfigureAwait(false);
+        var (runA, runB) = runs[0].CompareTo(runs[1]) < 0 ? (runs[0], runs[1]) : (runs[1], runs[0]);
+
+        // The B side is the one the old guard could not see: a comparison's work item names only the canonical FIRST
+        // run, so deleting B walked straight past "is anything queued for this run".
+        var refusedB = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => DeleteAsync(store, runB)).ConfigureAwait(false);
+        var refusedA = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => DeleteAsync(store, runA)).ConfigureAwait(false);
+
+        AssertEx.Equal("ActiveRun", refusedB.Code);
+        AssertEx.Equal("ActiveRun", refusedA.Code);
+        AssertEx.Equal(expected: 2, (await store.GetPairwiseCohortAsync(project.Id).ConfigureAwait(false)).Comparisons.Count);
+    }
+
+    [Test]
+    public async Task DeleteRunAsync_OfAFittedParticipant_RemovesItsComparisonsAndRetiresTheFit()
+    {
+        await using var context = await CreateSchemaAsync("delete-fitted-participant.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision, runs) = await SeedCohortAsync(store, runCount: 3).ConfigureAwait(false);
+        _ = await store.EnsureComparisonsAsync(project.Id, Slots(runs), Runtime(), null).ConfigureAwait(false);
+        for (var index = 0; index < 6; index++)
+        {
+            var claimed = await ClaimComparisonAsync(store).ConfigureAwait(false);
+            await store.MarkComparisonSucceededAsync(new BenchmarkComparisonSuccessCommand(claimed.QueueSequence, claimed.Version, "a", null, false, false))
+                       .ConfigureAwait(false);
+        }
+
+        var beforeVersion = (await store.GetPairwiseCohortAsync(project.Id).ConfigureAwait(false)).ComparisonSetVersion;
+        AssertEx.True(await store.PublishPairwiseFitAsync(Fit(project, revision, "v1:fitted", beforeVersion, runs, [70, 50, 30])).ConfigureAwait(false));
+
+        await DeleteAsync(store, runs[2]).ConfigureAwait(false);
+
+        var cohort = await store.GetPairwiseCohortAsync(project.Id).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, cohort.Candidates.Count);
+        AssertEx.Equal(expected: 2, cohort.Comparisons.Count, "Only the surviving pair's two orders are left; four comparisons named the deleted run.");
+        AssertEx.True(cohort.Comparisons.All(comparison => comparison.RunAId != runs[2] && comparison.RunBId != runs[2]),
+            "Foreign keys are off, so a comparison naming a deleted run would simply sit there forever.");
+        AssertEx.True(cohort.ComparisonSetVersion > beforeVersion, "The set the fit covered has changed, and staleness is that one integer.");
+
+        // The published fit ranked a run that no longer exists, so it is retired rather than left stale-but-active:
+        // the next planner pass re-fits the cohort that is actually left.
+        AssertEx.Null(await store.GetActivePairwiseFitAsync(project.Id).ConfigureAwait(false));
+        context.ChangeTracker.Clear();
+        AssertEx.Empty(await context.BenchmarkWorkItems.AsNoTracking()
+                                    .Where(item => item.Kind == BenchmarkWorkKind.Comparison && item.RunId == runs[2])
+                                    .ToListAsync()
+                                    .ConfigureAwait(false));
+
+        // Re-plannable: the surviving pair is already covered both ways round, so a planner pass adds nothing new.
+        AssertEx.Equal(expected: 0, await store.EnsureComparisonsAsync(project.Id, Slots([runs[0], runs[1]]), Runtime(), null).ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task DeleteRunAsync_OnAPointwiseProject_TouchesNoPairwiseState()
+    {
+        await using var context = await CreateSchemaAsync("delete-pointwise.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision, runs) = await SeedCohortAsync(store, runCount: 2).ConfigureAwait(false);
+        AssertEx.True(await store.PublishPairwiseFitAsync(Fit(project, revision, "v1:untouched", setVersion: 1, runs)).ConfigureAwait(false));
+
+        await DeleteAsync(store, runs[1]).ConfigureAwait(false);
+
+        // No comparison ever named this run, so nothing pairwise is invalidated by its removal.
+        AssertEx.Equal("v1:untouched", AssertEx.NotNull(await store.GetActivePairwiseFitAsync(project.Id).ConfigureAwait(false)).FitKey);
+    }
+
+    private static async Task DeleteAsync(BenchmarkStore store, Guid runId) =>
+        await store.DeleteRunAsync(runId, AssertEx.NotNull(await store.GetRunAsync(runId).ConfigureAwait(false)).Version).ConfigureAwait(false);
+
     /// <summary>
     ///     A fitted score lives in the fit row and nowhere else. Per-run copies were the design that let a crash
     ///     between run four and run five leave a ranking blended from two fits, every row internally consistent and the
