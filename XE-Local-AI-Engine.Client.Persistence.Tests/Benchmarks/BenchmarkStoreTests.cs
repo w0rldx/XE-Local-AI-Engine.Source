@@ -107,6 +107,117 @@ public sealed class BenchmarkStoreTests : IDisposable
     }
 
     [Test]
+    public async Task UpdateProjectFidelity_WritesThroughTheFreezeAndLeavesStoredMeasurementsAlone()
+    {
+        // The ordinary project write refuses a frozen project because its runs were measured against the task,
+        // context and agent it carries. The fidelity settings are none of those: they decide what gets measured NEXT.
+        // Changing the base model therefore does not touch a stored number — it changes the digest the project now
+        // expects, which is what makes the old figure read stale instead of silently comparable.
+        var databasePath = GetDatabasePath("project-fidelity-patch.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        const string OldDigest = "v1:" + "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        var project = await store.CreateProjectAsync(CreateProject() with
+        {
+            FidelityEnabled = true,
+            FidelityKldEnabled = true,
+            FidelityKldBaseModelName = "base.gguf",
+            FidelityKldBaseFingerprint = "v1:" + new string('b', 64)
+        });
+        var run = await store.StartRunAsync(CreateRun(project));
+        var primary = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, primary.Run.Version,
+            Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 120));
+
+        // Freeze queued the fidelity item beside the run; terminalize it so the run carries a stored KLD figure.
+        var fidelity = AssertEx.NotNull(await store.ClaimNextAsync());
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, fidelity.Version,
+            fidelity.FidelityAttemptId!.Value, PerplexityMean: 6.5, KldMean: 0.01, BaseModelName: "base.gguf",
+            BaseModelContentFingerprint: "v1:" + new string('b', 64), BaseLogitsDigest: OldDigest));
+
+        var frozen = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        AssertEx.True(frozen.IsFrozen, "The project has a run, so every ordinary edit is refused.");
+        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() =>
+            store.UpdateProjectAsync(project.Id, frozen.Version, CreateProject(project.Id)));
+
+        var change = await store.UpdateProjectFidelityAsync(project.Id, frozen.Version,
+            new BenchmarkProjectFidelityInput(FidelityEnabled: true, FidelityKldEnabled: true, FidelityChunks: 50,
+                "other-base.gguf", "v1:" + new string('c', 64)));
+
+        AssertEx.Equal("other-base.gguf", change.Project.FidelityKldBaseModelName);
+        AssertEx.Equal<int?>(50, change.Project.FidelityChunks);
+        AssertEx.True(change.Project.IsFrozen, "The write went through the freeze; it did not lift it.");
+        AssertEx.Empty(change.EnqueuedRunIds, "Nothing was re-measured — the operator did not ask for that.");
+
+        // The measurement is untouched and still carries the digest it was measured under, so the display gate has
+        // both halves it needs to decide the figure is stale rather than deleting or rewriting it.
+        var measured = AssertEx.NotNull(await store.GetRunAsync(run.Id));
+        AssertEx.Equal(OldDigest, measured.Fidelity?.KldBaseLogitsDigest);
+        AssertEx.Equal(1, (await store.ListFidelityAttemptsAsync(run.Id)).Count);
+    }
+
+    [Test]
+    public async Task UpdateProjectFidelity_WithMeasureExisting_QueuesOneItemPerUnmeasuredSucceededCell()
+    {
+        var databasePath = GetDatabasePath("project-fidelity-measure-existing.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+
+        // Two succeeded runs and one still queued. Fidelity was off, so none of them has an attempt.
+        var succeeded = new List<Guid>();
+        for (var index = 0; index < 2; index++)
+        {
+            var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+            var run = await store.StartRunAsync(CreateRun(current));
+            var claimed = AssertEx.NotNull(await store.ClaimNextAsync());
+            _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
+                Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 7, 4096, 100, 12, 120));
+            succeeded.Add(run.Id);
+        }
+
+        var withQueued = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var queuedRun = await store.StartRunAsync(CreateRun(withQueued));
+
+        var latest = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var change = await store.UpdateProjectFidelityAsync(latest.Id, latest.Version,
+            new BenchmarkProjectFidelityInput(FidelityEnabled: true, FidelityKldEnabled: false, FidelityChunks: null, null, null),
+            measureExisting: true);
+
+        AssertEx.Equal(2, change.EnqueuedRunIds.Count, "Only the succeeded cells; the queued run gets its item at its own terminalization.");
+        AssertEx.True(change.EnqueuedRunIds.OrderBy(static id => id).SequenceEqual(succeeded.OrderBy(static id => id)));
+        AssertEx.Equal(1, (await store.ListFidelityAttemptsAsync(succeeded[0])).Count);
+        AssertEx.Empty(await store.ListFidelityAttemptsAsync(queuedRun.Id));
+
+        // Idempotent: a second measureExisting write finds nothing left to measure rather than doubling the queue.
+        var after = AssertEx.NotNull(await store.GetProjectAsync(project.Id));
+        var again = await store.UpdateProjectFidelityAsync(after.Id, after.Version,
+            new BenchmarkProjectFidelityInput(FidelityEnabled: true, FidelityKldEnabled: false, FidelityChunks: null, null, null),
+            measureExisting: true);
+
+        AssertEx.Empty(again.EnqueuedRunIds);
+        AssertEx.Equal(1, (await store.ListFidelityAttemptsAsync(succeeded[0])).Count);
+    }
+
+    [Test]
+    public async Task UpdateProjectFidelity_OnAStaleVersion_Conflicts()
+    {
+        var databasePath = GetDatabasePath("project-fidelity-cas.sqlite");
+        await using var context = CreateContext(databasePath);
+        await context.Database.EnsureDeletedAsync();
+        await context.Database.EnsureCreatedAsync();
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var project = await store.CreateProjectAsync(CreateProject());
+
+        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.UpdateProjectFidelityAsync(project.Id, project.Version + 1,
+            new BenchmarkProjectFidelityInput(FidelityEnabled: true, FidelityKldEnabled: false, FidelityChunks: null, null, null)));
+    }
+
+    [Test]
     public async Task MarkPrimarySucceeded_RoundTripsTheThroughputSplitAndClearsItOnCancellation()
     {
         // Two halves of one invariant. Written: the six columns survive a read back, so the pp/tg split the runtime

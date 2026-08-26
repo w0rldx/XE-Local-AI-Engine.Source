@@ -620,6 +620,12 @@ public sealed record BenchmarkJudgePolicyDraft(
 ///     bounded only by the effort ladder and the window. Validated as <c>1 &lt;= ReasoningBudgetTokens &lt;
 ///     ContextTokens</c>, and — with an output budget also set — as leaving a prompt reserve inside the context.
 /// </param>
+/// <summary>
+///     The four settable quant-fidelity knobs. The base model's FINGERPRINT is absent on purpose: the service resolves
+///     it from the eligible-model catalog, because it is an input to the KLD comparability digest.
+/// </summary>
+public sealed record BenchmarkProjectFidelitySettings(bool Enabled, bool KldEnabled, int? Chunks, string? KldBaseModelName);
+
 /// <param name="FidelityKldBaseModelName">
 ///     The base model KL divergence is measured against. Its FINGERPRINT is never part of a draft: the service
 ///     resolves it from the eligible-model catalog, so a caller cannot claim a base identity the node does not have.

@@ -14051,6 +14051,94 @@
         ]
       }
     },
+    "/api/local/v1/benchmarks/projects/{projectId}/fidelity": {
+      "patch": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "updateBenchmarkProjectFidelity",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateBenchmarkProjectFidelityRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectFidelityRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectFidelityChangeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/benchmarks/runs/{runId}/fidelity": {
       "post": {
         "tags": [
@@ -30929,6 +31017,164 @@
         "type": "object",
         "additionalProperties": false
       },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectFidelityChangeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "project"
+        ],
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse"
+          },
+          "enqueuedRunIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          "enqueuedCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse"
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "coreTask",
+              "judge"
+            ],
+            "properties": {
+              "coreTask": {
+                "type": "string"
+              },
+              "judge": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse"
+              },
+              "fidelityEnabled": {
+                "type": "boolean"
+              },
+              "fidelityKldEnabled": {
+                "type": "boolean"
+              },
+              "fidelityChunks": {
+                "type": "integer",
+                "format": "int32",
+                "nullable": true
+              },
+              "fidelityChunksEffective": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "fidelityKldBaseModelName": {
+                "type": "string",
+                "nullable": true
+              },
+              "fidelityKldBaseFingerprint": {
+                "type": "string",
+                "nullable": true
+              },
+              "fidelityKldExpectedDigest": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          }
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "contextTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxOutputTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "reasoningBudgetTokens": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "invocationTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "judgeEnabled": {
+            "type": "boolean"
+          },
+          "runCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isFrozen": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectFidelityRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer"
+          },
+          "fidelityEnabled": {
+            "type": "boolean"
+          },
+          "fidelityKldEnabled": {
+            "type": "boolean"
+          },
+          "fidelityChunks": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "fidelityKldBaseModelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "measureExisting": {
+            "type": "boolean"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1StartRunFidelityRequest": {
         "type": "object",
         "additionalProperties": false
@@ -31278,114 +31524,6 @@
             }
           }
         }
-      },
-      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "name"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "guid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "contextTokens": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "maxOutputTokens": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "reasoningBudgetTokens": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "invocationTimeoutSeconds": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "agentDefinitionId": {
-            "type": "string",
-            "format": "guid"
-          },
-          "judgeEnabled": {
-            "type": "boolean"
-          },
-          "runCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "isFrozen": {
-            "type": "boolean"
-          },
-          "version": {
-            "type": "integer"
-          },
-          "createdAtUtc": {
-            "type": "integer"
-          },
-          "updatedAtUtc": {
-            "type": "integer"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse"
-          },
-          {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "coreTask",
-              "judge"
-            ],
-            "properties": {
-              "coreTask": {
-                "type": "string"
-              },
-              "judge": {
-                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse"
-              },
-              "fidelityEnabled": {
-                "type": "boolean"
-              },
-              "fidelityKldEnabled": {
-                "type": "boolean"
-              },
-              "fidelityChunks": {
-                "type": "integer",
-                "format": "int32",
-                "nullable": true
-              },
-              "fidelityChunksEffective": {
-                "type": "integer",
-                "format": "int32"
-              },
-              "fidelityKldBaseModelName": {
-                "type": "string",
-                "nullable": true
-              },
-              "fidelityKldBaseFingerprint": {
-                "type": "string",
-                "nullable": true
-              },
-              "fidelityKldExpectedDigest": {
-                "type": "string",
-                "nullable": true
-              }
-            }
-          }
-        ]
       },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRequest": {
         "type": "object",

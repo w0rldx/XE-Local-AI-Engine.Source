@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 using System.Globalization;
 using FastEndpoints;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -52,6 +53,61 @@ public sealed class GetBenchmarkKldDiskEstimateEndpoint(IBenchmarkStore store, B
                       FitsOnDisk = free - estimated >= BenchmarkFidelityPolicy.KldFreeSpaceHeadroomBytes
                   }, ct)
                   .ConfigureAwait(false);
+    }
+}
+
+/// <summary>
+///     Changes a project's quant-fidelity settings. Unlike every other project write this one is allowed on a FROZEN
+///     project: the settings decide what gets measured next, not what the existing runs were measured against.
+///     <para>
+///         A base-model or chunk-count change mints a new expected comparability digest, so figures measured under the
+///         old one start reading as <c>kld-stale</c>. Nothing is deleted and no attempt is rewritten — the stale
+///         reading IS the honest answer, and the operator re-measures the runs they care about.
+///     </para>
+/// </summary>
+public sealed class UpdateBenchmarkProjectFidelityEndpoint(IBenchmarkProjectService projects, IBenchmarkStore store)
+    : Endpoint<UpdateBenchmarkProjectFidelityRequest, BenchmarkProjectFidelityChangeResponse>
+{
+    private readonly IBenchmarkProjectService _projects = projects ?? throw new ArgumentNullException(nameof(projects));
+    private readonly IBenchmarkStore _store = store ?? throw new ArgumentNullException(nameof(store));
+
+    public override void Configure()
+    {
+        Patch(LocalApiRoutes.Benchmarks.ProjectFidelity);
+        Policies(NodeAuthorizationPolicies.Operator);
+        Description(builder => builder.ProducesProblem(StatusCodes.Status400BadRequest)
+                                      .ProducesProblem(StatusCodes.Status404NotFound)
+                                      .ProducesProblem(StatusCodes.Status409Conflict));
+    }
+
+    public override async Task HandleAsync(UpdateBenchmarkProjectFidelityRequest req, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(req);
+        try
+        {
+            var change = await _projects.UpdateFidelityAsync(req.ProjectId,
+                                            req.ExpectedVersion,
+                                            new BenchmarkProjectFidelitySettings(req.FidelityEnabled,
+                                                req.FidelityKldEnabled,
+                                                req.FidelityChunks,
+                                                req.FidelityKldBaseModelName),
+                                            req.MeasureExisting,
+                                            ct)
+                                        .ConfigureAwait(false);
+            var runCount = await _store.CountRunsAsync(req.ProjectId, ct).ConfigureAwait(false);
+            await Send.OkAsync(new BenchmarkProjectFidelityChangeResponse
+                      {
+                          Project = change.Project.ToDetail(runCount,
+                              await BenchmarkJudgePolicyProjection.ReadAsync(_store, req.ProjectId, ct).ConfigureAwait(false)),
+                          EnqueuedRunIds = change.EnqueuedRunIds,
+                          EnqueuedCount = change.EnqueuedRunIds.Count
+                      }, ct)
+                      .ConfigureAwait(false);
+        }
+        catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
+        {
+            await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
+        }
     }
 }
 

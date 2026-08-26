@@ -1860,6 +1860,68 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<BenchmarkProjectFidelityChange> UpdateProjectFidelityAsync(Guid projectId,
+        long expectedProjectVersion,
+        BenchmarkProjectFidelityInput input,
+        bool measureExisting = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var project = await RequireProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(project.Version, expectedProjectVersion);
+
+        // No freeze check, on purpose. See IBenchmarkStore: a frozen project refuses edits to what its runs were
+        // measured AGAINST; these settings decide what gets measured next, and every stored number keeps the
+        // comparability digest it was measured under, so a change here makes old figures stale rather than wrong.
+        var now = Now();
+        project.FidelityEnabled = input.FidelityEnabled;
+        project.FidelityKldEnabled = input.FidelityKldEnabled;
+        project.FidelityChunks = input.FidelityChunks;
+        project.FidelityKldBaseModelName = input.FidelityKldBaseModelName;
+        project.FidelityKldBaseFingerprint = input.FidelityKldBaseFingerprint;
+        project.Version++;
+        project.UpdatedAtUtc = now;
+
+        var frozen = await _dbContext.BenchmarkRuns.AnyAsync(entity => entity.ProjectId == projectId, cancellationToken).ConfigureAwait(false);
+        var enqueued = measureExisting && input.FidelityEnabled
+            ? await EnqueueMissingFidelityAsync(project, now, cancellationToken).ConfigureAwait(false)
+            : [];
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return new BenchmarkProjectFidelityChange(ToRecord(project, frozen), enqueued);
+    }
+
+    /// <summary>
+    ///     Queues one fidelity measurement per succeeded cell that has none. The eligibility rule is freeze's own —
+    ///     non-warm-up, first of its repeat group — because a cell measured here and a cell measured at freeze must
+    ///     mean the same thing. Runs that already have an attempt are skipped rather than re-measured: a re-measure is
+    ///     the per-run route's job and costs GPU the operator did not ask for here.
+    /// </summary>
+    private async Task<IReadOnlyList<Guid>> EnqueueMissingFidelityAsync(BenchmarkProject project, long now, CancellationToken cancellationToken)
+    {
+        var kind = project.FidelityKldEnabled ? FidelityKindKld : FidelityKindPerplexity;
+        var candidates = await _dbContext.BenchmarkRuns
+                                         .Where(entity => entity.ProjectId == project.Id
+                                                          && entity.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
+                                                          && !entity.IsWarmup
+                                                          && (entity.RepeatIndex == null || entity.RepeatIndex == 1)
+                                                          && !_dbContext.BenchmarkFidelityAttempts.Any(attempt => attempt.RunId == entity.Id))
+                                         .OrderBy(entity => entity.CreatedAtUtc)
+                                         .ToListAsync(cancellationToken)
+                                         .ConfigureAwait(false);
+        foreach (var run in candidates)
+        {
+            _ = await AppendFidelityWorkAsync(run, kind, now, cancellationToken).ConfigureAwait(false);
+            run.FidelityStatus = null;
+            run.FidelityErrorMessage = null;
+            run.Version++;
+            run.UpdatedAtUtc = now;
+        }
+
+        return [.. candidates.Select(static run => run.Id)];
+    }
+
     public async Task<BenchmarkJudgeAttemptRecord?> GetJudgeAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default) =>
         await _dbContext.BenchmarkJudgeAttempts.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken).ConfigureAwait(false) is { } attempt
             ? ToRecord(attempt)

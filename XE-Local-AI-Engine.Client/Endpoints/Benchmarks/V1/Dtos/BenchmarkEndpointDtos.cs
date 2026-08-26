@@ -126,6 +126,41 @@ public class BenchmarkProjectSummaryResponse
     public long UpdatedAtUtc { get; init; }
 }
 
+/// <summary>
+///     The quant-fidelity settings, changeable on a frozen project. Deliberately NOT part of the project PUT: those
+///     fields describe what the existing runs were measured against and are frozen with them, while these decide what
+///     gets measured next.
+/// </summary>
+public sealed class UpdateBenchmarkProjectFidelityRequest
+{
+    public Guid ProjectId { get; init; }
+    public long ExpectedVersion { get; init; }
+    public bool FidelityEnabled { get; init; }
+
+    /// <summary>Requires <see cref="FidelityKldBaseModelName" />. Turning it off keeps every stored attempt.</summary>
+    public bool FidelityKldEnabled { get; init; }
+
+    /// <summary>Chunks scored at the pinned 512-token window; omitted takes the default. Range 50..655.</summary>
+    public int? FidelityChunks { get; init; }
+
+    /// <summary>An eligible local model. Its fingerprint is resolved server-side and never accepted from a client.</summary>
+    public string? FidelityKldBaseModelName { get; init; }
+
+    /// <summary>
+    ///     Also queue a measurement for every succeeded, non-warm-up, first-of-its-repeat-group run that has none.
+    ///     Off by default: enabling fidelity should not silently spend GPU on a project's whole history.
+    /// </summary>
+    public bool MeasureExisting { get; init; }
+}
+
+/// <summary>The result of a fidelity change: the updated project plus the runs a measurement was queued for.</summary>
+public sealed class BenchmarkProjectFidelityChangeResponse
+{
+    public required BenchmarkProjectDetailResponse Project { get; init; }
+    public IReadOnlyList<Guid> EnqueuedRunIds { get; init; } = [];
+    public int EnqueuedCount { get; init; }
+}
+
 public sealed class BenchmarkProjectDetailResponse : BenchmarkProjectSummaryResponse
 {
     public required string CoreTask { get; init; }

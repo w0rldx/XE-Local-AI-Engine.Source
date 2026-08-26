@@ -286,6 +286,51 @@ public sealed class BenchmarkProjectServiceTests
         AssertEx.Equal<int?>(BenchmarkFidelityPolicy.MaximumChunks, AssertEx.NotNull(context.CreatedInput).FidelityChunks);
     }
 
+    [Test]
+    public async Task UpdateFidelity_ResolvesTheFingerprintValidatesAndWakesTheQueueOnlyWhenItQueuedSomething()
+    {
+        // Same validation as the project write, through the same resolver — a second copy is how the two paths drift
+        // into disagreeing about what a valid base model is.
+        var context = new ServiceContext();
+        BenchmarkProjectFidelityInput? input = null;
+        context.Store.UpdateProjectFidelityAsync(ProjectId, 1, Arg.Do<BenchmarkProjectFidelityInput>(value => input = value),
+                   Arg.Any<bool>(), Arg.Any<CancellationToken>())
+               .Returns(call => new BenchmarkProjectFidelityChange(ServiceContext.CurrentProject(), call.ArgAt<bool>(3) ? [Guid.NewGuid()] : []));
+
+        var quiet = await context.Service.UpdateFidelityAsync(ProjectId, 1,
+            new BenchmarkProjectFidelitySettings(Enabled: true, KldEnabled: true, Chunks: 50, $"  {ServiceContext.BaseModelName}  "));
+
+        AssertEx.Empty(quiet.EnqueuedRunIds);
+        AssertEx.Equal(ServiceContext.BaseModelName, AssertEx.NotNull(input).FidelityKldBaseModelName);
+        AssertEx.Equal(ServiceContext.BaseFingerprint, input!.FidelityKldBaseFingerprint);
+        AssertEx.Equal<int?>(50, input.FidelityChunks);
+
+        var measured = await context.Service.UpdateFidelityAsync(ProjectId, 1,
+            new BenchmarkProjectFidelitySettings(Enabled: true, KldEnabled: false, Chunks: null, null),
+            measureExisting: true);
+
+        AssertEx.Equal(1, measured.EnqueuedRunIds.Count);
+        AssertEx.Null(AssertEx.NotNull(input).FidelityKldBaseFingerprint, "No base named, so nothing to resolve.");
+    }
+
+    [Test]
+    public async Task UpdateFidelity_WithAnUnusableConfiguration_IsRefusedBeforeTheStoreIsTouched()
+    {
+        var context = new ServiceContext();
+
+        var tooMany = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.UpdateFidelityAsync(ProjectId, 1,
+            new BenchmarkProjectFidelitySettings(Enabled: true, KldEnabled: false, BenchmarkFidelityPolicy.MaximumChunks + 1, null)));
+        var noBase = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.UpdateFidelityAsync(ProjectId, 1,
+            new BenchmarkProjectFidelitySettings(Enabled: true, KldEnabled: true, Chunks: null, null)));
+        var unknownBase = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => context.Service.UpdateFidelityAsync(ProjectId, 1,
+            new BenchmarkProjectFidelitySettings(Enabled: true, KldEnabled: true, Chunks: null, "not-installed.gguf")));
+
+        AssertEx.Contains(tooMany.Message, "chunk count");
+        AssertEx.Contains(noBase.Message, "requires a base model");
+        AssertEx.Contains(unknownBase.Message, "not an eligible local model");
+        _ = context.Store.DidNotReceiveWithAnyArgs().UpdateProjectFidelityAsync(Guid.Empty, 0, null!, false, CancellationToken.None);
+    }
+
     private static BenchmarkProjectDraft Draft(ServiceContext context) =>
         new(ProjectId, "Benchmark", "task", 4096, context.AgentId);
 
@@ -577,7 +622,7 @@ public sealed class BenchmarkProjectServiceTests
                 draft.ReferenceAnswer);
         }
 
-        private static BenchmarkProjectRecord CurrentProject() =>
+        internal static BenchmarkProjectRecord CurrentProject() =>
             new(ProjectId, "Benchmark", Encoding.UTF8.GetBytes("\"task\""), 4096, Guid.NewGuid(), JudgeEnabled: true, RevisionId, IsFrozen: true, 1, 1, 1);
 
         private static BenchmarkJudgePolicyRevisionRecord Revision(string? policyHash) =>

@@ -34,6 +34,7 @@ public sealed class BenchmarkEndpointTests
     [Arguments("DELETE", "/runs/00000000-0000-0000-0000-000000000002/score")]
     [Arguments("POST", "/runs/00000000-0000-0000-0000-000000000002/rejudge")]
     [Arguments("PUT", "/projects/00000000-0000-0000-0000-000000000001/judge")]
+    [Arguments("PATCH", "/projects/00000000-0000-0000-0000-000000000001/fidelity")]
     [Arguments("POST", "/projects/00000000-0000-0000-0000-000000000001/rejudge")]
     [Arguments("GET", "/rubric-presets")]
     [Arguments("GET", "/eligible-agents?modelName=model")]
@@ -43,7 +44,7 @@ public sealed class BenchmarkEndpointTests
         await using var context = CreateContext();
         using var client = context.Factory.CreateClient();
         using var request = new HttpRequestMessage(new HttpMethod(method), Api + path);
-        if (method is "POST" or "PUT" or "DELETE")
+        if (method is "POST" or "PUT" or "PATCH" or "DELETE")
         {
             request.Content = JsonContent.Create(new
             {
@@ -914,6 +915,44 @@ public sealed class BenchmarkEndpointTests
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.False(body.Contains("fidelity", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Test]
+    public async Task PatchProjectFidelity_OnAFrozenProject_SucceedsAndReportsWhatItQueued()
+    {
+        // The one project write the freeze does not refuse. If this ever starts 409-ing, an operator whose project
+        // has runs can never turn fidelity on at all, which is the hole this route exists to close.
+        await using var context = CreateContext();
+        var queued = Guid.NewGuid();
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project(isFrozen: true, fidelity: true));
+        context.Store.CountRunsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(3);
+        BenchmarkProjectFidelitySettings? settings = null;
+        var measureExisting = false;
+        context.Projects.UpdateFidelityAsync(ProjectId, 4, Arg.Do<BenchmarkProjectFidelitySettings>(value => settings = value),
+                   Arg.Do<bool>(value => measureExisting = value), Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkProjectFidelityChange(Project(isFrozen: true, fidelity: true), [queued]));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Patch, Api + $"/projects/{ProjectId}/fidelity",
+            new
+            {
+                projectId = ProjectId,
+                expectedVersion = 4,
+                fidelityEnabled = true,
+                fidelityKldEnabled = false,
+                measureExisting = true
+            });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(1, document.RootElement.GetProperty("enqueuedCount").GetInt32());
+        AssertEx.Equal(queued, document.RootElement.GetProperty("enqueuedRunIds")[0].GetGuid());
+        AssertEx.True(document.RootElement.GetProperty("project").GetProperty("isFrozen").GetBoolean());
+        AssertEx.True(document.RootElement.GetProperty("project").GetProperty("fidelityEnabled").GetBoolean());
+        AssertEx.True(AssertEx.NotNull(settings).Enabled);
+        AssertEx.False(settings!.KldEnabled);
+        AssertEx.True(measureExisting, "The flag must reach the service, or the operator's opt-in silently does nothing.");
     }
 
     [Test]

@@ -269,6 +269,11 @@ public static class LocalApiRoutes
 
         // Quant fidelity is a display-only axis measured by its own work kind, so it gets its own sub-resources
         // rather than flags on the run or project routes.
+        // The one part of a FROZEN project's configuration an operator may still change: it decides what gets
+        // measured next, not what the existing runs were measured against. Its own sub-resource for the same reason
+        // the judge has one — it never rides the project PUT, which the freeze refuses.
+        public const string ProjectFidelity = "benchmarks/projects/{projectId}/fidelity";
+
         public const string ProjectKldEstimate = "benchmarks/projects/{projectId}/fidelity/kld-estimate";
         public const string ProjectFidelityCache = "benchmarks/projects/{projectId}/fidelity/cache";
         public const string RunFidelity = "benchmarks/runs/{runId}/fidelity";

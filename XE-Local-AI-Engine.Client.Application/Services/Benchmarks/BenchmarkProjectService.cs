@@ -21,6 +21,18 @@ public interface IBenchmarkProjectService
         bool confirmRejudge,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Changes the quant-fidelity settings of a project that may already be frozen, and optionally queues a
+    ///     measurement for every succeeded cell that has none. A base-model or chunk-count change mints a new expected
+    ///     comparability digest, which makes previously stored KLD figures read as stale — no attempt is deleted or
+    ///     rewritten.
+    /// </summary>
+    Task<BenchmarkProjectFidelityChange> UpdateFidelityAsync(Guid projectId,
+        long expectedVersion,
+        BenchmarkProjectFidelitySettings settings,
+        bool measureExisting = false,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Judges one succeeded run again under the project's current policy.</summary>
     Task<BenchmarkJudgeAttemptRecord> RejudgeRunAsync(Guid runId, long expectedRunVersion, bool force, CancellationToken cancellationToken = default);
 
@@ -86,6 +98,33 @@ public sealed class BenchmarkProjectService(
                                         ToPolicyChange(policy) ?? BenchmarkJudgePolicyChangeInput.Disabled,
                                         cancellationToken)
                                     .ConfigureAwait(false);
+    }
+
+    public async Task<BenchmarkProjectFidelityChange> UpdateFidelityAsync(Guid projectId,
+        long expectedVersion,
+        BenchmarkProjectFidelitySettings settings,
+        bool measureExisting = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var baseModelName = NormalizeModelName(settings.KldBaseModelName);
+        var change = await _benchmarkStore.UpdateProjectFidelityAsync(projectId,
+                                              expectedVersion,
+                                              new BenchmarkProjectFidelityInput(settings.Enabled,
+                                                  settings.KldEnabled,
+                                                  settings.Chunks,
+                                                  baseModelName,
+                                                  await ResolveKldBaseFingerprintAsync(settings.KldEnabled, settings.Chunks, baseModelName, cancellationToken)
+                                                      .ConfigureAwait(false)),
+                                              measureExisting,
+                                              cancellationToken)
+                                          .ConfigureAwait(false);
+        if (change.EnqueuedRunIds.Count > 0)
+        {
+            _queueSignal?.Wake();
+        }
+
+        return change;
     }
 
     public async Task<BenchmarkJudgePolicyChange> UpdateJudgePolicyAsync(Guid projectId,
@@ -284,7 +323,11 @@ public sealed class BenchmarkProjectService(
             throw new BenchmarkValidationException("An existing Single agent definition is required.");
         }
 
-        var baseFingerprint = await ResolveKldBaseFingerprintAsync(draft, cancellationToken).ConfigureAwait(false);
+        var baseFingerprint = await ResolveKldBaseFingerprintAsync(draft.FidelityKldEnabled,
+                                        draft.FidelityChunks,
+                                        NormalizeModelName(draft.FidelityKldBaseModelName),
+                                        cancellationToken)
+                                    .ConfigureAwait(false);
         var policy = draft.Judge is null ? null : await BuildPolicyAsync(draft.Judge, cancellationToken).ConfigureAwait(false);
         return (new BenchmarkProjectInput(draft.Id,
                 draft.Name.Trim(),
@@ -314,13 +357,15 @@ public sealed class BenchmarkProjectService(
     ///         name fails there rather than being silently measured.
     ///     </para>
     /// </summary>
-    private async Task<string?> ResolveKldBaseFingerprintAsync(BenchmarkProjectDraft draft, CancellationToken cancellationToken)
+    private async Task<string?> ResolveKldBaseFingerprintAsync(bool kldEnabled,
+        int? chunks,
+        string? baseModelName,
+        CancellationToken cancellationToken)
     {
-        ValidateFidelityChunks(draft.FidelityChunks);
-        var baseModelName = NormalizeModelName(draft.FidelityKldBaseModelName);
+        ValidateFidelityChunks(chunks);
         if (baseModelName is null)
         {
-            if (draft.FidelityKldEnabled)
+            if (kldEnabled)
             {
                 throw new BenchmarkValidationException("KL divergence requires a base model.");
             }

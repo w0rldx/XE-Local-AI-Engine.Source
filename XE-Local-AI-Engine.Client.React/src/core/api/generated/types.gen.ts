@@ -3862,6 +3862,50 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1GetKldDiskEstimateRequest 
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectFidelityChangeResponse = {
+	project: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse;
+	enqueuedRunIds?: Array<string>;
+	enqueuedCount?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse =
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse & {
+		coreTask: string;
+		judge: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse;
+		fidelityEnabled?: boolean;
+		fidelityKldEnabled?: boolean;
+		fidelityChunks?: number | null;
+		fidelityChunksEffective?: number;
+		fidelityKldBaseModelName?: string | null;
+		fidelityKldBaseFingerprint?: string | null;
+		fidelityKldExpectedDigest?: string | null;
+	};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse = {
+	id?: string;
+	name: string;
+	contextTokens?: number;
+	maxOutputTokens?: number | null;
+	reasoningBudgetTokens?: number | null;
+	invocationTimeoutSeconds?: number | null;
+	agentDefinitionId?: string;
+	judgeEnabled?: boolean;
+	runCount?: number;
+	isFrozen?: boolean;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectFidelityRequest = {
+	expectedVersion?: number;
+	fidelityEnabled?: boolean;
+	fidelityKldEnabled?: boolean;
+	fidelityChunks?: number | null;
+	fidelityKldBaseModelName?: string | null;
+	measureExisting?: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsBenchmarksV1StartRunFidelityRequest = {
 	[key: string]: never;
 };
@@ -3966,35 +4010,6 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstima
 export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkProjectsResponse = {
 	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse>;
 };
-
-export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse = {
-	id?: string;
-	name: string;
-	contextTokens?: number;
-	maxOutputTokens?: number | null;
-	reasoningBudgetTokens?: number | null;
-	invocationTimeoutSeconds?: number | null;
-	agentDefinitionId?: string;
-	judgeEnabled?: boolean;
-	runCount?: number;
-	isFrozen?: boolean;
-	version?: number;
-	createdAtUtc?: number;
-	updatedAtUtc?: number;
-};
-
-export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse =
-	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse & {
-		coreTask: string;
-		judge: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse;
-		fidelityEnabled?: boolean;
-		fidelityKldEnabled?: boolean;
-		fidelityChunks?: number | null;
-		fidelityChunksEffective?: number;
-		fidelityKldBaseModelName?: string | null;
-		fidelityKldBaseFingerprint?: string | null;
-		fidelityKldExpectedDigest?: string | null;
-	};
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectMutationRequest = {
 	name?: string;
@@ -13295,6 +13310,48 @@ export type GetBenchmarkKldDiskEstimateResponses = {
 
 export type GetBenchmarkKldDiskEstimateResponse =
 	GetBenchmarkKldDiskEstimateResponses[keyof GetBenchmarkKldDiskEstimateResponses];
+
+export type UpdateBenchmarkProjectFidelityData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkProjectFidelityRequest;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/fidelity";
+};
+
+export type UpdateBenchmarkProjectFidelityErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type UpdateBenchmarkProjectFidelityError =
+	UpdateBenchmarkProjectFidelityErrors[keyof UpdateBenchmarkProjectFidelityErrors];
+
+export type UpdateBenchmarkProjectFidelityResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectFidelityChangeResponse;
+};
+
+export type UpdateBenchmarkProjectFidelityResponse =
+	UpdateBenchmarkProjectFidelityResponses[keyof UpdateBenchmarkProjectFidelityResponses];
 
 export type StartBenchmarkRunFidelityData = {
 	body?: never;

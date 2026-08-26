@@ -341,6 +341,7 @@ import {
 	updateAgentDefinition,
 	updateBenchmarkJudgePolicy,
 	updateBenchmarkProject,
+	updateBenchmarkProjectFidelity,
 	updateCustomTool,
 	updateLlamaCppRuntime,
 	updateMcpServer,
@@ -1135,6 +1136,9 @@ import type {
 	UpdateBenchmarkJudgePolicyResponse,
 	UpdateBenchmarkProjectData,
 	UpdateBenchmarkProjectError,
+	UpdateBenchmarkProjectFidelityData,
+	UpdateBenchmarkProjectFidelityError,
+	UpdateBenchmarkProjectFidelityResponse,
 	UpdateBenchmarkProjectResponse,
 	UpdateCustomToolData,
 	UpdateCustomToolResponse,
@@ -7124,6 +7128,30 @@ export const getBenchmarkKldDiskEstimateOptions = (options: Options<GetBenchmark
 		},
 		queryKey: getBenchmarkKldDiskEstimateQueryKey(options),
 	});
+
+export const updateBenchmarkProjectFidelityMutation = (
+	options?: Partial<Options<UpdateBenchmarkProjectFidelityData>>,
+): UseMutationOptions<
+	UpdateBenchmarkProjectFidelityResponse,
+	AxiosError<UpdateBenchmarkProjectFidelityError>,
+	Options<UpdateBenchmarkProjectFidelityData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateBenchmarkProjectFidelityResponse,
+		AxiosError<UpdateBenchmarkProjectFidelityError>,
+		Options<UpdateBenchmarkProjectFidelityData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateBenchmarkProjectFidelity({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const startBenchmarkRunFidelityMutation = (
 	options?: Partial<Options<StartBenchmarkRunFidelityData>>,

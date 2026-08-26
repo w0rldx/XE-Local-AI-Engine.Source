@@ -287,6 +287,23 @@ public interface IBenchmarkStore
     /// </summary>
     Task DisableJudgePolicyAsync(Guid projectId, long expectedProjectVersion, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Writes the project's quant-fidelity settings, and ONLY those, deliberately ignoring the freeze the ordinary
+    ///     project write honours. A frozen project refuses every other edit because its runs were measured against the
+    ///     task, context and agent it carries; the fidelity settings are none of those — they decide what gets
+    ///     measured NEXT, and every number already stored keeps its own comparability digest.
+    ///     <para>
+    ///         <paramref name="measureExisting" /> additionally enqueues a fidelity item for every succeeded,
+    ///         non-warm-up, first-of-its-repeat-group run that has no fidelity attempt yet, in the same transaction —
+    ///         the same rule freeze applies per cell. The count is reported so the operator sees what they started.
+    ///     </para>
+    /// </summary>
+    Task<BenchmarkProjectFidelityChange> UpdateProjectFidelityAsync(Guid projectId,
+        long expectedProjectVersion,
+        BenchmarkProjectFidelityInput input,
+        bool measureExisting = false,
+        CancellationToken cancellationToken = default);
+
     /// <summary>One judge attempt by id, payloads included, or null when it is gone.</summary>
     Task<BenchmarkJudgeAttemptRecord?> GetJudgeAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default);
 
@@ -674,6 +691,20 @@ public sealed record BenchmarkFidelitySuccessCommand(
 ///     The cohort key for a judging that ran no model at all because every rubric criterion was verified
 ///     server-side. Applied only when the attempt has none — a measured key, written at launch, is never overwritten.
 /// </param>
+/// <param name="FidelityKldBaseFingerprint">
+///     Resolved by the service from the eligible-model catalog, never by a caller: it is an input to the KLD
+///     comparability digest, so a supplied value could make numbers measured against different weights compare equal.
+/// </param>
+public sealed record BenchmarkProjectFidelityInput(
+    bool FidelityEnabled,
+    bool FidelityKldEnabled,
+    int? FidelityChunks,
+    string? FidelityKldBaseModelName,
+    string? FidelityKldBaseFingerprint);
+
+/// <param name="EnqueuedRunIds">The runs a <c>measureExisting</c> write queued a measurement for; empty otherwise.</param>
+public sealed record BenchmarkProjectFidelityChange(BenchmarkProjectRecord Project, IReadOnlyList<Guid> EnqueuedRunIds);
+
 public sealed record BenchmarkJudgeSuccessCommand(
     Guid RunId,
     long ExpectedWorkVersion,
