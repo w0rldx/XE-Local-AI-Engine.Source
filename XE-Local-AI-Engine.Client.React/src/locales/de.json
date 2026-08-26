@@ -4551,6 +4551,24 @@
 					"delete": "Diese Aufgabe konnte nicht gelöscht werden.",
 					"reorder": "Die Aufgaben konnten nicht umsortiert werden."
 				}
+			},
+			"cells": {
+				"view": "Kombinationen",
+				"runsView": "Alle Läufe",
+				"empty": "Noch keine gemessenen Kombinationen.",
+				"cohort": "{{ranked}} von {{scored}} Kombinationen gewertet, jeweils über {{items}} bewertete Aufgaben",
+				"quality": "Sammlungsmittel",
+				"items": "Aufgaben",
+				"itemsOf": "{{answered}} von {{total}}",
+				"recall": "Recall",
+				"recallValue": "{{found}} von {{graded}} Nadeln",
+				"expand": "Diese Kombination Aufgabe für Aufgabe anzeigen",
+				"rerun": "Erneut",
+				"unranked": "Nicht gewertet.",
+				"selectRun": "Den Lauf dieser Aufgabe in der Detailansicht zeigen",
+				"missing": "Nie beantwortet: {{items}}",
+				"legacyItem": "die Aufgabe des Projekts",
+				"unknownItem": "Aufgabe {{index}}"
 			}
 		},
 		"customTools": {

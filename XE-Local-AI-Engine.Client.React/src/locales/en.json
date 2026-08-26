@@ -4551,6 +4551,24 @@
 					"delete": "Could not delete this task item.",
 					"reorder": "Could not reorder the task items."
 				}
+			},
+			"cells": {
+				"view": "Combinations",
+				"runsView": "Every run",
+				"empty": "No measured combinations yet.",
+				"cohort": "{{ranked}} of {{scored}} combinations ranked, each over {{items}} scored items",
+				"quality": "Suite mean",
+				"items": "Items",
+				"itemsOf": "{{answered}} of {{total}}",
+				"recall": "Recall",
+				"recallValue": "{{found}} of {{graded}} needles",
+				"expand": "Show this combination item by item",
+				"rerun": "Re-run",
+				"unranked": "Not ranked.",
+				"selectRun": "Show this item's run in the detail view",
+				"missing": "Never answered: {{items}}",
+				"legacyItem": "the project's task",
+				"unknownItem": "item {{index}}"
 			}
 		},
 		"customTools": {

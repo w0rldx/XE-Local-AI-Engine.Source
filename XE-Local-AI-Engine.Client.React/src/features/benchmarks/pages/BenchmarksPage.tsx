@@ -6,6 +6,7 @@ import {
 	Grid,
 	Group,
 	Loader,
+	SegmentedControl,
 	Select,
 	SimpleGrid,
 	Stack,
@@ -40,6 +41,7 @@ import { BenchmarkBatchProgressAlert } from "@/features/benchmarks/components/Be
 import { BenchmarkExportButtons } from "@/features/benchmarks/components/BenchmarkExportButtons";
 import { BenchmarkFidelityPanel } from "@/features/benchmarks/components/BenchmarkFidelityPanel";
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
+import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
 import type { BenchmarkMatrixSelection } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkLaunchMatrix } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkPairwiseEstimateNote } from "@/features/benchmarks/components/BenchmarkPairwiseEstimateNote";
@@ -47,6 +49,7 @@ import { BenchmarkPairwiseMatrix } from "@/features/benchmarks/components/Benchm
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
 import { BenchmarkRepeatModePicker } from "@/features/benchmarks/components/BenchmarkRepeatModePicker";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
+import { BenchmarkCellsTable } from "@/features/benchmarks/components/BenchmarkCellsTable";
 import { BenchmarkRunsTable } from "@/features/benchmarks/components/BenchmarkRunsTable";
 import { BenchmarkTaskItemEditor } from "@/features/benchmarks/components/BenchmarkTaskItemEditor";
 import { benchmarkJudgeFamilyOverlap } from "@/features/benchmarks/models/BenchmarkJudgeFamily";
@@ -74,6 +77,7 @@ import { leafBenchmarkTaskItems } from "@/features/benchmarks/models/BenchmarkTa
 import { isVerifiableCriterionKind, toBenchmarkCriterionKind } from "@/features/benchmarks/models/BenchmarkVerifier";
 import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarks";
 import {
+	useBenchmarkCells,
 	useBenchmarkComparisons,
 	useBenchmarkProject,
 	useBenchmarkProjects,
@@ -177,6 +181,12 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const leafItemCount = Math.max(leafBenchmarkTaskItems(taskItemsQuery.data?.items ?? []).length, 1);
 	const medianRunMs = useMemo(() => medianBenchmarkRunDurationMs(runs), [runs]);
 	const singleRunEstimate = benchmarkRunEstimate({ cellCount: 1, leafItemCount, repeatCount: 1, warmup: false }, medianRunMs);
+	// A suite is what makes the CELL the ranked unit. A single-item project has one run per cell, so its cell table
+	// would be its runs table with a layer of indirection — it keeps the runs table it has always had.
+	const isSuite = leafItemCount > 1;
+	const cellsQuery = useBenchmarkCells(selectedProjectId, isSuite);
+	const [ranking, setRanking] = useState<"cells" | "runs">("cells");
+	const showCells = isSuite && ranking === "cells";
 	const [chartsOpen, setChartsOpen] = useState(false);
 	const batchProgress = useMemo(
 		() => (batchLaunch && batchLaunch.projectId === selectedProjectId ? benchmarkBatchProgress(runs, batchLaunch.runIds) : null),
@@ -445,6 +455,30 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						setMatrixOpen(false);
 					}
 				},
+				onError: (error) => toast.error(startRunErrorMessage(error)),
+			},
+		);
+	};
+	// Re-measure one combination. The node has no per-item start — a freeze always fans out over every leaf item — so
+	// the smallest thing that can answer a missing or a revised item is the whole cell, and the button says "re-run"
+	// rather than promising a single-item run it cannot make.
+	const rerunCell = (cell: BenchmarkCell): void => {
+		if (!detail) {
+			return;
+		}
+		startRun.mutate(
+			{
+				projectId: detail.id,
+				modelName: cell.primaryModelName,
+				expectedProjectVersion: detail.version,
+				// The cell reports the type the node resolved, which is a plain string; anything the picker does not
+				// know is sent as Auto rather than as a value the start endpoint would refuse.
+				kvCacheType: benchmarkKvCacheTypes.find((type) => type === cell.kvCacheType) ?? null,
+				repeatMode,
+				answerVarianceTemperature: repeatMode === "AnswerVariance" ? answerVarianceTemperature : null,
+			},
+			{
+				onSuccess: (run) => selectRun(run.id),
 				onError: (error) => toast.error(startRunErrorMessage(error)),
 			},
 		);
@@ -720,20 +754,48 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 
 			{runsQuery.data && runs.length > 0 ? (
 				<SectionCard title={t("pages.benchmarks.runs", "Runs")}>
-					<BenchmarkRunsTable
-						runs={runs}
-						pairwiseScores={pairwiseScores}
-						cohort={runsQuery.data.cohort}
-						selectedRunIds={selectedRunIds}
-						totalCount={runsQuery.data.totalCount}
-						isLoadingMore={runsQuery.isFetchingNextPage}
-						onLoadMore={runsQuery.loadMore}
-						isActionPending={rejudgeRun.isPending || deleteRun.isPending || measureFidelity.isPending}
-						onToggleRun={toggleRun}
-						onRejudgeRun={rejudgeOne}
-						onMeasureFidelity={measureRunFidelity}
-						onDeleteRun={removeRun}
-					/>
+					{/* A suite ranks COMBINATIONS, not runs — but the per-run actions (re-judge, measure, delete) live on
+					    the runs table, and an operator working a suite still needs them. So the ranked view switches and
+					    the run list stays one click away, rather than being replaced. */}
+					{isSuite ? (
+						<SegmentedControl
+							size="xs"
+							value={ranking}
+							onChange={(value) => setRanking(value === "runs" ? "runs" : "cells")}
+							data={[
+								{ value: "cells", label: t("pages.benchmarks.cells.view", "Combinations") },
+								{ value: "runs", label: t("pages.benchmarks.cells.runsView", "Every run") },
+							]}
+							data-testid="benchmark-ranking-view"
+						/>
+					) : null}
+					{showCells ? (
+						<BenchmarkCellsTable
+							cells={cellsQuery.data?.cells ?? []}
+							cohort={cellsQuery.data?.cohort ?? runsQuery.data.cohort}
+							scorableItemCount={cellsQuery.data?.scorableItemCount ?? leafItemCount}
+							items={taskItemsQuery.data?.items ?? []}
+							selectedRunIds={selectedRunIds}
+							isActionPending={startRun.isPending}
+							onToggleRun={toggleRun}
+							onRerunCell={rerunCell}
+						/>
+					) : (
+						<BenchmarkRunsTable
+							runs={runs}
+							pairwiseScores={pairwiseScores}
+							cohort={runsQuery.data.cohort}
+							selectedRunIds={selectedRunIds}
+							totalCount={runsQuery.data.totalCount}
+							isLoadingMore={runsQuery.isFetchingNextPage}
+							onLoadMore={runsQuery.loadMore}
+							isActionPending={rejudgeRun.isPending || deleteRun.isPending || measureFidelity.isPending}
+							onToggleRun={toggleRun}
+							onRejudgeRun={rejudgeOne}
+							onMeasureFidelity={measureRunFidelity}
+							onDeleteRun={removeRun}
+						/>
+					)}
 					{/* One fit covers the cohort, so the matrix is mounted once here rather than under each run pane. */}
 					{detail?.judge.mode === "pairwise" ? <BenchmarkPairwiseMatrix projectId={detail.id} /> : null}
 					{selectedRunIds.length >= 2 ? <BenchmarkLaunchCompare runIds={selectedRunIds} /> : null}
