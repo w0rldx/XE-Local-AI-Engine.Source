@@ -533,6 +533,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                     attempt.Status = BenchmarkJudgeAttemptStatus.Running;
                     attempt.StartedAtUtc = now;
                     attempt.Version++;
+
+                    // The projection follows the attempt through every transition, not only the terminal ones. Left
+                    // reading 'queued' for the hours a measurement actually takes, it says nothing has started.
+                    run.FidelityStatus = ToFidelityStatus(BenchmarkJudgeAttemptStatus.Running);
                     break;
                 }
 

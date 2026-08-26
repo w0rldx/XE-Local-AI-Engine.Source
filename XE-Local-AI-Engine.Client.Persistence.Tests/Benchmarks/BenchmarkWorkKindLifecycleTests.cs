@@ -121,6 +121,35 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     }
 
     /// <summary>
+    ///     The fidelity projection follows its attempt through every transition. Claiming used to update only the
+    ///     attempt, so a measurement that runs for hours kept reading 'queued' on the run every API projects.
+    /// </summary>
+    [Test]
+    public async Task ClaimNextAsync_Fidelity_ProjectsRunningOnTheRunAndTerminalizesBack()
+    {
+        await using var context = await CreateSchemaAsync("claim-fidelity-running.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
+        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
+
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        AssertEx.Equal(BenchmarkWorkKind.Fidelity, claimed.Kind);
+        context.ChangeTracker.Clear();
+        AssertEx.Equal("running",
+            (await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id).ConfigureAwait(false)).FidelityStatus);
+
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, claimed.Version, attemptId, PerplexityMean: 6.7983))
+                       .ConfigureAwait(false);
+
+        context.ChangeTracker.Clear();
+        AssertEx.Equal("succeeded",
+            (await context.BenchmarkRuns.AsNoTracking().SingleAsync(entity => entity.Id == run.Id).ConfigureAwait(false)).FidelityStatus,
+            "Terminalization still returns the projection to a terminal state.");
+    }
+
+    /// <summary>
     ///     A comparison is not an event in either run's life. Claiming one used to fall through to the common run
     ///     version bump on the canonical first run, which invalidated that run's CAS token on every pairwise claim:
     ///     scoring, deleting or re-measuring it returned VersionConflict throughout a tournament.
