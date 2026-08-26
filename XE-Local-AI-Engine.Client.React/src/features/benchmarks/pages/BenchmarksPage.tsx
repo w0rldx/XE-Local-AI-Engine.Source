@@ -37,6 +37,7 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
 import { BenchmarkBatchProgressAlert } from "@/features/benchmarks/components/BenchmarkBatchProgressAlert";
 import { BenchmarkExportButtons } from "@/features/benchmarks/components/BenchmarkExportButtons";
+import { BenchmarkFidelityPanel } from "@/features/benchmarks/components/BenchmarkFidelityPanel";
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import type { BenchmarkMatrixSelection } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkLaunchMatrix } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
@@ -71,6 +72,7 @@ import {
 	useRejudgeBenchmarkRun,
 	useStartBenchmarkRun,
 	useStartBenchmarkRunBatch,
+	useStartBenchmarkRunFidelity,
 	useUpdateBenchmarkJudgePolicy,
 	useUpdateBenchmarkProject,
 } from "@/features/benchmarks/queries/useBenchmarks";
@@ -136,6 +138,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const deleteRun = useDeleteBenchmarkRun();
 	const startRun = useStartBenchmarkRun();
 	const startBatch = useStartBenchmarkRunBatch();
+	const measureFidelity = useStartBenchmarkRunFidelity();
 	const runs = useMemo(() => runsQuery.data?.items ?? [], [runsQuery.data]);
 	const batchProgress = useMemo(
 		() => (batchLaunch && batchLaunch.projectId === selectedProjectId ? benchmarkBatchProgress(runs, batchLaunch.runIds) : null),
@@ -348,6 +351,14 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 					toast.error(apiErrorMessage(error, t("pages.benchmarks.errors.rejudgeRun", "Could not re-judge this run."))),
 			},
 		);
+	};
+	const measureRunFidelity = (run: BenchmarkRunSummary): void => {
+		measureFidelity.mutate(run, {
+			onError: (error) =>
+				toast.error(
+					apiErrorMessage(error, t("pages.benchmarks.errors.measureFidelity", "Could not queue a fidelity measurement.")),
+				),
+		});
 	};
 	// One request for the whole matrix. The node answers per cell, so a refused combination is reported in the dialog
 	// beside the ones that started rather than failing everything the operator picked.
@@ -598,6 +609,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										{t("pages.benchmarks.matrix.open", "Batch runs…")}
 									</Button>
 								</Group>
+								<BenchmarkFidelityPanel projectId={detail.id} />
 								<BenchmarkRepeatModePicker
 									mode={repeatMode}
 									temperature={answerVarianceTemperature}
@@ -628,9 +640,10 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						totalCount={runsQuery.data.totalCount}
 						isLoadingMore={runsQuery.isFetchingNextPage}
 						onLoadMore={runsQuery.loadMore}
-						isActionPending={rejudgeRun.isPending || deleteRun.isPending}
+						isActionPending={rejudgeRun.isPending || deleteRun.isPending || measureFidelity.isPending}
 						onToggleRun={toggleRun}
 						onRejudgeRun={rejudgeOne}
+						onMeasureFidelity={measureRunFidelity}
 						onDeleteRun={removeRun}
 					/>
 					{selectedRunIds.length === 2 && selectedRunIds[0] && selectedRunIds[1] ? (

@@ -5,7 +5,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BenchmarkRunsTable } from "@/features/benchmarks/components/BenchmarkRunsTable";
 import type { BenchmarkRankCohort, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkJudgeFixture, benchmarkRunSummaryFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
+import {
+	benchmarkFidelityFixture,
+	benchmarkJudgeFixture,
+	benchmarkRunSummaryFixture,
+} from "@/features/benchmarks/models/BenchmarkTestFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The ranked table is where the node's ranking becomes readable. Two rules carry it: an unranked run is never hidden
@@ -21,7 +25,7 @@ const cohort: BenchmarkRankCohort = {
 };
 
 function renderTable(runs: BenchmarkRunSummary[], props: Record<string, unknown> = {}) {
-	const handlers = { onToggleRun: vi.fn(), onRejudgeRun: vi.fn(), onDeleteRun: vi.fn() };
+	const handlers = { onToggleRun: vi.fn(), onRejudgeRun: vi.fn(), onMeasureFidelity: vi.fn(), onDeleteRun: vi.fn() };
 	const view = renderWithProviders(
 		<BenchmarkRunsTable runs={runs} cohort={cohort} selectedRunIds={[]} {...handlers} {...props} />,
 	);
@@ -302,5 +306,80 @@ describe("BenchmarkRunsTable", () => {
 
 		expect(screen.queryByTestId("benchmark-runs-loaded")).toBeNull();
 		expect(screen.queryByTestId("benchmark-runs-load-more")).toBeNull();
+	});
+});
+
+// Fidelity is the P2 axis that separates two quants of one model by a number. The rules the cell has to keep: print
+// enough decimals for the separation to survive, and never render a KLD figure that was measured against something the
+// project no longer expects — that one is a badge, not a greyed-out number.
+describe("BenchmarkRunsTable fidelity column", () => {
+	afterEach(cleanup);
+
+	it("shows perplexity as a mean with its standard error", () => {
+		renderTable([benchmarkRunSummaryFixture({ id: "ranked", fidelity: benchmarkFidelityFixture() })]);
+
+		expect(screen.getByTestId("benchmark-fidelity-ranked").textContent).toContain("6.7977 ± 0.0741");
+	});
+
+	it("shows the KLD trio when the node says the measurement is comparable", () => {
+		renderTable([
+			benchmarkRunSummaryFixture({
+				id: "ranked",
+				fidelity: benchmarkFidelityFixture({ kldState: "ok", kldMean: 0.0123, kldP99: 0.4021, topTokenAgreement: 0.9421 }),
+			}),
+		]);
+
+		const line = screen.getByTestId("benchmark-fidelity-kld-ranked").textContent;
+		expect(line).toContain("0.0123");
+		expect(line).toContain("94.2 %");
+	});
+
+	// A number a reader can still see is a number they will compare, and one taken over a different corpus, chunk count
+	// or base model means something different from the one beside it.
+	it("renders a kld-stale badge instead of a figure when the comparability key moved", () => {
+		renderTable([
+			benchmarkRunSummaryFixture({
+				id: "ranked",
+				fidelity: benchmarkFidelityFixture({ kldState: "kld-stale", kldMean: 0.0123, topTokenAgreement: 0.94 }),
+			}),
+		]);
+
+		expect(screen.getByTestId("benchmark-fidelity-kld-stale-ranked").textContent).toBe("kld-stale");
+		expect(screen.queryByTestId("benchmark-fidelity-kld-ranked")).toBeNull();
+		expect(screen.getByTestId("benchmark-fidelity-ranked").textContent).not.toContain("0.0123");
+	});
+
+	it("surfaces a failed measurement as its own badge rather than an empty cell", () => {
+		renderTable([
+			benchmarkRunSummaryFixture({
+				id: "ranked",
+				fidelity: benchmarkFidelityFixture({ status: "failed", perplexityMean: null, errorMessage: "llama-perplexity is not installed" }),
+			}),
+		]);
+
+		expect(screen.getByTestId("benchmark-fidelity-status-ranked").textContent).toBe("Fidelity failed");
+	});
+
+	it("asks the caller to measure one run's fidelity", async () => {
+		const run = benchmarkRunSummaryFixture({ id: "ranked" });
+		const { onMeasureFidelity } = renderTable([run]);
+
+		fireEvent.click(screen.getByTestId("benchmark-run-actions-ranked"));
+		fireEvent.click(await screen.findByRole("menuitem", { name: "Measure fidelity" }));
+
+		expect(onMeasureFidelity).toHaveBeenCalledExactlyOnceWith(run);
+	});
+
+	// A second measurement of the same run would only queue behind the first; the node's own attempt sequence makes
+	// that harmless, but offering it invites the operator to think the first one stalled.
+	it("refuses a measure while a measurement of that run is already running", async () => {
+		const { onMeasureFidelity } = renderTable([
+			benchmarkRunSummaryFixture({ id: "ranked", fidelity: benchmarkFidelityFixture({ status: "running" }) }),
+		]);
+
+		fireEvent.click(screen.getByTestId("benchmark-run-actions-ranked"));
+		fireEvent.click(await screen.findByRole("menuitem", { name: "Measure fidelity" }));
+
+		expect(onMeasureFidelity).not.toHaveBeenCalled();
 	});
 });

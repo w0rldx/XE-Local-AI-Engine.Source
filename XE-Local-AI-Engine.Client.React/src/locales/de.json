@@ -4174,7 +4174,8 @@
 				"kvUnsupportedHint": "Wählen Sie ausdrücklich f16, um dieses Modell mit dieser Laufzeit auszuführen.",
 				"rejudgeRun": "Dieser Lauf konnte nicht neu bewertet werden.",
 				"rejudgeProject": "Dieses Projekt konnte nicht neu bewertet werden.",
-				"judgeAttemptsActive": "Eine Bewertung dieses Projekts läuft noch. Warten Sie sie ab oder brechen Sie sie ab."
+				"judgeAttemptsActive": "Eine Bewertung dieses Projekts läuft noch. Warten Sie sie ab oder brechen Sie sie ab.",
+				"measureFidelity": "Es konnte keine Treuemessung eingereiht werden."
 			},
 			"loading": {
 				"projects": "Benchmark-Projekte werden geladen…",
@@ -4293,6 +4294,36 @@
 					"title": "Ein Titel ist erforderlich (höchstens 64 Zeichen).",
 					"description": "Eine Beschreibung ist erforderlich (höchstens 1024 Zeichen).",
 					"weight": "Das Gewicht muss zwischen 1 und 100 liegen."
+				}
+			},
+			"fidelity": {
+				"title": "Quantisierungstreue (PPL / KLD)",
+				"column": "PPL / KLD",
+				"explanation": "Perplexität und KL-Divergenz messen, wie weit ein quantisierter Build von den Gewichten abweicht, aus denen er entstand. Beide dienen nur der Anzeige und fließen nie in eine Rangfolge ein.",
+				"displayOnly": "Nur zur Anzeige — die Treue bewertet keinen Lauf.",
+				"measure": "Treue messen",
+				"kldStale": "kld-stale",
+				"kldStaleHint": "Gegen ein anderes Basismodell, einen anderen Korpus oder eine andere Chunk-Anzahl gemessen, als dieses Projekt jetzt erwartet. Miss diesen Lauf erneut, um eine vergleichbare Zahl zu erhalten.",
+				"kldLine": "KLD {{mean}} · p99 {{p99}} · {{agreement}}",
+				"pplTooltip": "Perplexität {{value}} über {{chunks}} Chunks bei einem Fenster von {{window}} Tokens ({{corpus}})",
+				"kldTooltip": "KL-Divergenz Mittelwert {{mean}}, p99 {{p99}}, Top-Token-Übereinstimmung {{agreement}}",
+				"noReason": "Der Knoten hat keinen Grund vermerkt.",
+				"estimate": "KL-Divergenz würde {{size}} Basis-Logits zwischenspeichern — {{free}} frei, {{cached}} bereits zwischengespeichert.",
+				"estimateInputs": "{{chunks}} Chunks × {{window}} Tokens × {{vocab}} Vokabular",
+				"estimateLoading": "Größe des Basis-Logit-Caches wird geschätzt…",
+				"estimateError": "Die Größe des KL-Divergenz-Caches konnte nicht geschätzt werden.",
+				"estimateTooLarge": "Das passt nicht auf den Datenträger, auf den der Knoten schreibt. Die Messung würde abgelehnt statt halb geschrieben — schaffe Platz oder senke die Chunk-Anzahl.",
+				"clearCache": "Zwischengespeicherte Basis-Logits löschen",
+				"clearCacheHint": "Es geht nichts Gemessenes verloren — die Läufe behalten ihre Zahlen. Der nächste KL-Divergenz-Durchlauf berechnet die Basis-Logits neu.",
+				"cacheCleared": "Zwischengespeicherte Basis-Logits gelöscht.",
+				"cacheClearError": "Die zwischengespeicherten Basis-Logits konnten nicht gelöscht werden.",
+				"status": {
+					"queued": "Treue in Warteschlange",
+					"running": "Treue wird gemessen",
+					"succeeded": "Gemessen",
+					"failed": "Treuemessung fehlgeschlagen",
+					"cancelled": "Treuemessung abgebrochen",
+					"skipped": "Nicht gemessen"
 				}
 			}
 		},

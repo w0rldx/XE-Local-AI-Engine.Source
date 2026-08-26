@@ -2,6 +2,7 @@ import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse as JudgePolicyResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse as ProjectDetailResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse as ProjectSummaryResponse,
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse as FidelityResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse as RankCohortResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto as RubricResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse as RunDetailResponse,
@@ -12,6 +13,7 @@ import type {
 	BenchmarkEligibleModel,
 	BenchmarkEvidenceObject,
 	BenchmarkFlashAttentionMode,
+	BenchmarkRunFidelity,
 	BenchmarkJudgeCriterionScore,
 	BenchmarkJudgePolicy,
 	BenchmarkKvCacheTypeSource,
@@ -29,6 +31,8 @@ import type {
 } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkRubricLimits,
+	toBenchmarkFidelityKldState,
+	toBenchmarkFidelityStatus,
 	toBenchmarkJudgeState,
 	toBenchmarkQualityScoreSource,
 	toBenchmarkRepeatMode,
@@ -126,6 +130,32 @@ function toBenchmarkRunJudge(value: RunSummaryResponse["judge"]): BenchmarkRunJu
 	};
 }
 
+/**
+ * A run's fidelity numbers. The KLD trio is read through {@link toBenchmarkFidelityKldState}: the node already withholds
+ * the figures unless the run's stored base-logit digest is the one the project now expects, and the state is carried
+ * through unchanged so the UI can say WHY a number is missing rather than showing a bare dash.
+ */
+export function toBenchmarkRunFidelity(value: FidelityResponse | null | undefined): BenchmarkRunFidelity | null {
+	if (!value) {
+		return null;
+	}
+	return {
+		status: toBenchmarkFidelityStatus(value.status),
+		attemptId: value.attemptId ?? null,
+		perplexityMean: value.perplexityMean ?? null,
+		perplexityStdErr: value.perplexityStdErr ?? null,
+		perplexityChunks: value.perplexityChunks ?? null,
+		perplexityContextTokens: value.perplexityContextTokens ?? null,
+		perplexityCorpusId: value.perplexityCorpusId ?? null,
+		kldState: toBenchmarkFidelityKldState(value.kldState),
+		kldMean: value.kldMean ?? null,
+		kldP99: value.kldP99 ?? null,
+		topTokenAgreement: value.topTokenAgreement ?? null,
+		kldBaseFingerprint: value.kldBaseFingerprint ?? null,
+		errorMessage: value.errorMessage ?? null,
+	};
+}
+
 export function toBenchmarkRankCohort(value: RankCohortResponse | undefined): BenchmarkRankCohort {
 	return {
 		policyRevision: value?.policyRevision ?? null,
@@ -187,6 +217,7 @@ export function toBenchmarkRunSummary(value: RunSummaryResponse): BenchmarkRunSu
 		requestedContextTokens: numberValue(value.requestedContextTokens),
 		primaryStatus: primaryStatus(value.primaryStatus),
 		judge: toBenchmarkRunJudge(value.judge),
+		fidelity: toBenchmarkRunFidelity(value.fidelity),
 		qualityScore: value.qualityScore ?? null,
 		qualityScoreSource: toBenchmarkQualityScoreSource(value.qualityScoreSource),
 		rank: value.rank ?? null,

@@ -2,9 +2,11 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 
 import {
 	cancelBenchmarkRun,
+	clearBenchmarkFidelityCache,
 	clearBenchmarkRunScore,
 	createBenchmarkProject,
 	deleteBenchmarkRun,
+	getBenchmarkKldDiskEstimate,
 	getBenchmarkProject,
 	getBenchmarkRubricPresets,
 	getBenchmarkRun,
@@ -16,6 +18,7 @@ import {
 	scoreBenchmarkRun,
 	startBenchmarkRun,
 	startBenchmarkRunBatch,
+	startBenchmarkRunFidelity,
 	updateBenchmarkJudgePolicy,
 	updateBenchmarkProject,
 } from "@/core/api/generated";
@@ -60,6 +63,7 @@ const benchmarkQueryKeys = {
 	runs: (projectId: string) => ["benchmarks", "projects", projectId, "runs"] as const,
 	run: (id: string) => ["benchmarks", "runs", id] as const,
 	models: (contextTokens?: number) => ["benchmarks", "eligible-models", contextTokens] as const,
+	kldEstimate: (projectId: string, chunks?: number) => ["benchmarks", "projects", projectId, "kld-estimate", chunks] as const,
 	rubricPresets: ["benchmarks", "rubric-presets"] as const,
 };
 
@@ -181,6 +185,56 @@ export function useEligibleBenchmarkModels(contextTokens?: number) {
 				listEligibleBenchmarkModels({ query: contextTokens ? { contextTokens } : undefined, signal, throwOnError: true }),
 			);
 			return (data.items ?? []).map(toBenchmarkEligibleModel);
+		},
+	});
+}
+
+/**
+ * What enabling KL divergence would cost this project in disk. Read BEFORE the operator commits, never after: the base
+ * logits are ~1.75 bytes per logit and 200 chunks of a 150k-vocabulary model is 25 GB, which is not a number to
+ * discover once the write has already started (plan §2 #3).
+ */
+export interface BenchmarkKldDiskEstimate {
+	estimatedBytes: number;
+	freeDiskBytes: number;
+	/** What the cache already holds for this base model — the estimate is not all new spend. */
+	cachedBytes: number;
+	chunks: number;
+	contextTokens: number;
+	vocabSize: number;
+	/** The arithmetic, verbatim from the node, so the number is checkable rather than trusted. */
+	formula: string;
+	/** The node's own verdict on the reservation. Fail-closed: an absent flag reads as "does not fit". */
+	fitsOnDisk: boolean;
+}
+
+/**
+ * The KLD disk estimate for one project. `enabled` is the caller's: it is only worth asking while the operator is
+ * actually looking at the fidelity settings, and the answer moves whenever the disk does.
+ */
+export function useBenchmarkKldDiskEstimate(projectId: string | null, chunks?: number, enabled = true) {
+	return useQuery<BenchmarkKldDiskEstimate>({
+		queryKey: benchmarkQueryKeys.kldEstimate(projectId ?? "", chunks),
+		enabled: enabled && Boolean(projectId),
+		queryFn: async ({ signal }) => {
+			const { data } = await callWithResponseValidation(
+				getBenchmarkKldDiskEstimate({
+					path: { projectId: projectId as string },
+					...(chunks === undefined ? {} : { query: { chunks } }),
+					signal,
+					throwOnError: true,
+				}),
+			);
+			return {
+				estimatedBytes: data.estimatedBytes ?? 0,
+				freeDiskBytes: data.freeDiskBytes ?? 0,
+				cachedBytes: data.cachedBytes ?? 0,
+				chunks: data.chunks ?? 0,
+				contextTokens: data.contextTokens ?? 0,
+				vocabSize: data.vocabSize ?? 0,
+				formula: data.formula,
+				fitsOnDisk: data.fitsOnDisk === true,
+			};
 		},
 	});
 }
@@ -479,6 +533,34 @@ export function useRejudgeBenchmarkRun() {
 			return toBenchmarkRunDetail(data);
 		},
 		onSuccess: (run) => invalidate(run.projectId, run.id),
+	});
+}
+
+/**
+ * Re-measures one run's quant fidelity. The node inserts a NEW immutable attempt rather than overwriting: the previous
+ * numbers survive a failed re-measure, which is why this is safe to offer as a plain menu action.
+ */
+export function useStartBenchmarkRunFidelity() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async (run: BenchmarkRunRef) => {
+			await callWithResponseValidation(startBenchmarkRunFidelity({ path: { runId: run.id }, throwOnError: true }));
+		},
+		onSuccess: (_, run) => invalidate(run.projectId, run.id),
+	});
+}
+
+/**
+ * Drops this project's cached base logits. Nothing measured is lost — the cache is a derived file, and the runs keep
+ * the numbers that were computed from it — but the next KLD measurement pays the full base pass again.
+ */
+export function useClearBenchmarkFidelityCache() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async (projectId: string) => {
+			await callWithResponseValidation(clearBenchmarkFidelityCache({ path: { projectId }, throwOnError: true }));
+		},
+		onSuccess: (_, projectId) => invalidate(projectId),
 	});
 }
 

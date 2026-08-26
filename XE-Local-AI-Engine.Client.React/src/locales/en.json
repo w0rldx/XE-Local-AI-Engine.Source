@@ -4174,7 +4174,8 @@
 				"kvUnsupportedHint": "Pick f16 explicitly to run this model on this runtime.",
 				"rejudgeRun": "Could not re-judge this run.",
 				"rejudgeProject": "Could not re-judge this project.",
-				"judgeAttemptsActive": "A judging of this project is still running. Wait for it or cancel it first."
+				"judgeAttemptsActive": "A judging of this project is still running. Wait for it or cancel it first.",
+				"measureFidelity": "Could not queue a fidelity measurement."
 			},
 			"loading": {
 				"projects": "Loading benchmark projects…",
@@ -4293,6 +4294,36 @@
 					"title": "A title is required (64 characters max).",
 					"description": "A description is required (1024 characters max).",
 					"weight": "The weight must be between 1 and 100."
+				}
+			},
+			"fidelity": {
+				"title": "Quant fidelity (PPL / KLD)",
+				"column": "PPL / KLD",
+				"explanation": "Perplexity and KL divergence measure how far a quantized build drifted from the weights it was made from. Both are display only and neither ever ranks a run.",
+				"displayOnly": "Display only — fidelity never ranks a run.",
+				"measure": "Measure fidelity",
+				"kldStale": "kld-stale",
+				"kldStaleHint": "Measured against a different base model, corpus or chunk count than this project now expects. Re-measure this run to get a comparable number.",
+				"kldLine": "KLD {{mean}} · p99 {{p99}} · {{agreement}}",
+				"pplTooltip": "Perplexity {{value}} over {{chunks}} chunks at a {{window}}-token window ({{corpus}})",
+				"kldTooltip": "KL divergence mean {{mean}}, p99 {{p99}}, top-token agreement {{agreement}}",
+				"noReason": "The node recorded no reason.",
+				"estimate": "KL divergence would cache {{size}} of base logits — {{free}} free, {{cached}} already cached.",
+				"estimateInputs": "{{chunks}} chunks × {{window}} tokens × {{vocab}} vocabulary",
+				"estimateLoading": "Estimating the base-logit cache…",
+				"estimateError": "Could not estimate the KL-divergence cache size.",
+				"estimateTooLarge": "This does not fit on the disk the node writes to. The measurement would be refused rather than half-written — free space or lower the chunk count first.",
+				"clearCache": "Delete cached base logits",
+				"clearCacheHint": "Nothing measured is lost — the runs keep their numbers. The next KL-divergence pass recomputes the base logits.",
+				"cacheCleared": "Cached base logits deleted.",
+				"cacheClearError": "Could not delete the cached base logits.",
+				"status": {
+					"queued": "Fidelity queued",
+					"running": "Measuring fidelity",
+					"succeeded": "Measured",
+					"failed": "Fidelity failed",
+					"cancelled": "Fidelity cancelled",
+					"skipped": "Not measured"
 				}
 			}
 		},

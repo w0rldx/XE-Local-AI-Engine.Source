@@ -1,5 +1,6 @@
 import type {
 	BenchmarkRunDetail,
+	BenchmarkRunFidelity,
 	BenchmarkRunJudge,
 	BenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkModels";
@@ -10,6 +11,24 @@ import { noBenchmarkLaunchFacts, noBenchmarkRunJudge } from "@/features/benchmar
 
 export const benchmarkJudgeFixture = (overrides: Partial<BenchmarkRunJudge> = {}): BenchmarkRunJudge => ({
 	...noBenchmarkRunJudge,
+	...overrides,
+});
+
+/** A succeeded perplexity-only measurement: KLD is opt-in, so `none` is the ordinary state, not a degraded one. */
+export const benchmarkFidelityFixture = (overrides: Partial<BenchmarkRunFidelity> = {}): BenchmarkRunFidelity => ({
+	status: "succeeded",
+	attemptId: "attempt-1",
+	perplexityMean: 6.7977,
+	perplexityStdErr: 0.074_05,
+	perplexityChunks: 200,
+	perplexityContextTokens: 512,
+	perplexityCorpusId: "wikitext2-raw-test@abc123def456",
+	kldState: "none",
+	kldMean: null,
+	kldP99: null,
+	topTokenAgreement: null,
+	kldBaseFingerprint: null,
+	errorMessage: null,
 	...overrides,
 });
 
@@ -50,6 +69,7 @@ export function benchmarkRunSummaryFixture(overrides: Partial<BenchmarkRunSummar
 			cachedPromptTokens: 0,
 			segmentCount: 1,
 		},
+		fidelity: null,
 		userScore: null,
 		lastStreamSequence: 2,
 		version: 3,

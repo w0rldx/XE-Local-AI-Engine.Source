@@ -6,6 +6,7 @@ import {
 	toBenchmarkProjectSummary,
 	toBenchmarkRankCohort,
 	toBenchmarkRunDetail,
+	toBenchmarkRunFidelity,
 	toBenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkMappers";
 import { noBenchmarkLaunchFacts } from "@/features/benchmarks/models/BenchmarkModels";
@@ -506,5 +507,44 @@ describe("toBenchmarkRankCohort", () => {
 			rankedCount: 2,
 			totalScored: 5,
 		});
+	});
+});
+
+// The KLD gate lives on the node, but the mapper is where a contract addition would first leak a figure the reader
+// must not compare — so the state is carried through verbatim rather than collapsed to a boolean.
+describe("toBenchmarkRunFidelity", () => {
+	it("is null for a run the node reports no fidelity row for", () => {
+		expect(toBenchmarkRunFidelity(null)).toBeNull();
+		expect(toBenchmarkRunFidelity(undefined)).toBeNull();
+	});
+
+	it("maps a succeeded perplexity measurement with its comparability facts", () => {
+		const fidelity = toBenchmarkRunFidelity({
+			status: "succeeded",
+			attemptId: "attempt-1",
+			perplexityMean: 6.7977,
+			perplexityStdErr: 0.07405,
+			perplexityChunks: 200,
+			perplexityContextTokens: 512,
+			perplexityCorpusId: "wikitext2-raw-test@abc123def456",
+			kldState: "none",
+		});
+
+		expect(fidelity).toMatchObject({
+			status: "succeeded",
+			perplexityMean: 6.7977,
+			perplexityChunks: 200,
+			perplexityContextTokens: 512,
+			kldState: "none",
+			kldMean: null,
+		});
+	});
+
+	it("fails closed on an unrecognized kldState, so an unknown answer never reads as comparable", () => {
+		expect(toBenchmarkRunFidelity({ status: "succeeded", kldState: "something-new" })?.kldState).toBe("none");
+	});
+
+	it("falls back to the node's own default for an unrecognized status", () => {
+		expect(toBenchmarkRunFidelity({ status: "reticulating", kldState: "none" })?.status).toBe("queued");
 	});
 });
