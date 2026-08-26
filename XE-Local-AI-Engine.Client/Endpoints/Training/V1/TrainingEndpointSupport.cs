@@ -5,19 +5,15 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
 /// <summary>
-///     Centralized store-exception → HTTP mapping for every training endpoint, mirroring
-///     <c>BenchmarkEndpointSupport</c>. An exception outside the handled set is rethrown so a genuine fault still reaches
-///     the global handler rather than being flattened into a 4xx.
+///     Centralized Training store-exception → HTTP mapping used by <c>TrainingExceptionHandler</c>. The persisted-JSON
+///     reader stays here because the Training endpoint mappers share its corrupt-row recovery contract.
 /// </summary>
 internal static class TrainingEndpointSupport
 {
-    public static bool IsHandled(Exception exception) =>
-        exception is TrainingStoreException or KeyNotFoundException;
-
     public static IResult Error(Exception exception) =>
         exception switch
         {
-            TrainingNotFoundException or KeyNotFoundException =>
+            TrainingNotFoundException =>
                 TypedResults.NotFound(Response(TrainingErrorCode.NotFound, "The requested training resource was not found.")),
             TrainingValidationException => TypedResults.BadRequest(Response(TrainingErrorCode.InvalidRequest, exception.Message)),
             TrainingConflictException conflict => TypedResults.Conflict(Response(Classify(conflict.Code), SafeMessage(conflict.Code))),

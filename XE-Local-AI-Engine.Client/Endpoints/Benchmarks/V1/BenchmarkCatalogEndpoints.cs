@@ -28,19 +28,12 @@ public sealed class ListEligibleBenchmarkAgentsEndpoint(IBenchmarkCatalogService
             return;
         }
 
-        try
-        {
-            var agents = await _catalog.ListEligibleAgentsAsync(req.ModelName, ct).ConfigureAwait(false);
-            await Send.OkAsync(new ListEligibleBenchmarkAgentsResponse
-                      {
-                          Items = [.. agents.Select(static agent => agent.ToResponse())]
-                      }, ct)
-                      .ConfigureAwait(false);
-        }
-        catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var agents = await _catalog.ListEligibleAgentsAsync(req.ModelName, ct).ConfigureAwait(false);
+        await Send.OkAsync(new ListEligibleBenchmarkAgentsResponse
+                  {
+                      Items = [.. agents.Select(static agent => agent.ToResponse())]
+                  }, ct)
+                  .ConfigureAwait(false);
     }
 }
 
@@ -59,18 +52,11 @@ public sealed class ListEligibleBenchmarkModelsEndpoint(IBenchmarkCatalogService
 
     public override async Task HandleAsync(EligibleBenchmarkModelsRequest req, CancellationToken ct)
     {
-        try
-        {
-            var models = await _catalog.ListEligibleModelsAsync(req.ContextTokens, ct).ConfigureAwait(false);
-            await Send.OkAsync(new ListEligibleBenchmarkModelsResponse
-                      {
-                          Items = [.. models.Select(static model => model.ToResponse())]
-                      }, ct)
-                      .ConfigureAwait(false);
-        }
-        catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var models = await _catalog.ListEligibleModelsAsync(req.ContextTokens, ct).ConfigureAwait(false);
+        await Send.OkAsync(new ListEligibleBenchmarkModelsResponse
+                  {
+                      Items = [.. models.Select(static model => model.ToResponse())]
+                  }, ct)
+                  .ConfigureAwait(false);
     }
 }

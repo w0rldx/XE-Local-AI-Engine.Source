@@ -415,7 +415,7 @@ assert_gpu_was_used() {
     # report utilisation as "[N/A]"). Still a failure, because an unmeasurable run is not a pass,
     # but say what actually happened so nobody debugs a GPU fault that does not exist.
     step_fail "4-gpu-used" \
-      "GPU utilisation was UNMEASURABLE — nvidia-smi returned no numeric utilisation sample during generation (it can report '[N/A]'). This is not evidence the GPU was idle; it is an absence of evidence, which is not a pass. Check 'nvidia-smi --query-gpu=utilization.gpu --format=csv' on this box."
+      "GPU utilisation was UNMEASURABLE — nvidia-smi returned no numeric utilisation sample during generation (it can report '[N/A]'). This is not evidence the GPU was idle; it is an absence of evidence, which is not a pass. Check 'nvidia-smi --query-gpu=utilization.gpu --format=csv' on this host."
     ok=1
   elif [[ "${peak_util}" -lt "${MIN_UTIL_PERCENT}" ]]; then
     step_fail "4-gpu-used" \
@@ -431,8 +431,8 @@ assert_gpu_was_used() {
 }
 
 # Step 5. Assert a tool was OFFERED AND INVOKED. Asserting the allowlist config would have passed
-# while the feature was broken (F-001/F-025: the allowlist was correct but seeded once at startup,
-# so tools were silently withheld) — so only the turn's own tool-call events count.
+# while the feature was broken: the allowlist was correct but seeded only once at startup, so tools were silently
+# withheld. Only the turn's own tool-call events therefore count.
 assert_tool_call() {
   local records="$1"
   local requested completed

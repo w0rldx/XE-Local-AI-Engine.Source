@@ -23,8 +23,8 @@
 # gguf-py declares numpy>=1.17 with no upper bound, so the convert tooling shares the
 # training stack's numpy 2.x rather than needing a second venv.
 #
-# The `gguf` PyPI package is intentionally absent — Slice 4 vendors gguf-py from the
-# pinned llama.cpp commit and puts it on PYTHONPATH; resolving it from PyPI would
+# The `gguf` PyPI package is intentionally absent because the runtime vendors gguf-py
+# from the pinned llama.cpp commit and puts it on PYTHONPATH; resolving it from PyPI would
 # silently substitute an unpinned upstream for the commit-verified copy.
 #
 # xformers is not a direct dependency: unsloth pulls a prebuilt wheel transitively and

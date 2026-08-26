@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-07-26
-- **Scope:** The six plans implemented on `codex/implement-2026-07-26-plans`
+- **Scope:** The six plans implemented in the 2026-07-26 batch
 - **Authority:** Human operator responses in the implementation handoff
 
 ## Context

@@ -1,10 +1,6 @@
 // Saves bytes already in memory to the user's disk. Operator-gated endpoints cannot be reached by a bare `<a href>`
 // (it carries no bearer token), so every authenticated download fetches the body through the shared axios instance
 // first and then clicks a synthetic anchor over an object URL — no second request, no token in a URL.
-//
-// follow-up: `features/images/GeneratedImageDownload.ts` and `features/diagnostics/ExportSnapshot.ts` each carry their
-// own byte-identical copy of this anchor dance; folding them onto this helper is a mechanical, test-covered change that
-// belongs in its own pass rather than riding along with a benchmark feature.
 
 /** Triggers a browser download of `blob` under `fileName`. */
 export function saveBlob(blob: Blob, fileName: string): void {

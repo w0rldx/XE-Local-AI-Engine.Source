@@ -51,20 +51,13 @@ public sealed class CreateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
 
     public override async Task HandleAsync(BenchmarkProjectMutationRequest req, CancellationToken ct)
     {
-        try
-        {
-            var project = await _projects.CreateAsync(req.ToDraft(Guid.Empty), ct).ConfigureAwait(false);
-            await Send.CreatedAtAsync<GetBenchmarkProjectEndpoint>(new
-                          {
-                              projectId = project.Id
-                          }, project.ToDetail(runCount: 0, await BenchmarkJudgePolicyProjection.ReadAsync(_store, project.Id, ct).ConfigureAwait(false)),
-                          cancellation: ct)
-                      .ConfigureAwait(false);
-        }
-        catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var project = await _projects.CreateAsync(req.ToDraft(Guid.Empty), ct).ConfigureAwait(false);
+        await Send.CreatedAtAsync<GetBenchmarkProjectEndpoint>(new
+                      {
+                          projectId = project.Id
+                      }, project.ToDetail(runCount: 0, await BenchmarkJudgePolicyProjection.ReadAsync(_store, project.Id, ct).ConfigureAwait(false)),
+                      cancellation: ct)
+                  .ConfigureAwait(false);
     }
 }
 
@@ -113,16 +106,9 @@ public sealed class UpdateBenchmarkProjectEndpoint(IBenchmarkProjectService proj
 
     public override async Task HandleAsync(UpdateBenchmarkProjectRequest req, CancellationToken ct)
     {
-        try
-        {
-            var project = await _projects.UpdateAsync(req.ProjectId, req.ExpectedVersion, req.ToDraft(req.ProjectId), ct).ConfigureAwait(false);
-            await Send.OkAsync(project.ToDetail(runCount: 0, await BenchmarkJudgePolicyProjection.ReadAsync(_store, project.Id, ct).ConfigureAwait(false)), ct)
-                      .ConfigureAwait(false);
-        }
-        catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var project = await _projects.UpdateAsync(req.ProjectId, req.ExpectedVersion, req.ToDraft(req.ProjectId), ct).ConfigureAwait(false);
+        await Send.OkAsync(project.ToDetail(runCount: 0, await BenchmarkJudgePolicyProjection.ReadAsync(_store, project.Id, ct).ConfigureAwait(false)), ct)
+                  .ConfigureAwait(false);
     }
 }
 
@@ -141,15 +127,8 @@ public sealed class DeleteBenchmarkProjectEndpoint(IBenchmarkStore store)
 
     public override async Task HandleAsync(DeleteBenchmarkProjectRequest req, CancellationToken ct)
     {
-        try
-        {
-            await _store.DeleteProjectAsync(req.ProjectId, req.ExpectedVersion, ct).ConfigureAwait(false);
-            await Send.NoContentAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        await _store.DeleteProjectAsync(req.ProjectId, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }
 
@@ -176,22 +155,15 @@ public sealed class UpdateBenchmarkJudgePolicyEndpoint(IBenchmarkProjectService 
 
     public override async Task HandleAsync(UpdateBenchmarkJudgePolicyRequest req, CancellationToken ct)
     {
-        try
-        {
-            var draft = req.Policy is null
-                ? null
-                : new BenchmarkJudgePolicyDraft(req.Policy.ModelName,
-                    req.Policy.ContextTokens,
-                    req.Policy.Rubric.ToRubric(),
-                    req.Policy.ReferenceAnswer,
-                    req.Policy.Mode);
-            var change = await _projects.UpdateJudgePolicyAsync(req.ProjectId, req.ExpectedVersion, draft, req.ConfirmRejudge, ct).ConfigureAwait(false);
-            await Send.OkAsync(await ToResponseAsync(_store, change, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var draft = req.Policy is null
+            ? null
+            : new BenchmarkJudgePolicyDraft(req.Policy.ModelName,
+                req.Policy.ContextTokens,
+                req.Policy.Rubric.ToRubric(),
+                req.Policy.ReferenceAnswer,
+                req.Policy.Mode);
+        var change = await _projects.UpdateJudgePolicyAsync(req.ProjectId, req.ExpectedVersion, draft, req.ConfirmRejudge, ct).ConfigureAwait(false);
+        await Send.OkAsync(await ToResponseAsync(_store, change, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
     }
 
     internal static async Task<BenchmarkJudgeChangeResponse> ToResponseAsync(IBenchmarkStore store,
@@ -225,15 +197,8 @@ public sealed class RejudgeBenchmarkProjectEndpoint(IBenchmarkProjectService pro
 
     public override async Task HandleAsync(RejudgeBenchmarkProjectRequest req, CancellationToken ct)
     {
-        try
-        {
-            var change = await _projects.RejudgeProjectAsync(req.ProjectId, req.ExpectedVersion, ct).ConfigureAwait(false);
-            await Send.OkAsync(await UpdateBenchmarkJudgePolicyEndpoint.ToResponseAsync(_store, change, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var change = await _projects.RejudgeProjectAsync(req.ProjectId, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await Send.OkAsync(await UpdateBenchmarkJudgePolicyEndpoint.ToResponseAsync(_store, change, ct).ConfigureAwait(false), ct).ConfigureAwait(false);
     }
 }
 
@@ -267,11 +232,4 @@ internal static class BenchmarkJudgePolicyProjection
             : null;
         return BenchmarkEndpointMapper.ToJudgePolicy(revision, policy);
     }
-}
-
-internal static class BenchmarkExceptionFilter
-{
-    public static bool IsHandled(Exception exception) =>
-        exception is BenchmarkNotFoundException or BenchmarkValidationException or BenchmarkConflictException or BenchmarkEligibilityException
-            or BenchmarkUnsupportedKvCacheTypeException or BenchmarkJudgePolicyChangedException;
 }

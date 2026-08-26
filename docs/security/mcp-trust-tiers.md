@@ -1,8 +1,8 @@
 # MCP server trust tiers
 
-- **Status:** Accepted, implemented in Phase 2 (gap G2) of `Plans/secure-agent-execution-2026-08-25/02-phased-plan.md`.
+- **Status:** Accepted, implemented in Phase 2 (gap G2) of the 2026-08-25 secure-agent-execution work.
 - **Scope:** Outbound MCP servers this node connects to. The node's own inbound MCP server is out of scope (ADR 0006).
-- **Authority:** Operator decision D-C (2026-08-25): the tiers are `Sandboxed` / `PrivilegedHost` / `BuiltInTrusted`.
+- **Authority:** Maintainer decision (2026-08-25): the tiers are `Sandboxed` / `PrivilegedHost` / `BuiltInTrusted`.
   There is **no `Remote` tier**; `McpOptions.HttpLoopbackHosts` stays exact-match loopback.
 
 ## The three tiers

@@ -1,7 +1,11 @@
 # Agent Framework 1.15 completion evidence
 
-This document closes the reproducibility and hardware-lane gaps in
-`Plans/2026-07-26-agent-framework-1.15-upgrade-and-harness-assessment-plan.md`.
+This document closes the reproducibility and hardware-lane gaps identified in the
+Agent Framework 1.15 upgrade and harness assessment.
+Only the manifests, central-pin tables, the rollback patch and the three contract logs are tracked; the raw
+build/restore/test logs and the dependency-graph JSON they describe are regenerated locally by
+`scripts/run-agent-framework-validation.sh` and `scripts/capture-agent-framework-dependencies.sh` and are
+ignored by git.
 The deterministic compatibility tests remain the permanent release gate. The real
 llama-server lane below is explicitly opt-in and hardware-dependent.
 

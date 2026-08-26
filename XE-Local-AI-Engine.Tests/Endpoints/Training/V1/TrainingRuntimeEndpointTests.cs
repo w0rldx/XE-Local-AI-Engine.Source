@@ -3,6 +3,12 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.Training.V1;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
+using XE_Local_AI_Engine.Providers.Training;
+using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -149,5 +155,109 @@ public sealed class TrainingRuntimeEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Test]
+    public async Task RuntimeInstall_WhenTheProviderFails_UsesTheInstallPrerequisitesReason()
+    {
+        var runtime = Substitute.For<ITrainingRuntimeService>();
+        runtime.InstallAsync(Arg.Any<CancellationToken>())
+               .Returns<Task<TrainingRuntimeInstallResult>>(_ => throw new TrainingRuntimeException("The runtime package verification failed."));
+        await using var factory = Factory(runtime: runtime);
+        using var client = factory.CreateClient();
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/runtime/install");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 3, document.RootElement.EnumerateObject().Count());
+        AssertEx.Equal("prerequisites", document.RootElement.GetProperty("reason").GetString());
+        AssertEx.Equal("The runtime package verification failed.", document.RootElement.GetProperty("message").GetString());
+        AssertEx.Equal(JsonValueKind.Null, document.RootElement.GetProperty("prerequisites").ValueKind);
+    }
+
+    [Test]
+    public async Task RuntimeRemove_WhenTheProviderFails_UsesTheDistinctRemoveFailedReason()
+    {
+        var runtime = Substitute.For<ITrainingRuntimeService>();
+        runtime.Cancel().Returns(false);
+        runtime.RemoveAsync(Arg.Any<CancellationToken>())
+               .Returns<Task<bool>>(_ => throw new TrainingRuntimeException("The runtime cleanup failed."));
+        await using var factory = Factory(runtime: runtime);
+        using var client = factory.CreateClient();
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/runtime/remove");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 3, document.RootElement.EnumerateObject().Count());
+        AssertEx.Equal("remove-failed", document.RootElement.GetProperty("reason").GetString());
+        AssertEx.Equal("The runtime cleanup failed.", document.RootElement.GetProperty("message").GetString());
+        AssertEx.Equal(JsonValueKind.Null, document.RootElement.GetProperty("prerequisites").ValueKind);
+    }
+
+    [Test]
+    public async Task CreateBaseArtifact_WhenTheSelectionIsRejected_PreservesItsDistinctBlockedBody()
+    {
+        var artifacts = Substitute.For<IBaseArtifactService>();
+        artifacts.StartDownloadAsync("org/model", "revision", Arg.Any<CancellationToken>())
+                 .Returns<Task<BaseArtifactView>>(_ => throw new BaseArtifactRejectedException("The selected checkpoint is not trainable."));
+        await using var factory = Factory(artifacts: artifacts);
+        using var client = factory.CreateClient();
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/base-artifacts", new
+        {
+            repoId = "org/model",
+            revision = "revision"
+        });
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 2, document.RootElement.EnumerateObject().Count());
+        AssertEx.Equal("rejected", document.RootElement.GetProperty("reason").GetString());
+        AssertEx.Equal("The selected checkpoint is not trainable.", document.RootElement.GetProperty("message").GetString());
+        AssertEx.False(document.RootElement.TryGetProperty("code", out _),
+            "A base-artifact rejection has its own reason/message contract, not the training-store error envelope.");
+    }
+
+    private static TestServerWebAppFactory Factory(ITrainingRuntimeService? runtime = null, IBaseArtifactService? artifacts = null) =>
+        new()
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                if (runtime is not null)
+                {
+                    services.RemoveAll<ITrainingRuntimeService>();
+                    services.AddSingleton(runtime);
+                }
+
+                if (artifacts is not null)
+                {
+                    services.RemoveAll<IBaseArtifactService>();
+                    services.AddSingleton(artifacts);
+                }
+            }
+        };
+
+    private static HttpRequestMessage Authorized(TestServerWebAppFactory factory, HttpMethod method, string path, object? content = null)
+    {
+        var request = new HttpRequestMessage(method, path);
+        factory.AddNodeBearerToken(request);
+        request.Headers.Add("Origin", "http://localhost");
+        if (content is not null)
+        {
+            request.Content = JsonContent.Create(content);
+        }
+
+        return request;
     }
 }

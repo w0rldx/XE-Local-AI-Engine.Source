@@ -24,7 +24,7 @@ Hard-won rules, invariants, and traps for this repository. `docs/wiki/` explains
 
 ## 0. Repo orientation
 
-- This is the standalone repository at `~/projects/XE-Local-AI-Engine`, with remote **`public`** pointing to **`w0rldx/XE-Local-AI-Engine.Source`**. There is no `origin`, parent-repository pointer, or `w0rldx/XE-Local-AI-Engine` remote.
+- This is a standalone repository with remote **`public`** pointing to **`w0rldx/XE-Local-AI-Engine.Source`**. There is no `origin`, parent-repository pointer, or `w0rldx/XE-Local-AI-Engine` remote.
 - Old references to `C0re.slnx`, `C0re.Client.React.Web`, `C0re.Tests.IntegrationTests`, or a C0re-parent Docker context are invalid. Current names are `XE-Local-AI-Engine.slnx`, `XE-Local-AI-Engine.Client.React/`, the three in-repo unit-test projects, `XE-Local-AI-Engine.Tests.E2ETests`, and `XE-Local-AI-Engine.AI.Contracts`.
 
 ### Cite symbols, not `file:line`, for anything under active development
@@ -303,9 +303,9 @@ One Kestrel process serves API and UI via `UseStaticFiles` and `MapFallbackToFil
 
 ## 2. Dev environment & local runtime
 
-### This WSL2 box HAS a GPU
+### The dev environment has a CUDA GPU — probe it, never infer it
 
-Never infer the current hardware from this document. Run `nvidia-smi`, `nvcc --version`, and inspect the compiled architecture. The last verified box was RTX 5090/32 GB/sm_120 with 8 WSL CPUs and ~31 GiB RAM, but hardware/toolkit versions have already changed.
+Never infer the current hardware from this document. Run `nvidia-smi`, `nvcc --version`, and inspect the compiled architecture. The GPU is Blackwell-class (sm_120) as of the last verification, but hardware and toolkit versions have already changed once and will again.
 
 WDDM/WSL traps:
 
@@ -313,7 +313,7 @@ WDDM/WSL traps:
 - `nvidia-smi memory.free` is global; llama.cpp `--list-devices` uses a process residency budget. They can diverge by tens of GiB. Use global availability for admission/invalidation and the process budget for process allocation; never reunify them.
 - `nvidia-smi --query-compute-apps` may report no processes under WSL even while VRAM is occupied; per-process attribution is unavailable.
 
-### This WSL2 box has no keyring
+### Headless WSL2/Linux dev boxes have no keyring
 
 With no Secret Service daemon, Azure.Identity can wrap MSAL cache persistence failure as `AuthenticationFailedException`. Walk `InnerException`; do not catch only `CredentialUnavailableException`. Such sessions are memory-only and do not survive restart.
 
@@ -1196,7 +1196,7 @@ These are intentionally terse. Follow the linked/current section for the active 
 | Memory-safe runner defaults to `JOBS=4`; increase in-process width. | Default is `JOBS=10`; process batches, not width, provide the useful concurrency (§1). |
 | Coverage should use one process per namespace. | Coverage instrumentation makes that prohibitively expensive; use `TEST_GROUPS=$(nproc)` groups (§1). |
 | Development Mode must be unrestricted because restore needs network. | A short warm sandbox restores, then the agent-facing sandbox requests deny-egress where supported (§2). |
-| WSL has no GPU / is an RTX 4080. | Hardware changed to RTX 5090 at last verification; always query live (§2). |
+| WSL has no GPU (or a specific older card). | Hardware changes between verifications; always query live (§2). |
 | llama.cpp native MCP should replace the app client. | Its MCP proxy is for llama-server's browser UI; keep the .NET MCP integration and approval boundary (§3). |
 | Ollama was removed. | Only Aspire auto-orchestration was removed; Ollama remains opt-in (§2). |
 | `aspire stop` necessarily leaks and only 13.5+ fixes it. | Leak did not reproduce on tested versions, but `dev-stop.sh` remains sanctioned until the trigger is understood (§2). |

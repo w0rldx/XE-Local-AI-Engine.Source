@@ -216,12 +216,13 @@ public static class ConfigureServices
             builder.Services.AddSingleton<IDevelopmentAttemptLiveEventPublisher, DevelopmentAttemptLiveEventPublisher>();
         }
 
-        // Error handling - the order of the exception handlers is important: specific handlers first
-        // (ConflictExceptionHandler -> 409, DomainValidationExceptionHandler -> 400), DefaultExceptionHandler last as
-        // the catch-all 500. Mirrors the central platform's IExceptionHandler pattern.
+        // Error handling - the order of the exception handlers is important: specific handlers first, family-specific
+        // Training/Benchmark wire contracts next, and DefaultExceptionHandler last as the catch-all 500.
         builder.Services
                .AddExceptionHandler<ConflictExceptionHandler>()
                .AddExceptionHandler<DomainValidationExceptionHandler>()
+               .AddExceptionHandler<TrainingExceptionHandler>()
+               .AddExceptionHandler<BenchmarkExceptionHandler>()
                .AddExceptionHandler<DefaultExceptionHandler>();
         builder.Services.AddProblemDetails();
 
@@ -273,6 +274,7 @@ public static class ConfigureServices
                 // validators reject valid responses.
                 settings.SchemaSettings.SchemaProcessors.Add(new JsonStringEnumMemberNameSchemaProcessor());
                 settings.OperationProcessors.Add(new McpServerApiKeyOpenApiOperationProcessor());
+                settings.DocumentProcessors.Add(new DevelopmentOpenApiDocumentProcessor());
             };
 
             options.ExcludeNonFastEndpoints = true;

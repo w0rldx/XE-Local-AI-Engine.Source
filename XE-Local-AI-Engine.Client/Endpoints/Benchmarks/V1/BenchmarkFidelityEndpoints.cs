@@ -83,31 +83,24 @@ public sealed class UpdateBenchmarkProjectFidelityEndpoint(IBenchmarkProjectServ
     public override async Task HandleAsync(UpdateBenchmarkProjectFidelityRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        try
-        {
-            var change = await _projects.UpdateFidelityAsync(req.ProjectId,
-                                            req.ExpectedVersion,
-                                            new BenchmarkProjectFidelitySettings(req.FidelityEnabled,
-                                                req.FidelityKldEnabled,
-                                                req.FidelityChunks,
-                                                req.FidelityKldBaseModelName),
-                                            req.MeasureExisting,
-                                            ct)
-                                        .ConfigureAwait(false);
-            var runCount = await _store.CountRunsAsync(req.ProjectId, ct).ConfigureAwait(false);
-            await Send.OkAsync(new BenchmarkProjectFidelityChangeResponse
-                      {
-                          Project = change.Project.ToDetail(runCount,
-                              await BenchmarkJudgePolicyProjection.ReadAsync(_store, req.ProjectId, ct).ConfigureAwait(false)),
-                          EnqueuedRunIds = change.EnqueuedRunIds,
-                          EnqueuedCount = change.EnqueuedRunIds.Count
-                      }, ct)
-                      .ConfigureAwait(false);
-        }
-        catch (Exception exception) when (BenchmarkExceptionFilter.IsHandled(exception))
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var change = await _projects.UpdateFidelityAsync(req.ProjectId,
+                                        req.ExpectedVersion,
+                                        new BenchmarkProjectFidelitySettings(req.FidelityEnabled,
+                                            req.FidelityKldEnabled,
+                                            req.FidelityChunks,
+                                            req.FidelityKldBaseModelName),
+                                        req.MeasureExisting,
+                                        ct)
+                                    .ConfigureAwait(false);
+        var runCount = await _store.CountRunsAsync(req.ProjectId, ct).ConfigureAwait(false);
+        await Send.OkAsync(new BenchmarkProjectFidelityChangeResponse
+                  {
+                      Project = change.Project.ToDetail(runCount,
+                          await BenchmarkJudgePolicyProjection.ReadAsync(_store, req.ProjectId, ct).ConfigureAwait(false)),
+                      EnqueuedRunIds = change.EnqueuedRunIds,
+                      EnqueuedCount = change.EnqueuedRunIds.Count
+                  }, ct)
+                  .ConfigureAwait(false);
     }
 }
 
@@ -137,16 +130,7 @@ public sealed class StartBenchmarkRunFidelityEndpoint(IBenchmarkStore store, IBe
         }
 
         var project = await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false);
-        try
-        {
-            _ = await _store.EnqueueFidelityAsync(req.RunId, project?.FidelityKldEnabled == true ? "kld" : "ppl", ct).ConfigureAwait(false);
-        }
-        catch (BenchmarkStoreException exception)
-        {
-            await Send.ResultAsync(BenchmarkEndpointSupport.Error(exception)).ConfigureAwait(false);
-            return;
-        }
-
+        _ = await _store.EnqueueFidelityAsync(req.RunId, project?.FidelityKldEnabled == true ? "kld" : "ppl", ct).ConfigureAwait(false);
         _signal.Wake();
         await Send.ResultAsync(Results.Accepted()).ConfigureAwait(false);
     }

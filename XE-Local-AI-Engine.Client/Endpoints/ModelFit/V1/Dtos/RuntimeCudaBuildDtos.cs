@@ -122,13 +122,13 @@ public sealed class LlamaCppRuntimeStatusResponse
     /// <summary>
     ///     True when the installed runtime is an in-app source-built CUDA build. When true the catalog-driven
     ///     "update available" is suppressed (a source build is not on the prebuilt update channel); use
-    ///     <see cref="RebuildAvailable" /> instead. <c>[archMED-2]</c>
+    ///     <see cref="RebuildAvailable" /> instead.
     /// </summary>
     public required bool IsSourceBuild { get; init; }
 
     /// <summary>
     ///     True when the installed runtime is a source build whose tag differs from the engine's current pinned tag —
-    ///     i.e. a fresh in-app CUDA rebuild is available. Always false for a downloaded prebuilt. <c>[archMED-4]</c>
+    ///     i.e. a fresh in-app CUDA rebuild is available. Always false for a downloaded prebuilt.
     /// </summary>
     public required bool RebuildAvailable { get; init; }
 }

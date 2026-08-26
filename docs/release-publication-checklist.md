@@ -7,7 +7,7 @@ installer, signing certificate, or signed stable artifact exists.
 
 - [ ] Replace every `unresolved` decision in `docs/compliance/release-authority-register.json` with durable,
       named, dated, evidenced approval.
-- [ ] Keep author identity entries public-safe: use the two established public identities or aliases; do not publish
+- [ ] Keep author identity entries public-safe: use established public identities or aliases; do not publish
       new private identity data.
 - [ ] Document permissions or non-applicability for employer, contractor, predecessor-project, and C0re material.
 - [ ] Account for copied/adapted schemas, migrations, golden vectors, templates, logos/media/branding, and vendored

@@ -995,6 +995,66 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             self.assertEqual("$RUNTIME_ROOT/llama-server", sanitized["argv"][0])
             self.assertTrue(sanitized["sanitized"])
 
+    def test_sanitize_redacts_host_cpu_kernel_and_os_but_keeps_gpu_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = root / "raw.json"
+            output = root / "safe.json"
+            source.write_text(
+                json.dumps(
+                    {
+                        "host": {
+                            "cpu": "ExampleVendor Model X 16-Core Processor",
+                            "kernel": "9.99.99.9-example-standard-WSL2",
+                            "os": "Linux-9.99.99.9-example-standard-WSL2-x86_64-with-glibc2.99",
+                            "architecture": "x86_64",
+                            "nvidia_smi_driver": {
+                                "stdout": "0, NVIDIA GeForce RTX 5090, 610.74",
+                            },
+                        },
+                        "run_stdout": (
+                            '{"cpu_info": "ExampleVendor Model X 16-Core Processor", '
+                            '"gpu_info": "NVIDIA GeForce RTX 5090"}'
+                        ),
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            capture.sanitize_artifact(source, output, [])
+
+            sanitized = json.loads(output.read_text(encoding="utf-8"))
+            host = sanitized["host"]
+            self.assertEqual("<redacted-cpu>", host["cpu"])
+            self.assertEqual("<redacted-kernel>", host["kernel"])
+            self.assertEqual("Linux-<redacted-kernel>-x86_64", host["os"])
+            # Embedded tool output is scrubbed too, not just the host block.
+            self.assertNotIn("ExampleVendor", json.dumps(sanitized))
+            self.assertNotIn("9.99.99", json.dumps(sanitized))
+            # GPU name and driver are benchmark metadata and stay.
+            self.assertIn("NVIDIA GeForce RTX 5090", host["nvidia_smi_driver"]["stdout"])
+            self.assertIn("610.74", host["nvidia_smi_driver"]["stdout"])
+            labels = [entry["label"] for entry in sanitized["sanitization"]["replacements"]]
+            self.assertIn("<redacted-cpu>", labels)
+            self.assertIn("<redacted-kernel>", labels)
+
+    def test_sanitize_leaves_unknown_host_cpu_and_missing_host_alone(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source = root / "raw.json"
+            output = root / "safe.json"
+            source.write_text(
+                json.dumps({"host": {"cpu": "unknown", "kernel": ""}, "other": 1}),
+                encoding="utf-8",
+            )
+
+            capture.sanitize_artifact(source, output, [])
+
+            sanitized = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual("unknown", sanitized["host"]["cpu"])
+            self.assertEqual("", sanitized["host"]["kernel"])
+            self.assertEqual([], sanitized["sanitization"]["replacements"])
+
     def test_sanitize_redacts_gpu_uuid_and_rejects_identifier_leakage(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

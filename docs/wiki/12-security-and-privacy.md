@@ -222,7 +222,7 @@ Its handling mirrors the MCP key rather than inventing a second posture
 **The bearer key is not the only gate, and that is load-bearing.** The passthrough is hand-mapped
 *inside* the `/api/local/v1` prefix precisely so `LocalApiSecurityMiddleware`'s loopback-peer + Host +
 Origin check has already rejected any non-loopback caller before the handler runs. An external tool
-therefore has to be on this box (or reach it through the operator's own tunnel) — mounting these routes
+therefore has to be on this host (or reach it through the operator's own tunnel) — mounting these routes
 outside the prefix would silently remove that layer and leave the key as the only control. `proxy/key`
 itself is an ordinary Operator-gated FastEndpoints family, so key management stays on the browser's
 JWT posture. Requests are forwarded verbatim to the resolved `llama-server` child and never route

@@ -158,7 +158,7 @@ public sealed class BenchmarkJudgeExecutionIdentityTests
         var absent = AssertEx.NotNull(BenchmarkJudgeExecutionKey.TryBuild(Receipt(GpuVariant.Cuda, LlamaServerPlacementOutcome.Full, offloaded: 33, total: 33),
             Environment(cpuModel: null)));
 
-        AssertEx.Equal("AMD Ryzen 9 9950X3D", present.CpuModel);
+        AssertEx.Equal("Example CPU 16-Core", present.CpuModel);
         AssertEx.Null(absent.CpuModel, "A fact the node does not report is recorded as absent, never as a required field.");
         AssertEx.NotEqual(BenchmarkJudgeExecutionKey.Compute(PolicyHash, present),
             BenchmarkJudgeExecutionKey.Compute(PolicyHash, absent),
@@ -194,12 +194,12 @@ public sealed class BenchmarkJudgeExecutionIdentityTests
     private static RuntimeEnvironmentFactsV1 Environment(long capturedAtUtc = 1_700_000_000_000,
         string? bundleIdentity = "bundle-identity",
         IReadOnlyList<BenchmarkGpuFactsV1>? gpus = null,
-        string? cpuModel = "AMD Ryzen 9 9950X3D",
+        string? cpuModel = "Example CPU 16-Core",
         bool includeHardware = true) =>
         new(1,
             bundleIdentity is null ? null : new RuntimeBundleFactsV1(bundleIdentity, 3, []),
             includeHardware
-                ? new BenchmarkHardwareFactsV1("Linux 6.18.33.2-microsoft-standard-WSL2",
+                ? new BenchmarkHardwareFactsV1("Linux 9.99.99.9-example-WSL2",
                     "X64",
                     cpuModel,
                     8,

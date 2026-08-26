@@ -465,8 +465,9 @@ namespace XE_Local_AI_Engine.Client
             app.UseSerilogRequestLogging(ConfigureRequestLogging);
 
             // Configure the HTTP request pipeline.
-            // Standardized typed exception handling (mirrors the central platform): translates domain
-            // exceptions into RFC7807 ProblemDetails. Registered before UseFastEndpoints so it wraps endpoints.
+            // Central exception handling preserves each typed family contract: Training handlers write their custom
+            // JSON shapes, while Benchmark and other ProblemDetails handlers use RFC 7807. Registered before
+            // UseFastEndpoints so it wraps endpoints.
             app.UseExceptionHandler();
 
             // Apply response-wide security/correlation headers at the shared boundary before static files, health checks,

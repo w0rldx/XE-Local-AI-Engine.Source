@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 public sealed record BenchmarkGpuFactsV1(string Name, long? TotalBytes, string? DriverVersion);
 
 /// <param name="OsDescription">
-///     The host OS as the runtime describes it ("Linux 6.18.33.2-microsoft-standard-WSL2 ..."). Deliberately NOT named
+///     The host OS as the runtime describes it ("Linux 6.18.0-example-WSL2 ..."). Deliberately NOT named
 ///     <c>os</c>: the receipt already carries a bounded <c>os</c> token, and two same-named fields of different shapes
 ///     read as a contradiction in a field-by-field diff.
 /// </param>

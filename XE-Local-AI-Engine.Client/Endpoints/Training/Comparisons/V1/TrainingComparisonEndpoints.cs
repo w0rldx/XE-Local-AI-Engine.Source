@@ -41,10 +41,6 @@ public sealed class CreateComparisonEndpoint(IComparisonReportService comparison
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
     }
 }
 
@@ -106,15 +102,8 @@ public sealed class DeleteComparisonEndpoint(IComparisonReportService comparison
 
     public override async Task HandleAsync(DeleteComparisonRequest req, CancellationToken ct)
     {
-        try
-        {
-            await _comparisons.DeleteAsync(req.ComparisonId, req.ExpectedVersion, ct).ConfigureAwait(false);
-            await Send.NoContentAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        await _comparisons.DeleteAsync(req.ComparisonId, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }
 

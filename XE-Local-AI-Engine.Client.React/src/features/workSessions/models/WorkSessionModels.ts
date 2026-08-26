@@ -88,8 +88,8 @@ export function isTerminalWorkSessionStatus(status: WorkSessionStatus): boolean 
 }
 
 /**
- * Posting a follow-up here also RESUMES the session (P3 row 16 / X20). `Draft` is deliberately excluded: it has no
- * next step until Start, so its composer must promise "used when you start", never "resuming".
+ * Posting a follow-up also resumes paused or interrupted sessions. `Draft` is deliberately excluded: it has no next
+ * step until Start, so its composer must promise "used when you start", never "resuming".
  */
 export function resumesOnFollowUp(status: WorkSessionStatus): boolean {
 	return status === "Paused" || status === "Interrupted";
@@ -117,8 +117,8 @@ export function artifactEditorLanguage(kind: WorkSessionArtifactKind, mediaType:
 }
 
 /**
- * Decodes an artifact body for the read-only editor. The server base64s anything whose media type is not on its
- * text allowlist (P3 L11), so a decode failure means genuinely binary content — reported, never rendered as mojibake.
+ * Decodes an artifact body for the read-only editor. The server sends allowlisted text media types directly and
+ * base64-encodes every other type, so invalid UTF-8 is reported as binary instead of rendered as mojibake.
  */
 export function decodeArtifactContent(content: string, isBase64: boolean): { text: string; isBinary: boolean } {
 	if (!isBase64) {

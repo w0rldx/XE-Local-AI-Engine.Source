@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-08-15
 - **Scope:** The Training group (dataset generation, fine-tuning runs, export, evaluation). Nothing else.
-- **Authority:** Locked decisions 1, 13 and 14 in `Plans/2026-08-15-training-module-plan.md` §2. Decision 1 is an operator decision (AskUserQuestion + directive, 2026-08-15); 13 and 14 were closed by review evidence in the same round and confirmed by the operator. This record states them precisely enough to be enforced and to be revisited; it does not reopen them.
+- **Authority:** Locked decisions 1, 13 and 14 of the 2026-08-15 training-module plan. Decision 1 was made by the maintainer on 2026-08-15; decisions 13 and 14 were closed by review evidence in the same round and confirmed by the maintainer. This record states them precisely enough to be enforced and to be revisited; it does not reopen them.
 - **Relates to:** [ADR 0004](0004-development-mode-container-execution-docker-stopgap.md) — unchanged and unamended by this record. See "Relationship to ADR 0004" below.
 
 ## Context
@@ -14,7 +14,7 @@ Three facts about this repository constrain the answer.
 
 **The box is not a training box that happens to serve inference.** It is an inference node. A single GPU carries chat, embeddings, image generation, benchmarks and model-fit probing, and every one of those paths already contends for it. The supervisor's runtime-mutation lease (`ILlamaServerProcessSupervisor.TryAcquireRuntimeMutationLeaseAsync`) and the GPU load admission semaphore (`IGpuModelLoadAdmission`) exist because that contention is real and was paid for. A training run is not another consumer of that budget — it is a multi-hour, whole-GPU tenant, which is a different kind of thing.
 
-**The host's Python is not usable.** The live box runs system Python 3.14.6; Unsloth's supported floor at the pin is 3.13, and the torch wheels the Blackwell (sm_120) path needs come from the cu128/cu129 index. Depending on whatever interpreter the operator happens to have installed reproduces the toolchain problem ADR 0004 solved for Development Mode, in a feature where the failure mode is a run that trains for two hours and then cannot export.
+**The host's Python is not usable.** The host's system Python is newer than Unsloth's supported floor at the pin (3.13), and the torch wheels the Blackwell (sm_120) path needs come from the cu128/cu129 index. Depending on whatever interpreter the operator happens to have installed reproduces the toolchain problem ADR 0004 solved for Development Mode, in a feature where the failure mode is a run that trains for two hours and then cannot export.
 
 **Project layering is enforced, not advisory.** `LayerDependencyTests` holds exact-match `ApprovedProjectReferences` and `ApprovedInternalAssemblyReferences` lists, and an unregistered project reference fails the build on the first commit that introduces it. So "where does this code live" is a decision with a test behind it, not a preference.
 

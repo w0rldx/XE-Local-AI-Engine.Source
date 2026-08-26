@@ -23,7 +23,7 @@ Two `.csproj` files on disk are intentionally **not** in `XE-Local-AI-Engine.sln
 
 ## Project inventory
 
-Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `ProjectReference`) and, where useful, its file set from the CodeGraph index.
+Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `ProjectReference`) and, where useful, its file set.
 
 ### Core (`/Src/`)
 
@@ -47,7 +47,7 @@ Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `Proje
 
 All provider projects reference **only** `Providers.Abstractions`. SDK-specific types stay inside each provider; consumers depend on the abstraction seams (`ILocalModelProvider`, `IChatClient`, `IEmbeddingGenerator`).
 
-| Project | Role | Key symbols (CodeGraph) |
+| Project | Role | Key symbols |
 |---|---|---|
 | `XE-Local-AI-Engine.Providers.Abstractions` | The seam layer. Defines `ILocalModelProvider`, `IRerankerClient`, `IModelCapabilityClient`, GGUF contracts (`IGgufModelStore`, `IGgufModelRegistry`, `IHfTokenStore`, `IHuggingFaceGgufDiscovery`), hardware-profile + capability contracts, and `INodeDataDirectory`. `Gguf/` is also the single source of truth for quant logic — `QuantLadder.cs` + `GgufQuantQuality.cs` feed the Model Advisor's quant recommendation. | `ILocalModelProvider.cs`, `Contracts/IRerankerClient.cs`, `Gguf/`, `Capabilities/` |
 | `XE-Local-AI-Engine.Providers.LlamaServer` | **The default inference runtime.** Host llama.cpp process: `LlamaServerLocalModelProvider`, `LlamaServerProcessSupervisor`, binary manager/updater (`LlamaCppBinaryManager`), GitHub release catalog + pins (`GitHubLlamaCppReleaseCatalog`, `LlamaCppReleasePins`), GPU variant selection (`GpuVariantSelector`, `ProcessGpuVendorProbe`), cross-platform process-group handles (Windows job object / Linux process group). | `LlamaServerProcessSupervisor.cs` (56 sym), `LlamaCppBinaryManager.cs` (44) |

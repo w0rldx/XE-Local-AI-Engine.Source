@@ -4,8 +4,8 @@
 - **Date:** 2026-08-25
 - **Scope:** How a feature obtains an execution sandbox, and how a backend is chosen for it. It does not change what any
   backend enforces, and it does not add or remove a backend.
-- **Authority:** Operator decision D-A, taken 2026-08-25 in the session that produced
-  `Plans/secure-agent-execution-2026-08-25/00-mapping.md`. Drafted from that mapping and the lane evidence beside it.
+- **Authority:** Decided by the maintainer on 2026-08-25. Drafted from the secure-agent-execution gap mapping and
+  the lane evidence beside it.
 - **Amends:** [ADR 0004](0004-development-mode-container-execution-docker-stopgap.md) Decision §1 only — see
   [What this amends, and what it deliberately does not](#what-this-amends-and-what-it-deliberately-does-not).
 
@@ -142,7 +142,7 @@ Stated honestly, including the ones that are costs.
   behavioural test, so it fails deterministically and offline — but it is a real reduction and should be weighed as one.
 
 - **Minimal-satisfying resolution has to be defined on an axis that is arguable.** "Least additional privilege" is
-  obvious for process-vs-Docker on this box (a root-equivalent daemon socket on Linux) and will be less obvious the day
+  obvious for process-vs-Docker on a given host (a root-equivalent daemon socket on Linux) and will be less obvious the day
   a third backend exists. The ordering must be an explicit, code-owned ranking with the reasoning attached, not an
   emergent property of a `switch`.
 

@@ -1,6 +1,5 @@
 // SignalR-stream-only DTOs for the node chat streaming path. These have NO OpenAPI/generated equivalent
-// (the stream rides the SignalR hub, not the REST surface), so they live here as hand types that survive
-// the hey-api REST migration. Moved verbatim out of the now-deleted NodeChatApi.ts.
+// (the stream rides the SignalR hub, not the REST surface), so they remain hand-authored beside the chat feature.
 
 export interface NodeChatStreamRequestDto {
 	conversationId: string;
@@ -16,15 +15,17 @@ export interface NodeChatStreamRequestDto {
 	// server persists it and assembles context from the selected branch only; absent falls back to the stored map.
 	selectedPath?: Record<string, string>;
 	// Agent to resolve for this turn. Absent/null → Default Assistant (today's built-in chat path). This is a
-	// HAND-TYPED SSE DTO field (not generated), so it is safe to add here without touching NodeChatMapper.ts.
+	// HAND-TYPED SignalR stream DTO field (not generated), so it is safe to add here without touching NodeChatMapper.ts.
 	agentDefinitionId?: string;
 	// File attachments scoped to this conversation. The client re-sends ALL current (non-deleted) attachment
 	// file ids on EVERY turn so the server can inline extracted text for plain chat (capped) and stage the
-	// files into AgentHome for agent mode. Absent/empty → no attachments. Hand-typed SSE DTO field (not generated).
+	// files into AgentHome for agent mode. Absent/empty → no attachments.
+	// Hand-typed SignalR stream DTO field (not generated).
 	attachmentFileIds?: string[];
 	// Opt-in knowledge-base grounding for a plain-chat turn (default off). When true the server retrieves
 	// the top-k knowledge-base hits for this message and inlines them (fenced, capped) into the turn, surfacing
-	// their sources on the assistant turn. Ignored in agent mode. Hand-typed SSE DTO field (not generated).
+	// their sources on the assistant turn. Ignored in agent mode.
+	// Hand-typed SignalR stream DTO field (not generated).
 	useKnowledgeBase?: boolean;
 	// Developer-mode per-send sampling overrides. Omitted entirely when developer mode is off or all fields
 	// are null — keeps the wire payload byte-identical to the default (non-dev) path.

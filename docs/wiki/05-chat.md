@@ -229,9 +229,9 @@ route keep the request they had before the flag existed.
 
 #### Enforcement evidence (b10201, 2026-08-24)
 
-Measured on this repo's pinned runtime — the source-build CUDA `llama-server` at commit `8f4646a6` (tag `b10201`),
-RTX 5090 — launched with the app's chat-role flags (`--jinja -c 16384 --n-gpu-layers 99 -fa on --metrics`). One
-prompt, run twice per model: *"Think very carefully and at length, exploring many cases, before answering: how
+Measured with the pinned llama.cpp runtime — the source-build CUDA `llama-server` at commit `8f4646a6` (tag
+`b10201`) — on an RTX 5090 (32 GB), launched with the app's chat-role flags (`--jinja -c 16384 --n-gpu-layers 99
+-fa on --metrics`). One prompt, run twice per model: *"Think very carefully and at length, exploring many cases, before answering: how
 many primes are there below 10000? Show your reasoning."* at `max_tokens: 8192`, `temperature: 0.6`, `seed: 12345`,
 once with no budget and once with `reasoning_budget_tokens: 256`. Reasoning/answer lengths are the server's own
 `/tokenize` counts of `reasoning_content` and `content`.

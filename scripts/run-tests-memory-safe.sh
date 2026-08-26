@@ -65,7 +65,7 @@
 #   mutation, PATH stubs, meter/ActivityListener capture, the HostStartupLock) or already isolated
 #   per host (GUID-named temp SQLite/data dirs, port-0 binds). So the batches run JOBS at a time,
 #   longest-first, each still single-threaded by default. PROCESS-level parallelism is what this
-#   module responds to; in-process width is contention-bound (measured 2026-08-22, 16-core dev box:
+#   module responds to; in-process width is contention-bound (measured 2026-08-22, 16-core host:
 #   one process 8-wide = 11:00 wall / 10.0 GB, JOBS=4 batches = 6:02, JOBS=10 batches = 2:18 with
 #   ~670 MB per batch process). Hence the default of 10 rather than one-per-core.
 #   JOBS=1 reproduces the old strictly-sequential behavior exactly.
@@ -241,7 +241,7 @@ fi
 
 # Longest-first (LPT) so the parallel schedule doesn't end on a 90s batch started last. Every
 # namespace that took >= 20s is listed, descending; the trailing comment is that measurement.
-# Weights measured 2026-08-22 on the dev box (JOBS=4 run); harmless if stale — unlisted namespaces
+# Weights measured 2026-08-22 on a 16-core host (JOBS=4 run); harmless if stale — unlisted namespaces
 # follow alphabetically. Re-generate from a run's `dur=` column when the tail stops shrinking —
 # and note only the PER-NAMESPACE shape yields a per-namespace `dur=`, so regenerate from a run
 # with TEST_GROUPS unset. These weights are also what the TEST_GROUPS packer bins on.
