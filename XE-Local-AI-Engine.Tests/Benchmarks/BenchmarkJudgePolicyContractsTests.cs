@@ -33,6 +33,20 @@ public sealed class BenchmarkJudgePolicyContractsTests
     }
 
     [Test]
+    public void CodeExecutionPreset_ActivatesAndIsScoredByExecutionAlone()
+    {
+        var rubric = BenchmarkJudgeRubricDefaults.CodeExecution();
+
+        BenchmarkJudgePolicyValidator.Validate(Policy(rubric));
+
+        AssertEx.Equal(100, rubric.Criteria.Sum(static criterion => criterion.Weight));
+        AssertEx.True(rubric.Criteria.All(static criterion => BenchmarkJudgeCriterionKinds.IsExecutionVerified(criterion.Kind)),
+            "the whole point of this preset is that a model never reads the code, so nothing here may be model-judged");
+        AssertEx.True(rubric.Criteria.All(static criterion => BenchmarkJudgeVerifierConfig.Parse(criterion.Kind, criterion.Config) is not null),
+            "the shipped placeholder config must itself pass activation validation");
+    }
+
+    [Test]
     public void Validator_RejectsCriterionCountOutOfRange()
     {
         var empty = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() => BenchmarkJudgePolicyValidator.Validate(Policy(Rubric([]))));

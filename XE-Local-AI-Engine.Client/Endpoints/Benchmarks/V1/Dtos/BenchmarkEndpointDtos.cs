@@ -418,8 +418,11 @@ public sealed class BenchmarkRubricCriterionDto
 
     /// <summary>
     ///     How the criterion is decided: <c>llm</c> (the default an omitted value takes), <c>exact</c>, <c>regex</c>,
-    ///     <c>jsonSchema</c>, <c>mathAnswer</c> or <c>constraint</c>. Optional on the way in so a caller written
-    ///     before verifiable criteria existed keeps working unchanged; always present on the way out.
+    ///     <c>jsonSchema</c>, <c>mathAnswer</c>, <c>constraint</c> or <c>pythonTests</c>. Optional on the way in so a
+    ///     caller written before verifiable criteria existed keeps working unchanged; always present on the way out.
+    ///     <c>pythonTests</c> is the only kind that EXECUTES anything: it runs the answer's code against the operator's
+    ///     test code in the node's compute sandbox, and a node that cannot run it leaves the run unranked rather than
+    ///     scoring it 0.
     /// </summary>
     public string? Kind { get; init; }
 
@@ -668,16 +671,55 @@ public class BenchmarkRunSummaryResponse
     /// <summary><c>user</c>, <c>judge</c>, or <c>none</c>.</summary>
     public required string QualityScoreSource { get; init; }
 
-    /// <summary>Dense rank within the project, descending. Null when the run is not in the ranked cohort.</summary>
+    /// <summary>
+    ///     Dense rank within the project, descending. Null when the run is not in the ranked cohort.
+    ///     <para>
+    ///         It is the rank of this run's CELL, not of the run alone: what ranks is one model, one KV type and one
+    ///         repeat of the whole task-item suite. On a single-item project a cell is one run and this is exactly the
+    ///         number it always was.
+    ///     </para>
+    /// </summary>
     public int? Rank { get; init; }
+
+    /// <summary>
+    ///     The score this run's cell ranks by — the mean of its scorable items' quality scores — or null when the cell
+    ///     does not rank. <see cref="QualityScore" /> stays this run's OWN score.
+    /// </summary>
+    public int? CellQuality { get; init; }
 
     /// <summary>
     ///     Why this run is not in the project's ranked cohort, or null when it is ranked. One of <c>no-score</c>,
     ///     <c>judge-pending</c>, <c>judge-failed</c>, <c>judge-cancelled</c>, <c>policy-outdated</c>,
     ///     <c>generation-stale</c>, <c>execution-key-mismatch</c>, <c>execution-identity-incomplete</c>,
-    ///     <c>truncated</c>, <c>incomplete</c>, <c>warmup</c>.
+    ///     <c>truncated</c>, <c>incomplete</c>, <c>warmup</c>, <c>item-revised</c>, <c>item-set-revised</c>,
+    ///     <c>item-incomplete</c>.
+    ///     <para>
+    ///         The last three are suite-level. <c>item-revised</c>: this run's own task item has been edited since it
+    ///         was frozen. <c>item-set-revised</c>: the project's item set has changed since this run's cell was
+    ///         measured. <c>item-incomplete</c>: nothing is wrong with this run, but its cell is missing a scorable
+    ///         item or holds one that cannot rank. Unlike <c>truncated</c>, the first two are NOT overridden by an
+    ///         operator score — that score was given for a question, or a suite, that has since moved.
+    ///     </para>
     /// </summary>
     public string? RankExclusionReason { get; init; }
+
+    /// <summary>The leaf task item this run answered, or null on a run frozen before task suites existed.</summary>
+    public Guid? TaskItemId { get; init; }
+
+    /// <summary>That item's display position, denormalized so a listing never reads the item table.</summary>
+    public int? TaskItemIndex { get; init; }
+
+    /// <summary>
+    ///     The measurement cell this run's per-item score aggregates into. Never null and never shared across two
+    ///     freezes: a run that belongs to no group is stamped its own singleton cell.
+    /// </summary>
+    public string? CellKey { get; init; }
+
+    /// <summary>A copy of the task item's input hash at freeze — exactly what this run was asked.</summary>
+    public string? TaskInputHash { get; init; }
+
+    /// <summary>A copy of the project's item-set hash at freeze — what the whole question set was when this cell was measured.</summary>
+    public string? TaskItemSetHash { get; init; }
 
     /// <summary>
     ///     Why the primary generation stopped, verbatim from the provider (<c>stop</c>, <c>length</c>,
@@ -1085,4 +1127,65 @@ public sealed class ListBenchmarkTaskItemsResponse
 
     /// <summary>The project version, so a client can make its next item write against the version it just read.</summary>
     public long ProjectVersion { get; init; }
+}
+
+public sealed class ListBenchmarkCellsRequest
+{
+    public Guid ProjectId { get; init; }
+}
+
+/// <summary>One item's answer inside a cell.</summary>
+public sealed class BenchmarkCellItemResponse
+{
+    public Guid RunId { get; init; }
+    public Guid? TaskItemId { get; init; }
+    public int? TaskItemIndex { get; init; }
+
+    /// <summary>This run's own quality score, not the cell's mean.</summary>
+    public int? QualityScore { get; init; }
+
+    public string? PrimaryStopReason { get; init; }
+    public string? RankExclusionReason { get; init; }
+}
+
+/// <summary>
+///     One measurement cell: one model, one KV type, one repeat of the whole task-item suite. This is the unit that
+///     ranks — the per-run listing shows the same numbers one row at a time and cannot say which items a cell is
+///     missing.
+/// </summary>
+public sealed class BenchmarkCellResponse
+{
+    public required string CellKey { get; init; }
+    public required string PrimaryModelName { get; init; }
+    public required string ModelContentFingerprint { get; init; }
+    public string? KvCacheType { get; init; }
+    public Guid? RepeatGroupId { get; init; }
+    public int? RepeatIndex { get; init; }
+
+    /// <summary>The mean of the cell's scorable items' quality scores, or null when it does not rank.</summary>
+    public int? Quality { get; init; }
+
+    public int? Rank { get; init; }
+
+    /// <summary>
+    ///     Why the cell does not rank, or null when it does — <c>item-set-revised</c>, <c>item-incomplete</c>, or a
+    ///     run-level reason on a pre-suite singleton cell.
+    /// </summary>
+    public string? RankExclusionReason { get; init; }
+
+    public IReadOnlyList<BenchmarkCellItemResponse> Items { get; init; } = [];
+}
+
+public sealed class ListBenchmarkCellsResponse
+{
+    public IReadOnlyList<BenchmarkCellResponse> Cells { get; init; } = [];
+
+    /// <summary>What the ranking is computed against, counted in CELLS.</summary>
+    public required BenchmarkRankCohortResponse RankCohort { get; init; }
+
+    /// <summary>
+    ///     How many leaf items the project counts toward its score right now. A cell holding fewer of them is why a
+    ///     reader sees <c>item-incomplete</c>, and it is not derivable from the cells alone.
+    /// </summary>
+    public int ScorableItemCount { get; init; }
 }
