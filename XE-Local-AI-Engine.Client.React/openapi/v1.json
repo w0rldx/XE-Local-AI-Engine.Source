@@ -13877,6 +13877,61 @@
         ]
       }
     },
+    "/api/local/v1/benchmarks/projects/{projectId}/cells": {
+      "get": {
+        "tags": [
+          "Benchmarks"
+        ],
+        "operationId": "listBenchmarkCells",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkCellsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/benchmarks/projects/{projectId}/export": {
       "get": {
         "tags": [
@@ -30616,6 +30671,147 @@
         "type": "object",
         "additionalProperties": false
       },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkCellsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "rankCohort"
+        ],
+        "properties": {
+          "cells": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkCellResponse"
+            }
+          },
+          "rankCohort": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse"
+          },
+          "scorableItemCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkCellResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cellKey",
+          "primaryModelName",
+          "modelContentFingerprint"
+        ],
+        "properties": {
+          "cellKey": {
+            "type": "string"
+          },
+          "primaryModelName": {
+            "type": "string"
+          },
+          "modelContentFingerprint": {
+            "type": "string"
+          },
+          "kvCacheType": {
+            "type": "string",
+            "nullable": true
+          },
+          "repeatGroupId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "repeatIndex": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "quality": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "rank": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "rankExclusionReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkCellItemResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkCellItemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "runId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "taskItemId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "taskItemIndex": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "qualityScore": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "primaryStopReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "rankExclusionReason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "policyRevision": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "executionKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "cohortGeneration": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "rankedCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalScored": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1ListBenchmarkCellsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -30662,6 +30858,22 @@
                 "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseFitResponse"
               }
             ]
+          },
+          "taskItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse"
+            }
+          },
+          "cells": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkCellResponse"
+            }
+          },
+          "scorableItemCount": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -30839,34 +31051,6 @@
           }
         }
       },
-      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "policyRevision": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "executionKey": {
-            "type": "string",
-            "nullable": true
-          },
-          "cohortGeneration": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "rankedCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "totalScored": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse": {
         "allOf": [
           {
@@ -30984,7 +31168,34 @@
             "format": "int32",
             "nullable": true
           },
+          "cellQuality": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
           "rankExclusionReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "taskItemId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "taskItemIndex": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "cellKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "taskInputHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "taskItemSetHash": {
             "type": "string",
             "nullable": true
           },
@@ -31584,6 +31795,72 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "inputHash",
+          "prompt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "projectId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "parentItemId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "inputHash": {
+            "type": "string"
+          },
+          "isLeaf": {
+            "type": "boolean"
+          },
+          "countsTowardScore": {
+            "type": "boolean"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "referenceAnswer": {
+            "type": "string",
+            "nullable": true
+          },
+          "verifierConfig": {
+            "nullable": true
+          },
+          "generatorConfig": {
+            "nullable": true
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest": {
         "type": "object",
         "additionalProperties": false
@@ -31710,72 +31987,6 @@
             }
           }
         ]
-      },
-      "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "kind",
-          "inputHash",
-          "prompt"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "guid"
-          },
-          "projectId": {
-            "type": "string",
-            "format": "guid"
-          },
-          "parentItemId": {
-            "type": "string",
-            "format": "guid",
-            "nullable": true
-          },
-          "index": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "revision": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "inputHash": {
-            "type": "string"
-          },
-          "isLeaf": {
-            "type": "boolean"
-          },
-          "countsTowardScore": {
-            "type": "boolean"
-          },
-          "prompt": {
-            "type": "string"
-          },
-          "referenceAnswer": {
-            "type": "string",
-            "nullable": true
-          },
-          "verifierConfig": {
-            "nullable": true
-          },
-          "generatorConfig": {
-            "nullable": true
-          },
-          "version": {
-            "type": "integer"
-          },
-          "createdAtUtc": {
-            "type": "integer"
-          },
-          "updatedAtUtc": {
-            "type": "integer"
-          }
-        }
       },
       "XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse": {
         "type": "object",

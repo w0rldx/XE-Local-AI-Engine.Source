@@ -218,6 +218,7 @@ import {
 	listAgentPlaybookActions,
 	listAgentTemplates,
 	listBaseArtifacts,
+	listBenchmarkCells,
 	listBenchmarkComparisons,
 	listBenchmarkFidelityAttempts,
 	listBenchmarkProjects,
@@ -847,6 +848,9 @@ import type {
 	ListAgentTemplatesResponse,
 	ListBaseArtifactsData,
 	ListBaseArtifactsResponse,
+	ListBenchmarkCellsData,
+	ListBenchmarkCellsError,
+	ListBenchmarkCellsResponse,
 	ListBenchmarkComparisonsData,
 	ListBenchmarkComparisonsError,
 	ListBenchmarkComparisonsResponse,
@@ -7085,6 +7089,28 @@ export const listEligibleBenchmarkModelsOptions = (options?: Options<ListEligibl
 			return data;
 		},
 		queryKey: listEligibleBenchmarkModelsQueryKey(options),
+	});
+
+export const listBenchmarkCellsQueryKey = (options: Options<ListBenchmarkCellsData>) =>
+	createQueryKey("listBenchmarkCells", options);
+
+export const listBenchmarkCellsOptions = (options: Options<ListBenchmarkCellsData>) =>
+	queryOptions<
+		ListBenchmarkCellsResponse,
+		AxiosError<ListBenchmarkCellsError>,
+		ListBenchmarkCellsResponse,
+		ReturnType<typeof listBenchmarkCellsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listBenchmarkCells({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listBenchmarkCellsQueryKey(options),
 	});
 
 export const exportBenchmarkProjectQueryKey = (options: Options<ExportBenchmarkProjectData>) =>

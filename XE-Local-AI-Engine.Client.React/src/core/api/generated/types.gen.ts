@@ -3620,6 +3620,46 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkModelsReq
 	[key: string]: never;
 };
 
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkCellsResponse = {
+	cells?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse>;
+	rankCohort: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse;
+	scorableItemCount?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse = {
+	cellKey: string;
+	primaryModelName: string;
+	modelContentFingerprint: string;
+	kvCacheType?: string | null;
+	repeatGroupId?: string | null;
+	repeatIndex?: number | null;
+	quality?: number | null;
+	rank?: number | null;
+	rankExclusionReason?: string | null;
+	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellItemResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellItemResponse = {
+	runId?: string;
+	taskItemId?: string | null;
+	taskItemIndex?: number | null;
+	qualityScore?: number | null;
+	primaryStopReason?: string | null;
+	rankExclusionReason?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse = {
+	policyRevision?: number | null;
+	executionKey?: string | null;
+	cohortGeneration?: number | null;
+	rankedCount?: number;
+	totalScored?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkCellsRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse = {
 	schemaVersion?: number;
 	exportedAtUtc?: number;
@@ -3629,6 +3669,9 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportResponse = 
 	repeatGroups?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportRepeatGroupResponse>;
 	llamaBench?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportLlamaBenchRowResponse>;
 	pairwiseFit?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseFitResponse | null;
+	taskItems?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse>;
+	cells?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse>;
+	scorableItemCount?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportProjectResponse = {
@@ -3678,14 +3721,6 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricCriterionDt
 	config?: string | null;
 };
 
-export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse = {
-	policyRevision?: number | null;
-	executionKey?: string | null;
-	cohortGeneration?: number | null;
-	rankedCount?: number;
-	totalScored?: number;
-};
-
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse =
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse & {
 		outputParts?: unknown;
@@ -3714,7 +3749,13 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryRespons
 	qualityScore?: number | null;
 	qualityScoreSource: string;
 	rank?: number | null;
+	cellQuality?: number | null;
 	rankExclusionReason?: string | null;
+	taskItemId?: string | null;
+	taskItemIndex?: number | null;
+	cellKey?: string | null;
+	taskInputHash?: string | null;
+	taskItemSetHash?: string | null;
 	primaryStopReason?: string | null;
 	modelGroupKey: string;
 	repeatGroupId?: string | null;
@@ -3867,6 +3908,25 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkExportPairwiseSco
 	reason?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse = {
+	id?: string;
+	projectId?: string;
+	parentItemId?: string | null;
+	index?: number;
+	kind: string;
+	revision?: number;
+	inputHash: string;
+	isLeaf?: boolean;
+	countsTowardScore?: boolean;
+	prompt: string;
+	referenceAnswer?: string | null;
+	verifierConfig?: unknown;
+	generatorConfig?: unknown;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectRouteRequest = {
 	[key: string]: never;
 };
@@ -3906,25 +3966,6 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResp
 		fidelityKldBaseFingerprint?: string | null;
 		fidelityKldExpectedDigest?: string | null;
 	};
-
-export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse = {
-	id?: string;
-	projectId?: string;
-	parentItemId?: string | null;
-	index?: number;
-	kind: string;
-	revision?: number;
-	inputHash: string;
-	isLeaf?: boolean;
-	countsTowardScore?: boolean;
-	prompt: string;
-	referenceAnswer?: string | null;
-	verifierConfig?: unknown;
-	generatorConfig?: unknown;
-	version?: number;
-	createdAtUtc?: number;
-	updatedAtUtc?: number;
-};
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse = {
 	id?: string;
@@ -13297,6 +13338,41 @@ export type ListEligibleBenchmarkModelsResponses = {
 
 export type ListEligibleBenchmarkModelsResponse =
 	ListEligibleBenchmarkModelsResponses[keyof ListEligibleBenchmarkModelsResponses];
+
+export type ListBenchmarkCellsData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/cells";
+};
+
+export type ListBenchmarkCellsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ListBenchmarkCellsError = ListBenchmarkCellsErrors[keyof ListBenchmarkCellsErrors];
+
+export type ListBenchmarkCellsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkCellsResponse;
+};
+
+export type ListBenchmarkCellsResponse = ListBenchmarkCellsResponses[keyof ListBenchmarkCellsResponses];
 
 export type ExportBenchmarkProjectData = {
 	body?: never;

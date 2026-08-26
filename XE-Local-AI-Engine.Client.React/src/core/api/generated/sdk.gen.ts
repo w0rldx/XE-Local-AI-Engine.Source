@@ -633,6 +633,9 @@ import type {
 	ListBaseArtifactsData,
 	ListBaseArtifactsErrors,
 	ListBaseArtifactsResponses,
+	ListBenchmarkCellsData,
+	ListBenchmarkCellsErrors,
+	ListBenchmarkCellsResponses,
 	ListBenchmarkComparisonsData,
 	ListBenchmarkComparisonsErrors,
 	ListBenchmarkComparisonsResponses,
@@ -1464,6 +1467,8 @@ import {
 	zListAgentPlaybookActionsResponse,
 	zListAgentTemplatesResponse,
 	zListBaseArtifactsResponse,
+	zListBenchmarkCellsPath,
+	zListBenchmarkCellsResponse,
 	zListBenchmarkComparisonsPath,
 	zListBenchmarkComparisonsResponse,
 	zListBenchmarkFidelityAttemptsPath,
@@ -10508,6 +10513,36 @@ export const listEligibleBenchmarkModels = <ThrowOnError extends boolean = false
 			},
 		],
 		url: "/api/local/v1/benchmarks/eligible-models",
+		...options,
+	});
+
+export const listBenchmarkCells = <ThrowOnError extends boolean = false>(
+	options: Options<ListBenchmarkCellsData, ThrowOnError>,
+): RequestResult<ListBenchmarkCellsResponses, ListBenchmarkCellsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListBenchmarkCellsResponses, ListBenchmarkCellsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListBenchmarkCellsPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListBenchmarkCellsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/benchmarks/projects/{projectId}/cells",
 		...options,
 	});
 

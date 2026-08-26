@@ -268,6 +268,11 @@ public static class LocalApiRoutes
         public const string ProjectTaskItems = "benchmarks/projects/{projectId}/items";
         public const string ProjectTaskItemById = "benchmarks/projects/{projectId}/items/{itemId}";
 
+        // The measurement CELLS of a project: one model, one KV type, one repeat of the whole item suite. Its own
+        // route rather than a shape on ProjectRuns, because a cell is what ranks and a run list cannot say which
+        // items a cell is MISSING — the absence is the answer.
+        public const string ProjectCells = "benchmarks/projects/{projectId}/cells";
+
         // Reordering is its own verb on its own route: it names the whole order at once, which is also what makes it
         // safe under a concurrent add or delete.
         public const string ProjectTaskItemOrder = "benchmarks/projects/{projectId}/items/order";

@@ -197,6 +197,7 @@ public sealed class OpenApiDocumentTests
                      "/api/local/v1/benchmarks/projects/{projectId}/items",
                      "/api/local/v1/benchmarks/projects/{projectId}/items/{itemId}",
                      "/api/local/v1/benchmarks/projects/{projectId}/items/order",
+                     "/api/local/v1/benchmarks/projects/{projectId}/cells",
                      "/api/local/v1/benchmarks/runs/{runId}",
                      "/api/local/v1/benchmarks/runs/{runId}/cancel",
                      "/api/local/v1/benchmarks/runs/{runId}/score",
