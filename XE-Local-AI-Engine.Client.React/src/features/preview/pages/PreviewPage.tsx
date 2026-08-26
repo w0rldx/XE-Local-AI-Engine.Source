@@ -388,7 +388,7 @@ export function PreviewPage({ routeRunId = null, onRouteRunIdChange }: PreviewPa
 						 * and page header scrolled away with the list. `offsetScrollbars` keeps the cards from shifting
 						 * when the scrollbar appears.
 						 */
-						<ScrollArea type="hover" scrollbarSize={8} offsetScrollbars="y" style={{ flex: 1, minHeight: 0 }}>
+						<ScrollArea type="auto" scrollbarSize={8} offsetScrollbars="y" style={{ flex: 1, minHeight: 0 }}>
 							<Stack gap="lg">
 								<ActiveRunsPanel
 									runs={runsQuery.data ?? []}
