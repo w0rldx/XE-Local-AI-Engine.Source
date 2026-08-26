@@ -629,7 +629,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var (judge, qualityScore, qualityScoreSource, _) = ApplyRunExclusions(JudgeViewFor(views, runId, entity.UserScore),
             entity.UserScore,
             entity.IsWarmup,
-            entity.PrimaryStopReason);
+            entity.PrimaryStopReason,
+            await LoadRunIdentityAsync(entity, cancellationToken).ConfigureAwait(false));
         return ToRecord(entity) with
         {
             Judge = judge,
@@ -781,7 +782,13 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                   entity.InvocationTimeoutSeconds,
                                   entity.RepeatMode,
                                   entity.SamplingSeed,
-                                  entity.SamplingTemperature))
+                                  entity.SamplingTemperature,
+                                  null,
+                                  entity.TaskItemId,
+                                  entity.TaskItemIndex,
+                                  entity.CellKey,
+                                  entity.TaskInputHash,
+                                  entity.TaskItemSetHash))
                               .ToArrayAsync(cancellationToken)
                               .ConfigureAwait(false);
 
@@ -2894,10 +2901,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     /// </summary>
     private static BenchmarkRunRecord ToRecordWithJudge(BenchmarkRun run, IReadOnlyDictionary<Guid, BenchmarkRunJudgeView> views)
     {
+        // The write paths that project a run they have just touched compare it against nothing: item edits are refused
+        // while any of the project's work is Queued or Running, so a row a write just moved cannot be stale. The
+        // ranking read and the single-run read do the real comparison.
         var (judge, qualityScore, qualityScoreSource, _) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
             run.UserScore,
             run.IsWarmup,
-            run.PrimaryStopReason);
+            run.PrimaryStopReason,
+            BenchmarkRunIdentity.Unstamped);
         return ToRecord(run) with
         {
             Judge = judge,
@@ -2907,9 +2918,40 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     }
 
     /// <summary>
+    ///     What one run was asked, against what the project asks now. Two tiny plaintext reads; a run that names no
+    ///     item short-circuits to <see cref="BenchmarkRunIdentity.Unstamped" /> and cannot be stale on either axis.
+    /// </summary>
+    private async Task<BenchmarkRunIdentity> LoadRunIdentityAsync(BenchmarkRun entity, CancellationToken cancellationToken)
+    {
+        if (entity.TaskItemId is not { } itemId)
+        {
+            return BenchmarkRunIdentity.Unstamped;
+        }
+
+        var currentInputHash = await _dbContext.BenchmarkTaskItems.AsNoTracking()
+                                               .Where(item => item.Id == itemId)
+                                               .Select(static item => item.InputHash)
+                                               .FirstOrDefaultAsync(cancellationToken)
+                                               .ConfigureAwait(false);
+        var currentSetHash = await _dbContext.BenchmarkProjects.AsNoTracking()
+                                             .Where(project => project.Id == entity.ProjectId)
+                                             .Select(static project => project.TaskItemSetHash)
+                                             .FirstOrDefaultAsync(cancellationToken)
+                                             .ConfigureAwait(false);
+        return new BenchmarkRunIdentity(entity.TaskInputHash, currentInputHash, entity.TaskItemSetHash, currentSetHash);
+    }
+
+    /// <summary>
     ///     The project's ranking, computed once per request from flat columns only. Dense rank, descending, ties
-    ///     sharing a rank. Recompute per request rather than maintain a rollup: a project is one hard-fixed task and
-    ///     its run count stays small.
+    ///     sharing a rank. Recompute per request rather than maintain a rollup: a project's run count stays small.
+    ///     <para>
+    ///         The unit that ranks is a CELL — one model, one KV type, one repeat of the whole task-item suite — and a
+    ///         cell is ranked only when every scorable item in it produced a rankable score. Partial credit is
+    ///         rejected: it would let a model that ran out of budget on the hardest item be scored on the easy ones
+    ///         only and outrank one that attempted everything, which is the same reason a truncated run is excluded
+    ///         outright rather than scored low. A single-item project has one run per cell and the numbers are
+    ///         identical to what they always were.
+    ///     </para>
     /// </summary>
     private async Task<BenchmarkProjectRanking> LoadRankingAsync(Guid projectId, CancellationToken cancellationToken)
     {
@@ -2920,60 +2962,154 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                          entity.Id,
                                          entity.UserScore,
                                          entity.PrimaryStopReason,
-                                         entity.IsWarmup
+                                         entity.IsWarmup,
+                                         entity.TaskItemId,
+                                         entity.CellKey,
+                                         entity.TaskInputHash,
+                                         entity.TaskItemSetHash
                                      })
                                      .ToArrayAsync(cancellationToken)
                                      .ConfigureAwait(false);
+
+        // Plaintext on both sides — hashes and flags, never a payload — so this read still decrypts nothing.
+        var items = await _dbContext.BenchmarkTaskItems.AsNoTracking()
+                                    .Where(entity => entity.ProjectId == projectId)
+                                    .Select(entity => new
+                                    {
+                                        entity.Id,
+                                        entity.Kind,
+                                        entity.InputHash,
+                                        entity.CountsTowardScore
+                                    })
+                                    .ToArrayAsync(cancellationToken)
+                                    .ConfigureAwait(false);
+        var currentInputHashes = items.ToDictionary(static item => item.Id, static item => item.InputHash);
+        var scorableItemIds = items.Where(static item => BenchmarkTaskItemKinds.IsLeaf(item.Kind) && item.CountsTowardScore)
+                                   .Select(static item => item.Id)
+                                   .ToHashSet();
+        var currentSetHash = await _dbContext.BenchmarkProjects.AsNoTracking()
+                                             .Where(entity => entity.Id == projectId)
+                                             .Select(static entity => entity.TaskItemSetHash)
+                                             .FirstOrDefaultAsync(cancellationToken)
+                                             .ConfigureAwait(false);
+
         var views = await LoadJudgeViewsAsync([.. scored.Select(static run => run.Id)], cancellationToken).ConfigureAwait(false);
         var current = await GetCurrentJudgePolicyRevisionAsync(projectId, cancellationToken).ConfigureAwait(false);
         var pairwise = await LoadPairwiseRankingAsync(current, cancellationToken).ConfigureAwait(false);
 
         var runs = new Dictionary<Guid, BenchmarkRunRanking>(scored.Length);
-        var totalScored = 0;
+        var rankable = new Dictionary<Guid, bool>(scored.Length);
+        var anyScore = new Dictionary<Guid, bool>(scored.Length);
+        var setRevised = new HashSet<Guid>();
         foreach (var run in scored)
         {
-            var (judge, qualityScore, source, rankable) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
+            var identity = new BenchmarkRunIdentity(run.TaskInputHash,
+                run.TaskItemId is { } itemId && currentInputHashes.TryGetValue(itemId, out var hash) ? hash : null,
+                run.TaskItemSetHash,
+                currentSetHash);
+            var (judge, qualityScore, source, runRankable) = ApplyRunExclusions(JudgeViewFor(views, run.Id, run.UserScore),
                 run.UserScore,
                 run.IsWarmup,
                 run.PrimaryStopReason,
+                identity,
                 ToPairwiseRunView(pairwise, run.Id));
 
-            // The denominator counts only runs a score could ever rank: a project's "n of m ranked" must not carry a
-            // gap nothing the operator does can close. `rankable` is the exclusion method's OWN verdict rather than a
-            // second copy of the rule — a warm-up and a truncated run without an operator override are both
-            // permanently unrankable, and re-judging cannot un-truncate one.
-            if (rankable && (run.UserScore is not null || judge.Score is not null || PairwiseScoreFor(pairwise, run.Id)?.Score is not null))
+            rankable[run.Id] = runRankable;
+            anyScore[run.Id] = run.UserScore is not null || judge.Score is not null || PairwiseScoreFor(pairwise, run.Id)?.Score is not null;
+            if (identity.SetRevised)
             {
-                totalScored++;
+                _ = setRevised.Add(run.Id);
             }
 
-            runs[run.Id] = new BenchmarkRunRanking(judge, qualityScore, source, Rank: null);
+            runs[run.Id] = new BenchmarkRunRanking(judge, qualityScore, source, Rank: null, CellQuality: null);
         }
 
-        // Dense rank: equal scores share a position and the next distinct score is the next integer, so "rank 2" is
-        // always "the second-best score in this project", however many runs tie above it.
-        var ordered = runs.Values.Where(static entry => entry.QualityScore is not null)
-                          .Select(static entry => entry.QualityScore!.Value)
-                          .Distinct()
-                          .OrderByDescending(static score => score)
-                          .ToArray();
-        foreach (var (runId, entry) in runs.ToArray())
+        // Warm-ups are dropped BEFORE grouping. A warm-up sits at repeat index 0, so it forms a cell of its own that
+        // could only ever be complete if every leaf item also got a warm-up run — and it would then sit in the
+        // denominator forever. It is not a contender at cell granularity for exactly the reason it is not one at run
+        // granularity.
+        var cells = new Dictionary<string, CellRanking>(StringComparer.Ordinal);
+        foreach (var cell in scored.Where(static run => !run.IsWarmup).GroupBy(static run => run.CellKey, StringComparer.Ordinal))
         {
-            if (entry.QualityScore is { } score)
+            var members = cell.ToArray();
+
+            // The set check comes FIRST: "does this cell hold every current item" is only a meaningful question once
+            // both sides agree on what the set is. Asking it of a cell frozen under a different set is the bug.
+            if (Array.Exists(members, member => setRevised.Contains(member.Id)))
             {
-                runs[runId] = entry with
-                {
-                    Rank = Array.IndexOf(ordered, score) + 1
-                };
+                cells[cell.Key] = new CellRanking(null, BenchmarkRunJudgeStates.ReasonItemSetRevised, Countable: false);
+                continue;
             }
+
+            // A cell whose runs name no item at all was frozen before task suites: it is a singleton, it is ranked on
+            // its own run's score, and materializing item 0 for the project later must not retroactively unrank it.
+            var contributing = members.Where(member => member.TaskItemId is { } id && scorableItemIds.Contains(id)).ToArray();
+            if (contributing.Length == 0 && Array.TrueForAll(members, static member => member.TaskItemId is null))
+            {
+                var only = members[0];
+                cells[cell.Key] = new CellRanking(runs[only.Id].QualityScore,
+                    runs[only.Id].QualityScore is null ? runs[only.Id].Judge.RankExclusionReason : null,
+                    rankable[only.Id] && anyScore[only.Id]);
+                continue;
+            }
+
+            var covered = contributing.Select(static member => member.TaskItemId!.Value).ToHashSet();
+            var complete = scorableItemIds.Count > 0
+                           && scorableItemIds.All(covered.Contains)
+                           && Array.TrueForAll(contributing, member => rankable[member.Id]);
+            if (!complete)
+            {
+                cells[cell.Key] = new CellRanking(null, BenchmarkRunJudgeStates.ReasonItemIncomplete, Countable: false);
+                continue;
+            }
+
+            // Half away from zero, matching ComputeQuality's own arithmetic.
+            var quality = Array.TrueForAll(contributing, member => runs[member.Id].QualityScore is not null)
+                ? (int)Math.Round(contributing.Average(member => (double)runs[member.Id].QualityScore!.Value), MidpointRounding.AwayFromZero)
+                : (int?)null;
+            cells[cell.Key] = new CellRanking(quality,
+                quality is null ? BenchmarkRunJudgeStates.ReasonItemIncomplete : null,
+                Array.TrueForAll(contributing, member => anyScore[member.Id]));
+        }
+
+        // Dense rank over CELLS: equal scores share a position and the next distinct score is the next integer, so
+        // "rank 2" is always "the second-best score in this project", however many cells tie above it. Every run of a
+        // cell reports its cell's rank and its cell's mean; its own quality score stays its own.
+        var ordered = cells.Values.Where(static entry => entry.Quality is not null)
+                           .Select(static entry => entry.Quality!.Value)
+                           .Distinct()
+                           .OrderByDescending(static score => score)
+                           .ToArray();
+        foreach (var run in scored)
+        {
+            if (run.IsWarmup || !cells.TryGetValue(run.CellKey, out var cell))
+            {
+                continue;
+            }
+
+            var entry = runs[run.Id];
+            runs[run.Id] = entry with
+            {
+                CellQuality = cell.Quality,
+                Rank = cell.Quality is { } quality ? Array.IndexOf(ordered, quality) + 1 : null,
+
+                // A run the cell excluded but that nothing about the run itself excluded reports the cell's reason:
+                // "your sibling item never answered" is why this row does not rank, and it is not visible anywhere else.
+                Judge = entry.Judge.RankExclusionReason is null && cell.Reason is not null
+                    ? entry.Judge with
+                    {
+                        RankExclusionReason = cell.Reason
+                    }
+                    : entry.Judge
+            };
         }
 
         return new BenchmarkProjectRanking(runs,
             new BenchmarkRankCohort(current?.Revision,
                 current?.ReferenceExecutionKey,
                 current?.CohortGeneration,
-                runs.Values.Count(static entry => entry.Rank is not null),
-                totalScored));
+                cells.Values.Count(static entry => entry.Quality is not null),
+                cells.Values.Count(static entry => entry.Countable)));
     }
 
     /// <summary>
@@ -3004,10 +3140,18 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         int? userScore,
         bool isWarmup,
         string? primaryStopReason,
+        BenchmarkRunIdentity identity,
         PairwiseRunView? pairwise = null)
     {
-        var unanswered = isWarmup || userScore is not null ? null : UnansweredReason(primaryStopReason);
-        if (!isWarmup && unanswered is null)
+        // The stale stamps sit ABOVE the operator override, and truncation still sits below it. An operator who read a
+        // truncated answer and scored it anyway has overruled the machine about a fact they could see; an operator who
+        // scored an answer to a question that has since been edited, or to one item of a suite whose membership has
+        // since changed, has not — they had no way to know either moved.
+        var revised = identity.Revised;
+        var setRevised = identity.SetRevised;
+        var stale = revised || setRevised;
+        var unanswered = isWarmup || stale || userScore is not null ? null : UnansweredReason(primaryStopReason);
+        if (!isWarmup && !stale && unanswered is null)
         {
             var (score, source) = ComputeQuality(userScore, judge, pairwise);
             if (pairwise is null)
@@ -3021,10 +3165,57 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             }, score, source, true);
         }
 
+        // The more specific cause wins: "your question changed" before "the suite around it changed".
+        var reason = StaleReason(revised, setRevised) ?? unanswered;
         return (judge with
         {
-            RankExclusionReason = isWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : unanswered
+            RankExclusionReason = isWarmup ? BenchmarkRunJudgeStates.ReasonWarmup : reason
         }, null, BenchmarkQualityScoreSources.None, false);
+    }
+
+    /// <summary>
+    ///     Which stale-identity reason a run carries, or <see langword="null" /> when neither stamp moved. The more
+    ///     specific cause wins, so the badge names the question rather than the suite whenever both apply.
+    /// </summary>
+    private static string? StaleReason(bool revised, bool setRevised)
+    {
+        if (revised)
+        {
+            return BenchmarkRunJudgeStates.ReasonItemRevised;
+        }
+
+        return setRevised ? BenchmarkRunJudgeStates.ReasonItemSetRevised : null;
+    }
+
+    /// <summary>
+    ///     What a run was asked, against what the project asks now. Both sides are plaintext, so the ranking read still
+    ///     never decrypts anything.
+    ///     <para>
+    ///         The two axes fail differently and neither implies the other. <paramref name="TaskInputHash" /> answers
+    ///         "was this run's own question edited"; every run of an untouched item passes it.
+    ///         <paramref name="TaskItemSetHash" /> answers "was this cell measured against the suite the project now
+    ///         claims" — and the deletion case is the one nothing else catches: delete the item a cell never answered
+    ///         and its two surviving runs keep matching their own item hashes, satisfy every per-item check, and now
+    ///         constitute a COMPLETE two-item cell whose mean is over a suite the model was never scored on.
+    ///     </para>
+    /// </summary>
+    /// <param name="CurrentInputHash">
+    ///     The item's hash now, or <see langword="null" /> when the run names no item (pre-suite) or names one that no
+    ///     longer exists — in which case the set hash has moved and is the accurate reason.
+    /// </param>
+    private sealed record BenchmarkRunIdentity(string? TaskInputHash,
+        string? CurrentInputHash,
+        string? TaskItemSetHash,
+        string? CurrentItemSetHash)
+    {
+        /// <summary>A run frozen before task suites, or a projection that has no project state to compare against.</summary>
+        public static BenchmarkRunIdentity Unstamped { get; } = new(null, null, null, null);
+
+        public bool Revised =>
+            CurrentInputHash is not null && !string.Equals(TaskInputHash, CurrentInputHash, StringComparison.Ordinal);
+
+        public bool SetRevised =>
+            TaskItemSetHash is not null && !string.Equals(TaskItemSetHash, CurrentItemSetHash ?? LegacyTaskHash, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -3048,7 +3239,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 Judge = entry.Judge,
                 QualityScore = entry.QualityScore,
                 QualityScoreSource = entry.Source,
-                Rank = entry.Rank
+                Rank = entry.Rank,
+                CellQuality = entry.CellQuality
             }
             : run;
 
@@ -3143,7 +3335,16 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             entry?.Reason ?? pairwise.ScopeReason ?? (entry is null ? BenchmarkRunJudgeStates.ReasonPairwiseInsufficient : null));
     }
 
-    private sealed record BenchmarkRunRanking(BenchmarkRunJudgeView Judge, int? QualityScore, string Source, int? Rank);
+    private sealed record BenchmarkRunRanking(BenchmarkRunJudgeView Judge, int? QualityScore, string Source, int? Rank, int? CellQuality);
+
+    /// <summary>
+    ///     One measurement cell: the mean of its scorable items' qualities, or the reason it has none.
+    /// </summary>
+    /// <param name="Countable">
+    ///     Whether this cell belongs in the "n of m ranked" denominator — complete, every member rankable, every member
+    ///     carrying some score. A cell nothing the operator does could ever rank must not sit in it.
+    /// </param>
+    private sealed record CellRanking(int? Quality, string? Reason, bool Countable);
 
     private sealed record BenchmarkProjectRanking(IReadOnlyDictionary<Guid, BenchmarkRunRanking> Runs, BenchmarkRankCohort Cohort);
 
@@ -3238,7 +3439,12 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         return row.Status switch
         {
             BenchmarkJudgeAttemptStatus.Queued or BenchmarkJudgeAttemptStatus.Running => BenchmarkRunJudgeStates.ReasonJudgePending,
-            BenchmarkJudgeAttemptStatus.Failed => BenchmarkRunJudgeStates.ReasonJudgeFailed,
+            // A judging that failed because a verifier could not RUN is not the same fact as one whose judge model
+            // failed: the run is unranked either way, but only one of them is fixed by an operator action on the node.
+            BenchmarkJudgeAttemptStatus.Failed =>
+                row.ErrorMessage?.StartsWith(BenchmarkRunJudgeStates.VerifierUnavailablePrefix, StringComparison.Ordinal) is true
+                    ? BenchmarkRunJudgeStates.ReasonVerifierUnavailable
+                    : BenchmarkRunJudgeStates.ReasonJudgeFailed,
             BenchmarkJudgeAttemptStatus.Cancelled => BenchmarkRunJudgeStates.ReasonJudgeCancelled,
             _ when row.Score is null => BenchmarkRunJudgeStates.ReasonNoScore,
             _ when !policyCurrent => BenchmarkRunJudgeStates.ReasonPolicyOutdated,
@@ -3625,7 +3831,12 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             RepeatMode: entity.RepeatMode,
             SamplingSeed: entity.SamplingSeed,
             SamplingTemperature: entity.SamplingTemperature,
-            Fidelity: ToFidelity(entity));
+            Fidelity: ToFidelity(entity),
+            TaskItemId: entity.TaskItemId,
+            TaskItemIndex: entity.TaskItemIndex,
+            CellKey: entity.CellKey,
+            TaskInputHash: entity.TaskInputHash,
+            TaskItemSetHash: entity.TaskItemSetHash);
 
     /// <summary>
     ///     Null when nothing has ever been measured, so the API says "no measurement" rather than a projection of

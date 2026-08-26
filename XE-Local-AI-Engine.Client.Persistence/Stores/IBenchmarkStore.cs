@@ -930,7 +930,13 @@ public sealed record BenchmarkRunRecord(
     BenchmarkRepeatMode RepeatMode = BenchmarkRepeatMode.Throughput,
     string? SamplingSeed = null,
     double? SamplingTemperature = null,
-    BenchmarkRunFidelity? Fidelity = null);
+    BenchmarkRunFidelity? Fidelity = null,
+    Guid? TaskItemId = null,
+    int? TaskItemIndex = null,
+    string? CellKey = null,
+    string? TaskInputHash = null,
+    string? TaskItemSetHash = null,
+    int? CellQuality = null);
 
 /// <summary>
 ///     A run's quant-fidelity projection: a copy of the latest succeeded measurement. Display only — perplexity and
@@ -1213,6 +1219,45 @@ public static class BenchmarkRunJudgeStates
 
     /// <summary>Nothing has promoted a reference execution key yet, so no fit can be shown to belong to a cohort.</summary>
     public const string ReasonPairwiseExecutionIdentityIncomplete = "pairwise-execution-identity-incomplete";
+
+    /// <summary>
+    ///     A criterion could not be CHECKED — the compute sandbox is disabled, cannot isolate, or cannot enforce the
+    ///     resource ceilings unattended execution requires. Distinct from <see cref="ReasonJudgeFailed" /> because the
+    ///     fix is an operator action on the node (enable Compute, install bubblewrap) rather than a re-judge, and
+    ///     distinct from a score of 0 because 0 is something an answer earns and "unmeasurable" is not.
+    /// </summary>
+    public const string ReasonVerifierUnavailable = "verifier-unavailable";
+
+    /// <summary>
+    ///     What a judging failed by an unusable verifier puts in front of its error message. It is how the ranking read
+    ///     tells that failure apart from every other judge failure without a second column: the judge executor is the
+    ///     only thing that writes it, and it writes it only for a sandbox it could not trust.
+    /// </summary>
+    public const string VerifierUnavailablePrefix = "verifier-unavailable: ";
+
+    /// <summary>
+    ///     This run's task item has been edited since it was frozen, so its stored answer answers a question that no
+    ///     longer exists. Unlike truncation, an operator score does NOT override it: the score was given for a
+    ///     different question and the operator has no way to know it changed.
+    /// </summary>
+    public const string ReasonItemRevised = "item-revised";
+
+    /// <summary>
+    ///     The project's task-item SET has changed since this run's cell was measured. Completeness is judged against a
+    ///     mutable set, so without this stamp deleting an item retroactively "completes" a historical cell: a
+    ///     three-item cell holding two answers becomes a two-of-two cell and ranks, as a mean over a suite the model
+    ///     was never scored on. An operator score does not override it, for the same reason as
+    ///     <see cref="ReasonItemRevised" /> — a cell mean is a mean OF the suite, and the suite is what moved.
+    /// </summary>
+    public const string ReasonItemSetRevised = "item-set-revised";
+
+    /// <summary>
+    ///     The cell is missing a scorable task item, or one of its runs is not rankable. A cell is ranked only when
+    ///     every item in it produced a rankable score: with partial credit a model that ran out of budget on the
+    ///     hardest item would be scored on the easy ones only and could outrank one that attempted everything — which
+    ///     is the same reason a truncated run is excluded outright rather than scored low.
+    /// </summary>
+    public const string ReasonItemIncomplete = "item-incomplete";
 }
 
 /// <summary>
