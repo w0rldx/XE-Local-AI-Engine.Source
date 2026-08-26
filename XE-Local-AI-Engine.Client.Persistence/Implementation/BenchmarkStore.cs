@@ -692,7 +692,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     /// <summary>
     ///     The measured cell of a repeat group: non-warm-up, first of its group. One rule, three callers — freeze's
     ///     "skipped" marker, the seed on primary success, and the measure-existing sweep — because a cell measured by
-    ///     one of them and a cell measured by another must mean the same thing.
+    ///     one of them and a cell measured by another must mean the same thing. <c>EnqueueMissingFidelityAsync</c>
+    ///     re-expresses this rule as an EF predicate because a method cannot be translated; the two must change together.
     /// </summary>
     private static bool IsFidelityMeasuredCell(BenchmarkRun run) => !run.IsWarmup && run.RepeatIndex is null or 1;
 
