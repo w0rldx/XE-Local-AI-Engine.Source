@@ -243,11 +243,23 @@ public sealed class BenchmarkProjectService(
     ///     Resolves the judge runtime ONCE for the revision, for the store to seed every eligible run's attempt with.
     ///     The runtime depends only on the policy, so resolving it per run would repeat identical work and could
     ///     straddle a runtime swap mid-loop, splitting one re-judge across two cohorts.
+    ///     <para>
+    ///         A PAIRWISE policy seeds no attempt at all. Its cohort is judged by the comparisons
+    ///         <see cref="IBenchmarkPairwisePlanner.EnsurePairsAsync" /> plans immediately after this activation, so a
+    ///         pointwise attempt per run would queue a second judging of every run that the mode never asked for — and
+    ///         the planner resolves the runtime itself, which is why this does not even take the verifying lease. The
+    ///         seed is still returned, because it is what pins the revision the caller resolved against.
+    ///     </para>
     /// </summary>
     private async Task<BenchmarkJudgeAttemptSeed> BuildCohortSeedAsync(BenchmarkJudgePolicyV1 policy,
         Guid? expectedRevisionId,
         CancellationToken cancellationToken)
     {
+        if (string.Equals(BenchmarkJudgePolicyModes.Normalize(policy.Mode), BenchmarkJudgePolicyModes.Pairwise, StringComparison.Ordinal))
+        {
+            return new BenchmarkJudgeAttemptSeed(expectedRevisionId, SeedPointwiseAttempts: false);
+        }
+
         var resolved = await TryResolveRuntimeAsync(policy, cancellationToken).ConfigureAwait(false);
         return new BenchmarkJudgeAttemptSeed(expectedRevisionId, resolved.RuntimeJson, resolved.UnresolvedReason, resolved.Intent);
     }

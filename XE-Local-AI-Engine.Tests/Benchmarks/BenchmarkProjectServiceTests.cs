@@ -351,6 +351,56 @@ public sealed class BenchmarkProjectServiceTests
     }
 
     [Test]
+    public async Task UpdateJudgePolicy_SwitchingAProjectWithRunsToPairwise_SeedsNoPointwiseAttempts()
+    {
+        // The activation runs BEFORE the planner enqueues a single comparison, so a seed that still carried a runtime
+        // would queue one pointwise judging of every succeeded run — a second, cheaper answer to a question the
+        // operator moved to pairwise precisely to stop asking that way.
+        var context = new ServiceContext(runCount: 2, succeededRunIds: [Guid.NewGuid(), Guid.NewGuid()]);
+        context.SetCurrentRevision("f" + new string('0', count: 63));
+
+        _ = await context.Service.UpdateJudgePolicyAsync(ProjectId,
+            1,
+            new BenchmarkJudgePolicyDraft("judge-model", 4096, Mode: BenchmarkJudgePolicyModes.Pairwise),
+            confirmRejudge: true);
+
+        var seed = AssertEx.NotNull(context.ActivatedSeed);
+        AssertEx.False(seed.SeedPointwiseAttempts, "A pairwise cohort holds comparisons, never pointwise attempts.");
+        AssertEx.Null(seed.RuntimeJson, "And the planner resolves the judge runtime itself, so activation does not pay for it twice.");
+    }
+
+    [Test]
+    public async Task UpdateJudgePolicy_SwitchingBackToPointwise_SeedsAttemptsAgainAndPlansNoComparisons()
+    {
+        // The reverse of the case above, and the reason the flag lives on the seed rather than on the store call: a
+        // project coming back to pointwise must get its attempts, and the planner must stay a no-op for it.
+        var context = new ServiceContext(runCount: 2, succeededRunIds: [Guid.NewGuid(), Guid.NewGuid()]);
+        await context.SetCurrentPolicyAsync(new BenchmarkJudgePolicyDraft("judge-model", 4096, Mode: BenchmarkJudgePolicyModes.Pairwise));
+
+        _ = await context.Service.UpdateJudgePolicyAsync(ProjectId,
+            1,
+            new BenchmarkJudgePolicyDraft("judge-model", 4096, Mode: BenchmarkJudgePolicyModes.Pointwise),
+            confirmRejudge: true);
+
+        var seed = AssertEx.NotNull(context.ActivatedSeed);
+        AssertEx.True(seed.SeedPointwiseAttempts, "Pointwise is judged by attempts, so the cohort reset must enqueue them.");
+        AssertEx.True(seed.RuntimeJson is not null, "And every attempt of the cohort carries one runtime resolved once.");
+    }
+
+    [Test]
+    public async Task RejudgeProject_InPairwiseMode_ResetsTheCohortWithoutQueueingPointwiseAttempts()
+    {
+        var context = new ServiceContext(runCount: 2, succeededRunIds: [Guid.NewGuid(), Guid.NewGuid()]);
+        await context.SetCurrentPolicyAsync(new BenchmarkJudgePolicyDraft("judge-model", 4096, Mode: BenchmarkJudgePolicyModes.Pairwise));
+
+        _ = await context.Service.RejudgeProjectAsync(ProjectId, 1);
+
+        var seed = AssertEx.NotNull(context.RejudgeSeed);
+        AssertEx.False(seed.SeedPointwiseAttempts);
+        AssertEx.Equal(RevisionId, seed.ExpectedJudgePolicyRevisionId, "The revision pin survives: it is what rolls a straddled re-judge back.");
+    }
+
+    [Test]
     public async Task UpdateJudgePolicy_WithAnAllVerifiableRubric_ActivatesAndStoresTheConfig()
     {
         var context = new ServiceContext();
@@ -619,7 +669,11 @@ public sealed class BenchmarkProjectServiceTests
                 BenchmarkJudgePolicyVersions.OutputSchemaVersion,
                 BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
                 draft.Rubric ?? BenchmarkJudgeRubricDefaults.Default(),
-                draft.ReferenceAnswer);
+                draft.ReferenceAnswer,
+
+                // The mode is inside the policy hash, so a harness that dropped it would store a POINTWISE revision for
+                // a pairwise draft and every mode-switch assertion below would be made against the wrong stored policy.
+                BenchmarkJudgePolicyModes.Normalize(draft.Mode));
         }
 
         internal static BenchmarkProjectRecord CurrentProject() =>

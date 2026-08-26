@@ -2803,6 +2803,11 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     ///     transaction. Enqueuing here rather than in a follow-up loop is what makes a cohort reset all-or-nothing: a
     ///     reset that committed with only some attempts enqueued would rank a cohort against runs never re-judged.
     ///     No already-applied guard: the caller has just reset the cohort, and every eligible run belongs to it.
+    ///     <para>
+    ///         A seed that clears <see cref="BenchmarkJudgeAttemptSeed.SeedPointwiseAttempts" /> reports the same
+    ///         eligible set and inserts nothing: a pairwise cohort is judged by comparisons, and a pointwise attempt
+    ///         queued beside them is a judging the mode never asked for.
+    ///     </para>
     /// </summary>
     private async Task<IReadOnlyList<Guid>> EnqueueCohortAttemptsAsync(Guid projectId,
         BenchmarkJudgePolicyRevision revision,
@@ -2810,7 +2815,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         long now,
         CancellationToken cancellationToken)
     {
-        if (seed is null)
+        if (seed is null or { SeedPointwiseAttempts: false })
         {
             return await SucceededRunIdsAsync(projectId, cancellationToken).ConfigureAwait(false);
         }

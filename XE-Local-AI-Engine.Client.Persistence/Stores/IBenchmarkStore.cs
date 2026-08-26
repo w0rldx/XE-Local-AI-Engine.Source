@@ -499,11 +499,18 @@ public sealed record BenchmarkRunThroughput(
 ///     The judge's frozen launch configuration. <see langword="null" /> means resolution failed, and the attempt is
 ///     inserted directly as Failed together with a terminal work item.
 /// </param>
+/// <param name="SeedPointwiseAttempts">
+///     Whether a cohort-wide reset inserts one POINTWISE attempt per eligible run. False for a pairwise policy, whose
+///     cohort is judged by comparisons the planner enqueues instead: a pairwise cohort carrying pointwise attempts
+///     judges every run a second way and ranks off whichever source answered. The seed is still supplied, because
+///     <see cref="ExpectedJudgePolicyRevisionId" /> is what pins the revision the caller resolved against.
+/// </param>
 public sealed record BenchmarkJudgeAttemptSeed(
     Guid? ExpectedJudgePolicyRevisionId = null,
     ReadOnlyMemory<byte>? RuntimeJson = null,
     string? RuntimeUnresolvedReason = null,
-    BenchmarkRunLaunchIntent? LaunchIntent = null);
+    BenchmarkRunLaunchIntent? LaunchIntent = null,
+    bool SeedPointwiseAttempts = true);
 
 /// <inheritdoc cref="IBenchmarkStore.EnqueueJudgeAttemptAsync" />
 /// <param name="Force">Bypasses the already-applied guard for a deliberate operator re-judge.</param>

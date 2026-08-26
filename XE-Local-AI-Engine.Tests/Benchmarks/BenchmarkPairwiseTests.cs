@@ -170,6 +170,29 @@ public sealed class BenchmarkPairwiseTests
         await store.DidNotReceive().PublishPairwiseFitAsync(Arg.Any<BenchmarkPairwiseFitCommand>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task EnsurePairs_ForAProjectBackOnPointwise_PlansNothing()
+    {
+        // The other half of the mode switch: activation stops seeding pointwise attempts for a pairwise project, and
+        // the planner must stay a no-op for a pointwise one — otherwise switching back would leave comparisons queued
+        // against a revision whose ranking never reads them.
+        var store = StubStore(out _);
+        store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
+             .Returns(new BenchmarkJudgePolicyRevisionRecord(RevisionId, ProjectId, 1,
+                 BenchmarkJudgeSerialization.SerializePolicy(PairwisePolicy() with { Mode = BenchmarkJudgePolicyModes.Pointwise }),
+                 PolicyHash, ExecutionKey, 1, 1, 7));
+        var runtimes = Substitute.For<IBenchmarkJudgeRuntimeResolver>();
+        var planner = new BenchmarkPairwisePlanner(store, runtimes, Fitter(store), Substitute.For<IBenchmarkQueueSignal>(),
+            NullLogger<BenchmarkPairwisePlanner>.Instance);
+
+        AssertEx.Equal(expected: 0, await planner.EnsurePairsAsync(ProjectId, CancellationToken.None));
+
+        await store.DidNotReceiveWithAnyArgs()
+                   .EnsureComparisonsAsync(Arg.Any<Guid>(), Arg.Any<IReadOnlyList<BenchmarkPairwiseSlot>>(), Arg.Any<ReadOnlyMemory<byte>?>(),
+                       Arg.Any<BenchmarkRunLaunchIntent?>(), Arg.Any<CancellationToken>());
+        await runtimes.DidNotReceiveWithAnyArgs().ResolveAsync(default!, default);
+    }
+
     private static BenchmarkPairwiseFitter Fitter(IBenchmarkStore store) =>
         new(store, NullLogger<BenchmarkPairwiseFitter>.Instance);
 
