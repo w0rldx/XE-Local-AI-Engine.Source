@@ -80,6 +80,7 @@ const draft: BenchmarkProjectDraft = {
 	invocationTimeoutSeconds: null,
 	agentDefinitionId: "cccccccc-0000-4000-8000-000000000003",
 	judgeEnabled: false,
+	judgeMode: "pointwise",
 	judgeModelName: null,
 	judgeContextTokens: null,
 	rubric: null,

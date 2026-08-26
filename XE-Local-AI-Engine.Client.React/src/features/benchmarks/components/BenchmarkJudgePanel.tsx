@@ -9,7 +9,7 @@ import { isJudgeActive } from "@/features/benchmarks/models/BenchmarkModels";
 
 interface BenchmarkJudgePanelProps {
 	judge: BenchmarkRunJudge;
-	/** The project's judging mode. Only `pointwise` has a reading this panel can render. */
+	/** The project's judging mode. Only `pointwise` has a per-run reading; see the note above. */
 	mode?: BenchmarkJudgeMode;
 	/** The primary answer was cut off by the token budget, so this verdict graded a fragment. */
 	primaryTruncated?: boolean;
@@ -34,15 +34,10 @@ const maxCriterionScore = 10;
  * as their own chips rather than folded into the score — a stale score is still a real score, it just cannot be ranked
  * against runs judged under the current policy and judge runtime.
  *
- * POINTWISE ONLY, and deliberately so. This panel reads one score with one rationale per criterion, which is exactly
- * what the pointwise rubric judge produces. Pairwise is a different reading: no per-run rubric score at all, but a
- * verdict matrix over run pairs and a Bradley-Terry fit whose per-run number carries a bootstrap CI, plus a
- * `pairwise-pending` / `pairwise-insufficient` exclusion vocabulary the ranking helper does not know.
- *
- * The caller passes `mode` and gets nothing back for `pairwise` — that arm renders a `BenchmarkPairwiseMatrix` off
- * `GET benchmarks/projects/{projectId}/comparisons`, which serves the verdict matrix and the fit it produced
- * together. Refusing to render meanwhile is the honest answer: showing pointwise chrome for a pairwise policy would
- * present a score shape the policy does not produce.
+ * POINTWISE ONLY. This panel reads one score with one rationale per criterion, which is what the pointwise rubric
+ * judge produces. Pairwise produces no per-run rubric score at all — a verdict matrix and a Bradley-Terry fit — so
+ * that mode renders nothing here. The pairwise reading is `BenchmarkPairwiseMatrix`, mounted ONCE by the page: one
+ * fit covers the whole cohort, so a copy under every open run pane would be the same table repeated.
  */
 export function BenchmarkJudgePanel({
 	judge,
@@ -57,7 +52,6 @@ export function BenchmarkJudgePanel({
 	const { t } = useTranslation();
 	const active = isJudgeActive(judge.state);
 	const explanation = t(`pages.benchmarks.judge.explanations.${judge.state}`, "");
-	// follow-up: render <BenchmarkPairwiseMatrix /> here once the pairwise executor ships (plan §7.5).
 	const verifiers = new Map(judge.verifiers.map((verifier) => [verifier.id, verifier]));
 
 	if (mode !== "pointwise") {

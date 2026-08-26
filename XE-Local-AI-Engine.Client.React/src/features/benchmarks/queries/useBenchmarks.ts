@@ -7,9 +7,11 @@ import {
 	createBenchmarkProject,
 	deleteBenchmarkRun,
 	getBenchmarkKldDiskEstimate,
+	getBenchmarkPairwiseEstimate,
 	getBenchmarkProject,
 	getBenchmarkRubricPresets,
 	getBenchmarkRun,
+	listBenchmarkComparisons,
 	listBenchmarkProjects,
 	listBenchmarkRuns,
 	listEligibleBenchmarkModels,
@@ -29,7 +31,9 @@ import type {
 } from "@/core/api/generated";
 import { callWithResponseValidation } from "@/core/api/ResponseValidation";
 import {
+	toBenchmarkComparisonList,
 	toBenchmarkEligibleModel,
+	toBenchmarkPairwiseEstimate,
 	toBenchmarkProjectDetail,
 	toBenchmarkProjectSummary,
 	toBenchmarkRankCohort,
@@ -38,7 +42,9 @@ import {
 	toBenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkMappers";
 import type {
+	BenchmarkComparisonList,
 	BenchmarkEligibleModel,
+	BenchmarkPairwiseEstimate,
 	BenchmarkKvCacheType,
 	BenchmarkRepeatMode,
 	BenchmarkProjectDetail,
@@ -64,6 +70,8 @@ const benchmarkQueryKeys = {
 	run: (id: string) => ["benchmarks", "runs", id] as const,
 	models: (contextTokens?: number) => ["benchmarks", "eligible-models", contextTokens] as const,
 	kldEstimate: (projectId: string, chunks?: number) => ["benchmarks", "projects", projectId, "kld-estimate", chunks] as const,
+	comparisons: (projectId: string) => ["benchmarks", "projects", projectId, "comparisons"] as const,
+	pairwiseEstimate: (projectId: string) => ["benchmarks", "projects", projectId, "pairwise-estimate"] as const,
 	rubricPresets: ["benchmarks", "rubric-presets"] as const,
 };
 
@@ -262,6 +270,44 @@ export function useBenchmarkKldDiskEstimate(projectId: string | null, chunks?: n
 	});
 }
 
+/**
+ * The verdict matrix and the fit read out of it. Polls while any comparison is still working, for the same reason the
+ * runs list does: a pairwise cohort finishes one pair at a time and the fit only appears after the last one.
+ */
+export function useBenchmarkComparisons(projectId: string | null, enabled = true) {
+	return useQuery<BenchmarkComparisonList>({
+		queryKey: benchmarkQueryKeys.comparisons(projectId ?? ""),
+		enabled: enabled && Boolean(projectId),
+		refetchInterval: (query) =>
+			query.state.data?.items.some((item) => item.status === "Queued" || item.status === "Running")
+				? activeRunPollIntervalMs
+				: false,
+		queryFn: async ({ signal }) => {
+			const { data } = await callWithResponseValidation(
+				listBenchmarkComparisons({ path: { projectId: projectId as string }, signal, throwOnError: true }),
+			);
+			return toBenchmarkComparisonList(data);
+		},
+	});
+}
+
+/**
+ * What switching this project to pairwise would cost. Read BEFORE the save: 12 runs is 132 judge calls, and that is
+ * not a number to discover once the queue is full.
+ */
+export function useBenchmarkPairwiseEstimate(projectId: string | null, enabled = true) {
+	return useQuery<BenchmarkPairwiseEstimate>({
+		queryKey: benchmarkQueryKeys.pairwiseEstimate(projectId ?? ""),
+		enabled: enabled && Boolean(projectId),
+		queryFn: async ({ signal }) => {
+			const { data } = await callWithResponseValidation(
+				getBenchmarkPairwiseEstimate({ path: { projectId: projectId as string }, signal, throwOnError: true }),
+			);
+			return toBenchmarkPairwiseEstimate(data);
+		},
+	});
+}
+
 /** The presets never change while the node runs, so they are read once and kept. */
 export function useBenchmarkRubricPresets(enabled: boolean) {
 	return useQuery<BenchmarkRubricPresets>({
@@ -310,6 +356,9 @@ const projectMutationBody = (draft: BenchmarkProjectDraft) => ({
 	...(draft.invocationTimeoutSeconds === null ? {} : { invocationTimeoutSeconds: draft.invocationTimeoutSeconds }),
 	agentDefinitionId: draft.agentDefinitionId,
 	judgeEnabled: draft.judgeEnabled,
+	// `judgeMode` is deliberately NOT here: the project write does not carry it, only `PUT .../judge` does. That is
+	// also the only path where the mode matters — pairwise needs runs to compare, and a project with runs is frozen,
+	// which is exactly when the judge-policy route is the one used.
 	judgeModelName: draft.judgeModelName,
 	judgeContextTokens: draft.judgeContextTokens,
 	...(draft.rubric === null ? {} : { rubric: draft.rubric }),

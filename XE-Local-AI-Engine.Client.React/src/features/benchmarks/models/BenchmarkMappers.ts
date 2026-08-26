@@ -7,6 +7,8 @@ import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto as RubricResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse as RunDetailResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse as RunSummaryResponse,
+	XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsResponse as ComparisonsResponse,
+	XeLocalAiEngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstimateResponse as PairwiseEstimateResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkModelResponse as EligibleModelResponse,
 } from "@/core/api/generated";
 import type {
@@ -24,6 +26,8 @@ import type {
 	BenchmarkProjectDetail,
 	BenchmarkProjectFidelity,
 	BenchmarkProjectSummary,
+	BenchmarkComparisonList,
+	BenchmarkPairwiseEstimate,
 	BenchmarkRankCohort,
 	BenchmarkRubric,
 	BenchmarkRunVerifier,
@@ -41,6 +45,7 @@ import {
 	toBenchmarkQualityScoreSource,
 	toBenchmarkRepeatMode,
 	toBenchmarkRankExclusionReason,
+	toBenchmarkVerdict,
 } from "@/features/benchmarks/models/BenchmarkModels";
 
 // The generated OpenAPI shapes intentionally keep most response members optional. These boundary mappers supply
@@ -202,6 +207,71 @@ export function toBenchmarkRankCohort(value: RankCohortResponse | undefined): Be
 		totalScored: numberValue(value?.totalScored),
 	};
 }
+
+/**
+ * The verdicts and the fit as ONE read. `isCurrent` is carried through untouched: a fit that no longer describes the
+ * cohort is the `pairwise-stale` case, and the caller must be able to refuse the score rather than be handed a number
+ * with no way to tell.
+ */
+export function toBenchmarkComparisonList(value: ComparisonsResponse): BenchmarkComparisonList {
+	const fit = value.fit;
+	return {
+		cohortGeneration: numberValue(value.cohortGeneration),
+		comparisonSetVersion: numberValue(value.comparisonSetVersion),
+		referenceExecutionKey: value.referenceExecutionKey ?? null,
+		items: (value.items ?? []).map((item) => ({
+			id: item.id ?? "",
+			runAId: item.runAId ?? "",
+			runBId: item.runBId ?? "",
+			order: numberValue(item.order),
+			attemptSequence: numberValue(item.attemptSequence),
+			sequence: numberValue(item.sequence),
+			taskCaseId: item.taskCaseId ?? null,
+			status: item.status,
+			verdict: toBenchmarkVerdict(item.verdict),
+			answerATruncated: item.answerATruncated === true,
+			answerBTruncated: item.answerBTruncated === true,
+			judgeExecutionKey: item.judgeExecutionKey ?? null,
+			errorMessage: item.errorMessage ?? null,
+			enqueuedAtUtc: numberValue(item.enqueuedAtUtc),
+			completedAtUtc: item.completedAtUtc ?? null,
+		})),
+		fit:
+			fit == null
+				? null
+				: {
+						fitKey: fit.fitKey,
+						judgeExecutionKey: fit.judgeExecutionKey,
+						comparisonSetVersion: numberValue(fit.comparisonSetVersion),
+						cohortGeneration: numberValue(fit.cohortGeneration),
+						iterations: numberValue(fit.iterations),
+						bootstrapReplicates: numberValue(fit.bootstrapReplicates),
+						// Fail closed: an absent flag reads as "not current", so a score is withheld rather than shown stale.
+						isCurrent: fit.isCurrent === true,
+						createdAtUtc: numberValue(fit.createdAtUtc),
+						scores: (fit.scores ?? []).map((score) => ({
+							runId: score.runId ?? "",
+							score: score.score ?? null,
+							ciLow: score.ciLow ?? null,
+							ciHigh: score.ciHigh ?? null,
+							comparisons: numberValue(score.comparisons),
+							bootstrapAppearances: numberValue(score.bootstrapAppearances),
+							reason: score.reason ?? null,
+						})),
+					},
+	};
+}
+
+export const toBenchmarkPairwiseEstimate = (value: PairwiseEstimateResponse): BenchmarkPairwiseEstimate => ({
+	eligibleRuns: numberValue(value.eligibleRuns),
+	pairedRuns: numberValue(value.pairedRuns),
+	cappedRuns: numberValue(value.cappedRuns),
+	judgeCalls: numberValue(value.judgeCalls),
+	// Null stays null: the caller omits the ETA entirely rather than rendering "0 s", which would read as instant.
+	estimatedSeconds: value.estimatedSeconds ?? null,
+	warn: value.warn === true,
+	maximumRuns: numberValue(value.maximumRuns),
+});
 
 const text = (value: unknown): string | null => (typeof value === "string" && value.length > 0 ? value : null);
 const count = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);

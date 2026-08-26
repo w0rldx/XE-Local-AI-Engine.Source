@@ -42,6 +42,7 @@ import { BenchmarkFidelityPanel } from "@/features/benchmarks/components/Benchma
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import type { BenchmarkMatrixSelection } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkLaunchMatrix } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
+import { BenchmarkPairwiseMatrix } from "@/features/benchmarks/components/BenchmarkPairwiseMatrix";
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
 import { BenchmarkRepeatModePicker } from "@/features/benchmarks/components/BenchmarkRepeatModePicker";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
@@ -64,6 +65,7 @@ import {
 import { hasActiveJudgeAttempt, succeededRunCount } from "@/features/benchmarks/models/BenchmarkRanking";
 import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarks";
 import {
+	useBenchmarkComparisons,
 	useBenchmarkProject,
 	useBenchmarkProjects,
 	useBenchmarkRunDetails,
@@ -94,6 +96,7 @@ const emptyProject: BenchmarkProjectDraft = {
 	invocationTimeoutSeconds: null,
 	agentDefinitionId: "",
 	judgeEnabled: false,
+	judgeMode: "pointwise",
 	judgeModelName: null,
 	judgeContextTokens: null,
 	rubric: null,
@@ -215,6 +218,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						invocationTimeoutSeconds: detail.invocationTimeoutSeconds,
 						agentDefinitionId: detail.agentDefinitionId,
 						judgeEnabled: detail.judge.enabled,
+						judgeMode: detail.judge.mode,
 						judgeModelName: detail.judge.modelName,
 						judgeContextTokens: detail.judge.requestedContextTokens,
 						rubric: detail.judge.rubric,
@@ -297,6 +301,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 					? {
 							modelName: draft.judgeModelName ?? "",
 							contextTokens: draft.judgeContextTokens ?? 0,
+							mode: draft.judgeMode,
 							rubric: draft.rubric,
 							referenceAnswer: draft.referenceAnswer,
 						}
@@ -372,6 +377,15 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 			},
 		);
 	};
+	// Only read while the project actually judges pairwise; shares the query key the matrix below uses, so the two are
+	// one request. A fit that is not current yields no intervals — a stale band is worse than none.
+	const isPairwise = projectQuery.data?.judge.mode === "pairwise";
+	const comparisonsQuery = useBenchmarkComparisons(selectedProjectId, isPairwise);
+	const pairwiseScores = useMemo(() => {
+		const fit = comparisonsQuery.data?.fit;
+		return fit?.isCurrent ? new Map(fit.scores.map((score) => [score.runId, score])) : undefined;
+	}, [comparisonsQuery.data]);
+
 	const measureRunFidelity = (run: BenchmarkRunSummary): void => {
 		measureFidelity.mutate(run, {
 			onError: (error) =>
@@ -655,6 +669,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 				<SectionCard title={t("pages.benchmarks.runs", "Runs")}>
 					<BenchmarkRunsTable
 						runs={runs}
+						pairwiseScores={pairwiseScores}
 						cohort={runsQuery.data.cohort}
 						selectedRunIds={selectedRunIds}
 						totalCount={runsQuery.data.totalCount}
@@ -666,6 +681,8 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						onMeasureFidelity={measureRunFidelity}
 						onDeleteRun={removeRun}
 					/>
+					{/* One fit covers the cohort, so the matrix is mounted once here rather than under each run pane. */}
+					{detail?.judge.mode === "pairwise" ? <BenchmarkPairwiseMatrix projectId={detail.id} /> : null}
 					{selectedRunIds.length >= 2 ? <BenchmarkLaunchCompare runIds={selectedRunIds} /> : null}
 					{/* Opened on demand: mounting the charts pulls the charting library, and an operator reading the table
 					    has not asked for it. */}
@@ -727,6 +744,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 				<BenchmarkProjectForm
 					key={`${editorMode}-${detail?.id ?? "new"}`}
 					initialValues={editorDraft}
+					projectId={editorMode === "edit" ? detail?.id : undefined}
 					agents={(agentsQuery.data ?? []).filter((agent) => agent.kind === "Single")}
 					models={allModelsQuery.data ?? []}
 					presets={presetsQuery.data}

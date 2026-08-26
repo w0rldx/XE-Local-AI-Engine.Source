@@ -51,15 +51,24 @@ export const benchmarkRankExclusionReasons = [
 	"truncated",
 	"incomplete",
 	"warmup",
+	// Pairwise: a fitted score is read THROUGH the active fit, so every way that read can fail is its own reason.
+	"pairwise-pending",
+	"pairwise-insufficient",
+	"pairwise-cap",
+	"pairwise-stale",
+	"pairwise-unfitted",
+	"pairwise-cross-case",
+	"pairwise-execution-mismatch",
+	"pairwise-execution-identity-incomplete",
 ] as const;
 export type BenchmarkRankExclusionReason = (typeof benchmarkRankExclusionReasons)[number];
 export const toBenchmarkRankExclusionReason = (value: unknown): BenchmarkRankExclusionReason | null =>
 	benchmarkRankExclusionReasons.find((reason) => reason === value) ?? null;
 
 /** Which side produced `qualityScore`: the operator's override wins over the judge, and `none` means unscored. */
-export type BenchmarkQualityScoreSource = "user" | "judge" | "none";
+export type BenchmarkQualityScoreSource = "user" | "judge" | "pairwise" | "none";
 export const toBenchmarkQualityScoreSource = (value: unknown): BenchmarkQualityScoreSource =>
-	value === "user" || value === "judge" ? value : "none";
+	value === "user" || value === "judge" || value === "pairwise" ? value : "none";
 
 export type BenchmarkOrigin = XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin | null;
 
@@ -198,6 +207,7 @@ export interface BenchmarkProjectDraft {
 	invocationTimeoutSeconds: number | null;
 	agentDefinitionId: string;
 	judgeEnabled: boolean;
+	judgeMode: BenchmarkJudgeMode;
 	judgeModelName: string | null;
 	judgeContextTokens: number | null;
 	rubric: BenchmarkRubric | null;
@@ -277,6 +287,83 @@ export const noBenchmarkRunJudge: BenchmarkRunJudge = {
 };
 
 /** What the project's ranking is computed against, so the table can say "n of m ranked" honestly. */
+/** Which answer the judge preferred, already normalized to the canonical pair — never to the order it was shown in. */
+export const benchmarkVerdicts = ["a", "b", "tie"] as const;
+export type BenchmarkVerdict = (typeof benchmarkVerdicts)[number];
+export const toBenchmarkVerdict = (value: unknown): BenchmarkVerdict | null =>
+	benchmarkVerdicts.find((verdict) => verdict === value) ?? null;
+
+/**
+ * One judged pair. `order` is the position the answers were SHOWN in (0 = A first), which is the whole point of the
+ * swap: the same pair is judged both ways so a position preference cancels instead of becoming a verdict.
+ */
+export interface BenchmarkComparison {
+	id: string;
+	runAId: string;
+	runBId: string;
+	order: number;
+	attemptSequence: number;
+	sequence: number;
+	taskCaseId: string | null;
+	status: string;
+	verdict: BenchmarkVerdict | null;
+	answerATruncated: boolean;
+	answerBTruncated: boolean;
+	judgeExecutionKey: string | null;
+	errorMessage: string | null;
+	enqueuedAtUtc: number;
+	completedAtUtc: number | null;
+}
+
+/** One run's fitted score. The interval is the bootstrap CI; a score with no interval is not a rankable reading. */
+export interface BenchmarkPairwiseRunScore {
+	runId: string;
+	score: number | null;
+	ciLow: number | null;
+	ciHigh: number | null;
+	comparisons: number;
+	bootstrapAppearances: number;
+	reason: string | null;
+}
+
+/**
+ * The Bradley-Terry fit the scores were read out of. `isCurrent` false is the `pairwise-stale` case: the fit exists
+ * but does not describe the cohort as it now stands, and a score from it must not be rendered as a current one.
+ */
+export interface BenchmarkPairwiseFit {
+	fitKey: string;
+	judgeExecutionKey: string;
+	comparisonSetVersion: number;
+	cohortGeneration: number;
+	iterations: number;
+	bootstrapReplicates: number;
+	isCurrent: boolean;
+	createdAtUtc: number;
+	scores: BenchmarkPairwiseRunScore[];
+}
+
+/** The verdicts and the fit they produced, as one read — a score beside verdicts that did not produce it is a lie. */
+export interface BenchmarkComparisonList {
+	cohortGeneration: number;
+	comparisonSetVersion: number;
+	referenceExecutionKey: string | null;
+	items: BenchmarkComparison[];
+	fit: BenchmarkPairwiseFit | null;
+}
+
+/** What switching a project to pairwise would cost, shown BEFORE the save that commits to it. */
+export interface BenchmarkPairwiseEstimate {
+	eligibleRuns: number;
+	pairedRuns: number;
+	/** Runs left out because the cohort is above `maximumRuns`. */
+	cappedRuns: number;
+	judgeCalls: number;
+	/** Null when the node cannot estimate one. Rendered as absent, never as 0. */
+	estimatedSeconds: number | null;
+	warn: boolean;
+	maximumRuns: number;
+}
+
 export interface BenchmarkRankCohort {
 	policyRevision: number | null;
 	executionKey: string | null;

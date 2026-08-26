@@ -99,7 +99,7 @@ describe("rankExclusionAction", () => {
 	// Every reason the node can send must map to something the operator can DO; an unmapped reason would render a chip
 	// with no next step.
 	it.each(benchmarkRankExclusionReasons)("maps %s to an action", (reason) => {
-		expect(["score", "rejudge", "wait", "rerun", "none"]).toContain(rankExclusionAction(reason));
+		expect(["score", "rejudge", "wait", "rerun", "remove-runs", "none"]).toContain(rankExclusionAction(reason));
 	});
 
 	it.each([
@@ -137,5 +137,35 @@ describe("project-level judge guards", () => {
 		expect(
 			succeededRunCount([run(), run({ primaryStatus: "Failed" }), run({ primaryStatus: "Running" }), run()]),
 		).toBe(2);
+	});
+});
+
+// Pairwise reads a score THROUGH the active fit, so every way that read can fail is its own reason with its own fix.
+describe("rankExclusionAction for pairwise reasons", () => {
+	it("waits on the two the node is already resolving by itself", () => {
+		expect(rankExclusionAction("pairwise-pending")).toBe("wait");
+		// Stale refits on the next judging pass; telling the operator to act would be telling them to do nothing.
+		expect(rankExclusionAction("pairwise-stale")).toBe("wait");
+	});
+
+	it("asks for more comparisons where the fit had too little to work with", () => {
+		expect(rankExclusionAction("pairwise-insufficient")).toBe("rerun");
+		expect(rankExclusionAction("pairwise-unfitted")).toBe("rerun");
+	});
+
+	it("names the cohort cap as runs to remove, not as something to re-judge", () => {
+		expect(rankExclusionAction("pairwise-cap")).toBe("remove-runs");
+	});
+
+	it("re-judges the ones a new generation fixes", () => {
+		for (const reason of ["pairwise-cross-case", "pairwise-execution-mismatch", "pairwise-execution-identity-incomplete"] as const) {
+			expect(rankExclusionAction(reason)).toBe("rejudge");
+		}
+	});
+
+	it("gives every exclusion reason an action, so a chip is never unactionable", () => {
+		for (const reason of benchmarkRankExclusionReasons) {
+			expect(rankExclusionAction(reason)).toBeTruthy();
+		}
 	});
 });

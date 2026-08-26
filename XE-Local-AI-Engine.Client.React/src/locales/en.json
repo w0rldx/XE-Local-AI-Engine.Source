@@ -4054,7 +4054,13 @@
 				"fidelityKldEnabled": "Also measure KL divergence",
 				"fidelityKldEnabledHelp": "Needs a cached logit file for the base model — tens of gigabytes. Check the estimate on the project before enabling it.",
 				"fidelityKldBase": "KL-divergence base model",
-				"fidelityKldBaseHelp": "The reference the quants are measured against — normally the unquantized build."
+				"fidelityKldBaseHelp": "The reference the quants are measured against — normally the unquantized build.",
+				"judgeMode": "Judging mode",
+				"judgeModeHelp": "Pointwise scores each run against the rubric. Pairwise compares runs against each other and ranks them through one fit.",
+				"judgeModes": {
+					"pointwise": "Pointwise (rubric per run)",
+					"pairwise": "Pairwise (run against run)"
+				}
 			},
 			"run": {
 				"model": "Primary model",
@@ -4250,7 +4256,8 @@
 				"source": {
 					"user": "operator",
 					"judge": "judge",
-					"none": "—"
+					"none": "—",
+					"pairwise": "pairwise"
 				},
 				"exclusion": {
 					"no-score": "No score yet — set an operator score or wait for the judge.",
@@ -4263,7 +4270,15 @@
 					"execution-identity-incomplete": "The judge runtime identity of this judging is incomplete.",
 					"truncated": "The answer was cut off by the token budget, so it is not comparable to a complete one.",
 					"incomplete": "The run produced no answer at all, so there is nothing to compare or grade.",
-					"warmup": "A warm-up run. It is excluded on purpose so the repeats after it are not judged against a cold launch."
+					"warmup": "A warm-up run. It is excluded on purpose so the repeats after it are not judged against a cold launch.",
+					"pairwise-pending": "pairwise judging not finished",
+					"pairwise-insufficient": "too few comparisons to fit",
+					"pairwise-cap": "outside the pairwise cohort cap",
+					"pairwise-stale": "fitted from an older comparison set",
+					"pairwise-unfitted": "not in the active fit",
+					"pairwise-cross-case": "compared under a different task case",
+					"pairwise-execution-mismatch": "fitted under a different judge runtime",
+					"pairwise-execution-identity-incomplete": "judge runtime not fully recorded"
 				},
 				"exclusionShort": {
 					"no-score": "unscored",
@@ -4276,14 +4291,23 @@
 					"execution-identity-incomplete": "identity incomplete",
 					"truncated": "truncated",
 					"incomplete": "no answer",
-					"warmup": "warm-up"
+					"warmup": "warm-up",
+					"pairwise-pending": "pairwise pending",
+					"pairwise-insufficient": "too few pairs",
+					"pairwise-cap": "over cap",
+					"pairwise-stale": "refitting",
+					"pairwise-unfitted": "unfitted",
+					"pairwise-cross-case": "cross-case",
+					"pairwise-execution-mismatch": "runtime differs",
+					"pairwise-execution-identity-incomplete": "runtime unknown"
 				},
 				"action": {
 					"score": "Set an operator score.",
 					"rejudge": "Re-judge to bring it back into the cohort.",
 					"wait": "Wait for the judging to finish.",
 					"rerun": "Rerun it — with more room when it was cut off.",
-					"none": "Nothing to do — a warm-up is meant to sit outside the ranking."
+					"none": "Nothing to do — a warm-up is meant to sit outside the ranking.",
+					"remove-runs": "Remove runs to bring the cohort under the cap."
 				},
 				"comparing": "Comparing {{count}} runs"
 			},
@@ -4418,6 +4442,30 @@
 					"constraintContains": "A contains entry cannot be empty.",
 					"constraintFormat": "That format is not supported."
 				}
+			},
+			"pairwise": {
+				"title": "Pairwise verdicts",
+				"cohort": "gen {{generation}} · set v{{version}}",
+				"loading": "Loading pairwise verdicts…",
+				"loadError": "Could not load the pairwise verdicts.",
+				"empty": "No comparisons yet. They are queued when the project judges.",
+				"staleFit": "These scores were fitted from a different comparison set than the project now has. They refit on the next judging pass.",
+				"fitSummary": "{{iterations}} iterations · {{replicates}} bootstrap replicates",
+				"comparisonCount": "{{count}} comparisons",
+				"pair": "Pair",
+				"orderA": "A shown first",
+				"orderB": "B shown first",
+				"tie": "tie",
+				"status": {
+					"Queued": "queued",
+					"Running": "running",
+					"Succeeded": "succeeded",
+					"Failed": "failed",
+					"Cancelled": "cancelled"
+				},
+				"estimate": "{{runs}} runs pair into {{calls}} judge calls.",
+				"estimateDuration": "Roughly {{duration}}.",
+				"estimateCapped": "{{capped}} runs are left out — the cohort caps at {{maximum}}. They rank as pairwise-cap until removed."
 			}
 		},
 		"customTools": {

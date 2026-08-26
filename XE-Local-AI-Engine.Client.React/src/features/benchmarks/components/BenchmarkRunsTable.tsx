@@ -20,7 +20,7 @@ import {
 	formatTopTokenAgreement,
 	isKldComparable,
 } from "@/features/benchmarks/models/BenchmarkFidelity";
-import type { BenchmarkRankCohort, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
+import type { BenchmarkPairwiseRunScore, BenchmarkRankCohort, BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkBaseModelLabel,
 	benchmarkQuantTag,
@@ -41,6 +41,8 @@ import {
 
 interface BenchmarkRunsTableProps {
 	runs: readonly BenchmarkRunSummary[];
+	/** Bootstrap intervals by run id, when the project judges pairwise. The score itself rides `qualityScore`. */
+	pairwiseScores?: ReadonlyMap<string, BenchmarkPairwiseRunScore>;
 	cohort: BenchmarkRankCohort;
 	selectedRunIds: readonly string[];
 	/** Runs the project has in total. More than `runs.length` means the table shows one page of them. */
@@ -206,16 +208,29 @@ function FidelityCell({ run }: { run: BenchmarkRunSummary }) {
 	);
 }
 
-function QualityScoreCell({ run }: { run: BenchmarkRunSummary }) {
+function QualityScoreCell({ run, pairwise }: { run: BenchmarkRunSummary; pairwise?: BenchmarkPairwiseRunScore }) {
 	const { t } = useTranslation();
 	if (run.qualityScore === null) {
 		return <Text size="sm">—</Text>;
 	}
+	// A fitted score without its interval is not a comparison an operator can make: two runs whose bands overlap are
+	// not separated by the difference in their point estimates, however large it looks.
+	const interval =
+		pairwise === undefined || pairwise.ciLow === null || pairwise.ciHigh === null
+			? null
+			: `${pairwise.ciLow.toFixed(1)}–${pairwise.ciHigh.toFixed(1)}`;
 	return (
 		<Group gap={6} wrap="nowrap">
-			<Text size="sm" fw={700}>
-				{run.qualityScore}
-			</Text>
+			<Stack gap={0}>
+				<Text size="sm" fw={700}>
+					{run.qualityScore}
+				</Text>
+				{interval === null ? null : (
+					<Text size="xs" c="dimmed" data-testid={`benchmark-pairwise-ci-${run.id}`}>
+						{interval}
+					</Text>
+				)}
+			</Stack>
 			<StatusBadge
 				color={run.qualityScoreSource === "user" ? "grape" : "blue"}
 				label={t(`pages.benchmarks.rank.source.${run.qualityScoreSource}`, run.qualityScoreSource)}
@@ -266,6 +281,7 @@ interface RunRowProps {
 	/** A group leader shows the BASE model; every other row shows the exact model name it ran. */
 	modelName?: string;
 	stats?: BenchmarkRepeatStats;
+	pairwise?: BenchmarkPairwiseRunScore;
 	onToggleRun: (runId: string) => void;
 	onRejudgeRun: (run: BenchmarkRunSummary) => void;
 	onMeasureFidelity: (run: BenchmarkRunSummary) => void;
@@ -281,6 +297,7 @@ function RunRow({
 	modelLabel,
 	modelName,
 	stats,
+	pairwise,
 	onToggleRun,
 	onRejudgeRun,
 	onMeasureFidelity,
@@ -336,7 +353,7 @@ function RunRow({
 				</Stack>
 			</Table.Td>
 			<Table.Td>
-				<QualityScoreCell run={run} />
+				<QualityScoreCell run={run} pairwise={pairwise} />
 			</Table.Td>
 			<Table.Td>
 				<Text size="sm">{run.judge.score ?? "—"}</Text>
@@ -431,6 +448,7 @@ function RunRow({
  */
 export function BenchmarkRunsTable({
 	runs,
+	pairwiseScores,
 	cohort,
 	selectedRunIds,
 	totalCount,
@@ -451,6 +469,7 @@ export function BenchmarkRunsTable({
 	// narrower than a group and never wider, so scoping it to the rendered group would only recompute the same thing.
 	const stats = useMemo(() => benchmarkRepeatStats(runs), [runs]);
 	const statsFor = (run: BenchmarkRunSummary): BenchmarkRepeatStats | undefined => stats.get(benchmarkRepeatCohortKey(run));
+	const pairwiseFor = (run: BenchmarkRunSummary): BenchmarkPairwiseRunScore | undefined => pairwiseScores?.get(run.id);
 	const rowProps = { isActionPending, onToggleRun, onRejudgeRun, onMeasureFidelity, onDeleteRun };
 
 	if (runs.length === 0) {
@@ -517,6 +536,7 @@ export function BenchmarkRunsTable({
 												run={group.leader}
 												selected={selectedRunIds.includes(group.leader.id)}
 												stats={statsFor(group.leader)}
+												pairwise={pairwiseFor(group.leader)}
 												modelName={benchmarkBaseModelLabel(group.leader.primaryModelName)}
 												modelLabel={t("pages.benchmarks.rank.groupCount", "{{count}} runs of this model", {
 													count: group.runs.length,
@@ -550,6 +570,7 @@ export function BenchmarkRunsTable({
 																run={run}
 																selected={selectedRunIds.includes(run.id)}
 																stats={statsFor(run)}
+																pairwise={pairwiseFor(run)}
 																nested={true}
 															/>
 														))
@@ -558,7 +579,14 @@ export function BenchmarkRunsTable({
 									);
 								})
 							: ordered.map((run) => (
-									<RunRow {...rowProps} key={run.id} run={run} selected={selectedRunIds.includes(run.id)} stats={statsFor(run)} />
+									<RunRow
+										{...rowProps}
+										key={run.id}
+										run={run}
+										selected={selectedRunIds.includes(run.id)}
+										stats={statsFor(run)}
+										pairwise={pairwiseFor(run)}
+									/>
 								))}
 					</Table.Tbody>
 				</Table>

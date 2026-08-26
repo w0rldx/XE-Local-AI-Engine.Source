@@ -50,6 +50,7 @@ function draft(overrides: Partial<BenchmarkProjectDraft> = {}): BenchmarkProject
 		invocationTimeoutSeconds: null,
 		agentDefinitionId: "agent-1",
 		judgeEnabled: false,
+		judgeMode: "pointwise",
 		judgeModelName: null,
 		judgeContextTokens: null,
 		rubric: null,

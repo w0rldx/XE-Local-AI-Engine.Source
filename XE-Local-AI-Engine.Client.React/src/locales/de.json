@@ -4054,7 +4054,13 @@
 				"fidelityKldEnabled": "Zusätzlich KL-Divergenz messen",
 				"fidelityKldEnabledHelp": "Benötigt eine zwischengespeicherte Logit-Datei des Basismodells — mehrere zehn Gigabyte. Prüfe vorher die Schätzung im Projekt.",
 				"fidelityKldBase": "Basismodell für KL-Divergenz",
-				"fidelityKldBaseHelp": "Die Referenz, gegen die die Quantisierungen gemessen werden — normalerweise der unquantisierte Build."
+				"fidelityKldBaseHelp": "Die Referenz, gegen die die Quantisierungen gemessen werden — normalerweise der unquantisierte Build.",
+				"judgeMode": "Bewertungsmodus",
+				"judgeModeHelp": "Pointwise bewertet jeden Lauf anhand der Rubrik. Pairwise vergleicht Läufe untereinander und ordnet sie über eine gemeinsame Anpassung.",
+				"judgeModes": {
+					"pointwise": "Pointwise (Rubrik je Lauf)",
+					"pairwise": "Pairwise (Lauf gegen Lauf)"
+				}
 			},
 			"run": {
 				"model": "Primärmodell",
@@ -4250,7 +4256,8 @@
 				"source": {
 					"user": "Betreiber",
 					"judge": "Judge",
-					"none": "—"
+					"none": "—",
+					"pairwise": "paarweise"
 				},
 				"exclusion": {
 					"no-score": "Noch keine Bewertung — vergeben Sie eine Betreiberbewertung oder warten Sie auf den Judge.",
@@ -4263,7 +4270,15 @@
 					"execution-identity-incomplete": "Die Laufzeit-Identität dieser Bewertung ist unvollständig.",
 					"truncated": "Die Antwort wurde vom Token-Budget abgeschnitten und ist deshalb nicht mit einer vollständigen vergleichbar.",
 					"incomplete": "Der Lauf hat überhaupt keine Antwort erzeugt, es gibt also nichts zu vergleichen oder zu bewerten.",
-					"warmup": "Ein Aufwärmlauf. Er wird absichtlich ausgeschlossen, damit die folgenden Wiederholungen nicht gegen einen kalten Start bewertet werden."
+					"warmup": "Ein Aufwärmlauf. Er wird absichtlich ausgeschlossen, damit die folgenden Wiederholungen nicht gegen einen kalten Start bewertet werden.",
+					"pairwise-pending": "paarweise Bewertung nicht abgeschlossen",
+					"pairwise-insufficient": "zu wenige Vergleiche für eine Anpassung",
+					"pairwise-cap": "außerhalb der paarweisen Kohortengrenze",
+					"pairwise-stale": "aus einem älteren Vergleichssatz angepasst",
+					"pairwise-unfitted": "nicht in der aktiven Anpassung",
+					"pairwise-cross-case": "unter einem anderen Aufgabenfall verglichen",
+					"pairwise-execution-mismatch": "unter einer anderen Judge-Laufzeit angepasst",
+					"pairwise-execution-identity-incomplete": "Judge-Laufzeit nicht vollständig erfasst"
 				},
 				"exclusionShort": {
 					"no-score": "unbewertet",
@@ -4276,14 +4291,23 @@
 					"execution-identity-incomplete": "Identität unvollständig",
 					"truncated": "abgeschnitten",
 					"incomplete": "keine Antwort",
-					"warmup": "Aufwärmlauf"
+					"warmup": "Aufwärmlauf",
+					"pairwise-pending": "paarweise ausstehend",
+					"pairwise-insufficient": "zu wenige Paare",
+					"pairwise-cap": "über Grenze",
+					"pairwise-stale": "wird neu angepasst",
+					"pairwise-unfitted": "nicht angepasst",
+					"pairwise-cross-case": "fallübergreifend",
+					"pairwise-execution-mismatch": "Laufzeit weicht ab",
+					"pairwise-execution-identity-incomplete": "Laufzeit unbekannt"
 				},
 				"action": {
 					"score": "Vergeben Sie eine Betreiberbewertung.",
 					"rejudge": "Neu bewerten, um ihn wieder in die Kohorte zu holen.",
 					"wait": "Warten Sie, bis die Bewertung fertig ist.",
 					"rerun": "Erneut starten — mit mehr Raum, falls er abgeschnitten wurde.",
-					"none": "Nichts zu tun — ein Aufwärmlauf soll außerhalb der Wertung stehen."
+					"none": "Nichts zu tun — ein Aufwärmlauf soll außerhalb der Wertung stehen.",
+					"remove-runs": "Entferne Läufe, damit die Kohorte unter der Grenze liegt."
 				},
 				"comparing": "{{count}} Läufe im Vergleich"
 			},
@@ -4418,6 +4442,30 @@
 					"constraintContains": "Ein Eintrag darf nicht leer sein.",
 					"constraintFormat": "Dieses Format wird nicht unterstützt."
 				}
+			},
+			"pairwise": {
+				"title": "Paarweise Urteile",
+				"cohort": "Gen {{generation}} · Satz v{{version}}",
+				"loading": "Paarweise Urteile werden geladen…",
+				"loadError": "Die paarweisen Urteile konnten nicht geladen werden.",
+				"empty": "Noch keine Vergleiche. Sie werden eingereiht, wenn das Projekt bewertet.",
+				"staleFit": "Diese Werte wurden aus einem anderen Vergleichssatz angepasst als dem, den das Projekt jetzt hat. Sie werden beim nächsten Bewertungsdurchlauf neu angepasst.",
+				"fitSummary": "{{iterations}} Iterationen · {{replicates}} Bootstrap-Wiederholungen",
+				"comparisonCount": "{{count}} Vergleiche",
+				"pair": "Paar",
+				"orderA": "A zuerst gezeigt",
+				"orderB": "B zuerst gezeigt",
+				"tie": "unentschieden",
+				"status": {
+					"Queued": "in Warteschlange",
+					"Running": "läuft",
+					"Succeeded": "erfolgreich",
+					"Failed": "fehlgeschlagen",
+					"Cancelled": "abgebrochen"
+				},
+				"estimate": "{{runs}} Läufe ergeben {{calls}} Judge-Aufrufe.",
+				"estimateDuration": "Etwa {{duration}}.",
+				"estimateCapped": "{{capped}} Läufe bleiben außen vor — die Kohorte ist auf {{maximum}} begrenzt. Sie gelten als pairwise-cap, bis sie entfernt werden."
 			}
 		},
 		"customTools": {
