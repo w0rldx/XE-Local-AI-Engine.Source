@@ -284,20 +284,22 @@ public sealed class ScheduledJobManagementService(
         // which keys may override stored parameters; an empty/absent map fires the stored definition unchanged.
         // Quartz honors [DisallowConcurrentExecution] on the non-overlapping dispatch job, so an overlapping manual fire
         // of a prevent-overlap definition is serialized by Quartz rather than rejected here.
-        if (parameterOverrides is { Count: > 0 })
+        var fireDataMap = new JobDataMap
         {
-            var fireDataMap = new JobDataMap();
+            // Every fire through here is an operator/agent "Run now", which is the only thing that distinguishes it from
+            // the cron fire of the same job once both are rows in the run history.
+            [SchedulerJobKeys.ManualFireKey] = bool.TrueString
+        };
+
+        if (parameterOverrides is not null)
+        {
             foreach (var (key, value) in parameterOverrides)
             {
                 fireDataMap[key] = value;
             }
+        }
 
-            await scheduler.TriggerJob(jobKey, fireDataMap, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            await scheduler.TriggerJob(jobKey, cancellationToken).ConfigureAwait(false);
-        }
+        await scheduler.TriggerJob(jobKey, fireDataMap, cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Manually triggered scheduled job {ScheduledJobId} (template {TemplateId}, overrides={OverrideCount}).",
             definition.Id,

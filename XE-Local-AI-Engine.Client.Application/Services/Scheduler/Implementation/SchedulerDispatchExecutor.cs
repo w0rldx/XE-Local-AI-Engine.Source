@@ -77,7 +77,8 @@ internal sealed class SchedulerDispatchExecutor(
         DateTimeOffset? scheduledFireTimeUtc,
         DateTimeOffset actualFireTimeUtc,
         CancellationToken cancellationToken,
-        IReadOnlyDictionary<string, string>? parameterOverrides = null)
+        IReadOnlyDictionary<string, string>? parameterOverrides = null,
+        ScheduledRunTrigger triggeredBy = ScheduledRunTrigger.Schedule)
     {
         var definition = await _definitionStore.GetByIdAsync(scheduledJobId, cancellationToken).ConfigureAwait(false);
         if (definition is null)
@@ -107,7 +108,7 @@ internal sealed class SchedulerDispatchExecutor(
             return;
         }
 
-        await RecordAndRunAsync(definition, handler, fireInstanceId, scheduledFireTimeUtc, actualFireTimeUtc, parameterOverrides, cancellationToken)
+        await RecordAndRunAsync(definition, handler, fireInstanceId, scheduledFireTimeUtc, actualFireTimeUtc, parameterOverrides, triggeredBy, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -117,6 +118,7 @@ internal sealed class SchedulerDispatchExecutor(
         DateTimeOffset? scheduledFireTimeUtc,
         DateTimeOffset actualFireTimeUtc,
         IReadOnlyDictionary<string, string>? parameterOverrides,
+        ScheduledRunTrigger triggeredBy,
         CancellationToken cancellationToken)
     {
         var actualFireMs = actualFireTimeUtc.ToUnixTimeMilliseconds();
@@ -126,7 +128,7 @@ internal sealed class SchedulerDispatchExecutor(
         var run = await _runStore.UpsertByFireInstanceAsync(new ScheduledJobRunInput(definition.Id,
                 definition.TemplateId,
                 fireInstanceId,
-                ScheduledRunTrigger.Schedule,
+                triggeredBy,
                 ScheduledRunStatus.Running,
                 scheduledFireTimeUtc?.ToUnixTimeMilliseconds(),
                 actualFireMs),
@@ -157,7 +159,7 @@ internal sealed class SchedulerDispatchExecutor(
             FireInstanceId = fireInstanceId,
             ScheduledFireTimeUtc = scheduledFireTimeUtc,
             ActualFireTimeUtc = actualFireTimeUtc,
-            TriggeredBy = ScheduledRunTrigger.Schedule,
+            TriggeredBy = triggeredBy,
             ReportProgressAsync = BuildProgressReporter(run.Id, definition.Id)
         };
 

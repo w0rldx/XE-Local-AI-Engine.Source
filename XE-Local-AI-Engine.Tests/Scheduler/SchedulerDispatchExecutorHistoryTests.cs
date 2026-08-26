@@ -45,6 +45,24 @@ public sealed class SchedulerDispatchExecutorHistoryTests
             Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task DispatchAsync_WhenTriggeredManually_RecordsManualOnTheRunAndTheContext()
+    {
+        ScheduledRunTrigger? observed = null;
+        var handler = new ConfigurableHandler((ctx, _) =>
+        {
+            observed = ctx.TriggeredBy;
+            return Task.CompletedTask;
+        });
+        var (executor, runStore, _, _) = CreateExecutor(handler, ScheduledRunStatus.Running);
+
+        await executor.DispatchAsync(JobId, "fire-manual", Now, Now, CancellationToken.None, parameterOverrides: null, ScheduledRunTrigger.Manual);
+
+        await runStore.Received(1).UpsertByFireInstanceAsync(Arg.Is<ScheduledJobRunInput>(i => i.TriggeredBy == ScheduledRunTrigger.Manual),
+            Arg.Any<CancellationToken>());
+        AssertEx.Equal(ScheduledRunTrigger.Manual, observed!.Value);
+    }
+
     // ──────────────────────────────────────────────────────────────────────
     // Success summary: the handler's own sentence is persisted; its absence keeps the generic constant
     // ──────────────────────────────────────────────────────────────────────

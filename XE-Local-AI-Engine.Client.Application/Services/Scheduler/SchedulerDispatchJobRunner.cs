@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Scheduler;
 
 using Quartz;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     Shared fire-extraction logic for the two dispatch <see cref="IJob" /> variants (overlapping and
@@ -34,12 +35,18 @@ internal static class SchedulerDispatchJobRunner
         // stored parameters unchanged. The executor decides whether/how to apply them.
         var parameterOverrides = ExtractParameterOverrides(context);
 
+        // Only TriggerNowAsync stamps the manual marker, so its absence means Quartz fired the definition's own trigger.
+        var triggeredBy = string.Equals(SafeGetString(context, SchedulerJobKeys.ManualFireKey), bool.TrueString, StringComparison.OrdinalIgnoreCase)
+            ? ScheduledRunTrigger.Manual
+            : ScheduledRunTrigger.Schedule;
+
         await dispatchExecutor.DispatchAsync(scheduledJobId,
             context.FireInstanceId,
             context.ScheduledFireTimeUtc,
             context.FireTimeUtc,
             context.CancellationToken,
-            parameterOverrides).ConfigureAwait(false);
+            parameterOverrides,
+            triggeredBy).ConfigureAwait(false);
     }
 
     /// <summary>
