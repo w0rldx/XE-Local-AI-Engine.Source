@@ -4288,7 +4288,8 @@
 					"item-incomplete": "At least one task item of this combination has no rankable answer, so its mean would be over a different suite than the ones beside it.",
 					"item-revised": "The task item this run answered has been edited since. The answer is to a question the project no longer asks.",
 					"item-set-revised": "A task item was added or removed after this combination was measured, so it was scored against a suite the project no longer has.",
-					"verifier-unavailable": "A deterministic verifier could not run on this node, so the answer was never checked. That is not a zero."
+					"verifier-unavailable": "A deterministic verifier could not run on this node, so the answer was never checked. That is not a zero.",
+					"override-unmatched": "The task item this run answered carries a verifier override naming a rubric criterion that no longer exists, so nothing it asked for was applied."
 				},
 				"exclusionShort": {
 					"no-score": "unscored",
@@ -4313,7 +4314,8 @@
 					"item-incomplete": "item missing",
 					"item-revised": "item edited",
 					"item-set-revised": "suite changed",
-					"verifier-unavailable": "verifier unavailable"
+					"verifier-unavailable": "verifier unavailable",
+					"override-unmatched": "override unmatched"
 				},
 				"action": {
 					"score": "Set an operator score.",
@@ -4324,7 +4326,8 @@
 					"remove-runs": "Remove runs to bring the cohort under the cap.",
 					"rerun-item": "Run that task item again for this model.",
 					"rerun-cell": "Run this whole combination again under the current task items.",
-					"enable-compute": "Enable Compute on this node — and give it a host where the sandbox can be bounded — then re-judge."
+					"enable-compute": "Enable Compute on this node — and give it a host where the sandbox can be bounded — then re-judge.",
+					"fix-override": "Edit the task item's override, or the rubric, so the two name the same criterion — then re-judge."
 				},
 				"comparing": "Comparing {{count}} runs"
 			},

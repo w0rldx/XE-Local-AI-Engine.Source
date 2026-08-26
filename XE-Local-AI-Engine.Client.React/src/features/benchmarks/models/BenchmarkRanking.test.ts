@@ -99,9 +99,18 @@ describe("rankExclusionAction", () => {
 	// Every reason the node can send must map to something the operator can DO; an unmapped reason would render a chip
 	// with no next step.
 	it.each(benchmarkRankExclusionReasons)("maps %s to an action", (reason) => {
-		expect(["score", "rejudge", "wait", "rerun", "rerun-item", "rerun-cell", "enable-compute", "remove-runs", "none"]).toContain(
-			rankExclusionAction(reason),
-		);
+		expect([
+			"score",
+			"rejudge",
+			"wait",
+			"rerun",
+			"rerun-item",
+			"rerun-cell",
+			"enable-compute",
+			"fix-override",
+			"remove-runs",
+			"none",
+		]).toContain(rankExclusionAction(reason));
 	});
 
 	it.each([
@@ -170,6 +179,12 @@ describe("rankExclusionAction for pairwise reasons", () => {
 		for (const reason of ["pairwise-cross-case", "pairwise-execution-mismatch", "pairwise-execution-identity-incomplete"] as const) {
 			expect(rankExclusionAction(reason)).toBe("rejudge");
 		}
+	});
+
+	// A re-judge repeats the refusal for as long as the override names a criterion the rubric does not have, so the
+	// only next step is an edit to one of the two.
+	it("sends an unmatched override to an edit rather than to another re-judge", () => {
+		expect(rankExclusionAction("override-unmatched")).toBe("fix-override");
 	});
 
 	it("gives every exclusion reason an action, so a chip is never unactionable", () => {

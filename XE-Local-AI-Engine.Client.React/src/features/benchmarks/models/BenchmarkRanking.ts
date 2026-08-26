@@ -69,6 +69,7 @@ export type BenchmarkRankExclusionAction =
 	| "rerun-item"
 	| "rerun-cell"
 	| "enable-compute"
+	| "fix-override"
 	| "remove-runs"
 	| "none";
 
@@ -100,6 +101,10 @@ export function rankExclusionAction(reason: BenchmarkRankExclusionReason): Bench
 		// operator changes the node's configuration.
 		case "verifier-unavailable":
 			return "enable-compute";
+		// Also not a run problem, and NOT a re-judge: the item's override names a criterion the rubric no longer has, so
+		// every re-judge refuses again until the item or the rubric is edited to agree.
+		case "override-unmatched":
+			return "fix-override";
 		// Pairwise. The node is already working (`pending`) or already fixing itself (`stale` refits on the next pass),
 		// so both are waits; the rest name what the operator has to change.
 		case "pairwise-pending":

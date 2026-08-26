@@ -4288,7 +4288,8 @@
 					"item-incomplete": "Mindestens eine Aufgabe dieser Kombination hat keine wertbare Antwort, ihr Mittelwert liefe also über eine andere Sammlung als der der Kombinationen daneben.",
 					"item-revised": "Die Aufgabe, die dieser Lauf beantwortet hat, wurde seitdem bearbeitet. Die Antwort gehört zu einer Frage, die das Projekt nicht mehr stellt.",
 					"item-set-revised": "Nach dieser Messung wurde eine Aufgabe hinzugefügt oder entfernt; gemessen wurde also gegen eine Sammlung, die das Projekt nicht mehr hat.",
-					"verifier-unavailable": "Ein deterministischer Prüfer konnte auf diesem Node nicht laufen, die Antwort wurde also nie geprüft. Das ist keine Null."
+					"verifier-unavailable": "Ein deterministischer Prüfer konnte auf diesem Node nicht laufen, die Antwort wurde also nie geprüft. Das ist keine Null.",
+					"override-unmatched": "Die von diesem Lauf beantwortete Aufgabe trägt eine Verifizierer-Überschreibung, die ein Rubrik-Kriterium nennt, das es nicht mehr gibt — nichts davon wurde angewendet."
 				},
 				"exclusionShort": {
 					"no-score": "unbewertet",
@@ -4313,7 +4314,8 @@
 					"item-incomplete": "Aufgabe fehlt",
 					"item-revised": "Aufgabe bearbeitet",
 					"item-set-revised": "Sammlung geändert",
-					"verifier-unavailable": "Prüfer nicht verfügbar"
+					"verifier-unavailable": "Prüfer nicht verfügbar",
+					"override-unmatched": "Überschreibung ohne Kriterium"
 				},
 				"action": {
 					"score": "Vergeben Sie eine Betreiberbewertung.",
@@ -4324,7 +4326,8 @@
 					"remove-runs": "Entferne Läufe, damit die Kohorte unter der Grenze liegt.",
 					"rerun-item": "Diese Aufgabe für dieses Modell erneut ausführen.",
 					"rerun-cell": "Diese ganze Kombination unter den aktuellen Aufgaben erneut ausführen.",
-					"enable-compute": "Compute auf diesem Node aktivieren — auf einem Host, der die Sandbox begrenzen kann — und dann neu bewerten."
+					"enable-compute": "Compute auf diesem Node aktivieren — auf einem Host, der die Sandbox begrenzen kann — und dann neu bewerten.",
+					"fix-override": "Die Überschreibung der Aufgabe oder die Rubrik so bearbeiten, dass beide dasselbe Kriterium nennen — dann neu bewerten."
 				},
 				"comparing": "{{count}} Läufe im Vergleich"
 			},
