@@ -3894,6 +3894,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectFidelityCh
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse =
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse & {
+		taskItems?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse>;
+		taskItemSetHash?: string | null;
 		coreTask: string;
 		judge: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse;
 		fidelityEnabled?: boolean;
@@ -3904,6 +3906,25 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResp
 		fidelityKldBaseFingerprint?: string | null;
 		fidelityKldExpectedDigest?: string | null;
 	};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse = {
+	id?: string;
+	projectId?: string;
+	parentItemId?: string | null;
+	index?: number;
+	kind: string;
+	revision?: number;
+	inputHash: string;
+	isLeaf?: boolean;
+	countsTowardScore?: boolean;
+	prompt: string;
+	referenceAnswer?: string | null;
+	verifierConfig?: unknown;
+	generatorConfig?: unknown;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse = {
 	id?: string;
@@ -4193,6 +4214,39 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1ClearBenchmarkRunScoreRequ
 export type XeLocalAiEngineClientEndpointsBenchmarksV1RejudgeBenchmarkRunRequest = {
 	expectedVersion?: number;
 	force?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkTaskItemsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse>;
+	taskItemSetHash?: string | null;
+	projectVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkTaskItemRequest =
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest & {
+		expectedProjectVersion?: number;
+	};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest = {
+	prompt?: string;
+	kind?: string | null;
+	referenceAnswer?: string | null;
+	verifierConfig?: unknown;
+	generatorConfig?: unknown;
+	countsTowardScore?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkTaskItemRequest =
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest & {
+		expectedVersion?: number;
+	};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkTaskItemRequest = {
+	expectedVersion?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1ReorderBenchmarkTaskItemsRequest = {
+	itemIds?: Array<string>;
 };
 
 export type XeLocalAiEngineClientEndpointsAutomationV1ListSlashCommandsResponse = {
@@ -14236,6 +14290,203 @@ export type RejudgeBenchmarkRunResponses = {
 };
 
 export type RejudgeBenchmarkRunResponse = RejudgeBenchmarkRunResponses[keyof RejudgeBenchmarkRunResponses];
+
+export type ListBenchmarkTaskItemsData = {
+	body?: never;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/items";
+};
+
+export type ListBenchmarkTaskItemsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ListBenchmarkTaskItemsError = ListBenchmarkTaskItemsErrors[keyof ListBenchmarkTaskItemsErrors];
+
+export type ListBenchmarkTaskItemsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkTaskItemsResponse;
+};
+
+export type ListBenchmarkTaskItemsResponse = ListBenchmarkTaskItemsResponses[keyof ListBenchmarkTaskItemsResponses];
+
+export type CreateBenchmarkTaskItemData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkTaskItemRequest;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/items";
+};
+
+export type CreateBenchmarkTaskItemErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type CreateBenchmarkTaskItemError = CreateBenchmarkTaskItemErrors[keyof CreateBenchmarkTaskItemErrors];
+
+export type CreateBenchmarkTaskItemResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse;
+};
+
+export type CreateBenchmarkTaskItemResponse = CreateBenchmarkTaskItemResponses[keyof CreateBenchmarkTaskItemResponses];
+
+export type DeleteBenchmarkTaskItemData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkTaskItemRequest;
+	path: {
+		projectId: string;
+		itemId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/items/{itemId}";
+};
+
+export type DeleteBenchmarkTaskItemErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type DeleteBenchmarkTaskItemError = DeleteBenchmarkTaskItemErrors[keyof DeleteBenchmarkTaskItemErrors];
+
+export type DeleteBenchmarkTaskItemResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteBenchmarkTaskItemResponse = DeleteBenchmarkTaskItemResponses[keyof DeleteBenchmarkTaskItemResponses];
+
+export type UpdateBenchmarkTaskItemData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkTaskItemRequest;
+	path: {
+		projectId: string;
+		itemId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/items/{itemId}";
+};
+
+export type UpdateBenchmarkTaskItemErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type UpdateBenchmarkTaskItemError = UpdateBenchmarkTaskItemErrors[keyof UpdateBenchmarkTaskItemErrors];
+
+export type UpdateBenchmarkTaskItemResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse;
+};
+
+export type UpdateBenchmarkTaskItemResponse = UpdateBenchmarkTaskItemResponses[keyof UpdateBenchmarkTaskItemResponses];
+
+export type ReorderBenchmarkTaskItemsData = {
+	body: XeLocalAiEngineClientEndpointsBenchmarksV1ReorderBenchmarkTaskItemsRequest;
+	path: {
+		projectId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/benchmarks/projects/{projectId}/items/order";
+};
+
+export type ReorderBenchmarkTaskItemsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: MicrosoftAspNetCoreMvcProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: MicrosoftAspNetCoreMvcProblemDetails;
+	409: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type ReorderBenchmarkTaskItemsError = ReorderBenchmarkTaskItemsErrors[keyof ReorderBenchmarkTaskItemsErrors];
+
+export type ReorderBenchmarkTaskItemsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkTaskItemsResponse;
+};
+
+export type ReorderBenchmarkTaskItemsResponse = ReorderBenchmarkTaskItemsResponses[keyof ReorderBenchmarkTaskItemsResponses];
 
 export type ListSlashCommandsData = {
 	body?: never;

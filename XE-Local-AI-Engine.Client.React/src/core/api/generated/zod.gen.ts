@@ -4739,6 +4739,33 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1GetKldDiskEstimateRespon
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1GetKldDiskEstimateRequest = z.record(z.string(), z.never());
 
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse = z.object({
+	id: z.guid().optional(),
+	projectId: z.guid().optional(),
+	parentItemId: z.guid().nullish(),
+	index: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	kind: z.string(),
+	revision: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	inputHash: z.string(),
+	isLeaf: z.boolean().optional(),
+	countsTowardScore: z.boolean().optional(),
+	prompt: z.string(),
+	referenceAnswer: z.string().nullish(),
+	verifierConfig: z.unknown().optional(),
+	generatorConfig: z.unknown().optional(),
+	version: z.int().optional(),
+	createdAtUtc: z.int().optional(),
+	updatedAtUtc: z.int().optional(),
+});
+
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse = z.object({
 	id: z.guid().optional(),
 	name: z.string(),
@@ -4778,6 +4805,8 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryR
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse =
 	zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse.and(
 		z.object({
+			taskItems: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse).optional(),
+			taskItemSetHash: z.string().nullish(),
 			coreTask: z.string(),
 			judge: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse,
 			fidelityEnabled: z.boolean().optional(),
@@ -5225,6 +5254,43 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1ClearBenchmarkRunScoreRe
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1RejudgeBenchmarkRunRequest = z.object({
 	expectedVersion: z.int().optional(),
 	force: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkTaskItemsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse).optional(),
+	taskItemSetHash: z.string().nullish(),
+	projectVersion: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest = z.object({
+	prompt: z.string().optional(),
+	kind: z.string().nullish(),
+	referenceAnswer: z.string().nullish(),
+	verifierConfig: z.unknown().optional(),
+	generatorConfig: z.unknown().optional(),
+	countsTowardScore: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkTaskItemRequest =
+	zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest.and(
+		z.object({
+			expectedProjectVersion: z.int().optional(),
+		}),
+	);
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkTaskItemRequest =
+	zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemMutationRequest.and(
+		z.object({
+			expectedVersion: z.int().optional(),
+		}),
+	);
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkTaskItemRequest = z.object({
+	expectedVersion: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1ReorderBenchmarkTaskItemsRequest = z.object({
+	itemIds: z.array(z.guid()).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsAutomationV1SlashCommandActionTypeDto = z.enum(["sendPrompt"]);
@@ -8449,6 +8515,61 @@ export const zRejudgeBenchmarkRunPath = z.object({
  * Success
  */
 export const zRejudgeBenchmarkRunResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse;
+
+export const zListBenchmarkTaskItemsPath = z.object({
+	projectId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zListBenchmarkTaskItemsResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkTaskItemsResponse;
+
+export const zCreateBenchmarkTaskItemBody = zXeLocalAiEngineClientEndpointsBenchmarksV1CreateBenchmarkTaskItemRequest;
+
+export const zCreateBenchmarkTaskItemPath = z.object({
+	projectId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zCreateBenchmarkTaskItemResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse;
+
+export const zDeleteBenchmarkTaskItemBody = zXeLocalAiEngineClientEndpointsBenchmarksV1DeleteBenchmarkTaskItemRequest;
+
+export const zDeleteBenchmarkTaskItemPath = z.object({
+	projectId: z.guid(),
+	itemId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteBenchmarkTaskItemResponse = z.void();
+
+export const zUpdateBenchmarkTaskItemBody = zXeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkTaskItemRequest;
+
+export const zUpdateBenchmarkTaskItemPath = z.object({
+	projectId: z.guid(),
+	itemId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateBenchmarkTaskItemResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkTaskItemResponse;
+
+export const zReorderBenchmarkTaskItemsBody = zXeLocalAiEngineClientEndpointsBenchmarksV1ReorderBenchmarkTaskItemsRequest;
+
+export const zReorderBenchmarkTaskItemsPath = z.object({
+	projectId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zReorderBenchmarkTaskItemsResponse = zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkTaskItemsResponse;
 
 /**
  * Success

@@ -262,6 +262,16 @@ public static class LocalApiRoutes
         public const string RunScore = "benchmarks/runs/{runId}/score";
         public const string RunRejudge = "benchmarks/runs/{runId}/rejudge";
 
+        // A project's task items are their own sub-resource, one level down from the project: they are a collection
+        // with its own lifecycle (add, edit, delete, reorder), and each write recomputes the project's item-set hash,
+        // which is not something a field on the project PUT could express.
+        public const string ProjectTaskItems = "benchmarks/projects/{projectId}/items";
+        public const string ProjectTaskItemById = "benchmarks/projects/{projectId}/items/{itemId}";
+
+        // Reordering is its own verb on its own route: it names the whole order at once, which is also what makes it
+        // safe under a concurrent add or delete.
+        public const string ProjectTaskItemOrder = "benchmarks/projects/{projectId}/items/order";
+
         // The judge policy is its own sub-resource: it is the one part of a FROZEN project an operator may still
         // change, and doing so re-judges every run, so it never rides along on the project PUT.
         public const string ProjectJudge = "benchmarks/projects/{projectId}/judge";

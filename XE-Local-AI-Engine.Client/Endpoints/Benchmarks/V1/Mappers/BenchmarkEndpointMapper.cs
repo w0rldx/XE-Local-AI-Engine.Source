@@ -27,6 +27,43 @@ internal static class BenchmarkEndpointMapper
             request.FidelityChunks,
             request.FidelityKldBaseModelName);
 
+    public static BenchmarkTaskItemDraft ToDraft(this BenchmarkTaskItemMutationRequest request) =>
+        new(request.Prompt,
+            request.Kind,
+            request.ReferenceAnswer,
+            request.VerifierConfig,
+            request.GeneratorConfig,
+            request.CountsTowardScore);
+
+    public static BenchmarkTaskItemResponse ToResponse(this BenchmarkTaskItemRecord item) =>
+        new()
+        {
+            Id = item.Id,
+            ProjectId = item.ProjectId,
+            ParentItemId = item.ParentItemId,
+            Index = item.Index,
+            Kind = item.Kind,
+            Revision = item.Revision,
+            InputHash = item.InputHash,
+            IsLeaf = item.IsLeaf,
+            CountsTowardScore = item.CountsTowardScore,
+            Prompt = BenchmarkTaskItemService.DecodePrompt(item.PromptJson.Span),
+            ReferenceAnswer = BenchmarkTaskItemService.DecodeOptional(item.ReferenceAnswerJson),
+            VerifierConfig = ParseJson(item.VerifierConfigJson),
+            GeneratorConfig = ParseJson(item.GeneratorConfigJson),
+            Version = item.Version,
+            CreatedAtUtc = item.CreatedAtUtc,
+            UpdatedAtUtc = item.UpdatedAtUtc
+        };
+
+    public static ListBenchmarkTaskItemsResponse ToResponse(this IReadOnlyList<BenchmarkTaskItemRecord> items, BenchmarkProjectRecord project) =>
+        new()
+        {
+            Items = [.. items.Select(ToResponse)],
+            TaskItemSetHash = project.TaskItemSetHash,
+            ProjectVersion = project.Version
+        };
+
     public static BenchmarkProjectSummaryResponse ToSummary(this BenchmarkProjectRecord project, int runCount) =>
         new()
         {
@@ -46,11 +83,18 @@ internal static class BenchmarkEndpointMapper
         };
 
     /// <param name="judge">The decrypted current judge policy, or a disabled marker when the project does not judge.</param>
+    /// <param name="taskItems">
+    ///     The project's items. Omitted leaves the detail's item list empty rather than guessing: a caller that did
+    ///     not read them must not be able to render "this project asks nothing".
+    /// </param>
     public static BenchmarkProjectDetailResponse ToDetail(this BenchmarkProjectRecord project,
         int runCount,
-        BenchmarkJudgePolicyResponse? judge = null) =>
+        BenchmarkJudgePolicyResponse? judge = null,
+        IReadOnlyList<BenchmarkTaskItemRecord>? taskItems = null) =>
         new()
         {
+            TaskItems = taskItems is null ? [] : [.. taskItems.Select(ToResponse)],
+            TaskItemSetHash = project.TaskItemSetHash,
             Id = project.Id,
             Name = project.Name,
             CoreTask = JsonSerializer.Deserialize<string>(project.CoreTaskJson.Span)
