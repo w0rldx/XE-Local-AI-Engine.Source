@@ -113,6 +113,8 @@ export interface BenchmarkRubricPresets {
 	programming: BenchmarkRubric | null;
 	reasoning: BenchmarkRubric | null;
 	verifiable: BenchmarkRubric | null;
+	/** Every criterion decided by running the answer's code against the operator's tests — no judge model at all. */
+	codeExecution: BenchmarkRubric | null;
 }
 
 // Three things can still change a run's row, and the poll has to survive all three. Fidelity is the one that is easy to
@@ -372,6 +374,7 @@ export function useBenchmarkRubricPresets(enabled: boolean) {
 				programming: toBenchmarkRubric(data.programming),
 				reasoning: toBenchmarkRubric(data.reasoning),
 				verifiable: toBenchmarkRubric(data.verifiable),
+				codeExecution: toBenchmarkRubric(data.codeExecution),
 			};
 		},
 	});

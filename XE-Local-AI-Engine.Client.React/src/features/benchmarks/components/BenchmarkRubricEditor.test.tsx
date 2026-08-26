@@ -27,6 +27,7 @@ const presets: BenchmarkRubricPresets = {
 	programming: rubric(2),
 	reasoning: rubric(1),
 	verifiable: rubric(1),
+	codeExecution: rubric(1),
 };
 
 function renderEditor(props: Partial<React.ComponentProps<typeof BenchmarkRubricEditor>> = {}) {

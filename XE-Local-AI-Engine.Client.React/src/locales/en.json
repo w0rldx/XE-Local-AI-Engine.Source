@@ -4349,7 +4349,8 @@
 					"weight": "The weight must be between 1 and 100."
 				},
 				"presetVerifiable": "Verifiable",
-				"criterionDescriptionVerified": "This criterion is decided server-side, so the text is documentation for the operator rather than an instruction to a model."
+				"criterionDescriptionVerified": "This criterion is decided server-side, so the text is documentation for the operator rather than an instruction to a model.",
+				"presetCodeExecution": "Code execution"
 			},
 			"fidelity": {
 				"title": "Quant fidelity (PPL / KLD)",
@@ -4419,7 +4420,8 @@
 					"regex": "Regular expression",
 					"jsonSchema": "JSON schema",
 					"mathAnswer": "Numeric answer",
-					"constraint": "Structural constraints"
+					"constraint": "Structural constraints",
+					"pythonTests": "Running the code against tests"
 				},
 				"expected": "Expected answer",
 				"normalize": {
@@ -4461,9 +4463,27 @@
 					"constraintEmpty": "State at least one constraint.",
 					"constraintWords": "The word bounds are inconsistent.",
 					"constraintContains": "A contains entry cannot be empty.",
-					"constraintFormat": "That format is not supported."
+					"constraintFormat": "That format is not supported.",
+					"testCodeRequired": "Test code is required — a pythonTests criterion is decided by running it.",
+					"testCodeTooLong": "The test code is too long: it has to fit inside the sandbox script alongside the answer's own code.",
+					"exportsInvalid": "Every export must be a plain Python identifier.",
+					"exportsCap": "At most 16 exports.",
+					"timeoutRange": "The timeout must be a whole number of seconds between 1 and 600.",
+					"extractInvalid": "Take the code from the first python fence or from the whole answer."
 				},
-				"kindLocked": "Decided by: {{kind}} — set by the judge policy."
+				"kindLocked": "Decided by: {{kind}} — set by the judge policy.",
+				"pythonTestsHelp": "The answer's code runs in an untrusted child process inside the compute sandbox; these tests run in the parent, which never executes it. All tests pass = 10, anything else = 0. The tests reach the answer as candidate.name(...), or as bare names you list under Exports.",
+				"testCode": "Test code",
+				"exports": "Exports",
+				"exportsHelp": "Names the tests may call directly instead of through candidate. Plain Python identifiers, at most {{max}}.",
+				"timeoutSeconds": "Timeout (s)",
+				"timeoutSecondsHelp": "Empty = the node's own compute timeout.",
+				"extract": "Code taken from",
+				"extractHelp": "Empty = the node's default, the first python fence.",
+				"extractModes": {
+					"firstPythonFence": "The first ```python block",
+					"wholeText": "The whole answer"
+				}
 			},
 			"pairwise": {
 				"title": "Pairwise verdicts",

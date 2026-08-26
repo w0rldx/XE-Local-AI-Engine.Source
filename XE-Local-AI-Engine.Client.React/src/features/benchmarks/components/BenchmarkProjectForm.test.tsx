@@ -38,6 +38,9 @@ const presets: BenchmarkRubricPresets = {
 	verifiable: rubric([
 		{ id: "answer", title: "Answer", description: "Exactly the expected answer.", weight: 100, kind: "exact", config: '{"expected":"42"}' },
 	]),
+	codeExecution: rubric([
+		{ id: "tests", title: "Tests", description: "The answer's code passes the suite's tests.", weight: 100, kind: "pythonTests", config: '{"testCode":"assert True"}' },
+	]),
 };
 
 function draft(overrides: Partial<BenchmarkProjectDraft> = {}): BenchmarkProjectDraft {

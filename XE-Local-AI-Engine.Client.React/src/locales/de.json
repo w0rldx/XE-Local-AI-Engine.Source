@@ -4349,7 +4349,8 @@
 					"weight": "Das Gewicht muss zwischen 1 und 100 liegen."
 				},
 				"presetVerifiable": "Verifizierbar",
-				"criterionDescriptionVerified": "Dieses Kriterium wird serverseitig entschieden; der Text ist Dokumentation für den Betreiber und keine Anweisung an ein Modell."
+				"criterionDescriptionVerified": "Dieses Kriterium wird serverseitig entschieden; der Text ist Dokumentation für den Betreiber und keine Anweisung an ein Modell.",
+				"presetCodeExecution": "Codeausführung"
 			},
 			"fidelity": {
 				"title": "Quantisierungstreue (PPL / KLD)",
@@ -4419,7 +4420,8 @@
 					"regex": "Regulärer Ausdruck",
 					"jsonSchema": "JSON-Schema",
 					"mathAnswer": "Numerische Antwort",
-					"constraint": "Strukturelle Vorgaben"
+					"constraint": "Strukturelle Vorgaben",
+					"pythonTests": "Ausführen des Codes gegen Tests"
 				},
 				"expected": "Erwartete Antwort",
 				"normalize": {
@@ -4461,9 +4463,27 @@
 					"constraintEmpty": "Gib mindestens eine Vorgabe an.",
 					"constraintWords": "Die Wortgrenzen widersprechen sich.",
 					"constraintContains": "Ein Eintrag darf nicht leer sein.",
-					"constraintFormat": "Dieses Format wird nicht unterstützt."
+					"constraintFormat": "Dieses Format wird nicht unterstützt.",
+					"testCodeRequired": "Testcode ist erforderlich — ein pythonTests-Kriterium wird durch dessen Ausführung entschieden.",
+					"testCodeTooLong": "Der Testcode ist zu lang: er muss zusammen mit dem Code der Antwort in das Sandbox-Skript passen.",
+					"exportsInvalid": "Jeder Export muss ein einfacher Python-Bezeichner sein.",
+					"exportsCap": "Höchstens 16 Exports.",
+					"timeoutRange": "Das Zeitlimit muss eine ganze Sekundenzahl zwischen 1 und 600 sein.",
+					"extractInvalid": "Nehmen Sie den Code aus dem ersten Python-Codeblock oder aus der ganzen Antwort."
 				},
-				"kindLocked": "Entschieden durch: {{kind}} — von der Judge-Richtlinie festgelegt."
+				"kindLocked": "Entschieden durch: {{kind}} — von der Judge-Richtlinie festgelegt.",
+				"pythonTestsHelp": "Der Code der Antwort läuft in einem nicht vertrauenswürdigen Kindprozess in der Compute-Sandbox; diese Tests laufen im Elternprozess, der ihn nie ausführt. Alle Tests bestanden = 10, sonst 0. Die Tests erreichen die Antwort über candidate.name(...) oder über die unter Exports genannten Namen.",
+				"testCode": "Testcode",
+				"exports": "Exports",
+				"exportsHelp": "Namen, die die Tests direkt statt über candidate aufrufen dürfen. Einfache Python-Bezeichner, höchstens {{max}}.",
+				"timeoutSeconds": "Zeitlimit (s)",
+				"timeoutSecondsHelp": "Leer = das Compute-Zeitlimit des Nodes.",
+				"extract": "Code entnommen aus",
+				"extractHelp": "Leer = Standard des Nodes, der erste Python-Codeblock.",
+				"extractModes": {
+					"firstPythonFence": "Erster ```python-Block",
+					"wholeText": "Die ganze Antwort"
+				}
 			},
 			"pairwise": {
 				"title": "Paarweise Urteile",

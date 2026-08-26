@@ -1,6 +1,8 @@
 import { Checkbox, Group, JsonInput, NumberInput, Select, Stack, Switch, TagsInput, Text, TextInput } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
+
 import type {
 	BenchmarkCriterionKind,
 	BenchmarkVerifierConfig,
@@ -9,6 +11,8 @@ import type {
 import {
 	benchmarkConstraintFormats,
 	benchmarkCriterionKinds,
+	benchmarkPythonExtractModes,
+	benchmarkPythonTestsLimits,
 	defaultVerifierConfig,
 	maxVerifierPatternLength,
 	parseVerifierConfig,
@@ -202,6 +206,70 @@ export function BenchmarkVerifierEditor({
 								data-testid={`${testId}-${key}`}
 							/>
 						))}
+					</Group>
+				</Stack>
+			) : null}
+
+			{kind === "pythonTests" ? (
+				<Stack gap={4} data-testid={`${testId}-python`}>
+					<Text size="xs" c="dimmed">
+						{t(
+							"pages.benchmarks.verifier.pythonTestsHelp",
+							"The answer's code runs in an untrusted child process inside the compute sandbox; these tests run in the parent, which never executes it. All tests pass = 10, anything else = 0. The tests reach the answer as candidate.name(...), or as bare names you list under Exports.",
+						)}
+					</Text>
+					<CodeEditor
+						value={readString(parsed, "testCode")}
+						language="python"
+						height={220}
+						aria-label={t("pages.benchmarks.verifier.testCode", "Test code")}
+						onChange={(value) => write({ testCode: value })}
+						data-testid={`${testId}-test-code`}
+					/>
+					{message("testCodeRequired", "testCodeTooLong") === undefined ? null : (
+						<Text size="xs" c="red" data-testid={`${testId}-test-code-error`}>
+							{message("testCodeRequired", "testCodeTooLong")}
+						</Text>
+					)}
+					<TagsInput
+						label={t("pages.benchmarks.verifier.exports", "Exports")}
+						description={t(
+							"pages.benchmarks.verifier.exportsHelp",
+							"Names the tests may call directly instead of through candidate. Plain Python identifiers, at most {{max}}.",
+							{ max: benchmarkPythonTestsLimits.maxExports },
+						)}
+						value={readList(parsed, "exports")}
+						error={message("exportsInvalid", "exportsCap")}
+						onChange={(value) => write({ exports: value })}
+						data-testid={`${testId}-exports`}
+					/>
+					<Group gap="sm" align="flex-start">
+						<NumberInput
+							w={180}
+							min={1}
+							max={benchmarkPythonTestsLimits.maxTimeoutSeconds}
+							allowDecimal={false}
+							label={t("pages.benchmarks.verifier.timeoutSeconds", "Timeout (s)")}
+							description={t("pages.benchmarks.verifier.timeoutSecondsHelp", "Empty = the node's own compute timeout.")}
+							value={readNumber(parsed, "timeoutSeconds")}
+							error={message("timeoutRange")}
+							onChange={(value) => write({ timeoutSeconds: value === "" ? undefined : Number(value) })}
+							data-testid={`${testId}-timeout`}
+						/>
+						<Select
+							w={220}
+							clearable={true}
+							label={t("pages.benchmarks.verifier.extract", "Code taken from")}
+							description={t("pages.benchmarks.verifier.extractHelp", "Empty = the node's default, the first python fence.")}
+							value={readString(parsed, "extract") || null}
+							data={benchmarkPythonExtractModes.map((mode) => ({
+								value: mode,
+								label: t(`pages.benchmarks.verifier.extractModes.${mode}`, mode),
+							}))}
+							error={message("extractInvalid")}
+							onChange={(value) => write({ extract: value ?? undefined })}
+							data-testid={`${testId}-extract`}
+						/>
 					</Group>
 				</Stack>
 			) : null}
