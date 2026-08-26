@@ -657,6 +657,42 @@ public sealed class BenchmarkRunFreezeServiceTests
     }
 
     /// <summary>
+    ///     A probe's cases are ordinary leaf items, so the fan-out reaches them with no NIAH-specific code: six cases
+    ///     are six runs of one cell, each answering its own haystack and stamped with its own item.
+    /// </summary>
+    [Test]
+    public async Task Start_WithSixProbeCases_FreezesSixRunsOfOneCell()
+    {
+        var harness = new FreezeHarness(probeContextTokens: [2048, 2048, 2048, 3072, 3072, 3072]);
+
+        _ = await harness.StartAsync();
+
+        AssertEx.Equal(6, harness.Commands.Count, "Six generated cases are six runs; a probe costs what its cases cost.");
+        AssertEx.Equal(1, harness.StoreCalls, "The whole cell goes in through one all-or-nothing insert.");
+        AssertEx.Equal(6, harness.Commands.Select(static command => command.TaskItemId).Distinct().Count(),
+            "Each run names the case it answered.");
+        AssertEx.Equal(1, harness.Commands.Select(static command => command.CellKey).Distinct(StringComparer.Ordinal).Count(),
+            "And they measure one thing together, so they share a cell.");
+    }
+
+    /// <summary>
+    ///     The freeze half of the length refusal. Expansion compared these numbers already, but the project's context
+    ///     window is editable afterwards — and a probe truncated to a smaller window measures the window rather than
+    ///     the model, which is a number that looks like a result and is not one.
+    /// </summary>
+    [Test]
+    public async Task Start_WithAProbeLongerThanTheProjectWindow_IsRefusedNamingBothNumbers()
+    {
+        var harness = new FreezeHarness(probeContextTokens: [2048, 32768]);
+
+        var failure = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => harness.StartAsync());
+
+        AssertEx.Contains(failure.Message, "32768", message: "The refusal names the probe that does not fit.");
+        AssertEx.Contains(failure.Message, "4096", message: "And the window it does not fit in.");
+        AssertEx.Equal(0, harness.StoreCalls, "Nothing is frozen when a probe cannot be measured.");
+    }
+
+    /// <summary>
     ///     One freeze wired end to end. Everything but the KV decision is held constant so a matrix test reads as the
     ///     single input it varies.
     /// </summary>
@@ -681,13 +717,16 @@ public sealed class BenchmarkRunFreezeServiceTests
             bool supportsThinking = false,
             bool unverifiableModel = false,
             IReadOnlyList<string>? itemPrompts = null,
-            string? taskItemSetHash = null)
+            string? taskItemSetHash = null,
+            IReadOnlyList<int>? probeContextTokens = null)
         {
             _primaryModel = primaryModel;
             AgentId = Guid.NewGuid();
             _project = Project(Guid.NewGuid(), AgentId, judgeModel is not null, judgeModel, maxOutputTokens, invocationTimeoutSeconds,
                 reasoningBudgetTokens, taskItemSetHash);
-            TaskItems = [.. (itemPrompts ?? ["exact task"]).Select((prompt, index) => Item(_project.Id, index, prompt))];
+            TaskItems = probeContextTokens is null
+                ? [.. (itemPrompts ?? ["exact task"]).Select((prompt, index) => Item(_project.Id, index, prompt))]
+                : [.. probeContextTokens.Select((contextTokens, index) => ProbeCase(_project.Id, index, contextTokens))];
             var store = Substitute.For<IBenchmarkStore>();
             store.GetProjectAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(_project);
             store.ListTaskItemsAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(TaskItems);
@@ -814,6 +853,19 @@ public sealed class BenchmarkRunFreezeServiceTests
                 judgeEnabled, judgeEnabled ? Guid.NewGuid() : null, IsFrozen: false, 7, 1, 1, maxOutputTokens, invocationTimeoutSeconds,
                 reasoningBudgetTokens, TaskItemSetHash: taskItemSetHash);
         }
+
+        /// <summary>
+        ///     One generated long-context case, carrying its own parameters exactly as the expansion writes them —
+        ///     which is what lets the freeze re-check its length without parsing a haystack back out of the prompt.
+        /// </summary>
+        private static BenchmarkTaskItemRecord ProbeCase(Guid projectId, int index, int contextTokens) =>
+            new(Guid.NewGuid(), projectId, Guid.NewGuid(), index, BenchmarkTaskItemKinds.NiahCase, 1, "v1:case-" + index, false,
+                JsonSerializer.SerializeToUtf8Bytes("haystack " + index),
+                null,
+                null,
+                JsonSerializer.SerializeToUtf8Bytes(new BenchmarkNiahCaseV1(contextTokens, 50, contextTokens - 100, 0,
+                    $"NIAH ~{contextTokens} @ 50%", "Lisbon", "wikitext2-raw-test@abc"), BenchmarkNiahGenerator.SerializerOptions),
+                1, 1, 1);
 
         /// <summary>One leaf item, with the prompt encoded exactly as the item store encodes it.</summary>
         private static BenchmarkTaskItemRecord Item(Guid projectId, int index, string prompt) =>
