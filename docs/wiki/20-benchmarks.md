@@ -45,13 +45,35 @@ Rank-exclusion precedence: **warm-up > user score > (truncated | incomplete) > j
 
 A project holds **1..N `BenchmarkTaskItem` rows**, and a single item is the degenerate case: a project with one item freezes, ranks and exports exactly as it always did.
 
-- An item carries a **kind** (`prompt`, and the reserved generator kinds `niah`/`niahCase`), a **revision**, a plaintext **input hash**, a `countsTowardScore` flag, and four encrypted payloads: prompt, reference answer, per-criterion verifier override, generator config. Each payload has its own AAD column name — a verifier config holds expected answers and must never be servable as the prompt.
+- An item carries a **kind** (`prompt`, the generator kind `niah`, and its generated leaf kind `niahCase` — §1.4), a **revision**, a plaintext **input hash**, a `countsTowardScore` flag, and four encrypted payloads: prompt, reference answer, per-criterion verifier override, generator config. Each payload has its own AAD column name — a verifier config holds expected answers and must never be servable as the prompt.
 - **The store owns identity.** Index, revision, input hash and the project's item-set hash are computed on every write (`BenchmarkTaskItemHashing`); the service and the endpoints cannot name them. A client that could would be able to present an answer to an old question as an answer to the current one.
 - `input_hash` = `v1:` + SHA-256 over `(kind, revision, prompt, reference, verifier, generator)`. `benchmark_projects.task_item_set_hash` = `v1:` + SHA-256 over the **leaf** items ordered by their immutable **`Id`, not by `Index`** — so **adding or deleting** an item moves it and **reordering does not**. A cosmetic drag-and-drop must not unrank a completed suite.
 - A **moved set hash resets the rank cohort**, through the same path a judge-policy activation uses: the project score is a mean over the item set, so a different set is a different score. A reorder does neither.
 - **Item writes are refused while any of the project's work is queued or running.** That is the primary guard; the run-level staleness stamps below are the safety net for completed history.
 - **Creation is atomic.** `IBenchmarkStore.CreateProjectAsync` takes the initial item set and writes it in the project's own transaction, so a project never exists without a question to ask. `GetOrCreateItemsAsync` survives **only** as the legacy backfill for projects created before task items existed, and exactly one endpoint may call it (`GET …/items`) — a migration cannot do it instead, because it runs without the node encryption key and `prompt_json` is AAD-bound to its own item's id. It deliberately leaves the project's set hash **null**: materializing item 0 changes nothing about what the project asks, so it must not move the value every historical run is compared against.
 - Cap: **20 leaf items** (`BenchmarkTaskItemService.MaxTaskItems`), counted over leaves so a generator's cases each count.
+
+### 1.4 Long-context probes — `niah` and `niahCase`
+
+A `niah` item is a **generator**, never a run target. It expands into one `niahCase` child per (length x depth) pair **when the item is written**, and each case is an ordinary task item with its own id, index, revision and input hash. That is the whole design: cell completeness, the item caps, the run cap, the staleness exclusions, the paired bootstrap's shared-item set and the export all reach a case without any of them knowing what NIAH is.
+
+Generator config, on the `niah` item:
+
+```json
+{ "contextTokens": [8192, 32768], "needleDepthPercent": [10, 50, 90],
+  "needleTemplate": "The secret passcode for {city} is {code}.",
+  "questionTemplate": "What is the secret passcode for {city}?",
+  "criterionId": "recall", "seed": 0, "countsTowardScore": false }
+```
+
+- **Deterministic and seeded.** The haystack is drawn from the shipped wikitext-2 corpus (`tools/benchmark/corpus/`, CC BY-SA 3.0, attributed in the prompt) through a fixed SplitMix64 seeded from a SHA-256 of `(parentItemId, contextTokens, depth, seed)`. `Random` is deliberately not used: its sequence is an implementation detail, and a case whose text shifted with a .NET upgrade would move its own input hash and unrank every answer ever given to it.
+- **Depth is a position in the text**, measured by weighted characters, not an index into the sentence list — wikitext sentences differ in length by an order of magnitude.
+- **Length is approximate and says so.** The haystack is built to **90%** of the requested length and the case is labelled `NIAH ≈32k @ 50%`. `ChunkTokenApproximation` under-counts English prose, so building to the full request would overshoot the real tokenization and truncate the tail — and a needle that fell off the end measures the window, not the model.
+- **Refused twice** when a probe is longer than the project's context window: at expansion, while the operator is still looking at the form, and again at freeze, because the project's window is editable afterwards. Both refusals name both numbers.
+- **Scored by `exact`, with no judge model.** Each case writes its own override of the criterion named by `criterionId` — the case supplies the expected passcode, the project's rubric supplies the kind. At judging, a criterion's config and the reference answer resolve as **item override ?? policy config**; the override lives on the item, so it moves the item's input hash rather than the policy hash, and does not force a re-judge of items that did not change.
+- **Cases are excluded from the project mean by default** (`countsTowardScore: false`). Recall is a capability, not quality: averaging 0-or-10 needle recall into a rubric mean says a model that missed the needle wrote a worse answer. The cases are still scored and still shown — each case run's own `qualityScore` **is** the recall axis. A project whose leaves are *all* excluded reports `no-score` on its cells rather than `item-incomplete`; there is no missing item to re-run.
+- **Only the generator is writable.** Editing a `niah` item deletes and regenerates its cases in one transaction, so a case never describes parameters its generator no longer has; deleting it takes the cases with it (explicitly ordered — foreign keys are off on this connection and no cascade fires). A `niahCase` cannot be created, edited or deleted on its own.
+- Cases count individually against `MaxTaskItems` (20 leaves) and `MaxRunsPerRequest` (100). A 2x3 probe costs **6**, not 1.
 
 Every run is stamped at freeze with **four immutable identities** (`benchmark_runs`): `task_item_id` (which leaf it answered), `cell_key` (**NOT NULL** — which measurement cell its per-item score aggregates into), `task_input_hash` (a copy of the item's input hash: *exactly what it was asked*) and `task_item_set_hash` (a copy of the project's: *what the whole question set was when this cell was measured*). Three are NOT NULL because a missing stamp would otherwise read as "belongs with everything else": a null `cell_key` would drop every ungrouped run of a project into one anonymous bucket and average their scores together, silently. Runs frozen before the columns existed carry `run:<id>` and `v1:legacy`, and `v1:legacy` is also what they are compared **against**, so they are never read as stale.
 
