@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
+using System.Text;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
@@ -70,25 +71,39 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
         BenchmarkTaskItemDraft draft,
         CancellationToken cancellationToken = default)
     {
-        var input = ToInput(draft);
         var existing = await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken).ConfigureAwait(false);
-        if (existing.Count(static item => item.IsLeaf) >= MaxTaskItems)
-        {
-            throw new BenchmarkValidationException($"A benchmark project holds at most {MaxTaskItems} task items.");
-        }
 
-        return await _benchmarkStore.CreateTaskItemAsync(projectId, expectedProjectVersion, input, cancellationToken).ConfigureAwait(false);
+        // The generator's id is minted HERE rather than by the store, because every case it expands into is derived
+        // from it: the id is the seed material that makes one probe's haystacks its own.
+        var (input, children) = await ToInputAsync(projectId, Guid.NewGuid(), draft, cancellationToken).ConfigureAwait(false);
+        EnsureLeafCap(existing, children?.Count ?? 1);
+        return await _benchmarkStore.CreateTaskItemAsync(projectId, expectedProjectVersion, input, children, cancellationToken).ConfigureAwait(false);
     }
 
-    public Task<BenchmarkTaskItemRecord> UpdateAsync(Guid projectId,
+    public async Task<BenchmarkTaskItemRecord> UpdateAsync(Guid projectId,
         Guid itemId,
         long expectedVersion,
         BenchmarkTaskItemDraft draft,
-        CancellationToken cancellationToken = default) =>
-        _benchmarkStore.UpdateTaskItemAsync(projectId, itemId, expectedVersion, ToInput(draft), cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        var existing = await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        EnsureNotGenerated(existing, itemId);
+        var (input, children) = await ToInputAsync(projectId, itemId, draft, cancellationToken).ConfigureAwait(false);
+        if (children is not null)
+        {
+            // Re-expansion REPLACES this generator's cases, so only the difference counts against the cap.
+            EnsureLeafCap(existing, children.Count - existing.Count(item => item.ParentItemId == itemId));
+        }
 
-    public Task DeleteAsync(Guid projectId, Guid itemId, long expectedVersion, CancellationToken cancellationToken = default) =>
-        _benchmarkStore.DeleteTaskItemAsync(projectId, itemId, expectedVersion, cancellationToken);
+        return await _benchmarkStore.UpdateTaskItemAsync(projectId, itemId, expectedVersion, input, children, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteAsync(Guid projectId, Guid itemId, long expectedVersion, CancellationToken cancellationToken = default)
+    {
+        var existing = await _benchmarkStore.ListTaskItemsAsync(projectId, cancellationToken).ConfigureAwait(false);
+        EnsureNotGenerated(existing, itemId);
+        await _benchmarkStore.DeleteTaskItemAsync(projectId, itemId, expectedVersion, cancellationToken).ConfigureAwait(false);
+    }
 
     public Task<IReadOnlyList<BenchmarkTaskItemRecord>> ReorderAsync(Guid projectId,
         IReadOnlyList<Guid> orderedItemIds,
@@ -122,7 +137,38 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
         }
     }
 
-    private static BenchmarkTaskItemInput ToInput(BenchmarkTaskItemDraft draft)
+    /// <summary>
+    ///     Refuses a write to a GENERATED case. Its parameters live on the generator that produced it, and an edit
+    ///     here would survive exactly until the next re-expansion — a case that disagrees with the probe it belongs to
+    ///     is a probe that measures something nobody configured.
+    /// </summary>
+    private static void EnsureNotGenerated(IReadOnlyList<BenchmarkTaskItemRecord> existing, Guid itemId)
+    {
+        if (existing.Any(item => item.Id == itemId && string.Equals(item.Kind, BenchmarkTaskItemKinds.NiahCase, StringComparison.Ordinal)))
+        {
+            throw new BenchmarkValidationException(
+                "A generated long-context case cannot be edited or deleted on its own. Change the probe it was generated from.");
+        }
+    }
+
+    private static void EnsureLeafCap(IReadOnlyList<BenchmarkTaskItemRecord> existing, int leafDelta)
+    {
+        if (existing.Count(static item => item.IsLeaf) + leafDelta > MaxTaskItems)
+        {
+            throw new BenchmarkValidationException($"A benchmark project holds at most {MaxTaskItems} task items.");
+        }
+    }
+
+    /// <summary>
+    ///     The item to write and — for a generator — the cases it expands into, both decided before the store opens a
+    ///     transaction. Expansion at WRITE time is what gives a probe's cases durable identity: each one is an
+    ///     ordinary item with its own id, revision and input hash, so the caps count them, a freeze stamps them onto
+    ///     runs, and the staleness exclusions reach them without any of those knowing what NIAH is.
+    /// </summary>
+    private async Task<(BenchmarkTaskItemInput Input, IReadOnlyList<BenchmarkTaskItemInput>? Children)> ToInputAsync(Guid projectId,
+        Guid itemId,
+        BenchmarkTaskItemDraft draft,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(draft);
         if (string.IsNullOrWhiteSpace(draft.Prompt))
@@ -130,23 +176,76 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
             throw new BenchmarkValidationException("A benchmark task item needs a prompt.");
         }
 
-        // The kinds are already in the schema's CHECK and in the store's vocabulary, so the generator kinds are ready
-        // to be written the moment something can execute them. Nothing can yet, and accepting an item this build would
-        // never run is worse than refusing it while the operator is still looking at the form.
         var kind = string.IsNullOrWhiteSpace(draft.Kind) ? BenchmarkTaskItemKinds.Prompt : draft.Kind.Trim();
-        if (!string.Equals(kind, BenchmarkTaskItemKinds.Prompt, StringComparison.Ordinal))
+        if (kind is not (BenchmarkTaskItemKinds.Prompt or BenchmarkTaskItemKinds.Niah))
         {
-            throw new BenchmarkValidationException($"Only '{BenchmarkTaskItemKinds.Prompt}' task items are supported.");
+            // A case is written by the generator that owns it, never by an operator: one written by hand would carry
+            // a parent that does not describe it.
+            throw new BenchmarkValidationException(
+                $"A task item is either '{BenchmarkTaskItemKinds.Prompt}' or '{BenchmarkTaskItemKinds.Niah}'.");
         }
 
-        return new BenchmarkTaskItemInput(JsonSerializer.SerializeToUtf8Bytes(draft.Prompt),
+        var input = new BenchmarkTaskItemInput(JsonSerializer.SerializeToUtf8Bytes(draft.Prompt),
             kind,
             string.IsNullOrWhiteSpace(draft.ReferenceAnswer)
                 ? null
                 : (ReadOnlyMemory<byte>?)JsonSerializer.SerializeToUtf8Bytes(draft.ReferenceAnswer.Trim()),
             Encode(draft.VerifierConfig),
             Encode(draft.GeneratorConfig),
+            Id: itemId,
             CountsTowardScore: draft.CountsTowardScore);
+
+        return string.Equals(kind, BenchmarkTaskItemKinds.Niah, StringComparison.Ordinal)
+            ? (input, await ExpandAsync(projectId, itemId, draft.GeneratorConfig, cancellationToken).ConfigureAwait(false))
+            : (input, null);
+    }
+
+    private async Task<IReadOnlyList<BenchmarkTaskItemInput>> ExpandAsync(Guid projectId,
+        Guid itemId,
+        JsonElement? generatorConfig,
+        CancellationToken cancellationToken)
+    {
+        if (generatorConfig is not { } element || element.ValueKind is not JsonValueKind.Object)
+        {
+            throw new BenchmarkValidationException("A long-context probe needs its generator configuration.");
+        }
+
+        BenchmarkNiahConfigV1? config;
+        try
+        {
+            config = element.Deserialize<BenchmarkNiahConfigV1>(BenchmarkNiahGenerator.SerializerOptions);
+        }
+        catch (JsonException exception)
+        {
+            throw new BenchmarkValidationException($"The long-context probe configuration is invalid: {exception.Message}");
+        }
+
+        if (config is null)
+        {
+            throw new BenchmarkValidationException("A long-context probe needs its generator configuration.");
+        }
+
+        // The project's window is the refusal's other number, and it is read here so the operator is told while still
+        // looking at the form. The freeze re-checks it anyway: a project's context can be edited after expansion.
+        var project = await _benchmarkStore.GetProjectAsync(projectId, cancellationToken).ConfigureAwait(false)
+                      ?? throw new BenchmarkNotFoundException("Benchmark project was not found.");
+        var criterionId = BenchmarkNiahGenerator.CriterionIdOf(config);
+        return
+        [
+            .. BenchmarkNiahGenerator.Expand(itemId, config, project.ContextTokens)
+                                     .Select(generated => new BenchmarkTaskItemInput(
+                                         JsonSerializer.SerializeToUtf8Bytes(generated.Prompt),
+                                         BenchmarkTaskItemKinds.NiahCase,
+                                         ReferenceAnswerJson: JsonSerializer.SerializeToUtf8Bytes(generated.ExpectedAnswer),
+                                         VerifierConfigJson: Encoding.UTF8.GetBytes(
+                                             BenchmarkNiahGenerator.VerifierConfigJson(criterionId, generated.ExpectedAnswer)),
+                                         GeneratorConfigJson: JsonSerializer.SerializeToUtf8Bytes(generated.Case, BenchmarkNiahGenerator.SerializerOptions),
+                                         ParentItemId: itemId,
+
+                                         // Recall is a capability, not quality. The default keeps a 0-or-10 needle
+                                         // score out of the project's rubric mean and leaves it on its own axis.
+                                         CountsTowardScore: config.CountsTowardScore))
+        ];
     }
 
     /// <remarks>

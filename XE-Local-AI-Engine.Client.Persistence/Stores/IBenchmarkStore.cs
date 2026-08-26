@@ -64,9 +64,15 @@ public interface IBenchmarkStore
     ///     cohort, through the same path a judge-policy activation uses: the project score is a mean over the item
     ///     set, so changing the set changes what the score means.
     /// </summary>
+    /// <param name="children">
+    ///     The leaf cases a generator item expands into, written in the SAME transaction as the generator. A case is
+    ///     an ordinary item with its own id, so every cap, every hash and the export reach it without knowing what
+    ///     generated it — and a generator never exists, even for one commit, without the cases it promises.
+    /// </param>
     Task<BenchmarkTaskItemRecord> CreateTaskItemAsync(Guid projectId,
         long expectedProjectVersion,
         BenchmarkTaskItemInput input,
+        IReadOnlyList<BenchmarkTaskItemInput>? children = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -74,10 +80,16 @@ public interface IBenchmarkStore
     ///     recomputing its <see cref="BenchmarkTaskItemRecord.InputHash" /> — which is what makes every stored answer
     ///     to the OLD instance identifiable as an answer to a question that no longer exists.
     /// </summary>
+    /// <param name="children">
+    ///     A generator's cases, REGENERATED: the item's existing children are deleted and these written in their
+    ///     place, inside the same transaction as the edit. Atomicity is the point — a case must never be left
+    ///     describing parameters its generator no longer has.
+    /// </param>
     Task<BenchmarkTaskItemRecord> UpdateTaskItemAsync(Guid projectId,
         Guid itemId,
         long expectedItemVersion,
         BenchmarkTaskItemInput input,
+        IReadOnlyList<BenchmarkTaskItemInput>? children = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

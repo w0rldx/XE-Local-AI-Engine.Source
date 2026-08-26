@@ -135,6 +135,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     public async Task<BenchmarkTaskItemRecord> CreateTaskItemAsync(Guid projectId,
         long expectedProjectVersion,
         BenchmarkTaskItemInput input,
+        IReadOnlyList<BenchmarkTaskItemInput>? children = null,
         CancellationToken cancellationToken = default)
     {
         ValidateTaskItem(input);
@@ -153,9 +154,12 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
         // Indices are never renumbered on delete, so the next one is one past the highest — a gap is fine and is
         // cheaper than rewriting every sibling row to close it.
-        var item = NewTaskItem(projectId, input, items.Count == 0 ? 0 : items.Max(entity => entity.Index) + 1, now);
+        var nextIndex = items.Count == 0 ? 0 : items.Max(entity => entity.Index) + 1;
+        var item = NewTaskItem(projectId, input, nextIndex, now);
         _dbContext.BenchmarkTaskItems.Add(item);
-        await ApplyItemSetChangeAsync(project, [.. items, item], now, cancellationToken).ConfigureAwait(false);
+        var written = new List<BenchmarkTaskItem>(items) { item };
+        written.AddRange(AddChildren(projectId, item.Id, children, nextIndex + 1, now));
+        await ApplyItemSetChangeAsync(project, written, now, cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return ToRecord(item);
     }
@@ -164,6 +168,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         Guid itemId,
         long expectedItemVersion,
         BenchmarkTaskItemInput input,
+        IReadOnlyList<BenchmarkTaskItemInput>? children = null,
         CancellationToken cancellationToken = default)
     {
         ValidateTaskItem(input);
@@ -193,9 +198,48 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         item.InputHash = BenchmarkTaskItemHashing.ComputeInputHash(item);
         item.Version++;
         item.UpdatedAtUtc = now;
-        await ApplyItemSetChangeAsync(project, items, now, cancellationToken).ConfigureAwait(false);
+
+        // A generator's cases are regenerated, not patched: the old rows go and the new ones are written in this same
+        // transaction, so no case is ever left describing parameters its generator no longer has. The replacements
+        // take fresh indices past the highest rather than reusing the vacated ones — the unique (project, index)
+        // index is enforced per statement, and a reused index collides with a row EF has not deleted yet.
+        var survivors = items;
+        if (children is not null)
+        {
+            var doomed = items.Where(entity => entity.ParentItemId == itemId).ToArray();
+            _dbContext.BenchmarkTaskItems.RemoveRange(doomed);
+            survivors = [.. items.Where(entity => Array.IndexOf(doomed, entity) < 0)];
+            survivors.AddRange(AddChildren(projectId, itemId, children, items.Max(entity => entity.Index) + 1, now));
+        }
+
+        await ApplyItemSetChangeAsync(project, survivors, now, cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return ToRecord(item);
+    }
+
+    /// <summary>
+    ///     Writes a generator's cases as ordinary items pointing back at it. Called inside the generator's own
+    ///     transaction, never on its own.
+    /// </summary>
+    private List<BenchmarkTaskItem> AddChildren(Guid projectId,
+        Guid parentItemId,
+        IReadOnlyList<BenchmarkTaskItemInput>? children,
+        int firstIndex,
+        long now)
+    {
+        var written = new List<BenchmarkTaskItem>(children?.Count ?? 0);
+        foreach (var child in children ?? [])
+        {
+            ValidateTaskItem(child);
+            var row = NewTaskItem(projectId, child with
+            {
+                ParentItemId = parentItemId
+            }, firstIndex + written.Count, now);
+            _dbContext.BenchmarkTaskItems.Add(row);
+            written.Add(row);
+        }
+
+        return written;
     }
 
     public async Task DeleteTaskItemAsync(Guid projectId, Guid itemId, long expectedItemVersion, CancellationToken cancellationToken = default)
@@ -3118,9 +3162,18 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 continue;
             }
 
+            // A project whose every leaf is excluded from the mean — a pure long-context probe, where recall is
+            // reported on its own axis — has nothing to rank, which is not the same as a cell missing an item. Saying
+            // "incomplete" here would send the operator looking for a question that was never asked; the runs still
+            // carry their own scores, and those are what the recall axis reads.
+            if (scorableItemIds.Count == 0)
+            {
+                cells[cell.Key] = new CellRanking(null, BenchmarkRunJudgeStates.ReasonNoScore, Countable: false);
+                continue;
+            }
+
             var covered = contributing.Select(static member => member.TaskItemId!.Value).ToHashSet();
-            var complete = scorableItemIds.Count > 0
-                           && scorableItemIds.All(covered.Contains)
+            var complete = scorableItemIds.All(covered.Contains)
                            && Array.TrueForAll(contributing, member => rankable[member.Id]);
             if (!complete)
             {

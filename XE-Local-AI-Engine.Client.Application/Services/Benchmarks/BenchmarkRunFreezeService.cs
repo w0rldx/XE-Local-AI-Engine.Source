@@ -272,6 +272,20 @@ public sealed class BenchmarkRunFreezeService(
             throw new BenchmarkValidationException("The project has no runnable task item.");
         }
 
+        // The second half of the long-context refusal. Expansion already compared these two numbers, but a project's
+        // context window is editable afterwards, and a probe silently truncated to a smaller window measures the
+        // window rather than the model — so the check that decides is the one taken against the context this freeze
+        // is actually about to use.
+        foreach (var probe in leafItems)
+        {
+            if (BenchmarkNiahCase.TryRead(probe) is { } probeCase && probeCase.ContextTokens > project.ContextTokens)
+            {
+                throw new BenchmarkValidationException(
+                    $"The long-context probe '{probeCase.Label}' asks for {probeCase.ContextTokens} tokens, which does not fit the project's "
+                    + $"{project.ContextTokens}-token context window.");
+            }
+        }
+
         var repeatIndexes = RepeatIndexes(repeatCount, warmup).ToArray();
         var runCount = leafItems.Length * repeatIndexes.Length;
         if (runCount > MaxRunsPerRequest)

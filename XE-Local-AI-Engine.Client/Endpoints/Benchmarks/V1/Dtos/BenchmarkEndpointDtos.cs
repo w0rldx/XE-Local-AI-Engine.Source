@@ -1041,7 +1041,11 @@ public class BenchmarkTaskItemMutationRequest
 {
     public string Prompt { get; init; } = string.Empty;
 
-    /// <summary>Omitted means <c>prompt</c>. The generator kinds are reserved and refused for now.</summary>
+    /// <summary>
+    ///     Omitted means <c>prompt</c>. <c>niah</c> writes a long-context probe, which expands into its
+    ///     <c>niahCase</c> children here and now, so each case is an ordinary item with its own id. A <c>niahCase</c>
+    ///     is refused: a case is written by the generator that owns it, never by hand.
+    /// </summary>
     public string? Kind { get; init; }
 
     /// <summary>Overrides the judge policy's reference answer for this item only.</summary>
@@ -1050,7 +1054,12 @@ public class BenchmarkTaskItemMutationRequest
     /// <summary>Per-criterion overrides of the judge policy's verifier config, keyed by criterion id.</summary>
     public JsonElement? VerifierConfig { get; init; }
 
-    /// <summary>Generator parameters. Reserved for the generator kinds; null for a plain prompt.</summary>
+    /// <summary>
+    ///     Generator parameters; null for a plain prompt, required for a <c>niah</c> probe:
+    ///     <c>{contextTokens[], needleDepthPercent[], needleTemplate?, questionTemplate?, criterionId?, seed?,
+    ///     countsTowardScore?}</c>. One case is generated per (length x depth) pair, and a length past the project's
+    ///     context window is refused with both numbers named.
+    /// </summary>
     public JsonElement? GeneratorConfig { get; init; }
 
     /// <summary>Whether this item enters the project's ranked mean, or is reported on its own axis.</summary>
