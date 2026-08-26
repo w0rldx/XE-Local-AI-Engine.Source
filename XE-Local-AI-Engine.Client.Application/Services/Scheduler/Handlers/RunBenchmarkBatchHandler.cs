@@ -94,13 +94,21 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
         """;
 
     /// <summary>
-    ///     How long one fire keeps freezing cells before it stops and reports what it started. Mirrors the interactive
-    ///     batch endpoint's budget (<c>StartBenchmarkRunBatchEndpoint</c>) for the same reason: the freeze is synchronous
-    ///     per cell, so a fifty-cell matrix over cold, unverified models would otherwise hold the fire — and Quartz's
-    ///     max-runtime interrupt would kill it mid-matrix with nothing recorded about which cells started. Checked
-    ///     BETWEEN cells, never inside one, so no cell is ever half-frozen.
+    ///     How long a fire may spend freezing EACH cell before it stops and reports what it started. The whole fire's
+    ///     budget is this times the number of cells, so the ceiling grows with the matrix the operator asked for.
+    ///     <para>
+    ///         The interactive batch endpoint spends 45 s on the WHOLE request, because a connection is held open; a
+    ///         Quartz fire holds nothing, and a flat 45 s truncates the overnight matrix this template exists to run —
+    ///         measured live on this node, a cold cell costs ~18 s (the freeze verifies each model's GGUF by digest),
+    ///         so a flat budget enqueued 3 of 4 cells. Per-cell keeps the guard that matters — a pathological host
+    ///         cannot hang the fire indefinitely — while still admitting the matrix.
+    ///     </para>
+    ///     <para>
+    ///         Checked BETWEEN cells, never inside one, so the budget can be overrun by one cell and no cell is ever
+    ///         half-frozen. The scheduler's own max-runtime ceiling remains the outer bound.
+    ///     </para>
     /// </summary>
-    private static readonly TimeSpan FireTimeBudget = TimeSpan.FromSeconds(45);
+    private static readonly TimeSpan PerCellFreezeBudget = TimeSpan.FromSeconds(45);
 
     private static readonly JsonSerializerOptions ParameterSerializerOptions = new()
     {
@@ -133,8 +141,8 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
         // A matrix missed while the node was off must not fire the moment it comes back — it would land in the middle of
         // whatever the operator is doing on the GPU. The next scheduled slot is soon enough.
         SchedulerMisfirePolicy.SkipMissed,
-        // No template default: the fire only ENQUEUES, so it is bounded by FireTimeBudget rather than by the length of
-        // the runs it queues. Leaving this blank keeps the node-level ceiling in charge.
+        // No template default: the fire only ENQUEUES, so it is bounded by its own per-cell freeze budget rather than by
+        // the length of the runs it queues. Leaving this blank keeps the node-level ceiling in charge.
         DefaultMaxRuntimeSeconds: null,
         AllowManualTrigger: true,
         // Locked decision: an AI agent may schedule a saved-agent run; it may not schedule GPU-hours.
@@ -200,15 +208,16 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
 
         await using var freezeScope = new BenchmarkFreezeScope();
         var startedAt = _timeProvider.GetTimestamp();
+        var fireBudget = PerCellFreezeBudget * cells.Count;
         var expectedVersion = projectVersion;
 
         for (var index = 0; index < cells.Count; index++)
         {
             var (modelName, kvCacheType) = cells[index];
 
-            if (_timeProvider.GetElapsedTime(startedAt) >= FireTimeBudget)
+            if (_timeProvider.GetElapsedTime(startedAt) >= fireBudget)
             {
-                failures.Add($"{cells.Count - index} cell(s) not attempted: the fire reached its {FireTimeBudget.TotalSeconds:0} second budget");
+                failures.Add($"{cells.Count - index} cell(s) not attempted: the fire reached its {fireBudget.TotalSeconds:0} second budget");
                 break;
             }
 

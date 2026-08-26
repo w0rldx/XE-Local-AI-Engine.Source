@@ -202,13 +202,15 @@ public sealed class RunBenchmarkBatchHandlerTests
     public async Task ExecuteAsync_WhenTheFireTimeBudgetIsSpent_ReportsTheUntriedCells()
     {
         // The freeze is synchronous per cell, so a cold matrix must stop and say what it started rather than run into
-        // Quartz's max-runtime interrupt with nothing recorded.
+        // Quartz's max-runtime interrupt with nothing recorded. The budget is per cell — 4 cells buy 180 s — so a
+        // 60 s-per-check clock spends it on the fourth cell.
         var harness = new Harness(new BudgetBurningTimeProvider(TimeSpan.FromSeconds(60)));
 
         await harness.Handler.ExecuteAsync(harness.Fire(TwoByTwoMatrix()), CancellationToken.None);
 
-        AssertEx.Equal(expected: 1, harness.FreezeCalls.Count);
-        AssertEx.Contains(harness.Progress.Single(), "3 cell(s) not attempted", StringComparison.Ordinal);
+        AssertEx.Equal(expected: 3, harness.FreezeCalls.Count);
+        AssertEx.Contains(harness.Progress.Single(), "1 cell(s) not attempted", StringComparison.Ordinal);
+        AssertEx.Contains(harness.Progress.Single(), "180 second budget", StringComparison.Ordinal);
     }
 
     private static string TwoByTwoMatrix() =>
@@ -222,7 +224,7 @@ public sealed class RunBenchmarkBatchHandlerTests
           }
           """;
 
-    /// <summary>A <see cref="TimeProvider" /> whose clock jumps a fixed step on every read, so a per-fire budget can be
+    /// <summary>A <see cref="TimeProvider" /> whose clock advances one fixed step per read, so a fire's budget can be
     ///     spent deterministically without sleeping.</summary>
     private sealed class BudgetBurningTimeProvider(TimeSpan step) : TimeProvider
     {
@@ -230,9 +232,9 @@ public sealed class RunBenchmarkBatchHandlerTests
 
         public override long GetTimestamp()
         {
-            // The first read is the fire's start stamp and the second is the first cell's budget check, so the clock
-            // only moves from the third read on — one cell freezes, the rest are reported untried.
-            var elapsed = _reads++ <= 1 ? TimeSpan.Zero : step;
+            // The first read is the fire's start stamp, so elapsed time only starts accruing from the second read on:
+            // one step per budget check, which spends the 4-cell fire's budget on its fourth check.
+            var elapsed = step * Math.Max(0, _reads++ - 1);
             return (long)(elapsed.TotalSeconds * TimestampFrequency);
         }
     }
