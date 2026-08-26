@@ -406,7 +406,9 @@ public static class BenchmarkMathAnswer
         new(@"####\s*(?<value>[^\r\n]{1,64})", RegexOptions.NonBacktracking | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(250));
 
     private static readonly Regex AnswerPhrase =
-        new(@"(?i:answer)\s*(?i:is)?\s*[:=]?\s*(?<value>[^\s,;]{1,64})",
+        // The captured value keeps commas: they are thousands separators as often as punctuation, and Clean strips
+        // both. Excluding them here read "$1,234,567" as 1.
+        new(@"(?i:answer)\s*(?i:is)?\s*[:=]?\s*(?<value>[^\s;]{1,64})",
             RegexOptions.NonBacktracking | RegexOptions.CultureInvariant,
             TimeSpan.FromMilliseconds(250));
 
