@@ -23,6 +23,7 @@ import {
 	startBenchmarkRunFidelity,
 	updateBenchmarkJudgePolicy,
 	updateBenchmarkProject,
+	updateBenchmarkProjectFidelity,
 } from "@/core/api/generated";
 import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyDraftDto as JudgePolicyDraft,
@@ -43,6 +44,7 @@ import {
 } from "@/features/benchmarks/models/BenchmarkMappers";
 import type {
 	BenchmarkComparisonList,
+	BenchmarkProjectFidelityDraft,
 	BenchmarkEligibleModel,
 	BenchmarkPairwiseEstimate,
 	BenchmarkKvCacheType,
@@ -444,6 +446,55 @@ export function useUpdateBenchmarkJudgePolicy() {
 			return { project: toBenchmarkProjectDetail(data.project), enqueuedRunIds, enqueuedRunCount: enqueuedRunIds.length };
 		},
 		onSuccess: (change) => invalidate(change.project.id, ...change.enqueuedRunIds),
+	});
+}
+
+/** What a fidelity change did: the refreshed project plus the runs it queued a measurement for. */
+export interface BenchmarkFidelityChange {
+	project: BenchmarkProjectDetail;
+	enqueuedCount: number;
+}
+
+/**
+ * The fidelity settings on their OWN route, with their own CAS. That is what lets them change on a frozen project:
+ * the ordinary project write is refused once runs exist, and fidelity is exactly the setting an operator wants to
+ * revisit after seeing some.
+ *
+ * `measureExisting` is opt-in because enabling fidelity should not silently spend GPU on a project's whole history.
+ * Pressing it twice queues nothing the second time — runs with an attempt already are skipped by the node.
+ */
+export function useUpdateBenchmarkProjectFidelity() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async ({
+			projectId,
+			expectedVersion,
+			draft,
+			measureExisting,
+		}: {
+			projectId: string;
+			expectedVersion: number;
+			draft: BenchmarkProjectFidelityDraft;
+			measureExisting: boolean;
+		}): Promise<BenchmarkFidelityChange> => {
+			const { data } = await callWithResponseValidation(
+				updateBenchmarkProjectFidelity({
+					path: { projectId },
+					body: {
+						expectedVersion,
+						fidelityEnabled: draft.fidelityEnabled,
+						fidelityKldEnabled: draft.fidelityKldEnabled,
+						// Omitted rather than null when unset, so an absent value means the node's default.
+						...(draft.fidelityChunks === null ? {} : { fidelityChunks: draft.fidelityChunks }),
+						fidelityKldBaseModelName: draft.fidelityKldBaseModelName,
+						measureExisting,
+					},
+					throwOnError: true,
+				}),
+			);
+			return { project: toBenchmarkProjectDetail(data.project), enqueuedCount: data.enqueuedCount ?? 0 };
+		},
+		onSuccess: (change) => invalidate(change.project.id),
 	});
 }
 

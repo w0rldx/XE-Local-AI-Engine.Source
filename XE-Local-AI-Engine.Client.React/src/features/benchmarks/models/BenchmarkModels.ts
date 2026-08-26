@@ -220,6 +220,14 @@ export interface BenchmarkProjectDraft {
 	fidelityKldBaseModelName: string | null;
 }
 
+/** The four settable fidelity members, shared by the create request and the fidelity PATCH. */
+export interface BenchmarkProjectFidelityDraft {
+	fidelityEnabled: boolean;
+	fidelityKldEnabled: boolean;
+	fidelityChunks: number | null;
+	fidelityKldBaseModelName: string | null;
+}
+
 export interface BenchmarkEligibleModel {
 	modelName: string;
 	maxContextTokens: number | null;

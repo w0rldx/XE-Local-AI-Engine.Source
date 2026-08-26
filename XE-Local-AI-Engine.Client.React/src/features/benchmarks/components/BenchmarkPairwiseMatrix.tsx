@@ -1,4 +1,4 @@
-import { Alert, Group, Loader, ScrollArea, Stack, Table, Text } from "@mantine/core";
+import { Alert, Group, Loader, ScrollArea, Stack, Table, Text, Tooltip } from "@mantine/core";
 import { IconAlertTriangle, IconScale } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
@@ -29,12 +29,35 @@ function VerdictCell({ comparison, runAId }: { comparison: BenchmarkComparison |
 	// The verdict is stored against the canonical pair, never against the order it was shown in, so it reads the same
 	// in both columns — which is what makes a disagreement between the two columns visible as a disagreement.
 	const winner = comparison.verdict === "tie" ? null : comparison.verdict === "a" ? runAId : comparison.runBId;
+	// A verdict over a cut-off answer graded a fragment. It still counts in the fit, so the flag is the only thing
+	// that stops the reader taking it for a judgement of the whole answer.
+	const truncated = comparison.answerATruncated || comparison.answerBTruncated;
 	return (
-		<StatusBadge
-			color={comparison.verdict === "tie" ? "gray" : "blue"}
-			label={winner === null ? t("pages.benchmarks.pairwise.tie", "tie") : shortId(winner)}
-			data-testid={`benchmark-pairwise-verdict-${comparison.id}`}
-		/>
+		<Group gap={4} wrap="nowrap">
+			<StatusBadge
+				color={comparison.verdict === "tie" ? "gray" : "blue"}
+				label={winner === null ? t("pages.benchmarks.pairwise.tie", "tie") : shortId(winner)}
+				data-testid={`benchmark-pairwise-verdict-${comparison.id}`}
+			/>
+			{truncated ? (
+				<Tooltip
+					label={t(
+						"pages.benchmarks.pairwise.truncatedHint",
+						"One of the two answers was cut off by the token budget, so this verdict compared a fragment.",
+					)}
+					multiline={true}
+					w={260}
+				>
+					<span>
+						<StatusBadge
+							color="orange"
+							label={t("pages.benchmarks.pairwise.truncated", "truncated")}
+							data-testid={`benchmark-pairwise-truncated-${comparison.id}`}
+						/>
+					</span>
+				</Tooltip>
+			) : null}
+		</Group>
 	);
 }
 

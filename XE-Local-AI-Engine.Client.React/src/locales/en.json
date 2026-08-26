@@ -4046,7 +4046,6 @@
 				"reasoningBudget": "Reasoning budget (tokens)",
 				"reasoningBudgetHint": "Leave empty = as much as the window allows. The context must cover the prompt, this budget AND the max output — a pair that fills the window truncates every run.",
 				"fidelitySection": "Quant fidelity",
-				"fidelityFrozen": "Fidelity settings are frozen with the project's task. Re-measure a single run from the runs table instead.",
 				"fidelityEnabled": "Measure perplexity beside each run",
 				"fidelityEnabledHelp": "Scores a fixed corpus with the run's own frozen placement. Display only — it never ranks a run.",
 				"fidelityChunks": "Chunks to score",
@@ -4060,7 +4059,10 @@
 				"judgeModes": {
 					"pointwise": "Pointwise (rubric per run)",
 					"pairwise": "Pairwise (run against run)"
-				}
+				},
+				"pairwiseConfirmTitle": "Switch this project to pairwise judging?",
+				"pairwiseConfirm": "Every eligible run is judged against every other, in both orders. The comparisons are queued at once and the ranking only appears once the fit completes.",
+				"pairwiseConfirmAccept": "Switch and queue"
 			},
 			"run": {
 				"model": "Primary model",
@@ -4369,7 +4371,12 @@
 				"onPplOnly": "PPL",
 				"off": "off",
 				"settings": "Scoring {{chunks}} chunks{{base}}.",
-				"disabled": "Not measured. Enable it in the project settings before the first run."
+				"disabled": "Not measured. Enable it in the project settings before the first run.",
+				"measureExisting": "Also measure the runs this project already has",
+				"saved": "Fidelity settings saved.",
+				"savedWithRuns": "Saved. Queued {{count}} measurements.",
+				"saveError": "Could not save the fidelity settings.",
+				"remeasureNote": "Changing the base model or chunk count deletes nothing, but it mints a new comparability digest — figures measured under the old one start reading kld-stale until each run is re-measured."
 			},
 			"charts": {
 				"title": "Charts",
@@ -4465,7 +4472,9 @@
 				},
 				"estimate": "{{runs}} runs pair into {{calls}} judge calls.",
 				"estimateDuration": "Roughly {{duration}}.",
-				"estimateCapped": "{{capped}} runs are left out — the cohort caps at {{maximum}}. They rank as pairwise-cap until removed."
+				"estimateCapped": "{{capped}} runs are left out — the cohort caps at {{maximum}}. They rank as pairwise-cap until removed.",
+				"truncated": "truncated",
+				"truncatedHint": "One of the two answers was cut off by the token budget, so this verdict compared a fragment."
 			}
 		},
 		"customTools": {

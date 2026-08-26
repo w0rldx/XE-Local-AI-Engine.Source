@@ -1,4 +1,4 @@
-import { Alert, Button, Code, Group, Loader, Stack, Text } from "@mantine/core";
+import { Alert, Button, Checkbox, Code, Group, Loader, NumberInput, Select, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle, IconChevronDown, IconChevronRight, IconRuler2, IconTrash } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -7,8 +7,17 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { toast } from "@/core/ui/notifications/Toast";
-import type { BenchmarkProjectFidelity } from "@/features/benchmarks/models/BenchmarkModels";
-import { useBenchmarkKldDiskEstimate, useClearBenchmarkFidelityCache } from "@/features/benchmarks/queries/useBenchmarks";
+import type {
+	BenchmarkEligibleModel,
+	BenchmarkProjectFidelity,
+	BenchmarkProjectFidelityDraft,
+} from "@/features/benchmarks/models/BenchmarkModels";
+import { benchmarkFidelityChunkLimits } from "@/features/benchmarks/models/BenchmarkModels";
+import {
+	useBenchmarkKldDiskEstimate,
+	useClearBenchmarkFidelityCache,
+	useUpdateBenchmarkProjectFidelity,
+} from "@/features/benchmarks/queries/useBenchmarks";
 
 /**
  * The disk side of the quant-fidelity axis. Perplexity costs nothing but a pass over a shipped corpus; KL divergence
@@ -22,9 +31,31 @@ import { useBenchmarkKldDiskEstimate, useClearBenchmarkFidelityCache } from "@/f
  * DTOs in S1. Both controls go in unchanged the moment those four members reach the generated client; until then this
  * panel reports the cost and manages the cache, and the measurement itself is triggered per run from the runs table.
  */
-export function BenchmarkFidelityPanel({ projectId, fidelity }: { projectId: string; fidelity: BenchmarkProjectFidelity }) {
+interface BenchmarkFidelityPanelProps {
+	projectId: string;
+	/** The project's stored settings, and the version the PATCH writes against. */
+	fidelity: BenchmarkProjectFidelity;
+	projectVersion: number;
+	models: readonly BenchmarkEligibleModel[];
+}
+
+export function BenchmarkFidelityPanel({ projectId, fidelity, projectVersion, models }: BenchmarkFidelityPanelProps) {
 	const { t } = useTranslation();
 	const [opened, setOpened] = useState(false);
+	const [measureExisting, setMeasureExisting] = useState(false);
+	const [draft, setDraft] = useState<BenchmarkProjectFidelityDraft>({
+		fidelityEnabled: fidelity.enabled,
+		fidelityKldEnabled: fidelity.kldEnabled,
+		fidelityChunks: fidelity.chunks,
+		fidelityKldBaseModelName: fidelity.kldBaseModelName,
+	});
+	const save = useUpdateBenchmarkProjectFidelity();
+	// A base or chunk change mints a new expected digest, so figures measured under the old one start reading
+	// kld-stale. Nothing is deleted — saying so is the honest answer, and re-measuring is the runs table's action.
+	const remeasures =
+		fidelity.kldEnabled &&
+		(draft.fidelityKldBaseModelName !== fidelity.kldBaseModelName || draft.fidelityChunks !== fidelity.chunks);
+	const kldNeedsBase = draft.fidelityKldEnabled && !draft.fidelityKldBaseModelName;
 	// Asked for while the section is open whether or not KLD is on: the estimate is exactly what the operator needs
 	// BEFORE deciding to enable it, so gating it on the setting would hide the number that informs the setting.
 	const estimateQuery = useBenchmarkKldDiskEstimate(projectId, fidelity.chunks ?? undefined, opened);
@@ -72,6 +103,111 @@ export function BenchmarkFidelityPanel({ projectId, fidelity }: { projectId: str
 								})
 							: t("pages.benchmarks.fidelity.disabled", "Not measured. Enable it in the project settings before the first run.")}
 					</Text>
+					<Checkbox
+						label={t("pages.benchmarks.project.fidelityEnabled", "Measure perplexity beside each run")}
+						checked={draft.fidelityEnabled}
+						onChange={(event) => {
+							const checked = event.currentTarget.checked;
+							// KLD is a strict extra on top of the perplexity pass; with the pass off it has nothing to ride.
+							setDraft((current) => ({
+								...current,
+								fidelityEnabled: checked,
+								fidelityKldEnabled: checked && current.fidelityKldEnabled,
+							}));
+						}}
+						data-testid="benchmark-fidelity-enabled"
+					/>
+					{draft.fidelityEnabled ? (
+						<Stack gap="xs">
+							<NumberInput
+								w={220}
+								label={t("pages.benchmarks.project.fidelityChunks", "Chunks to score")}
+								min={benchmarkFidelityChunkLimits.min}
+								max={benchmarkFidelityChunkLimits.max}
+								clampBehavior="strict"
+								value={draft.fidelityChunks ?? ""}
+								onChange={(value) => setDraft((current) => ({ ...current, fidelityChunks: Number(value) || null }))}
+								data-testid="benchmark-fidelity-chunks"
+							/>
+							<Checkbox
+								label={t("pages.benchmarks.project.fidelityKldEnabled", "Also measure KL divergence")}
+								checked={draft.fidelityKldEnabled}
+								onChange={(event) => {
+									const checked = event.currentTarget.checked;
+									setDraft((current) => ({ ...current, fidelityKldEnabled: checked }));
+								}}
+								data-testid="benchmark-fidelity-kld-enabled"
+							/>
+							{draft.fidelityKldEnabled ? (
+								<Select
+									label={t("pages.benchmarks.project.fidelityKldBase", "KL-divergence base model")}
+									required={true}
+									searchable={true}
+									data={models.map((model) => ({ value: model.modelName, label: model.modelName }))}
+									value={draft.fidelityKldBaseModelName}
+									error={
+										kldNeedsBase
+											? t("pages.benchmarks.validation.fidelityKldBase", "KL divergence requires a base model.")
+											: undefined
+									}
+									onChange={(value) => setDraft((current) => ({ ...current, fidelityKldBaseModelName: value }))}
+									data-testid="benchmark-fidelity-kld-base"
+								/>
+							) : null}
+						</Stack>
+					) : null}
+					{remeasures ? (
+						<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-fidelity-remeasure-note">
+							{t(
+								"pages.benchmarks.fidelity.remeasureNote",
+								"Changing the base model or chunk count deletes nothing, but it mints a new comparability digest — figures measured under the old one start reading kld-stale until each run is re-measured.",
+							)}
+						</Alert>
+					) : null}
+					<Group gap="sm" align="center">
+						<Checkbox
+							label={t("pages.benchmarks.fidelity.measureExisting", "Also measure the runs this project already has")}
+							disabled={!draft.fidelityEnabled}
+							checked={measureExisting}
+							onChange={(event) => {
+								const checked = event.currentTarget.checked;
+								setMeasureExisting(checked);
+							}}
+							data-testid="benchmark-fidelity-measure-existing"
+						/>
+						<Button
+							size="xs"
+							disabled={kldNeedsBase}
+							loading={save.isPending}
+							onClick={() =>
+								save.mutate(
+									{ projectId, expectedVersion: projectVersion, draft, measureExisting },
+									{
+										onSuccess: (change) => {
+											toast.success(
+												change.enqueuedCount > 0
+													? t("pages.benchmarks.fidelity.savedWithRuns", "Saved. Queued {{count}} measurements.", {
+															count: change.enqueuedCount,
+														})
+													: t("pages.benchmarks.fidelity.saved", "Fidelity settings saved."),
+											);
+											setMeasureExisting(false);
+										},
+										onError: (error) =>
+											toast.error(
+												apiErrorMessage(
+													error,
+													t("pages.benchmarks.fidelity.saveError", "Could not save the fidelity settings."),
+												),
+											),
+									},
+								)
+							}
+							data-testid="benchmark-fidelity-save"
+						>
+							{t("common.save", "Save")}
+						</Button>
+					</Group>
 					{estimateQuery.isLoading ? (
 						<Group gap="sm">
 							<Loader size="xs" />

@@ -159,4 +159,21 @@ describe("BenchmarkPairwiseMatrix", () => {
 
 		expect((await screen.findByTestId("benchmark-pairwise-status-c1")).textContent).toBe("running");
 	});
+
+	// A verdict over a cut-off answer graded a fragment. It still counts in the fit, so the flag is the only thing
+	// stopping the reader from taking it for a judgement of the whole answer.
+	it("flags a verdict that compared a truncated answer", async () => {
+		comparisonsMock.mockResolvedValue(wire([comparison({ answerBTruncated: true })]));
+		renderWithProviders(<BenchmarkPairwiseMatrix projectId="p1" />);
+
+		expect((await screen.findByTestId("benchmark-pairwise-truncated-c1")).textContent).toBe("truncated");
+	});
+
+	it("does not flag a pair where neither answer was cut off", async () => {
+		comparisonsMock.mockResolvedValue(wire([comparison()]));
+		renderWithProviders(<BenchmarkPairwiseMatrix projectId="p1" />);
+
+		await screen.findByTestId("benchmark-pairwise-verdict-c1");
+		expect(screen.queryByTestId("benchmark-pairwise-truncated-c1")).toBeNull();
+	});
 });

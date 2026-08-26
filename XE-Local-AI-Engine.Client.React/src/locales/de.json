@@ -4046,7 +4046,6 @@
 				"reasoningBudget": "Denkbudget (Token)",
 				"reasoningBudgetHint": "Leer = so viel, wie das Fenster zulässt. Der Kontext muss Prompt, dieses Budget UND die maximale Ausgabe abdecken — ein Paar, das das Fenster füllt, schneidet jeden Lauf ab.",
 				"fidelitySection": "Quantisierungstreue",
-				"fidelityFrozen": "Die Treue-Einstellungen sind zusammen mit der Aufgabe des Projekts eingefroren. Miss stattdessen einen einzelnen Lauf über die Lauftabelle erneut.",
 				"fidelityEnabled": "Perplexität neben jedem Lauf messen",
 				"fidelityEnabledHelp": "Bewertet einen festen Korpus mit der eingefrorenen Platzierung des Laufs. Nur zur Anzeige — bewertet nie einen Lauf.",
 				"fidelityChunks": "Zu bewertende Chunks",
@@ -4060,7 +4059,10 @@
 				"judgeModes": {
 					"pointwise": "Pointwise (Rubrik je Lauf)",
 					"pairwise": "Pairwise (Lauf gegen Lauf)"
-				}
+				},
+				"pairwiseConfirmTitle": "Dieses Projekt auf paarweise Bewertung umstellen?",
+				"pairwiseConfirm": "Jeder geeignete Lauf wird gegen jeden anderen bewertet, in beiden Reihenfolgen. Die Vergleiche werden auf einmal eingereiht, und die Rangfolge erscheint erst, wenn die Anpassung abgeschlossen ist.",
+				"pairwiseConfirmAccept": "Umstellen und einreihen"
 			},
 			"run": {
 				"model": "Primärmodell",
@@ -4369,7 +4371,12 @@
 				"onPplOnly": "PPL",
 				"off": "aus",
 				"settings": "{{chunks}} Chunks werden bewertet{{base}}.",
-				"disabled": "Nicht gemessen. Aktiviere es in den Projekteinstellungen vor dem ersten Lauf."
+				"disabled": "Nicht gemessen. Aktiviere es in den Projekteinstellungen vor dem ersten Lauf.",
+				"measureExisting": "Auch die Läufe messen, die dieses Projekt bereits hat",
+				"saved": "Treue-Einstellungen gespeichert.",
+				"savedWithRuns": "Gespeichert. {{count}} Messungen eingereiht.",
+				"saveError": "Die Treue-Einstellungen konnten nicht gespeichert werden.",
+				"remeasureNote": "Das Ändern von Basismodell oder Chunk-Anzahl löscht nichts, erzeugt aber einen neuen Vergleichbarkeits-Digest — unter dem alten gemessene Werte lesen sich dann als kld-stale, bis jeder Lauf neu gemessen wurde."
 			},
 			"charts": {
 				"title": "Diagramme",
@@ -4465,7 +4472,9 @@
 				},
 				"estimate": "{{runs}} Läufe ergeben {{calls}} Judge-Aufrufe.",
 				"estimateDuration": "Etwa {{duration}}.",
-				"estimateCapped": "{{capped}} Läufe bleiben außen vor — die Kohorte ist auf {{maximum}} begrenzt. Sie gelten als pairwise-cap, bis sie entfernt werden."
+				"estimateCapped": "{{capped}} Läufe bleiben außen vor — die Kohorte ist auf {{maximum}} begrenzt. Sie gelten als pairwise-cap, bis sie entfernt werden.",
+				"truncated": "abgeschnitten",
+				"truncatedHint": "Eine der beiden Antworten wurde vom Token-Budget abgeschnitten; dieses Urteil verglich also ein Fragment."
 			}
 		},
 		"customTools": {

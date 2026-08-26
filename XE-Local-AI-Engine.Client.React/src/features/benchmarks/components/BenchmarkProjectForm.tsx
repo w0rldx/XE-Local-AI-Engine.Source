@@ -12,7 +12,6 @@ import type {
 	BenchmarkRubric,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import {
-	benchmarkFidelityChunkLimits,
 	benchmarkInvocationTimeoutLimits,
 	benchmarkJudgeModes,
 	benchmarkPromptReserveTokens,
@@ -73,20 +72,6 @@ export function BenchmarkProjectForm({
 	const rubricIssue = values.judgeEnabled && values.rubric ? benchmarkRubricIssue(values.rubric) : null;
 	const errors = {
 		name: values.name.trim() ? undefined : t("pages.benchmarks.validation.name", "Name is required."),
-		// Mirrors the node's own two refusals so neither costs a round-trip: the chunk bounds, and KLD without a base
-		// model to measure against.
-		fidelityChunks:
-			values.fidelityChunks !== null &&
-			(values.fidelityChunks < benchmarkFidelityChunkLimits.min || values.fidelityChunks > benchmarkFidelityChunkLimits.max)
-				? t("pages.benchmarks.validation.fidelityChunks", "Chunks must be between {{min}} and {{max}}.", {
-						min: benchmarkFidelityChunkLimits.min,
-						max: benchmarkFidelityChunkLimits.max,
-					})
-				: undefined,
-		fidelityKldBaseModelName:
-			values.fidelityKldEnabled && !values.fidelityKldBaseModelName
-				? t("pages.benchmarks.validation.fidelityKldBase", "KL divergence requires a base model.")
-				: undefined,
 		coreTask: values.coreTask.trim() ? undefined : t("pages.benchmarks.validation.task", "Core task is required."),
 		contextTokens: values.contextTokens > 0 ? undefined : t("pages.benchmarks.validation.context", "Context must be positive."),
 		maxOutputTokens:
@@ -253,94 +238,6 @@ export function BenchmarkProjectForm({
 					error={attempted ? errors.agentDefinitionId : undefined}
 					onChange={(value) => setValues((current) => ({ ...current, agentDefinitionId: value ?? "" }))}
 				/>
-				<Divider
-					label={t("pages.benchmarks.project.fidelitySection", "Quant fidelity")}
-					labelPosition="left"
-					data-testid="benchmark-fidelity-section"
-				/>
-				{/* These ride the ordinary project write, so the project freeze governs them: once a run exists the node
-				    answers 409 ProjectFrozen. Fidelity is enqueued AT freeze beside each run, so the setting belongs to the
-				    project before it has any — and a control that looked editable here would produce a 409 the operator
-				    could not act on. Re-measuring one run afterwards is the runs table's action, not this. */}
-				{frozen ? (
-					<Text size="xs" c="dimmed" data-testid="benchmark-fidelity-frozen">
-						{t(
-							"pages.benchmarks.project.fidelityFrozen",
-							"Fidelity settings are frozen with the project's task. Re-measure a single run from the runs table instead.",
-						)}
-					</Text>
-				) : null}
-				<Checkbox
-					label={t("pages.benchmarks.project.fidelityEnabled", "Measure perplexity beside each run")}
-					description={t(
-						"pages.benchmarks.project.fidelityEnabledHelp",
-						"Scores a fixed corpus with the run's own frozen placement. Display only — it never ranks a run.",
-					)}
-					disabled={frozen}
-					checked={values.fidelityEnabled}
-					onChange={(event) => {
-						const checked = event.currentTarget.checked;
-						// KLD is a strict extra on top of perplexity: turning the pass off leaves nothing for it to ride.
-						setValues((current) => ({
-							...current,
-							fidelityEnabled: checked,
-							fidelityKldEnabled: checked && current.fidelityKldEnabled,
-						}));
-					}}
-					data-testid="benchmark-fidelity-enabled"
-				/>
-				{values.fidelityEnabled ? (
-					<Stack gap="sm">
-						<NumberInput
-							w={220}
-							label={t("pages.benchmarks.project.fidelityChunks", "Chunks to score")}
-							description={t("pages.benchmarks.project.fidelityChunksHelp", "{{min}}–{{max}}; empty uses {{fallback}}.", {
-								min: benchmarkFidelityChunkLimits.min,
-								max: benchmarkFidelityChunkLimits.max,
-								fallback: benchmarkFidelityChunkLimits.default,
-							})}
-							min={benchmarkFidelityChunkLimits.min}
-							max={benchmarkFidelityChunkLimits.max}
-							clampBehavior="strict"
-							disabled={frozen}
-							value={values.fidelityChunks ?? ""}
-							error={attempted ? errors.fidelityChunks : undefined}
-							onChange={(value) => setValues((current) => ({ ...current, fidelityChunks: Number(value) || null }))}
-							data-testid="benchmark-fidelity-chunks"
-						/>
-						<Checkbox
-							label={t("pages.benchmarks.project.fidelityKldEnabled", "Also measure KL divergence")}
-							description={t(
-								"pages.benchmarks.project.fidelityKldEnabledHelp",
-								"Needs a cached logit file for the base model — tens of gigabytes. Check the estimate on the project before enabling it.",
-							)}
-							disabled={frozen}
-							checked={values.fidelityKldEnabled}
-							onChange={(event) => {
-								const checked = event.currentTarget.checked;
-								setValues((current) => ({ ...current, fidelityKldEnabled: checked }));
-							}}
-							data-testid="benchmark-fidelity-kld-enabled"
-						/>
-						{values.fidelityKldEnabled ? (
-							<Select
-								label={t("pages.benchmarks.project.fidelityKldBase", "KL-divergence base model")}
-								description={t(
-									"pages.benchmarks.project.fidelityKldBaseHelp",
-									"The reference the quants are measured against — normally the unquantized build.",
-								)}
-								required={true}
-								searchable={true}
-								disabled={frozen}
-								data={models.map((model) => ({ value: model.modelName, label: model.modelName }))}
-								value={values.fidelityKldBaseModelName}
-								error={attempted ? errors.fidelityKldBaseModelName : undefined}
-								onChange={(value) => setValues((current) => ({ ...current, fidelityKldBaseModelName: value }))}
-								data-testid="benchmark-fidelity-kld-base"
-							/>
-						) : null}
-					</Stack>
-				) : null}
 				<Divider
 					label={t("pages.benchmarks.project.judgeSection", "Automated judge")}
 					labelPosition="left"

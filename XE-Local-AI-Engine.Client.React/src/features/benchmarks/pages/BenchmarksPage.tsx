@@ -42,6 +42,7 @@ import { BenchmarkFidelityPanel } from "@/features/benchmarks/components/Benchma
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import type { BenchmarkMatrixSelection } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkLaunchMatrix } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
+import { BenchmarkPairwiseEstimateNote } from "@/features/benchmarks/components/BenchmarkPairwiseEstimateNote";
 import { BenchmarkPairwiseMatrix } from "@/features/benchmarks/components/BenchmarkPairwiseMatrix";
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
 import { BenchmarkRepeatModePicker } from "@/features/benchmarks/components/BenchmarkRepeatModePicker";
@@ -109,7 +110,7 @@ const emptyProject: BenchmarkProjectDraft = {
 
 type EditorMode = "create" | "edit" | null;
 /** Which confirmation the operator is being asked for; both re-score every succeeded run of the project. */
-type ConfirmMode = "judgePolicy" | "rejudgeAll" | null;
+type ConfirmMode = "judgePolicy" | "rejudgeAll" | "pairwise" | null;
 /** The picker's "Auto" entry is a UI-only value: it is sent as an omitted `kvCacheType`, which the node resolves. */
 const autoKvCacheType = "auto";
 
@@ -126,6 +127,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const [editorMode, setEditorMode] = useState<EditorMode>(null);
 	const [confirmMode, setConfirmMode] = useState<ConfirmMode>(null);
 	const [pendingPolicy, setPendingPolicy] = useState<JudgePolicyDraft | null>(null);
+	const [pendingProjectDraft, setPendingProjectDraft] = useState<BenchmarkProjectDraft | null>(null);
 	// The node's own refusal of the last save, shown inside the editor. A toast would outlive the dialog and leave the
 	// operator re-reading it next to fields it no longer describes.
 	const [saveError, setSaveError] = useState<string | null>(null);
@@ -295,6 +297,13 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 
 	const saveProject = (draft: BenchmarkProjectDraft): void => {
 		setSaveError(null);
+		// Switching a project INTO pairwise commits its queue to a quadratic number of judge calls, so it is confirmed
+		// against the node's own estimate rather than saved on the click that selected the mode.
+		if (editorMode === "edit" && detail && draft.judgeEnabled && draft.judgeMode === "pairwise" && detail.judge.mode !== "pairwise") {
+			setPendingProjectDraft(draft);
+			setConfirmMode("pairwise");
+			return;
+		}
 		if (editorMode === "edit" && detail?.isFrozen) {
 			saveJudgePolicy(
 				draft.judgeEnabled
@@ -643,7 +652,12 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										{t("pages.benchmarks.matrix.open", "Batch runs…")}
 									</Button>
 								</Group>
-								<BenchmarkFidelityPanel projectId={detail.id} fidelity={detail.fidelity} />
+								<BenchmarkFidelityPanel
+									projectId={detail.id}
+									fidelity={detail.fidelity}
+									projectVersion={detail.version}
+									models={allModelsQuery.data ?? []}
+								/>
 								<BenchmarkRepeatModePicker
 									mode={repeatMode}
 									temperature={answerVarianceTemperature}
@@ -775,13 +789,23 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 			<DialogShell
 				opened={confirmMode !== null}
 				onClose={() => setConfirmMode(null)}
-				title={t("pages.benchmarks.project.rejudgeConfirmTitle", "Re-judge this project?")}
+				title={
+					confirmMode === "pairwise"
+						? t("pages.benchmarks.project.pairwiseConfirmTitle", "Switch this project to pairwise judging?")
+						: t("pages.benchmarks.project.rejudgeConfirmTitle", "Re-judge this project?")
+				}
 				size="md"
 				data-testid="benchmark-rejudge-confirm"
 			>
 				<Stack gap="md">
+					{confirmMode === "pairwise" && detail ? <BenchmarkPairwiseEstimateNote projectId={detail.id} /> : null}
 					<Text>
-						{confirmMode === "judgePolicy"
+						{confirmMode === "pairwise"
+							? t(
+									"pages.benchmarks.project.pairwiseConfirm",
+									"Every eligible run is judged against every other, in both orders. The comparisons are queued at once and the ranking only appears once the fit completes.",
+								)
+							: confirmMode === "judgePolicy"
 							? t(
 									"pages.benchmarks.project.rejudgeConfirmPolicy",
 									"Changing the judge re-scores this project. All {{count}} succeeded runs will be re-judged and the ranking is rebuilt from the new cohort.",
@@ -799,10 +823,32 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						</Button>
 						<Button
 							loading={updateJudge.isPending || rejudgeProject.isPending}
-							onClick={() => (confirmMode === "judgePolicy" ? saveJudgePolicy(pendingPolicy, true) : rejudgeAll())}
+							onClick={() => {
+							if (confirmMode === "pairwise") {
+								const draft = pendingProjectDraft;
+								setConfirmMode(null);
+								setPendingProjectDraft(null);
+								if (draft && detail) {
+									saveJudgePolicy(
+										{
+											modelName: draft.judgeModelName ?? "",
+											contextTokens: draft.judgeContextTokens ?? 0,
+											mode: draft.judgeMode,
+											rubric: draft.rubric,
+											referenceAnswer: draft.referenceAnswer,
+										},
+										true,
+									);
+								}
+								return;
+							}
+							confirmMode === "judgePolicy" ? saveJudgePolicy(pendingPolicy, true) : rejudgeAll();
+						}}
 							data-testid="benchmark-rejudge-confirm-accept"
 						>
-							{t("pages.benchmarks.project.rejudgeConfirmAccept", "Re-judge")}
+							{confirmMode === "pairwise"
+							? t("pages.benchmarks.project.pairwiseConfirmAccept", "Switch and queue")
+							: t("pages.benchmarks.project.rejudgeConfirmAccept", "Re-judge")}
 						</Button>
 					</Group>
 				</Stack>
