@@ -58,6 +58,8 @@ Rank-exclusion precedence: **warm-up > user score > (truncated | incomplete) > j
 
 > **A new work kind is not additive at the lifecycle layer.** `BenchmarkStore.ClaimNextAsync` (`BenchmarkStore.cs:450`) and `RecoverRunsOnStartupAsync` (`:1667`) both used to branch "Primary, else it is a Judge", and the `else` dereferenced `JudgeAttemptId`. Either new kind reaching them threw `InvalidJudgeTransition` and stalled the single-consumer queue behind an item it could never claim. Both are **explicit four-arm switches** now, and recovery needs **two sibling pre-sweeps**: an attempt or comparison left `Running` by a killed process, whose work item a previous partial recovery already terminalized, has nothing else that can reach it.
 
+> **A comparison claim touches neither run's version.** Every per-run kind bumps `BenchmarkRun.Version` so a poller sees that something changed; a comparison names two runs and its work item names only the canonical first, so the common bump invalidated that run's CAS token on every pairwise claim — scoring, deleting or re-measuring it returned `VersionConflict` throughout a tournament. A pairwise reader is refreshed by the fit's own publication.
+
 ---
 
 ## 3. Quant fidelity — perplexity and KL divergence (display only)
@@ -92,6 +94,12 @@ A run stores the digest it was measured under (`kld_base_logits_digest`); the pr
 Each measurement is a `BenchmarkFidelityAttempt` row at `Sequence` 1..n. Re-measuring **inserts a new attempt**; the run's flat fidelity columns are refreshed only from a `Succeeded` attempt that is the highest-sequenced succeeded one, under a CAS. So a stale re-measurement cannot overwrite newer numbers, a failed one leaves the previous numbers alone, and "which file produced this figure" stays answerable from either end.
 
 Fidelity is measured **once per cell**, never per repeat — perplexity is deterministic given the same weights and argv, so N repeats buy N identical numbers at N× the cost. A warm-up records `fidelity_status = 'skipped'` rather than NULL: "covered by repeat 1" and "never asked for" are different facts.
+
+The measurement is **seeded on primary success**, in the same transaction that terminalizes the primary and seeds the judge attempt (`BenchmarkStore.MarkPrimarySucceededAsync`). Freeze writes only the `skipped` markers: a work item inserted at freeze outlives the run it belongs to, so a primary that failed or was cancelled left hours of GPU work queued against a run with no answer. One `IsFidelityMeasuredCell` predicate serves freeze, the seed and `EnqueueMissingFidelityAsync`.
+
+The run's `fidelity_status` follows its attempt through **every** transition — `queued` on the seed, `running` on the claim, a terminal value on terminalization, and `failed` when restart recovery fails an interrupted attempt. A status left `queued` with no attempt and no work item behind it makes every API report an active measurement forever: the poller never stops and the UI keeps re-measure disabled. The NUMBERS are separate and are never touched by recovery.
+
+The executor's **measurement watchdog (2 h, a constructor parameter) is a failure, not a cancellation**. Its linked token throws the same `OperationCanceledException` an operator's stop does, so the classification is derived at mapping time in the repo's priority order: the caller's token is not cancelled, therefore the timer is ours, and the attempt is terminalized `Failed` with a reason.
 
 ### 3.4 Settings live outside the project freeze
 
