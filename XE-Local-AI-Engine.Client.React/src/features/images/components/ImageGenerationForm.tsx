@@ -196,9 +196,10 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 				/>
 			</Group>
 
-			{/* Sampler/seed stack below md rather than sm: at ~768px the two halves left the sampler Select too narrow to
-			 show its longest option ("Euler a" clipped to "Eule"). Numbers survive a half-width column; a name does not. */}
-			<SimpleGrid cols={{ base: 1, md: 2 }} spacing="md" verticalSpacing="xs" data-testid="image-form-sampler-row">
+			{/* Sampler/seed go two-up only from `lg`. This app overrides Mantine's breakpoints (theme.json: md = 768,
+			 lg = 1024), and 768 is exactly the width where a half-width column left the sampler Select too narrow for its
+			 longest option — "Euler a" rendered as "Eule". Numbers survive a half-width column; a name does not. */}
+			<SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md" verticalSpacing="xs" data-testid="image-form-sampler-row">
 				<Select
 					label={t("pages.images.form.sampler.label", "Sampler")}
 					data={samplerData}
