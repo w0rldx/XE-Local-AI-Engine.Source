@@ -351,11 +351,13 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     }
 
     /// <summary>
-    ///     One fidelity item per measured CELL. Perplexity is deterministic given the same weights and arguments, so
-    ///     N repeats would produce N identical numbers at N times the cost, and a warm-up is never compared at all.
+    ///     Freeze queues NO measurement — it only records the cells that will never be measured. One fidelity item per
+    ///     measured CELL, and only once that cell has an answer: perplexity is deterministic given the same weights
+    ///     and arguments, so N repeats would produce N identical numbers at N times the cost, and a warm-up is never
+    ///     compared at all.
     /// </summary>
     [Test]
-    public async Task Freeze_WithFidelityEnabled_MeasuresOneCellAndSkipsWarmupsAndExtraRepeats()
+    public async Task Freeze_WithFidelityEnabled_QueuesNothingAndMarksTheCellsItWillNeverMeasure()
     {
         await using var context = await CreateSchemaAsync("fidelity-freeze.sqlite").ConfigureAwait(false);
         var store = new BenchmarkStore(context, TimeProvider.System);
@@ -368,26 +370,74 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
         context.ChangeTracker.Clear();
 
         var groupId = Guid.NewGuid();
-        var runs = await store.StartRunsAsync([
-                                  CreateRun(project) with { RepeatGroupId = groupId, RepeatIndex = 0, IsWarmup = true },
-                                  CreateRun(project) with { RepeatGroupId = groupId, RepeatIndex = 1 },
-                                  CreateRun(project) with { RepeatGroupId = groupId, RepeatIndex = 2 }
-                              ],
-                              project.Version)
-                              .ConfigureAwait(false);
+        _ = await store.StartRunsAsync([
+                           CreateRun(project) with { RepeatGroupId = groupId, RepeatIndex = 0, IsWarmup = true },
+                           CreateRun(project) with { RepeatGroupId = groupId, RepeatIndex = 1 },
+                           CreateRun(project) with { RepeatGroupId = groupId, RepeatIndex = 2 }
+                       ],
+                       project.Version)
+                       .ConfigureAwait(false);
 
         context.ChangeTracker.Clear();
-        var fidelityItems = await context.BenchmarkWorkItems.AsNoTracking()
-                                         .Where(item => item.Kind == BenchmarkWorkKind.Fidelity)
-                                         .ToListAsync()
-                                         .ConfigureAwait(false);
-        AssertEx.Equal(expected: 1, fidelityItems.Count, "Exactly the first measured repeat is measured.");
-        AssertEx.Equal(runs[1].Id, fidelityItems[0].RunId);
+        AssertEx.Empty(await context.BenchmarkWorkItems.AsNoTracking()
+                                    .Where(item => item.Kind == BenchmarkWorkKind.Fidelity)
+                                    .ToListAsync()
+                                    .ConfigureAwait(false));
 
         var stored = await context.BenchmarkRuns.AsNoTracking().Where(run => run.ProjectId == project.Id).OrderBy(run => run.CreatedAtUtc).ToListAsync().ConfigureAwait(false);
         AssertEx.Equal("skipped", stored.Single(run => run.IsWarmup).FidelityStatus, "A warm-up records that it was skipped, not that it was never asked.");
-        AssertEx.Equal("queued", stored.Single(run => run.RepeatIndex == 1).FidelityStatus);
+        AssertEx.Equal<string?>(null, stored.Single(run => run.RepeatIndex == 1).FidelityStatus, "The measured cell is not queued until it has an answer to measure.");
         AssertEx.Equal("skipped", stored.Single(run => run.RepeatIndex == 2).FidelityStatus);
+    }
+
+    /// <summary>
+    ///     The fidelity work item used to be inserted at freeze, so a primary that failed or was cancelled left hours
+    ///     of GPU work queued against a run with no answer — the queue would dutifully measure a corpse.
+    /// </summary>
+    [Test]
+    public async Task Fidelity_IsSeededOnPrimarySuccessAndOnNoOtherOutcome()
+    {
+        await using var context = await CreateSchemaAsync("fidelity-on-success.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+
+        context.ChangeTracker.Clear();
+        var entity = await context.BenchmarkProjects.SingleAsync(candidate => candidate.Id == project.Id).ConfigureAwait(false);
+        entity.FidelityEnabled = true;
+        await context.SaveChangesAsync().ConfigureAwait(false);
+        context.ChangeTracker.Clear();
+
+        var failed = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
+        var failedClaim = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = await store.MarkPrimaryFailedAsync(failed.Id, failedClaim.Version, "the runtime never became ready").ConfigureAwait(false);
+
+        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        var cancelled = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
+        var cancelledClaim = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = await store.MarkPrimaryCancelledAsync(cancelled.Id, cancelledClaim.Version).ConfigureAwait(false);
+
+        context.ChangeTracker.Clear();
+        AssertEx.Empty(await context.BenchmarkWorkItems.AsNoTracking()
+                                    .Where(item => item.Kind == BenchmarkWorkKind.Fidelity)
+                                    .ToListAsync()
+                                    .ConfigureAwait(false));
+        AssertEx.Empty(await context.BenchmarkFidelityAttempts.AsNoTracking().ToListAsync().ConfigureAwait(false));
+
+        project = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+        var succeeded = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
+        var succeededClaim = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(succeeded.Id, succeededClaim.Run.Version,
+                Encoding.UTF8.GetBytes("[{\"text\":\"answer\"}]"), 1, 4096, 100, 12, 120))
+            .ConfigureAwait(false);
+
+        context.ChangeTracker.Clear();
+        var items = await context.BenchmarkWorkItems.AsNoTracking()
+                                 .Where(item => item.Kind == BenchmarkWorkKind.Fidelity)
+                                 .ToListAsync()
+                                 .ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, items.Count, "Exactly the run that produced an answer is measured.");
+        AssertEx.Equal(succeeded.Id, items[0].RunId);
+        AssertEx.Equal("queued", (await context.BenchmarkRuns.AsNoTracking().SingleAsync(run => run.Id == succeeded.Id).ConfigureAwait(false)).FidelityStatus);
     }
 
     [Test]

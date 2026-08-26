@@ -244,15 +244,15 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 EnqueuedAtUtc = now
             });
 
-            // One fidelity item per measured CELL, not per repeat. Perplexity is deterministic given the same weights
-            // and the same arguments, so N repeats of one cell would produce N identical numbers at N times the cost.
-            // A warm-up is never measured at all — it exists to absorb first-launch costs, not to be compared.
-            if (project.FidelityEnabled && !run.IsWarmup && run.RepeatIndex is null or 1)
-            {
-                _ = await AppendFidelityWorkAsync(run, project.FidelityKldEnabled ? FidelityKindKld : FidelityKindPerplexity, now, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            else if (project.FidelityEnabled)
+            // Fidelity is NOT queued here. A measurement enqueued at freeze outlives the run it belongs to: when the
+            // primary then fails or is cancelled, hours of GPU work stay queued against a run that has no answer to
+            // measure. It is seeded on primary SUCCESS instead, exactly where the judge attempt is seeded.
+            //
+            // What freeze does record is the cells that will never be measured. One fidelity item per measured CELL,
+            // not per repeat: perplexity is deterministic given the same weights and the same arguments, so N repeats
+            // of one cell would produce N identical numbers at N times the cost, and a warm-up is never measured at
+            // all — it exists to absorb first-launch costs, not to be compared.
+            if (project.FidelityEnabled && !IsFidelityMeasuredCell(run))
             {
                 // Recorded rather than left null: "this cell's repeats are covered by repeat 1" and "fidelity was
                 // never asked for" are different facts, and the UI shows a different thing for each.
@@ -627,14 +627,19 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         run.Version++;
         run.UpdatedAtUtc = now;
         TerminalizeWork(work, BenchmarkWorkStatus.Succeeded, errorMessage: null, now);
-        // Only the pointer column: deciding whether to judge must not decrypt the project's core task. No pointer
-        // means nothing to judge under, and the run simply never gets an attempt.
-        var currentRevisionId = await _dbContext.BenchmarkProjects.AsNoTracking()
-                                                .Where(entity => entity.Id == run.ProjectId)
-                                                .Select(entity => entity.CurrentJudgePolicyRevisionId)
-                                                .SingleOrDefaultAsync(cancellationToken)
-                                                .ConfigureAwait(false);
-        if (currentRevisionId is { } revisionId)
+        // Flat columns only: deciding whether to judge or to measure must not decrypt the project's core task. No
+        // revision pointer means nothing to judge under, and the run simply never gets an attempt.
+        var settings = await _dbContext.BenchmarkProjects.AsNoTracking()
+                                       .Where(entity => entity.Id == run.ProjectId)
+                                       .Select(entity => new
+                                       {
+                                           entity.CurrentJudgePolicyRevisionId,
+                                           entity.FidelityEnabled,
+                                           entity.FidelityKldEnabled
+                                       })
+                                       .SingleOrDefaultAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+        if (settings?.CurrentJudgePolicyRevisionId is { } revisionId)
         {
             var seed = command.JudgeAttempt;
 
@@ -656,10 +661,27 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 .ConfigureAwait(false);
         }
 
+        // Seeded here rather than at freeze, for the judge attempt's own reason: a measurement is queued against an
+        // answer, so it must not exist until there IS one. The eligibility rule is the per-cell one shared with the
+        // freeze marker and with EnqueueMissingFidelityAsync — the current project settings decide it, because the
+        // fidelity settings deliberately write through the freeze.
+        if (settings is { FidelityEnabled: true } && IsFidelityMeasuredCell(run))
+        {
+            _ = await AppendFidelityWorkAsync(run, settings.FidelityKldEnabled ? FidelityKindKld : FidelityKindPerplexity, now, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         await SaveAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return await ToRecordWithJudgeAsync(run, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    ///     The measured cell of a repeat group: non-warm-up, first of its group. One rule, three callers — freeze's
+    ///     "skipped" marker, the seed on primary success, and the measure-existing sweep — because a cell measured by
+    ///     one of them and a cell measured by another must mean the same thing.
+    /// </summary>
+    private static bool IsFidelityMeasuredCell(BenchmarkRun run) => !run.IsWarmup && run.RepeatIndex is null or 1;
 
     public Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId, long expectedRunVersion, string errorMessage, CancellationToken cancellationToken = default) =>
         TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Failed, BenchmarkWorkStatus.Failed, errorMessage,
