@@ -13,6 +13,7 @@ import {
 	getBenchmarkProject,
 	getBenchmarkRubricPresets,
 	getBenchmarkRun,
+	compareBenchmarkCells,
 	listBenchmarkCells,
 	listBenchmarkComparisons,
 	listBenchmarkProjects,
@@ -37,8 +38,8 @@ import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest as StartBenchmarkRunRequest,
 } from "@/core/api/generated";
 import { callWithResponseValidation } from "@/core/api/ResponseValidation";
-import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
-import { toBenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
+import type { BenchmarkCell, BenchmarkPairedDelta } from "@/features/benchmarks/models/BenchmarkCells";
+import { toBenchmarkCell, toBenchmarkPairedDelta } from "@/features/benchmarks/models/BenchmarkCells";
 import { isFidelityActive } from "@/features/benchmarks/models/BenchmarkFidelity";
 import {
 	toBenchmarkComparisonList,
@@ -82,6 +83,8 @@ const benchmarkQueryKeys = {
 	runs: (projectId: string) => ["benchmarks", "projects", projectId, "runs"] as const,
 	taskItems: (projectId: string) => ["benchmarks", "projects", projectId, "items"] as const,
 	cells: (projectId: string) => ["benchmarks", "projects", projectId, "cells"] as const,
+	cellComparison: (projectId: string, cellKeys: readonly string[]) =>
+		["benchmarks", "projects", projectId, "compare", [...cellKeys].sort().join("|")] as const,
 	run: (id: string) => ["benchmarks", "runs", id] as const,
 	/** The prefix every {@link benchmarkQueryKeys.run} entry sits under, for the rare change that touches runs it cannot name. */
 	runDetails: ["benchmarks", "runs"] as const,
@@ -924,6 +927,42 @@ export function useBenchmarkCells(projectId: string | null, enabled: boolean) {
 				cells: (data.cells ?? []).map(toBenchmarkCell),
 				cohort: toBenchmarkRankCohort(data.rankCohort),
 				scorableItemCount: data.scorableItemCount ?? 0,
+			};
+		},
+	});
+}
+
+/** Two to six cells side by side, plus every paired difference between them. */
+export interface BenchmarkCellComparison extends BenchmarkCellList {
+	/**
+	 * One entry per unordered pair that shares at least three rankably-answered items. A REQUESTED pair with no entry
+	 * means exactly that — too few shared items — and never a delta of zero.
+	 */
+	pairedDeltas: BenchmarkPairedDelta[];
+}
+
+/**
+ * The paired-difference read. Enabled only for a real selection of two or more: the node refuses fewer, and asking it
+ * anyway would turn an empty picker into an error the operator has to dismiss.
+ */
+export function useBenchmarkCellComparison(projectId: string | null, cellKeys: readonly string[]) {
+	return useQuery<BenchmarkCellComparison>({
+		queryKey: benchmarkQueryKeys.cellComparison(projectId ?? "", cellKeys),
+		enabled: Boolean(projectId) && cellKeys.length >= 2,
+		queryFn: async ({ signal }) => {
+			const { data } = await callWithResponseValidation(
+				compareBenchmarkCells({
+					path: { projectId: projectId as string },
+					query: { cellKeys: [...cellKeys] },
+					signal,
+					throwOnError: true,
+				}),
+			);
+			return {
+				cells: (data.cells ?? []).map(toBenchmarkCell),
+				cohort: toBenchmarkRankCohort(data.rankCohort),
+				scorableItemCount: data.scorableItemCount ?? 0,
+				pairedDeltas: (data.pairedDeltas ?? []).map(toBenchmarkPairedDelta),
 			};
 		},
 	});

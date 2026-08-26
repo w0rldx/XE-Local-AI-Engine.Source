@@ -1,6 +1,7 @@
 import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellItemResponse as CellItemResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse as CellResponse,
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse as PairedDeltaResponse,
 } from "@/core/api/generated";
 import type { BenchmarkRankExclusionReason } from "@/features/benchmarks/models/BenchmarkModels";
 import { toBenchmarkRankExclusionReason } from "@/features/benchmarks/models/BenchmarkModels";
@@ -112,3 +113,62 @@ export function benchmarkNiahRecall(cell: BenchmarkCell, items: readonly Benchma
 		recall: graded.length === 0 ? null : graded.filter((item) => (item.qualityScore as number) >= 50).length / graded.length,
 	};
 }
+
+/**
+ * The paired difference between two cells over the items they BOTH answered rankably, with a 95 % percentile
+ * bootstrap interval. Paired on purpose: resampling the per-item DIFFERENCES removes item difficulty as a variance
+ * source, which is what makes the interval tight enough to separate two models on a suite this small.
+ */
+export interface BenchmarkPairedDelta {
+	aCellKey: string;
+	bCellKey: string;
+	/** How many items were rankable in both cells; the resampling unit. Never below three — see the absence rule. */
+	sharedItemCount: number;
+	/** Mean of qualityA − qualityB over the shared items. Positive means A scored higher. */
+	delta: number;
+	ciLow: number;
+	ciHigh: number;
+	/** False exactly when 0 lies inside the interval. The node's flag, never re-derived from the two bounds. */
+	separated: boolean;
+}
+
+export const toBenchmarkPairedDelta = (value: PairedDeltaResponse): BenchmarkPairedDelta => ({
+	aCellKey: value.aCellKey,
+	bCellKey: value.bCellKey,
+	sharedItemCount: value.sharedItemCount ?? 0,
+	delta: value.delta ?? 0,
+	ciLow: value.ciLow ?? 0,
+	ciHigh: value.ciHigh ?? 0,
+	separated: value.separated ?? false,
+});
+
+/**
+ * The delta between two cells in the direction the reader asked for. The node reports one entry per UNORDERED pair,
+ * so picking B first has to flip the sign and swap the interval's ends rather than show A − B under a B − A heading.
+ *
+ * Null means the node reported no entry for the pair, which says "fewer than three shared items" and never "zero
+ * difference" — an interval three points cannot support is worse than no interval.
+ */
+export function benchmarkPairedDeltaFor(
+	deltas: readonly BenchmarkPairedDelta[],
+	aCellKey: string,
+	bCellKey: string,
+): BenchmarkPairedDelta | null {
+	const direct = deltas.find((entry) => entry.aCellKey === aCellKey && entry.bCellKey === bCellKey);
+	if (direct !== undefined) {
+		return direct;
+	}
+	const reversed = deltas.find((entry) => entry.aCellKey === bCellKey && entry.bCellKey === aCellKey);
+	return reversed === undefined
+		? null
+		: { ...reversed, aCellKey, bCellKey, delta: -reversed.delta, ciLow: -reversed.ciHigh, ciHigh: -reversed.ciLow };
+}
+
+/** `+6.2` / `−1.4`: the sign is the whole reading, so it is always printed. */
+export const formatBenchmarkDelta = (value: number): string => `${value >= 0 ? "+" : "−"}${Math.abs(value).toFixed(1)}`;
+
+/** `owner/Repo Q4_K_M · q8_0` — enough to tell two cells of one project apart in a picker. */
+export const benchmarkCellLabel = (cell: BenchmarkCell, autoLabel: string): string => {
+	const repeat = cell.repeatIndex === null ? "" : ` #${cell.repeatIndex}`;
+	return `${cell.primaryModelName} · ${cell.kvCacheType ?? autoLabel}${repeat}`;
+};

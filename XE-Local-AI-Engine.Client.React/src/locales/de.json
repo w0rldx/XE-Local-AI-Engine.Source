@@ -4589,6 +4589,19 @@
 				"missing": "Nie beantwortet: {{items}}",
 				"legacyItem": "die Aufgabe des Projekts",
 				"unknownItem": "Aufgabe {{index}}"
+			},
+			"paired": {
+				"title": "Gepaarte Differenz",
+				"a": "A",
+				"b": "B",
+				"hint": "Wählen Sie zwei verschiedene Kombinationen, um sie über die gemeinsamen Aufgaben zu vergleichen.",
+				"loading": "Wird verglichen…",
+				"insufficient": "Diese beiden teilen sich weniger als drei wertbar beantwortete Aufgaben, was kein Intervall trägt. Das ist eine Lücke in der Messung, kein Gleichstand.",
+				"value": "A − B = {{delta}} [{{low}}, {{high}}]",
+				"separated": "getrennt",
+				"notSeparated": "nicht getrennt",
+				"notSeparatedHelp": "Null liegt im Intervall: diese Sammlung trennt die beiden nicht.",
+				"detail": "Über die {{count}} von beiden beantworteten Aufgaben, 95-%-Bootstrap-Intervall."
 			}
 		},
 		"customTools": {

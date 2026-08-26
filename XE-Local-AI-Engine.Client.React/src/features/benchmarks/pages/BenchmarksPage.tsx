@@ -44,6 +44,7 @@ import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/Benchma
 import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
 import type { BenchmarkMatrixSelection } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkLaunchMatrix } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
+import { BenchmarkPairedDelta } from "@/features/benchmarks/components/BenchmarkPairedDelta";
 import { BenchmarkPairwiseEstimateNote } from "@/features/benchmarks/components/BenchmarkPairwiseEstimateNote";
 import { BenchmarkPairwiseMatrix } from "@/features/benchmarks/components/BenchmarkPairwiseMatrix";
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
@@ -796,6 +797,11 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 							onDeleteRun={removeRun}
 						/>
 					)}
+					{/* "A beats B by 6" is only a finding with an interval on it, and the interval is paired over the items
+					    the two combinations share. Offered wherever a suite is ranked. */}
+					{showCells && (cellsQuery.data?.cells.length ?? 0) >= 2 && detail ? (
+						<BenchmarkPairedDelta projectId={detail.id} cells={cellsQuery.data?.cells ?? []} />
+					) : null}
 					{/* One fit covers the cohort, so the matrix is mounted once here rather than under each run pane. */}
 					{detail?.judge.mode === "pairwise" ? <BenchmarkPairwiseMatrix projectId={detail.id} /> : null}
 					{selectedRunIds.length >= 2 ? <BenchmarkLaunchCompare runIds={selectedRunIds} /> : null}

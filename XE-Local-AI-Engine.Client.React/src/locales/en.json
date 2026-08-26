@@ -4589,6 +4589,19 @@
 				"missing": "Never answered: {{items}}",
 				"legacyItem": "the project's task",
 				"unknownItem": "item {{index}}"
+			},
+			"paired": {
+				"title": "Paired difference",
+				"a": "A",
+				"b": "B",
+				"hint": "Pick two different combinations to compare them over the items they share.",
+				"loading": "Comparing…",
+				"insufficient": "These two share fewer than three rankably answered items, which cannot support an interval. That is a gap in the measurement, not a tie.",
+				"value": "A − B = {{delta}} [{{low}}, {{high}}]",
+				"separated": "separated",
+				"notSeparated": "not separated",
+				"notSeparatedHelp": "Zero is inside the interval: this suite does not separate them.",
+				"detail": "Over the {{count}} items both answered, 95 % bootstrap interval."
 			}
 		},
 		"customTools": {
