@@ -150,6 +150,52 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     }
 
     [Test]
+    public async Task RequeueFidelityAsync_PutsTheClaimedItemBackInTheQueueRatherThanFailingIt()
+    {
+        await using var context = await CreateSchemaAsync("requeue-fidelity.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
+        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var attemptId = await store.EnqueueFidelityAsync(run.Id, "kld").ConfigureAwait(false);
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+
+        var requeued = await store.RequeueFidelityAsync(run.Id, claimed.Version, "another process holds the base logits").ConfigureAwait(false);
+
+        // Still queued, with the reason beside it: "waiting on another process" and "this will not happen" must not
+        // read the same, and a fidelity work item pins attempt = 1, so a failure here would have no retry behind it.
+        var projection = AssertEx.NotNull(requeued.Fidelity);
+        AssertEx.Equal("queued", projection.Status);
+        AssertEx.True(AssertEx.NotNull(projection.ErrorMessage).Contains("another process", StringComparison.Ordinal),
+            "The reason travels with the item so a reader can tell waiting from failed.");
+        context.ChangeTracker.Clear();
+        AssertEx.Equal(BenchmarkJudgeAttemptStatus.Queued,
+            (await context.BenchmarkFidelityAttempts.AsNoTracking().SingleAsync(entity => entity.Id == attemptId).ConfigureAwait(false)).Status);
+
+        var reclaimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        AssertEx.Equal(BenchmarkWorkKind.Fidelity, reclaimed.Kind);
+        AssertEx.Equal<Guid?>(attemptId, reclaimed.FidelityAttemptId, "The consumer picks the same measurement up again on its next claim.");
+    }
+
+    [Test]
+    public async Task RequeueFidelityAsync_OnAnAlreadyTerminalAttempt_ChangesNothing()
+    {
+        await using var context = await CreateSchemaAsync("requeue-fidelity-terminal.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, _) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+        var run = await store.StartRunAsync(CreateRun(project)).ConfigureAwait(false);
+        _ = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        var attemptId = await store.EnqueueFidelityAsync(run.Id, "ppl").ConfigureAwait(false);
+        var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = await store.MarkFidelitySucceededAsync(new BenchmarkFidelitySuccessCommand(run.Id, claimed.Version, attemptId, PerplexityMean: 6.7983))
+                       .ConfigureAwait(false);
+
+        // A requeue racing a completion must not start a second measurement of a cell that already has its number.
+        _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.RequeueFidelityAsync(run.Id, claimed.Version, "too late")).ConfigureAwait(false);
+        AssertEx.Null(await store.ClaimNextAsync().ConfigureAwait(false));
+    }
+
+    [Test]
     public async Task Recovery_RunningComparison_TerminalizesFailed()
     {
         await using var context = await CreateSchemaAsync("recover-comparison.sqlite").ConfigureAwait(false);

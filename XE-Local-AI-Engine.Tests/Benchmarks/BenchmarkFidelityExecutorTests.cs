@@ -177,6 +177,24 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         AssertEx.Equal("quant.gguf", second.CapacityRequests[0].ModelName);
     }
 
+    [Test]
+    public async Task Execute_WhenAnotherProcessHoldsTheBaseLogitLease_RequeuesInsteadOfFailing()
+    {
+        // The message has always promised a retry; failing the item was terminal, and a fidelity work item pins
+        // attempt = 1, so there was nothing behind that promise. It goes back to Queued instead.
+        var harness = new Harness(_root, kind: "kld");
+        var key = BenchmarkKldCacheKey.Create(Harness.BaseFingerprint, BenchmarkFidelityCorpus.Require().Sha256, BenchmarkFidelityPolicy.DefaultChunks);
+        using var heldByAnotherProcess = AssertEx.NotNull(harness.Cache.TryAcquireLease(key));
+
+        await harness.Executor().ExecuteAsync(harness.Work(), CancellationToken.None);
+
+        _ = await harness.Store.Received(1)
+                         .RequeueFidelityAsync(harness.RunId, Harness.WorkVersion, Arg.Any<string>(), Arg.Any<CancellationToken>());
+        _ = await harness.Store.DidNotReceive()
+                         .MarkFidelityFailedAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+        _ = await harness.Store.DidNotReceiveWithAnyArgs().MarkFidelitySucceededAsync(default!, default);
+    }
+
     private const string BasePhaseOutput = """
         0.31.519.491 I perplexity: 7.18 seconds per pass - ETA 5.97 minutes
         1.12.579.214 I Final estimate: PPL = 5.7712 +/- 0.38886
@@ -251,13 +269,16 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         }
 
         public const string BaseModelName = "base.gguf";
-        private static readonly string BaseFingerprint = "v1:" + new string('e', 64);
         private readonly Dictionary<string, IBenchmarkInstalledModelLease> _leases;
 
+        public static string BaseFingerprint { get; } = "v1:" + new string('e', 64);
         public static Guid AttemptId { get; } = new("44444444-4444-4444-4444-444444444444");
         public IBenchmarkStore Store { get; }
         public Guid RunId { get; }
         public IGgufModelStore Gguf { get; }
+
+        /// <summary>The base-logit cache the executor writes to, so a test can hold its lease the way a rival process would.</summary>
+        public BenchmarkKldBaseCache Cache => _cache;
         /// <summary>Whether the resolved runtime directory contains the perplexity helper at all.</summary>
         public bool RuntimeHasPerplexityTool { get; set; } = true;
 

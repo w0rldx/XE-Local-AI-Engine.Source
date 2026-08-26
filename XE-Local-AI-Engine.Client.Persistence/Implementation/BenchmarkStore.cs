@@ -918,6 +918,51 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         TerminalizeFidelityAsync(runId, expectedWorkVersion, BenchmarkJudgeAttemptStatus.Cancelled, BenchmarkWorkStatus.Cancelled, errorMessage: null,
             success: null, cancellationToken);
 
+    public async Task<BenchmarkRunRecord> RequeueFidelityAsync(Guid runId,
+        long expectedWorkVersion,
+        string reason,
+        CancellationToken cancellationToken = default)
+    {
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await AcquireWorkCompletionAsync(runId, BenchmarkWorkKind.Fidelity, expectedWorkVersion, cancellationToken).ConfigureAwait(false);
+        _dbContext.ChangeTracker.Clear();
+        var run = await RequireRunAsync(runId, tracking: true, cancellationToken).ConfigureAwait(false);
+        var work = await RequireWorkAsync(run.Id, BenchmarkWorkKind.Fidelity, cancellationToken).ConfigureAwait(false);
+        EnsureVersion(work.Version, expectedWorkVersion);
+        var attempt = work.FidelityAttemptId is { } attemptId
+            ? await _dbContext.BenchmarkFidelityAttempts.SingleOrDefaultAsync(entity => entity.Id == attemptId, cancellationToken).ConfigureAwait(false)
+            : null;
+        if (attempt is null || IsAttemptTerminal(attempt.Status))
+        {
+            // Something already finished this measurement. Re-queueing it would run a second one nobody asked for.
+            return ToRecord(run);
+        }
+
+        // The CHECK pins attempt = 1, so a requeue is a status reset and not a retry counter: the work item goes back
+        // to the head of its own queue slot and the consumer picks it up again on the next claim.
+        var now = Now();
+        var sanitized = Sanitize(reason);
+        work.Status = BenchmarkWorkStatus.Queued;
+        work.StartedAtUtc = null;
+        work.ErrorMessage = sanitized;
+        work.Version++;
+        attempt.Status = BenchmarkJudgeAttemptStatus.Queued;
+        attempt.StartedAtUtc = null;
+        attempt.ErrorMessage = sanitized;
+        attempt.Version++;
+
+        // Still 'queued' rather than 'failed', with the reason beside it: the difference is exactly what a reader
+        // needs to tell "this measurement is waiting on another process" from "this measurement will not happen".
+        run.FidelityStatus = "queued";
+        run.FidelityErrorMessage = sanitized;
+        run.Version++;
+        run.LastStreamSequence = checked(run.LastStreamSequence + 1);
+        run.UpdatedAtUtc = now;
+        await SaveAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return ToRecord(run);
+    }
+
     public Task MarkComparisonFailedAsync(long queueSequence, long expectedWorkVersion, string errorMessage, CancellationToken cancellationToken = default) =>
         TerminalizeComparisonWorkAsync(queueSequence, expectedWorkVersion, BenchmarkJudgeAttemptStatus.Failed, BenchmarkWorkStatus.Failed,
             Sanitize(errorMessage), success: null, cancellationToken);

@@ -95,6 +95,13 @@ public sealed class BenchmarkFidelityExecutor(
         {
             _ = await store.MarkFidelityCancelledAsync(work.RunId, work.Version, CancellationToken.None).ConfigureAwait(false);
         }
+        catch (BenchmarkFidelityRequeueException exception)
+        {
+            // NOT a failure: the blocker is another process's work, and it clears itself. The item goes back to Queued
+            // carrying the reason, so the consumer moves on to whatever else is waiting and comes back to this.
+            logger.LogInformation("Benchmark fidelity work {RunId} was requeued: {Reason}", work.RunId, exception.Message);
+            _ = await store.RequeueFidelityAsync(work.RunId, work.Version, exception.Message, CancellationToken.None).ConfigureAwait(false);
+        }
         catch (Exception exception)
         {
             logger.LogError(exception, "Benchmark fidelity work {RunId} failed.", work.RunId);
@@ -240,11 +247,13 @@ public sealed class BenchmarkFidelityExecutor(
         using var lease = cache.TryAcquireLease(key);
         if (lease is null)
         {
-            // Another writer holds it. Re-check the finished file once — it may have landed while we resolved paths —
-            // and otherwise leave the item to be retried rather than writing a second multi-gigabyte copy.
-            return cache.TryResolveExisting(key) is { } published
+            // Another writer holds it, so this process must not write a second multi-gigabyte copy. Wait for theirs on
+            // the SAME cadence a capacity rejection waits on, and if it has still not landed put the item back in the
+            // queue. It used to throw here, which terminalized the measurement as failed — under a message that
+            // promised a retry there was no mechanism for.
+            return await WaitForPublishedBaseAsync(key, token).ConfigureAwait(false) is { } published
                 ? new KldPreparation(key, published, baseModelName, baseFingerprint)
-                : throw new BenchmarkExecutionException(BaseWaitedTooLongMessage);
+                : throw new BenchmarkFidelityRequeueException(BaseWaitedTooLongMessage);
         }
 
         // Reserved for the BASE model, and only once this phase is certainly going to run it: an early return on a
@@ -291,6 +300,30 @@ public sealed class BenchmarkFidelityExecutor(
 
         _ = cache.Trim(cacheOptions.Value.KldCacheMaxBytes, await store.ListLiveFidelityDigestsAsync(token).ConfigureAwait(false));
         return new KldPreparation(key, cache.PathFor(key), baseModelName, baseFingerprint);
+    }
+
+    /// <summary>
+    ///     Polls for the base file the process holding the lease is writing, on the retry cadence
+    ///     <see cref="BenchmarkCapacityAdmission" /> already uses for a capacity rejection — same shape, same reason:
+    ///     the blocker is transient and someone else is actively clearing it. Returns the published path, or
+    ///     <see langword="null" /> once the budget is spent, which is the caller's cue to requeue rather than fail.
+    /// </summary>
+    private async Task<string?> WaitForPublishedBaseAsync(BenchmarkKldCacheKey key, CancellationToken token)
+    {
+        for (var attempt = 0; attempt <= admissionRetry.MaxRetries; attempt++)
+        {
+            if (attempt > 0)
+            {
+                await Task.Delay(admissionRetry.Interval, token).ConfigureAwait(false);
+            }
+
+            if (cache.TryResolveExisting(key) is { } published)
+            {
+                return published;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -413,3 +446,10 @@ public sealed class BenchmarkFidelityExecutor(
 
     private sealed record KldPreparation(BenchmarkKldCacheKey Key, string BaseFilePath, string BaseModelName, string BaseFingerprint);
 }
+
+/// <summary>
+///     A measurement that cannot proceed YET, through no fault of its own — today, a base-logit file another process
+///     is still writing. It is deliberately not a <see cref="BenchmarkExecutionException" />: that path terminalizes
+///     the attempt as failed, and a fidelity work item pins <c>attempt = 1</c>, so there is no retry behind it.
+/// </summary>
+internal sealed class BenchmarkFidelityRequeueException(string message) : InvalidOperationException(message);

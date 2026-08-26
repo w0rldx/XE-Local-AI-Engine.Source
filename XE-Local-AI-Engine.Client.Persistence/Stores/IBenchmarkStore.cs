@@ -139,6 +139,15 @@ public interface IBenchmarkStore
     Task<BenchmarkRunRecord> MarkFidelityCancelledAsync(Guid runId, long expectedWorkVersion, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Returns a claimed fidelity item — work item AND attempt — to <c>Queued</c>, carrying the reason it could not
+    ///     proceed yet. For a blocker that clears itself, such as a base-logit file another process is still writing:
+    ///     the work item pins <c>attempt = 1</c>, so terminalizing it as failed is terminal in the literal sense and
+    ///     the "it will be retried" the operator was promised has nothing behind it. A no-op once the attempt is
+    ///     terminal, so a requeue racing a completion cannot start a second measurement.
+    /// </summary>
+    Task<BenchmarkRunRecord> RequeueFidelityAsync(Guid runId, long expectedWorkVersion, string reason, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Terminalizes a comparison work item and its comparison as failed. Keyed by queue sequence rather than by
     ///     run, because a comparison names TWO runs and "the run's comparison work item" is not a well-formed lookup.
     /// </summary>
