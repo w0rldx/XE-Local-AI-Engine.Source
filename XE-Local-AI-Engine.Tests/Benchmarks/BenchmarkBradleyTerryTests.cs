@@ -72,7 +72,7 @@ public sealed class BenchmarkBradleyTerryTests
         var fit = BenchmarkBradleyTerry.Fit([.. Sweep(RunA, RunB), .. Sweep(RunA, RunC), .. Sweep(RunB, RunC), .. Sweep(RunA, RunD)], replicates: 0);
 
         // Measured 62 sweeps for this four-run fixture at the 1e-10 log-strength tolerance. The bound is what the cap
-        // has to be a safety net for, not a tuning target: the plan's "< 60" was an estimate taken before the fit ran.
+        // has to be a safety net for, not a tuning target; the measured run is the authority rather than an earlier estimate.
         AssertEx.True(fit.Iterations is > 0 and < 100, $"expected convergence well under the 500-sweep cap, took {fit.Iterations}");
     }
 

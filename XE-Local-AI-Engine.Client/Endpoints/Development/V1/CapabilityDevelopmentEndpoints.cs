@@ -22,7 +22,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 ///     <para>
 ///         The container-runtime block is reported only when the resolved
 ///         <see cref="IDevelopmentSandboxRuntimeProvider" /> really is the container provider. Reporting it
-///         unconditionally — which is what this endpoint did before per-feature selection (D2) landed — told operators
+    ///         unconditionally — which this endpoint did before per-feature selection — told operators
 ///         that a node without a Docker daemon could not run Development Mode, while Development Mode was in fact
 ///         running perfectly well on the supervised process sandbox. An over-reported dependency is not a harmless
 ///         extra field: it is a false blocker on a working feature.

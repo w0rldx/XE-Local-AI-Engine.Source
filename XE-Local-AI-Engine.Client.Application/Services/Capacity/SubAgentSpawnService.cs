@@ -42,7 +42,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///         AllowedToolNames) is tool-less. Every expected rejection is a sanitized string, not an exception.
 ///     </para>
 /// </summary>
-internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExecutionService
+internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExecutionService
 {
     // The inner agent-as-tool exposes a single "query" input parameter (re-verified against MAF 1.15.0
     // AIAgentExtensions.AsAIFunction); the spawn task is passed under
@@ -132,7 +132,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (string.IsNullOrWhiteSpace(request.Task) || !HasExactlyOneBinding(request))
+        if (string.IsNullOrWhiteSpace(request.Task) || !SubAgentSpawnPolicy.HasExactlyOneBinding(request))
         {
             return ReasonInvalidArguments;
         }
@@ -332,21 +332,6 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
             : SpawnOutcome.Success(content);
     }
 
-    private async Task<WorkspaceOpenOutcome> OpenWorkspaceAsync(Guid? workspaceId, CancellationToken cancellationToken)
-    {
-        if (workspaceId is not { } id)
-        {
-            return new WorkspaceOpenOutcome(Session: null, Failure: null);
-        }
-
-        var opened = await _mcpWorkspaceSessionFactory.OpenAsync(id, cancellationToken).ConfigureAwait(false);
-        return opened.Session is { } session
-            ? new WorkspaceOpenOutcome(session, Failure: null)
-            : new WorkspaceOpenOutcome(Session: null,
-                Failure: SpawnOutcome.Rejected(opened.FailureCode ?? McpExecutionFailureCodes.WorkspacePreparationFailed,
-                    opened.DisplayMessage));
-    }
-
     private async Task<ResolvedBinding?> TryCreateResolvedMcpBindingAsync(McpExecutionBinding binding,
         McpExecutionBindingRequest request,
         CancellationToken cancellationToken)
@@ -389,21 +374,21 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
                                                   || string.Equals(tool.Name, "search_text", StringComparison.Ordinal)))
                         .ToArray();
         if (safeOffer.Length != 3
-            || !HasExactCoderToolNames(safeOffer.Select(static tool => tool.Name))
+            || !SubAgentSpawnPolicy.HasExactCoderToolNames(safeOffer.Select(static tool => tool.Name))
             || safeOffer.Length != allowedTools.Count)
         {
             tools = null;
             return false;
         }
 
-        var executables = InvocationToolResolver.Resolve(ToOfferPlaceholders(safeOffer),
+        var executables = InvocationToolResolver.Resolve(SubAgentSpawnPolicy.ToOfferPlaceholders(safeOffer),
             _toolRegistry,
             _clientLocalToolRegistry,
             _mcpToolRegistry,
             _logger);
         if (executables.Count != 3
             || executables.Any(static tool => tool is ApprovalRequiredAIFunction)
-            || !HasExactCoderToolNames(executables.Select(static tool => tool.Name)))
+            || !SubAgentSpawnPolicy.HasExactCoderToolNames(executables.Select(static tool => tool.Name)))
         {
             tools = null;
             return false;
@@ -435,7 +420,7 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
             return (false, null);
         }
 
-        var executables = await InvocationToolResolver.ResolveAsync(ToOfferPlaceholders(allowedTools),
+        var executables = await InvocationToolResolver.ResolveAsync(SubAgentSpawnPolicy.ToOfferPlaceholders(allowedTools),
             _toolRegistry,
             _clientLocalToolRegistry,
             _mcpToolRegistry,
@@ -476,15 +461,6 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
         }
 
         return (true, adapted);
-    }
-
-    private static bool HasExactCoderToolNames(IEnumerable<string> names)
-    {
-        var distinctNames = names.ToHashSet(StringComparer.Ordinal);
-        return distinctNames.Count == 3
-               && distinctNames.Contains("list_files")
-               && distinctNames.Contains("read_file")
-               && distinctNames.Contains("search_text");
     }
 
     // Allow: a cloud spawn consumes a cloud-budget unit (DoS-of-wallet cap); a local Allow carries a ledger reservation
@@ -585,248 +561,5 @@ internal sealed class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExe
         }
     }
 
-    private async Task<ResolvedBinding?> ResolveBindingAsync(SubAgentSpawnRequest request, CancellationToken ct)
-    {
-        // model-id-only binding: no agent profile, so no AllowedToolNames to curate from → the child is tool-less.
-        if (!string.IsNullOrWhiteSpace(request.ModelId))
-        {
-            var instructions = string.IsNullOrWhiteSpace(request.Instructions)
-                ? BaseInstructionComposer.Compose(_instructionProvider.GetBaseScaffold(), DefaultSubAgentPersonaInstructions)
-                : request.Instructions;
-            return new ResolvedBinding(request.ModelId, instructions, Tools: null);
-        }
 
-        var definition = await ResolveDefinitionAsync(request.SubAgentKey!, ct).ConfigureAwait(false);
-        if (definition is null || string.IsNullOrWhiteSpace(definition.ModelProfile))
-        {
-            return null;
-        }
-
-        // Resolve the FULL runtime for the bound child in ONE pass — the same ResolvedAgentRuntime a direct agent send
-        // consumes — so the child inherits the resolved system prompt (scaffold + persona + injected playbook memory),
-        // reasoning effort, and skills as one unit, not just its curated tool set. Reading only AllowedTools here used to
-        // let a saved sub-agent silently run on raw definition.Instructions with no scaffold, reasoning, or
-        // skills — LESS grounding than the anonymous model-id-only path, which already composes the base scaffold.
-        var resolved = await _agentDefinitionResolver
-                             .ResolveAsync(definition.Id, definition.ModelProfile, cancellationToken: ct)
-                             .ConfigureAwait(false);
-        if (resolved is null)
-        {
-            // TOCTOU: the definition was deleted between the fetch above and this resolve. Reject with the sanitized
-            // unresolved reason rather than degrade to raw instructions (the very bypass this fix closes).
-            return null;
-        }
-
-        // The profile's OWN curated tool set: offer ∩ AllowedToolNames (already capability-gated by the resolver),
-        // bridged to executables, then UNCONDITIONALLY strip spawn_subagent so the child can never spawn (the structural
-        // depth cap), regardless of what its AllowedToolNames lists.
-        var tools = CurateChildTools(resolved.AllowedTools);
-
-        // The child model's OWN thinking capability gates the reasoning field, exactly as the direct path
-        // (resolution.SupportsThinking) and the orchestration-participant path (participant.SupportsThinking) gate
-        // theirs: a non-thinking Ollama model 400s on think:true/level, so ParticipantReasoningOptions omits the field
-        // for it. Cache-first; no probe on a cache hit.
-        // The child's knowledge-tool locality gate is applied inside AgentDefinitionResolver above (it classifies the
-        // pinned effective model, which for a spawned child IS definition.ModelProfile), so only the thinking bit is
-        // taken here; the locality element is ignored.
-        var childCapabilities = await _modelCapabilityResolver
-                                      .ResolveAsync(definition.ModelProfile, ct)
-                                      .ConfigureAwait(false);
-        var (supportsThinking, _, _) = childCapabilities;
-
-        return new ResolvedBinding(definition.ModelProfile,
-            resolved.ResolvedSystemPrompt,
-            tools,
-            // The child model's own reasoning-budget enforceability rides alongside its thinking capability, so a child
-            // pinned to a template that renders no reasoning end marker is not handed a cap llama.cpp would ignore.
-            new ChildReasoning(resolved.ReasoningEffort, supportsThinking, childCapabilities.ReasoningBudgetEnforceable),
-            resolved.Skills);
-    }
-
-    // Bridges the resolver's curated AllowedTools (capability-gated, profile-pool offer ∩ AllowedToolNames) to
-    // executables via the shared InvocationToolResolver, then filters spawn_subagent out (the structural depth cap).
-    private IList<AITool>? CurateChildTools(IReadOnlyList<AllowedToolDto> allowedTools)
-    {
-        if (allowedTools.Count == 0)
-        {
-            return null;
-        }
-
-        var offeredExecutables = InvocationToolResolver.Resolve(ToOfferPlaceholders(allowedTools),
-            _toolRegistry,
-            _clientLocalToolRegistry,
-            _mcpToolRegistry,
-            _logger);
-
-        // Two unconditional strips, both structural — a curated child tool is never one of these:
-        //   (1) DEPTH CAP: spawn_subagent, so a child can never spawn (mirrored by the runtime Depth guard).
-        //   (2) NO HITL ROUTE: any ApprovalRequiredAIFunction. A child runs as an agent-as-tool via
-        //       AsAIFunction, which invokes with no per-run options and no approval round-trip — an approval-gated tool
-        //       would surface a ToolApprovalRequestContent the child can never answer, silently failing every call to it.
-        //       The tools are DROPPED (and warned, naming them), never unwrapped to auto-execute — unwrapping would
-        //       bypass the approval control the offer/registry/MCP policy asserted.
-        var curated = new List<AITool>(offeredExecutables.Count);
-        List<string>? droppedApprovalTools = null;
-        foreach (var tool in offeredExecutables)
-        {
-            if (string.Equals(tool.Name, SpawnSubAgentToolDefinition.ToolName, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            if (tool is ApprovalRequiredAIFunction)
-            {
-                (droppedApprovalTools ??= []).Add(tool.Name);
-                continue;
-            }
-
-            curated.Add(tool);
-        }
-
-        if (droppedApprovalTools is { Count: > 0 })
-        {
-            _logger.LogWarning("Dropped {DroppedCount} approval-required tool(s) from a sub-agent child ({DroppedTools}); a spawned child has no human-in-the-loop approval route.",
-                droppedApprovalTools.Count,
-                string.Join(", ", droppedApprovalTools));
-        }
-
-        return curated.Count > 0 ? curated : null;
-    }
-
-    // Builds a MAF AgentSkillsProvider from the resolved node skills and attaches it to the child agent's options,
-    // mirroring InvocationAgentFactory.BuildAgent's skills path (frontmatter + body-as-instructions + bundled
-    // resources; scripts are never registered). Empty/null is a no-op so a no-skills child stays byte-identical. The
-    // child receives the parent's ALREADY-RESOLVED skill set, so an imported skill arrives fenced — the trust decision
-    // was taken once at the resolver and is not re-taken, or reversed, here.
-    //
-    // Skill-tool approval is waived for children, and only for children. MAF gates load_skill, read_skill_resource and
-    // run_skill_script behind approval by default, but these tools arrive through AIContextProviders and so bypass
-    // CurateChildTools, which strips approval-required tools precisely because a spawned child has no human-in-the-loop
-    // route. Left at the default a child would be handed a load_skill it can never get approved: every call fails
-    // silently and an assigned skill is simply unreachable. The parent's approval of the spawn is the consent, and the
-    // child's skill set is the parent's resolved set — no wider. run_skill_script keeps its gate: inline skills cannot
-    // carry scripts (AddScript takes only a delegate), so the tool always fails closed and must never be pre-approved.
-    private static void AttachSkillsProvider(ChatClientAgentOptions agentOptions,
-        IReadOnlyList<ResolvedSkill>? skills,
-        ILogger<SubAgentSpawnService> logger)
-    {
-        if (skills is not { Count: > 0 } resolvedSkills)
-        {
-            return;
-        }
-
-        // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped [Experimental] in Microsoft.Agents.AI
-        // in 1.8.0. The scoped MAAI001 suppression remains at the pinned 1.15.0 until explicit graduation evidence is
-        // available. Reached only when the child agent has assigned skills, the
-        // same scoped suppression InvocationAgentFactory uses.
-#pragma warning disable MAAI001
-        var inlineSkills = new AgentInlineSkill[resolvedSkills.Count];
-        for (var index = 0; index < resolvedSkills.Count; index++)
-        {
-            var skill = resolvedSkills[index];
-            var inlineSkill = new AgentInlineSkill(skill.Name,
-                skill.Description,
-                skill.Body,
-                license: skill.License,
-                compatibility: skill.Compatibility,
-                allowedTools: skill.AllowedTools,
-                metadata: ToFrontmatterMetadata(skill.Metadata));
-
-            // Registered BEFORE the provider below is constructed: the provider renders a skill's <available_resources>
-            // block from the resources present when it first resolves the skill, so one added afterwards would be
-            // readable but never advertised. Mirrors InvocationAgentFactory.BuildInlineSkill.
-            if (skill.Resources is { Count: > 0 } resources)
-            {
-                foreach (var resource in resources)
-                {
-                    inlineSkill.AddResource(resource.Name, resource.Content, resource.Description);
-                }
-            }
-
-            inlineSkills[index] = inlineSkill;
-        }
-
-#pragma warning disable CA2000 // Ownership transfers to the ChatClientAgent via AIContextProviders; the agent disposes its context providers with itself.
-        agentOptions.AIContextProviders =
-        [
-            new AgentSkillsProvider(inlineSkills,
-                new AgentSkillsProviderOptions
-                {
-                    DisableLoadSkillApproval = true,
-                    DisableReadSkillResourceApproval = true
-                })
-        ];
-#pragma warning restore CA2000
-#pragma warning restore MAAI001
-
-        // Ids only: the waiver is auditable without a crafted skill name shaping a log line.
-        logger.LogInformation(
-            "Attached {SkillCount} skill(s) to a spawned sub-agent child with skill-read approval waived ({SkillIds}); the child has no human-in-the-loop approval route and the parent's spawn approval is the consent.",
-            resolvedSkills.Count,
-            string.Join(", ", resolvedSkills.Select(static skill => skill.Id)));
-    }
-
-    // Converts the skill's string metadata map onto the loosely-typed dictionary MAF's frontmatter takes; null for an
-    // absent or empty map so a skill without metadata keeps the constructor's default.
-    private static AdditionalPropertiesDictionary? ToFrontmatterMetadata(IReadOnlyDictionary<string, string>? metadata)
-    {
-        return metadata is { Count: > 0 }
-            ? new AdditionalPropertiesDictionary(metadata.Select(static entry => new KeyValuePair<string, object?>(entry.Key, entry.Value)))
-            : null;
-    }
-
-    // Converts the profile's offer DTOs into the placeholder AITools InvocationToolResolver matches by name (mirrors the
-    // single-agent path's BuildInvocationTools: ApiSide → bridge, ClientLocal → name-only placeholder swapped for the
-    // registry executable). A sub-agent never round-trips to a client, so an ApiSide offer is dropped here.
-    private static IReadOnlyList<AITool> ToOfferPlaceholders(IReadOnlyList<AllowedToolDto> offered)
-    {
-        return
-        [
-            .. offered
-               .Where(static tool => tool.Location == ToolLocation.ClientLocal)
-               .Select(static tool => InvocationToolBridge.CreateOfferPlaceholder(tool.Name, tool.RequiresApproval))
-        ];
-    }
-
-    // Resolve a persisted definition by GUID id first, then fall back to a case-sensitive name match. A spawn naming an
-    // unknown/unbound (no ModelProfile) definition is rejected upstream, never fabricated.
-    private async Task<AgentDefinitionRecord?> ResolveDefinitionAsync(string key, CancellationToken ct)
-    {
-        if (Guid.TryParse(key, out var id))
-        {
-            return await _definitionStore.GetByIdAsync(id, ct).ConfigureAwait(false);
-        }
-
-        var all = await _definitionStore.ListAsync(ct).ConfigureAwait(false);
-        var match = all.FirstOrDefault(record => string.Equals(record.Name, key, StringComparison.Ordinal));
-        if (match is null)
-        {
-            _logger.LogWarning("Sub-agent spawn referenced an unknown definition key.");
-        }
-
-        return match;
-    }
-
-    private static bool HasExactlyOneBinding(SubAgentSpawnRequest request)
-    {
-        var hasKey = !string.IsNullOrWhiteSpace(request.SubAgentKey);
-        var hasModel = !string.IsNullOrWhiteSpace(request.ModelId);
-        return hasKey ^ hasModel;
-    }
-
-    // The child's fully-resolved run inputs. Instructions is the resolved system prompt for a profile-bound child (the
-    // scaffold + persona + injected playbook memory), or the raw request instructions for a model-id-only child.
-    // Reasoning + Skills are populated only for a profile-bound child (null for model-id-only, keeping that path as-is).
-    private sealed record ResolvedBinding(
-        string ModelName,
-        string Instructions,
-        IList<AITool>? Tools,
-        ChildReasoning? Reasoning = null,
-        IReadOnlyList<ResolvedSkill>? Skills = null);
-
-    // The child's reasoning inputs: the resolved effort plus the child model's OWN thinking capability, which together
-    // drive ParticipantReasoningOptions.Build exactly as the orchestration-participant path does.
-    private sealed record ChildReasoning(string? ReasoningEffort, bool SupportsThinking, bool ReasoningBudgetEnforceable = true);
-
-    private sealed record WorkspaceOpenOutcome(IMcpWorkspaceExecutionSession? Session, SpawnOutcome? Failure);
 }

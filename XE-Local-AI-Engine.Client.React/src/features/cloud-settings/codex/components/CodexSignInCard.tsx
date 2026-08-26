@@ -24,7 +24,7 @@ import {
 	IconLogout,
 	IconRefresh,
 } from "@tabler/icons-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useCodexLogin, useCodexLogout, useCodexStatus } from "@/features/cloud-settings/codex/queries/useCodexAuth";
@@ -48,15 +48,7 @@ export function CodexSignInCard({ onSignedInChange }: CodexSignInCardProps) {
 	// Detect poll timeout to surface a helpful message instead of spinning forever.
 	const timedOut = loginFlowActive && pollStartedAt !== undefined && Date.now() - pollStartedAt > 5 * 60 * 1_000;
 
-	// prevSignedIn holds the last observed signed-in value; it lets the effective polling flag (below) stop the poll
-	// at the signed-in terminal state without a state-toggling effect. It is updated during render once the latest
-	// query data is read.
-	const prevSignedIn = useRef<boolean | undefined>(undefined);
-
-	// Effective polling: poll while the login flow is active and we have not yet observed sign-in. Deriving the flag
-	// from the last observed value (rather than toggling polling state from an effect) halts polling once sign-in
-	// completes without chaining an extra render.
-	const statusQuery = useCodexStatus({ polling: loginFlowActive && prevSignedIn.current !== true, pollStartedAt });
+	const statusQuery = useCodexStatus({ polling: loginFlowActive, pollStartedAt });
 	const status = statusQuery.data;
 	const isSignedIn = status?.signedIn === true;
 
@@ -75,12 +67,6 @@ export function CodexSignInCard({ onSignedInChange }: CodexSignInCardProps) {
 			setPollStartedAt(undefined);
 		}, []),
 	);
-
-	// Record the latest signed-in value during render so the polling-stop derivation above (which reads
-	// prevSignedIn.current in the same render) halts the poll without chaining an extra render.
-	if (prevSignedIn.current !== isSignedIn) {
-		prevSignedIn.current = isSignedIn;
-	}
 
 	// Propagate signed-in state to the parent for provider-selector gating from an effect rather than during render:
 	// calling a parent setter mid-render is the no-prop-callback-in-render violation. Fires on mount and whenever the
@@ -178,11 +164,11 @@ export function CodexSignInCard({ onSignedInChange }: CodexSignInCardProps) {
 										{({ copied, copy }) => (
 											<Tooltip label={copied ? t("pages.cloudSettings.codex.copied") : t("pages.cloudSettings.codex.copy")}>
 												<ActionIcon
-												variant="subtle"
-												color={copied ? "teal" : "gray"}
-												onClick={copy}
-												aria-label={copied ? t("pages.cloudSettings.codex.copied") : t("pages.cloudSettings.codex.copy")}
-											>
+													variant="subtle"
+													color={copied ? "teal" : "gray"}
+													onClick={copy}
+													aria-label={copied ? t("pages.cloudSettings.codex.copied") : t("pages.cloudSettings.codex.copy")}
+												>
 													{copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
 												</ActionIcon>
 											</Tooltip>

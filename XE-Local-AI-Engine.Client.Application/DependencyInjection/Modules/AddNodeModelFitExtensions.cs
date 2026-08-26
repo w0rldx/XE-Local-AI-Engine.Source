@@ -110,9 +110,8 @@ internal static class AddNodeModelFitExtensions
         builder.Services.AddScoped<IModelFitQueryService, ModelFitQueryService>();
         builder.Services.AddScoped<IModelFitRefreshTrigger, ModelFitRefreshTrigger>();
 
-        // The cross-platform hardware profiler (RAM/VRAM/GPU-vendor/CPU/free-disk), extracted out of the removed
-        // HostAgent.Linux CapabilityDetector into the surviving Providers.Capabilities project so it compiles with ZERO
-        // HostAgent.* references. Singleton — the profile is cached in-memory and re-probed only on forceRefresh:true.
+        // The provider-neutral hardware profiler reports RAM, VRAM, GPU vendor, CPU, and free disk across platforms.
+        // Singleton — the profile is cached in memory and re-probed only on forceRefresh:true.
         // The free-disk figure is reported for the models volume, resolved here from the node data dir (the same root the
         // INodeDataDirectory abstraction resolves: the per-user data dir in desktop mode, ContentRootPath otherwise — the
         // profiler is registered with a plain string at config time, so it reads the NodeData:Directory key directly).

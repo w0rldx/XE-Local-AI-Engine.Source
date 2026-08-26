@@ -9,7 +9,7 @@ using System.Text;
 /// <remarks>
 ///     No <c>required</c> members so a partial / legacy JSON parse never throws. A header value may be marked
 ///     <see cref="IsSecret" />: secret values are write-only (never returned to the UI) and redacted in
-///     <see cref="object.ToString" /> via <see cref="PrintMembers" /> (Locked #11).
+///     <see cref="object.ToString" /> via <see cref="PrintMembers" />.
 /// </remarks>
 public sealed record StoredAzureFoundryHeader
 {
@@ -30,7 +30,7 @@ public sealed record StoredAzureFoundryHeader
     /// </summary>
     public bool IsSecret { get; init; }
 
-    // Sealed-record PrintMembers signature is private (Locked #11). Redacts a secret value so it never leaks via ToString.
+    // The sealed-record PrintMembers signature is private and redacts secret values from ToString.
     private bool PrintMembers(StringBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);

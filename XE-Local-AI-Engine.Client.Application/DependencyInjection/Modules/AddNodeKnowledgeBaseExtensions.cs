@@ -20,7 +20,7 @@ internal static class AddNodeKnowledgeBaseExtensions
         // Ingestion + embedding options (section "KnowledgeBase"). The reranker model name is a MIGRATED knob seeded from
         // the node settings store the same way the llama.cpp cap/TTL + speculative knobs are: PostConfigure resolves the
         // stored value (sync twin — startup path) and, when set, overrides the config-bound value, giving the precedence
-        // stored > config > off. This keeps a follow-up operator UI a thin add (it only needs a request field + endpoint).
+        // stored > config > off.
         _ = builder.Services.AddOptions<KnowledgeBaseOptions>()
                    .Bind(configuration.GetSection(KnowledgeBaseOptions.Section))
                    .PostConfigure<INodeRuntimeSettings>(static (options, runtimeSettings) =>
@@ -55,7 +55,7 @@ internal static class AddNodeKnowledgeBaseExtensions
         builder.Services.AddScoped<IKnowledgeIndexWriter, KnowledgeIndexWriter>();
         builder.Services.AddScoped<IKnowledgeIngestionService, KnowledgeIngestionService>();
 
-        // Scoped management surfaces for the Lane-D endpoints: the delete purge (explicit ordered raw-SQL deletes, since
+        // Scoped management surfaces for the document endpoints: the delete purge (explicit ordered raw-SQL deletes, since
         // FK cascade is OFF) and the read + reindex-reset catalog. Both drive the request-scoped NodeChatDbContext.
         builder.Services.AddScoped<IKnowledgeDocumentPurgeService, KnowledgeDocumentPurgeService>();
         builder.Services.AddScoped<IKnowledgeDocumentCatalogService, KnowledgeDocumentCatalogService>();

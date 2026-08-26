@@ -4,13 +4,14 @@ import { devtools } from "@tanstack/devtools-vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import UnoCSS from "unocss/vite";
-import { defineConfig, loadEnv, type ProxyOptions } from "vite";
+import { defineConfig, loadEnv, type Plugin, type ProxyOptions } from "vite";
 
 import signalrProxyPaths from "./config/signalr-proxy-paths.json" with { type: "json" };
+import { createFrontendComponentManifestPlugin } from "./scripts/FrontendComponentManifest.mjs";
 import aspNetCoreDevelopmentCertificate from "./vite-plugins/aspnetcore-development-certificate.ts";
 import tablerDevelopmentBugfix from "./vite-plugins/tabler-development-bugfix.ts";
-import { createFrontendComponentManifestPlugin } from "./scripts/FrontendComponentManifest.mjs";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 // The version shown in the About dialog must match the released artifact without a second hand-maintained constant.
@@ -50,6 +51,50 @@ const coverageThresholds =
 
 const defaultProxyTarget = "https://localhost:50722";
 const localProxyHosts = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+// The palette generator needs only Chroma's light entry plus LCH saturation. Resolving its peer from the package that
+// owns it keeps the application bundle from loading Chroma's unrelated color catalogs and generators.
+const requireFromColorsGenerator = createRequire(createRequire(import.meta.url).resolve("@mantine/colors-generator"));
+const chromaJsRoot = path.dirname(path.dirname(requireFromColorsGenerator.resolve("chroma-js")));
+const chromaFacadeId = "virtual:mantine-chroma-generator";
+const resolvedChromaFacadeId = `\0${chromaFacadeId}`;
+const chromaLightId = `${chromaFacadeId}/light`;
+const chromaLchId = `${chromaFacadeId}/lch`;
+const chromaSaturateId = `${chromaFacadeId}/saturate`;
+
+function chromaColorsGeneratorPlugin(): Plugin {
+	return {
+		name: "chroma-colors-generator-light",
+		enforce: "pre",
+		resolveId(source) {
+			switch (source) {
+				case "chroma-js":
+				case chromaFacadeId:
+					return resolvedChromaFacadeId;
+				case chromaLightId:
+					return path.join(chromaJsRoot, "index.umd.light.js");
+				case chromaLchId:
+					return path.join(chromaJsRoot, "src/io/lch/index.js");
+				case chromaSaturateId:
+					return path.join(chromaJsRoot, "src/ops/saturate.js");
+				default:
+					return null;
+			}
+		},
+		load(id) {
+			if (id !== resolvedChromaFacadeId) {
+				return null;
+			}
+
+			return `
+import chroma from "${chromaLightId}";
+import "${chromaLchId}";
+import "${chromaSaturateId}";
+
+export default chroma;
+`;
+		},
+	};
+}
 
 function resolveLocalProxyTarget(value: string | undefined): string {
 	const target = new URL(value || defaultProxyTarget);
@@ -81,12 +126,12 @@ function localProxy(target: string, websocket = false): ProxyOptions {
 
 export default defineConfig(({ command, mode }) => {
 	const environment = { ...loadEnv(mode, process.cwd(), ""), ...process.env };
-	const proxyTarget =
-		command === "serve" && mode !== "test" ? resolveLocalProxyTarget(environment.VITE_PROXY_TARGET) : undefined;
+	const proxyTarget = command === "serve" && mode !== "test" ? resolveLocalProxyTarget(environment.VITE_PROXY_TARGET) : undefined;
 
 	return {
 		base: "/",
 		plugins: [
+			chromaColorsGeneratorPlugin(),
 			createFrontendComponentManifestPlugin(),
 			devtools(),
 			tanstackRouter({ target: "react", autoCodeSplitting: true }),
@@ -113,6 +158,7 @@ export default defineConfig(({ command, mode }) => {
 			},
 		},
 		optimizeDeps: {
+			exclude: ["chroma-js"],
 			include: ["@tanstack/react-form-devtools"],
 		},
 		resolve: {

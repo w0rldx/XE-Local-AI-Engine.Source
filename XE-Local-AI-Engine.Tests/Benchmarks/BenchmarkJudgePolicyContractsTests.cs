@@ -181,16 +181,16 @@ public sealed class BenchmarkJudgePolicyContractsTests
         var criteria = BenchmarkJudgeRubricDefaults.Default().Criteria;
         var forward = Policy(BenchmarkJudgeRubricDefaults.Default());
         var reversed = Policy(BenchmarkJudgeRubricDefaults.Default() with
-            {
-                Criteria = [.. criteria.Reverse()]
-            })
+        {
+            Criteria = [.. criteria.Reverse()]
+        })
             with
+        {
+            Model = Model() with
             {
-                Model = Model() with
-                {
-                    MemberHashes = ["bbb", "aaa"]
-                }
-            };
+                MemberHashes = ["bbb", "aaa"]
+            }
+        };
 
         AssertEx.Equal(BenchmarkJudgePolicyCanonicalizer.ToCanonicalJson(forward), BenchmarkJudgePolicyCanonicalizer.ToCanonicalJson(reversed));
         AssertEx.Equal(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(forward), BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(reversed));
@@ -443,7 +443,7 @@ public sealed class BenchmarkJudgePolicyContractsTests
     [Test]
     public void LegacyPolicyJson_WithoutModeOrKind_DeserializesToTheDefaults()
     {
-        // The exact bytes a pre-P2 build wrote: no mode, no pairwise versions, no criterion kind or config.
+        // Exact legacy-policy bytes: no mode, no pairwise versions, and no criterion kind or config.
         const string LegacyJson =
             """
             {"model":{"modelName":"judge-model","modelContentFingerprint":"v1:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","memberHashes":["aaa","bbb"]},"requestedContextTokens":4096,"promptVersion":3,"outputSchemaVersion":2,"sampling":{"temperature":0,"topP":null,"topK":null,"minP":null,"maxOutputTokens":null,"repeatPenalty":null,"repeatLastN":null,"presencePenalty":null,"frequencyPenalty":null,"stop":[],"seedPolicy":"fixed","seedValue":"0"},"rubric":{"version":1,"criteria":[{"id":"correctness","title":"T","description":"D","weight":100}]},"referenceAnswer":null}
@@ -461,8 +461,8 @@ public sealed class BenchmarkJudgePolicyContractsTests
     [Test]
     public void ComputePolicyHash_SeparatesModeAndEveryCriterionKindAndConfig()
     {
-        // The precondition the `verified:v1` sentinel rests on (plan §7.3, §20 nit): one policy revision provably
-        // means ONE rubric composition, because the mode, every criterion kind and every criterion config are inside
+        // The `verified:v1` sentinel requires one policy revision to mean exactly one rubric composition, so
+        // the mode, every criterion kind, and every criterion config are inside
         // the hash. If any of them ever left it, a constant execution key would start merging attempts that were
         // graded differently and the sentinel would have to be revisited with it.
         var baseline = Policy(BenchmarkJudgeRubricDefaults.Default());

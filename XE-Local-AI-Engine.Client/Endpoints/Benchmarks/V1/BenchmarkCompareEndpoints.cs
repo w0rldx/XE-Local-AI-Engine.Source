@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 /// <summary>
-///     Two to six cells side by side, with the paired-difference interval between every pair of them (B3). The
+///     Two to six cells side by side, with the paired-difference interval between every pair of them. The
 ///     difference is a read-time projection over the cell table — nothing here is stored, so it is always computed
 ///     from the scores the project holds right now.
 /// </summary>

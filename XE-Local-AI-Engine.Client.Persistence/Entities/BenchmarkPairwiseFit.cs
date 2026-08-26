@@ -13,7 +13,7 @@ internal sealed record class BenchmarkPairwiseFit
     public Guid PolicyRevisionId { get; set; }
     public int CohortGeneration { get; set; }
 
-    /// <summary>The task case this fit covers. NULL in P2 — Bradley–Terry is fit per case, never across cases.</summary>
+    /// <summary>The task case this fit covers. Null for a legacy single-case fit; Bradley–Terry never crosses cases.</summary>
     public Guid? TaskCaseId { get; set; }
 
     /// <summary>

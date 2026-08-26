@@ -254,7 +254,8 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
         var secondJudge = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
         var secondJudged = await store.MarkJudgeSucceededAsync(new BenchmarkJudgeSuccessCommand(run.Id, secondJudge.Version, Encoding.UTF8.GetBytes("{}"))).ConfigureAwait(false);
 
-        // S1 writes the key at launch readiness; here it is set directly so the ranked-cohort guard can be exercised.
+        // Launch readiness normally writes the execution key; this test sets it directly to isolate the
+        // ranked-cohort guard.
         await SetExecutionKeyAsync(context, second.Id, "key-a").ConfigureAwait(false);
         AssertEx.True(await store.TryPromoteReferenceExecutionKeyAsync(revision.Id, revision.CohortGeneration, "key-a").ConfigureAwait(false));
 

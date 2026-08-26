@@ -114,7 +114,7 @@ public sealed class BenchmarkJudgeExecutor(
 
             // Verifiable criteria are decided HERE — before the model lease, before capacity admission, before any
             // spawn — because a rubric that needs no model must cost no GPU. A verifier that cannot run throws and
-            // fails the attempt (R5); it never contributes a 0, which is a score an answer can genuinely earn.
+            // fails the attempt; it never contributes a 0, which is a score an answer can genuinely earn.
             var graded = BenchmarkOutputParts.ForJudge(BenchmarkExecutionSerialization.DeserializeParts(output.Span),
                 Math.Min(runtime.RequestedContextTokens, runtime.Runtime.ContextTokens));
             var verifiable = policy.Rubric.Criteria.Where(static criterion => BenchmarkJudgeCriterionKinds.IsVerifiable(criterion.Kind)).ToArray();

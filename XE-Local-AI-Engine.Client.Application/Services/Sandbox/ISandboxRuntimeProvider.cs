@@ -5,8 +5,8 @@ using System.Text;
 /// <summary>
 ///     Provider-neutral runtime over which AgentHome creates a node-scoped sandbox, copies selected folders in,
 ///     executes commands, reads results, copies artifacts out, and tears the sandbox down. The
-///     contract is shaped by AgentHome's lifecycle, not by any provider SDK — no Docker / OpenSandbox / gRPC type
-///     appears here. Implementations: <c>FakeSandboxRuntimeProvider</c> (deterministic, CI-mandatory, the safe default),
+///     contract is shaped by AgentHome's lifecycle, so no provider SDK or transport types appear here.
+///     Implementations: <c>FakeSandboxRuntimeProvider</c> (deterministic, CI-mandatory, the safe default),
 ///     <c>ProcessSandboxRuntimeProvider</c> (a jailed supervised-child process), and <c>DockerSandboxRuntimeProvider</c>
 ///     (a hardened container, Development Mode only per ADR 0004).
 ///     <para>

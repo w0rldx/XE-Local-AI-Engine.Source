@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Covers the outbound custom-header pipeline policy: every resolved header is set on the request, and a reserved
-///     name (case-insensitive) is defensively skipped even if it slipped past save-time validation (Locked #5/#8).
+///     name is defensively skipped case-insensitively even if it slipped past save-time validation.
 /// </summary>
 public sealed class CustomHeaderPipelinePolicyTests
 {

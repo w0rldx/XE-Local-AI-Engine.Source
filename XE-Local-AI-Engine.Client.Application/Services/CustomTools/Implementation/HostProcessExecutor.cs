@@ -222,7 +222,7 @@ internal sealed class HostProcessExecutor : ICustomToolExecutor
         builder.Append("\nstderr:\n");
         builder.Append(standardError.ToStringWithMarker());
 
-        // Scrub secret env values from the whole model-facing string (H4): any program the command runs can read its
+        // Scrub secret environment values from the whole model-facing string: any program the command runs can read its
         // injected env by design, so echoing a secret back through stdout/stderr is the leak this closes.
         return redactor.Redact(builder.ToString());
     }

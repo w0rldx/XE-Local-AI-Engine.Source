@@ -1,6 +1,6 @@
 import { ActionIcon, Alert, Button, Group, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { IconDeviceFloppy, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
-import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
@@ -104,13 +104,6 @@ export function McpServerForm({
 	const [envRows, setEnvRows] = useState<McpEnvRow[]>(() => toEnvRows(initialValues.env));
 	const [errors, setErrors] = useState<Record<string, string>>({});
 
-	// Refs mirror the latest committed editing state so an update to one slice (values OR envRows) can build the
-	// combined dirty candidate from the current value of the other without depending on a stale render closure.
-	const valuesRef = useRef(values);
-	valuesRef.current = values;
-	const envRowsRef = useRef(envRows);
-	envRowsRef.current = envRows;
-
 	// Compute and report the host's dirty state. Dirty = current values (with env projected back) differ from the
 	// initial snapshot; a JSON compare gives shallow/structural detection. Called from an effect (below), never during
 	// render, so the parent setter is only ever invoked after commit.
@@ -123,15 +116,11 @@ export function McpServerForm({
 	);
 
 	const updateValues = useCallback((updater: (current: McpServerFormValues) => McpServerFormValues) => {
-		const next = updater(valuesRef.current);
-		valuesRef.current = next;
-		setValues(next);
+		setValues(updater);
 	}, []);
 
 	const updateEnvRows = useCallback((updater: (current: McpEnvRow[]) => McpEnvRow[]) => {
-		const next = updater(envRowsRef.current);
-		envRowsRef.current = next;
-		setEnvRows(next);
+		setEnvRows(updater);
 	}, []);
 
 	// Report dirty state to the host from an effect, so the parent setter is only ever called after commit — never
@@ -411,9 +400,7 @@ function McpEnvEditor({ rows, errors, onKeyChange, onValueChange, onAdd, onRemov
 					{t("pages.mcp.form.env.add", "Add variable")}
 				</Button>
 			</Group>
-			{rows.length === 0 ? (
-				<EmptyState size="xs" message={t("pages.mcp.form.env.empty", "No environment variables.")} />
-			) : null}
+			{rows.length === 0 ? <EmptyState size="xs" message={t("pages.mcp.form.env.empty", "No environment variables.")} /> : null}
 			{rows.map((row, index) => (
 				<Group key={row.id} gap="xs" align="flex-start" data-testid={`mcp-form-env-row-${index}`}>
 					<TextInput

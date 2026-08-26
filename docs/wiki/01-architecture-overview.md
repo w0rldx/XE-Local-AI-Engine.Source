@@ -120,12 +120,12 @@ to the expected base commit and evidence hashes; apply revalidates those values 
 source. An agent cannot make its managed worktree authoritative merely by changing files there.
 
 This is an application-enforced workflow boundary, not operating-system isolation. Build and test code runs as
-the host user and retains the host filesystem and network access available to that user. MXC remains future
-`ISandboxRuntimeProvider`/workspace-provider work; the current architecture does not present it as an active
-security boundary. See [Security & Privacy](12-security-and-privacy.md#development-mode-source-and-execution-boundary).
+the host user and retains the host filesystem and network access available to that user. MXC is not integrated
+through the `ISandboxRuntimeProvider` or workspace-provider seams, and the current architecture does not present
+an MXC security boundary. See [Security & Privacy](12-security-and-privacy.md#development-mode-source-and-execution-boundary).
 
-**Direction of travel.** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted
-2026-07-29) moves Development Mode execution onto a **container provider behind the same `ISandboxRuntimeProvider`
+**Docker provider boundary.** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) (Accepted
+2026-07-29) defines an opt-in **container provider behind the same `ISandboxRuntimeProvider`
 seam**, with a running Docker daemon as a hard requirement for the feature and **no unisolated fallback** — no
 daemon means no Development Mode, deliberately, so the isolation posture cannot depend on what happens to be
 installed. Repository-supplied container configuration is rejected wholesale (engine-generated canonical mounts,
@@ -135,7 +135,7 @@ as a **stopgap**, not a replacement for MXC, and does not close the seam. That p
 choice, not the default**: `Development:Sandbox:Provider=docker` selects it, and because the shipped config sets no
 `Development:Sandbox` key, a default node still executes exactly as the paragraph above describes. See
 [Development Mode container implementation status](../roadmaps/development-mode-container-status.md) for the
-maintained implemented/not-implemented breakdown — this page does not track it.
+maintained provider coverage and limitations — this page does not duplicate them.
 
 **Where the code and the decisions live.** Backend: 21 endpoints in `Client/Endpoints/Development/V1/DevelopmentEndpoints.cs`
 (routes on `LocalApiRoutes.Development`), services under `Client.Application/Services/Development/`, live attempt output over
@@ -181,7 +181,7 @@ digest”:
 Stored profiles are reconstructed from the current code-owned catalog and rejected when the
 catalog version or canonical content no longer matches. The `generic-git` profile runs only fixed
 Git status and `git diff --check`; it can detect whitespace errors but provides no build or test
-evidence. The D3 test-write policy permits adding or copying protected test files, but rejects
+evidence. The test-write policy permits adding or copying protected test files, but rejects
 modification, deletion, or rename of a protected test that existed at the base commit. An attempt
 does not re-read the repository import file as its command source
 (`DevelopmentCommandProfileCatalog.cs`, `DevelopmentCommandProfileImport.cs`,
@@ -298,7 +298,7 @@ The runtime was deliberately re-architected (status: *decisions locked*). The dr
 
 | # | Decision | Reality in code |
 |---|---|---|
-| 2 | **Docker removed entirely** — **amended 2026-07-29 to "no Docker on the inference path"** by [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) | No container sandbox as the inference path; `AppHost.cs` comment confirms the in-Aspire HostAgent/Docker resource was removed. The amendment permits a Docker Engine API client (`Docker.DotNet.Enhanced` — the maintained testcontainers fork, whose assembly/namespace is still `Docker.DotNet`) and a running daemon **for Development Mode build/test/lint execution only**, as an interim step ahead of MXC. The epic's grep-clean acceptance criterion was amended in the same change. |
+| 2 | **Docker removed entirely** — **amended 2026-07-29 to "no Docker on the inference path"** by [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) | No container sandbox as the inference path; `AppHost.cs` comment confirms the in-Aspire HostAgent/Docker resource was removed. The amendment permits a Docker Engine API client (`Docker.DotNet.Enhanced` — the maintained testcontainers fork, whose assembly/namespace is still `Docker.DotNet`) and a running daemon **for Development Mode build/test/lint execution only**, as a bounded stopgap that leaves the MXC provider seam open. The epic's grep-clean acceptance criterion was amended in the same change. |
 | 5/6 | Hybrid spawn-per-model lifecycle; app-controlled HF download + local store | `LlamaServerProcessSupervisor`, `LlamaServerLocalModelProvider`, `Providers.HuggingFace`. |
 | 7/8 | Prebuilt llama.cpp, recommended-pinned + user-upgradable; GPU variant selection only | `LlamaCppBinaryManager`, `LlamaCppReleasePins.cs`, `IGpuVariantSelector`, `LlamaCppUpdateCheckService` (notify-only update check). **Amended since the lock:** prebuilt download is still the default and the only *automatic* path, but two opt-in operator paths now sit ahead of it in `EnsureBinaryAsync` — an environment-variable bring-your-own binary override, and an in-app **source build** (`ILlamaCppSourceBuildService`, `LlamaCppSourceBuildService.cs`) that closes the missing-Linux-CUDA-prebuilt gap. Neither ever runs implicitly. See [Local Runtime & Providers §2.6](03-local-runtime-and-providers.md#26-in-app-source-builds-linux). |
 | 14 | **Ollama kept as optional native secondary** (no Docker) | `Providers.Ollama` still exists; **de-orchestrated** from Aspire dev — `AppHost.cs` orchestrates only `app` + Vite + SQLite, llama.cpp is the dev runtime. |

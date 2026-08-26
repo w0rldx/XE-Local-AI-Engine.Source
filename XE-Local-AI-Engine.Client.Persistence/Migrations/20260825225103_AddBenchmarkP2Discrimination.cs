@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace XE_Local_AI_Engine.Client.Persistence.Migrations
 {
     /// <summary>
-    ///     The single schema change P2 makes, shipped whole. Three new tables (fidelity attempts, pairwise
+    ///     This schema change ships whole. Three new tables (fidelity attempts, pairwise
     ///     comparisons, the Bradley-Terry fit), the run's plaintext fidelity projection, the project's fidelity
     ///     settings, the revision's comparison-set version, and the two new work-item id columns — plus the REWRITTEN
     ///     work-item CHECK covering all four kinds.

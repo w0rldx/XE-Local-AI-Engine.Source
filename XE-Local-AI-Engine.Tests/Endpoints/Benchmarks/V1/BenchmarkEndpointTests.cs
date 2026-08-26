@@ -439,6 +439,34 @@ public sealed class BenchmarkEndpointTests
     }
 
     [Test]
+    public async Task StartRunBatch_WithAnUnsupportedSnapshot_ReportsTheDeclaredPerCellCodeAndContinues()
+    {
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "old-snapshot", 4, null, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
+                     Arg.Any<CancellationToken>())
+               .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new NotSupportedException("The runtime snapshot version is not supported."));
+        context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "current", 4, null, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
+                     Arg.Any<CancellationToken>()).Returns(Runs());
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
+            BatchBody("old-snapshot", "current"));
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 1, document.RootElement.GetProperty("started").GetArrayLength());
+        var rejected = document.RootElement.GetProperty("rejected");
+        AssertEx.Equal(expected: 1, rejected.GetArrayLength());
+        AssertEx.Equal("old-snapshot", rejected[0].GetProperty("modelName").GetString());
+        AssertEx.Equal(BenchmarkErrorCode.UnsupportedSnapshot.ToString(), rejected[0].GetProperty("code").GetString());
+        AssertEx.Equal("The runtime snapshot version is not supported.", rejected[0].GetProperty("message").GetString());
+    }
+
+    [Test]
     public async Task StartRunBatch_WhenTheProjectVersionMoved_FailsTheWholeBatch()
     {
         await using var context = CreateContext();

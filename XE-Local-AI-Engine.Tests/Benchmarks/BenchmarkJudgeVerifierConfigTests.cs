@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The activation-time half of C4: what a policy may carry. The execution half is
+///     Defines what verifier configuration a policy may carry. Execution behavior is covered by
 ///     <see cref="BenchmarkJudgeVerifiersTests" />; both go through the same parser, which is the point.
 /// </summary>
 public sealed class BenchmarkJudgeVerifierConfigTests
@@ -15,7 +15,7 @@ public sealed class BenchmarkJudgeVerifierConfigTests
     public void Parse_ForLlm_ReturnsNoSpecAndRefusesAConfig()
     {
         AssertEx.Null(BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.Llm, configJson: null));
-        AssertEx.Null(BenchmarkJudgeVerifierConfig.Parse(kind: null, configJson: null), "An absent kind is the pre-P2 default.");
+        AssertEx.Null(BenchmarkJudgeVerifierConfig.Parse(kind: null, configJson: null), "An absent kind uses the legacy-compatible default.");
 
         var withConfig = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
             BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.Llm, """{"expected":"x"}"""));

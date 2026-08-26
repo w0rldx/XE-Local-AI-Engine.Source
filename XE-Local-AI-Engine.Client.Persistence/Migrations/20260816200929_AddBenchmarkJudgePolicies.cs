@@ -12,7 +12,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
     ///     the operator score widens from 1..5 to 0..100.
     ///     <para>
     ///         <b>Up deletes every existing benchmark row</b> (work items, then runs, then projects). This is an
-    ///         explicit operator decision (plan C4): the feature is declared unused, only development boxes hold any
+    ///         explicit operator decision: the feature is declared unused, only development boxes hold any
     ///         rows, and the alternative — a fail-fast precondition — would brick node startup on such a box with no
     ///         UI path left to clear it. Down restores the previous empty schema and no data.
     ///     </para>

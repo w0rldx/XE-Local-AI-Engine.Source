@@ -305,7 +305,7 @@ At the baseline, agent-memory/playbook **analysis**, the playbook **eval/golden-
 and memory extraction are wired to **node-local models**, not a cloud provider. This is the implemented
 privacy contract behind the playbook pipeline; source wiring and tests establish the path, while this
 page does not claim operational network observation. See [Agent Mode](04-agent-mode.md) for the
-playbook P1–P5 / eval flow and the adaptive-memory extraction loop; the wiring decisions live in
+playbook analysis/evaluation flow and the adaptive-memory extraction loop; the wiring decisions live in
 `XE-Local-AI-Engine.Client.Application/Services/*` and the provider seams in
 `Providers.Abstractions` (`ILocalModelProvider` / `IChatClient` / `IEmbeddingGenerator`).
 
@@ -378,7 +378,7 @@ The **capability-honesty invariant** runs in both directions off that one record
 
 Neither half may be softened into a silent no-op: a caller must never believe it received isolation the provider does not implement.
 
-Two scope limits a reader must not overrun. **Egress is deny-everything or nothing** — where the mechanism is active the child gets an empty namespace, so egress is denied outright rather than filtered; `SandboxNetworkPolicy.Restricted` (an allow-list) stays unsupported and rejected. **Development Mode now requests the denial too, for the sandbox the agent's work runs in** (see [Development Mode egress](#development-mode-egress-two-sandboxes-one-of-them-denied) for the two-sandbox design, the capability gate, and what it does *not* cover). Both requests are **capability-gated**, so there is still no engine-wide egress posture to cite — though **Coder is covered too**, because `CoderWorkspaceReader` does not create its own sandbox: it attaches to AgentHome's via `ISandboxRuntimeProvider.ConnectAsync`, so that one policy decision covers AgentHome's 4 injection sites and Coder's single one (three tools, one injected provider — earlier text said 3, counting the tools). The request is itself **capability-gated** (`AgentHomeService.ResolveNetworkPolicy`): it asks for `None` only where the provider advertises `SupportsNetworkPolicy`, and `Unrestricted` otherwise — an unconditional request would be rejected fail-closed on any host without the mechanism. The AgentHome `policy.json` records the posture in force **at the time the agent home was initialised** (`"unrestricted"` when nothing is enforced, `"disabled"` when egress is denied); note that `EnsureBaselineFilesAsync` deliberately does **not** overwrite an existing `policy.json`, so a home created before denial shipped keeps a file reading `"unrestricted"` while the run is actually denied. That preservation is a tested contract protecting operator edits across re-init, and the drift runs in the safe direction — the file under-reports the boundary, never over-reports it — so read the provider's advertised capability, not this file, when you need the posture of a *current* run. An empty namespace is still not a kernel-hardened boundary: **strong isolation remains deferred to a future OS-isolated provider (MXC) behind this same seam**, and approval-gating upstream stays the interim control wherever a mechanism is inactive.
+Two scope limits a reader must not overrun. **Egress is deny-everything or nothing** — where the mechanism is active the child gets an empty namespace, so egress is denied outright rather than filtered; `SandboxNetworkPolicy.Restricted` (an allow-list) stays unsupported and rejected. **Development Mode now requests the denial too, for the sandbox the agent's work runs in** (see [Development Mode egress](#development-mode-egress-two-sandboxes-one-of-them-denied) for the two-sandbox design, the capability gate, and what it does *not* cover). Both requests are **capability-gated**, so there is still no engine-wide egress posture to cite — though **Coder is covered too**, because `CoderWorkspaceReader` does not create its own sandbox: it attaches to AgentHome's via `ISandboxRuntimeProvider.ConnectAsync`, so that one policy decision covers AgentHome's 4 injection sites and Coder's single one (three tools, one injected provider — earlier text said 3, counting the tools). The request is itself **capability-gated** (`AgentHomeService.ResolveNetworkPolicy`): it asks for `None` only where the provider advertises `SupportsNetworkPolicy`, and `Unrestricted` otherwise — an unconditional request would be rejected fail-closed on any host without the mechanism. The AgentHome `policy.json` records the posture in force **at the time the agent home was initialised** (`"unrestricted"` when nothing is enforced, `"disabled"` when egress is denied); note that `EnsureBaselineFilesAsync` deliberately does **not** overwrite an existing `policy.json`, so a home created before denial shipped keeps a file reading `"unrestricted"` while the run is actually denied. That preservation is a tested contract protecting operator edits across re-init, and the drift runs in the safe direction — the file under-reports the boundary, never over-reports it — so read the provider's advertised capability, not this file, when you need the posture of a *current* run. An empty namespace is still not a kernel-hardened boundary: **this backend does not provide strong OS isolation; MXC remains an unintegrated provider behind the same seam**, and approval-gating upstream stays the interim control wherever a mechanism is inactive.
 
 Guards a contributor must not weaken:
 
@@ -396,7 +396,7 @@ Guards a contributor must not weaken:
 
 Everything above describes the **default** posture: a supervised child in a working-directory jail that can still *read* everything the engine's own user can read. A second, opt-in posture now exists behind the same provider — `SandboxCreateRequest.Isolation = SandboxIsolationMode.Filesystem` — in which the host filesystem is **not present in the command's mount namespace at all**.
 
-**Status: built, probed, and consumed by two callers — `run_python` and a `Sandboxed` stdio MCP server (see [§7.2](#72-outbound-mcp-servers-run-under-a-declared-trust-tier)).** `ComputeToolGateway` names `SandboxIsolationMode.Filesystem` on every invocation and **refuses the call** on a node whose provider does not advertise `SupportsFilesystemIsolation` (see [Compute Tools §2.1](19-compute-tools.md#21-execution-flow)). `SandboxedMcpStdioTransport` does the same for an MCP server and refuses the connection the same way. AgentHome, Coder and Development Mode create sandboxes without naming an isolation mode and therefore still run the byte-identical chain they always did (asserted by `SandboxFilesystemIsolationContractTests`); extending the boundary to them is a separate epic. Nothing on this page's default posture has moved.
+**Status: built, probed, and consumed by two callers — `run_python` and a `Sandboxed` stdio MCP server (see [§7.2](#72-outbound-mcp-servers-run-under-a-declared-trust-tier)).** `ComputeToolGateway` names `SandboxIsolationMode.Filesystem` on every invocation and **refuses the call** on a node whose provider does not advertise `SupportsFilesystemIsolation` (see [Compute Tools §2.1](19-compute-tools.md#21-execution-flow)). `SandboxedMcpStdioTransport` does the same for an MCP server and refuses the connection the same way. AgentHome, Coder and Development Mode create sandboxes without naming an isolation mode and therefore still run the byte-identical chain they always did (asserted by `SandboxFilesystemIsolationContractTests`); filesystem isolation is not part of their current boundary. Nothing on this page's default posture has moved.
 
 **What the isolated chain is.** `setsid` → a named transient `systemd-run --user --scope` → `bwrap`, rendered by `SandboxIsolatedChain` (`Services/Sandbox/Implementation/Launch/Isolation/`). Inside it the workload sees: a read-only bind of `/usr` plus whatever legacy roots (`/bin`, `/lib64`, …) this host's layout needs to make an ELF interpreter resolve; an invented four-file `/etc` (`passwd`, `group`, `nsswitch.conf`, `hosts`) generated byte for byte into **sealed `memfd`s** rather than bound from the host, so the machine's real account database is never exposed; `/dev` and `/proc`, both remounted read-only; empty `/home`, `/run`, `/var`; any explicitly named read-only trees at their own canonical paths; and exactly one writable directory, `/work`, which is the engine's jail. `/tmp` is the jail's own subdirectory, so everything the workload writes stays inside the one tree the disk watchdog walks. The environment is `--clearenv` plus a fixed allow-list. PID, IPC, UTS and network namespaces are unshared; `--disable-userns --assert-userns-disabled` closes the nested-user-namespace route back out.
 
@@ -408,7 +408,7 @@ Everything above describes the **default** posture: a supervised child in a work
 
 **Termination is the scope's cgroup, not the process tree.** The workload's processes live in a PID namespace the engine cannot see, and the pid it holds belongs to `setsid`. The kill authority is therefore `systemctl --user kill --kill-whom=cgroup --signal=SIGKILL --wait <unit>` against the transient scope named at launch (`xe-<role>-<32 hex>.scope`), with the process-group kill kept as a fallback. It is applied at timeout, cancel (which previously had no group kill at all), sandbox kill, disposal, the disk ceiling, and caller cancellation; the unit name is recorded in the orphan marker so the next start can reap it, and a startup sweep kills engine-owned scopes no live worker still claims. That marker is written **before** the launch that creates the scope — `systemd-run` creates it as its first act, so a marker written afterwards would leave a window in which a second worker's sweep saw a live command's scope unclaimed and killed it — and the sweep additionally skips any unreferenced scope that has been active for less than 30 seconds, or whose age the user manager did not report. `RuntimeMaxSec` bounds a scope whose engine was hard-killed. A live test covers the case that motivates all of it: a **detached grandchild** started with its own `setsid`, which a tree-kill and a `kill(-pgid)` both miss.
 
-**What it is not.** It is a namespace boundary, not a kernel-hardened one — no seccomp filter, no LSM profile, no user-namespace-free design; a kernel LPE is out of scope for it exactly as it is for the default posture, and strong isolation remains MXC's job behind this same seam. There is no read-only *mount* capability (`SupportsReadOnlyMounts` stays off; `ReadOnlyTrees` is the isolated-mode surface, and a tree under a mount point the chain owns — `/usr`, `/dev`, `/proc`, `/work`, `/tmp`, the legacy roots — is **rejected** rather than mounted and silently shadowed). Isolation and a trusted host workspace are refused together: an isolated jail is tightened to 0700 and unreachable at its host path, which is the opposite of what a preserved checkout is for. And the jail-disk watchdog underneath it is unchanged — a best-effort visible-file occupancy check sampled every two seconds, which an unlink-then-write loop bypasses entirely. It is not a quota, and nothing here should be read as one; a real ceiling needs a project quota or a size-bounded mount, and that is a follow-up.
+**What it is not.** It is a namespace boundary, not a kernel-hardened one — no seccomp filter, no LSM profile, no user-namespace-free design; a kernel LPE is out of scope for it exactly as it is for the default posture, and strong isolation remains MXC's job behind this same seam. There is no read-only *mount* capability (`SupportsReadOnlyMounts` stays off; `ReadOnlyTrees` is the isolated-mode surface, and a tree under a mount point the chain owns — `/usr`, `/dev`, `/proc`, `/work`, `/tmp`, the legacy roots — is **rejected** rather than mounted and silently shadowed). Isolation and a trusted host workspace are refused together: an isolated jail is tightened to 0700 and unreachable at its host path, which is the opposite of what a preserved checkout is for. And the jail-disk watchdog underneath it is unchanged — a best-effort visible-file occupancy check sampled every two seconds, which an unlink-then-write loop bypasses entirely. It is not a quota, and nothing here should be read as one; the current provider has neither a project quota nor a size-bounded mount.
 
 **What `run_python` binds, and why it is two trees rather than one.** The compute tool names its own `ReadOnlyTrees`: the provisioned venv (`<compute-runtime>/venv/.venv`) and the uv-managed CPython root it links into (`<compute-runtime>/pythons`). Not the compute cache root above them — that also holds the uv download cache, the digest-pinned uv binary and the lockfile state marker, and naming the parent would have handed all of it to a model-authored script for free. Not the single installed CPython version either: uv addresses the install through a version-alias symlink beside it (`cpython-3.13-…` → `cpython-3.13.15-…`) which the venv's own `bin/python` points at, so binding only the versioned directory leaves that alias resolving to nothing inside. Both are bound **at their own canonical paths**, which is what lets the venv's compiled-in absolute paths keep working, and both are read-only: a script's `os.chmod` on `site-packages` or on the interpreter now answers `EROFS` regardless of who owns the inode. The venv's cleared write bits are still applied, demoted to what they always were — defence in depth for what happens *outside* the namespace.
 
@@ -416,9 +416,9 @@ The same no-follow / byte-recheck philosophy appears in AgentHome host-path safe
 
 ### 7.2 Outbound MCP servers run under a declared trust tier
 
-An outbound stdio MCP server is a third-party executable the operator installed, and until Phase 2 it ran as a plain
-child of the engine with nothing but an environment scrub between it and the machine. It now carries a **trust tier**
-on its registration (`McpTrustTier`), and the tier decides where its process runs. The full rationale, including why
+An outbound stdio MCP server is a third-party executable the operator installed. Legacy registrations ran as plain
+engine child processes with only an environment scrub between them and the machine. Each registration now carries a
+**trust tier** (`McpTrustTier`), and the tier decides where its process runs. The full rationale, including why
 there is no `Remote` tier and why existing rows migrated the way they did, is
 [docs/security/mcp-trust-tiers.md](../security/mcp-trust-tiers.md); what a security reader needs from this page is:
 
@@ -434,7 +434,7 @@ there is no `Remote` tier and why existing rows migrated the way they did, is
   the operator — which is what keeps `npx`- and `uvx`-based servers usable at the default tier. Comparison happens
   on resolved paths at one gate both trees pass through, and the list is code-owned.
 - **It fails closed, and it is visible before it fails.** A host whose backend does not advertise
-  `SupportsFilesystemIsolation` — Windows until G12, or a Linux host without bubblewrap — refuses the connection
+  `SupportsFilesystemIsolation` — Windows, or a Linux host without bubblewrap — refuses the connection
   before a process exists, with an engine-authored reason that names the tier and is surfaced verbatim rather than
   redacted. The Development status isolation panel carries an `mcp-stdio` row that says the same thing ahead of any
   connection attempt.
@@ -476,8 +476,8 @@ These controls limit what the **application's Development tools** read, write, p
 limit what executed repository code can do. Generated source, MSBuild targets, source generators, build scripts,
 and tests run as the host user and have that user's **host filesystem** access — the workload declares an isolation
 floor of `None` (`SandboxWorkloads.DevelopmentModeHostToolchain`), so there is no host-filesystem boundary under
-them on any backend the shipped configuration resolves. **Network access is no longer part of that sentence**: since
-G1 the agent-facing sandbox asks for egress denial wherever the backend advertises it, and reaches the network
+them on any backend the shipped configuration resolves. **Network access is no longer part of that sentence**: the
+agent-facing sandbox asks for egress denial wherever the backend advertises it, and reaches the network
 unrestricted only where it does not — see
 [Development Mode egress](#development-mode-egress-two-sandboxes-one-of-them-denied) for the two-sandbox design and
 the capability gate. **CPU, memory and process-count ceilings ARE requested for these commands** — since 2026-08-25
@@ -495,14 +495,14 @@ rather than bounding it. The Process
 sandbox and Agent Home are application-level path, byte, environment, and lifecycle controls; neither is an OS
 security boundary. Do not describe the selected folder as a kernel-enforced filesystem allow-list.
 
-MXC remains future provider work behind the existing sandbox/workspace seams. It is not integrated today, and no
-current MXC profile should be documented as a security boundary. Any future provider must implement and
-independently validate the isolation guarantees it advertises.
+MXC is not integrated through the existing sandbox or workspace seams, and no current MXC profile is a security
+boundary. A provider exposed through those seams must implement and independently validate every isolation
+guarantee it advertises.
 
 #### Development Mode egress: two sandboxes, one of them denied
 
-Until G1 landed, `DevelopmentWorkspaceProvider` created one sandbox with `NetworkPolicy = Unrestricted` and a
-comment recording the deferral. That was the one live High-risk gap in this feature: a malicious package's
+Before network denial was implemented, `DevelopmentWorkspaceProvider` created one sandbox with
+`NetworkPolicy = Unrestricted`. That was the one live High-risk gap in this feature: a malicious package's
 restore hook, an MSBuild target, or a test could read the whole clone and POST it out. It is now closed on the
 axis the engine controls, in three parts, and the honest statement of what remains open matters as much as what
 does not.
@@ -545,7 +545,7 @@ two sandboxes, not one sandbox with two postures.
 > resolves them to the process backend. On such a node **the attempt still has full host network access**, and
 > the abuse case above is still live there. What makes that acceptable rather than silent is that the
 > Development status surface reports the posture the provider actually **served**, not the one that was
-> requested. Making denial mandatory per node is an open follow-up.
+> requested. Mandatory denial on every node is not part of the current cross-platform contract.
 
 Two things this does *not* close, on any backend. A private feed named by the repository's own `NuGet.config` is
 reached by the **warm** restore, which is correct behaviour and will read as "restore worked, build failed" if
@@ -687,7 +687,7 @@ Current bans:
 | `Thread.Sleep(...)` | `await Task.Delay(..., cancellationToken)` |
 | `GC.Collect(...)` | let the runtime manage GC |
 
-The file documents its own scope: it is the "safe set" — APIs with zero current production usage — so the wall blocks *new* occurrences while keeping the build green. (`DateTimeOffset.UtcNow` and sync-over-async `.Result`/`.Wait()`/`.GetAwaiter().GetResult()` are explicitly *not yet* banned, pending a dedicated refactor.) Separately, a literal `TODO`/`FIXME`/`HACK`/`XXX` in a comment fails the build (Sonar S1135 = error) — phrase deferred work as "… follow-up:". Like every rule on this page, that one is **Release-only** per the note above: a bare `TODO` compiles cleanly in a local Debug build and fails the packaging script later.
+The file documents its own scope: it is the "safe set" — APIs with zero current production usage — so the wall blocks *new* occurrences while keeping the build green. (`DateTimeOffset.UtcNow` and sync-over-async `.Result`/`.Wait()`/`.GetAwaiter().GetResult()` remain outside the safe set because production call sites still use them.) Separately, a literal `TODO`/`FIXME`/`HACK`/`XXX` in a comment fails the build (Sonar S1135 = error); describe the present limitation or rationale directly without task markers. Like every rule on this page, that one is **Release-only** per the note above: a bare `TODO` compiles cleanly in a local Debug build and fails the packaging script later.
 
 **Maintainer rule:** don't suppress RS0030 to land a banned call; fix the call site.
 

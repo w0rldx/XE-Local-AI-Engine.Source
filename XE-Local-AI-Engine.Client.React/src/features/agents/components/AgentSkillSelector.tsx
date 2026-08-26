@@ -56,6 +56,7 @@ export function AgentSkillSelector({ selectedSkillIds, onToggleSkill }: AgentSki
 		}
 		return [...library, ...orphanSelected];
 	}, [skillsQuery.data, selectedSkillIds]);
+	const selectedSkillIdSet = useMemo(() => new Set(selectedSkillIds), [selectedSkillIds]);
 
 	return (
 		<Stack gap="xs" data-testid="agent-skill-selector">
@@ -91,7 +92,7 @@ export function AgentSkillSelector({ selectedSkillIds, onToggleSkill }: AgentSki
 			) : null}
 
 			{rows.map((skill) => {
-				const isSelected = selectedSkillIds.includes(skill.id);
+				const isSelected = selectedSkillIdSet.has(skill.id);
 
 				return (
 					<Paper withBorder={true} p="xs" key={skill.id} data-testid={`agent-skill-row-${skill.id}`}>

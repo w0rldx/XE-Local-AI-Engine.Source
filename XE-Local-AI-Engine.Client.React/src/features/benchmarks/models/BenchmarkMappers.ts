@@ -1,39 +1,39 @@
 import type {
+	XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsResponse as ComparisonsResponse,
+	XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkModelResponse as EligibleModelResponse,
+	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse as FidelityResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResponse as JudgePolicyResponse,
+	XeLocalAiEngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstimateResponse as PairwiseEstimateResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectDetailResponse as ProjectDetailResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkProjectSummaryResponse as ProjectSummaryResponse,
-	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse as FidelityResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse as RankCohortResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto as RubricResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunDetailResponse as RunDetailResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunSummaryResponse as RunSummaryResponse,
-	XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkComparisonsResponse as ComparisonsResponse,
-	XeLocalAiEngineClientEndpointsBenchmarksV1GetBenchmarkPairwiseEstimateResponse as PairwiseEstimateResponse,
-	XeLocalAiEngineClientEndpointsBenchmarksV1EligibleBenchmarkModelResponse as EligibleModelResponse,
 } from "@/core/api/generated";
 import type {
+	BenchmarkComparisonList,
 	BenchmarkEligibleModel,
 	BenchmarkEvidenceObject,
 	BenchmarkFlashAttentionMode,
-	BenchmarkRunFidelity,
 	BenchmarkJudgeCriterionScore,
 	BenchmarkJudgePolicy,
 	BenchmarkKvCacheTypeSource,
 	BenchmarkLaunchFacts,
 	BenchmarkOrigin,
 	BenchmarkOutputPart,
+	BenchmarkPairwiseEstimate,
 	BenchmarkPrimaryStatus,
 	BenchmarkProjectDetail,
 	BenchmarkProjectFidelity,
 	BenchmarkProjectSummary,
-	BenchmarkComparisonList,
-	BenchmarkPairwiseEstimate,
 	BenchmarkRankCohort,
 	BenchmarkRubric,
-	BenchmarkRunVerifier,
 	BenchmarkRunDetail,
+	BenchmarkRunFidelity,
 	BenchmarkRunJudge,
 	BenchmarkRunSummary,
+	BenchmarkRunVerifier,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	benchmarkFidelityChunkLimits,
@@ -43,8 +43,8 @@ import {
 	toBenchmarkJudgeMode,
 	toBenchmarkJudgeState,
 	toBenchmarkQualityScoreSource,
-	toBenchmarkRepeatMode,
 	toBenchmarkRankExclusionReason,
+	toBenchmarkRepeatMode,
 	toBenchmarkVerdict,
 } from "@/features/benchmarks/models/BenchmarkModels";
 
@@ -282,7 +282,7 @@ const flashAttention = (value: unknown): BenchmarkFlashAttentionMode | null =>
 const evidenceObject = (value: unknown): BenchmarkEvidenceObject | null =>
 	typeof value === "object" && value !== null && !Array.isArray(value) ? (value as BenchmarkEvidenceObject) : null;
 
-// Every member is nullable by contract (D7: legacy rows predate the receipt and stay NULL).
+// Every member is nullable by contract because legacy rows predate the receipt and stay null.
 function launchFacts(value: RunSummaryResponse): BenchmarkLaunchFacts {
 	const at = (suffix: string): unknown => (value as Record<string, unknown>)[`primary${suffix}`];
 	return {

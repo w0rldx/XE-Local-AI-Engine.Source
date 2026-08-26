@@ -184,7 +184,7 @@ describe("LocalToolsOverview", () => {
 		expect(screen.getByTestId("local-tools-empty")).toBeTruthy();
 	});
 
-	// G13: the panel renders the node's INSTALLED catalog, while the per-turn offer is narrowed by model tool capability,
+	// The panel renders the node's installed catalog, while the per-turn offer is narrowed by model tool capability,
 	// the ToolCapableModels allow-list and the agent's AllowedToolNames. The copy has to say so rather than imply the
 	// listed tools are all callable right now.
 	it("labels the list as what is installed on the node, not what a turn can call", () => {

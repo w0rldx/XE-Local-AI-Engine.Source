@@ -692,7 +692,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             "the managed workspace must not share an object store with the trusted source repository");
 
         // Shallow: proves the file:// transport was used. Given a plain local path git ignores --depth with only a
-        // warning and hardlinks the whole history, which is the exact coupling D8 exists to prevent.
+        // warning and hardlinks the whole history, which is the exact coupling the standalone clone prevents.
         var count = await RunProcessAsync(workspace, "git", "rev-list", "--count", "HEAD").ConfigureAwait(false);
         EnsureSuccess(count);
         AssertEx.Equal("1", count.StandardOutput.Trim(),
@@ -712,7 +712,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.Equal(session.BaseCommit, head.StandardOutput.Trim());
 
         // The common Git directory resolves INSIDE the workspace and is not the trusted source's — the inverted
-        // meaning of the --git-common-dir check under D8.
+        // meaning of the --git-common-dir check for a standalone clone.
         var commonDirectory = await RunProcessAsync(workspace, "git", "rev-parse", "--git-common-dir").ConfigureAwait(false);
         EnsureSuccess(commonDirectory);
         var resolvedCommon = Path.TrimEndingDirectorySeparator(Path.GetFullPath(commonDirectory.StandardOutput.Trim(), workspace));
@@ -733,7 +733,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     <para>
     ///         <c>core.fsmonitor</c> is executed as a shell command on the first index refresh, and
     ///         <see cref="DevelopmentPatchEvidenceService" /> runs <c>reset</c> and <c>add -A</c> <em>on the host</em>
-    ///         against the workspace. Under D8 the workspace <c>.git/config</c> is writable from inside the container,
+    ///         against the workspace. The workspace <c>.git/config</c> is writable from inside the container,
     ///         so without the pinned <c>-c core.fsmonitor=</c> this is a container-to-host escape. The include chain is
     ///         covered too: a command-line <c>-c</c> outranks configuration reached through <c>include.path</c>.
     ///     </para>

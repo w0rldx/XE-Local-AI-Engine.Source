@@ -99,8 +99,8 @@ public sealed class BenchmarkComparisonExecutor(
                 throw new BenchmarkExecutionException("The project no longer judges pairwise.");
             }
 
-            // The case invariant, re-asserted before a model is leased. In P2 a project is one case, so a comparison
-            // carrying anything else was enqueued against a different shape of the world than the one executing it.
+            // The legacy single-case invariant, re-asserted before a model is leased. A comparison carrying task-case
+            // identity was enqueued against a different shape of the world than this execution path supports.
             if (comparison.TaskCaseId is not null || comparison.TaskInputHash.Length != 0)
             {
                 throw new BenchmarkExecutionException(CrossCaseMessage);

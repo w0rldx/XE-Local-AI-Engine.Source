@@ -93,7 +93,7 @@ export const AZURE_BUILTIN_HOST_SUFFIXES = [
 ] as const;
 
 // Reserved header names (lower-cased for case-insensitive compare) that must never be operator-set —
-// they would override credentials or transport framing. Mirrors the backend reserved set (Locked #8).
+// they would override credentials or transport framing. Mirrors the backend reserved set.
 const RESERVED_HEADER_NAMES = new Set<string>([
 	"api-key",
 	"authorization",
@@ -108,7 +108,7 @@ const RESERVED_HEADER_NAMES = new Set<string>([
 	"expect",
 ]);
 
-// RFC 7230 header-name token charset (Locked #6).
+// RFC 7230 header-name token charset.
 const HEADER_NAME_TOKEN = /^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$/;
 
 // DNS label charset for an operator host suffix (alphanumerics + hyphen, no leading/trailing hyphen).
@@ -133,7 +133,7 @@ export function hasAtLeastOneModel(models: CloudFoundryModelDraft[]): boolean {
 	return models.some((model) => model.deploymentName.trim().length > 0);
 }
 
-// RFC 7230 field-value guard (Locked #7): reject CR/LF/NUL and any control char except HTAB (0x09),
+// RFC 7230 field-value guard: reject CR/LF/NUL and any control char except HTAB (0x09),
 // plus DEL (0x7F). Implemented char-by-char to avoid a control-char regex literal (biome lint).
 function hasControlCharacter(value: string): boolean {
 	for (let index = 0; index < value.length; index += 1) {
@@ -148,7 +148,7 @@ function hasControlCharacter(value: string): boolean {
 	return false;
 }
 
-// Shape guard for an operator-added host suffix (Locked #14): leading '.', ≥ 2 non-empty DNS labels
+// Shape guard for an operator-added host suffix: leading '.', ≥ 2 non-empty DNS labels
 // (so a bare TLD like `.com` is rejected), no wildcard, valid label chars, within the length cap.
 export function isValidHostSuffix(suffix: string): boolean {
 	if (!suffix.startsWith(".") || suffix.length > MAX_HOST_SUFFIX_LENGTH || suffix.includes("*")) {
@@ -204,7 +204,7 @@ function validateHeaders(headers: CloudHeaderDraft[]): string | undefined {
 		}
 
 		// Secret rows keep the stored value only while both secret and blank. Turning "Secret" off on a
-		// stored-secret row with a blank value must not silently reuse the stored value (Locked #10).
+		// stored-secret row with a blank value must not silently reuse the stored value.
 		if (!header.isSecret && header.hasStoredValue && !hasValue) {
 			return `Enter a new value for header "${name}" before saving — the stored secret is not reused once "Secret" is turned off.`;
 		}
@@ -329,7 +329,7 @@ function hostMatchesSuffix(host: string, suffix: string): boolean {
 }
 
 // True when managed identity or EntraId is selected and the endpoint host is non-Azure (matched only by an
-// operator-added suffix). Drives the orange Entra-token egress warning (Locked #14). Both modes send a
+// operator-added suffix). Drives the orange Entra-token egress warning. Both modes send a
 // bearer token obtained from Entra ID to the endpoint host, so the same non-Microsoft-host reminder applies to
 // EntraId connections (commonly an APIM gateway) as well as managed identity.
 export function shouldWarnManagedIdentityEgress(values: CloudSettingsFormValues): boolean {

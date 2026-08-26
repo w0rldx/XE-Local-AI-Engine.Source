@@ -300,7 +300,7 @@ public sealed class DevelopmentWorkflowE2ETests : XEPooledE2ETestBase
                 Timeout = 30_000
             }).ConfigureAwait(false);
             // The VALUES, not just the labels. Asserting only that a counts grid rendered would pass against four
-            // zeroes — which is precisely the false green this slice exists to expose. The fixture has exactly one
+            // zeroes — the false green this assertion prevents. The fixture has exactly one
             // test and it passes, so every number here is exact.
             await Expect(Page.GetByTestId("development-validation-test-discovered")).ToHaveTextAsync("1").ConfigureAwait(false);
             await Expect(Page.GetByTestId("development-validation-test-executed")).ToHaveTextAsync("1").ConfigureAwait(false);

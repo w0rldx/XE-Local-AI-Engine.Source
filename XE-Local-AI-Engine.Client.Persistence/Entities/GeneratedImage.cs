@@ -13,7 +13,7 @@ internal sealed record class GeneratedImage
     /// <summary>The owning job (FK → <see cref="ImageJob" />, cascade delete).</summary>
     public Guid JobId { get; set; }
 
-    /// <summary>MIME type of the stored image (for step 1, <c>image/png</c>).</summary>
+    /// <summary>MIME type of the stored image; currently <c>image/png</c>.</summary>
     public string MimeType { get; set; } = string.Empty;
 
     /// <summary>Image width in pixels.</summary>

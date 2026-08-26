@@ -1,6 +1,6 @@
 # Compute Tools — Sandboxed Code Execution for Agents
 
-> Baseline: `feat/math-agent-followups` · Reviewed: 2026-08-25 · Code-grounded.
+> Reviewed: 2026-08-25 · Code-grounded.
 
 The **compute tools** subsystem allows governed agents to execute short scripts in a **sandboxed, offline interpreter** for numeric and symbolic computation. The first and only v1 tool is `run_python`, which runs arbitrary Python 3 code with numpy, scipy, and sympy available — no network, no host filesystem, no filesystem persistence, no conversation access.
 
@@ -77,7 +77,7 @@ Unlike AgentHome and Coder, compute asks that provider for its **opt-in filesyst
      - **Jail disk ceiling**: the compute jail carries its OWN ceiling (`Compute:MaxJailDiskBytes`, default 256 MiB) rather than inheriting the node-wide `LocalContainer:MaxJailDiskBytes` (default 512 MiB), which is sized for workspace builds. The gateway passes it as `SandboxCreateRequest.MaxJailDiskBytes` and the provider applies `min(node-wide, per-sandbox)` — **tighten-only**: the node-wide value is the operator's ceiling, so a larger request never widens it, and a per-sandbox value can never re-enable a watchdog the operator disabled. It needs no capability gate for the same reason: a provider without a jail-growth watchdog ignores a field that could only have asked for *less*. Three properties of the number are worth stating exactly:
        - **It bounds OCCUPANCY, not one command's growth.** The watchdog measures everything under the jail root against the occupancy captured when the sandbox ran its *first* command, so a sandbox cannot accumulate an unbounded amount by running command after command, each staying just under the line. A command that starts in an already-over-ceiling jail is terminated at once. Anchoring at the first command (rather than at zero) is what keeps an AgentHome jail — filled by copy-in before any command runs — from being charged for a workspace it did not write.
        - **It covers the scratch too**, because `HOME` and `TMPDIR` are directories inside the jail.
-       - **It is create-time, with future-command tightening on attach.** Compute keys its jail per invocation, so every call takes the create path; a caller that reuses an attach key attaches instead, and a *stricter* ceiling on that attach lowers the live sandbox's ceiling for every command started afterwards. A looser one, or none, changes nothing, and a command already running keeps the ceiling it started under.
+       - **It is create-time, with later-command tightening on attach.** Compute keys its jail per invocation, so every call takes the create path; a caller that reuses an attach key attaches instead, and a *stricter* ceiling on that attach lowers the live sandbox's ceiling for every command started afterwards. A looser one, or none, changes nothing, and a command already running keeps the ceiling it started under.
      - **Wall-clock timeout**: process tree is killed if execution exceeds the configured ceiling (default 30 seconds).
      - **Output byte caps**: stdout and stderr are each truncated at `MaxOutputBytes` (default 64 KiB) with a truncation marker `…[output truncated]`.
 
@@ -136,7 +136,7 @@ Unlike AgentHome and Coder, compute asks that provider for its **opt-in filesyst
 
 **Still best-effort, and must not be described as a boundary:**
 
-- **The jail disk ceiling.** `Compute:MaxJailDiskBytes` is enforced by a watchdog that walks the jail every two seconds and sums **visible file** occupancy. An `unlink`-then-write loop holding an open descriptor bypasses it entirely, and even without that trick a script can exceed the line between samples. It is a runaway-detector, not a quota; a real ceiling needs a project quota or a size-bounded mount, and that is a follow-up. What the isolated mode *did* fix is coverage: `/tmp` is a bind of a jail subdirectory rather than a tmpfs, so nothing the script writes escapes the tree the watchdog walks (or lands in RAM the memory ceiling cannot see).
+- **The jail disk ceiling.** `Compute:MaxJailDiskBytes` is enforced by a watchdog that walks the jail every two seconds and sums **visible file** occupancy. An `unlink`-then-write loop holding an open descriptor bypasses it entirely, and even without that trick a script can exceed the line between samples. It is a runaway-detector, not a quota; the current implementation has no hard disk quota, which would require a project quota or a size-bounded mount. What the isolated mode *did* fix is coverage: `/tmp` is a bind of a jail subdirectory rather than a tmpfs, so nothing the script writes escapes the tree the watchdog walks (or lands in RAM the memory ceiling cannot see).
 - **Kernel-level hardening.** There is no seccomp filter and no LSM profile. A kernel LPE is out of scope for this boundary exactly as it is for the default posture; strong isolation remains MXC's job behind the same seam.
 - **What the script prints.** Output is capped, not classified. Anything the script computes reaches the model and the conversation.
 
@@ -186,7 +186,7 @@ Seeded agent example: `MathematicianAgentSeeder` (`Services/Agents/Implementatio
 
 **The filesystem boundary is not gated at all**: a node whose sandbox provider does not advertise `SupportsFilesystemIsolation` has `run_python` refuse every call, before provisioning and before any jail is created (§2.1 step 2). "Sandboxed" is what the tool's description promises the model and what the approving user was shown.
 
-**Egress denial rides on the same refusal.** It used to have its own capability check, on the provider's `SupportsNetworkPolicy` flag — which describes the *separate* `unshare(1)` mechanism the non-isolated chain uses. Under the isolated mode that mechanism is not on the path: the empty network namespace is `bwrap`'s own `--unshare-net`, positively controlled by the probe with a loopback connect. The old check was therefore both redundant and capable of a **false refusal** — a host that isolates perfectly well but whose `unshare(1)` probe failed would have been turned away. It was replaced by the boundary check, which is strictly stronger: the call is still never run with the operator's network, and now never with the operator's filesystem either. `NetworkPolicy.None` is still stated on the create request, as the honest statement of intent and as what a future non-isolating provider would need.
+**Egress denial rides on the same refusal.** It used to have its own capability check, on the provider's `SupportsNetworkPolicy` flag — which describes the *separate* `unshare(1)` mechanism the non-isolated chain uses. Under the isolated mode that mechanism is not on the path: the empty network namespace is `bwrap`'s own `--unshare-net`, positively controlled by the probe with a loopback connect. The old check was therefore both redundant and capable of a **false refusal** — a host that isolates perfectly well but whose `unshare(1)` probe failed would have been turned away. It was replaced by the boundary check, which is strictly stronger: the call is still never run with the operator's network, and now never with the operator's filesystem either. `NetworkPolicy.None` is still stated on the create request as the honest statement of intent and as a requirement for any non-isolating provider.
 
 **Resource limits remain capability-gated** — an old system without cgroup v2 or systemd `--user` runs without the ceilings and says so in the containment log, because they bound *cost* rather than reachability. Degrading them costs no advertised guarantee; degrading the boundary would.
 
@@ -194,15 +194,15 @@ Seeded agent example: `MathematicianAgentSeeder` (`Services/Agents/Implementatio
 
 ---
 
-## 4. Linux-only v1, Windows planned for v2
+## 4. Platform support
 
-`run_python` is **Linux-only in v1** and requires:
+`run_python` is **Linux-only** and requires:
 
 - The **process-role sandbox provider** to be functional (Linux with or without systemd cgroup v2 support; other OSes degrade capabilities but sandbox still runs).
 - **`uv` binary** — pinned download, same `uv` platform detection as Training.
 - **Python 3.13** as the target interpreter (locked in `tools/compute/pyproject.toml` `requires-python`).
 
-On Windows, the process sandbox provider is not currently available. Windows compute support is planned for v2 once the Windows sandbox strategy is finalized (pending ADR or implementation completion).
+On Windows, the process sandbox provider does not advertise filesystem isolation, so `run_python` is unsupported. No Windows compute isolation boundary is implemented.
 
 ---
 
@@ -348,7 +348,7 @@ curl -X POST http://localhost:5000/api/local/v1/agents/invoke \
 ## 9. Related architecture
 
 - **[Agent Mode](04-agent-mode.md)** — tool registries, `IClientLocalToolHandler`, approval policy, `AllowedToolNames`.
-- **[Sandbox & Containment](../services/sandbox.md)** (not yet documented; see `Services/Sandbox/`) — process-role `ISandboxRuntimeProvider`, resource limits, network policy, attachment keys.
+- **[Sandbox / process-jail](12-security-and-privacy.md#7-sandbox--process-jail-for-tool-execution)** — process-role `ISandboxRuntimeProvider`, resource limits, network policy, attachment keys.
 - **[Security & Privacy](12-security-and-privacy.md) §4** — Custom Tools, approval audit, execute-on-host guards.
 - **[Training](18-training.md)** — sibling `uv`-provisioned Python runtime; shared binary-acquisition helper.
 - **[ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)** — Development Mode sandbox boundary; explains why Docker is not on the inference path.
@@ -356,8 +356,8 @@ curl -X POST http://localhost:5000/api/local/v1/agents/invoke \
 
 ---
 
-## Changes from baseline
+## Boundary history
 
-This page documents the `run_python` compute tool added on branch `test/math-agent-eval` (2026-08-24). It is a first-class agent tool for numeric/symbolic computation, distinct from Custom Tools, gated as profile-opt-in, and routed through the process-role sandbox.
+The `run_python` compute tool is a first-class agent tool for numeric and symbolic computation. It is distinct from Custom Tools, gated as profile-opt-in, and routed through the process-role sandbox.
 
 **2026-08-25:** `run_python` was wired onto the sandbox provider's filesystem-isolated launch mode. The tool now refuses on a node that cannot isolate, runs with the host filesystem absent from its mount namespace, and binds only the venv and the managed-CPython root read-only. §2.4 is the new section; §2.2, §2.3 and §3.4 lost claims that were true before the boundary existed ("a script still sees the host filesystem as the worker user", "a deliberate script can `os.chmod` the tree back", the egress-capability gate). The disk watchdog is unchanged and remains best-effort.

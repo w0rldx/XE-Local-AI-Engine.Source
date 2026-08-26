@@ -246,7 +246,7 @@ reconnect). Four things differ and must not be copied from that hook:
    every feed rather than being dropped.
 3. **The snapshot's replay is a watermark plus a "something changed", not cache seed data.** A replayed
    `WorkSessionEventResponse` carries an `eventType` (`StepStarted`, …), *not* a change kind, so the missed feeds
-   cannot be derived from it — and P3's design makes the store, not the client, the replay authority. A non-empty
+   cannot be derived from it — the store, not the client, is the replay authority. A non-empty
    replay or `replayTruncated: true` therefore triggers one full-feed refetch; pushed events, which do carry a kind,
    drive the fine-grained per-feed invalidation.
 4. **`step` also invalidates the conversation query and bumps a `resumeNonce`** that feeds `scope.resumeNonce`, which

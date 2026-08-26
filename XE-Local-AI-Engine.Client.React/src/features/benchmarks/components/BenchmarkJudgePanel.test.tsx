@@ -146,7 +146,7 @@ describe("BenchmarkJudgePanel", () => {
 	});
 });
 
-// C4: a verifiable criterion's score was DECIDED server-side, not judged. The panel says which side produced it, so a
+// A verifiable criterion's score was decided server-side, not judged. The panel says which side produced it, so a
 // 10 that came from a regex match is not read as a model's opinion that happened to agree with one.
 describe("BenchmarkJudgePanel verifier evidence", () => {
 	afterEach(cleanup);
@@ -213,9 +213,7 @@ describe("BenchmarkJudgePanel narrow layout", () => {
 
 	it("truncates a long criterion id instead of shouldering the score off the row", () => {
 		const id = "a-very-long-operator-authored-criterion-identifier";
-		renderPanel(
-			benchmarkJudgeFixture({ state: "succeeded", score: 70, criteria: [{ id, score: 7, rationale: "Fine." }] }),
-		);
+		renderPanel(benchmarkJudgeFixture({ state: "succeeded", score: 70, criteria: [{ id, score: 7, rationale: "Fine." }] }));
 
 		const label = screen.getByText(id);
 		expect(label.getAttribute("data-truncate")).toBe("end");

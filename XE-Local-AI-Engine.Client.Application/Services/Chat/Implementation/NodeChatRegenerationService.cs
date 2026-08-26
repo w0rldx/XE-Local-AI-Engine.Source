@@ -205,7 +205,7 @@ public sealed class NodeChatRegenerationService(
                 ? await ResolveAllowedToolsAsync(activeModel, resolution, cancellationToken).ConfigureAwait(false)
                 : null;
 
-            // G16 parity with the send path: an Orchestrator whose orchestration did not compile reruns as a lone single
+            // Parity with the send path: an Orchestrator whose orchestration did not compile reruns as a lone single
             // agent, which used to be visible only in a server log. Emit ONE notice naming the typed reason; a Single-kind
             // agent (NotOrchestrated) has no notice, so the common path stays silent.
             if (resolution.OrchestrationOutcome.DegradationNotice is { } orchestrationDegradedMessage)

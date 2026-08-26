@@ -139,7 +139,7 @@ describe("BenchmarkLaunchCompare", () => {
 	});
 });
 
-// E2: the cap is the caller's, but the table has to render N columns honestly — one per run, in the order asked for,
+// The cap is the caller's, but the table has to render N columns honestly — one per run, in the order asked for,
 // with a row flagged when ANY of them disagrees rather than only the first pair.
 describe("BenchmarkLaunchCompare across more than two runs", () => {
 	afterEach(cleanup);

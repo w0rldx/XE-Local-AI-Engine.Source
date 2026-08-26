@@ -94,7 +94,7 @@ public sealed class LlamaServerSupervisorOptionsTests
     [Test]
     public void HttpNetworkTimeoutDefault_IsNotShorterThanTheNodeMessageTimeoutCeiling()
     {
-        // G9: this is the OUTERMOST floor against a wedged socket, not the per-turn bound. When it was 600s an operator
+        // This is the outermost floor against a wedged socket, not the per-turn bound. When it was 600s an operator
         // who raised the node "Maximum message request timeout" above 600s got a socket abort from the inner HTTP
         // timeout first, so the setting silently had no effect for local models. It must never be shorter than the node
         // setting's own ceiling (StoredNodeSettings.MaxMaxMessageRequestTimeoutSeconds = 3600; that constant lives in

@@ -1,5 +1,5 @@
 import { Alert, Stack, Textarea, TextInput } from "@mantine/core";
-import { type Ref, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { type Ref, useCallback, useEffect, useImperativeHandle, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { type CommandFormValues, commandFormSchema } from "@/features/commands/models/CommandModels";
@@ -21,13 +21,9 @@ export function CommandForm({ initialValues, isSubmitting, submitError, onSubmit
 	const { t } = useTranslation();
 	const [values, setValues] = useState(initialValues);
 	const [errors, setErrors] = useState<Record<string, string>>({});
-	const valuesRef = useRef(values);
-	valuesRef.current = values;
 
 	const update = useCallback((field: keyof CommandFormValues, value: string) => {
-		const next = { ...valuesRef.current, [field]: value };
-		valuesRef.current = next;
-		setValues(next);
+		setValues((current) => ({ ...current, [field]: value }));
 	}, []);
 
 	useEffect(() => {

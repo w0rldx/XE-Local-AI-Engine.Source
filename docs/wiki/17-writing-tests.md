@@ -204,8 +204,8 @@ scripts/run-e2e-local.sh --filter '/*/*/AgentsPageE2ETests/*'      # --list enum
   flight — the box is shared. Exit `75` means the result is void; rerun.
 - Iterate in Debug if you like, but **finish with a Release build** of the solution. Debug skips the analyzers
   entirely, so a green Debug build has verified none of the static-analysis wall.
-- A bare `TODO`/`FIXME` in a C# comment **fails the Release build** (Sonar S1135 + warnings-as-errors). Write
-  `// follow-up: …` instead.
+- A bare `TODO`/`FIXME` in a C# comment **fails the Release build** (Sonar S1135 + warnings-as-errors). Describe
+  the present limitation or rationale directly without `TODO`/`FIXME` or task markers.
 
 ## Related pages
 

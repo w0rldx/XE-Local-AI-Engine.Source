@@ -36,7 +36,7 @@ export const nodeChatStreamEventTypes = {
 	assistantCancelled: "assistant-cancelled",
 	assistantFailed: "assistant-failed",
 	assistantInterrupted: "assistant-interrupted",
-	// Tool lifecycle events (Phase D6) reuse the dedicated tool-event constant so the wire names stay DRY.
+	// Tool lifecycle events reuse the dedicated tool-event constant so the wire names stay DRY.
 	toolCallRequested: nodeChatToolStreamEventTypes.toolCallRequested,
 	toolCallCompleted: nodeChatToolStreamEventTypes.toolCallCompleted,
 	// A pending tool-approval request: flips the matching tool card into a waiting-for-approval state without
@@ -273,8 +273,7 @@ function mergeToolEntry(toolEntries: readonly ToolEntryInput[], toolCall: ChatTo
 						toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingApprovalSessionScopeEligible,
 					// Same rule for an `ask_user` question: once the tool call resolves, the answer has been consumed
 					// (or the wait timed out), so the inline question card must not survive on the resolved card.
-					pendingQuestion:
-						toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingQuestion,
+					pendingQuestion: toolCall.state === "received" || toolCall.state === "failed" ? undefined : entry.pendingQuestion,
 				}
 			: entry,
 	);
@@ -390,12 +389,7 @@ function nextReasoningParts(
 		nextReasoningSegments = [{ id: `${event.messageId}:${event.sequence}`, sequence: event.sequence, text: reasoning }];
 	}
 
-	if (
-		nextReasoningSegments.length === 0 &&
-		toolEntries.length === 0 &&
-		textSegments.length === 0 &&
-		noticeEntries.length === 0
-	) {
+	if (nextReasoningSegments.length === 0 && toolEntries.length === 0 && textSegments.length === 0 && noticeEntries.length === 0) {
 		return undefined;
 	}
 

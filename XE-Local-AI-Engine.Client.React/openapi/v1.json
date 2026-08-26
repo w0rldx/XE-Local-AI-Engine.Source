@@ -168,6 +168,73 @@
         ]
       }
     },
+    "/api/local/v1/work-sessions/{sessionId}/artifacts/{artifactId}/content": {
+      "get": {
+        "tags": [
+          "Work-Sessions"
+        ],
+        "operationId": "getWorkSessionArtifactContent",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/work-sessions": {
       "get": {
         "tags": [
@@ -402,278 +469,6 @@
         "responses": {
           "204": {
             "description": "No Content"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/work-sessions/{sessionId}/start": {
-      "post": {
-        "tags": [
-          "Work-Sessions"
-        ],
-        "operationId": "startWorkSession",
-        "parameters": [
-          {
-            "name": "sessionId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "guid"
-            }
-          }
-        ],
-        "responses": {
-          "202": {
-            "description": "Accepted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/work-sessions/{sessionId}/pause": {
-      "post": {
-        "tags": [
-          "Work-Sessions"
-        ],
-        "operationId": "pauseWorkSession",
-        "parameters": [
-          {
-            "name": "sessionId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "guid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/work-sessions/{sessionId}/resume": {
-      "post": {
-        "tags": [
-          "Work-Sessions"
-        ],
-        "operationId": "resumeWorkSession",
-        "parameters": [
-          {
-            "name": "sessionId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "guid"
-            }
-          }
-        ],
-        "responses": {
-          "202": {
-            "description": "Accepted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          },
-          "404": {
-            "description": "Not Found"
-          },
-          "409": {
-            "description": "",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWTBearerAuth": []
-          },
-          {
-            "Bearer": []
-          }
-        ]
-      }
-    },
-    "/api/local/v1/work-sessions/{sessionId}/cancel": {
-      "post": {
-        "tags": [
-          "Work-Sessions"
-        ],
-        "operationId": "cancelWorkSession",
-        "parameters": [
-          {
-            "name": "sessionId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "guid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
-                }
-              }
-            }
           },
           "401": {
             "description": "Unauthorized"
@@ -1044,12 +839,12 @@
         ]
       }
     },
-    "/api/local/v1/work-sessions/{sessionId}/artifacts/{artifactId}/content": {
-      "get": {
+    "/api/local/v1/work-sessions/{sessionId}/start": {
+      "post": {
         "tags": [
           "Work-Sessions"
         ],
-        "operationId": "getWorkSessionArtifactContent",
+        "operationId": "startWorkSession",
         "parameters": [
           {
             "name": "sessionId",
@@ -1059,9 +854,68 @@
               "type": "string",
               "format": "guid"
             }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
           },
           {
-            "name": "artifactId",
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/work-sessions/{sessionId}/pause": {
+      "post": {
+        "tags": [
+          "Work-Sessions"
+        ],
+        "operationId": "pauseWorkSession",
+        "parameters": [
+          {
+            "name": "sessionId",
             "in": "path",
             "required": true,
             "schema": {
@@ -1076,7 +930,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
                 }
               }
             }
@@ -1090,12 +954,148 @@
           "404": {
             "description": "Not Found"
           },
-          "413": {
+          "409": {
             "description": "",
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/work-sessions/{sessionId}/resume": {
+      "post": {
+        "tags": [
+          "Work-Sessions"
+        ],
+        "operationId": "resumeWorkSession",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/work-sessions/{sessionId}/cancel": {
+      "post": {
+        "tags": [
+          "Work-Sessions"
+        ],
+        "operationId": "cancelWorkSession",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
                 }
               }
             }
@@ -18594,6 +18594,60 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "artifact": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse"
+          },
+          "content": {
+            "type": "string"
+          },
+          "isBase64": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "sequence": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "contentSha256": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "isValid": {
+            "type": "boolean"
+          },
+          "createdStep": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1ListWorkSessionsResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -18888,41 +18942,6 @@
           }
         }
       },
-      "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "guid"
-          },
-          "sequence": {
-            "type": "integer"
-          },
-          "kind": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "mediaType": {
-            "type": "string"
-          },
-          "contentSha256": {
-            "type": "string"
-          },
-          "sizeBytes": {
-            "type": "integer"
-          },
-          "isValid": {
-            "type": "boolean"
-          },
-          "createdStep": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1ListWorkSessionCheckpointsResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -19020,25 +19039,6 @@
         }
       },
       "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionEventFeedRequest": {
-        "type": "object",
-        "additionalProperties": false
-      },
-      "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "artifact": {
-            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse"
-          },
-          "content": {
-            "type": "string"
-          },
-          "isBase64": {
-            "type": "boolean"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsWorkSessionsV1WorkSessionArtifactRequest": {
         "type": "object",
         "additionalProperties": false
       },

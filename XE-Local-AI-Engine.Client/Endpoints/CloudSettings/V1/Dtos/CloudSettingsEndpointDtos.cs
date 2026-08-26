@@ -44,7 +44,7 @@ public sealed record AzureFoundrySettingsResponse
     /// </summary>
     public IReadOnlyList<AzureFoundryHeaderDto> Headers { get; init; } = [];
 
-    /// <summary>Operator-added extra allowed host suffixes (Locked #14). Not secret — round-trips for inline editing.</summary>
+    /// <summary>Operator-added extra allowed host suffixes. Not secret — round-trips for inline editing.</summary>
     public IReadOnlyList<string> AdditionalAllowedHostSuffixes { get; init; } = [];
 
     /// <summary>The Entra ID tenant id. Populated only when <see cref="AuthMode" /> is <c>EntraId</c>.</summary>
@@ -115,11 +115,11 @@ public sealed record SaveCloudSettingsRequest
 
     /// <summary>
     ///     Custom request headers to persist. A secret header sent with a blank value keeps the previously stored value
-    ///     (merge happens in the endpoint, Locked #10/#12).
+    ///     through the endpoint's secret-preserving merge.
     /// </summary>
     public IReadOnlyList<SaveAzureFoundryHeaderRequest> Headers { get; init; } = [];
 
-    /// <summary>Operator-added extra allowed host suffixes (Locked #14). Shape-validated on save.</summary>
+    /// <summary>Operator-added extra allowed host suffixes. Shape-validated on save.</summary>
     public IReadOnlyList<string> AdditionalAllowedHostSuffixes { get; init; } = [];
 
     /// <summary>Required only when <see cref="AuthMode" /> is <c>EntraId</c>; ignored otherwise.</summary>
@@ -130,8 +130,8 @@ public sealed record SaveCloudSettingsRequest
 
     /// <summary>
     ///     Write-only Entra ID client secret. A blank value on an existing EntraId connection keeps the previously
-    ///     stored secret (merge happens in the endpoint, mirroring the custom-header secret merge, Locked #10/#12
-    ///     pattern); a blank value with no stored secret selects interactive user sign-in instead of app-only
+    ///     stored secret through the endpoint's custom-header-style secret merge; a blank value with no stored secret
+    ///     selects interactive user sign-in instead of app-only
     ///     client-credentials.
     /// </summary>
     public string? EntraClientSecret { get; init; }

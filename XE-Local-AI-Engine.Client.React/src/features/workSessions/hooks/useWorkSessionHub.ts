@@ -13,7 +13,7 @@ const EVENT_NAME = "workSessionChanged";
 export const WORK_SESSION_POLL_INTERVAL_MS = 3_000;
 
 /**
- * The change kinds the hub pushes. **Lowercase on the wire** — P3's publisher serializes
+ * The change kinds the hub pushes. **Lowercase on the wire** — the publisher serializes
  * `kind.ToString().ToLowerInvariant()`, so a casing slip here makes every invalidation a silent no-op rather than an
  * error. The literals are asserted in `useWorkSessionHub.test.tsx` for exactly that reason.
  */
@@ -26,7 +26,7 @@ export interface WorkSessionChanged {
 	readonly kind: string;
 }
 
-/** P3 §6. `events` is the replay since the client's watermark, capped at 200 with `replayTruncated`. */
+/** `events` is the replay since the client's watermark, capped at 200 with `replayTruncated`. */
 export interface WorkSessionSubscriptionSnapshot {
 	readonly sessionId: string;
 	readonly status: string;
@@ -65,11 +65,11 @@ function isChangeKind(kind: string): kind is WorkSessionChangeKind {
  * implemented, not inherited: `SubscribeSession(sessionId, afterSeq)` takes the client's watermark, and the snapshot
  * carries the replay rather than a single latest update.
  *
- * **What the replay is used for.** The hub pushes notifications, never payloads (P3 L2), and a replayed
+ * **What the replay is used for.** The hub pushes notifications, never payloads, and a replayed
  * `WorkSessionEventResponse` carries an `eventType` (`StepStarted`, …), not a change *kind* — so the missed feeds
  * cannot be derived from it. The replay's real jobs are therefore the watermark and the fact that something changed
  * while this client was away: a non-empty replay (or `replayTruncated`) invalidates every feed of this session once,
- * and the store — which P3 L1 makes the replay authority — answers the refetch. Pushed events, which DO carry a
+ * and the store, which is the replay authority, answers the refetch. Pushed events, which DO carry a
  * kind, drive the fine-grained per-feed invalidation below.
  */
 export function useWorkSessionHub(sessionId: string | undefined, conversationId: string | undefined): WorkSessionLiveState {
@@ -149,7 +149,7 @@ export function useWorkSessionHub(sessionId: string | undefined, conversationId:
 			setState((current) => ({
 				...current,
 				watermark,
-				// The step push is published at step START (X8), while the invocation is still resumable — this is what
+				// The step push is published at step start, while the invocation is still resumable — this is what
 				// makes the embedded conversation stream live instead of back-filling a beat later.
 				resumeNonce: kind === "step" ? current.resumeNonce + 1 : current.resumeNonce,
 			}));

@@ -4,8 +4,7 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Browser-driven E2E for the MCP servers page (<c>/mcp</c>) — the highest-priority no-e2e-at-all
-///     route (gap analysis P0-1). Exercises the full config-CRUD round-trip:
+///     Browser-driven E2E for the MCP servers page (<c>/mcp</c>). Exercises the full config-CRUD round-trip:
 ///     <list type="bullet">
 ///         <item>Register server → fill <c>McpServerForm</c> (Stdio transport: name + command) → save.</item>
 ///         <item>The new server appears in <c>McpServerList</c> by name.</item>

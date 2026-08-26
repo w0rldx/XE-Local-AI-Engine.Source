@@ -4,8 +4,7 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Browser-driven E2E for the Scheduler page (<c>/scheduler</c>) — a no-e2e-at-all shipped route
-///     (gap analysis P0-2). Exercises the job create + list-render happy path:
+///     Browser-driven E2E for the Scheduler page (<c>/scheduler</c>). Exercises the job create + list-render happy path:
 ///     <list type="bullet">
 ///         <item>Page renders heading + job list + "Create job".</item>
 ///         <item>Open <c>ScheduledJobForm</c> → pick the registered "Model recommendation check" template.</item>

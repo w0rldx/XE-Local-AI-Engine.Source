@@ -437,9 +437,9 @@ public sealed class BenchmarkRunFreezeService(
 
         // One snapshot per DISTINCT (item, sampling), memoized. Throughput mode has exactly one sampling, so a
         // single-item project's group is byte-for-byte the single shared payload it has always been; answer-variance
-        // mode gets one per repeat, differing ONLY in the seed. The ITEM half of the key is load-bearing: P1 keyed
-        // this cache on the seed alone, and fanning out over items without widening it would hand every item the
-        // FIRST item's serialized snapshot — every run answering item 0's prompt while its task_item_id column
+        // mode gets one per repeat, differing ONLY in the seed. The ITEM half of the key is load-bearing: the earlier
+        // single-item cache keyed on the seed alone, and fanning out over items without widening it would hand every
+        // item the FIRST item's serialized snapshot — every run answering item 0's prompt while its task_item_id column
         // claimed otherwise, with nothing failing loudly.
         var serializedSnapshots = new Dictionary<(Guid ItemId, string Seed), byte[]>();
 

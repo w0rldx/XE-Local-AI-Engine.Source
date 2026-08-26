@@ -856,7 +856,7 @@ public sealed class SubAgentSpawnServiceTests
     [Test]
     public async Task SpawnForMcp_WhenNodeMessageTimeoutElapses_FailsWithTimedOutCode()
     {
-        // G5: an inbound MCP run had no whole-turn deadline — only the dispatcher's coarse watchdog and the transport's
+        // An inbound MCP run once had no whole-turn deadline — only the dispatcher's coarse watchdog and the transport's
         // own timeout bounded it. The deadline lives at THIS boundary so both front doors (synchronous run_agent and the
         // detached executor) are bounded once, by the same operator knob as a local send. The chat client hangs on its
         // token, so this fails if the deadline is dropped; the outcome must be a distinguishable typed failure.

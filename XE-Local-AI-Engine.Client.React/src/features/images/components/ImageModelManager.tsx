@@ -1,15 +1,11 @@
-import { ActionIcon, Alert, Badge, Card, Group, Loader, Stack, Tabs, Text, Tooltip } from "@mantine/core";
-import { IconCloudDownload, IconPlus, IconSparkles, IconTrash } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
-import { type BrowseInstallRequest, ImageModelBrowsePanel } from "@/features/images/components/ImageModelBrowsePanel";
-import { ImageModelCatalogPanel } from "@/features/images/components/ImageModelCatalogPanel";
-import { DownloadRow } from "@/features/images/components/ImageDownloadRow";
-import { ManualDownloadForm } from "@/features/images/components/ImageManualDownloadForm";
+import type { BrowseInstallRequest } from "@/features/images/components/ImageModelBrowsePanel";
+import { ImageModelManagerPresentation } from "@/features/images/components/ImageModelManagerPresentation";
 import { useActiveImageModelDownloads } from "@/features/images/hooks/useActiveImageModelDownloads";
 import type {
 	DownloadDraft,
@@ -161,19 +157,21 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 	// manual form all post the same file-set shape. Keeping one implementation is what stops the catalog's one-click
 	// install from drifting away from the tracking/error handling the manual form already got right.
 	const startDownload = useCallback(
-		(payload: {
-			modelName: string;
-			repoId: string;
-			family: ImageModelFamily;
-			parts: readonly {
-				role: ImageModelPartRole;
-				fileName: string;
-				repoId?: string;
-				sizeBytes?: number;
-				sha256?: string;
-			}[];
-		},
-		onStarted?: () => void) => {
+		(
+			payload: {
+				modelName: string;
+				repoId: string;
+				family: ImageModelFamily;
+				parts: readonly {
+					role: ImageModelPartRole;
+					fileName: string;
+					repoId?: string;
+					sizeBytes?: number;
+					sha256?: string;
+				}[];
+			},
+			onStarted?: () => void,
+		) => {
 			const { modelName } = payload;
 			setDownloadErrors((current) => {
 				const { [modelName]: _removed, ...rest } = current;
@@ -313,9 +311,13 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 		async (modelName: string) => {
 			const confirmed = await confirm({
 				title: t("pages.images.models.delete.title", "Delete image model"),
-				description: t("pages.images.models.delete.description", "Delete '{{modelName}}' and its weight files? This cannot be undone.", {
-					modelName,
-				}),
+				description: t(
+					"pages.images.models.delete.description",
+					"Delete '{{modelName}}' and its weight files? This cannot be undone.",
+					{
+						modelName,
+					},
+				),
 				confirmationText: t("pages.images.models.delete.confirm", "Delete"),
 				cancellationText: t("pages.images.models.delete.cancel", "Cancel"),
 			});
@@ -340,136 +342,48 @@ export function ImageModelManager({ models, isLoading, onPendingDownloadChange }
 	);
 
 	return (
-		<Stack gap="md" data-testid="image-model-manager">
-			<Stack gap="xs">
-				<Text fw={600}>{t("pages.images.models.installedTitle", "Installed image models")}</Text>
-				{isLoading ? (
-					<Loader size="sm" data-testid="image-models-loading" />
-				) : models.length === 0 ? (
-					<Text c="dimmed" data-testid="image-models-empty">
-						{t("pages.images.models.empty", "No image models installed yet.")}
-					</Text>
-				) : (
-					<Stack gap="xs" data-testid="image-models-list">
-						{models.map((model) => (
-							<Card key={model.modelName} withBorder={true} padding="sm" radius="sm">
-								<Group justify="space-between" wrap="nowrap">
-									<Stack gap={2} style={{ minWidth: 0 }}>
-										<Text size="sm" fw={500} truncate={true}>
-											{model.modelName}
-										</Text>
-										<Text size="xs" c="dimmed" truncate={true}>
-											{model.repoId}
-										</Text>
-									</Stack>
-									<Group gap="xs" wrap="nowrap">
-										<Text size="xs" c="dimmed">
-											{humanizeBytes(model.sizeBytes)}
-										</Text>
-										<Badge variant="light">{t(`pages.images.models.families.${model.family}`, model.family)}</Badge>
-										<Tooltip label={t("pages.images.models.delete.action", "Delete model")}>
-											<ActionIcon
-												variant="light"
-												color="red"
-												aria-label={t("pages.images.models.delete.action", "Delete model")}
-												loading={deletingModelName === model.modelName}
-												disabled={deletingModelName === model.modelName}
-												onClick={() => handleDelete(model.modelName)}
-												data-testid={`image-model-delete-${model.modelName}`}
-											>
-												<IconTrash size={16} />
-											</ActionIcon>
-										</Tooltip>
-									</Group>
-								</Group>
-							</Card>
-						))}
-					</Stack>
-				)}
-			</Stack>
-
-			{inFlight.length > 0 ? (
-				<Stack gap="sm" data-testid="image-model-download-progress">
-					{inFlight.map((modelName) => (
-						<DownloadRow
-							key={modelName}
-							modelName={modelName}
-							status={statuses.get(modelName)}
-							etaSeconds={rateEstimates.get(modelName)?.etaSeconds}
-							bytesPerSecond={rateEstimates.get(modelName)?.bytesPerSecond}
-							isCancelling={cancellingModelName === modelName}
-							onCancel={handleCancel}
-						/>
-					))}
-				</Stack>
-			) : null}
-
-			{Object.entries(downloadErrors).map(([modelName, reason]) => (
-				<Alert
-					key={modelName}
-					variant="light"
-					color="red"
-					withCloseButton={true}
-					closeButtonLabel={t("pages.images.models.download.dismissError", "Dismiss")}
-					onClose={() =>
-						setDownloadErrors((current) => {
-							const { [modelName]: _removed, ...rest } = current;
-							return rest;
-						})
-					}
-					data-testid="image-model-download-error"
-				>
-					{reason}
-				</Alert>
-			))}
-
-			<Tabs defaultValue="catalog" keepMounted={false} data-testid="image-model-add-tabs">
-				<Tabs.List>
-					<Tabs.Tab value="catalog" leftSection={<IconSparkles size={14} />} data-testid="image-model-tab-catalog">
-						{t("pages.images.models.tabs.catalog", "Recommended")}
-					</Tabs.Tab>
-					<Tabs.Tab value="browse" leftSection={<IconCloudDownload size={14} />} data-testid="image-model-tab-browse">
-						{t("pages.images.models.tabs.browse", "Hugging Face")}
-					</Tabs.Tab>
-					<Tabs.Tab value="manual" leftSection={<IconPlus size={14} />} data-testid="image-model-tab-manual">
-						{t("pages.images.models.tabs.manual", "Advanced")}
-					</Tabs.Tab>
-				</Tabs.List>
-
-				<Tabs.Panel value="catalog" pt="md">
-					<ImageModelCatalogPanel
-						entries={catalogQuery.data ?? []}
-						isLoading={catalogQuery.isPending}
-						error={catalogQuery.error}
-						busyEntryIds={busyCatalogIds}
-						onInstall={handleCatalogInstall}
-					/>
-				</Tabs.Panel>
-
-				<Tabs.Panel value="browse" pt="md">
-					<ImageModelBrowsePanel
-						installedModelNames={installedModelNames}
-						isInstalling={downloadMutation.isPending}
-						onInstall={handleBrowseInstall}
-					/>
-				</Tabs.Panel>
-
-				<Tabs.Panel value="manual" pt="md">
-					<ManualDownloadForm
-						draft={draft}
-						setDraft={setDraft}
-						advancedParts={advancedParts}
-						hasDiffusionPart={hasDiffusionPart}
-						canSubmit={canSubmit}
-						isDraftInFlight={isDraftInFlight}
-						isSubmitting={downloadMutation.isPending}
-						onSubmit={handleDownload}
-						onUpdatePart={updatePart}
-						onAddPart={addPart}
-						onRemovePart={removePart}
-					/>
-				</Tabs.Panel>
-			</Tabs>
-		</Stack>
+		<ImageModelManagerPresentation
+			t={t}
+			installed={{
+				models,
+				formatBytes: humanizeBytes,
+				isLoading,
+				deletingModelName,
+				onDelete: handleDelete,
+			}}
+			downloads={{
+				inFlight,
+				statuses,
+				rateEstimates,
+				cancellingModelName,
+				onCancel: handleCancel,
+				errors: downloadErrors,
+				onDismissError: (modelName) =>
+					setDownloadErrors((current) => {
+						const { [modelName]: _removed, ...rest } = current;
+						return rest;
+					}),
+			}}
+			entries={{
+				catalogEntries: catalogQuery.data ?? [],
+				catalogLoading: catalogQuery.isPending,
+				catalogError: catalogQuery.error,
+				busyCatalogIds,
+				onCatalogInstall: handleCatalogInstall,
+				installedModelNames,
+				isInstalling: downloadMutation.isPending,
+				onBrowseInstall: handleBrowseInstall,
+				draft,
+				setDraft,
+				advancedParts,
+				hasDiffusionPart,
+				canSubmit,
+				isDraftInFlight,
+				onSubmit: handleDownload,
+				onUpdatePart: updatePart,
+				onAddPart: addPart,
+				onRemovePart: removePart,
+			}}
+		/>
 	);
 }

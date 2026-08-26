@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class NodeChatPersistenceContractTests
 {
     [Test]
-    public void Interface_DefinesPhase44PersistenceOperations()
+    public void Interface_DefinesPersistenceOperations()
     {
         var methods = typeof(INodeChatPersistenceService)
                       .GetMethods(BindingFlags.Public | BindingFlags.Instance)

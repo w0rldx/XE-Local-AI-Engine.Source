@@ -1,6 +1,6 @@
 # MCP server trust tiers
 
-- **Status:** Accepted, implemented in Phase 2 (gap G2) of the 2026-08-25 secure-agent-execution work.
+- **Status:** Accepted and implemented.
 - **Scope:** Outbound MCP servers this node connects to. The node's own inbound MCP server is out of scope (ADR 0006).
 - **Authority:** Maintainer decision (2026-08-25): the tiers are `Sandboxed` / `PrivilegedHost` / `BuiltInTrusted`.
   There is **no `Remote` tier**; `McpOptions.HttpLoopbackHosts` stays exact-match loopback.
@@ -65,8 +65,8 @@ component, because the kernel resolves the whole chain when bwrap binds by descr
 the path, a relative segment or a trailing separator therefore cannot walk past the list. The list is also
 derived from the account's home directory, so a host that cannot name one (HOME unset) refuses every Sandboxed
 connection rather than checking a list with its credential half missing; the `mcp-stdio` isolation-panel row
-says so. Follow-up: on Windows an 8.3 short name could still alias past the ordinal comparison — Sandboxed is
-Linux-only until G12, so this is recorded rather than fixed. The list is code-owned: a denylist a registration
+says so. On Windows, an 8.3 short name can still alias past the ordinal comparison. Sandboxed stdio is
+Linux-only, so that alias limitation is not reachable in the implemented boundary. The list is code-owned: a denylist a registration
 could edit would be no denylist at all.
 
 **Egress.** `--unshare-net` is unconditional on the isolated chain and is positively controlled by the containment
@@ -81,10 +81,10 @@ ways out — install bubblewrap plus the user-namespace support the containment 
 server to `PrivilegedHost` deliberately. This is the one MCP connection error that is not redacted to a generic
 string, because a generic string here would be indistinguishable from the server simply being broken.
 
-**Windows.** `HostSandboxContainmentProbe` reports `SandboxContainment.None` on Windows — the Job Object path is not
-implemented (G12) — so `Sandboxed` is unavailable there and every stdio server refuses to start with the message above
-until G12 lands. That is the visible degradation the phased plan asks for, not a silent one. The
-`mcp-stdio` row on the Development status isolation panel reports the same fact ahead of any connection attempt.
+**Windows.** `HostSandboxContainmentProbe` reports `SandboxContainment.None` on Windows because there is no Job
+Object containment implementation. `Sandboxed` is unavailable there, so every stdio server refuses to start with the
+message above. The `mcp-stdio` row on the Development status isolation panel reports the same fact ahead of any
+connection attempt.
 
 **Lifecycle.** The sandbox is created per server registration with an attach key carrying the server id, so two servers
 never share a jail. The long-lived child runs through `ISandboxRuntimeProvider.StartInteractiveAsync` and is registered
@@ -119,7 +119,7 @@ Two properties are already in force for **every** MCP tool and are stated here s
 Existing rows migrate to **`Sandboxed`**, not to `PrivilegedHost`.
 
 `PrivilegedHost` would preserve today's behaviour silently and would leave every already-registered server permanently
-outside the boundary this gap exists to close, with nothing in the UI to say so. `Sandboxed` is the secure default and
+outside the sandbox boundary, with nothing in the UI to say so. `Sandboxed` is the secure default and
 its failure mode is loud: a server that genuinely needs host access stops connecting and says why, in the status the
 settings page already renders, with the tier named and `PrivilegedHost` named as the deliberate way to restore it. An
 operator who re-grants host access has made a decision; an operator whose servers were quietly grandfathered has not.
@@ -128,9 +128,9 @@ The migration sets the column default and is a one-line `AddColumn` — no data 
 
 ## Environment at rest
 
-Already done, and this document says so rather than repeating the work: `McpServerRegistration.EnvJson` is AEAD-encrypted
-at rest by `NodeEncryptionSaveChangesInterceptor` with AAD column name `env`, and decrypted on materialization —
-the same pattern the custom-tools `config_json` column uses. What Phase 2 adds is **masking on the way out**: the
+`McpServerRegistration.EnvJson` is AEAD-encrypted at rest by `NodeEncryptionSaveChangesInterceptor` with AAD
+column name `env`, and decrypted on materialization — the same pattern the custom-tools `config_json` column uses.
+Responses also **mask values on the way out**: the
 `McpServerResponse.Env` map returns each configured key with a fixed placeholder value instead of the secret, and an
 update that sends the placeholder back keeps the stored value. A secret that only ever travels inbound cannot be read
 back out of the node by anything holding a session.

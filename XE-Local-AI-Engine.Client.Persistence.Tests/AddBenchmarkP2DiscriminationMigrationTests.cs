@@ -5,7 +5,7 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     <c>AddBenchmarkP2Discrimination</c> is the ONE migration P2 ships: three new tables, the run's fidelity
+///     <c>AddBenchmarkP2Discrimination</c> is one atomic migration: three new tables, the run's fidelity
 ///     projection, the project's fidelity settings, the revision's comparison-set version, and the rewritten
 ///     work-item CHECK. It is one migration precisely so no window exists in which a work item of a kind the old
 ///     CHECK forbids is written; splitting it would fail an operator's freeze rather than a test.
@@ -20,11 +20,11 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     {
         await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-p2-up.sqlite").ConfigureAwait(false);
 
-        AssertEx.True(await probe.TableExistsAsync("benchmark_fidelity_attempts").ConfigureAwait(false), "M1 must create benchmark_fidelity_attempts.");
-        AssertEx.True(await probe.TableExistsAsync("benchmark_pairwise_fits").ConfigureAwait(false), "M3 must create benchmark_pairwise_fits.");
-        AssertEx.True(await probe.TableExistsAsync("benchmark_comparisons").ConfigureAwait(false), "M5 must create benchmark_comparisons.");
+        AssertEx.True(await probe.TableExistsAsync("benchmark_fidelity_attempts").ConfigureAwait(false), "The migration must create benchmark_fidelity_attempts.");
+        AssertEx.True(await probe.TableExistsAsync("benchmark_pairwise_fits").ConfigureAwait(false), "The migration must create benchmark_pairwise_fits.");
+        AssertEx.True(await probe.TableExistsAsync("benchmark_comparisons").ConfigureAwait(false), "The migration must create benchmark_comparisons.");
 
-        // M2: the projection is 13 columns; counting them here is what keeps the plan's table and the schema in step.
+        // The projection is 13 columns; counting them here keeps the documented contract and schema in step.
         var runColumns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
         string[] projection =
         [
@@ -54,7 +54,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
                 "fidelity_kld_base_model_name",
                 "fidelity_kld_base_fingerprint"
             }),
-            "M4 must persist the project's fidelity settings, including WHICH base model a KLD number is measured against.");
+            "The migration must persist the project's fidelity settings, including which base model a KLD number is measured against.");
 
         var revisionColumns = await probe.ColumnsAsync("benchmark_judge_policy_revisions").ConfigureAwait(false);
         AssertEx.True(revisionColumns.Contains("comparison_set_version"), "M7 must add the comparison-set version the fit is checked against.");
@@ -186,7 +186,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
         await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-p2-applied.sqlite").ConfigureAwait(false);
 
         var applied = await probe.AppliedMigrationsAsync(identityContext: false).ConfigureAwait(false);
-        AssertEx.True(applied.Contains(P2MigrationId), "The P2 migration must be part of the chat chain a fresh box applies.");
+        AssertEx.True(applied.Contains(P2MigrationId), "The discrimination migration must be part of the chat chain a fresh box applies.");
     }
 
     private static async Task<string> IndexSqlAsync(MigrationSchemaProbe probe, string indexName)
@@ -204,7 +204,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     private static async Task SeedProjectRunAsync(MigrationSchemaProbe probe)
     {
         // The work item's FK needs a run, and the run's needs a project. Written as SQL rather than through the entity
-        // model on purpose: the model describes the schema at head, and half these tests observe it before P2 applies.
+        // model on purpose: the model describes the schema at head, and half these tests observe it before this migration applies.
         await probe.ExecuteAsync("""
                                  INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, version, created_at_utc, updated_at_utc)
                                  VALUES ($project, 'p2-probe', x'00', 4096, $agent, 1, 1, 1);

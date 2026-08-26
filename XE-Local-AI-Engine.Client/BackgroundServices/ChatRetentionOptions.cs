@@ -11,9 +11,7 @@ using System.ComponentModel.DataAnnotations;
 ///     everything: the sweep cutoff is <c>now - RetentionDays</c>, so a zero or negative window would set a cutoff at or
 ///     after "now" and purge every conversation the instant retention is enabled.
 /// </summary>
-/// <remarks>
-///     UI exposure of this policy is a follow-up: today it is configured only at the appsettings level.
-/// </remarks>
+/// <remarks>This policy is configured only through appsettings; the UI does not expose it.</remarks>
 public sealed class ChatRetentionOptions : IValidatableObject
 {
     public const string Section = "ChatRetention";

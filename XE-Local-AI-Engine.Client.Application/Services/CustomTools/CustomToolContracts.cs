@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 /// <summary>
 ///     Typed projection of a custom tool's opaque <c>ParametersJson</c> / <c>ConfigJson</c> (the persistence layer keeps
 ///     them as opaque strings; this layer owns their shape). Every type here is a deserialization target for the
-///     operator-authored JSON and, on the P3 side, a serialization source, so the read and write halves of a tool's
+///     operator-authored JSON and a serialization source, so the read and write halves of a tool's
 ///     config can never drift.
 /// </summary>
 internal static class CustomToolJson

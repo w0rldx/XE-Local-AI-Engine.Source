@@ -6,9 +6,9 @@ using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 
 /// <summary>
-///     The rubric-criterion vocabulary. <see cref="Llm" /> is what every criterion written before P2 carries by
-///     default and is the only kind that costs a model turn; every other kind is checked server-side against the
-///     graded answer with no inference at all.
+///     The rubric-criterion vocabulary. <see cref="Llm" /> is the compatibility default for criteria without an
+///     explicit kind and is the only kind that costs a model turn; every other kind is checked server-side against
+///     the graded answer with no inference at all.
 /// </summary>
 public static class BenchmarkJudgeCriterionKinds
 {
@@ -38,12 +38,12 @@ public static class BenchmarkJudgeCriterionKinds
     public static bool IsExecutionVerified(string? kind) =>
         string.Equals(Normalize(kind), PythonTests, StringComparison.Ordinal);
 
-    /// <summary>The kind a criterion carries, treating an absent value as the pre-P2 default.</summary>
+    /// <summary>The kind a criterion carries, treating an absent value as the legacy-compatible default.</summary>
     public static string Normalize(string? kind) =>
         string.IsNullOrWhiteSpace(kind) ? Llm : kind;
 }
 
-/// <summary>The judging modes a policy may name. Pointwise is the default and the only one P2 executes.</summary>
+/// <summary>The judging modes a policy may name. Pointwise is the default and the only mode currently executed.</summary>
 public static class BenchmarkJudgePolicyModes
 {
     public const string Pointwise = "pointwise";
@@ -60,7 +60,7 @@ public sealed record BenchmarkVerifierNormalizeV1(
     bool CaseInsensitive = false,
     bool StripMarkdown = false);
 
-/// <summary>IFEval-style structural constraints. <c>language</c> is deliberately absent (plan §2 #8).</summary>
+/// <summary>IFEval-style structural constraints. Language detection is intentionally outside this contract.</summary>
 public sealed record BenchmarkConstraintConfigV1(
     int? MinWords = null,
     int? MaxWords = null,
@@ -111,7 +111,7 @@ public sealed record BenchmarkVerifierSpec
 /// <summary>
 ///     Parses and validates a criterion's <c>config</c> blob. Every failure is a
 ///     <see cref="BenchmarkJudgePolicyValidationException" /> so an operator saving an unusable rubric is told at
-///     activation, not by a judging that fails an hour later (plan R5: a verifier that cannot run must never score 0).
+///     activation, not by a judging that fails later. A verifier that cannot run must never score 0.
 /// </summary>
 public static class BenchmarkJudgeVerifierConfig
 {
@@ -275,10 +275,10 @@ public static class BenchmarkJudgeVerifierConfig
         };
     }
 
-    // ponytail: a structural subset of JSON Schema — type/properties/required/items/enum/const/additionalProperties —
-    // rather than a validator dependency (plan §7.0 adds no NuGet). The ceiling is enforced rather than hidden: a
-    // schema naming any other keyword is refused at activation, so the subset can never silently under-check. Upgrade
-    // path is JsonSchema.Net behind this same seam.
+    // ponytail: a dependency-free structural subset of JSON Schema —
+    // type/properties/required/items/enum/const/additionalProperties. The ceiling is enforced rather than hidden: a
+    // schema naming any other keyword is refused at activation, so the subset can never silently under-check. A full
+    // validator can replace this implementation behind the same seam.
     private static void ValidateSchemaShape(JsonElement schema)
     {
         if (schema.ValueKind != JsonValueKind.Object)

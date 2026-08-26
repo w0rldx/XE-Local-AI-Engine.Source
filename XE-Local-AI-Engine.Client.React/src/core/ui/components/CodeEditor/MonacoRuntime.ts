@@ -4,7 +4,7 @@
  *
  * Deliberately `editor.api` (the core) plus a hand-picked set of Monarch grammars — NOT `editor.main`, which drags in
  * every language plus the TypeScript/JSON/CSS/HTML language services and their workers (measured: the JSON service alone
- * is +1.6 MB). Highlighting is what the viewer needs; a language service is a follow-up for the feature that wants it.
+ * is +1.6 MB). The viewer provides syntax highlighting without a language service.
  * Workers are bundled through Vite's `?worker` import so nothing is fetched from a CDN — the app must work offline.
  */
 import * as monaco from "monaco-editor/editor/editor.api.js";
@@ -61,7 +61,11 @@ monaco.languages.setLanguageConfiguration("json", {
 		["{", "}"],
 		["[", "]"],
 	],
-	autoClosingPairs: [{ open: "{", close: "}" }, { open: "[", close: "]" }, { open: '"', close: '"' }],
+	autoClosingPairs: [
+		{ open: "{", close: "}" },
+		{ open: "[", close: "]" },
+		{ open: '"', close: '"' },
+	],
 });
 
 const diffRules = (added: string, removed: string, hunk: string): monaco.editor.ITokenThemeRule[] => [
@@ -71,6 +75,11 @@ const diffRules = (added: string, removed: string, hunk: string): monaco.editor.
 	{ token: "diff.header", fontStyle: "bold" },
 ];
 monaco.editor.defineTheme("xe-light", { base: "vs", inherit: true, rules: diffRules("22863A", "B31D28", "005CC5"), colors: {} });
-monaco.editor.defineTheme("xe-dark", { base: "vs-dark", inherit: true, rules: diffRules("85E89D", "FDAEB7", "79B8FF"), colors: {} });
+monaco.editor.defineTheme("xe-dark", {
+	base: "vs-dark",
+	inherit: true,
+	rules: diffRules("85E89D", "FDAEB7", "79B8FF"),
+	colors: {},
+});
 
 export { monaco };

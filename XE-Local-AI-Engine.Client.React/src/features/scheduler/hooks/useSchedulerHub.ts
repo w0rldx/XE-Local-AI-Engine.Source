@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
@@ -35,7 +35,9 @@ export function useSchedulerHub(): void {
 	// re-running the effect — re-running would tear down and rebuild the live hub connection. Kept current every render.
 	const { t } = useTranslation();
 	const tRef = useRef(t);
-	tRef.current = t;
+	useLayoutEffect(() => {
+		tRef.current = t;
+	}, [t]);
 
 	useEffect(() => {
 		// Shared refcounted connection: reused across mounts so navigating back to a scheduler page does not pay a fresh

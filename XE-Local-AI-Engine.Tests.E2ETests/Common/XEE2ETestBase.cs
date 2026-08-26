@@ -8,10 +8,9 @@ using XE_Local_AI_Engine.Client.Services.Events.Implementation;
 using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 
 /// <summary>
-///     Base for browser-driven XE node E2E tests. Mirrors the C0re <c>E2ETestBase</c> shell
-///     (headless-via-<c>HEADED</c> Chromium, tracing-on-failure to <c>test-results/traces/</c>,
-///     <c>PerTestSession</c> shared fixtures, bounded parallelism) but drops C0re's identity
-///     login/cookie helpers — the XE node is same-origin.
+///     Base for browser-driven XE node E2E tests. Provides headless-via-<c>HEADED</c> Chromium,
+///     tracing-on-failure to <c>test-results/traces/</c>, <c>PerTestSession</c> shared fixtures, and bounded
+///     parallelism. The XE node is same-origin, so the fixture needs no identity login or cookie helpers.
 ///     <para>
 ///         Single origin: the host serves both the API and the SPA, so
 ///         <see cref="FrontendBaseUrl" /> == <see cref="ApiBaseUrl" /> == the factory's ServerAddress.

@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 ///     Default <see cref="ICudaBuildService" />. Orchestrates a single-flight, cancellable, background in-app CUDA
 ///     <c>llama-server</c> build and adopts the result as a managed runtime. Every subprocess runs under a scrubbed,
 ///     allowlisted environment (<c>[secHIGH-2]</c>) in an owner-only (0700) work directory inside the cache root — never
-///     <c>/tmp</c> (<c>[secHIGH-3]</c>, Locked #8). The clone source URL + tag are constants and the checked-out commit is
+///     <c>/tmp</c> (<c>[secHIGH-3]</c>). The clone source URL + tag are constants and the checked-out commit is
 ///     verified == the pinned SHA before any cmake runs (<c>[secHIGH-1]</c>). On any failure the partial tree is deleted
 ///     and nothing is recorded (no silent CPU fallback).
 /// </summary>
@@ -226,7 +226,7 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
 
         try
         {
-            // Owner-only (0700) work dir inside the cache root — never /tmp. [secHIGH-3, Locked #8]
+            // Owner-only (0700) work directory inside the cache root — never /tmp. [secHIGH-3]
             TryDeleteDirectory(workDir);
             TryDeleteDirectory(stagingTagDir);
             TryDeleteDirectory(backupTagDir);
@@ -427,7 +427,7 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
 
     // Scrubbed, allowlisted build environment: ONLY these keys pass through; everything else (LD_PRELOAD, LD_LIBRARY_PATH,
     // CC, CXX, CUDAHOSTCXX, CMAKE_*_LAUNCHER, GIT_SSH_COMMAND, GIT_PROXY_COMMAND, GIT_EXTERNAL_DIFF, app secrets) is
-    // dropped by construction. [secHIGH-2, Locked #7]
+    // dropped by construction. [secHIGH-2]
     private static Dictionary<string, string> BuildScrubbedEnvironment()
     {
         string[] allowlist = ["PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "CUDA_HOME", "CUDA_PATH"];

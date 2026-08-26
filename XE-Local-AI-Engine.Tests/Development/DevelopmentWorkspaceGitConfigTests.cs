@@ -108,7 +108,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
     public void RestoreMinimal_DoesNotReintroduceARemote()
     {
         // The clone drops origin deliberately — it points straight back at the trusted source repository — and a test
-        // asserts the workspace has no remote. Restoring it here would quietly undo D8.
+        // asserts the workspace has no remote. Restoring it here would quietly undo that isolation boundary.
         var workspace = CreateWorkspace("""
                                         [core]
                                         	repositoryformatversion = 0

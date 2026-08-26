@@ -210,7 +210,7 @@ public sealed class DockerSandboxRuntimeProviderTests
     [Test]
     public async Task CreateOrAttachAsync_WhenUnrestrictedEgressIsRequested_ServesItOnTheDefaultBridge()
     {
-        // Development Mode asks for this today: its `dotnet restore` needs the network until the D6 package-proxy
+        // Development Mode asks for this today: its `dotnet restore` needs the network until a restricted package proxy
         // machinery exists, so a provider that served only `None` could never be switched on for it at all.
         var (provider, client, workspace) = CreateProvider();
 

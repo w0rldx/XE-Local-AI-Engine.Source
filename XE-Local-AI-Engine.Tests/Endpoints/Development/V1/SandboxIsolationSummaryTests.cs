@@ -189,7 +189,7 @@ public sealed class SandboxIsolationSummaryTests
     }
 
     /// <summary>
-    ///     THE REGRESSION THIS FILE EXISTS FOR SINCE G6b. Live on a Linux box with a working chain, the panel showed
+    ///     Regression guard: on a Linux box with a working chain, the panel showed
     ///     role <c>development</c> as filesystem-isolated and <c>Isolated</c> — read straight off the process backend's
     ///     advertised flags. It is false: <see cref="SandboxWorkloads.DevelopmentModeHostToolchain" /> declares
     ///     <see cref="SandboxIsolationMode.None" />, and Development Mode runs the host toolchain with the worktree

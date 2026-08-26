@@ -5,7 +5,7 @@ using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     The invariants P2's new tables enforce in the DATABASE rather than in the code that writes them: the canonical
+///     The pairwise-schema invariants enforced in the DATABASE rather than only in the code that writes them: canonical
 ///     pair ordering, one live comparison per slot with retries still possible, and exactly one active Bradley–Terry
 ///     fit per scope. Each is a rule a careful publisher would also keep — and each is here because "the publisher was
 ///     careful" is not an invariant, it is a hope.

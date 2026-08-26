@@ -115,7 +115,7 @@ public sealed class DefaultConfigDraftServiceTests
     [Test]
     public async Task DraftAgent_WithNoExplicitOption_UsesTheNodeMaximumMessageRequestTimeout()
     {
-        // G14: the drafting budget was a hardcoded 300s, so a raised node "Maximum message request timeout" was
+        // The drafting budget was once a hardcoded 300s, so a raised node "Maximum message request timeout" was
         // silently ignored here. With no explicit Drafting:GenerationTimeout the budget now follows the node setting,
         // read live. A 0s setting makes the hang elapse immediately — it would run to the model's completion (and the
         // assert would see no failure) if the wiring were dropped back to a fixed default.

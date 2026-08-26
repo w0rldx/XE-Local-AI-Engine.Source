@@ -2,8 +2,8 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 /// <summary>
 ///     Cross-field save policy for an Azure Foundry connection's custom headers and operator-added allowed host
-///     suffixes (Locked #6–#9, #14). Lives here — not in the boundary validator — because it needs the PREVIOUSLY
-///     STORED headers to tell a blank secret header that resolves via the merge apart from a fresh/renamed one that
+///     suffixes. Lives here — not in the boundary validator — because it needs the previously stored headers to tell a
+///     blank secret header that resolves via the merge apart from a fresh or renamed one that
 ///     has nothing to merge against. Error messages carry the offending header NAME only, never a value.
 /// </summary>
 public static class CloudSettingsPolicy
@@ -81,8 +81,8 @@ public static class CloudSettingsPolicy
                 errors.Add($"Custom header '{name}' value contains invalid control characters.");
             }
 
-            // A blank secret header only resolves when it merges with a stored secret of the same name (Locked #10/#12,
-            // CloudSettingsHeaderMerge). A fresh or renamed header has nothing to merge against, so reject it here (400)
+            // A blank secret header only resolves when CloudSettingsHeaderMerge finds a stored secret of the same name.
+            // A fresh or renamed header has nothing to merge against, so reject it here (400)
             // instead of letting CloudCredentialStore.ValidateConfig throw on save (500).
             if (header.IsSecret && string.IsNullOrWhiteSpace(header.Value) && !storedSecretNames.Contains(name))
             {

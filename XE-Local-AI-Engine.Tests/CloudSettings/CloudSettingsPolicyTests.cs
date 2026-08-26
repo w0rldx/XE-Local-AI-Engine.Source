@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The save policy owns every custom-header and host-suffix rule the endpoint used to inline (Locked #6–#9, #14).
+///     The save policy owns every custom-header and host-suffix rule instead of inlining them in the endpoint.
 ///     It must see the PREVIOUSLY STORED headers: a blank secret header is legal only when a stored secret of the same
 ///     name will merge into it, and messages must never carry a header value.
 /// </summary>

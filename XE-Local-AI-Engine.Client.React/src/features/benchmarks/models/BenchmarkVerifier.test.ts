@@ -16,7 +16,7 @@ import {
 // forced re-judge that a judge-policy save implies.
 
 describe("toBenchmarkCriterionKind", () => {
-	it("reads an absent or unknown kind as llm, the pre-P2 default", () => {
+	it("reads an absent or unknown kind as the legacy-compatible llm default", () => {
 		expect(toBenchmarkCriterionKind(undefined)).toBe("llm");
 		expect(toBenchmarkCriterionKind(null)).toBe("llm");
 		expect(toBenchmarkCriterionKind("somethingANewerNodeInvented")).toBe("llm");
@@ -86,12 +86,15 @@ describe("verifierConfigIssue", () => {
 	});
 
 	it("checks nested schema properties and items, not only the top level", () => {
-		expect(verifierConfigIssue("jsonSchema", '{"schema":{"type":"object","properties":{"a":{"pattern":"x"}}}}')).toBe("schemaKeyword");
+		expect(verifierConfigIssue("jsonSchema", '{"schema":{"type":"object","properties":{"a":{"pattern":"x"}}}}')).toBe(
+			"schemaKeyword",
+		);
 		expect(verifierConfigIssue("jsonSchema", '{"schema":{"type":"array","items":{"minimum":1}}}')).toBe("schemaKeyword");
 	});
 
 	it("accepts a schema built from the enforced keywords", () => {
-		const schema = '{"schema":{"type":"object","properties":{"total":{"type":"number"}},"required":["total"],"additionalProperties":false}}';
+		const schema =
+			'{"schema":{"type":"object","properties":{"total":{"type":"number"}},"required":["total"],"additionalProperties":false}}';
 		expect(verifierConfigIssue("jsonSchema", schema)).toBeNull();
 	});
 
@@ -150,7 +153,12 @@ describe("firstVerifierIssue", () => {
 	});
 
 	it("is null when every criterion passes the pre-check", () => {
-		expect(firstVerifierIssue([{ kind: "llm", config: null }, { kind: "exact", config: '{"expected":"42"}' }])).toBeNull();
+		expect(
+			firstVerifierIssue([
+				{ kind: "llm", config: null },
+				{ kind: "exact", config: '{"expected":"42"}' },
+			]),
+		).toBeNull();
 	});
 });
 
@@ -158,7 +166,8 @@ describe("firstVerifierIssue", () => {
 // program. The node bounds it at activation because the composed harness has to fit inside the sandbox script
 // alongside the candidate's own code — a limit an operator must meet in the form, not an hour into a batch.
 describe("pythonTests configuration", () => {
-	const config = (overrides: Record<string, unknown> = {}) => JSON.stringify({ testCode: "assert candidate.solve(2) == 4", ...overrides });
+	const config = (overrides: Record<string, unknown> = {}) =>
+		JSON.stringify({ testCode: "assert candidate.solve(2) == 4", ...overrides });
 
 	it("accepts the smallest valid configuration", () => {
 		expect(verifierConfigIssue("pythonTests", config())).toBeNull();
@@ -170,9 +179,9 @@ describe("pythonTests configuration", () => {
 	});
 
 	it("refuses test code past the node's activation cap", () => {
-		expect(verifierConfigIssue("pythonTests", config({ testCode: "x".repeat(benchmarkPythonTestsLimits.maxTestCodeLength + 1) }))).toBe(
-			"testCodeTooLong",
-		);
+		expect(
+			verifierConfigIssue("pythonTests", config({ testCode: "x".repeat(benchmarkPythonTestsLimits.maxTestCodeLength + 1) })),
+		).toBe("testCodeTooLong");
 	});
 
 	// Exports are seeded into the test namespace as bare names, so each has to be something Python can bind.

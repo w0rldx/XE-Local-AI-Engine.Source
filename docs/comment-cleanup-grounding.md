@@ -11,14 +11,14 @@ This note records the official documentation checked before tightening XML comme
 > - A comment describing Docker **on the inference path**, in the model runtime, in model acquisition, or as part of **HostAgent** or the deleted `LocalContainerSandboxProvider` is still a **defect**.
 > - A comment describing Docker as the **Development Mode execution sandbox** is **correct and must not be deleted** — even though this file previously told you it was retired guidance. Verify against the ADR before touching it.
 > - **Rootless Docker guidance stays retired.** The ADR documents that Docker-socket access is root-equivalent on Linux rather than mitigating it; the product neither depends on rootless Docker nor claims it. Do not write a comment implying otherwise.
-> - **WSL nuance:** the deleted subsystem was the *managed distro* (`wsl --unregister xe-engine-runtime`), and it stays deleted. That is **not** the same as decision D1's requirement that Development Mode's data root live inside the WSL2 filesystem on Windows — a comment describing *that* is correct.
+> - **WSL nuance:** the deleted subsystem was the *managed distro* (`wsl --unregister xe-engine-runtime`), and it stays deleted. That is **not** the same as the accepted requirement that Development Mode's data root live inside the WSL2 filesystem on Windows — a comment describing *that* is correct.
 
 ## Review cadence and version anchors
 
-- Re-check these sources before future source-comment edits when a package major version or runtime target changes. Several seams are version-sensitive; the current pins in `Directory.Packages.props` are `FastEndpoints`/`FastEndpoints.Swagger` 8.2, `Microsoft.Extensions.AI` 10.8.3, Microsoft Agent Framework (`Microsoft.Agents.AI`, `.Abstractions`, and `.Workflows`) 1.17.0, OpenAI 2.12.0, EF Core 10.x, ASP.NET Core/SignalR 10.x, Quartz 3.18.2, OpenTelemetry 1.16, OllamaSharp 5.4, and Aspire 13.4. **gRPC and Avalonia are no longer pins at all** — both were removed with HostAgent (no `Grpc.*` package, no `.proto` file, no Avalonia package remains in the tree).
+- Treat `Directory.Packages.props` as the authority for centrally managed package versions. Re-read the relevant entries and current official documentation before changing a version-sensitive source comment; do not copy a package-version snapshot into this note.
 - Prefer versioned official pages where available. If a source comment explains library mechanics, cite the stable concept in Markdown/reporting rather than pasting long upstream excerpts into `.cs` comments.
 - Treat `global.json` as the .NET SDK selection contract for local tools and CI restore/build behavior. It is not the same thing as a project target framework.
-- Worker-2 task-2 refresh on 2026-06-02 rechecked the C# XML documentation-comments specification, Quartz 3.x DI/hosted-service pages, and the ASP.NET Core gRPC overview before editing scheduler/AgentHome/sandbox/HostAgent comments. The gRPC and HostAgent parts of that pass are now moot — both were removed from the tree afterwards.
+- Recheck the C# XML documentation-comments specification and the Quartz DI/hosted-service documentation before changing version-sensitive scheduler or service comments.
 
 ## XML documentation comments
 

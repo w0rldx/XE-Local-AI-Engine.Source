@@ -58,6 +58,31 @@ public sealed class DefaultExceptionHandlerTests
         AssertEx.NotEqual(problemDetailsTraceId, logger.GetLoggedValue("RequestId")?.ToString());
     }
 
+    [Test]
+    public async Task TryHandleAsync_WhenKeyNotFoundIsUnrelated_ReturnsSanitizedInternalServerError()
+    {
+        const string SensitiveMessage = "secret lookup detail";
+        var logger = new StructuredCapturingLogger<DefaultExceptionHandler>();
+        var environment = Substitute.For<IHostEnvironment>();
+        environment.EnvironmentName.Returns("Production");
+        var handler = new DefaultExceptionHandler(logger, environment);
+        var httpContext = new DefaultHttpContext();
+        using var responseBody = new MemoryStream();
+        httpContext.Response.Body = responseBody;
+
+        var handled = await handler.TryHandleAsync(httpContext, new KeyNotFoundException(SensitiveMessage), CancellationToken.None)
+                                   .ConfigureAwait(false);
+
+        AssertEx.True(handled);
+        AssertEx.Equal(StatusCodes.Status500InternalServerError, httpContext.Response.StatusCode);
+        AssertEx.Contains(httpContext.Response.ContentType, "application/problem+json", StringComparison.OrdinalIgnoreCase);
+        responseBody.Position = 0;
+        using var document = await JsonDocument.ParseAsync(responseBody).ConfigureAwait(false);
+        AssertEx.Equal(StatusCodes.Status500InternalServerError, document.RootElement.GetProperty("status").GetInt32());
+        AssertEx.Equal("An unexpected error occurred", document.RootElement.GetProperty("detail").GetString());
+        AssertEx.False(document.RootElement.GetRawText().Contains(SensitiveMessage, StringComparison.Ordinal));
+    }
+
     // Captures the structured state of the most recent log call so a test can read individual message-template values
     // (e.g. TraceId, RequestId) rather than only the rendered string.
     private sealed class StructuredCapturingLogger<T> : ILogger<T>

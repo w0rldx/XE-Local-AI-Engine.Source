@@ -28,7 +28,7 @@ public sealed class CustomToolServiceTests
     {
         var service = BuildService(out _, out _);
 
-        // C1: a shell/interpreter executable reopens arbitrary-script execution and is rejected.
+        // A shell/interpreter executable reopens arbitrary-script execution and is rejected.
         var definition = ValidCommand() with
         {
             Command = ValidCommand().Command! with
@@ -82,7 +82,7 @@ public sealed class CustomToolServiceTests
     {
         var service = BuildService(out _, out _);
 
-        // H2: a model-fillable host must be pinned to an operator allow-list.
+        // A model-fillable host must be pinned to an operator allow-list.
         var definition = ValidHttpFetch() with
         {
             Mode = CustomToolMode.Parameterized,

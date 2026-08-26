@@ -4,7 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 
 /// <summary>
-///     The SSRF containment for <c>HttpFetch</c> tools (C4/H1/H2). Two layers:
+///     The SSRF containment for <c>HttpFetch</c> tools has two layers:
 ///     <list type="bullet">
 ///         <item>
 ///             <see cref="ValidateRequestUrl" /> runs on the FINAL assembled URL before the request is built: scheme
@@ -16,7 +16,7 @@ using System.Net.Sockets;
 ///             <see cref="CreatePinnedConnectCallback" /> is installed on the fetch handler's
 ///             <see cref="SocketsHttpHandler" />: it resolves the host, validates EVERY resolved address, and connects
 ///             the socket to a validated address itself. Because the address it validates is the address it dials, there
-///             is no re-resolve gap a DNS-rebind could exploit — the TOCTOU window C4 warns about is closed. The original
+///             is no re-resolve gap a DNS-rebind could exploit, so the TOCTOU window is closed. The original
 ///             host stays the connection's Host header + TLS SNI (the handler layers TLS over the returned stream).
 ///         </item>
 ///     </list>

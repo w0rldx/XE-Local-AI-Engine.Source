@@ -201,14 +201,21 @@ export function ThemeConfigurator() {
 								className="rounded border border-zinc-300 p-2"
 								value={draft.breakpoints.values[key]}
 								onChange={(event) => {
-									const numericValue = Number(event.target.value);
+									const rawValue = event.target.value;
+									if (rawValue.trim().length === 0) {
+										return;
+									}
+									const numericValue = Number(rawValue);
+									if (!Number.isFinite(numericValue)) {
+										return;
+									}
 									updateDraft((currentDraft) => ({
 										...currentDraft,
 										breakpoints: {
 											...currentDraft.breakpoints,
 											values: {
 												...currentDraft.breakpoints.values,
-												[key]: Number.isFinite(numericValue) ? numericValue : 0,
+												[key]: numericValue,
 											},
 										},
 									}));

@@ -206,8 +206,8 @@ public sealed class BenchmarkPythonTestsLiveTests : IDisposable
     [Test]
     public async Task PythonTests_ComputeDisabled_IsUnscorable_NotZero()
     {
-        // The kill-switch, live. R4's split in one assertion: the sandbox could not be trusted, so the run is unranked
-        // with a named reason rather than the model being told it wrote failing code.
+        // The kill-switch, live: when the sandbox cannot be trusted, the run is unranked with a named reason rather
+        // than the model being told it wrote failing code.
         RequireIsolationCapableHost();
         using var provider = CreateHostProvider();
         var verifier = CreateVerifier(provider, enabled: false, computeTimeoutSeconds: 60);

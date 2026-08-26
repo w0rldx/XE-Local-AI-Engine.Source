@@ -1,9 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.AgentHome;
 
 /// <summary>
-///     Worker-side AgentHome configuration (section <c>AgentHome</c>). The layout initializer introduces the
-///     minimal surface the layout initializer needs; broader runtime/quota options are explicit follow-up configuration work. The
-///     <c>AgentHome:Sandbox</c> child section is bound separately by <c>SandboxOptions</c>.
+///     Worker-side AgentHome configuration (section <c>AgentHome</c>) limited to settings consumed by the layout
+///     initializer. The <c>AgentHome:Sandbox</c> child section is bound separately by <c>SandboxOptions</c>.
 /// </summary>
 public sealed class AgentHomeOptions
 {
@@ -35,7 +34,7 @@ public sealed class AgentHomeOptions
     public string DefaultRuntimeProfile { get; set; } = "dotnet-agent-home";
 
     /// <summary>
-    ///     Timeout for the preparation phase (sandbox attach/create, layout recovery, future workspace copy), applied
+    ///     Timeout for the preparation phase (sandbox attach/create and layout recovery), applied
     ///     separately from the command timeout. Defaults to 900 seconds.
     /// </summary>
     public int PrepareTimeoutSeconds { get; set; } = 900;

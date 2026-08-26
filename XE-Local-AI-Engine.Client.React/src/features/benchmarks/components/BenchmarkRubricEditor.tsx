@@ -1,11 +1,20 @@
 import { ActionIcon, Button, Card, Group, NumberInput, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { IconPlus, IconTrash } from "@tabler/icons-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { BenchmarkVerifierEditor } from "@/features/benchmarks/components/BenchmarkVerifierEditor";
-import type { BenchmarkRubric, BenchmarkRubricCriterion, BenchmarkRubricIssue } from "@/features/benchmarks/models/BenchmarkModels";
+import type {
+	BenchmarkRubric,
+	BenchmarkRubricCriterion,
+	BenchmarkRubricIssue,
+} from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkRubricLimits, toBenchmarkCriterionId } from "@/features/benchmarks/models/BenchmarkModels";
-import { isVerifiableCriterionKind, toBenchmarkCriterionKind, verifierConfigIssue } from "@/features/benchmarks/models/BenchmarkVerifier";
+import {
+	isVerifiableCriterionKind,
+	toBenchmarkCriterionKind,
+	verifierConfigIssue,
+} from "@/features/benchmarks/models/BenchmarkVerifier";
 import type { BenchmarkRubricPresets } from "@/features/benchmarks/queries/useBenchmarks";
 
 interface BenchmarkRubricEditorProps {
@@ -18,6 +27,12 @@ interface BenchmarkRubricEditorProps {
 
 const emptyCriterion: BenchmarkRubricCriterion = { id: "", title: "", description: "", weight: 25, kind: "llm", config: null };
 
+let criterionRowSequence = 0;
+function nextCriterionRowKey(): string {
+	criterionRowSequence += 1;
+	return `benchmark-criterion-${criterionRowSequence}`;
+}
+
 /**
  * The criteria the judge scores against, 0..10 each, rolled up by weight into the run's 0..100 judge score. Bounds
  * mirror the node's validator so a rubric is refused here rather than after a round-trip; the whole editor is one
@@ -26,6 +41,17 @@ const emptyCriterion: BenchmarkRubricCriterion = { id: "", title: "", descriptio
 export function BenchmarkRubricEditor({ rubric, presets, issue, onChange }: BenchmarkRubricEditorProps) {
 	const { t } = useTranslation();
 	const criteria = rubric.criteria;
+	const [criterionRowKeys, setCriterionRowKeys] = useState(() =>
+		Array.from({ length: benchmarkRubricLimits.maxCriteria }, nextCriterionRowKey),
+	);
+	const replaceRubric = (next: BenchmarkRubric): void => {
+		setCriterionRowKeys(Array.from({ length: benchmarkRubricLimits.maxCriteria }, nextCriterionRowKey));
+		onChange(next);
+	};
+	const remove = (index: number): void => {
+		setCriterionRowKeys((current) => [...current.filter((_, position) => position !== index), nextCriterionRowKey()]);
+		onChange({ ...rubric, criteria: criteria.filter((_, position) => position !== index) });
+	};
 	const replace = (index: number, patch: Partial<BenchmarkRubricCriterion>): void => {
 		onChange({
 			...rubric,
@@ -70,7 +96,7 @@ export function BenchmarkRubricEditor({ rubric, presets, issue, onChange }: Benc
 							size="compact-xs"
 							variant="default"
 							disabled={preset.rubric === null}
-							onClick={() => preset.rubric && onChange(preset.rubric)}
+							onClick={() => preset.rubric && replaceRubric(preset.rubric)}
 							data-testid={`benchmark-rubric-preset-${preset.key}`}
 						>
 							{preset.label}
@@ -84,10 +110,13 @@ export function BenchmarkRubricEditor({ rubric, presets, issue, onChange }: Benc
 				</Text>
 			) : null}
 			{criteria.map((criterion, index) => (
-				// The criteria are an ordered list the operator edits in place; there is no stable server id to key on
-				// while a row is still being typed, so the position is the key.
-				// biome-ignore lint/suspicious/noArrayIndexKey: rows are positional until the rubric is saved.
-				<Card key={index} withBorder={true} radius="sm" padding="sm" data-testid={`benchmark-rubric-criterion-${index}`}>
+				<Card
+					key={criterionRowKeys[index]}
+					withBorder={true}
+					radius="sm"
+					padding="sm"
+					data-testid={`benchmark-rubric-criterion-${index}`}
+				>
 					<Stack gap="xs">
 						{/*
 						  * One line on a wide form, three wrapped fields on a phone: the title claims the first line
@@ -138,7 +167,7 @@ export function BenchmarkRubricEditor({ rubric, presets, issue, onChange }: Benc
 								color="red"
 								disabled={criteria.length <= benchmarkRubricLimits.minCriteria}
 								aria-label={t("pages.benchmarks.rubric.remove", "Remove criterion")}
-								onClick={() => onChange({ ...rubric, criteria: criteria.filter((_, position) => position !== index) })}
+								onClick={() => remove(index)}
 								data-testid={`benchmark-rubric-remove-${index}`}
 							>
 								<IconTrash size={16} />

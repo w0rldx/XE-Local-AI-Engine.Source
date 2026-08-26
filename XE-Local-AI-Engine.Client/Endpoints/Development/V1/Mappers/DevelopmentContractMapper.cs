@@ -147,7 +147,7 @@ internal static class DevelopmentContractMapper
     ///                 Mode, so that a node without the mechanism still runs), while every consumer REQUESTS
     ///                 <see cref="SandboxNetworkPolicy.None" /> per call exactly where the flag is advertised —
     ///                 <c>AgentHomeService.ResolveNetworkPolicy</c>,
-    ///                 <c>DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy</c> (G1c Option B), and
+    ///                 <c>DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy</c>, and
     ///                 <c>ComputeToolGateway.BuildCreateRequest</c> unconditionally. So the flag IS the served posture
     ///                 here, and reading the floor instead would report egress as unrestricted on a node that denies
     ///                 it. <see cref="SandboxIsolationSummaryResponse.NetworkIsolationRequired" /> carries the OTHER

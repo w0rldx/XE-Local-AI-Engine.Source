@@ -1,6 +1,6 @@
 import { HubConnectionState } from "@microsoft/signalr";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
@@ -101,19 +101,16 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 	// the effect); if `t` were a dep, each change would tear down and rebuild the SignalR connection mid-negotiation,
 	// aborting it ("stopped during negotiation") so the hub never stays connected and no run events ever arrive.
 	const tRef = useRef(t);
-	tRef.current = t;
 
 	// `scheduledJobId` is likewise read via a ref so it never rebuilds the connection (it resolves from a separate
 	// jobs query a tick after mount). The watermark fixes "now" at mount so the catch-up never surfaces a run that
 	// predates this page visit.
 	const jobIdRef = useRef(scheduledJobId);
-	jobIdRef.current = scheduledJobId;
-	// Lazy-initialized once at mount: useRef ignores all but its first argument, so passing Date.now() directly would
-	// re-evaluate it on every render and throw the result away. Initialize to null and stamp "now" once.
-	const watermarkUtcRef = useRef<number | null>(null);
-	if (watermarkUtcRef.current === null) {
-		watermarkUtcRef.current = Date.now();
-	}
+	useLayoutEffect(() => {
+		tRef.current = t;
+		jobIdRef.current = scheduledJobId;
+	}, [scheduledJobId, t]);
+	const [watermarkUtc] = useState(Date.now);
 
 	// Gate for the late-job-id catch-up effect: true once the hub has connected at least once. The connection effect
 	// already fires a catch-up the moment it connects, so the job-id effect must only fire its OWN catch-up AFTER a
@@ -122,16 +119,15 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 
 	// One-shot reconciliation: fetch the watched job's recent runs once and surface the latest terminal run (deduped
 	// against any push — and against another catch-up — by run id in ModelFitRefreshNotifications). Covers the
-	// connect-race / reconnect-gap / late-job-id cases WITHOUT polling. Reads job id / watermark / t via refs so it
-	// stays stable across renders (memoized only on the stable queryClient); a stable identity keeps it out of the
+	// connect-race / reconnect-gap / late-job-id cases WITHOUT polling. Reads job id and translations through refs;
+	// the mount-time watermark is stable state. A stable identity keeps it out of the
 	// connection effect's dependency set, so it never rebuilds the SignalR connection mid-negotiation.
 	const runCatchUp = useCallback(async (): Promise<void> => {
 		const jobId = jobIdRef.current;
 		if (jobId === undefined) {
 			return;
 		}
-		// `current` was stamped at mount (see lazy init above); coalesce only to satisfy the number | null type.
-		const sinceUtc = Math.max(0, (watermarkUtcRef.current ?? Date.now()) - CLOCK_SKEW_TOLERANCE_MS);
+		const sinceUtc = Math.max(0, watermarkUtc - CLOCK_SKEW_TOLERANCE_MS);
 		try {
 			const runs = await fetchScheduledJobRuns(queryClient, { scheduledJobId: jobId, fromUtc: sinceUtc });
 			// Most-recent terminal run since the watermark — order-independent (don't assume the API's sort order).
@@ -151,7 +147,7 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 		} catch {
 			// Best-effort reconciliation — the push path stays primary and the cache still serves last-good state.
 		}
-	}, [queryClient]);
+	}, [queryClient, watermarkUtc]);
 
 	// Connection + handler subscription effect. STABLE deps (queryClient, runCatchUp) so it is built exactly once per
 	// mount: live pushes are never dropped and handlers are never double-registered when the job id resolves later.
@@ -169,9 +165,7 @@ export function useModelFitSchedulerEvents(scheduledJobId?: string): void {
 			}
 
 			// Authoritative state path (unchanged): TanStack Query refetches the canonical snapshot.
-			queryClient
-				.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.latest) })
-				.catch(() => undefined);
+			queryClient.invalidateQueries({ queryKey: modelFitInvalidationKey(modelFitQueryIds.latest) }).catch(() => undefined);
 
 			// Best-effort UI feedback. Stable id per run so a reconnect/duplicate broadcast replaces rather than stacks.
 			const { errorMessage, runId } = readRefreshFields(payload);

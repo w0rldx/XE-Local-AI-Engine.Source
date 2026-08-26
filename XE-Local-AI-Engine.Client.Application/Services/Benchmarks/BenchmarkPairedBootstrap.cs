@@ -2,15 +2,15 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 /// <summary>
 ///     The paired difference between two measurement cells over the items they SHARE, with a percentile bootstrap
-///     interval around it. <paramref name="Separated" /> is false exactly when 0 lies inside the interval — which is
-///     the sentence B3 exists to let a reader say: "these two are not separated by this suite".
+///     interval around it. <paramref name="Separated" /> is false exactly when 0 lies inside the interval, allowing a
+///     reader to say: "these two are not separated by this suite".
 /// </summary>
 /// <param name="SharedItemCount">How many items were rankable in BOTH cells; the resampling unit is one of these.</param>
 /// <param name="Delta">Mean of <c>qualityA − qualityB</c> over the shared items. Positive means A scored higher.</param>
 public sealed record BenchmarkPairedDelta(int SharedItemCount, double Delta, double CiLow, double CiHigh, bool Separated);
 
 /// <summary>
-///     Paired-difference bootstrap over per-item quality scores (B3). Pure and read-time: nothing here is stored, and
+///     Paired-difference bootstrap over per-item quality scores. Pure and read-time: nothing here is stored, and
 ///     the whole estimate is recomputed from the cell table on every compare.
 /// </summary>
 /// <remarks>
@@ -22,7 +22,7 @@ public static class BenchmarkPairedBootstrap
 {
     /// <summary>
     ///     Below three shared items no interval is reported at all. Two points cannot support one, and an interval
-    ///     nobody should trust is worse than the absence a reader can see (plan §7.4).
+    ///     nobody should trust is worse than the absence a reader can see.
     /// </summary>
     public const int MinimumSharedItems = 3;
 

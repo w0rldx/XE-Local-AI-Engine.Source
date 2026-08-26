@@ -51,7 +51,7 @@ internal sealed partial class NodePatchApplyService
         var isBinary = block.Contains("GIT binary patch", StringComparison.Ordinal)
                        || lines.Any(line => line.StartsWith("Binary files ", StringComparison.Ordinal));
 
-        // Step 1: extract the authoritative paths from the body lines.
+        // Extract the authoritative paths from the body lines.
         // Every path git can act on comes from one of these line prefixes. /dev/null is skipped (new/deleted).
         // The prefix strings are kept as constants so S125 ("commented-out code") is not triggered by raw
         // unified-diff sigils appearing inline.
@@ -115,7 +115,7 @@ internal sealed partial class NodePatchApplyService
             };
         }
 
-        // Step 2: split each body path into alias + relative; validate traversal and cross-alias.
+        // Split each body path into alias + relative, then validate traversal and cross-alias references.
         var allAliasResults = new List<BodyAliasPath>();
         foreach (var (prefix, raw) in bodyPaths)
         {
@@ -151,7 +151,7 @@ internal sealed partial class NodePatchApplyService
 
         var blockAlias = aliases[0];
 
-        // Step 3: cross-check header b-path alias against the authoritative body alias.
+        // Cross-check the header b-path alias against the authoritative body alias.
         // The header can mis-split on paths whose name contains a space followed by a single letter and slash
         // (e.g. "dir b/file"), so it is not used as the authoritative source. When a body plus-plus path is
         // present the header alias should agree; a mismatch is a crafted-patch signal and is rejected.
@@ -165,7 +165,7 @@ internal sealed partial class NodePatchApplyService
             }
         }
 
-        // Step 4: collect all distinct relative target paths for the within-root guard in BuildAliasPlanAsync.
+        // Collect distinct relative target paths for the within-root guard in BuildAliasPlanAsync.
         var targetPaths = allAliasResults.Select(result => result.Relative).Distinct(StringComparer.Ordinal).ToArray();
 
         var changeType = DetermineChangeType(block);

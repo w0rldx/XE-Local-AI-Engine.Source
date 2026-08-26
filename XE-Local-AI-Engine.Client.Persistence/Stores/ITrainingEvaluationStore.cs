@@ -140,7 +140,7 @@ public sealed record TrainingEvaluationRecord(
 
 /// <summary>
 ///     One sample's verdict. <paramref name="ScoredBy" /> carries provenance in the <c>DefaultPlaybookEvalJudge</c>
-///     style — v1 only ever writes <c>deterministic</c>; <c>judge</c> is reserved for a follow-up LLM scorer.
+///     style. Version 1 writes <c>deterministic</c>; no current scorer writes the reserved <c>judge</c> value.
 /// </summary>
 public sealed record TrainingEvaluationResultEntry(Guid SampleId, string Kind, bool Passed, string ScoredBy, string? Reason = null);
 

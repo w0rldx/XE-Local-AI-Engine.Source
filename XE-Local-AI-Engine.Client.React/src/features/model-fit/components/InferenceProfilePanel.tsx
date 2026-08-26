@@ -1,17 +1,13 @@
-import { Alert, Badge, Button, Card, Group, Loader, Select, Stack, Switch, Table, Text, TextInput, Title, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconBolt, IconInfoCircle, IconPlayerPlay, IconSettings, IconSnowflake, IconTrash } from "@tabler/icons-react";
-import { Fragment, useState } from "react";
+import { Card, Group, Stack, Text, Title } from "@mantine/core";
+import { IconSettings } from "@tabler/icons-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { toast } from "@/core/ui/notifications/Toast";
-import { ProfileMetricsCard } from "@/features/model-fit/components/ProfileMetricsCard";
-import {
-	formatProfileOutcomeSummary,
-	type InferenceBenchmarkResult,
-	type InferenceProfileStatus,
-	type InferenceProfileView,
-} from "@/features/model-fit/models/InferenceProfileModels";
+import { InferenceProfileExploreForm } from "@/features/model-fit/components/InferenceProfileExploreForm";
+import { InferenceProfileList } from "@/features/model-fit/components/InferenceProfileList";
+import type { InferenceBenchmarkResult, InferenceProfileView } from "@/features/model-fit/models/InferenceProfileModels";
 import {
 	useBenchmarkInferenceProfile,
 	useExploreInferenceProfile,
@@ -19,14 +15,6 @@ import {
 	useInferenceProfiles,
 	useInvalidateInferenceProfile,
 } from "@/features/model-fit/queries/useInferenceProfiles";
-
-// Badge color per terminal status: a frozen (committed) profile is the desirable outcome (green); an explored
-// candidate is in-progress (blue); a stale one needs re-exploration (gray).
-const statusColor: Record<InferenceProfileStatus, string> = {
-	explored: "blue",
-	frozen: "green",
-	stale: "gray",
-};
 
 // The Inference Optimizer operator surface. Lists the tuned llama.cpp launch profiles this node explored,
 // benchmarked, and froze, plus an explore control to create a new one. It surfaces OUTCOMES ONLY — a status chip and
@@ -51,13 +39,6 @@ export function InferenceProfilePanel() {
 
 	const profiles = profilesQuery.data ?? [];
 
-	// Keep the operator surface aligned with every llama-server role accepted by the backend.
-	const roleData = [
-		{ value: "chat", label: t("pages.modelFit.inferenceProfiles.explore.roleChat", "Chat") },
-		{ value: "embedding", label: t("pages.modelFit.inferenceProfiles.explore.roleEmbedding", "Embedding") },
-		{ value: "reranker", label: t("pages.modelFit.inferenceProfiles.explore.roleReranker", "Reranker") },
-	];
-
 	const handleExplore = (): void => {
 		const trimmed = modelName.trim();
 		if (trimmed.length === 0) {
@@ -73,7 +54,9 @@ export function InferenceProfilePanel() {
 					setModelName("");
 				},
 				onError: (error) =>
-					toast.error(apiErrorMessage(error, t("pages.modelFit.inferenceProfiles.explore.error", "Could not start exploration."))),
+					toast.error(
+						apiErrorMessage(error, t("pages.modelFit.inferenceProfiles.explore.error", "Could not start exploration.")),
+					),
 			},
 		);
 	};
@@ -84,10 +67,19 @@ export function InferenceProfilePanel() {
 			{
 				onSuccess: (result) => {
 					setBenchmarkResults((previous) => ({ ...previous, [profile.id]: result }));
-					toast.success(t("pages.modelFit.inferenceProfiles.actions.benchmarkSuccess", "Benchmarked {{model}}.", { model: profile.modelName }));
+					toast.success(
+						t("pages.modelFit.inferenceProfiles.actions.benchmarkSuccess", "Benchmarked {{model}}.", {
+							model: profile.modelName,
+						}),
+					);
 				},
 				onError: (error) =>
-					toast.error(apiErrorMessage(error, t("pages.modelFit.inferenceProfiles.actions.benchmarkError", "Could not benchmark the profile."))),
+					toast.error(
+						apiErrorMessage(
+							error,
+							t("pages.modelFit.inferenceProfiles.actions.benchmarkError", "Could not benchmark the profile."),
+						),
+					),
 			},
 		);
 	};
@@ -97,9 +89,13 @@ export function InferenceProfilePanel() {
 			{ profileId: profile.id },
 			{
 				onSuccess: () =>
-					toast.success(t("pages.modelFit.inferenceProfiles.actions.freezeSuccess", "Froze {{model}}.", { model: profile.modelName })),
+					toast.success(
+						t("pages.modelFit.inferenceProfiles.actions.freezeSuccess", "Froze {{model}}.", { model: profile.modelName }),
+					),
 				onError: (error) =>
-					toast.error(apiErrorMessage(error, t("pages.modelFit.inferenceProfiles.actions.freezeError", "Could not freeze the profile."))),
+					toast.error(
+						apiErrorMessage(error, t("pages.modelFit.inferenceProfiles.actions.freezeError", "Could not freeze the profile.")),
+					),
 			},
 		);
 	};
@@ -109,9 +105,18 @@ export function InferenceProfilePanel() {
 			{ profileId: profile.id },
 			{
 				onSuccess: () =>
-					toast.success(t("pages.modelFit.inferenceProfiles.actions.invalidateSuccess", "Invalidated {{model}}.", { model: profile.modelName })),
+					toast.success(
+						t("pages.modelFit.inferenceProfiles.actions.invalidateSuccess", "Invalidated {{model}}.", {
+							model: profile.modelName,
+						}),
+					),
 				onError: (error) =>
-					toast.error(apiErrorMessage(error, t("pages.modelFit.inferenceProfiles.actions.invalidateError", "Could not invalidate the profile."))),
+					toast.error(
+						apiErrorMessage(
+							error,
+							t("pages.modelFit.inferenceProfiles.actions.invalidateError", "Could not invalidate the profile."),
+						),
+					),
 			},
 		);
 	};
@@ -130,242 +135,30 @@ export function InferenceProfilePanel() {
 					)}
 				</Text>
 
-				<Group align="flex-end" gap="sm" wrap="wrap">
-					<TextInput
-						label={t("pages.modelFit.inferenceProfiles.explore.modelLabel", "Model name")}
-						placeholder={t("pages.modelFit.inferenceProfiles.explore.modelPlaceholder", "e.g. unsloth/Qwen3-4B-GGUF")}
-						value={modelName}
-						onChange={(event) => setModelName(event.currentTarget.value)}
-						data-testid="inference-profile-explore-model"
-						style={{ flex: 1, minWidth: 200, maxWidth: 320 }}
-					/>
-					<Select
-						label={t("pages.modelFit.inferenceProfiles.explore.roleLabel", "Role")}
-						data={roleData}
-						value={role}
-						onChange={(value) => setRole(value ?? "chat")}
-						allowDeselect={false}
-						data-testid="inference-profile-explore-role"
-						w={180}
-					/>
-					<Button
-						leftSection={<IconPlayerPlay size={16} />}
-						loading={explore.isPending}
-						disabled={modelName.trim().length === 0}
-						onClick={handleExplore}
-						data-testid="inference-profile-explore-button"
-					>
-						{t("pages.modelFit.inferenceProfiles.explore.button", "Explore")}
-					</Button>
-				</Group>
-
-				<Switch
-					checked={allowPreSpawnVramPressure}
-					onChange={(event) => setAllowPreSpawnVramPressure(event.currentTarget.checked)}
-					color="orange"
-					label={t(
-						"pages.modelFit.inferenceProfiles.allowPreSpawnVramPressure.label",
-						"Allow benchmarks despite existing VRAM pressure",
-					)}
-					description={t(
-						"pages.modelFit.inferenceProfiles.allowPreSpawnVramPressure.description",
-						"Operator override: bypasses only the pre-spawn ambient-pressure gate. New pressure caused during the benchmark still invalidates the run.",
-					)}
-					data-testid="inference-profile-allow-pre-spawn-vram-pressure"
+				<InferenceProfileExploreForm
+					allowPreSpawnVramPressure={allowPreSpawnVramPressure}
+					isPending={explore.isPending}
+					modelName={modelName}
+					onAllowPreSpawnVramPressureChange={setAllowPreSpawnVramPressure}
+					onExplore={handleExplore}
+					onModelNameChange={setModelName}
+					onRoleChange={setRole}
+					role={role}
 				/>
 
-				{profilesQuery.isLoading ? (
-					<Group gap="sm">
-						<Loader size="sm" />
-						<Text c="dimmed">{t("pages.modelFit.inferenceProfiles.loading", "Loading inference profiles…")}</Text>
-					</Group>
-				) : null}
-
-				{profilesQuery.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="inference-profile-error">
-						{apiErrorMessage(profilesQuery.error, t("pages.modelFit.inferenceProfiles.error", "Could not load inference profiles."))}
-					</Alert>
-				) : null}
-
-				{!profilesQuery.isLoading && !profilesQuery.error && profiles.length === 0 ? (
-					<Alert color="gray" icon={<IconInfoCircle size={16} />} data-testid="inference-profile-empty">
-						{t("pages.modelFit.inferenceProfiles.empty", "No inference profiles yet. Explore a model to create one.")}
-					</Alert>
-				) : null}
-
-				{!profilesQuery.isLoading && !profilesQuery.error && profiles.length > 0 ? (
-					<Table.ScrollContainer minWidth={720}>
-						<Table verticalSpacing="sm" highlightOnHover={true} data-testid="inference-profile-table">
-							<Table.Thead>
-								<Table.Tr>
-									<Table.Th>{t("pages.modelFit.inferenceProfiles.columns.status", "Status")}</Table.Th>
-									<Table.Th>{t("pages.modelFit.inferenceProfiles.columns.model", "Model")}</Table.Th>
-									<Table.Th>{t("pages.modelFit.inferenceProfiles.columns.outcome", "Outcome")}</Table.Th>
-									<Table.Th>{t("pages.modelFit.inferenceProfiles.columns.action", "Action")}</Table.Th>
-								</Table.Tr>
-							</Table.Thead>
-							<Table.Tbody>
-								{profiles.map((profile) => {
-									const result = benchmarkResults[profile.id];
-									const tokensPerSecond = result?.metrics?.tokensPerSecond ?? null;
-									const vramBytes = profile.frozenGlobalFreeVramBytes ?? result?.metrics?.globalFreeVramAfterBytes ?? null;
-									const summary = formatProfileOutcomeSummary(tokensPerSecond, vramBytes);
-									const canFreeze = profile.hasBenchmark || result !== undefined;
-									const isBenchmarking = benchmark.isPending && benchmark.variables?.profileId === profile.id;
-									const isFreezing = freeze.isPending && freeze.variables?.profileId === profile.id;
-									const isInvalidating = invalidate.isPending && invalidate.variables?.profileId === profile.id;
-
-									const freezeButton = (
-										<Button
-											size="xs"
-											variant="light"
-											color="cyan"
-											leftSection={<IconSnowflake size={14} />}
-											loading={isFreezing}
-											disabled={!canFreeze}
-											onClick={() => handleFreeze(profile)}
-											data-testid={`inference-profile-freeze-${profile.id}`}
-										>
-											{t("pages.modelFit.inferenceProfiles.actions.freeze", "Freeze")}
-										</Button>
-									);
-
-									return (
-										<Fragment key={profile.id}>
-											<Table.Tr data-testid={`inference-profile-row-${profile.id}`}>
-												<Table.Td>
-													<Badge color={statusColor[profile.status]} variant="light" data-testid={`inference-profile-status-${profile.id}`}>
-														{t(`pages.modelFit.inferenceProfiles.status.${profile.status}`, profile.status)}
-													</Badge>
-												</Table.Td>
-												<Table.Td>
-													<Text size="sm" fw={500}>
-														{profile.modelName}
-													</Text>
-													<Group gap={6} mt={2}>
-														{profile.backend ? (
-															<Text size="xs" c="dimmed">
-																{profile.backend}
-															</Text>
-														) : null}
-														{profile.quant ? (
-															<Text size="xs" c="dimmed">
-																{profile.quant}
-															</Text>
-														) : null}
-														{profile.launchPolicyFingerprint && profile.launchPolicyFingerprintVersion !== null ? (
-															<Text
-																size="xs"
-																c="dimmed"
-																data-testid={`inference-profile-fingerprint-${profile.id}`}
-															>
-																{t(
-																	"pages.modelFit.inferenceProfiles.policyFingerprint",
-																	"Policy v{{version}} · {{fingerprint}}",
-																	{
-																		version: profile.launchPolicyFingerprintVersion,
-																		fingerprint: profile.launchPolicyFingerprint.slice(0, 8),
-																	},
-																)}
-															</Text>
-														) : null}
-														{profile.frozenGlobalFreeVramBytes !== null || profile.frozenProcessBudgetVramBytes !== null ? (
-															<Text size="xs" c="dimmed" data-testid={`inference-profile-freeze-vram-${profile.id}`}>
-																{t(
-																	"pages.modelFit.inferenceProfiles.freezeVramSummary",
-																	"Global free {{globalFree}} · process budget {{processBudget}}",
-																	{
-																		globalFree:
-																			profile.frozenGlobalFreeVramBytes === null
-																				? t("pages.modelFit.inferenceProfiles.metrics.unknown", "Unknown")
-																				: `${(profile.frozenGlobalFreeVramBytes / 1024 ** 3).toFixed(1)} GB`,
-																		processBudget:
-																			profile.frozenProcessBudgetVramBytes === null
-																				? t("pages.modelFit.inferenceProfiles.metrics.unknown", "Unknown")
-																				: `${(profile.frozenProcessBudgetVramBytes / 1024 ** 3).toFixed(1)} GB`,
-																	},
-																)}
-															</Text>
-														) : null}
-														{profile.isMoe ? (
-															<Badge size="xs" variant="outline" color="grape" data-testid={`inference-profile-moe-${profile.id}`}>
-																{profile.expertCount !== null
-																	? t("pages.modelFit.inferenceProfiles.moeExperts", "MoE · {{count}} experts", { count: profile.expertCount })
-																	: t("pages.modelFit.inferenceProfiles.moe", "MoE")}
-															</Badge>
-														) : null}
-													</Group>
-												</Table.Td>
-												<Table.Td>
-													{summary ? (
-														<Text size="sm" data-testid={`inference-profile-outcome-${profile.id}`}>
-															{summary}
-														</Text>
-													) : (
-														<Text size="sm" c="dimmed" data-testid={`inference-profile-outcome-${profile.id}`}>
-															—
-														</Text>
-													)}
-												</Table.Td>
-												<Table.Td>
-													<Group gap="xs" wrap="nowrap">
-														{profile.status !== "frozen" ? (
-															<>
-																<Button
-																	size="xs"
-																	variant="light"
-																	leftSection={<IconBolt size={14} />}
-																	loading={isBenchmarking}
-																	onClick={() => handleBenchmark(profile)}
-																	data-testid={`inference-profile-benchmark-${profile.id}`}
-																>
-																	{t("pages.modelFit.inferenceProfiles.actions.benchmark", "Benchmark")}
-																</Button>
-																{canFreeze ? (
-																	freezeButton
-																) : (
-																	<Tooltip
-																		label={t(
-																			"pages.modelFit.inferenceProfiles.actions.freezeDisabledHint",
-																			"Run a benchmark before freezing this profile.",
-																		)}
-																		multiline={true}
-																		maw={220}
-																	>
-																		<span>{freezeButton}</span>
-																	</Tooltip>
-																)}
-															</>
-														) : (
-															<Button
-																size="xs"
-																variant="light"
-																color="red"
-																leftSection={<IconTrash size={14} />}
-																loading={isInvalidating}
-																onClick={() => handleInvalidate(profile)}
-																data-testid={`inference-profile-invalidate-${profile.id}`}
-															>
-																{t("pages.modelFit.inferenceProfiles.actions.invalidate", "Invalidate")}
-															</Button>
-														)}
-													</Group>
-												</Table.Td>
-											</Table.Tr>
-											{result?.metrics ? (
-												<Table.Tr data-testid={`inference-profile-metrics-row-${profile.id}`}>
-													<Table.Td colSpan={4}>
-														<ProfileMetricsCard metrics={result.metrics} testIdSuffix={profile.id} />
-													</Table.Td>
-												</Table.Tr>
-											) : null}
-										</Fragment>
-									);
-								})}
-							</Table.Tbody>
-						</Table>
-					</Table.ScrollContainer>
-				) : null}
+				<InferenceProfileList
+					benchmarkResults={benchmarkResults}
+					loadState={{ loading: profilesQuery.isLoading, error: profilesQuery.error }}
+					pending={{
+						benchmarkProfileId: benchmark.isPending ? benchmark.variables?.profileId : undefined,
+						freezeProfileId: freeze.isPending ? freeze.variables?.profileId : undefined,
+						invalidateProfileId: invalidate.isPending ? invalidate.variables?.profileId : undefined,
+					}}
+					onBenchmark={handleBenchmark}
+					onFreeze={handleFreeze}
+					onInvalidate={handleInvalidate}
+					profiles={profiles}
+				/>
 			</Stack>
 		</Card>
 	);

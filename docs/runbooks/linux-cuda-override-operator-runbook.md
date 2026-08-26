@@ -3,15 +3,15 @@
 **Date:** 2026-06-29
 **Last validated against the repository:** 2026-08-08 (`9405df91`)
 **Audience:** operator running the engine on a Linux + NVIDIA host who wants the **CUDA** inference path (not the default Vulkan fallback).
-**Feature:** `[[linux-cuda-byo-override]]` — see plan `2026-06-29-linux-cuda-byo-override-plan.md`. Code committed `e59cbc43`.
+**Authoritative sources:** the [environment contract](../../XE-Local-AI-Engine.Providers.LlamaServer/Configuration/LlamaServerRuntimeOverrideOptions.cs), [binary validation path](../../XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaCppBinaryManager.Override.cs), [current llama.cpp pin](../../XE-Local-AI-Engine.Providers.LlamaServer/LlamaCppReleasePins.cs), and [live GPU smoke](../../scripts/run-gpu-smoke-local.sh).
 
 ---
 
 ## Why this exists
 
-Upstream llama.cpp (`ggml-org/llama.cpp`) ships **no Linux CUDA prebuilt** — only Windows gets a CUDA build. So on a Linux NVIDIA box the engine deliberately falls back to **Vulkan** (`GpuVariantSelector`). This override lets you point the engine at a **locally-built CUDA `llama-server`** so the CUDA path can be exercised before deploy.
+Upstream llama.cpp (`ggml-org/llama.cpp`) ships **no Linux CUDA prebuilt** — only Windows gets a CUDA build. So on a Linux NVIDIA box the engine deliberately falls back to **Vulkan** (`GpuVariantSelector`). This override lets you point the engine at a **locally-built CUDA `llama-server`** for an operator-managed CUDA runtime.
 
-It is **off by default**. When the override env var is unset, acquisition behaves exactly as today (pinned download + SHA256 verify). The override **skips** the download + hash step (an operator-built binary has no publisher digest) and instead validates the binary you supply.
+It is **off by default**. When the override environment variable is unset, acquisition uses the pinned download and SHA256 verification path. The override **skips** download and hash verification (an operator-built binary has no publisher digest) and instead validates the binary you supply.
 
 > **Preferred managed alternative — in-app CUDA build.** If you have the toolchain installed (nvcc/cmake/gcc/g++/make-or-ninja/git + an NVIDIA driver + free disk) but do not want to hand-build llama.cpp, use **Node Settings ▸ llama.cpp runtime ▸ "CUDA (build from source)"** (developer-mode / opt-in gated, Linux only). It clones the engine's pinned tag, verifies the checked-out commit equals `LlamaCppReleasePins.PinnedSourceCommitSha`, builds under a scrubbed environment, validates the result, and adopts it as a managed CUDA runtime. It needs no environment override, survives restart, appears in runtime status, and can be removed or rebuilt from the same card. The build option shows an itemized prerequisite checklist when unavailable. The bring-your-own override below remains the operator-managed alternative.
 

@@ -18,11 +18,9 @@ using XE_Local_AI_Engine.Client.Services.Workspace;
 ///     copied workspace as its working directory so the post-run patch export diffs the real CWD — classifies
 ///     timeout-vs-cancel, and feeds the gated patch export, memory proposal export, and run-scoped logging.
 ///     <para>
-///         Deferred to the HostAgent-backed local-container provider: a real nested MAF agent loop, real
-///         <c>dotnet build/test</c> and real git, multi-command sequences, and per-command enforcement. The
-///         service-level tests prove worker-side orchestration plus busy/cancel/owner hardening on the fake provider;
-///         the single command is the profile's liveness/work probe, and <c>allowedActions</c> gates the optional patch
-///         and memory exports.
+///         The service-level tests exercise orchestration, busy/cancel/owner hardening, and the optional patch and
+///         memory exports against the deterministic provider. The configured runtime provider supplies the real
+///         command execution and git behavior.
 ///     </para>
 /// </summary>
 internal sealed class AgentHomeService : IAgentHomeService, IConversationSandboxStager
@@ -40,9 +38,8 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         ChangedFilesRelativePath = null
     };
 
-    // Per-RuntimeProfile in-sandbox command descriptor. The current slice carries a single enabled profile; keeping it
-    // keyed lets the HostAgent-backed provider add real per-profile commands without re-touching RunAsync. The command
-    // is the profile's liveness/work probe on the fake.
+    // Per-RuntimeProfile in-sandbox command descriptor. Keeping the current profile keyed allows additional profiles
+    // without changing RunAsync. The command is the profile's liveness/work probe on the deterministic provider.
     private static readonly IReadOnlyDictionary<string, AgentHomeCommandDescriptor> ProfileCommands =
         new Dictionary<string, AgentHomeCommandDescriptor>(StringComparer.Ordinal)
         {
@@ -145,11 +142,11 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
             attachKey = CreateAttachKey(identity, effectiveProfile);
             var prepared = await PrepareUnderLeaseAsync(prepareRequest, attachKey, effectiveProfile, cancellationToken).ConfigureAwait(false);
             var result = await RunAsync(new AgentHomeRunRequest
-                {
-                    Prepared = prepared,
-                    Goal = request.Goal,
-                    AllowedActions = request.AllowedActions
-                },
+            {
+                Prepared = prepared,
+                Goal = request.Goal,
+                AllowedActions = request.AllowedActions
+            },
                 cancellationToken).ConfigureAwait(false);
             if (!result.Completed || result.TimedOut)
             {
@@ -554,10 +551,10 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         }
 
         var collected = await _memoryProposalService.CollectAsync(new MemoryProposalCollectRequest
-            {
-                RunId = runId,
-                HostRunDirectory = runDirectory
-            },
+        {
+            RunId = runId,
+            HostRunDirectory = runDirectory
+        },
             cancellationToken).ConfigureAwait(false);
 
         await AppendEventSafelyAsync(runLogger, "memory_collected",
@@ -587,13 +584,13 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         try
         {
             await runLogger.OpenAsync(new AgentHomeRunLogContext
-                {
-                    RunId = runId,
-                    HostLogDirectory = logDirectory,
-                    NodeId = identity.NodeId,
-                    OwnerUserId = identity.OwnerUserId,
-                    ProviderName = _provider.ProviderName
-                },
+            {
+                RunId = runId,
+                HostLogDirectory = logDirectory,
+                NodeId = identity.NodeId,
+                OwnerUserId = identity.OwnerUserId,
+                ProviderName = _provider.ProviderName
+            },
                 cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -634,16 +631,16 @@ internal sealed class AgentHomeService : IAgentHomeService, IConversationSandbox
         try
         {
             await runLogger.AppendCommandAsync(new AgentHomeCommandLogRecord
-                {
-                    TimestampUtc = _timeProvider.GetUtcNow(),
-                    ExecutionId = runId,
-                    Executable = descriptor.Executable,
-                    Arguments = descriptor.Arguments,
-                    Completed = completed,
-                    ExitCode = exitCode,
-                    DurationMs = (long)elapsed.TotalMilliseconds,
-                    ErrorClass = errorClass
-                },
+            {
+                TimestampUtc = _timeProvider.GetUtcNow(),
+                ExecutionId = runId,
+                Executable = descriptor.Executable,
+                Arguments = descriptor.Arguments,
+                Completed = completed,
+                ExitCode = exitCode,
+                DurationMs = (long)elapsed.TotalMilliseconds,
+                ErrorClass = errorClass
+            },
                 cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)

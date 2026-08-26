@@ -5,18 +5,18 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 /// <summary>
-///     Execution-time validation of a command tool's executable (H5), run every time the tool fires — not just at
+///     Execution-time validation of a command tool's executable, run every time the tool fires — not just at
 ///     author time — because a path that was a regular file when the operator saved it can be swapped for a symlink
 ///     later. The executable must be an absolute path (never a PATH/CWD lookup — Windows searches the CWD), must not be
 ///     a shell/interpreter, and must be a real regular file. On Linux the regular-file check uses <c>statx</c> with
 ///     <c>AT_SYMLINK_NOFOLLOW</c> so a symlinked executable is rejected rather than followed — the same libc-import
 ///     posture as the sandbox provider's no-follow guards (a raw <c>FileOptions</c> cast for the flag throws).
 ///     <para>
-///         follow-up: this statx check and the later <see cref="Process.Start()" /> re-resolve the same path string as
-///         two separate syscalls, so a small TOCTOU window remains between them — a leaf swapped for a symlink after
-///         this check passes but before <c>Process.Start</c>'s execve would still be followed. Closing that fully needs
-///         <c>open(O_NOFOLLOW|O_PATH)+fstat+fexecve</c> so the same open file description is both checked and executed.
-///         Deferred: the operator authors a fixed absolute path, so the residual risk is low, not zero.
+///         This statx check and the later <see cref="Process.Start()" /> re-resolve the same path string as two
+///         separate syscalls, so a small TOCTOU window remains: a leaf swapped for a symlink after this check but before
+///         <c>execve</c> would still be followed. Eliminating the window requires
+///         <c>open(O_NOFOLLOW|O_PATH)+fstat+fexecve</c> so validation and execution use the same open file description.
+///         The operator authors a fixed absolute path, which keeps the residual risk low but non-zero.
 ///     </para>
 /// </summary>
 internal static class HostExecutableGuard

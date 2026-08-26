@@ -1,9 +1,14 @@
 import { HubConnectionState } from "@microsoft/signalr";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import type { TrainingRunLiveProgress } from "@/features/training/models/TrainingModels";
-import { applyRunEvent, emptyTrainingRunProgress, trainingRunEventSchema, trainingRunReplayResetSchema } from "@/features/training/models/TrainingModels";
+import {
+	applyRunEvent,
+	emptyTrainingRunProgress,
+	trainingRunEventSchema,
+	trainingRunReplayResetSchema,
+} from "@/features/training/models/TrainingModels";
 
 // Module-private: nothing outside this hook subscribes to the run stream.
 const trainingRunHubEvents = {
@@ -20,7 +25,9 @@ export function useTrainingRunHub(runId: string | null, onResync: () => void): T
 	const [progress, setProgress] = useState<TrainingRunLiveProgress>(emptyTrainingRunProgress);
 	const cursorRef = useRef(0);
 	const resyncRef = useRef(onResync);
-	resyncRef.current = onResync;
+	useLayoutEffect(() => {
+		resyncRef.current = onResync;
+	}, [onResync]);
 
 	useEffect(() => {
 		if (!runId) {

@@ -360,7 +360,7 @@ public sealed class DockerSandboxHardeningTests
     [Test]
     public void FindViolations_WhenTheContainerCarriesAMountTheEngineDidNotRequest_RejectsIt()
     {
-        // D7's whole premise is that only engine-generated mounts exist. A mount nobody asked for is either a
+        // Only engine-generated mounts may exist. A mount nobody asked for is either a
         // daemon-side default this code has not accounted for or one somebody injected, and both are refusals.
         var violations = DockerSandboxHardening.FindViolations(Specification(),
             Conformant() with

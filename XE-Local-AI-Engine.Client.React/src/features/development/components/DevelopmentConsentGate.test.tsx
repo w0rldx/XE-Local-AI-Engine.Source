@@ -112,13 +112,13 @@ describe("DevelopmentConsentGate", () => {
 
 	// The two providers put the operator in materially different positions. Describing the process provider with the
 	// container sentence would understate the exposure on the exact screen that exists to state it.
-	it("states the process provider's host-user posture and the conditional egress denial G1 actually delivers", () => {
+	it("states the process provider's host-user posture and the conditional egress denial", () => {
 		renderGate("process");
 
 		const terms = screen.getByTestId("development-consent-terms").textContent ?? "";
 		expect(terms).toContain("signed-in user account that runs the engine");
 
-		// The pre-G1 sentence is gone, and its replacement must not swing to the opposite over-claim: the denial is
+		// The obsolete sentence is gone, and its replacement must not swing to the opposite over-claim: the denial is
 		// conditional on the backend advertising confinement, and Windows is still named as the case where it is not.
 		expect(terms).not.toContain("nothing restricts what they can reach");
 		expect(terms).toContain("wherever this node can enforce it");
@@ -148,9 +148,9 @@ describe("DevelopmentConsentGate", () => {
 	});
 
 	// Containment and egress are separate facts and the notice states both — that is why the container branch carries
-	// its own egress sentence rather than inheriting the process branch's. What the sentence SAYS inverted at G1: the
+	// its own egress sentence rather than inheriting the process branch's. The current behavior is the inverse of the
 	// container backend advertises SupportsNetworkPolicy, so ResolveAgentFacingNetworkPolicy asks for None and gets it,
-	// and the pre-G1 "nothing restricts what it can reach" is now false in the alarming direction.
+	// old "nothing restricts what it can reach" claim, which is now false in the alarming direction.
 	it("states the container provider's egress denial and still names the one sandbox that keeps the network", () => {
 		renderGate("docker");
 

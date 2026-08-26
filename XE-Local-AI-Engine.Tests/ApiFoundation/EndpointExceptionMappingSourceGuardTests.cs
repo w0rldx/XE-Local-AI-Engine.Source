@@ -18,8 +18,8 @@ public sealed class EndpointExceptionMappingSourceGuardTests
 
     private static readonly IReadOnlyDictionary<string, int> BenchmarkCatchAllowlist = new Dictionary<string, int>(StringComparer.Ordinal)
     {
-        ["V1/BenchmarkExportEndpoints.cs"] = 3,
-        ["V1/BenchmarkRunEndpoints.cs"] = 5,
+        ["V1/BenchmarkExportPairwise.cs"] = 1,
+        ["V1/BenchmarkRunEndpoints.cs"] = 2,
         ["V1/Mappers/BenchmarkEndpointMapper.cs"] = 1
     };
 
@@ -45,6 +45,34 @@ public sealed class EndpointExceptionMappingSourceGuardTests
         AssertEx.False(benchmark.Contains("Request.Path", StringComparison.Ordinal));
         AssertEx.False(training.Contains("exception is KeyNotFoundException", StringComparison.Ordinal));
         AssertEx.False(benchmark.Contains("exception is KeyNotFoundException", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void GlobalHandlers_RegisterWorkSessionNotFoundBeforeTheDefaultHandler()
+    {
+        var root = FindRepositoryRoot();
+        var composition = File.ReadAllText(Path.Combine(root, "XE-Local-AI-Engine.Client", "ConfigureServices.cs"));
+        var workSessionHandler = composition.IndexOf(".AddExceptionHandler<WorkSessionNotFoundExceptionHandler>()", StringComparison.Ordinal);
+        var defaultHandler = composition.IndexOf(".AddExceptionHandler<DefaultExceptionHandler>()", StringComparison.Ordinal);
+
+        AssertEx.True(workSessionHandler >= 0, "The typed WorkSession not-found handler must be registered in the global exception chain.");
+        AssertEx.True(defaultHandler >= 0, "The default exception handler registration must remain present.");
+        AssertEx.True(workSessionHandler < defaultHandler, "The typed WorkSession not-found handler must run before the default 500 handler.");
+    }
+
+    [Test]
+    public void WorkSessionEndpoints_DoNotTranslateRawKeyNotFoundExceptionsToNotFound()
+    {
+        var root = FindRepositoryRoot();
+        var workSessionEndpoints = Path.Combine(root, "XE-Local-AI-Engine.Client", "Endpoints", "WorkSessions");
+        var offenders = Directory.EnumerateFiles(workSessionEndpoints, "*.cs", SearchOption.AllDirectories)
+                                 .Where(path => File.ReadAllText(path).Contains("catch (KeyNotFoundException)", StringComparison.Ordinal))
+                                 .Select(path => Path.GetRelativePath(workSessionEndpoints, path).Replace('\\', '/'))
+                                 .OrderBy(static path => path, StringComparer.Ordinal)
+                                 .ToArray();
+
+        AssertEx.Empty(offenders,
+            "WorkSession endpoint-local raw KeyNotFoundException catches can turn unrelated defects into 404. Throw the typed persistence family and let its global handler map it.");
     }
 
     private static void AssertCatchAllowlist(string familyRoot, IReadOnlyDictionary<string, int> expected)

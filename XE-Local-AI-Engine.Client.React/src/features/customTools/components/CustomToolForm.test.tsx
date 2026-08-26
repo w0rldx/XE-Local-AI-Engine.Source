@@ -131,6 +131,23 @@ describe("CustomToolForm", () => {
 		expect(onDirtyChange).toHaveBeenLastCalledWith(true);
 	});
 
+	it("preserves the surviving parameter row identity when an earlier row is removed", () => {
+		renderForm({
+			mode: "Parameterized",
+			parameters: [
+				{ name: "first", type: "string", description: "", required: true },
+				{ name: "second", type: "string", description: "", required: true },
+			],
+		});
+
+		const secondName = screen.getByTestId("custom-tool-form-parameter-name-1") as HTMLInputElement;
+		secondName.focus();
+		fireEvent.click(screen.getByTestId("custom-tool-form-parameter-remove-0"));
+
+		expect(document.activeElement).toBe(secondName);
+		expect(screen.getByTestId("custom-tool-form-parameter-name-0")).toBe(secondName);
+	});
+
 	// Only the active kind's editor is on screen; the inactive block keeps its draft so switching back restores it.
 	it("shows the HTTP editor for an HttpFetch tool and the command editor for a Command tool", () => {
 		const { unmount } = renderForm();

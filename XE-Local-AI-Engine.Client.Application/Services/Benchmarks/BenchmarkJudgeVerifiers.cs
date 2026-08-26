@@ -18,7 +18,7 @@ using System.Text.RegularExpressions;
 ///         at all.
 ///     </para>
 ///     <para>
-///         <b>Fail closed (plan R5).</b> A verifier that CANNOT run — a config that got past the validator, a runtime
+///         <b>Fail closed.</b> A verifier that cannot run — a config that got past the validator or a runtime
 ///         fault — throws, and the judging fails with a reason. It never returns "not passed", because 0 is a real
 ///         score an answer can earn and "unmeasurable" is not one.
 ///     </para>
@@ -74,7 +74,7 @@ public static class BenchmarkJudgeVerifiers
         {
             // Not decidable here by construction: this class is pure and synchronous, and pythonTests needs the
             // compute sandbox. Throwing rather than falling through to the constraint branch keeps a routing mistake a
-            // failed judging (R5) instead of a criterion silently decided by the wrong verifier.
+            // failed judging instead of a criterion silently decided by the wrong verifier.
             throw new BenchmarkExecutionException($"Rubric criterion '{criterion.Id}' is decided by execution, not by a pure verifier.");
         }
 

@@ -35,7 +35,7 @@ public sealed record ImageGenerationRequest
     /// <summary>Classifier-free-guidance scale.</summary>
     public double CfgScale { get; init; } = 7.0;
 
-    /// <summary>How many images to generate in the batch. Step 1 ships single-image jobs.</summary>
+    /// <summary>How many images to generate in the batch; the current runtime supports single-image jobs.</summary>
     public int BatchCount { get; init; } = 1;
 }
 
@@ -142,7 +142,7 @@ public sealed record ImageGenerationResult
     /// <summary>The seed actually used (the server-resolved value when the request asked for a random seed).</summary>
     public required long Seed { get; init; }
 
-    /// <summary>The image format (always <c>png</c> in step 1).</summary>
+    /// <summary>The image format; currently always <c>png</c>.</summary>
     public string Format { get; init; } = "png";
 
     /// <summary>Total wall-clock time the generation took.</summary>

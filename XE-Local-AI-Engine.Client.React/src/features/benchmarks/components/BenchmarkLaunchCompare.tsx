@@ -46,6 +46,13 @@ const throughputRows = (runs: readonly BenchmarkRunDetail[]): BenchmarkEvidenceD
 const fidelityRows = (runs: readonly BenchmarkRunDetail[]): BenchmarkEvidenceDiffRow[] =>
 	diffLaunchEvidence(runs.map((run) => fidelityEvidenceEntries(run.fidelity)));
 
+function fieldList(rows: readonly BenchmarkEvidenceDiffRow[]): string {
+	const keys = differingEvidenceKeys(rows);
+	return keys.length > maxListedFields
+		? `${keys.slice(0, maxListedFields).join(", ")} (+${keys.length - maxListedFields})`
+		: keys.join(", ");
+}
+
 /**
  * Launch, throughput and fidelity evidence of the selected runs side by side, one column each. Differences are
  * reported as facts and never interpreted: the copy says *what* differs, never whether the runs may be ranked against
@@ -72,12 +79,6 @@ export function BenchmarkLaunchCompare({ runIds }: { runIds: readonly string[] }
 	}
 
 	const labels = columnLabels(compared);
-	const fieldList = (rows: readonly BenchmarkEvidenceDiffRow[]): string => {
-		const keys = differingEvidenceKeys(rows);
-		return keys.length > maxListedFields
-			? `${keys.slice(0, maxListedFields).join(", ")} (+${keys.length - maxListedFields})`
-			: keys.join(", ");
-	};
 	// Driven by the computed rows, not by the hashes: neither hash covers the freeze-side facts (KV source, auto
 	// reason, intended identity), so a hash comparison would stay silent on a difference the table already shows.
 	const sections = [
@@ -127,11 +128,7 @@ export function BenchmarkLaunchCompare({ runIds }: { runIds: readonly string[] }
 					>
 						<Stack gap="xs">
 							<Text size="sm">{section.message}</Text>
-							<BenchmarkEvidenceDiffTable
-								rows={section.rows}
-								labels={labels}
-								data-testid={`benchmark-${section.testId}-diff`}
-							/>
+							<BenchmarkEvidenceDiffTable rows={section.rows} labels={labels} data-testid={`benchmark-${section.testId}-diff`} />
 						</Stack>
 					</Alert>
 				))}

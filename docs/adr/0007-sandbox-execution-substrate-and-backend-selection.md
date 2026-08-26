@@ -1,10 +1,10 @@
 # ADR 0007: The sandbox execution substrate is capability-declared, and the backend is selected, never named
 
-- **Status:** Accepted — by the repository owner (`w0rldx`) on 2026-08-25, with one amendment to sequencing: the selection layer is built in Phase 1, before G1, so that Development Mode lands on it rather than being migrated later.
+- **Status:** Accepted — by the repository owner (`w0rldx`) on 2026-08-25, with one amendment to sequencing: the selection layer precedes Development Mode sandbox hardening, so Development Mode lands on it rather than being migrated later.
 - **Date:** 2026-08-25
 - **Scope:** How a feature obtains an execution sandbox, and how a backend is chosen for it. It does not change what any
   backend enforces, and it does not add or remove a backend.
-- **Authority:** Decided by the maintainer on 2026-08-25. Drafted from the secure-agent-execution gap mapping and
+- **Authority:** Decided by the maintainer on 2026-08-25. Drafted from the secure-agent-execution review and
   the lane evidence beside it.
 - **Amends:** [ADR 0004](0004-development-mode-container-execution-docker-stopgap.md) Decision §1 only — see
   [What this amends, and what it deliberately does not](#what-this-amends-and-what-it-deliberately-does-not).
@@ -29,15 +29,15 @@ is absent). One of those two consumers expresses its need; the other expresses a
 expressing needs already exists on `SandboxCreateRequest` and `SandboxProviderCapabilities` — it is simply not complete,
 and the toolchain axis is the missing one.
 
-**The marker set grows as consumers × backends, not as consumers.** Sandboxed outbound stdio MCP (gap G2) and work
-sessions are both queued. Under the present scheme each new consumer needs a new marker interface, a new
+**The marker set grows as consumers × backends, not as consumers.** Sandboxed outbound stdio MCP and work sessions
+both need this selection model. Under the present scheme each new consumer needs a new marker interface, a new
 `SandboxProviderSelector` resolver, a new configuration key, and a decision — encoded as an `implements` clause — about
 every backend. `SandboxProviderSelector.ResolveWorkSession` already documents the resulting awkwardness: it invents no
 configuration key of its own because "nothing in v1 executes inside this jail".
 
 **A backend named in a feature is a backend the feature is stuck with.** ADR 0004 §3 keeps MXC as the long-term
-hard-isolation seam and the 2026-07-28 plan §8.8 records OpenSandbox as *declined with flip conditions* and names its
-proper home as "behind the **existing** `ISandboxRuntimeProvider` SPI". Both of those futures are backend swaps. A swap
+hard-isolation seam, while OpenSandbox remains *declined with flip conditions* and belongs
+behind the **existing** `ISandboxRuntimeProvider` SPI. Both of those futures are backend swaps. A swap
 is only cheap if no consumer named the thing being swapped.
 
 ## Decision
@@ -80,8 +80,8 @@ is only cheap if no consumer named the thing being swapped.
 
 5. **Provider capability reporting becomes the same vocabulary the requirements are written in.** The axes a backend
    advertises (`SandboxProviderCapabilities`) and the axes a consumer declares are one set, so "can this host run this
-   workload, and under what boundary" is answerable without inspecting a provider type. This is what makes gap G6
-   (isolation level not surfaced to `CapabilityReportComposer`) a projection rather than a new model.
+   workload, and under what boundary" is answerable without inspecting a provider type. This makes surfacing the
+   isolation level to `CapabilityReportComposer` a projection rather than a new model.
 
 6. **Names in this record are provisional.** `SandboxRequirements`, `ISandboxBackend`, `SandboxBackendSelector` and
    `SandboxIsolationLevel` are placeholders chosen to make this document readable. The implementation must follow the
@@ -119,11 +119,10 @@ derivable from a repository would be `devcontainer.json` under another name.
 
 ## Non-goals
 
-- **An egress gateway.** `SandboxNetworkPolicy.Restricted` stays unimplemented and fail-closed under this record. The
-  allow-list proxy is ADR 0004 D6's v2, "a project of its own", and the 2026-07-28 plan §8.8 already names the shape to
-  copy when it is built. Nothing here brings it forward.
-- **Re-evaluating OpenSandbox, gVisor, Kata or Firecracker.** Evaluated 2026-07-29 and recorded in §8.8 with flip
-  conditions. Cited, not redone.
+- **An egress gateway.** `SandboxNetworkPolicy.Restricted` stays unimplemented and fail-closed under this record. An
+  allow-list proxy remains "a project of its own". Nothing here brings it forward.
+- **Re-evaluating OpenSandbox, gVisor, Kata or Firecracker.** Evaluated 2026-07-29 with explicit flip conditions;
+  this record does not repeat that evaluation.
 - **Windows containment.** The process backend's Windows path is `SandboxContainment.None`
   (`HostSandboxContainmentProbe`: "the Windows Job Object path is not implemented"). This record does not change that; it
   makes the shortfall expressible, which is a prerequisite for reporting it honestly, not a fix.

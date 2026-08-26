@@ -398,7 +398,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///         CLOSED, so an unconditional <c>None</c> would not harden Development Mode on Windows — or on any Linux
     ///         host whose <c>unshare</c> probe failed — it would stop it running there at all, since the shipped
     ///         configuration resolves those nodes to the process backend. The honest consequence is that on such a node
-    ///         the attempt still has egress. What makes that acceptable rather than silent is G6: the Development
+    ///         the attempt still has egress. What makes that acceptable rather than silent is that the Development
     ///         status surface reports the posture the provider actually SERVED, so an operator can see which of the two
     ///         they got. A node that wants Option A instead sets
     ///         <see cref="DevelopmentSandboxOptions.RequireEgressDenial" />: denial then becomes a precondition, and a
@@ -551,7 +551,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         finally
         {
             // Before PrepareAsync returns, unconditionally. A warm sandbox that outlived this method would be a second
-            // container per task with egress, held open for the whole attempt — the exact thing G1 removes.
+            // container per task with egress, held open for the whole attempt — precisely what the split sandbox design prevents.
             await _sandbox.KillAsync(warmHandle, CancellationToken.None).ConfigureAwait(false);
         }
 

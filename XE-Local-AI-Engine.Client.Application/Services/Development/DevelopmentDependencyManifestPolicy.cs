@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.Development;
 /// <summary>
 ///     The dependency-manifest policy: an attempt may not change any file that decides what <c>restore</c> resolves.
 ///     <para>
-///         This is the half of G1 that makes denying the agent-facing sandbox's egress a hardening win rather than an
-///         outage. The engine warms the package cache from the <em>base commit</em>'s manifests before the agent can
+///         This policy makes denying the agent-facing sandbox's egress a hardening win rather than an outage. The
+///         engine warms the package cache from the <em>base commit</em>'s manifests before the agent can
 ///         write anything (<c>DevelopmentWorkspaceProvider</c>'s warm restore), so an attempt that changed a manifest
 ///         would need a resolve the sandbox can no longer perform. Rejecting the change is what keeps the warmed cache
 ///         a complete answer instead of an approximate one.

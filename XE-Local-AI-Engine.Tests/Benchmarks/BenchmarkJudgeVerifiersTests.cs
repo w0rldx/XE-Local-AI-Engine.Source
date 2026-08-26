@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The execution half of C4. Table-driven per kind, with the adversarial inputs a verifier meets in the wild:
+///     Verifier execution is table-driven per kind, with the adversarial inputs a verifier meets in the wild:
 ///     a catastrophic pattern, an oversized answer, unicode, and a boxed fraction that must equal its decimal.
 /// </summary>
 public sealed class BenchmarkJudgeVerifiersTests
@@ -159,7 +159,7 @@ public sealed class BenchmarkJudgeVerifiersTests
     [Test]
     public void Verify_ForAnLlmCriterionOrABrokenConfig_ThrowsRatherThanScoringZero()
     {
-        // R5: 0 is a real score an answer can earn, so "unmeasurable" must never be spelled that way.
+        // Zero is a real score an answer can earn, so "unmeasurable" must never be represented that way.
         var llm = AssertEx.Throws<BenchmarkExecutionException>(() =>
             BenchmarkJudgeVerifiers.Verify(new BenchmarkJudgeRubricCriterionV1("c0", "T", "D", 10), "anything"));
         var broken = AssertEx.Throws<BenchmarkExecutionException>(() => Verify(BenchmarkJudgeCriterionKinds.Exact, """{"expected":""}""", "x"));

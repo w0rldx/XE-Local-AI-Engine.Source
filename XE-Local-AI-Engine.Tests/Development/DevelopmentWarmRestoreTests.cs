@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 /// <summary>
-///     G1(a): the engine-run warm restore that populates the per-task package cache from the BASE COMMIT before the
+///     The engine-run warm restore populates the per-task package cache from the base commit before the
 ///     agent-facing sandbox exists, which is what lets that sandbox be created with no egress at all.
 ///     <para>
 ///         Two properties carry the design and both are asserted as facts about the create requests rather than as
@@ -127,7 +127,7 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
 
     /// <summary>
     ///     The gate. A warm against a tree the agent has written to would restore the agent's own manifests with
-    ///     network, which is the exact thing G1 exists to prevent — so a dirty tracked tree with no recorded warm
+    ///     network, which the split sandbox design prevents — so a dirty tracked tree with no recorded warm
     ///     fails the prepare, naming the cause rather than leaving the attempt to fail later with "restore could not
     ///     reach the network".
     /// </summary>

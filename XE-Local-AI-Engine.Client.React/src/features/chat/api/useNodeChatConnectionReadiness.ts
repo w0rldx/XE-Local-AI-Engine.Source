@@ -28,7 +28,7 @@ function describeConnectionError(error: unknown): string {
 }
 
 /**
- * A9 module-readiness gate (platform parity): eager-connects the shared chat hub on mount and reports a
+ * Eager-connects the shared chat hub on mount and reports a
  * readiness state the page uses to block render until the hub is live. The hub is otherwise lazily started on
  * first send; warming it here surfaces connection failures up front instead of on the first message.
  *

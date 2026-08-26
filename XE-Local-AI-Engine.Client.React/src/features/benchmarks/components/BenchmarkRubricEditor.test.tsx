@@ -95,7 +95,7 @@ describe("BenchmarkRubricEditor", () => {
 	});
 });
 
-// C4: each criterion now says HOW it is decided. The rubric editor's own job here is narrow — mount the per-criterion
+// Each criterion says how it is decided. The rubric editor's own job here is narrow — mount the per-criterion
 // verifier editor and report the preset that makes every criterion server-decided.
 describe("BenchmarkRubricEditor verifiable criteria", () => {
 	afterEach(cleanup);
@@ -127,9 +127,7 @@ describe("BenchmarkRubricEditor verifiable criteria", () => {
 
 		expect(onChange).toHaveBeenCalledWith({
 			version: 1,
-			criteria: [
-				{ id: "answer", title: "Answer", description: "", weight: 10, kind: "exact", config: '{"expected":"42"}' },
-			],
+			criteria: [{ id: "answer", title: "Answer", description: "", weight: 10, kind: "exact", config: '{"expected":"42"}' }],
 		});
 	});
 });
@@ -150,7 +148,8 @@ describe("BenchmarkRubricEditor narrow layout", () => {
 	it("lets the id shrink while the weight keeps its width", () => {
 		renderEditor({ rubric: rubric(1) });
 
-		const rootOf = (label: string): HTMLElement => screen.getByLabelText(label).closest(".mantine-InputWrapper-root") as HTMLElement;
+		const rootOf = (label: string): HTMLElement =>
+			screen.getByLabelText(label).closest(".mantine-InputWrapper-root") as HTMLElement;
 		expect(rootOf("Id").style.minWidth).toBe("0rem");
 		expect(rootOf("Title").style.minWidth).toBe("0rem");
 		expect(rootOf("Weight").style.flex).toBe("0 0 110px");

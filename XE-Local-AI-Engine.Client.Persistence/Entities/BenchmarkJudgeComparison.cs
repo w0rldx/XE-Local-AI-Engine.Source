@@ -15,10 +15,10 @@ internal sealed record class BenchmarkJudgeComparison
     /// <summary>Copied from the revision at enqueue; a verdict never crosses a cohort.</summary>
     public int CohortGeneration { get; set; }
 
-    /// <summary>The task case both runs answered. NULL in P2 — a project is one case; P3's leaf task item.</summary>
+    /// <summary>The task case both runs answered. Null for a legacy single-case comparison; otherwise the leaf task item.</summary>
     public Guid? TaskCaseId { get; set; }
 
-    /// <summary>The hash of that case's input, empty in P2. Runs with different hashes are never paired.</summary>
+    /// <summary>The hash of that case's input, empty for a legacy single-case comparison. Different hashes never pair.</summary>
     public string TaskInputHash { get; set; } = string.Empty;
 
     /// <summary>The canonically smaller of the two run ids by GUID ordinal — enforced by a CHECK, not only here.</summary>

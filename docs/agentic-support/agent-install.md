@@ -337,7 +337,7 @@ Start-ScheduledTask -TaskName 'XE Local AI Engine'
 Re-run `--install-skill` so client instructions stay version-matched.
 
 The installer intentionally has no uninstall verb. The existing guarded uninstall helpers stop the
-node and optionally remove its **data directory only**; they neither identify nor remove P1's
+node and optionally remove its **data directory only**; they neither identify nor remove the
 portable application directory. Run the appropriate helper as the same user who ran the app:
 
 ```bash

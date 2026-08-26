@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing.Mocks;
 /// <summary>
 ///     Covers the header + host-suffix surface of <see cref="CloudCredentialStore" />: the encrypted round-trip
 ///     (including secret values and operator suffixes), a v2 blob with no Headers field defaulting to empty (legacy
-///     load), and the defense-in-depth <c>ValidateConfig</c> rejections (Locked #6–#10, #14).
+///     load), and the defense-in-depth <c>ValidateConfig</c> rejections.
 /// </summary>
 public sealed class AzureFoundryHeaderStoreTests : IDisposable
 {
@@ -79,23 +79,23 @@ public sealed class AzureFoundryHeaderStoreTests : IDisposable
     {
         Directory.CreateDirectory(_contentRootPath);
         var blob = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            schemaVersion = 2,
+            providerName = "AzureFoundry",
+            azureFoundry = new
             {
-                schemaVersion = 2,
-                providerName = "AzureFoundry",
-                azureFoundry = new
-                {
-                    endpoint = "https://example.openai.azure.com/",
-                    authMode = (int)AzureFoundryAuthMode.ApiKey,
-                    apiKey = "k",
-                    models = new[]
+                endpoint = "https://example.openai.azure.com/",
+                authMode = (int)AzureFoundryAuthMode.ApiKey,
+                apiKey = "k",
+                models = new[]
                     {
                         new
                         {
                             deploymentName = "gpt-4o"
                         }
                     }
-                }
-            },
+            }
+        },
             JsonOptions);
         await File.WriteAllBytesAsync(GetCredentialsPath(), blob);
         using var store = CreateStore();
@@ -110,7 +110,7 @@ public sealed class AzureFoundryHeaderStoreTests : IDisposable
     [Test]
     public async Task SaveConfigAsync_WhenEndpointHostNotInEffectiveAllowlist_ThrowsArgumentException()
     {
-        // A custom (non-Azure) endpoint host with no covering suffix must be rejected (Locked #14).
+        // A custom (non-Azure) endpoint host with no covering suffix must be rejected.
         using var store = CreateStore();
         var config = CreateConfig(connection => connection with
         {

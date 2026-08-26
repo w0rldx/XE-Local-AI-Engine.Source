@@ -51,7 +51,7 @@ export function BenchmarkLaunchBadges({ launch, "data-testid": testId }: Benchma
 	};
 
 	const backendBadge = backend();
-	// A null source is "not recorded" (D7), which must not be dressed up as an explicit operator pick: the suffix
+	// A null source is "not recorded", which must not be dressed up as an explicit operator pick: the suffix
 	// appears only for a source the node actually wrote.
 	const kvLabel =
 		launch.kvCacheType === null

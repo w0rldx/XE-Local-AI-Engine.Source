@@ -83,8 +83,8 @@ public sealed class BenchmarkPairwisePlanner(
     /// <summary>
     ///     Every unordered pair of the eligible set, formed ONLY inside one task case. Two answers to different
     ///     questions were never comparable, so a candidate whose case identity differs is in a different group and is
-    ///     never paired across. In P2 a project is one case and every candidate carries the same identity, which makes
-    ///     this a no-op today and the contract P3 widens — cheaper to state now than to re-mint stored comparisons for.
+    ///     never paired across. A single-case project naturally produces one group; a suite relies on the same stored
+    ///     identity to keep its cases separate without reinterpreting existing comparisons.
     /// </summary>
     /// <param name="maximumRuns">The cohort cap; candidates past it are returned as capped and never paired.</param>
     public static BenchmarkPairwisePlan Plan(IReadOnlyList<BenchmarkPairwiseCandidate> candidates, int maximumRuns)

@@ -258,8 +258,8 @@ internal sealed class AgentHomeWorkspaceService : IAgentHomeWorkspaceService
         // byte-stabilizing flags (hooks/attributes disabled, autocrlf/filemode off) make the later diff reproducible
         // even if a copied .gitattributes would otherwise perturb the bytes; the baseline must use the same flags the
         // diff is taken under. --allow-empty keeps an all-ignored tree (a copied .gitignore that hides every file) from
-        // failing the commit and sinking the whole prepare. On the fake provider these are scripted no-ops; real git
-        // state arrives with the HostAgent-backed local-container provider.
+        // failing the commit and sinking the whole prepare. On the fake provider these are scripted no-ops; the
+        // configured runtime provider supplies real git state.
         var prepareTimeoutSeconds = await _runtimeSettings.GetAgentHomePrepareTimeoutSecondsAsync(cancellationToken).ConfigureAwait(false);
         var timeout = TimeSpan.FromSeconds(prepareTimeoutSeconds);
         var commands = new[]

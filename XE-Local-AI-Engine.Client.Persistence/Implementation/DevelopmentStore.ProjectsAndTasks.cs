@@ -1,0 +1,313 @@
+namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
+
+using System.Globalization;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+
+public sealed partial class DevelopmentStore
+{
+    public async Task<DevelopmentOperationResult> CreateProjectAsync(DevelopmentCreateProjectCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ValidateCreate(command);
+
+        return await ExecuteOperationAsync(command.ProjectId,
+            command.OperationId,
+            DevelopmentOperationPhases.Completed,
+            async () =>
+            {
+                if (await _dbContext.DevelopmentProjects.AnyAsync(entity => entity.Id == command.ProjectId, cancellationToken).ConfigureAwait(false))
+                {
+                    throw new DevelopmentConcurrencyException($"Development project '{command.ProjectId}' already exists.");
+                }
+
+                var now = Now();
+                var project = new DevelopmentProject
+                {
+                    Id = command.ProjectId,
+                    Objective = Utf8(command.Objective),
+                    SelectedFolderId = command.SelectedFolderId,
+                    RepositoryIdentityHash = command.RepositoryIdentityHash,
+                    BaseBranch = command.BaseBranch,
+                    Status = DevelopmentProjectStatus.Active,
+                    EgressPolicy = command.EgressPolicy,
+                    CoderModelId = command.CoderModelId,
+                    ReviewerModelId = command.ReviewerModelId,
+                    MaxTokens = command.MaxTokens,
+                    MaxDurationSeconds = command.MaxDurationSeconds,
+                    CommandProfileJson = command.CommandProfileJson,
+                    ConfigurationVersion = command.ConfigurationVersion,
+                    TrustedRepositoryAcknowledged = command.TrustedRepositoryAcknowledged,
+                    TrustedRepositoryPolicyVersion = command.TrustedRepositoryPolicyVersion,
+                    TrustedRepositoryAcknowledgedAtUtc = command.TrustedRepositoryAcknowledgedAtUtc,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now,
+                    Version = 1
+                };
+                var task = new DevelopmentTask
+                {
+                    Id = command.TaskId,
+                    ProjectId = command.ProjectId,
+                    Title = Utf8(command.Title),
+                    Requirements = Utf8(command.Requirements),
+                    AcceptanceCriteriaJson = Utf8(command.AcceptanceCriteriaJson),
+                    Status = DevelopmentTaskStatus.Planned,
+                    MaxReviewRounds = command.MaxReviewRounds,
+                    CreatedAtUtc = now,
+                    UpdatedAtUtc = now,
+                    Version = 1
+                };
+
+                _dbContext.DevelopmentProjects.Add(project);
+                _dbContext.DevelopmentTasks.Add(task);
+                return await AddEventAsync(command.ProjectId,
+                    command.TaskId,
+                    attemptId: null,
+                    command.OperationId,
+                    DevelopmentOperationPhases.Completed,
+                    "ProjectCreated",
+                    "Created",
+                    DevelopmentTaskStatus.Planned.ToString(),
+                    version: 1,
+                    artifactId: null,
+                    detailJson: null,
+                    cancellationToken).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<DevelopmentOperationResult> StartAttemptAsync(DevelopmentStartAttemptCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        EnsureNotBlank(command.ModelId, "modelId");
+        EnsureNotBlank(command.Provider, "provider");
+
+        var projectId = await ProjectIdForTaskAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
+        return await ExecuteOperationAsync(projectId,
+            command.OperationId,
+            DevelopmentOperationPhases.Completed,
+            async () =>
+            {
+                var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == command.TaskId, cancellationToken).ConfigureAwait(false);
+                EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
+                EnsureAttemptMayStart(task, command.Role);
+
+                if (command.PredecessorAttemptId is { } predecessorId)
+                {
+                    var predecessor = await _dbContext.DevelopmentAttempts.SingleOrDefaultAsync(entity => entity.Id == predecessorId && entity.TaskId == task.Id, cancellationToken)
+                                                      .ConfigureAwait(false);
+                    if (predecessor?.Status != DevelopmentAttemptStatus.Interrupted)
+                    {
+                        throw new DevelopmentInvalidTransitionException("A replacement attempt must reference an interrupted predecessor on the same task.");
+                    }
+                }
+
+                var now = Now();
+                var attempt = new DevelopmentAttempt
+                {
+                    Id = command.AttemptId,
+                    TaskId = command.TaskId,
+                    PredecessorAttemptId = command.PredecessorAttemptId,
+                    Role = command.Role,
+                    ModelId = command.ModelId,
+                    Provider = command.Provider,
+                    Status = DevelopmentAttemptStatus.Running,
+                    StartedAtUtc = now,
+                    StartOperationId = command.OperationId,
+                    CommandProfileJson = await ResolveAttemptCommandProfileAsync(projectId, task.Id, command.Role, cancellationToken).ConfigureAwait(false),
+                    Version = 1
+                };
+                _dbContext.DevelopmentAttempts.Add(attempt);
+
+                if (command.Role == DevelopmentAttemptRole.Coder && task.Status != DevelopmentTaskStatus.InProgress)
+                {
+                    task.Status = DevelopmentTaskStatus.InProgress;
+                    task.ApprovedSubjectHash = null;
+                    await _dbContext.DevelopmentArtifacts
+                                    .Where(entity => entity.TaskId == task.Id
+                                                     && entity.IsValid
+                                                     && (entity.Kind == DevelopmentArtifactKind.ValidationReport
+                                                         || entity.Kind == DevelopmentArtifactKind.ReviewReport))
+                                    .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken)
+                                    .ConfigureAwait(false);
+                }
+
+                task.UpdatedAtUtc = now;
+                task.Version++;
+
+                return await AddEventAsync(projectId,
+                    task.Id,
+                    attempt.Id,
+                    command.OperationId,
+                    DevelopmentOperationPhases.Completed,
+                    "AttemptStarted",
+                    "Started",
+                    DevelopmentAttemptStatus.Running.ToString(),
+                    attempt.Version,
+                    artifactId: null,
+                    detailJson: null,
+                    cancellationToken).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The command profile to freeze onto a new attempt.
+    ///     <para>
+    ///         A Coder attempt takes the project's profile as it stands right now. A Reviewer attempt instead inherits
+    ///         the profile of the latest succeeded Coder attempt on the same task — the attempt whose result it is
+    ///         reviewing. That is what keeps one evidence chain (coder → validation → review → apply) judged under a
+    ///         single profile: without it, a profile edit landing between the coder attempt and its review would make
+    ///         the reviewer re-run different commands than the ones that produced the patch, and the apply gate would
+    ///         then reject on a digest mismatch that describes an edit rather than a defect.
+    ///     </para>
+    ///     <para>
+    ///         Returning null is meaningful and safe: it marks an attempt with no snapshot, and every reader falls back
+    ///         to the project's current profile, which is precisely the behaviour before this column existed. That is
+    ///         what makes the migration a no-op for rows that predate it.
+    ///     </para>
+    /// </summary>
+    private async Task<string?> ResolveAttemptCommandProfileAsync(Guid projectId,
+        Guid taskId,
+        DevelopmentAttemptRole role,
+        CancellationToken cancellationToken)
+    {
+        if (role == DevelopmentAttemptRole.Reviewer)
+        {
+            // Mirrors the (StartedAtUtc, Id) ordering ListAttemptsAsync exposes, so "latest succeeded coder" means the
+            // same attempt here as it does to the apply and reviewer gates that select it with LastOrDefault.
+            var inherited = await _dbContext.DevelopmentAttempts.AsNoTracking()
+                                            .Where(entity => entity.TaskId == taskId
+                                                             && entity.Role == DevelopmentAttemptRole.Coder
+                                                             && entity.Status == DevelopmentAttemptStatus.Succeeded)
+                                            .OrderByDescending(entity => entity.StartedAtUtc)
+                                            .ThenByDescending(entity => entity.Id)
+                                            .Select(entity => entity.CommandProfileJson)
+                                            .FirstOrDefaultAsync(cancellationToken)
+                                            .ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(inherited))
+            {
+                return inherited;
+            }
+        }
+
+        return await _dbContext.DevelopmentProjects.AsNoTracking()
+                               .Where(entity => entity.Id == projectId)
+                               .Select(entity => entity.CommandProfileJson)
+                               .SingleOrDefaultAsync(cancellationToken)
+                               .ConfigureAwait(false);
+    }
+
+    public async Task<DevelopmentOperationResult> TerminalizeAttemptAsync(DevelopmentTerminalizeAttemptCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (command.Status is DevelopmentAttemptStatus.Pending or DevelopmentAttemptStatus.Running)
+        {
+            throw new ArgumentException("Terminalization requires a terminal attempt status.", nameof(command));
+        }
+
+        var (projectId, taskId) = await OwnershipForAttemptAsync(command.AttemptId, cancellationToken).ConfigureAwait(false);
+        return await ExecuteOperationAsync(projectId,
+            command.OperationId,
+            DevelopmentOperationPhases.Completed,
+            async () =>
+            {
+                var attempt = await _dbContext.DevelopmentAttempts.SingleAsync(entity => entity.Id == command.AttemptId, cancellationToken).ConfigureAwait(false);
+                EnsureVersion(attempt.Version, command.ExpectedAttemptVersion, "attempt");
+                if (attempt.Status is not DevelopmentAttemptStatus.Pending and not DevelopmentAttemptStatus.Running)
+                {
+                    throw new DevelopmentInvalidTransitionException("A terminal attempt cannot be terminalized again with a new operation.");
+                }
+
+                attempt.Status = command.Status;
+                attempt.EndedAtUtc = Now();
+                attempt.TerminalReason = command.TerminalReason;
+                attempt.InputTokens = command.InputTokens;
+                attempt.OutputTokens = command.OutputTokens;
+                attempt.Version++;
+
+                return await AddEventAsync(projectId,
+                    taskId,
+                    attempt.Id,
+                    command.OperationId,
+                    DevelopmentOperationPhases.Completed,
+                    "AttemptTerminalized",
+                    "Terminalized",
+                    attempt.Status.ToString(),
+                    attempt.Version,
+                    artifactId: null,
+                    detailJson: null,
+                    cancellationToken).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<DevelopmentOperationResult> TransitionTaskAsync(DevelopmentTransitionTaskCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        var projectId = await ProjectIdForTaskAsync(command.TaskId, cancellationToken).ConfigureAwait(false);
+
+        return await ExecuteOperationAsync(projectId,
+            command.OperationId,
+            DevelopmentOperationPhases.Completed,
+            async () =>
+            {
+                var task = await _dbContext.DevelopmentTasks.SingleAsync(entity => entity.Id == command.TaskId, cancellationToken).ConfigureAwait(false);
+                EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
+                EnsureLegalTransition(task.Status, command.TargetStatus);
+
+                var now = Now();
+                task.Status = command.TargetStatus;
+                task.UpdatedAtUtc = now;
+                task.Version++;
+                task.BlockedReason = command.TargetStatus == DevelopmentTaskStatus.Blocked ? command.Reason : null;
+                task.BlockedAtUtc = command.TargetStatus == DevelopmentTaskStatus.Blocked ? now : null;
+                task.ApprovedSubjectHash = command.ApprovedSubjectHash ?? task.ApprovedSubjectHash;
+                if (command.TargetStatus == DevelopmentTaskStatus.InProgress)
+                {
+                    task.ApprovedSubjectHash = null;
+                    await _dbContext.DevelopmentArtifacts
+                                    .Where(entity => entity.TaskId == task.Id
+                                                     && entity.IsValid
+                                                     && (entity.Kind == DevelopmentArtifactKind.ValidationReport
+                                                         || entity.Kind == DevelopmentArtifactKind.ReviewReport))
+                                    .ExecuteUpdateAsync(setters => setters.SetProperty(entity => entity.IsValid, false), cancellationToken)
+                                    .ConfigureAwait(false);
+                }
+
+                if (command.TargetStatus == DevelopmentTaskStatus.InReview)
+                {
+                    if (task.CurrentReviewRound >= task.MaxReviewRounds)
+                    {
+                        throw new DevelopmentInvalidTransitionException("The configured maximum review rounds has been reached.");
+                    }
+
+                    task.CurrentReviewRound++;
+                }
+
+                return await AddEventAsync(projectId,
+                    task.Id,
+                    attemptId: null,
+                    command.OperationId,
+                    DevelopmentOperationPhases.Completed,
+                    "TaskTransitioned",
+                    "Transitioned",
+                    task.Status.ToString(),
+                    task.Version,
+                    artifactId: null,
+                    detailJson: command.Reason is null
+                        ? null
+                        : Utf8(JsonSerializer.Serialize(new
+                        {
+                            reason = command.Reason
+                        })),
+                    cancellationToken).ConfigureAwait(false);
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+}

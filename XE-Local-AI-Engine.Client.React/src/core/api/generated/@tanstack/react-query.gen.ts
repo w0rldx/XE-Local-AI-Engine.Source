@@ -1313,6 +1313,28 @@ export const deleteWorkspaceMutation = (
 	return mutationOptions;
 };
 
+export const getWorkSessionArtifactContentQueryKey = (options: Options<GetWorkSessionArtifactContentData>) =>
+	createQueryKey("getWorkSessionArtifactContent", options);
+
+export const getWorkSessionArtifactContentOptions = (options: Options<GetWorkSessionArtifactContentData>) =>
+	queryOptions<
+		GetWorkSessionArtifactContentResponse,
+		AxiosError<GetWorkSessionArtifactContentError>,
+		GetWorkSessionArtifactContentResponse,
+		ReturnType<typeof getWorkSessionArtifactContentQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getWorkSessionArtifactContent({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getWorkSessionArtifactContentQueryKey(options),
+	});
+
 export const listWorkSessionsQueryKey = (options?: Options<ListWorkSessionsData>) => createQueryKey("listWorkSessions", options);
 
 export const listWorkSessionsOptions = (options?: Options<ListWorkSessionsData>) =>
@@ -1405,86 +1427,6 @@ export const updateWorkSessionMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await updateWorkSession({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const startWorkSessionMutation = (
-	options?: Partial<Options<StartWorkSessionData>>,
-): UseMutationOptions<StartWorkSessionResponse, AxiosError<StartWorkSessionError>, Options<StartWorkSessionData>> => {
-	const mutationOptions: UseMutationOptions<
-		StartWorkSessionResponse,
-		AxiosError<StartWorkSessionError>,
-		Options<StartWorkSessionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await startWorkSession({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const pauseWorkSessionMutation = (
-	options?: Partial<Options<PauseWorkSessionData>>,
-): UseMutationOptions<PauseWorkSessionResponse, AxiosError<PauseWorkSessionError>, Options<PauseWorkSessionData>> => {
-	const mutationOptions: UseMutationOptions<
-		PauseWorkSessionResponse,
-		AxiosError<PauseWorkSessionError>,
-		Options<PauseWorkSessionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await pauseWorkSession({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const resumeWorkSessionMutation = (
-	options?: Partial<Options<ResumeWorkSessionData>>,
-): UseMutationOptions<ResumeWorkSessionResponse, AxiosError<ResumeWorkSessionError>, Options<ResumeWorkSessionData>> => {
-	const mutationOptions: UseMutationOptions<
-		ResumeWorkSessionResponse,
-		AxiosError<ResumeWorkSessionError>,
-		Options<ResumeWorkSessionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await resumeWorkSession({
-				...options,
-				...fnOptions,
-				throwOnError: true,
-			});
-			return data;
-		},
-	};
-	return mutationOptions;
-};
-
-export const cancelWorkSessionMutation = (
-	options?: Partial<Options<CancelWorkSessionData>>,
-): UseMutationOptions<CancelWorkSessionResponse, AxiosError<CancelWorkSessionError>, Options<CancelWorkSessionData>> => {
-	const mutationOptions: UseMutationOptions<
-		CancelWorkSessionResponse,
-		AxiosError<CancelWorkSessionError>,
-		Options<CancelWorkSessionData>
-	> = {
-		mutationFn: async (fnOptions) => {
-			const { data } = await cancelWorkSession({
 				...options,
 				...fnOptions,
 				throwOnError: true,
@@ -1605,27 +1547,85 @@ export const listWorkSessionEventsOptions = (options: Options<ListWorkSessionEve
 		queryKey: listWorkSessionEventsQueryKey(options),
 	});
 
-export const getWorkSessionArtifactContentQueryKey = (options: Options<GetWorkSessionArtifactContentData>) =>
-	createQueryKey("getWorkSessionArtifactContent", options);
-
-export const getWorkSessionArtifactContentOptions = (options: Options<GetWorkSessionArtifactContentData>) =>
-	queryOptions<
-		GetWorkSessionArtifactContentResponse,
-		AxiosError<GetWorkSessionArtifactContentError>,
-		GetWorkSessionArtifactContentResponse,
-		ReturnType<typeof getWorkSessionArtifactContentQueryKey>
-	>({
-		queryFn: async ({ queryKey, signal }) => {
-			const { data } = await getWorkSessionArtifactContent({
+export const startWorkSessionMutation = (
+	options?: Partial<Options<StartWorkSessionData>>,
+): UseMutationOptions<StartWorkSessionResponse, AxiosError<StartWorkSessionError>, Options<StartWorkSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartWorkSessionResponse,
+		AxiosError<StartWorkSessionError>,
+		Options<StartWorkSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startWorkSession({
 				...options,
-				...queryKey[0],
-				signal,
+				...fnOptions,
 				throwOnError: true,
 			});
 			return data;
 		},
-		queryKey: getWorkSessionArtifactContentQueryKey(options),
-	});
+	};
+	return mutationOptions;
+};
+
+export const pauseWorkSessionMutation = (
+	options?: Partial<Options<PauseWorkSessionData>>,
+): UseMutationOptions<PauseWorkSessionResponse, AxiosError<PauseWorkSessionError>, Options<PauseWorkSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		PauseWorkSessionResponse,
+		AxiosError<PauseWorkSessionError>,
+		Options<PauseWorkSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await pauseWorkSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const resumeWorkSessionMutation = (
+	options?: Partial<Options<ResumeWorkSessionData>>,
+): UseMutationOptions<ResumeWorkSessionResponse, AxiosError<ResumeWorkSessionError>, Options<ResumeWorkSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		ResumeWorkSessionResponse,
+		AxiosError<ResumeWorkSessionError>,
+		Options<ResumeWorkSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await resumeWorkSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelWorkSessionMutation = (
+	options?: Partial<Options<CancelWorkSessionData>>,
+): UseMutationOptions<CancelWorkSessionResponse, AxiosError<CancelWorkSessionError>, Options<CancelWorkSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelWorkSessionResponse,
+		AxiosError<CancelWorkSessionError>,
+		Options<CancelWorkSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelWorkSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
 
 export const postWorkSessionMessageMutation = (
 	options?: Partial<Options<PostWorkSessionMessageData>>,

@@ -167,11 +167,11 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
 
         // The trap this guards: a SQLite down migration rebuilds the table from its own target model, so a sibling
         // column added by a DIFFERENT branch's migration can vanish with it.
-        AssertEx.True(runColumns.Contains("perplexity_mean"), "Rollback must leave P2's fidelity projection intact.");
+        AssertEx.True(runColumns.Contains("perplexity_mean"), "Rollback must leave the existing fidelity projection intact.");
         AssertEx.True(runColumns.Contains("repeat_mode"), "Rollback must leave the preceding migrations' columns intact.");
         AssertEx.False((await probe.ColumnsAsync("benchmark_projects").ConfigureAwait(false)).Contains("task_item_set_hash"));
         AssertEx.True((await probe.ColumnsAsync("benchmark_projects").ConfigureAwait(false)).Contains("fidelity_kld_base_fingerprint"),
-            "Rollback must leave P2's project columns intact.");
+            "Rollback must leave the existing project fidelity columns intact.");
 
         var runs = await probe.LongsAsync("SELECT COUNT(*) FROM benchmark_runs;").ConfigureAwait(false);
         AssertEx.True(runs[0] == 2, "Rollback must not lose rows.");

@@ -128,19 +128,19 @@ public sealed class WorkSessionServiceTests
     }
 
     [Test]
-    public async Task EveryReader_OnAnUnknownSession_ThrowsKeyNotFound()
+    public async Task EveryReader_OnAnUnknownSession_ThrowsWorkSessionNotFound()
     {
         await using var factory = NewFactory();
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
         var unknown = Guid.NewGuid();
 
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => service.GetAsync(unknown)).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => service.UpdateAsync(unknown, new UpdateWorkSessionRequestModel("t", null, null))).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => service.DeleteAsync(unknown)).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => service.StartAsync(unknown)).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => service.PostFollowUpAsync(unknown, "hello")).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => service.ReadArtifactContentAsync(unknown, Guid.NewGuid())).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.GetAsync(unknown)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.UpdateAsync(unknown, new UpdateWorkSessionRequestModel("t", null, null))).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.DeleteAsync(unknown)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.StartAsync(unknown)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.PostFollowUpAsync(unknown, "hello")).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.ReadArtifactContentAsync(unknown, Guid.NewGuid())).ConfigureAwait(false);
     }
 
     [Test]
@@ -206,7 +206,8 @@ public sealed class WorkSessionServiceTests
         await using var scope = factory.Services.CreateAsyncScope();
         await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().DeleteAsync(sessionId).ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().GetAsync(sessionId)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().GetAsync(sessionId))
+                          .ConfigureAwait(false);
         var conversation = await scope.ServiceProvider.GetRequiredService<INodeChatPersistenceService>().GetConversationAsync(session.ConversationId).ConfigureAwait(false);
         AssertEx.True(conversation is null || conversation.Purged, "A session's conversation exists only to carry it, so nothing may orphan.");
     }
@@ -293,7 +294,7 @@ public sealed class WorkSessionServiceTests
     }
 
     [Test]
-    public async Task ReadArtifactContent_ForAnUnknownOrInvalidArtifact_ThrowsKeyNotFound()
+    public async Task ReadArtifactContent_ForAnUnknownOrInvalidArtifact_ThrowsWorkSessionNotFound()
     {
         await using var factory = NewFactory();
         var sessionId = Guid.NewGuid();
@@ -301,7 +302,7 @@ public sealed class WorkSessionServiceTests
 
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => service.ReadArtifactContentAsync(sessionId, Guid.NewGuid())).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.ReadArtifactContentAsync(sessionId, Guid.NewGuid())).ConfigureAwait(false);
 
         // A row whose bytes were never written: the blob read fails, and the node refuses to hand over content it cannot
         // vouch for rather than returning something plausible.
@@ -319,7 +320,7 @@ public sealed class WorkSessionServiceTests
                            "work-session-artifact:phantom"))
                        .ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => service.ReadArtifactContentAsync(sessionId, artifactId)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.ReadArtifactContentAsync(sessionId, artifactId)).ConfigureAwait(false);
     }
 
     [Test]
@@ -355,8 +356,8 @@ public sealed class WorkSessionServiceTests
         AssertEx.Equal(expected: 12L, artifact.SizeBytes);
 
         // Asked through another session's route, the artifact reads as absent — an id is not an authorization.
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => service.GetArtifactAsync(otherSessionId, artifactId)).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => service.GetArtifactAsync(sessionId, Guid.NewGuid())).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.GetArtifactAsync(otherSessionId, artifactId)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => service.GetArtifactAsync(sessionId, Guid.NewGuid())).ConfigureAwait(false);
     }
 
     [Test]

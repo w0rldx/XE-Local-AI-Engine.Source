@@ -26,7 +26,7 @@ using XE_Local_AI_Engine.Tests.Testing.Builders;
 ///         guards against lives precisely in the join: a reloaded browser holds no invocation id, so it must find the
 ///         live run by CONVERSATION id, and the prompt it needs is transient live state that is deliberately never
 ///         written into the conversation's persisted parts. Break any link and a reload silently strands the turn until
-///         it times out — which is exactly what shipped before D6, and what a live reload reproduced.
+///         it times out — which is the failure a live reload previously reproduced.
 ///     </para>
 /// </summary>
 public sealed class AskUserColdLoadResumeTests

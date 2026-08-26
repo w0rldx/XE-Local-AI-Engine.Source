@@ -50,9 +50,9 @@ public static class BenchmarkJudgePolicyVersions
 // JsonPropertyOrder. Reordering a declaration must never silently change a hash, and the policy must never inherit the
 // declaration order of a type it does not own.
 /// <param name="Kind">
-///     How this criterion is decided: <see cref="BenchmarkJudgeCriterionKinds.Llm" /> (the default, and what every
-///     criterion written before P2 carries) hands it to the judge model; every other kind is checked server-side by
-///     <see cref="BenchmarkJudgeVerifiers" /> with no inference at all.
+///     How this criterion is decided: <see cref="BenchmarkJudgeCriterionKinds.Llm" /> (the legacy-compatible default
+///     for a criterion without an explicit kind) hands it to the judge model; every other kind is checked server-side
+///     by <see cref="BenchmarkJudgeVerifiers" /> with no inference at all.
 /// </param>
 /// <param name="Config">
 ///     The kind's configuration as canonical JSON, or <see langword="null" /> for <c>llm</c>. Canonicalized by
@@ -335,8 +335,8 @@ public static class BenchmarkJudgePolicyValidator
 
             // Verifiable configuration is parsed HERE, at activation, and by the same parser the executor uses. A
             // config the validator waves through is a judging that fails at run time with nothing to show for the GPU
-            // it already reserved — and R5 forbids scoring it 0, so the operator's only signal would be a failed
-            // attempt. Strict path only: a stored revision must stay readable.
+            // it already reserved. A failed judging must not be converted into score 0, so the operator's only signal
+            // would be a failed attempt. Strict path only: a stored revision must stay readable.
             if (strictVersions)
             {
                 _ = BenchmarkJudgeVerifierConfig.Parse(criterion.Kind, criterion.Config);

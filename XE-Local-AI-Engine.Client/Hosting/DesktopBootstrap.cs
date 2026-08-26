@@ -438,8 +438,8 @@ internal static class DesktopBootstrap
     }
 
     /// <summary>
-    ///     Wraps the raw secret for at-rest storage: DPAPI (CurrentUser) on Windows, raw bytes on *nix (guarded by 0600
-    ///     owner-only perms — libsecret/Keychain integration is future work, full-disk encryption is the assumed posture).
+    ///     Wraps the raw secret for at-rest storage: DPAPI (CurrentUser) on Windows; raw bytes protected by owner-only
+    ///     permissions (0600) on Unix-like systems, where full-disk encryption is the assumed at-rest protection.
     /// </summary>
     private static byte[] ProtectSecretForAtRest(byte[] secret)
     {

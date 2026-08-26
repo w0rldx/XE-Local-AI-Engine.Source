@@ -32,7 +32,7 @@ export function WorkSessionCheckpointsTab({ checkpoints }: { checkpoints: readon
 							{new Date(checkpoint.createdAtUtc ?? 0).toLocaleString()}
 						</Text>
 						<Text size="sm">
-							{/* A NoLocalModel node cannot summarize, so P3 types Summary as nullable — say so rather than render "". */}
+							{/* A node without a local model cannot summarize; explain the missing value rather than render an empty string. */}
 							{checkpoint.summary ?? t("pages.workSessions.checkpoints.noSummary", "No prose summary was produced.")}
 						</Text>
 						<Anchor

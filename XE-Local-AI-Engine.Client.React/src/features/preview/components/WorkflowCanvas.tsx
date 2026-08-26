@@ -28,7 +28,7 @@ import {
 	useNodesState,
 	useReactFlow,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import "@xyflow/react/dist/style.css";
@@ -103,6 +103,189 @@ export interface WorkflowCanvasProps {
 	readonly onGraphChange: (graph: PreviewWorkflowGraph) => void;
 }
 
+interface WorkflowToolbarProps {
+	isNarrow: boolean;
+	hasNodeConfig: boolean;
+	isControlBusy: boolean;
+	executeDisabled: boolean;
+	runState: WorkflowCanvasRunState;
+	graph: PreviewWorkflowGraph;
+	onOpenConfig: () => void;
+	onAddNode: (kind: PreviewNodeKind, type: string) => void;
+	onPaletteDragStart: (event: React.DragEvent, kind: PreviewNodeKind, type: string) => void;
+	onExecute: (graph: PreviewWorkflowGraph) => void;
+	onContinue: () => void;
+	onCancel: () => void;
+}
+
+function WorkflowToolbar({
+	isNarrow,
+	hasNodeConfig,
+	isControlBusy,
+	executeDisabled,
+	runState,
+	graph,
+	onOpenConfig,
+	onAddNode,
+	onPaletteDragStart,
+	onExecute,
+	onContinue,
+	onCancel,
+}: WorkflowToolbarProps) {
+	const { t } = useTranslation();
+	return (
+		<Group justify="space-between" align="flex-end" wrap="wrap">
+			<Group gap="xs">
+				{PALETTE.map((entry) => (
+					// biome-ignore lint/a11y/noStaticElementInteractions: intentional DnD drag-source wrapper; inner Button owns keyboard/click
+					// biome-ignore lint/a11y/noNoninteractiveElementInteractions: same — drag source div is a deliberate DnD pattern
+					<div
+						key={entry.kind}
+						draggable={true}
+						onDragStart={(event) => onPaletteDragStart(event, entry.kind, entry.type)}
+						style={{ display: "inline-flex", cursor: "grab" }}
+						data-testid={`preview-palette-drag-${entry.type}`}
+					>
+						<Button
+							size="xs"
+							variant="light"
+							leftSection={<entry.icon size={14} />}
+							onClick={() => onAddNode(entry.kind, entry.type)}
+							data-testid={`preview-palette-${entry.type}`}
+						>
+							{t(`pages.preview.nodes.${entry.type}`, entry.kind)}
+						</Button>
+					</div>
+				))}
+			</Group>
+			<Group gap="xs">
+				{isNarrow && hasNodeConfig ? (
+					<Button
+						variant="light"
+						leftSection={<IconAdjustments size={16} />}
+						onClick={onOpenConfig}
+						data-testid="preview-node-config-toggle"
+					>
+						{t("pages.preview.nodeConfig.open", "Block settings")}
+					</Button>
+				) : null}
+				<Button
+					leftSection={<IconPlayerPlay size={16} />}
+					disabled={executeDisabled}
+					onClick={() => onExecute(graph)}
+					data-testid="preview-execute"
+				>
+					{t("pages.preview.toolbar.execute", "Execute")}
+				</Button>
+				{runState.isPaused ? (
+					<Button
+						color="orange"
+						leftSection={<IconPlayerPlay size={16} />}
+						disabled={isControlBusy}
+						onClick={onContinue}
+						data-testid="preview-continue"
+					>
+						{t("pages.preview.toolbar.continue", "Continue")}
+					</Button>
+				) : null}
+				{runState.isRunning || runState.isPaused ? (
+					<Button
+						color="red"
+						variant="light"
+						leftSection={<IconPlayerStop size={16} />}
+						disabled={isControlBusy}
+						onClick={onCancel}
+						data-testid="preview-cancel"
+					>
+						{t("pages.preview.toolbar.cancel", "Cancel")}
+					</Button>
+				) : null}
+			</Group>
+		</Group>
+	);
+}
+
+interface WorkflowSurfaceProps {
+	nodes: PreviewCanvasNode[];
+	edges: Edge[];
+	isNarrow: boolean;
+	hasNodeConfig: boolean;
+	nodeConfig: React.ReactNode;
+	configDrawerOpened: boolean;
+	onCloseConfig: () => void;
+	onNodesChange: (changes: NodeChange<PreviewCanvasNode>[]) => void;
+	onEdgesChange: (changes: EdgeChange<Edge>[]) => void;
+	onConnect: (connection: Connection) => void;
+	onSelectionChange: (selection: { nodes: Node[] }) => void;
+	onPaneClick: () => void;
+	onDrop: (event: React.DragEvent) => void;
+	onDragOver: (event: React.DragEvent) => void;
+}
+
+function WorkflowSurface({
+	nodes,
+	edges,
+	isNarrow,
+	hasNodeConfig,
+	nodeConfig,
+	configDrawerOpened,
+	onCloseConfig,
+	onNodesChange,
+	onEdgesChange,
+	onConnect,
+	onSelectionChange,
+	onPaneClick,
+	onDrop,
+	onDragOver,
+}: WorkflowSurfaceProps) {
+	const { t } = useTranslation();
+	return (
+		<>
+			<Group align="stretch" gap="sm" style={{ flex: 1, minHeight: 360 }} wrap="nowrap">
+				<Paper withBorder={true} style={{ flex: 1, minWidth: 0 }} data-testid="preview-canvas">
+					<ReactFlow
+						nodes={nodes}
+						edges={edges}
+						nodeTypes={nodeTypes}
+						onNodesChange={onNodesChange}
+						onEdgesChange={onEdgesChange}
+						onConnect={onConnect}
+						onSelectionChange={onSelectionChange}
+						onPaneClick={onPaneClick}
+						onDrop={onDrop}
+						onDragOver={onDragOver}
+						fitView={true}
+						deleteKeyCode={["Delete", "Backspace"]}
+						proOptions={{ hideAttribution: true }}
+						data-testid="preview-canvas-dropzone"
+					>
+						<Background />
+						<Controls />
+					</ReactFlow>
+				</Paper>
+				{!isNarrow && hasNodeConfig ? (
+					<Paper withBorder={true} p="sm" style={{ width: "100%", maxWidth: 360 }} data-testid="preview-node-config">
+						{nodeConfig}
+					</Paper>
+				) : null}
+			</Group>
+			{isNarrow ? (
+				<Drawer
+					opened={configDrawerOpened && hasNodeConfig}
+					onClose={onCloseConfig}
+					position="right"
+					size="85%"
+					title={t("pages.preview.nodeConfig.title", "Block settings")}
+					attributes={{ content: { "data-testid": "preview-node-config-drawer" } }}
+					closeButtonProps={{ "aria-label": t("common.close", "Close") }}
+				>
+					<div data-testid="preview-node-config">{nodeConfig}</div>
+				</Drawer>
+			) : null}
+		</>
+	);
+}
+
 // The React Flow editing canvas: a palette to add Start/Agent/Debug/Pause/End blocks, connect them (linear
 // chain), pan/zoom, and a per-node config panel (AgentNodeForm for Agent nodes). The run toolbar disables Execute
 // when the graph is invalid (client mirror of the backend validator), offers Cancel while running and Continue
@@ -137,18 +320,17 @@ function WorkflowCanvasInner({
 	// `open` and `close` are the useCallback-stable members, so the effect re-runs only when its real inputs change.
 	const [configDrawerOpened, { open: openConfigDrawer, close: closeConfigDrawer }] = useDisclosure(false);
 
-	// Refs mirror the latest committed editing inputs so any single mutation (nodes OR edges OR start text) can build
-	// the lifted graph from the current value of the others without a stale render closure.
 	const nodesRef = useRef(nodes);
-	nodesRef.current = nodes;
 	const edgesRef = useRef(edges);
-	edgesRef.current = edges;
 	const startTextRef = useRef(startText);
-	startTextRef.current = startText;
+	// External React Flow callbacks read the last committed graph, while each handler advances its changed slice
+	// synchronously before emitting the combined graph to the parent.
+	useLayoutEffect(() => {
+		nodesRef.current = nodes;
+		edgesRef.current = edges;
+		startTextRef.current = startText;
+	}, [edges, nodes, startText]);
 
-	// Lift the live graph up so the page can Save the current edits (the canvas owns editing state; the page owns
-	// persistence). Emitted from each mutation entry point — rather than a useEffect that watches the derived graph —
-	// so the parent does not re-render an extra time on every node/edge/start-text change.
 	const emitGraph = useCallback(
 		(nextNodes: PreviewCanvasNode[], nextEdges: Edge[], nextStartText: string) => {
 			onGraphChange(canvasToGraph(nextNodes, nextEdges, nextStartText));
@@ -305,76 +487,20 @@ function WorkflowCanvasInner({
 
 	return (
 		<Stack gap="sm" style={{ height: "100%" }}>
-			<Group justify="space-between" align="flex-end" wrap="wrap">
-				<Group gap="xs">
-					{PALETTE.map((entry) => (
-						// biome-ignore lint/a11y/noStaticElementInteractions: intentional DnD drag-source wrapper; inner Button owns keyboard/click
-						// biome-ignore lint/a11y/noNoninteractiveElementInteractions: same — drag source div is a deliberate DnD pattern
-						<div
-							key={entry.kind}
-							draggable={true}
-							onDragStart={(e) => onPaletteDragStart(e, entry.kind, entry.type)}
-							style={{ display: "inline-flex", cursor: "grab" }}
-							data-testid={`preview-palette-drag-${entry.type}`}
-						>
-							<Button
-								size="xs"
-								variant="light"
-								leftSection={<entry.icon size={14} />}
-								onClick={() => addNode(entry.kind, entry.type)}
-								data-testid={`preview-palette-${entry.type}`}
-							>
-								{t(`pages.preview.nodes.${entry.type}`, entry.kind)}
-							</Button>
-						</div>
-					))}
-				</Group>
-
-				<Group gap="xs">
-					{isNarrow && hasNodeConfig ? (
-						<Button
-							variant="light"
-							leftSection={<IconAdjustments size={16} />}
-							onClick={openConfigDrawer}
-							data-testid="preview-node-config-toggle"
-						>
-							{t("pages.preview.nodeConfig.open", "Block settings")}
-						</Button>
-					) : null}
-					<Button
-						leftSection={<IconPlayerPlay size={16} />}
-						disabled={executeDisabled}
-						onClick={() => onExecute(graph)}
-						data-testid="preview-execute"
-					>
-						{t("pages.preview.toolbar.execute", "Execute")}
-					</Button>
-					{runState.isPaused ? (
-						<Button
-							color="orange"
-							leftSection={<IconPlayerPlay size={16} />}
-							disabled={isControlBusy}
-							onClick={onContinue}
-							data-testid="preview-continue"
-						>
-							{t("pages.preview.toolbar.continue", "Continue")}
-						</Button>
-					) : null}
-					{runState.isRunning || runState.isPaused ? (
-						<Button
-							color="red"
-							variant="light"
-							leftSection={<IconPlayerStop size={16} />}
-							disabled={isControlBusy}
-							onClick={onCancel}
-							data-testid="preview-cancel"
-						>
-							{t("pages.preview.toolbar.cancel", "Cancel")}
-						</Button>
-					) : null}
-				</Group>
-			</Group>
-
+			<WorkflowToolbar
+				isNarrow={isNarrow}
+				hasNodeConfig={hasNodeConfig}
+				isControlBusy={isControlBusy}
+				executeDisabled={executeDisabled}
+				runState={runState}
+				graph={graph}
+				onOpenConfig={openConfigDrawer}
+				onAddNode={addNode}
+				onPaletteDragStart={onPaletteDragStart}
+				onExecute={onExecute}
+				onContinue={onContinue}
+				onCancel={onCancel}
+			/>
 			<TextInput
 				label={t("pages.preview.startText.label", "Start input")}
 				placeholder={t("pages.preview.startText.placeholder", "Seed text the Start node emits…")}
@@ -382,76 +508,33 @@ function WorkflowCanvasInner({
 				onChange={(event) => handleStartTextChange(event.currentTarget.value)}
 				data-testid="preview-start-text"
 			/>
-
 			<Text size="xs" c="dimmed" data-testid="preview-delete-hint">
 				{t(
 					"pages.preview.deleteHint",
 					"Tip: select a block or connection and press Delete (or Backspace) to remove it. Start and End cannot be removed.",
 				)}
 			</Text>
-
 			{!validation.isValid ? (
 				<Text size="xs" c="red" data-testid="preview-validation">
 					{validation.errorKeys.map((key) => t(key)).join(" ")}
 				</Text>
 			) : null}
-
-			<Group align="stretch" gap="sm" style={{ flex: 1, minHeight: 360 }} wrap="nowrap">
-				<Paper withBorder={true} style={{ flex: 1, minWidth: 0 }} data-testid="preview-canvas">
-					<ReactFlow
-						nodes={nodes}
-						edges={edges}
-						nodeTypes={nodeTypes}
-						onNodesChange={onNodesChange}
-						onEdgesChange={onEdgesChange}
-						onConnect={onConnect}
-						onSelectionChange={onSelectionChange}
-						onPaneClick={onPaneClick}
-						onDrop={onDrop}
-						onDragOver={onDragOver}
-						fitView={true}
-						deleteKeyCode={["Delete", "Backspace"]}
-						proOptions={{ hideAttribution: true }}
-						data-testid="preview-canvas-dropzone"
-					>
-						<Background />
-						<Controls />
-					</ReactFlow>
-				</Paper>
-
-				{!isNarrow && hasNodeConfig ? (
-					<Paper
-						withBorder={true}
-						p="sm"
-						style={{ width: "100%", maxWidth: 360 }}
-						data-testid="preview-node-config"
-					>
-						{nodeConfig}
-					</Paper>
-				) : null}
-			</Group>
-
-			{/*
-			 * Below the two-pane width the same form moves off-canvas instead of squeezing the canvas down to a sliver
-			 * it cannot be edited in — the pattern ChatDisplayShell and the work-session detail page already use. The
-			 * `preview-node-config` test id rides the content in both layouts, so a test (or an operator) finds the
-			 * config in exactly one place whichever branch rendered.
-			 */}
-			{isNarrow ? (
-				<Drawer
-					opened={configDrawerOpened && hasNodeConfig}
-					onClose={closeConfigDrawer}
-					position="right"
-					size="85%"
-					title={t("pages.preview.nodeConfig.title", "Block settings")}
-					// On `content`, not the root: Mantine spreads an unknown prop onto the zero-size portal root, which
-					// Playwright reports as hidden. Same rule DialogShell applies.
-					attributes={{ content: { "data-testid": "preview-node-config-drawer" } }}
-					closeButtonProps={{ "aria-label": t("common.close", "Close") }}
-				>
-					<div data-testid="preview-node-config">{nodeConfig}</div>
-				</Drawer>
-			) : null}
+			<WorkflowSurface
+				nodes={nodes}
+				edges={edges}
+				isNarrow={isNarrow}
+				hasNodeConfig={hasNodeConfig}
+				nodeConfig={nodeConfig}
+				configDrawerOpened={configDrawerOpened}
+				onCloseConfig={closeConfigDrawer}
+				onNodesChange={onNodesChange}
+				onEdgesChange={onEdgesChange}
+				onConnect={onConnect}
+				onSelectionChange={onSelectionChange}
+				onPaneClick={onPaneClick}
+				onDrop={onDrop}
+				onDragOver={onDragOver}
+			/>
 		</Stack>
 	);
 }

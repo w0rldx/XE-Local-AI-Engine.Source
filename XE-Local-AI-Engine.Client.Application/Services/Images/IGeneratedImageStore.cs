@@ -30,7 +30,7 @@ public sealed record GeneratedImageMetadata
     /// <summary>Pixel height of the image.</summary>
     public required int Height { get; init; }
 
-    /// <summary>MIME type of the stored image (step 1 always <c>image/png</c>).</summary>
+    /// <summary>MIME type of the stored image; currently always <c>image/png</c>.</summary>
     public string MimeType { get; init; } = "image/png";
 }
 

@@ -731,7 +731,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
     [Test]
     public async Task RegenerateAsync_WhenOrchestrationDegrades_EmitsNoticeNamingTheReason()
     {
-        // G16 send/regenerate parity: a rerun whose orchestration does not compile must tell the operator why, exactly as
+        // Send/regenerate parity: a rerun whose orchestration does not compile must tell the operator why, exactly as
         // the send path does — otherwise the same silent degrade reappears on every regenerate.
         await using var provider = await BuildProviderAsync("regeneration-orchestrator-degraded.sqlite").ConfigureAwait(false);
         var persistence = new NodeChatPersistenceService(provider.GetRequiredService<NodeChatPersistenceWriter>());

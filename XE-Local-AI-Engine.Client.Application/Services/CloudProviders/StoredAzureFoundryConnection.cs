@@ -45,7 +45,7 @@ public sealed record StoredAzureFoundryConnection
     public IReadOnlyList<StoredAzureFoundryHeader> Headers { get; init; } = [];
 
     /// <summary>
-    ///     Operator-added extra allowed host suffixes (e.g. an APIM gateway host, Locked #14). Union'd with the built-in
+    ///     Operator-added extra allowed host suffixes, such as an APIM gateway host. Combined with the built-in
     ///     Azure suffixes to form the effective endpoint allowlist. Not secret — round-trips to the UI. Default empty.
     /// </summary>
     public IReadOnlyList<string> AdditionalAllowedHostSuffixes { get; init; } = [];
@@ -79,7 +79,7 @@ public sealed record StoredAzureFoundryConnection
     /// </summary>
     public string? EntraAuthCodeRedirectUri { get; init; }
 
-    // Sealed-record PrintMembers signature is private (Locked #11). Redacts the API key and Entra client secret and
+    // The sealed-record PrintMembers signature is private. It redacts the API key and Entra client secret and
     // delegates per-header secret redaction (each header's own ToString redacts) so no secret value or key ever
     // leaks via ToString.
     private bool PrintMembers(StringBuilder builder)

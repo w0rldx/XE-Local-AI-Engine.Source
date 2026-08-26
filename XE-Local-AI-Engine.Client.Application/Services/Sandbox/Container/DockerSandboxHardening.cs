@@ -76,8 +76,8 @@ internal static class DockerSandboxHardening
             SandboxNetworkPolicy.Unrestricted => BridgeNetworkMode,
             _ => throw new SandboxCapabilityNotSupportedException($"The docker sandbox provider has no mechanism for '{policy}'. It serves "
                                                                   + $"{nameof(SandboxNetworkPolicy.None)} (an empty network namespace) and "
-                                                                  + $"{nameof(SandboxNetworkPolicy.Unrestricted)} (the default bridge). A restricted egress allow-list is the "
-                                                                  + "separate v2 package-proxy project (plan D6).")
+                                                                  + $"{nameof(SandboxNetworkPolicy.Unrestricted)} (the default bridge). Restricted egress allow-lists "
+                                                                  + "are unsupported.")
         };
     }
 

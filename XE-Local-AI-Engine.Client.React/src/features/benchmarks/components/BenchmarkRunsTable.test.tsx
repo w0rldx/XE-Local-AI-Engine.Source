@@ -119,7 +119,13 @@ describe("BenchmarkRunsTable", () => {
 			primaryStopReason: "length",
 			rank: null,
 			rankExclusionReason: "truncated",
-			judge: benchmarkJudgeFixture({ state: "succeeded", score: 96, policyRevision: 2, policyCurrent: true, executionCurrent: true }),
+			judge: benchmarkJudgeFixture({
+				state: "succeeded",
+				score: 96,
+				policyRevision: 2,
+				policyCurrent: true,
+				executionCurrent: true,
+			}),
 		});
 		renderTable([truncated, rankedRun]);
 
@@ -196,10 +202,7 @@ describe("BenchmarkRunsTable", () => {
 				rank,
 				createdAtUtc,
 			});
-		renderTable([
-			quant("q4", "unsloth/Qwen3.8-27B-GGUF:Q4_K_M", 2, 1),
-			quant("q6", "unsloth/Qwen3.8-27B-GGUF:Q6_K", 1, 2),
-		]);
+		renderTable([quant("q4", "unsloth/Qwen3.8-27B-GGUF:Q4_K_M", 2, 1), quant("q6", "unsloth/Qwen3.8-27B-GGUF:Q6_K", 1, 2)]);
 
 		fireEvent.click(screen.getByTestId("benchmark-group-by-model"));
 
@@ -309,7 +312,7 @@ describe("BenchmarkRunsTable", () => {
 	});
 });
 
-// Fidelity is the P2 axis that separates two quants of one model by a number. The rules the cell has to keep: print
+// Fidelity separates two quants of one model by a number. The rules the cell has to keep: print
 // enough decimals for the separation to survive, and never render a KLD figure that was measured against something the
 // project no longer expects — that one is a badge, not a greyed-out number.
 describe("BenchmarkRunsTable fidelity column", () => {
@@ -353,7 +356,11 @@ describe("BenchmarkRunsTable fidelity column", () => {
 		renderTable([
 			benchmarkRunSummaryFixture({
 				id: "ranked",
-				fidelity: benchmarkFidelityFixture({ status: "failed", perplexityMean: null, errorMessage: "llama-perplexity is not installed" }),
+				fidelity: benchmarkFidelityFixture({
+					status: "failed",
+					perplexityMean: null,
+					errorMessage: "llama-perplexity is not installed",
+				}),
 			}),
 		]);
 

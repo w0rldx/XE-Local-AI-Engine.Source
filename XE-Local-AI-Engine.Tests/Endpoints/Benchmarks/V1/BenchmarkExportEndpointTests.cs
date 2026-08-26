@@ -76,7 +76,18 @@ public sealed class BenchmarkExportEndpointTests
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         using var document = JsonDocument.Parse(body);
         var root = document.RootElement;
+        AssertEx.True(root.EnumerateObject()
+                          .Select(static property => property.Name)
+                          .SequenceEqual([
+                              "schemaVersion", "exportedAtUtc", "project", "rankCohort", "runs", "repeatGroups", "llamaBench", "pairwiseFit",
+                              "taskItems", "cells", "scorableItemCount"
+                          ], StringComparer.Ordinal),
+            "The export root must retain its versioned wire schema and property ordering.");
         AssertEx.Equal(BenchmarkExportProjection.SchemaVersion, root.GetProperty("schemaVersion").GetInt32());
+        AssertEx.Equal(expected: 4, root.GetProperty("schemaVersion").GetInt32());
+        AssertEx.Equal(expected: 0, root.GetProperty("taskItems").GetArrayLength());
+        AssertEx.Equal(expected: 0, root.GetProperty("cells").GetArrayLength());
+        AssertEx.Equal(expected: 0, root.GetProperty("scorableItemCount").GetInt32());
         AssertEx.True(root.GetProperty("exportedAtUtc").GetInt64() > 0, "The export must record when it was taken.");
         var project = root.GetProperty("project");
         AssertEx.Equal("Project", project.GetProperty("name").GetString());
@@ -102,6 +113,66 @@ public sealed class BenchmarkExportEndpointTests
         AssertEx.Equal(expected: 1, run.GetProperty("rank").GetInt32());
         AssertEx.False(body.Contains("runtimeSnapshot", StringComparison.OrdinalIgnoreCase));
         AssertEx.False(body.Contains("secret-runtime", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task ExportJson_SchemaFourCarriesTaskItemsCellsAndSummaryCellQuality()
+    {
+        await using var context = CreateContext();
+        var taskItemId = Guid.Parse("70000000-0000-0000-0000-000000000007");
+        var summary = Run(BenchmarkPrimaryStatus.Succeeded) with
+        {
+            TaskItemId = taskItemId,
+            TaskItemIndex = 0,
+            CellKey = "cell:model:1",
+            CellQuality = 84
+        };
+        var full = summary with
+        {
+            CellQuality = 17
+        };
+        ArrangeProject(context);
+        ArrangeRuns(context, summary);
+        context.Store.GetRunAsync(summary.Id, Arg.Any<CancellationToken>()).Returns(full);
+        context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns([
+                   new BenchmarkTaskItemRecord(taskItemId,
+                       ProjectId,
+                       ParentItemId: null,
+                       Index: 0,
+                       BenchmarkTaskItemKinds.Prompt,
+                       Revision: 1,
+                       InputHash: "v1:item",
+                       CountsTowardScore: true,
+                       JsonSerializer.SerializeToUtf8Bytes("Score this answer."),
+                       ReferenceAnswerJson: null,
+                       VerifierConfigJson: null,
+                       GeneratorConfigJson: null,
+                       Version: 1,
+                       CreatedAtUtc: 10,
+                       UpdatedAtUtc: 20)
+               ]);
+        context.Store.ListCellsAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(new BenchmarkCellPage([
+                       new BenchmarkCellRecord("cell:model:1", "model", "v1:aggregate", null, null, null, 84, 1, null,
+                           [new BenchmarkCellItemRecord(summary.Id, taskItemId, 0, 84, null, null)])
+                   ],
+                   new BenchmarkRankCohort(2, "cohort-key", 3, RankedCount: 1, TotalScored: 1),
+                   ScorableItemCount: 1));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var root = document.RootElement;
+        AssertEx.Equal(expected: 4, root.GetProperty("schemaVersion").GetInt32());
+        AssertEx.Equal("Score this answer.", root.GetProperty("taskItems")[0].GetProperty("prompt").GetString());
+        AssertEx.Equal("cell:model:1", root.GetProperty("cells")[0].GetProperty("cellKey").GetString());
+        AssertEx.Equal(expected: 1, root.GetProperty("scorableItemCount").GetInt32());
+        AssertEx.Equal(expected: 84, root.GetProperty("runs")[0].GetProperty("cellQuality").GetInt32(),
+            "The export must reattach cell quality from the ranking summary rather than the full-run record.");
     }
 
     [Test]
@@ -161,10 +232,15 @@ public sealed class BenchmarkExportEndpointTests
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var bytes = await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+        var body = Encoding.UTF8.GetString(bytes);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("text/csv", response.Content.Headers.ContentType?.MediaType);
+        AssertEx.False(bytes.AsSpan().StartsWith(Encoding.UTF8.Preamble), "The CSV contract is UTF-8 without a byte-order mark.");
+        AssertEx.True(body.EndsWith("\r\n", StringComparison.Ordinal), "Every CSV record, including the last, must end with CRLF.");
+        AssertEx.False(body.Replace("\r\n", string.Empty, StringComparison.Ordinal).Contains('\n', StringComparison.Ordinal),
+            "CSV must not contain bare LF record separators.");
         var lines = body.Split("\r\n", StringSplitOptions.RemoveEmptyEntries);
         AssertEx.Equal(expected: 2, lines.Length, "One header row and one run row.");
         // The three repeat-mode columns are APPENDED, never inserted: a consumer that reads this flat export by column
@@ -321,6 +397,102 @@ public sealed class BenchmarkExportEndpointTests
     }
 
     [Test]
+    [Arguments("=formula")]
+    [Arguments("+formula")]
+    [Arguments("-formula")]
+    [Arguments("@formula")]
+    [Arguments("\tformula")]
+    [Arguments("\rformula")]
+    public void ExportCsv_FieldBeginningWithAFormulaSignificantCharacter_IsQuotedAsText(string value)
+    {
+        AssertEx.Equal($"\"'{value}\"", BenchmarkExportCsv.Field(value));
+    }
+
+    [Test]
+    public async Task ExportCsv_IsOfferedAsAnAttachmentNamedAfterTheProjectAndTheMinute()
+    {
+        await using var context = CreateContext();
+        ArrangeProject(context);
+        ArrangeRuns(context, Run());
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var disposition = response.Content.Headers.ContentDisposition;
+        AssertEx.NotNull(disposition);
+        AssertEx.Equal("attachment", disposition!.DispositionType);
+        var fileName = disposition.FileNameStar ?? disposition.FileName?.Trim('"');
+        AssertEx.NotNull(fileName);
+        AssertEx.True(fileName!.StartsWith("benchmark-project-", StringComparison.Ordinal));
+        AssertEx.True(fileName.EndsWith(".csv", StringComparison.Ordinal));
+        var stamp = fileName["benchmark-project-".Length..^".csv".Length];
+        AssertEx.True(DateTime.TryParseExact(stamp, "yyyyMMdd-HHmm", CultureInfo.InvariantCulture, DateTimeStyles.None, out _));
+    }
+
+    [Test]
+    public async Task ExportCsv_UsesTheListingProjectionWithoutReadingFullRunsOrSnapshots()
+    {
+        await using var context = CreateContext();
+        ArrangeProject(context);
+        ArrangeRuns(context, Run());
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export.csv");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(expected: 0, context.Snapshots.Deserialized,
+            "CSV contains only listing columns and must not deserialize a frozen runtime snapshot.");
+        _ = context.Store.DidNotReceive().GetRunAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExportJson_PreservesStoreOrderAndWithholdsStaleKldNumbersAsNull()
+    {
+        await using var context = CreateContext();
+        var secondRunId = Guid.Parse("60000000-0000-0000-0000-000000000006");
+        context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>())
+               .Returns(Project() with
+               {
+                   FidelityEnabled = true,
+                   FidelityKldEnabled = true,
+                   FidelityKldBaseModelName = "base.gguf",
+                   FidelityKldBaseFingerprint = BaseFingerprint
+               });
+        ArrangeEmptySuite(context);
+        var currentDigest = BenchmarkKldCacheKey.Create(BaseFingerprint, BenchmarkFidelityCorpus.Require().Sha256,
+            BenchmarkFidelityPolicy.DefaultChunks).Digest;
+        ArrangeRuns(context,
+            Run(BenchmarkPrimaryStatus.Succeeded, runId: secondRunId) with
+            {
+                Fidelity = Fidelity("v1:" + new string('9', 64))
+            },
+            Run(BenchmarkPrimaryStatus.Succeeded) with
+            {
+                Fidelity = Fidelity(currentDigest)
+            });
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var runs = document.RootElement.GetProperty("runs");
+        AssertEx.Equal(secondRunId.ToString(), runs[0].GetProperty("id").GetString());
+        AssertEx.Equal(RunId.ToString(), runs[1].GetProperty("id").GetString());
+        var stale = runs[0].GetProperty("fidelity");
+        AssertEx.Equal(BenchmarkFidelityKldStates.Stale, stale.GetProperty("kldState").GetString());
+        AssertEx.Equal(JsonValueKind.Null, stale.GetProperty("kldMean").ValueKind);
+        AssertEx.Equal(JsonValueKind.Null, stale.GetProperty("kldP99").ValueKind);
+        AssertEx.Equal(JsonValueKind.Null, stale.GetProperty("topTokenAgreement").ValueKind);
+        AssertEx.Equal(6.7977d, stale.GetProperty("perplexityMean").GetDouble());
+        AssertEx.Equal(BenchmarkFidelityKldStates.Ok, runs[1].GetProperty("fidelity").GetProperty("kldState").GetString());
+    }
+
+    [Test]
     public async Task ExportJson_WithAJudgePolicyStoredUnderAnOlderPromptVersion_StillExports()
     {
         // Same read path as the project detail (BenchmarkJudgePolicyProjection). A version constant moving must not
@@ -354,7 +526,11 @@ public sealed class BenchmarkExportEndpointTests
     private static void ArrangeProject(Context context)
     {
         context.Store.GetProjectAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Project());
+        ArrangeEmptySuite(context);
+    }
 
+    private static void ArrangeEmptySuite(Context context)
+    {
         // The suite sections of schema 4. A project with no item rows is the pre-suite shape these tests describe, so
         // both come back empty rather than absent — the export still has to say what the ranking counted.
         context.Store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns([]);
@@ -366,9 +542,9 @@ public sealed class BenchmarkExportEndpointTests
     {
         context.Store.ListAllRunsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkRunPage(runs.Select(static run => run with
-                   {
-                       Rank = 1
-                   }).ToArray(),
+               {
+                   Rank = 1
+               }).ToArray(),
                    runs.Length,
                    new BenchmarkRankCohort(2, "cohort-key", 3, RankedCount: 1, TotalScored: 1)));
         foreach (var run in runs)

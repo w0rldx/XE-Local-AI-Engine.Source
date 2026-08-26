@@ -13,7 +13,7 @@ validation evidence live in this repository and must stay current with runtime b
 Official binaries are portable-only: Windows ships a Velopack `Portable.zip` with no `Setup.exe`, and Linux ships a
 Velopack AppImage rather than a ZIP. Both formats are self-updating. Release assets are currently unsigned because no
 signing certificate exists; verify `CHECKSUMS.sha256` and review `RELEASE-MANIFEST.json` / `RELEASE.spdx.json` before
-running them. Signing is planned.
+running them. Signing is not configured.
 
 > **Installing on behalf of an AI agent?** An external agent (Claude Code, Codex CLI, Cursor, and
 > others) can install, set up, start, and connect to this engine with no human in the browser:
@@ -60,9 +60,9 @@ running them. Signing is planned.
   The operator registers a trusted local Git repository once, then selects it by an opaque ID and alias; the host path stays internal to the node. The agent works in a managed worktree outside the selected source
   repository, and only a reviewed apply whose base and evidence hashes still match may change that source. Generated source, MSBuild targets, source generators, and tests execute as the host user with the host's
   filesystem and network access. The Process sandbox and Agent Home controls constrain application-mediated paths and bytes; they are not an operating-system security boundary. Set
-  `Development:Enabled=false` as an emergency switch when that execution posture is not intended. MXC remains future provider work.
-  [ADR 0004](docs/adr/0004-development-mode-container-execution-docker-stopgap.md) (accepted 2026-07-29) moves this feature's execution onto a **Docker container provider**, behind the same provider seam and as an
-  interim step ahead of MXC. That provider has **shipped and is opt-in**: set `Development:Sandbox:Provider=docker` to select it. Leave it unset — as the shipped configuration does — and Development Mode keeps running on
+  `Development:Enabled=false` as an emergency switch when that execution posture is not intended. MXC is not integrated, and the current provider seams do not constitute an MXC security boundary.
+  [ADR 0004](docs/adr/0004-development-mode-container-execution-docker-stopgap.md) (accepted 2026-07-29) defines an opt-in **Docker container provider** behind the same provider seam as a
+  bounded stopgap that leaves the MXC provider seam open. That provider has **shipped and is opt-in**: set `Development:Sandbox:Provider=docker` to select it. Leave it unset — as the shipped configuration does — and Development Mode keeps running on
   the process provider exactly as described above. On a node that *does* select it, **a running Docker daemon is a hard requirement** — there is deliberately no unisolated fallback, so a machine without one gets no
   Development Mode rather than a quietly weaker one. Docker stays scoped to this feature: chat, embeddings, model acquisition and image generation never require it. See
   [Development Mode container implementation status](docs/roadmaps/development-mode-container-status.md) for the maintained record of what is implemented.
@@ -109,7 +109,7 @@ registers a current-user systemd service on Linux or limited current-user Schedu
 - Only the Node Web Server talks to the C0re platform over `WorkerHub`.
 - Worker credentials, cloud-provider credentials, and external endpoint tokens stay local and must not be returned to the browser or written to logs/transcripts.
 - Local admin endpoints must be loopback/local-only, authenticated, strict about `Host`/`Origin`, and secret-redacted.
-- Any future installer or packaging effort must not create background autostart behavior unless
+- Installers and packaging must not create background autostart behavior unless
   explicitly opted in via `--autostart` (user-scope only); autostart is never the default.
 
 ## Documentation map

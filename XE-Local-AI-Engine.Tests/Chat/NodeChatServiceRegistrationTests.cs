@@ -24,7 +24,7 @@ public sealed class NodeChatServiceRegistrationTests : IDisposable
     }
 
     [Test]
-    public async Task AddServices_RegistersNodeChatPhase44ServicesWithValidateScopes()
+    public async Task AddServices_RegistersNodeChatPersistenceServicesWithValidateScopes()
     {
         var builder = CreateBuilder();
         builder.AddServices(builder.Configuration);
@@ -48,7 +48,7 @@ public sealed class NodeChatServiceRegistrationTests : IDisposable
     }
 
     [Test]
-    public void AddServices_DoesNotRegisterPhase45OrPhase46ChatEndpoints()
+    public void AddServices_DoesNotRegisterNodeChatEndpoints()
     {
         var builder = CreateBuilder();
         builder.AddServices(builder.Configuration);

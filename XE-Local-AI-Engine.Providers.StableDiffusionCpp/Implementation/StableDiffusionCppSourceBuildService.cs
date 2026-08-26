@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
-using System.Runtime.ExceptionServices;
-using System.Security.Cryptography;
-using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
@@ -31,6 +28,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
     private readonly IStableDiffusionManagedSourceBuildSignal _managedSignal;
     private readonly IStableDiffusionInstalledRuntimeStore _runtimeStore;
     private readonly IImageRuntimeActivityGate _activityGate;
+    private readonly StableDiffusionCppRuntimeAdoption _adoption;
     private readonly ILogger<StableDiffusionCppSourceBuildService> _logger;
     private readonly IStableDiffusionCppSourceBuildEventPublisher _publisher;
     private readonly IStableDiffusionCppSourceBuildPrerequisiteProbe _prerequisiteProbe;
@@ -89,11 +87,11 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         _cacheRoot = cacheRoot;
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+        _adoption = new StableDiffusionCppRuntimeAdoption(_cacheRoot, _runtimeStore, _managedSignal, _logger);
         _isLinux = isLinux ?? OperatingSystem.IsLinux();
     }
 
     private string BuildRoot => Path.Combine(_cacheRoot, "stable-diffusion.cpp", "source-build");
-    private string AdoptionJournalPath => Path.Combine(BuildRoot, "adoption-journal.json");
     private string MarkerPath => Path.Combine(WorkRoot, ".build-in-progress");
     private string RuntimeRoot => Path.Combine(_cacheRoot, "stable-diffusion.cpp", "managed");
     private string WorkRoot => Path.Combine(BuildRoot, ".work");
@@ -439,7 +437,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
                 .ConfigureAwait(false);
 
             SetPhase(StableDiffusionCppSourceBuildPhase.Adopting);
-            await AdoptBuildAsync(buildDir, serverPath, descriptor, ct).ConfigureAwait(false);
+            await _adoption.AdoptAsync(buildDir, serverPath, descriptor, ct).ConfigureAwait(false);
             return new BuildCompletion(StableDiffusionCppSourceBuildPhase.Completed, Error: null);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -609,7 +607,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
             }
         }
 
-        await RecoverAdoptionAsync(ct).ConfigureAwait(false);
+        await _adoption.RecoverAsync(ct).ConfigureAwait(false);
 
         if (File.Exists(MarkerPath) || Directory.Exists(WorkRoot))
         {
@@ -633,390 +631,11 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         }
     }
 
-    private async Task RecoverAdoptionAsync(CancellationToken ct)
-    {
-        if (!File.Exists(AdoptionJournalPath))
-        {
-            return;
-        }
-
-        StableDiffusionCppAdoptionJournal journal;
-        try
-        {
-            await using var stream = File.OpenRead(AdoptionJournalPath);
-            journal = await JsonSerializer.DeserializeAsync<StableDiffusionCppAdoptionJournal>(stream, cancellationToken: ct).ConfigureAwait(false)
-                      ?? throw new StableDiffusionRuntimeException("The managed image runtime adoption journal is invalid.");
-        }
-        catch (JsonException exception)
-        {
-            throw new StableDiffusionRuntimeException("The managed image runtime adoption journal is invalid.", exception);
-        }
-
-        var paths = GetAdoptionPaths(journal);
-        var installed = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
-        var committed = installed is not null
-                        && RuntimeStatesMatch(installed, journal.NewState)
-                        && Directory.Exists(paths.Destination);
-        if (committed)
-        {
-            try
-            {
-                CleanupCommittedAdoption(paths);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                _logger.LogWarning(exception, "A committed stable-diffusion.cpp runtime cleanup remains pending and will be retried.");
-            }
-
-            return;
-        }
-
-        if (journal.HadPreviousDestination
-            && !Directory.Exists(paths.Backup)
-            && Directory.Exists(paths.Destination)
-            && journal.PreviousState is not null
-            && installed is not null
-            && RuntimeStatesMatch(installed, journal.PreviousState))
-        {
-            if (await ManagedRuntimeBytesMatchStateAsync(journal.PreviousState, paths.Destination, ct).ConfigureAwait(false))
-            {
-                DeleteDirectoryStrict(paths.Failed);
-                DeleteFileStrict(AdoptionJournalPath);
-                return;
-            }
-
-            throw new StableDiffusionRuntimeException("The previous managed image runtime backup is missing and the installed bytes cannot be safely identified.");
-        }
-
-        await RollbackAdoptionAsync(journal, paths).ConfigureAwait(false);
-    }
-
     private void PrepareWorkTree()
     {
         TryDeleteDirectory(WorkRoot);
-        CreateOwnerOnlyDirectory(BuildRoot);
-        CreateOwnerOnlyDirectory(WorkRoot);
-    }
-
-    private async Task AdoptBuildAsync(string buildDir,
-        string serverPath,
-        StableDiffusionCppSourceBuildDescriptor descriptor,
-        CancellationToken ct)
-    {
-        var relativeServer = Path.GetRelativePath(buildDir, serverPath);
-        if (relativeServer.StartsWith("..", StringComparison.Ordinal))
-        {
-            throw new StableDiffusionRuntimeException("The built sd-server path escaped the build directory.");
-        }
-
-        var backendRoot = Path.Combine(RuntimeRoot, BackendSlug(descriptor.Backend));
-        var destination = Path.Combine(backendRoot, descriptor.ResolvedCommit!);
-        var staging = Path.Combine(backendRoot, $".staging-{descriptor.ResolvedCommit}-{descriptor.BuildId:N}");
-        var backup = Path.Combine(backendRoot, $".backup-{descriptor.ResolvedCommit}-{descriptor.BuildId:N}");
-        var failed = Path.Combine(backendRoot, $".failed-{descriptor.ResolvedCommit}-{descriptor.BuildId:N}");
-        CreateOwnerOnlyDirectory(RuntimeRoot);
-        CreateOwnerOnlyDirectory(backendRoot);
-        TryDeleteDirectory(staging);
-        TryDeleteDirectory(backup);
-        TryDeleteDirectory(failed);
-        Directory.Move(buildDir, staging);
-        try
-        {
-            HardenManagedTree(staging);
-            var stagedServer = Path.GetFullPath(Path.Combine(staging, relativeServer));
-            ValidateAdoptedServer(staging, stagedServer);
-            var digest = await ComputeSha256Async(stagedServer, ct).ConfigureAwait(false);
-            var finalServer = Path.GetFullPath(Path.Combine(destination, relativeServer));
-            var state = new StableDiffusionInstalledRuntimeState(StableDiffusionInstalledRuntimeValidity.Active,
-                descriptor.Backend,
-                descriptor.Repository,
-                descriptor.ResolvedCommit!,
-                descriptor.Source,
-                descriptor.RevisionMode,
-                descriptor.RequestedCommit,
-                Path.GetDirectoryName(finalServer),
-                digest,
-                DateTimeOffset.UtcNow);
-            var previousState = await _runtimeStore.ReadAsync(ct).ConfigureAwait(false);
-            var hadPreviousDestination = Directory.Exists(destination);
-            var journal = new StableDiffusionCppAdoptionJournal(descriptor.BuildId,
-                descriptor.Backend,
-                descriptor.ResolvedCommit!,
-                hadPreviousDestination,
-                previousState,
-                state);
-            var paths = GetAdoptionPaths(journal);
-            await WriteAdoptionJournalAsync(journal, ct).ConfigureAwait(false);
-
-            try
-            {
-                if (hadPreviousDestination)
-                {
-                    Directory.Move(destination, backup);
-                }
-
-                Directory.Move(staging, destination);
-                ValidateAdoptedServer(destination, finalServer);
-                await _runtimeStore.WriteAsync(state, CancellationToken.None).ConfigureAwait(false);
-            }
-            catch (Exception adoptionException)
-            {
-                try
-                {
-                    await RollbackAdoptionAsync(journal, paths).ConfigureAwait(false);
-                }
-                catch (Exception rollbackException)
-                {
-                    _managedSignal.Clear();
-                    throw new StableDiffusionRuntimeException("The managed image runtime adoption failed and its previous state could not be restored.",
-                        new AggregateException(adoptionException, rollbackException));
-                }
-
-                ExceptionDispatchInfo.Capture(adoptionException).Throw();
-                throw;
-            }
-
-            _managedSignal.SetActive(descriptor.Backend);
-            try
-            {
-                CleanupCommittedAdoption(paths);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                _logger.LogWarning(exception, "The previous stable-diffusion.cpp runtime cleanup is pending and will be retried.");
-            }
-        }
-        catch
-        {
-            TryDeleteDirectory(staging);
-            throw;
-        }
-    }
-
-    private async Task RollbackAdoptionAsync(StableDiffusionCppAdoptionJournal journal, AdoptionPaths paths)
-    {
-        _managedSignal.Clear();
-        if (Directory.Exists(paths.Destination))
-        {
-            if (Directory.Exists(paths.Failed))
-            {
-                DeleteDirectoryStrict(paths.Failed);
-            }
-
-            Directory.Move(paths.Destination, paths.Failed);
-        }
-
-        if (journal.HadPreviousDestination)
-        {
-            if (!Directory.Exists(paths.Backup))
-            {
-                throw new StableDiffusionRuntimeException("The previous managed image runtime backup is missing.");
-            }
-
-            Directory.Move(paths.Backup, paths.Destination);
-        }
-
-        if (paths.RetiredPrevious is not null && Directory.Exists(paths.RetiredPrevious))
-        {
-            if (paths.PreviousInstallRoot is null || Directory.Exists(paths.PreviousInstallRoot))
-            {
-                throw new StableDiffusionRuntimeException("The previous managed image runtime could not be recovered.");
-            }
-
-            Directory.Move(paths.RetiredPrevious, paths.PreviousInstallRoot);
-        }
-
-        await RestorePreviousStateAsync(journal.PreviousState).ConfigureAwait(false);
-        DeleteDirectoryStrict(paths.Failed);
-        DeleteFileStrict(AdoptionJournalPath);
-    }
-
-    private async Task WriteAdoptionJournalAsync(StableDiffusionCppAdoptionJournal journal, CancellationToken ct)
-    {
-        CreateOwnerOnlyDirectory(BuildRoot);
-        var temporaryPath = AdoptionJournalPath + ".tmp";
-        await using (var stream = new FileStream(temporaryPath,
-                         FileMode.Create,
-                         FileAccess.Write,
-                         FileShare.None,
-                         bufferSize: 4096,
-                         FileOptions.Asynchronous | FileOptions.WriteThrough))
-        {
-            await JsonSerializer.SerializeAsync(stream, journal, cancellationToken: ct).ConfigureAwait(false);
-            await stream.FlushAsync(ct).ConfigureAwait(false);
-        }
-
-        File.Move(temporaryPath, AdoptionJournalPath, overwrite: true);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(AdoptionJournalPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
-    }
-
-    private AdoptionPaths GetAdoptionPaths(StableDiffusionCppAdoptionJournal journal)
-    {
-        if (journal.NewCommit.Length != 40
-            || !journal.NewCommit.All(Uri.IsHexDigit)
-            || journal.NewState.SourceCommit != journal.NewCommit
-            || journal.NewState.DesiredBackend != journal.NewBackend)
-        {
-            throw new StableDiffusionRuntimeException("The managed image runtime adoption journal is invalid.");
-        }
-
-        var backendRoot = Path.Combine(RuntimeRoot, BackendSlug(journal.NewBackend));
-        var destination = Path.Combine(backendRoot, journal.NewCommit);
-        var backup = Path.Combine(backendRoot, $".backup-{journal.NewCommit}-{journal.BuildId:N}");
-        var failed = Path.Combine(backendRoot, $".failed-{journal.NewCommit}-{journal.BuildId:N}");
-        string? previousInstallRoot = null;
-        string? retiredPrevious = null;
-        if (journal.PreviousState is not null)
-        {
-            previousInstallRoot = GetManagedInstallRoot(journal.PreviousState);
-            if (!PathsEqual(previousInstallRoot, destination))
-            {
-                retiredPrevious = Path.Combine(Path.GetDirectoryName(previousInstallRoot)!,
-                    $".retired-{journal.PreviousState.SourceCommit}-{journal.BuildId:N}");
-            }
-        }
-
-        return new AdoptionPaths(destination, backup, failed, previousInstallRoot, retiredPrevious);
-    }
-
-    private void CleanupCommittedAdoption(AdoptionPaths paths)
-    {
-        if (paths.RetiredPrevious is not null && paths.PreviousInstallRoot is not null)
-        {
-            if (Directory.Exists(paths.PreviousInstallRoot) && !Directory.Exists(paths.RetiredPrevious))
-            {
-                Directory.Move(paths.PreviousInstallRoot, paths.RetiredPrevious);
-            }
-
-            DeleteDirectoryStrict(paths.RetiredPrevious);
-        }
-
-        DeleteDirectoryStrict(paths.Backup);
-        DeleteDirectoryStrict(paths.Failed);
-        DeleteFileStrict(AdoptionJournalPath);
-    }
-
-    private static bool RuntimeStatesMatch(StableDiffusionInstalledRuntimeState actual,
-        StableDiffusionInstalledRuntimeState expected)
-    {
-        return actual.Validity == StableDiffusionInstalledRuntimeValidity.Active
-               && actual.DesiredBackend == expected.DesiredBackend
-               && string.Equals(actual.SourceRepository, expected.SourceRepository, StringComparison.Ordinal)
-               && string.Equals(actual.SourceCommit, expected.SourceCommit, StringComparison.Ordinal)
-               && actual.SourceSelection == expected.SourceSelection
-               && actual.SourceRevisionMode == expected.SourceRevisionMode
-               && string.Equals(actual.SourceRequestedCommit, expected.SourceRequestedCommit, StringComparison.Ordinal)
-               && string.Equals(actual.SourceBuildPath, expected.SourceBuildPath, StringComparison.Ordinal)
-               && string.Equals(actual.ServerSha256, expected.ServerSha256, StringComparison.Ordinal);
-    }
-
-    private static async Task<bool> ManagedRuntimeBytesMatchStateAsync(StableDiffusionInstalledRuntimeState state,
-        string installRoot,
-        CancellationToken ct)
-    {
-        if (state.SourceBuildPath is not { Length: > 0 } buildPath
-            || state.ServerSha256 is not { Length: 64 } expectedSha
-            || !expectedSha.All(Uri.IsHexDigit))
-        {
-            return false;
-        }
-
-        try
-        {
-            var fullInstallRoot = Path.GetFullPath(installRoot);
-            var fullBuildPath = Path.GetFullPath(buildPath);
-            var installPrefix = fullInstallRoot + Path.DirectorySeparatorChar;
-            if (!string.Equals(fullBuildPath, fullInstallRoot, StringComparison.Ordinal)
-                && !fullBuildPath.StartsWith(installPrefix,
-                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            var serverPath = Path.Combine(fullBuildPath, OperatingSystem.IsWindows() ? "sd-server.exe" : "sd-server");
-            if (!File.Exists(serverPath) || new FileInfo(serverPath).LinkTarget is not null)
-            {
-                return false;
-            }
-
-            var actualSha = await ComputeSha256Async(serverPath, ct).ConfigureAwait(false);
-            return string.Equals(actualSha, expectedSha, StringComparison.OrdinalIgnoreCase);
-        }
-        catch (Exception exception) when (exception is IOException
-                                              or UnauthorizedAccessException
-                                              or ArgumentException
-                                              or NotSupportedException)
-        {
-            return false;
-        }
-    }
-
-    private async Task RestorePreviousStateAsync(StableDiffusionInstalledRuntimeState? previousState)
-    {
-        if (previousState is null)
-        {
-            await _runtimeStore.DeleteAsync(CancellationToken.None).ConfigureAwait(false);
-            _managedSignal.Clear();
-            return;
-        }
-
-        await _runtimeStore.WriteAsync(previousState, CancellationToken.None).ConfigureAwait(false);
-        if (previousState.Validity == StableDiffusionInstalledRuntimeValidity.Active)
-        {
-            _managedSignal.SetActive(previousState.DesiredBackend);
-        }
-        else
-        {
-            _managedSignal.Clear();
-        }
-    }
-
-    private void ValidateAdoptedServer(string installRoot, string serverPath)
-    {
-        var cacheRoot = Path.GetFullPath(_cacheRoot);
-        var fullInstallRoot = Path.GetFullPath(installRoot);
-        var fullServerPath = Path.GetFullPath(serverPath);
-        var installPrefix = fullInstallRoot + Path.DirectorySeparatorChar;
-        var cachePrefix = cacheRoot + Path.DirectorySeparatorChar;
-        if (!fullInstallRoot.StartsWith(cachePrefix, StringComparison.Ordinal)
-            || !fullServerPath.StartsWith(installPrefix, StringComparison.Ordinal)
-            || !File.Exists(fullServerPath)
-            || new FileInfo(fullServerPath).LinkTarget is not null)
-        {
-            throw new StableDiffusionRuntimeException("The built sd-server failed managed-path validation.");
-        }
-
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
-        var serverMode = File.GetUnixFileMode(fullServerPath);
-        if ((serverMode & UnixFileMode.OtherWrite) != UnixFileMode.None
-            || (serverMode & UnixFileMode.UserExecute) == UnixFileMode.None)
-        {
-            throw new StableDiffusionRuntimeException("The built sd-server has insecure permissions.");
-        }
-
-        var directory = Path.GetDirectoryName(fullServerPath);
-        while (!string.IsNullOrEmpty(directory) && directory.Length >= cacheRoot.Length)
-        {
-            if (new DirectoryInfo(directory).LinkTarget is not null
-                || (File.GetUnixFileMode(directory) & UnixFileMode.OtherWrite) != UnixFileMode.None)
-            {
-                throw new StableDiffusionRuntimeException("The built sd-server path chain is insecure.");
-            }
-
-            if (string.Equals(directory, cacheRoot, StringComparison.Ordinal))
-            {
-                break;
-            }
-
-            directory = Path.GetDirectoryName(directory);
-        }
+        StableDiffusionCppRuntimeAdoption.CreateOwnerOnlyDirectory(BuildRoot);
+        StableDiffusionCppRuntimeAdoption.CreateOwnerOnlyDirectory(WorkRoot);
     }
 
     private void DeleteManagedRuntime(StableDiffusionInstalledRuntimeState installed)
@@ -1096,47 +715,12 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         }
     }
 
-    private static async Task<string> ComputeSha256Async(string path, CancellationToken ct)
-    {
-        await using var stream = File.OpenRead(path);
-        return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, ct).ConfigureAwait(false));
-    }
-
     private static void EnsureExecutable(string path)
     {
         if (!OperatingSystem.IsWindows())
         {
             var mode = File.GetUnixFileMode(path);
             File.SetUnixFileMode(path, mode | UnixFileMode.UserExecute);
-        }
-    }
-
-    private static void HardenManagedTree(string root)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
-        foreach (var directory in Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories).Prepend(root))
-        {
-            File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-
-        foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
-        {
-            var existing = File.GetUnixFileMode(file);
-            var execute = existing & UnixFileMode.UserExecute;
-            File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite | execute);
-        }
-    }
-
-    private static void CreateOwnerOnlyDirectory(string path)
-    {
-        Directory.CreateDirectory(path);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
     }
 
@@ -1161,13 +745,6 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         return [.. GitHardeningArguments, .. arguments];
     }
 
-    private static bool PathsEqual(string first, string second)
-    {
-        return string.Equals(Path.GetFullPath(first).TrimEnd(Path.DirectorySeparatorChar),
-            Path.GetFullPath(second).TrimEnd(Path.DirectorySeparatorChar),
-            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
-    }
-
     private static void TryDeleteDirectory(string path)
     {
         try
@@ -1183,51 +760,10 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
         }
     }
 
-    private static void DeleteDirectoryStrict(string path)
-    {
-        if (Directory.Exists(path))
-        {
-            Directory.Delete(path, recursive: true);
-        }
-
-        if (Directory.Exists(path))
-        {
-            throw new IOException("A managed image runtime directory could not be removed.");
-        }
-    }
-
-    private static void DeleteFileStrict(string path)
-    {
-        if (File.Exists(path))
-        {
-            File.Delete(path);
-        }
-
-        if (File.Exists(path))
-        {
-            throw new IOException("The managed image runtime adoption journal could not be removed.");
-        }
-    }
-
     private static string DefaultCacheRoot()
     {
         return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XE-Local-AI-Engine");
     }
 
     private sealed record BuildCompletion(StableDiffusionCppSourceBuildPhase Phase, string? Error);
-
-    private sealed record AdoptionPaths(
-        string Destination,
-        string Backup,
-        string Failed,
-        string? PreviousInstallRoot,
-        string? RetiredPrevious);
 }
-
-internal sealed record StableDiffusionCppAdoptionJournal(
-    Guid BuildId,
-    SdGpuBackend NewBackend,
-    string NewCommit,
-    bool HadPreviousDestination,
-    StableDiffusionInstalledRuntimeState? PreviousState,
-    StableDiffusionInstalledRuntimeState NewState);

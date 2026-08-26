@@ -22,14 +22,10 @@ import {
 /**
  * The disk side of the quant-fidelity axis. Perplexity costs nothing but a pass over a shipped corpus; KL divergence
  * needs a cached logit file for the BASE model, which is ~1.75 bytes per logit — 200 chunks of a 150k-vocabulary model
- * is 25 GB. So the estimate is shown BEFORE the operator commits to it and never discovered afterwards (plan §2 #3),
+ * is 25 GB. The estimate is therefore shown before the operator commits to it rather than after the cache write starts,
  * and it is read only while this panel is open, because the answer moves whenever the disk does.
- *
- * follow-up: the KLD opt-in toggle and the base-model selector belong here, but `BenchmarkProjectMutationRequest` /
- * `BenchmarkProjectDetailResponse` do not carry `fidelityEnabled`, `fidelityKldEnabled`, `fidelityChunks` or
- * `fidelityKldBaseModelName` yet — the columns exist on `BenchmarkProject` but were never projected onto the endpoint
- * DTOs in S1. Both controls go in unchanged the moment those four members reach the generated client; until then this
- * panel reports the cost and manages the cache, and the measurement itself is triggered per run from the runs table.
+ * The project fidelity contract carries the opt-in, chunk count, and base-model selection. This panel owns those
+ * settings, the live disk estimate, and cache management; individual run measurements remain actions in the runs table.
  */
 interface BenchmarkFidelityPanelProps {
 	projectId: string;
@@ -195,10 +191,7 @@ export function BenchmarkFidelityPanel({ projectId, fidelity, projectVersion, mo
 										},
 										onError: (error) =>
 											toast.error(
-												apiErrorMessage(
-													error,
-													t("pages.benchmarks.fidelity.saveError", "Could not save the fidelity settings."),
-												),
+												apiErrorMessage(error, t("pages.benchmarks.fidelity.saveError", "Could not save the fidelity settings.")),
 											),
 									},
 								)

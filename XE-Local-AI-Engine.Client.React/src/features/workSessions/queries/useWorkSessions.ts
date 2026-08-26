@@ -57,7 +57,7 @@ export function workSessionInvalidationKey(
 // otherwise complete, so the client always reads them whole from 0.
 const FULL_FEED = { sinceSeq: 0 } as const;
 export const workSessionEventsPageSize = 200;
-/** P2 clamps `limit` at 500; asking for more is silently truncated, so the tab stops offering "load more" there. */
+/** The server clamps `limit` at 500; asking for more is silently truncated, so the tab stops offering "load more" there. */
 export const workSessionEventsMaxLimit = 500;
 
 interface FeedOptions {
@@ -156,8 +156,8 @@ export function useDeleteWorkSession() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		...withResponseValidation(deleteWorkSessionMutation()),
-		// The delete also removes the OWNED conversation, so the caller must navigate away rather than keep a route
-		// open on it (P3 §4 row 5). Only the list is refreshed here.
+		// The delete also removes the owned conversation, so the caller must navigate away rather than keep a route
+		// open on it. Only the list is refreshed here.
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: workSessionInvalidationKey(workSessionQueryIds.list) }),
 	});
 }

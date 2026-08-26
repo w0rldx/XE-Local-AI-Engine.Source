@@ -469,7 +469,7 @@ public sealed class BenchmarkJudgeExecutorTests
     }
 
     // ------------------------------------------------------------------------------------------------------------
-    // C4 — verifiable criteria. The run's stored transcript is a thinking model's: reasoning parts around the single
+    // Verifiable criteria. The run's stored transcript is a thinking model's: reasoning parts around the single
     // visible answer part "answer" (see Run below), so every fixture here verifies against exactly that text.
     // ------------------------------------------------------------------------------------------------------------
 
@@ -582,8 +582,8 @@ public sealed class BenchmarkJudgeExecutorTests
     [Test]
     public async Task Execute_WhenAVerifierCannotRun_FailsTheAttemptAndNeverScoresIt()
     {
-        // R5. The config is one the strict validator would have refused, so reaching the executor means it arrived
-        // some other way — a hand-edited row, a policy stored by a future build. Either way the honest answer is a
+        // The config is one the strict validator would have refused, so reaching the executor means it arrived some
+        // other way — a hand-edited row, a policy stored by a future build. Either way the honest answer is a
         // failed judging with a reason, not a 0 that reads as "the answer was bad".
         var installed = Installed();
         var snapshot = Snapshot(installed);

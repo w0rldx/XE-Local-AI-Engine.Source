@@ -74,8 +74,7 @@ internal static class CloudSettingsEndpointDtoMapper
 
     /// <summary>
     ///     Maps a save request to the stored config. Pure: the secret merges that need prior state run in the
-    ///     endpoint and are passed in via <paramref name="mergedHeaders" /> and <paramref name="mergedEntraClientSecret" />
-    ///     (Locked #12 pattern).
+    ///     endpoint and are passed in via <paramref name="mergedHeaders" /> and <paramref name="mergedEntraClientSecret" />.
     /// </summary>
     public static StoredCloudProviderConfig ToStoredConfig(this SaveCloudSettingsRequest request,
         IReadOnlyList<StoredAzureFoundryHeader> mergedHeaders,

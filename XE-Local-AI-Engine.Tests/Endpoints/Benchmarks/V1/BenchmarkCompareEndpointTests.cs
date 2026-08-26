@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The compare read path (B3). The store is a substitute, so every test here states the cell table it is reading
+///     The compare read path. The store is a substitute, so every test here states the cell table it is reading
 ///     — which is the only input the paired delta has.
 /// </summary>
 public sealed class BenchmarkCompareEndpointTests

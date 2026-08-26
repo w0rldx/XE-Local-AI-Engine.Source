@@ -22,9 +22,9 @@ public enum McpTrustTier
     Sandboxed = 0,
 
     /// <summary>
-    ///     A plain host child, exactly as every stdio server ran before Phase 2 — the operator's filesystem and the
-    ///     operator's network, with only the environment scrubbed. Reachable only by an explicit per-server operator
-    ///     opt-in, never as a fallback and never inferred from the command. Its tools are
+    ///     A plain host child with access to the operator's filesystem and network and only the environment scrubbed.
+    ///     Reachable only by an explicit per-server operator opt-in, never as a fallback and never inferred from the
+    ///     command. Its tools are
     ///     <c>ToolCategory.WriteExecute</c>.
     /// </summary>
     PrivilegedHost = 1,

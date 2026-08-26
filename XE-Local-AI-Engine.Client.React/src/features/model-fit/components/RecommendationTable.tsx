@@ -16,7 +16,7 @@ import type { ModelFitRecommendation } from "@/features/model-fit/models/ModelFi
 interface RecommendationTableProps {
 	recommendations: readonly ModelFitRecommendation[];
 	// When provided, an action cell renders a Download (GGUF) button per row. The parent drives the actual download
-	// (and progress / cancel) through the Lane-B store seam; the table only signals intent and reflects the in-flight name.
+	// (and progress / cancel) through the download store; the table only signals intent and reflects the in-flight name.
 	onDownload?: (recommendation: ModelFitRecommendation) => void;
 	// Model name currently being downloaded (the parent's in-flight download), used to disable that row's button.
 	downloadingModelName?: string | null;

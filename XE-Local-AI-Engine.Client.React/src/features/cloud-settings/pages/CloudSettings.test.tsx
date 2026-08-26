@@ -149,8 +149,11 @@ describe("CloudSettings — Azure Foundry connection form (generated hey-api dat
 		fireEvent.click(screen.getByTestId("cloud-settings-add-model"));
 		expect(screen.getAllByLabelText(/Deployment name/i)).toHaveLength(2);
 
-		fireEvent.click(screen.getByTestId("cloud-settings-remove-model-1"));
+		const secondDeployment = screen.getAllByLabelText(/Deployment name/i)[1] as HTMLInputElement;
+		secondDeployment.focus();
+		fireEvent.click(screen.getByTestId("cloud-settings-remove-model-0"));
 		expect(screen.getAllByLabelText(/Deployment name/i)).toHaveLength(1);
+		expect(document.activeElement).toBe(secondDeployment);
 	});
 
 	it("saves the nested Azure Foundry connection body", async () => {

@@ -110,8 +110,8 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
     [Test]
     public async Task LegacyRunsWithNoTaskItem_RankExactlyAsBefore_EvenAfterItemZeroIsMaterialized()
     {
-        // R2 for stored rows: a project frozen before task suites keeps ranking after something materializes its
-        // item 0. The materialized item must not turn every historical singleton into an incomplete cell.
+        // A project frozen before task suites keeps ranking after something materializes its item 0. The materialized
+        // item must not turn every historical singleton into an incomplete cell.
         await using var context = await CreateDatabaseAsync("cell-legacy.sqlite").ConfigureAwait(false);
         var store = new BenchmarkStore(context, TimeProvider.System);
         var project = await store.CreateProjectAsync(NewProject()).ConfigureAwait(false);

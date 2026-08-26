@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { searchKnowledgeMutation } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
@@ -32,9 +32,10 @@ export function useKnowledgeSearch(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 	const activeCollectionRef = useRef(collectionId);
 	const previousCollectionRef = useRef(collectionId);
 	const requestGenerationRef = useRef(0);
-	// Assignment during render closes the narrow gap before effects run: a response resolving immediately after a
-	// collection-switch render already sees the new namespace and cannot commit its old collection's results.
-	activeCollectionRef.current = collectionId;
+	// Commit the active namespace before the browser can deliver events or query completions for the newly rendered UI.
+	useLayoutEffect(() => {
+		activeCollectionRef.current = collectionId;
+	}, [collectionId]);
 
 	const mutation = useMutation({
 		...withResponseValidation(searchKnowledgeMutation()),

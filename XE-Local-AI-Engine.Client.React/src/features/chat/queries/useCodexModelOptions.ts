@@ -7,7 +7,7 @@
 // When neither is configured the backend omits them, so this hook returns an empty array and the
 // cloud sections are hidden from the picker.
 //
-// This is the T2-seam implementation: no separate endpoint, no status-query dependency.
+// This uses no separate endpoint and has no status-query dependency.
 
 import { useQuery } from "@tanstack/react-query";
 

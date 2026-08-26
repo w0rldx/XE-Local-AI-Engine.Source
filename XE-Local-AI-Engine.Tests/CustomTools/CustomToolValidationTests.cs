@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Tests.CustomTools;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Tests.Testing;
 
-/// <summary>Shared validators: interpreter/shell + script-extension denylist (C1/M4), absolute-path, and MAF-safe name.</summary>
+/// <summary>Shared validators for the interpreter/shell and script-extension denylist, absolute paths, and MAF-safe names.</summary>
 public sealed class CustomToolValidationTests
 {
     [Test]

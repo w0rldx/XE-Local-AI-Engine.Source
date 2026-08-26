@@ -127,7 +127,7 @@ public sealed class AgentUsageSummaryResponse
 
     /// <summary>
     ///     The retention window (days) after which run-envelope rows are aged out of <c>agent_execution_logs</c>. This
-    ///     summary only covers the retained horizon; a longer-term durable rollup is a follow-up.
+    ///     summary covers only the retained horizon and has no durable rollup beyond it.
     /// </summary>
     public required int RetentionDays { get; init; }
 }

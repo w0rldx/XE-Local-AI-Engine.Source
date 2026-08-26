@@ -144,7 +144,7 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
     [Test]
     public async Task StartAsync_WhenTheRedirectPortIsAlreadyBound_ThrowsInvalidOperationException_AndCleansUpPendingState()
     {
-        // L1: HttpListener.Start() throws HttpListenerException (not InvalidOperationException) when the port is
+        // HttpListener.Start() throws HttpListenerException (not InvalidOperationException) when the port is
         // already bound — occupy it first with a plain TcpListener to force that exact failure.
         var port = GetFreeLoopbackPort();
         var config = CreateConfig(redirectUri: $"http://127.0.0.1:{port}/signin-oidc");
@@ -167,7 +167,7 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
     [Test]
     public async Task StartAsync_WhenRedemptionThrowsAnUnexpectedExceptionType_SetsStatusToFailed_InsteadOfEscaping()
     {
-        // L2: TrackCallbackAsync runs fire-and-forget — an exception type outside the specific catches (e.g. a
+        // TrackCallbackAsync runs fire-and-forget — an exception type outside the specific catches (e.g. a
         // CryptographicException from the account store's protector) must still resolve to Failed via the trailing
         // catch-all, not escape as an unobserved task exception while status stays stuck at Pending forever.
         var port = GetFreeLoopbackPort();
@@ -347,7 +347,7 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
         }
     }
 
-    // Simulates an unexpected exception type escaping redemption (L2) — distinct from RecordingRedeemer, whose
+    // Simulates an unexpected exception type escaping redemption — distinct from RecordingRedeemer, whose
     // exception means "this test's assumptions were wrong," not "simulate a real failure mode."
     private sealed class ThrowingRedeemer(Exception exceptionToThrow) : IEntraAuthCodeRedeemer
     {

@@ -477,9 +477,9 @@ public sealed class BenchmarkRunFreezeServiceTests
 
         _ = await harness.StartAsync();
 
-        // R2: the degenerate case is byte-identical. One snapshot, the project's own task, no repeat group, and a
-        // NULL cell key — which is the store's instruction to stamp the run's own singleton cell, exactly what every
-        // pre-suite run already carries.
+        // The single-item degenerate case is byte-identical: one snapshot, the project's own task, no repeat group,
+        // and a NULL cell key — the store's instruction to stamp the run's own singleton cell, exactly what every
+        // legacy pre-suite run already carries.
         AssertEx.Equal(1, harness.SnapshotsCreated);
         AssertEx.Equal("exact task", AssertEx.NotNull(harness.SnapshotInput).CoreTask);
         AssertEx.Equal(1, harness.Commands.Count);

@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
-///     C1 delete-cascade guarantee, proven on the real e_sqlite3 runtime connection with foreign-key enforcement OFF (the
+///     The delete-cascade guarantee, proven on the real e_sqlite3 runtime connection with foreign-key enforcement off (the
 ///     same mode the app runs). Because <c>ON DELETE CASCADE</c> never fires without FK enforcement, the purge service must
 ///     itself delete every dependent row in child-to-parent order inside one transaction — and the chunk delete must fire
 ///     the FTS delete trigger so purged content is no longer searchable. These tests seed a full document graph with real
@@ -194,7 +194,7 @@ public sealed class KnowledgeDocumentPurgeServiceTests : IDisposable
     }
 
     // Microsoft.Data.Sqlite enables foreign-key enforcement by default; the node-sqlite runtime connection does not
-    // enable it (C1's explicit child-to-parent delete design assumes FK enforcement is off), so every connection this
+    // enable it. The explicit child-to-parent delete design assumes FK enforcement is off, so every connection this
     // suite touches must match that runtime mode rather than let FK cascade produce a false pass.
     private static async Task EnsureForeignKeysOffAsync(DbConnection connection)
     {

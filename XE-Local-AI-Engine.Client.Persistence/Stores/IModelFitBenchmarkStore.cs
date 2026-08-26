@@ -8,8 +8,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 public interface IModelFitBenchmarkStore
 {
-    // Deferred: the ModelFit Benchmark feature is scaffolding and not wired.
-    // This store has no live caller; it is kept so the deferred feature's persistence contract survives.
+    // The disabled benchmark operation has no live caller. This interface preserves its persistence contract.
 
     /// <summary>
     ///     Replaces every benchmark row for <paramref name="snapshotId" /> with <paramref name="benchmarks" /> in a single

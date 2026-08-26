@@ -1058,17 +1058,17 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
             ILlamaServerProcessHandle? handle = null;
             long? readinessStartedTimestamp = null;
             var readinessRecorded = false;
-            var automaticCapture = applyLaunchPolicy ? new BoundedStartupCapture() : null;
+            var automaticCapture = applyLaunchPolicy ? new LlamaServerBoundedStartupCapture() : null;
 
             // Latches llama.cpp's layer-placement banner out of the streamed startup output. It is deliberately NOT
             // read off automaticCapture: that buffer is bounded, and at the verbosity the banner requires it is
             // printed around line 155 — outside any small window.
-            var placementSniffer = variant == GpuVariant.Cpu ? null : new LayerPlacementSniffer();
+            var placementSniffer = variant == GpuVariant.Cpu ? null : new LlamaServerLayerPlacementSniffer();
 
             // Flipped once this child is serving, to demote its (raised-verbosity) request chatter to Debug. It stays
             // false for the whole load, and forever on a spawn that never reaches readiness, so the placement banner
             // and every failure message are still logged at Information.
-            var servingWindow = new DiagnosticVerbosityWindow();
+            var servingWindow = new LlamaServerDiagnosticVerbosityWindow();
             try
             {
                 var spec = LlamaServerLaunchArgumentComposer.BuildLaunchSpec(key, binary.ServerExecutablePath, modelFilePath, port, variant, candidate.Resolved,
@@ -1390,87 +1390,16 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         throw optimizedFailure ?? new InvalidOperationException("llama-server spawn produced no launch attempt.");
     }
 
-    /// <summary>
-    ///     Builds the ordered launch-plan candidates for a spawn. The normal path (<paramref name="applyLaunchPolicy" />)
-    ///     resolves the policy plan and, when it enables the GPU KV-quant + flash-attention optimization, appends a safe
-    ///     (KV/FA off) fallback candidate to try once if the optimized one cannot reach readiness. Replay profiling and
-    ///     any other caller that disables policy application get a single <see langword="null" /> plan.
-    /// </summary>
-    private async Task<LaunchPlanSet> BuildLaunchPlanCandidatesAsync(ProcessKey key,
+    private Task<LlamaServerLaunchPlanSet> BuildLaunchPlanCandidatesAsync(ProcessKey key,
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
         bool applyLaunchPolicy,
         ProcessContextAllocation? admittedAllocation,
         CancellationToken ct)
     {
-        if (!applyLaunchPolicy)
-        {
-            // A GPU spawn built with no policy replays its own -c/-ngl/-ts/-ot, so a null plan reproduces it verbatim.
-            // A CPU spawn emits none of those, so a null plan left it with NO context window and NO thread counts at
-            // all — it ran at llama.cpp's own defaults while every other CPU spawn got the policy's. The CPU replay
-            // plan supplies exactly the two args a CPU build can honour, and nothing else, so the GPU vector is
-            // untouched.
-            LlamaServerLaunchPlan? cpuReplayPlan = variant == GpuVariant.Cpu && !resolved.ExploreMode
-                ? _launchPolicy.ResolveCpuReplayPlan(resolved)
-                : null;
-            return new LaunchPlanSet(null, [new(resolved, cpuReplayPlan, LlamaServerLoadAttemptKind.Primary)]);
-        }
-
-        ProcessContextAllocation allocation;
-        if (admittedAllocation is null)
-        {
-            allocation = await _allocationResolver.ResolveAsync(key.ModelName, key.Role, variant, resolved, ct).ConfigureAwait(false)
-                         ?? throw NonRetryable("The requested model's process context could not be allocated.");
-        }
-        else if (admittedAllocation.Source == ProcessContextAllocationSource.HardwareTier)
-        {
-            if (!_allocationResolver.TryGetEffectiveCommittedAllocation(admittedAllocation, out allocation)
-                || !string.Equals(allocation.CacheKey, admittedAllocation.CacheKey, StringComparison.Ordinal)
-                || !string.Equals(allocation.ContentIdentity, admittedAllocation.ContentIdentity, StringComparison.Ordinal)
-                || allocation.ProcessContextTokens > admittedAllocation.ProcessContextTokens)
-            {
-                throw NonRetryable("The admitted local model context allocation is no longer valid.");
-            }
-        }
-        else
-        {
-            allocation = admittedAllocation;
-        }
-
-        var plan = await _launchPolicy.ResolveAsync(key.Role, variant, resolved, allocation, ct).ConfigureAwait(false);
-
-        // The optimized (KV-quant + fused flash-attention) config reaches the launch line from two independent sources,
-        // and each gets the same one-shot safe retry: the policy plan on an explore spawn, and the frozen profile's own
-        // -ctk/-ctv on a GPU replay. A CPU spawn emits no replay KV args at all, so its "safe" variant would be a
-        // byte-identical second launch — no candidate there.
-        if (plan.UseKvCacheQuantization)
-        {
-            return new LaunchPlanSet(allocation,
-            [
-                new(resolved, plan, LlamaServerLoadAttemptKind.Primary),
-                new(resolved, plan.WithoutKvCacheQuantization(), LlamaServerLoadAttemptKind.SafeRetry)
-            ]);
-        }
-
-        if (variant != GpuVariant.Cpu && !resolved.ExploreMode && !string.IsNullOrWhiteSpace(resolved.KvTypeK))
-        {
-            return new LaunchPlanSet(allocation,
-            [
-                new(resolved, plan, LlamaServerLoadAttemptKind.Primary),
-                new(resolved.WithoutKvCacheQuantization(), plan, LlamaServerLoadAttemptKind.SafeRetry)
-            ]);
-        }
-
-        return new LaunchPlanSet(allocation, [new(resolved, plan, LlamaServerLoadAttemptKind.Primary)]);
+        var builder = new LlamaServerLaunchCandidateBuilder(_allocationResolver, _launchPolicy);
+        return builder.BuildAsync(key, variant, resolved, applyLaunchPolicy, admittedAllocation, NonRetryable, ct);
     }
-
-    /// <summary>One ordered launch attempt: the explore/replay args to emit and the policy plan to emit them under.</summary>
-    private sealed record LaunchCandidate(
-        ResolvedLaunchArguments Resolved,
-        LlamaServerLaunchPlan? Plan,
-        LlamaServerLoadAttemptKind AttemptKind);
-
-    private sealed record LaunchPlanSet(ProcessContextAllocation? Allocation, List<LaunchCandidate> Candidates);
 
     /// <summary>
     ///     Publishes a sniffed layer-placement observation once the process is genuinely serving. Recording only after
@@ -1481,7 +1410,7 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
     /// </summary>
     private LlamaServerLaunchPlacement RecordObservedLayerPlacement(ProcessKey key,
         GpuVariant variant,
-        LayerPlacementSniffer? sniffer)
+        LlamaServerLayerPlacementSniffer? sniffer)
     {
         if (sniffer is null || !sniffer.TryGetObservation(out var offloaded, out var total))
         {
@@ -1636,117 +1565,6 @@ public sealed class LlamaServerProcessSupervisor : ILlamaServerProcessSupervisor
         }
 
         return observation;
-    }
-
-    /// <summary>
-    ///     One spawn's "is this child serving yet" latch. The launcher reads it per forwarded line via
-    ///     <see cref="IsServing" /> to decide Information vs Debug; the supervisor flips it exactly once, after
-    ///     readiness. A spawn that never becomes ready never flips it, so a failed load's diagnostics stay at
-    ///     Information where an operator will actually see them.
-    /// </summary>
-    private sealed class DiagnosticVerbosityWindow
-    {
-        private volatile bool _serving;
-
-        public Func<bool> IsServing => () => _serving;
-
-        public void MarkServing()
-        {
-            _serving = true;
-        }
-    }
-
-    /// <summary>
-    ///     Scans streamed startup output for llama.cpp's layer-placement banner and latches the first match. Both server
-    ///     pipes invoke <see cref="Add" /> concurrently; once a value is latched the hot path is a single volatile read,
-    ///     so the remaining (verbose) lines cost no regex.
-    /// </summary>
-    private sealed class LayerPlacementSniffer
-    {
-        private readonly Lock _gate = new();
-        private int _offloaded;
-        private volatile int _total;
-
-        public void Add(string line)
-        {
-            if (_total > 0)
-            {
-                return;
-            }
-
-            if (!LlamaLayerOffloadBanner.TryParse(line, out var offloaded, out var total))
-            {
-                return;
-            }
-
-            lock (_gate)
-            {
-                if (_total > 0)
-                {
-                    return;
-                }
-
-                _offloaded = offloaded;
-                _total = total;
-            }
-        }
-
-        public bool TryGetObservation(out int offloaded, out int total)
-        {
-            lock (_gate)
-            {
-                offloaded = _offloaded;
-                total = _total;
-                return total > 0;
-            }
-        }
-    }
-
-    /// <summary>
-    ///     Bounded startup diagnostics for <see cref="LlamaStartupFailureClassifier" />, retaining the MOST RECENT
-    ///     lines rather than the first ones.
-    /// </summary>
-    /// <remarks>
-    ///     Keeping the first N was safe only while the child ran at its default verbosity, where the whole startup is
-    ///     about 11 lines and everything fits. It is not safe now that GPU spawns raise verbosity to read the placement
-    ///     banner: measured against a real allocation failure, a default-verbosity startup put the "out of memory" text
-    ///     at line 11 of 18, and the same failure at the raised verbosity put it at line 179 of 186 — behind roughly
-    ///     170 lines of model-loader metadata. A first-N window would have captured only that metadata and classified
-    ///     the failure as Other, silently disabling the context down-tier retry. Failure output is always at the END of
-    ///     a failed startup at either verbosity, so a last-N window classifies both identically.
-    /// </remarks>
-    private sealed class BoundedStartupCapture
-    {
-        private const int MaximumCharacters = 16 * 1024;
-        private const int MaximumLines = 64;
-        private readonly Lock _gate = new();
-        private readonly Queue<string> _lines = new();
-        private int _characters;
-
-        public void Add(string line)
-        {
-            // A single pathological line cannot be allowed to evict the whole window, so cap the line itself first.
-            var captured = line.Length <= MaximumCharacters ? line : line[..MaximumCharacters];
-
-            lock (_gate)
-            {
-                _lines.Enqueue(captured);
-                _characters += captured.Length;
-
-                while (_lines.Count > MaximumLines || (_characters > MaximumCharacters && _lines.Count > 1))
-                {
-                    _characters -= _lines.Dequeue().Length;
-                }
-            }
-        }
-
-        public IReadOnlyList<string> Snapshot()
-        {
-            lock (_gate)
-            {
-                return [.. _lines];
-            }
-        }
     }
 
     /// <summary>Best-effort read of the running server's effective context window from /props; null when unavailable.</summary>

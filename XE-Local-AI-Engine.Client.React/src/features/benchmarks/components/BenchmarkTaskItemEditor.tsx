@@ -23,7 +23,7 @@ import {
 	IconPlus,
 	IconTrash,
 } from "@tabler/icons-react";
-import { useState } from "react";
+import { type Dispatch, type SetStateAction, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -83,130 +83,31 @@ const parseAxis = (value: string): number[] =>
 		.filter((entry) => Number.isFinite(entry) && entry > 0);
 const formatAxis = (values: readonly number[]): string => values.join(", ");
 
-/**
- * The project's task items: add, edit, reorder, delete, and per-item overrides of the judge policy's verifier config.
- *
- * Every mutation here changes what the project's score MEANS, and the alerts say which one costs what: editing an item
- * unranks the cells that answered it (`item-revised`), adding or deleting one unranks every cell measured under the
- * old set (`item-set-revised`), and reordering costs nothing at all — the item-set hash is taken over ids, not
- * positions.
- */
-export function BenchmarkTaskItemEditor({ projectId, projectContextTokens, hasRuns, criteria }: BenchmarkTaskItemEditorProps) {
+function otherLeafCount(items: readonly BenchmarkTaskItem[], leafCount: number, item: BenchmarkTaskItem | null): number {
+	return item === null ? leafCount : leafCount - (item.kind === "niah" ? benchmarkTaskItemChildren(items, item.id).length : 1);
+}
+
+const mutationFailure = (fallback: string) => (error: unknown) => toast.error(apiErrorMessage(error, fallback));
+const verifierOverride = (draft: BenchmarkTaskItemDraft, criterionId: string): BenchmarkVerifierConfig | null =>
+	draft.verifierConfig?.[criterionId] ?? null;
+
+interface TaskItemCardsProps {
+	groups: BenchmarkTaskItem[][];
+	expanded: ReadonlySet<string>;
+	isBusy: boolean;
+	onToggleExpanded: (itemId: string) => void;
+	onMove: (item: BenchmarkTaskItem, direction: -1 | 1) => void;
+	onOpen: (item: BenchmarkTaskItem) => void;
+	onDelete: (item: BenchmarkTaskItem) => void;
+}
+
+function TaskItemCards({ groups, expanded, isBusy, onToggleExpanded, onMove, onOpen, onDelete }: TaskItemCardsProps) {
 	const { t } = useTranslation();
-	const itemsQuery = useBenchmarkTaskItems(projectId);
-	const createItem = useCreateBenchmarkTaskItem();
-	const updateItem = useUpdateBenchmarkTaskItem();
-	const deleteItem = useDeleteBenchmarkTaskItem();
-	const reorderItems = useReorderBenchmarkTaskItems();
-	// `null` = nothing open, `"new"` = the add form, otherwise the id being edited.
-	const [editing, setEditing] = useState<string | null>(null);
-	const [draft, setDraft] = useState<BenchmarkTaskItemDraft>(emptyBenchmarkTaskItemDraft());
-	const [attempted, setAttempted] = useState(false);
-	const [expanded, setExpanded] = useState<string[]>([]);
-	const [pendingDelete, setPendingDelete] = useState<BenchmarkTaskItem | null>(null);
-
-	const items = itemsQuery.data?.items ?? [];
-	const groups = benchmarkTaskItemGroups(items);
-	const leafCount = leafBenchmarkTaskItems(items).length;
-	const isBusy = createItem.isPending || updateItem.isPending || deleteItem.isPending || reorderItems.isPending;
-	// A generator's own leaves are its cases, so its expansion is measured against the leaves that are NOT its own.
-	const otherLeafCount = (item: BenchmarkTaskItem | null): number =>
-		item === null ? leafCount : leafCount - (item.kind === "niah" ? benchmarkTaskItemChildren(items, item.id).length : 1);
-
-	const niah = parseNiahGeneratorConfig(draft.generatorConfig);
-	const editingItem = editing === null || editing === "new" ? null : (items.find((item) => item.id === editing) ?? null);
-	const niahIssue = draft.kind === "niah" ? niahGeneratorIssue(niah, projectContextTokens, otherLeafCount(editingItem)) : null;
-	const promptRequired = draft.prompt.trim().length === 0;
-
-	const failed = (fallback: string) => (error: unknown) => toast.error(apiErrorMessage(error, fallback));
-	const open = (item: BenchmarkTaskItem | null): void => {
-		setAttempted(false);
-		setEditing(item === null ? "new" : item.id);
-		setDraft(item === null ? emptyBenchmarkTaskItemDraft() : toBenchmarkTaskItemDraft(item));
-	};
-	const close = (): void => {
-		setEditing(null);
-		setAttempted(false);
-	};
-	const writeNiah = (patch: Partial<ReturnType<typeof parseNiahGeneratorConfig>>): void =>
-		setDraft((current) => ({ ...current, generatorConfig: serializeNiahGeneratorConfig({ ...niah, ...patch }) }));
-
-	const save = (): void => {
-		setAttempted(true);
-		if (promptRequired || niahIssue !== null) {
-			return;
-		}
-		if (editingItem === null) {
-			createItem.mutate(
-				{ projectId, expectedProjectVersion: itemsQuery.data?.projectVersion ?? 0, draft },
-				{ onSuccess: close, onError: failed(t("pages.benchmarks.items.errors.create", "Could not add this task item.")) },
-			);
-			return;
-		}
-		updateItem.mutate(
-			{ projectId, item: editingItem, draft },
-			{ onSuccess: close, onError: failed(t("pages.benchmarks.items.errors.update", "Could not save this task item.")) },
-		);
-	};
-	const move = (item: BenchmarkTaskItem, direction: -1 | 1): void =>
-		reorderItems.mutate(
-			{ projectId, itemIds: reorderBenchmarkTaskItems(items, item.id, direction) },
-			{ onError: failed(t("pages.benchmarks.items.errors.reorder", "Could not reorder the task items.")) },
-		);
-
-	// A verifier override is one criterion's CONFIG, keyed by criterion id. Emptying it removes the key, which is how
-	// the item goes back to the policy's own configuration for that criterion.
-	const overrideFor = (criterionId: string): BenchmarkVerifierConfig | null => draft.verifierConfig?.[criterionId] ?? null;
-	const writeOverride = (criterionId: string, config: string | null): void =>
-		setDraft((current) => {
-			const next = { ...(current.verifierConfig ?? {}) };
-			const parsed = config === null ? {} : parseVerifierConfig(config);
-			if (Object.keys(parsed).length === 0) {
-				delete next[criterionId];
-			} else {
-				next[criterionId] = parsed;
-			}
-			return { ...current, verifierConfig: Object.keys(next).length === 0 ? null : next };
-		});
-
 	return (
-		<Stack gap="sm" data-testid="benchmark-task-items">
-			<Divider
-				label={t("pages.benchmarks.items.section", "Task items")}
-				labelPosition="left"
-				data-testid="benchmark-items-section"
-			/>
-			<Group justify="space-between" align="center">
-				<Text size="sm" c="dimmed" data-testid="benchmark-items-count">
-					{t("pages.benchmarks.items.count", "{{count}} of {{max}} items — a model's project score is the mean over them", {
-						count: leafCount,
-						max: benchmarkTaskItemLimits.maxLeafItems,
-					})}
-				</Text>
-				<Button
-					variant="default"
-					size="xs"
-					leftSection={<IconPlus size={14} />}
-					disabled={isBusy || leafCount >= benchmarkTaskItemLimits.maxLeafItems}
-					onClick={() => open(null)}
-					data-testid="benchmark-item-add"
-				>
-					{t("pages.benchmarks.items.add", "Add item")}
-				</Button>
-			</Group>
-
-			{hasRuns ? (
-				<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-items-history-warning">
-					{t(
-						"pages.benchmarks.items.historyWarning",
-						"This project has runs. Editing an item unranks every measurement of it (item-revised); adding or deleting one unranks every combination measured under the old set (item-set-revised). Reordering changes nothing — the set is identified by its items, not their positions.",
-					)}
-				</Alert>
-			) : null}
-
+		<>
 			{groups.map(([item, ...cases], groupIndex) => {
 				const parent = item as BenchmarkTaskItem;
-				const isOpen = expanded.includes(parent.id);
+				const isOpen = expanded.has(parent.id);
 				return (
 					<Card key={parent.id} withBorder={true} padding="xs" data-testid={`benchmark-item-${parent.id}`}>
 						<Group justify="space-between" wrap="nowrap" align="flex-start">
@@ -251,11 +152,7 @@ export function BenchmarkTaskItemEditor({ projectId, projectContextTokens, hasRu
 										size="sm"
 										aria-label={t("pages.benchmarks.items.showCases", "Show the generated probe cases")}
 										aria-expanded={isOpen}
-										onClick={() =>
-											setExpanded((current) =>
-												current.includes(parent.id) ? current.filter((id) => id !== parent.id) : [...current, parent.id],
-											)
-										}
+										onClick={() => onToggleExpanded(parent.id)}
 										data-testid={`benchmark-item-cases-toggle-${parent.id}`}
 									>
 										{isOpen ? <IconChevronDown size={14} /> : <IconChevronRight size={14} />}
@@ -266,7 +163,7 @@ export function BenchmarkTaskItemEditor({ projectId, projectContextTokens, hasRu
 									size="sm"
 									disabled={isBusy || groupIndex === 0}
 									aria-label={t("pages.benchmarks.items.moveUp", "Move up")}
-									onClick={() => move(parent, -1)}
+									onClick={() => onMove(parent, -1)}
 									data-testid={`benchmark-item-up-${parent.id}`}
 								>
 									<IconChevronUp size={14} />
@@ -276,7 +173,7 @@ export function BenchmarkTaskItemEditor({ projectId, projectContextTokens, hasRu
 									size="sm"
 									disabled={isBusy || groupIndex === groups.length - 1}
 									aria-label={t("pages.benchmarks.items.moveDown", "Move down")}
-									onClick={() => move(parent, 1)}
+									onClick={() => onMove(parent, 1)}
 									data-testid={`benchmark-item-down-${parent.id}`}
 								>
 									<IconChevronDown size={14} />
@@ -286,7 +183,7 @@ export function BenchmarkTaskItemEditor({ projectId, projectContextTokens, hasRu
 									size="sm"
 									disabled={isBusy}
 									aria-label={t("common.edit", "Edit")}
-									onClick={() => open(parent)}
+									onClick={() => onOpen(parent)}
 									data-testid={`benchmark-item-edit-${parent.id}`}
 								>
 									<IconPencil size={14} />
@@ -298,7 +195,7 @@ export function BenchmarkTaskItemEditor({ projectId, projectContextTokens, hasRu
 									// A project always holds at least one item; the node refuses the last one anyway.
 									disabled={isBusy || groups.length <= 1}
 									aria-label={t("common.delete", "Delete")}
-									onClick={() => setPendingDelete(parent)}
+									onClick={() => onDelete(parent)}
 									data-testid={`benchmark-item-delete-${parent.id}`}
 								>
 									<IconTrash size={14} />
@@ -319,7 +216,50 @@ export function BenchmarkTaskItemEditor({ projectId, projectContextTokens, hasRu
 					</Card>
 				);
 			})}
+		</>
+	);
+}
 
+interface TaskItemFormProps {
+	editing: string | null;
+	editingItem: BenchmarkTaskItem | null;
+	hasRuns: boolean;
+	draft: BenchmarkTaskItemDraft;
+	setDraft: Dispatch<SetStateAction<BenchmarkTaskItemDraft>>;
+	attempted: boolean;
+	promptRequired: boolean;
+	niah: ReturnType<typeof parseNiahGeneratorConfig>;
+	niahIssue: ReturnType<typeof niahGeneratorIssue>;
+	projectContextTokens: number;
+	criteria: readonly BenchmarkRubricCriterion[];
+	isSaving: boolean;
+	onWriteNiah: (patch: Partial<ReturnType<typeof parseNiahGeneratorConfig>>) => void;
+	onOverride: (criterionId: string, config: string | null) => void;
+	onClose: () => void;
+	onSave: () => void;
+}
+
+function TaskItemForm({
+	editing,
+	editingItem,
+	hasRuns,
+	draft,
+	setDraft,
+	attempted,
+	promptRequired,
+	niah,
+	niahIssue,
+	projectContextTokens,
+	criteria,
+	isSaving,
+	onWriteNiah: writeNiah,
+	onOverride: writeOverride,
+	onClose: close,
+	onSave: save,
+}: TaskItemFormProps) {
+	const { t } = useTranslation();
+	return (
+		<>
 			{editing === null ? null : (
 				<Card withBorder={true} padding="sm" data-testid="benchmark-item-form">
 					<Stack gap="sm">
@@ -519,7 +459,7 @@ export function BenchmarkTaskItemEditor({ projectId, projectContextTokens, hasRu
 											</Text>
 											<BenchmarkVerifierEditor
 												kind={toBenchmarkCriterionKind(criterion.kind)}
-												config={serializeVerifierConfig(overrideFor(criterion.id) ?? {})}
+												config={serializeVerifierConfig(verifierOverride(draft, criterion.id) ?? {})}
 												issue={null}
 												lockKind={true}
 												onChange={(patch) => writeOverride(criterion.id, patch.config)}
@@ -535,18 +475,172 @@ export function BenchmarkTaskItemEditor({ projectId, projectContextTokens, hasRu
 							<Button variant="default" size="xs" onClick={close}>
 								{t("common.cancel", "Cancel")}
 							</Button>
-							<Button
-								size="xs"
-								loading={createItem.isPending || updateItem.isPending}
-								onClick={save}
-								data-testid="benchmark-item-save"
-							>
+							<Button size="xs" loading={isSaving} onClick={save} data-testid="benchmark-item-save">
 								{t("common.save", "Save")}
 							</Button>
 						</Group>
 					</Stack>
 				</Card>
 			)}
+		</>
+	);
+}
+
+/**
+ * The project's task items: add, edit, reorder, delete, and per-item overrides of the judge policy's verifier config.
+ *
+ * Every mutation here changes what the project's score MEANS, and the alerts say which one costs what: editing an item
+ * unranks the cells that answered it (`item-revised`), adding or deleting one unranks every cell measured under the
+ * old set (`item-set-revised`), and reordering costs nothing at all — the item-set hash is taken over ids, not
+ * positions.
+ */
+export function BenchmarkTaskItemEditor({ projectId, projectContextTokens, hasRuns, criteria }: BenchmarkTaskItemEditorProps) {
+	const { t } = useTranslation();
+	const itemsQuery = useBenchmarkTaskItems(projectId);
+	const createItem = useCreateBenchmarkTaskItem();
+	const updateItem = useUpdateBenchmarkTaskItem();
+	const deleteItem = useDeleteBenchmarkTaskItem();
+	const reorderItems = useReorderBenchmarkTaskItems();
+	// `null` = nothing open, `"new"` = the add form, otherwise the id being edited.
+	const [editing, setEditing] = useState<string | null>(null);
+	const [draft, setDraft] = useState<BenchmarkTaskItemDraft>(emptyBenchmarkTaskItemDraft);
+	const [attempted, setAttempted] = useState(false);
+	const [expanded, setExpanded] = useState(() => new Set<string>());
+	const [pendingDelete, setPendingDelete] = useState<BenchmarkTaskItem | null>(null);
+
+	const items = itemsQuery.data?.items ?? [];
+	const groups = benchmarkTaskItemGroups(items);
+	const leafCount = leafBenchmarkTaskItems(items).length;
+	const isBusy = createItem.isPending || updateItem.isPending || deleteItem.isPending || reorderItems.isPending;
+	const niah = parseNiahGeneratorConfig(draft.generatorConfig);
+	const itemsById = new Map(items.map((item) => [item.id, item]));
+	const editingItem = editing === null || editing === "new" ? null : (itemsById.get(editing) ?? null);
+	const niahIssue =
+		draft.kind === "niah" ? niahGeneratorIssue(niah, projectContextTokens, otherLeafCount(items, leafCount, editingItem)) : null;
+	const promptRequired = draft.prompt.trim().length === 0;
+
+	const open = (item: BenchmarkTaskItem | null): void => {
+		setAttempted(false);
+		setEditing(item === null ? "new" : item.id);
+		setDraft(item === null ? emptyBenchmarkTaskItemDraft() : toBenchmarkTaskItemDraft(item));
+	};
+	const close = (): void => {
+		setEditing(null);
+		setAttempted(false);
+	};
+	const writeNiah = (patch: Partial<ReturnType<typeof parseNiahGeneratorConfig>>): void =>
+		setDraft((current) => ({ ...current, generatorConfig: serializeNiahGeneratorConfig({ ...niah, ...patch }) }));
+
+	const save = (): void => {
+		setAttempted(true);
+		if (promptRequired || niahIssue !== null) {
+			return;
+		}
+		if (editingItem === null) {
+			createItem.mutate(
+				{ projectId, expectedProjectVersion: itemsQuery.data?.projectVersion ?? 0, draft },
+				{ onSuccess: close, onError: mutationFailure(t("pages.benchmarks.items.errors.create", "Could not add this task item.")) },
+			);
+			return;
+		}
+		updateItem.mutate(
+			{ projectId, item: editingItem, draft },
+			{ onSuccess: close, onError: mutationFailure(t("pages.benchmarks.items.errors.update", "Could not save this task item.")) },
+		);
+	};
+	const move = (item: BenchmarkTaskItem, direction: -1 | 1): void =>
+		reorderItems.mutate(
+			{ projectId, itemIds: reorderBenchmarkTaskItems(items, item.id, direction) },
+			{ onError: mutationFailure(t("pages.benchmarks.items.errors.reorder", "Could not reorder the task items.")) },
+		);
+
+	// A verifier override is one criterion's CONFIG, keyed by criterion id. Emptying it removes the key, which is how
+	// the item goes back to the policy's own configuration for that criterion.
+	const writeOverride = (criterionId: string, config: string | null): void =>
+		setDraft((current) => {
+			const next = { ...(current.verifierConfig ?? {}) };
+			const parsed = config === null ? {} : parseVerifierConfig(config);
+			if (Object.keys(parsed).length === 0) {
+				delete next[criterionId];
+			} else {
+				next[criterionId] = parsed;
+			}
+			return { ...current, verifierConfig: Object.keys(next).length === 0 ? null : next };
+		});
+
+	return (
+		<Stack gap="sm" data-testid="benchmark-task-items">
+			<Divider
+				label={t("pages.benchmarks.items.section", "Task items")}
+				labelPosition="left"
+				data-testid="benchmark-items-section"
+			/>
+			<Group justify="space-between" align="center">
+				<Text size="sm" c="dimmed" data-testid="benchmark-items-count">
+					{t("pages.benchmarks.items.count", "{{count}} of {{max}} items — a model's project score is the mean over them", {
+						count: leafCount,
+						max: benchmarkTaskItemLimits.maxLeafItems,
+					})}
+				</Text>
+				<Button
+					variant="default"
+					size="xs"
+					leftSection={<IconPlus size={14} />}
+					disabled={isBusy || leafCount >= benchmarkTaskItemLimits.maxLeafItems}
+					onClick={() => open(null)}
+					data-testid="benchmark-item-add"
+				>
+					{t("pages.benchmarks.items.add", "Add item")}
+				</Button>
+			</Group>
+
+			{hasRuns ? (
+				<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-items-history-warning">
+					{t(
+						"pages.benchmarks.items.historyWarning",
+						"This project has runs. Editing an item unranks every measurement of it (item-revised); adding or deleting one unranks every combination measured under the old set (item-set-revised). Reordering changes nothing — the set is identified by its items, not their positions.",
+					)}
+				</Alert>
+			) : null}
+
+			<TaskItemCards
+				groups={groups}
+				expanded={expanded}
+				isBusy={isBusy}
+				onToggleExpanded={(itemId) =>
+					setExpanded((current) => {
+						const next = new Set(current);
+						if (next.has(itemId)) {
+							next.delete(itemId);
+						} else {
+							next.add(itemId);
+						}
+						return next;
+					})
+				}
+				onMove={move}
+				onOpen={open}
+				onDelete={setPendingDelete}
+			/>
+
+			<TaskItemForm
+				editing={editing}
+				editingItem={editingItem}
+				hasRuns={hasRuns}
+				draft={draft}
+				setDraft={setDraft}
+				attempted={attempted}
+				promptRequired={promptRequired}
+				niah={niah}
+				niahIssue={niahIssue}
+				projectContextTokens={projectContextTokens}
+				criteria={criteria}
+				isSaving={createItem.isPending || updateItem.isPending}
+				onWriteNiah={writeNiah}
+				onOverride={writeOverride}
+				onClose={close}
+				onSave={save}
+			/>
 
 			<DialogShell
 				opened={pendingDelete !== null}
@@ -582,7 +676,7 @@ export function BenchmarkTaskItemEditor({ projectId, projectContextTokens, hasRu
 								if (target) {
 									deleteItem.mutate(
 										{ projectId, item: target },
-										{ onError: failed(t("pages.benchmarks.items.errors.delete", "Could not delete this task item.")) },
+										{ onError: mutationFailure(t("pages.benchmarks.items.errors.delete", "Could not delete this task item.")) },
 									);
 								}
 							}}

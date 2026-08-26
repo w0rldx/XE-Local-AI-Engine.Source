@@ -62,6 +62,7 @@ export function AgentToolSelector({
 		}
 		return [...catalog, ...orphanSelected];
 	}, [catalogQuery.data, selectedToolNames]);
+	const selectedToolNameSet = useMemo(() => new Set(selectedToolNames), [selectedToolNames]);
 
 	return (
 		<Stack gap="xs" data-testid="agent-tool-selector">
@@ -99,7 +100,7 @@ export function AgentToolSelector({
 			) : null}
 
 			{rows.map((tool) => {
-				const isSelected = selectedToolNames.includes(tool.name);
+				const isSelected = selectedToolNameSet.has(tool.name);
 				// A custom (user-defined) tool always requires approval at runtime (forced by the tool registry),
 				// so the per-tool approval switch is pinned on and locked — flipping it would be a misleading no-op.
 				const isCustom = tool.source.kind === "custom";

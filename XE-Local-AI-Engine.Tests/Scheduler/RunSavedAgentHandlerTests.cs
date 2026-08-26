@@ -230,7 +230,7 @@ public sealed class RunSavedAgentHandlerTests
     [Test]
     public async Task ExecuteAsync_AppliesOperatorMaxMessageRequestTimeoutToRuntimePackage()
     {
-        // Send/regenerate parity (G1): the operator's node-level "Maximum message request timeout" (900s here) must
+        // Send/regenerate parity: the operator's node-level "Maximum message request timeout" (900s here) must
         // bound a scheduled run too. Before the fix the package carried no timeout block and the builder's own 600s
         // default cut long unattended runs off. 900 is deliberately NOT the default, so this still fails if the wiring
         // is dropped. Tool-call/stream-idle are not operator-controlled and keep their defaults.

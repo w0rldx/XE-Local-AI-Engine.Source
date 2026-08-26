@@ -4,8 +4,8 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Browser-driven E2E for the Model Recommendations page (<c>/model-recommendations</c>) — a
-///     no-e2e-at-all shipped route (gap analysis P0-4). Exercises the recommend/refresh surface ONLY; the
+///     Browser-driven E2E for the Model Recommendations page (<c>/model-recommendations</c>). Exercises the
+///     recommend/refresh surface only; the
 ///     benchmark path is intentionally GATED everywhere and is never touched here.
 ///     <list type="bullet">
 ///         <item>The page renders (heading + cache-only recommendations snapshot or no-cache notice).</item>
@@ -25,7 +25,7 @@ using XE_Local_AI_Engine.Tests.E2ETests.Common;
 ///         disabled — but the shared <c>PerTestSession</c> host means <c>SchedulerPageE2ETests</c> may have created
 ///         a <c>model-recommendation-check</c> job in an earlier test, flipping the button to enabled. The test
 ///         branches on the rendered enabled-state and asserts the corresponding invariant, so it is correct in
-///         either ordering (the gap analysis explicitly asks the test to "handle both present/absent").
+///         either ordering.
 ///         The branch is only safe because the state cannot MOVE underneath it: <c>SchedulerPageE2ETests</c> is
 ///         deliberately kept in the serial group, and TUnit never overlaps the serial and pooled phases, so the
 ///         job either already exists for the whole of this test or does not appear at all during it.

@@ -60,9 +60,8 @@ public static class ConversationFootprintPurge
         // must go FIRST — once the session row is gone the subselect no longer finds them. They are deliberately absent
         // from CoveredChildTables, which mirrors what BE-08 discovers: conversation/message-keyed tables only.
         //
-        // Follow-up (owned by the work-session runtime): a session's artifact BYTES live encrypted on disk under
-        // work-sessions/artifacts/{sessionId:N}/, so this row purge leaves them behind exactly as it leaves upload blobs
-        // behind. The caller owns that teardown, the way DeleteAllForConversationAsync handles uploads.
+        // A session's artifact bytes live encrypted on disk under work-sessions/artifacts/{sessionId:N}/. This row purge
+        // does not remove those files or upload blobs; the caller owns both teardown paths.
         await dbContext.Database.ExecuteSqlRawAsync("DELETE FROM agent_work_session_events WHERE session_id IN (SELECT id FROM agent_work_sessions WHERE conversation_id = {0});",
                            [conversationId],
                            cancellationToken)

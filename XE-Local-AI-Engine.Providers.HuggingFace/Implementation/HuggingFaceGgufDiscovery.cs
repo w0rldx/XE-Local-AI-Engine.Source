@@ -15,15 +15,11 @@ using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 ///     downloadable file the <c>draft-*</c> speculative modes need, it just is not a base-model quant.
 /// </summary>
 /// <remarks>
-///     Considered-and-deferred perf idea (follow-up: revisit if inspection latency is still a problem after bounded
-///     concurrency + caching): the model-fit advisor's quant-ladder walk (<c>GgufFileSelector.SelectBestFit</c>)
-///     only needs each file's name + size to rank candidates, and reads only the winner's full GGUF header — in principle
-///     <see cref="InspectRepoAsync" /> could defer ALL header reads until after ranking. Not implemented: the KV-cache term
-///     in <c>MemoryFitEstimator.Estimate</c> depends on header-only fields (block/head counts, embedding length), so a
-///     candidate's fits-the-budget verdict is header-dependent — deferring headers for non-winning candidates would change
-///     which file the ladder walk picks in edge cases, not just how fast it gets there. Bounded concurrency (this file) +
-///     TTL caching (<see cref="HfHubClient" />, <see cref="GgufHeaderReader" />) deliver the same latency win without that
-///     behavior change.
+///     Header reads remain eager because the model-fit advisor's quant-ladder walk
+///     (<c>GgufFileSelector.SelectBestFit</c>) needs header-only fields such as block/head counts and embedding length
+///     for <c>MemoryFitEstimator.Estimate</c>. Ranking from file name and size alone would change fits-the-budget verdicts
+///     and could select a different quant. Bounded concurrency in this class plus TTL caching in
+///     <see cref="HfHubClient" /> and <see cref="GgufHeaderReader" /> reduce inspection latency without changing selection.
 /// </remarks>
 internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscovery
 {

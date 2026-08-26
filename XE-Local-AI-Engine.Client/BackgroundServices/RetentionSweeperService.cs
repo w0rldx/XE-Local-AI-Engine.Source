@@ -136,8 +136,8 @@ public sealed class RetentionSweeperService : BackgroundService
             if (workSessionId is { } sessionId)
             {
                 // Work-session artifact bytes live on disk under the session id, so the row purge cannot reach them.
-                // follow-up: no orphan resweep for stranded artifact directories yet, mirroring
-                // PurgeOrphanedUploadDirectoriesAsync — a crash between the commit and this call leaks one directory.
+                // Unlike uploaded files, artifact directories have no orphan resweep; a crash between the commit and
+                // this call can therefore strand one directory.
                 workSessionArtifactBlobStore.DeleteSession(sessionId);
             }
         }

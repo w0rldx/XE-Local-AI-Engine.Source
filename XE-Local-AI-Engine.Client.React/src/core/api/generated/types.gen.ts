@@ -79,6 +79,28 @@ export type XeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse = {
 	items?: Array<XeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse>;
 };
 
+export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse = {
+	artifact?: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse;
+	content?: string;
+	isBase64?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse = {
+	id?: string;
+	sequence?: number;
+	kind?: string;
+	name?: string;
+	mediaType?: string;
+	contentSha256?: string;
+	sizeBytes?: number;
+	isValid?: boolean;
+	createdStep?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactRequest = {
+	[key: string]: never;
+};
+
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionsResponse = {
 	items?: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionSummaryResponse>;
 };
@@ -171,18 +193,6 @@ export type XeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionArtifacts
 	lastSequence?: number;
 };
 
-export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse = {
-	id?: string;
-	sequence?: number;
-	kind?: string;
-	name?: string;
-	mediaType?: string;
-	contentSha256?: string;
-	sizeBytes?: number;
-	isValid?: boolean;
-	createdStep?: number;
-};
-
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionCheckpointsResponse = {
 	items?: Array<XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionCheckpointResponse>;
 	lastSequence?: number;
@@ -215,16 +225,6 @@ export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionEventResponse
 };
 
 export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionEventFeedRequest = {
-	[key: string]: never;
-};
-
-export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse = {
-	artifact?: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse;
-	content?: string;
-	isBase64?: boolean;
-};
-
-export type XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactRequest = {
 	[key: string]: never;
 };
 
@@ -4949,6 +4949,44 @@ export type DeleteWorkspaceResponses = {
 
 export type DeleteWorkspaceResponse = DeleteWorkspaceResponses[keyof DeleteWorkspaceResponses];
 
+export type GetWorkSessionArtifactContentData = {
+	body?: never;
+	path: {
+		sessionId: string;
+		artifactId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/work-sessions/{sessionId}/artifacts/{artifactId}/content";
+};
+
+export type GetWorkSessionArtifactContentErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type GetWorkSessionArtifactContentError = GetWorkSessionArtifactContentErrors[keyof GetWorkSessionArtifactContentErrors];
+
+export type GetWorkSessionArtifactContentResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse;
+};
+
+export type GetWorkSessionArtifactContentResponse =
+	GetWorkSessionArtifactContentResponses[keyof GetWorkSessionArtifactContentResponses];
+
 export type ListWorkSessionsData = {
 	body?: never;
 	path?: never;
@@ -5117,166 +5155,6 @@ export type UpdateWorkSessionResponses = {
 };
 
 export type UpdateWorkSessionResponse = UpdateWorkSessionResponses[keyof UpdateWorkSessionResponses];
-
-export type StartWorkSessionData = {
-	body?: never;
-	path: {
-		sessionId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/work-sessions/{sessionId}/start";
-};
-
-export type StartWorkSessionErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsProblemDetails;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	/**
-	 * Not Found
-	 */
-	404: unknown;
-	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
-};
-
-export type StartWorkSessionError = StartWorkSessionErrors[keyof StartWorkSessionErrors];
-
-export type StartWorkSessionResponses = {
-	/**
-	 * Accepted
-	 */
-	202: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
-};
-
-export type StartWorkSessionResponse = StartWorkSessionResponses[keyof StartWorkSessionResponses];
-
-export type PauseWorkSessionData = {
-	body?: never;
-	path: {
-		sessionId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/work-sessions/{sessionId}/pause";
-};
-
-export type PauseWorkSessionErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsProblemDetails;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	/**
-	 * Not Found
-	 */
-	404: unknown;
-	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
-};
-
-export type PauseWorkSessionError = PauseWorkSessionErrors[keyof PauseWorkSessionErrors];
-
-export type PauseWorkSessionResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
-};
-
-export type PauseWorkSessionResponse = PauseWorkSessionResponses[keyof PauseWorkSessionResponses];
-
-export type ResumeWorkSessionData = {
-	body?: never;
-	path: {
-		sessionId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/work-sessions/{sessionId}/resume";
-};
-
-export type ResumeWorkSessionErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsProblemDetails;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	/**
-	 * Not Found
-	 */
-	404: unknown;
-	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
-};
-
-export type ResumeWorkSessionError = ResumeWorkSessionErrors[keyof ResumeWorkSessionErrors];
-
-export type ResumeWorkSessionResponses = {
-	/**
-	 * Accepted
-	 */
-	202: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
-};
-
-export type ResumeWorkSessionResponse = ResumeWorkSessionResponses[keyof ResumeWorkSessionResponses];
-
-export type CancelWorkSessionData = {
-	body?: never;
-	path: {
-		sessionId: string;
-	};
-	query?: never;
-	url: "/api/local/v1/work-sessions/{sessionId}/cancel";
-};
-
-export type CancelWorkSessionErrors = {
-	/**
-	 * Bad Request
-	 */
-	400: FastEndpointsProblemDetails;
-	/**
-	 * Unauthorized
-	 */
-	401: unknown;
-	/**
-	 * Forbidden
-	 */
-	403: unknown;
-	/**
-	 * Not Found
-	 */
-	404: unknown;
-	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
-};
-
-export type CancelWorkSessionError = CancelWorkSessionErrors[keyof CancelWorkSessionErrors];
-
-export type CancelWorkSessionResponses = {
-	/**
-	 * Success
-	 */
-	200: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
-};
-
-export type CancelWorkSessionResponse = CancelWorkSessionResponses[keyof CancelWorkSessionResponses];
 
 export type ListWorkSessionTasksData = {
 	body?: never;
@@ -5484,17 +5362,20 @@ export type ListWorkSessionEventsResponses = {
 
 export type ListWorkSessionEventsResponse = ListWorkSessionEventsResponses[keyof ListWorkSessionEventsResponses];
 
-export type GetWorkSessionArtifactContentData = {
+export type StartWorkSessionData = {
 	body?: never;
 	path: {
 		sessionId: string;
-		artifactId: string;
 	};
 	query?: never;
-	url: "/api/local/v1/work-sessions/{sessionId}/artifacts/{artifactId}/content";
+	url: "/api/local/v1/work-sessions/{sessionId}/start";
 };
 
-export type GetWorkSessionArtifactContentErrors = {
+export type StartWorkSessionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
 	/**
 	 * Unauthorized
 	 */
@@ -5507,20 +5388,139 @@ export type GetWorkSessionArtifactContentErrors = {
 	 * Not Found
 	 */
 	404: unknown;
-	413: MicrosoftAspNetCoreMvcProblemDetails;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
 
-export type GetWorkSessionArtifactContentError = GetWorkSessionArtifactContentErrors[keyof GetWorkSessionArtifactContentErrors];
+export type StartWorkSessionError = StartWorkSessionErrors[keyof StartWorkSessionErrors];
 
-export type GetWorkSessionArtifactContentResponses = {
+export type StartWorkSessionResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
+};
+
+export type StartWorkSessionResponse = StartWorkSessionResponses[keyof StartWorkSessionResponses];
+
+export type PauseWorkSessionData = {
+	body?: never;
+	path: {
+		sessionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/work-sessions/{sessionId}/pause";
+};
+
+export type PauseWorkSessionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type PauseWorkSessionError = PauseWorkSessionErrors[keyof PauseWorkSessionErrors];
+
+export type PauseWorkSessionResponses = {
 	/**
 	 * Success
 	 */
-	200: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse;
+	200: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
 };
 
-export type GetWorkSessionArtifactContentResponse =
-	GetWorkSessionArtifactContentResponses[keyof GetWorkSessionArtifactContentResponses];
+export type PauseWorkSessionResponse = PauseWorkSessionResponses[keyof PauseWorkSessionResponses];
+
+export type ResumeWorkSessionData = {
+	body?: never;
+	path: {
+		sessionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/work-sessions/{sessionId}/resume";
+};
+
+export type ResumeWorkSessionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type ResumeWorkSessionError = ResumeWorkSessionErrors[keyof ResumeWorkSessionErrors];
+
+export type ResumeWorkSessionResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
+};
+
+export type ResumeWorkSessionResponse = ResumeWorkSessionResponses[keyof ResumeWorkSessionResponses];
+
+export type CancelWorkSessionData = {
+	body?: never;
+	path: {
+		sessionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/work-sessions/{sessionId}/cancel";
+};
+
+export type CancelWorkSessionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type CancelWorkSessionError = CancelWorkSessionErrors[keyof CancelWorkSessionErrors];
+
+export type CancelWorkSessionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
+};
+
+export type CancelWorkSessionResponse = CancelWorkSessionResponses[keyof CancelWorkSessionResponses];
 
 export type PostWorkSessionMessageData = {
 	body: XeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageRequest;

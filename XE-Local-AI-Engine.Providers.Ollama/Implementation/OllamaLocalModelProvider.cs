@@ -11,8 +11,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 /// </summary>
 /// <remarks>
 ///     This adapter keeps OllamaSharp types inside the provider project. It normalizes health, model inventory, pull
-///     progress, context-length probing, and chat-client creation into DTOs consumed by HostAgent, React, and the
-///     application-layer agent runtime.
+///     progress, context-length probing, and chat-client creation into DTOs consumed by React and the application
+///     layer.
 /// </remarks>
 public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
 {

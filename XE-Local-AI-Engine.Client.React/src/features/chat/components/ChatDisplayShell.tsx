@@ -1,7 +1,7 @@
 import { ActionIcon, Alert, Box, Drawer, Group, Paper, Stack, Switch, Text, Tooltip } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconInfoCircle, IconLayoutSidebar, IconUpload } from "@tabler/icons-react";
-import { useCallback, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
@@ -11,7 +11,7 @@ import { ChatMessageList } from "@/features/chat/components/ChatMessageList";
 import { ConversationList } from "@/features/chat/components/ConversationList";
 import { usePaneFileDrop } from "@/features/chat/hooks/usePaneFileDrop";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
-import type { ChatConversationModel, ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
+import type { ChatDisplayShellProps } from "@/features/chat/models/ChatModels";
 
 const EMPTY_TIMELINE_ENTRIES: ChatDisplayShellProps["timelineEntries"] = [];
 // Stable empty default for the optional agentOptions prop — a fresh `[]` default would allocate a new array
@@ -88,13 +88,8 @@ export function ChatDisplayShell({
 }: ChatDisplayShellProps) {
 	const { t } = useTranslation();
 	const conversation = conversations.find((item) => item.id === selectedConversationId);
-	// The app shell shows a persistent expanded sidebar from DESKTOP_NAV_BREAKPOINT up (Layout.tsx's own
-	// useWindowDimensions check), so the two-pane grid here (320px conversation list + chat pane) doesn't have room
-	// to breathe until the window is wider than roughly 220 + 320 + ~480 usable chat pane — TWO_PANE_BREAKPOINT.
-	// Below that, collapse to a single full-width column and move the conversation list into an off-canvas Drawer
-	// toggled from the header. useWindowDimensions (unlike useMediaQuery) reads window.innerWidth synchronously on
-	// first render, so there is no undefined-value flash of the desktop grid before it collapses. jsdom defaults
-	// innerWidth to 1024, so `<` (not `<=`) keeps desktop the default under the existing tests.
+	// The app shell shows a persistent expanded sidebar from DESKTOP_NAV_BREAKPOINT up, so the two-pane grid does not
+	// have room to breathe until TWO_PANE_BREAKPOINT. Below that, the conversation list moves into a drawer.
 	const { width } = useWindowDimensions();
 	const isMobile = width < TWO_PANE_BREAKPOINT;
 	const [conversationDrawerOpened, { open: openConversationDrawer, close: closeConversationDrawer }] = useDisclosure(false);
@@ -103,22 +98,22 @@ export function ChatDisplayShell({
 	// message body. During generation the parent re-folds the live conversation into `conversations` every token, so
 	// passing it straight through would defeat ConversationList's memo and re-render every row per token. Project a
 	// signature over just the fields the sidebar shows and return a reference-stable array while that signature is
-	// unchanged (writing a ref during render is memoization only — no state, no effect), so mid-stream body growth of
-	// the active thread produces no new identity; the sidebar refreshes only when a summary field actually changes.
+	// unchanged. The commit-phase update preserves concurrent-render safety; the current render uses the incoming array
+	// immediately when the signature changes, so the sidebar never displays a stale summary.
 	const sidebarSignature = conversations
 		.map(
 			(item) =>
 				`${item.id}\u0000${item.title}\u0000${item.lastMessagePreview ?? ""}\u0000${item.lastActivity ?? ""}\u0000${item.updatedAt ?? ""}\u0000${item.isPinned ? 1 : 0}${item.isArchived ? 1 : 0}\u0000${item.origin ?? ""}`,
 		)
 		.join("");
-	const stableSidebarRef = useRef<{ signature: string; value: ChatConversationModel[] }>({
-		signature: sidebarSignature,
-		value: conversations,
-	});
-	if (stableSidebarRef.current.signature !== sidebarSignature) {
-		stableSidebarRef.current = { signature: sidebarSignature, value: conversations };
-	}
-	const sidebarConversations = stableSidebarRef.current.value;
+	const stableSidebarRef = useRef({ signature: sidebarSignature, value: conversations });
+	const sidebarConversations =
+		stableSidebarRef.current.signature === sidebarSignature ? stableSidebarRef.current.value : conversations;
+	useLayoutEffect(() => {
+		if (stableSidebarRef.current.signature !== sidebarSignature) {
+			stableSidebarRef.current = { signature: sidebarSignature, value: conversations };
+		}
+	}, [conversations, sidebarSignature]);
 
 	const handleSelectConversation = useCallback(
 		(conversationId: string) => {
@@ -345,10 +340,7 @@ export function ChatDisplayShell({
 	return (
 		// mih is a floor, not a fixed height (h="100%" above governs normal sizing) — it exists so the two-pane
 		// grid doesn't collapse below a usable size, but a flat 620px overflows short/landscape desktop windows.
-		// min() caps it at 100% of the frame this shell is given: `calc(100dvh - 96px)` guessed at the chrome above
-		// (header + banners + FullHeightPage padding) and guessed low, so the floor could exceed the frame and push
-		// content past it — an outer scrollbar before FullHeightPage's overflow guard, clipped content after it.
-		// `100%` measures the real frame instead of estimating it, so the floor can never overflow its own parent.
+		// `100%` measures the real frame instead of estimating the chrome above it, so this floor cannot overflow its parent.
 		<Stack gap="md" h="100%" mih="min(620px, 100%)">
 			{notice}
 			<div

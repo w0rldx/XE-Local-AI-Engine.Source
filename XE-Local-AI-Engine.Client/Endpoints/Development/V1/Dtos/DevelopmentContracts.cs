@@ -115,7 +115,7 @@ public sealed class ReconnectDevelopmentRepositoryRequest
 ///     the container one — whether the container runtime is usable.
 ///     <para>
 ///         Three axes rather than one boolean, deliberately. <see cref="Enabled" /> is this node's own configuration
-///         switch; <see cref="SandboxProvider" /> is the provider per-feature selection (D2) actually resolved; and
+///         switch; <see cref="SandboxProvider" /> is the provider that per-feature selection actually resolved; and
 ///         <see cref="ContainerRuntime" /> is the preflight of the machine's container runtime, which ADR 0004 makes a
 ///         hard requirement for Development Mode execution <em>on that provider</em>. Collapsing them would tell an
 ///         operator only that Development Mode is unavailable, which is the least useful true statement available: the
@@ -232,7 +232,7 @@ public sealed record SandboxIsolationSummaryResponse(
 /// <param name="Message">Operator-facing prose naming the cause and the action.</param>
 /// <param name="RequiresOperatorConfirmation">Whether clearing this needs an explicit approval rather than a fix to the machine.</param>
 /// <param name="Endpoint">The daemon endpoint the probe used, when one could be resolved.</param>
-/// <param name="EndpointSource">How that endpoint was arrived at — the input D10 exists to make visible.</param>
+/// <param name="EndpointSource">How that endpoint was resolved, so daemon substitution is visible.</param>
 /// <param name="ObservedDaemon">The daemon actually reached, when one answered.</param>
 /// <param name="PinnedDaemon">The daemon this node has approved, when it has one.</param>
 public sealed record DevelopmentContainerRuntimeResponse(
@@ -261,7 +261,7 @@ public sealed record DevelopmentContainerDaemonResponse(
     DateTimeOffset? ConfirmedAtUtc);
 
 /// <summary>
-///     Approve the container runtime currently reachable (D10 re-confirmation).
+///     Approve the container runtime currently reachable after re-confirming its identity.
 ///     <para>
 ///         <see cref="DaemonId" /> is required and is the daemon the operator was <em>shown</em>. The confirmation is
 ///         refused if that is not the daemon reachable when the request arrives — otherwise an approval issued against

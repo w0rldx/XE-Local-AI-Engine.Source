@@ -1,6 +1,6 @@
 import { HubConnectionState } from "@microsoft/signalr";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import {
@@ -60,11 +60,8 @@ export function useImageJobProgress(jobId: string): ImageJobProgressView | null 
 export function useImageJobHub(activeJobIds: readonly string[]): void {
 	const queryClient = useQueryClient();
 
-	// Latest desired active-job set, read inside the effect's reconcile without re-running the (connection-owning)
-	// effect on every list change. Updated synchronously below so a reconcile always sees the current set. The
-	// initializer below is a type-only cast (zero-cost) rather than `new Set(...)`, since `.current` is
-	// unconditionally reassigned to the current set two lines down on every render anyway.
-	const desiredJobIdsRef = useRef<ReadonlySet<string>>(undefined as unknown as ReadonlySet<string>);
+	// Latest committed desired active-job set, read inside the connection callbacks without rebuilding the connection.
+	const desiredJobIdsRef = useRef<ReadonlySet<string>>(new Set());
 	// Per-job highest seq seen, so a replayed/duplicated push (same seq) is ignored. Lives across the connection.
 	const lastSeqByJob = useRef<Map<string, number>>(new Map());
 	// Per-job last coarse status pushed, so the list is refetched on a real transition rather than on every step.
@@ -72,17 +69,17 @@ export function useImageJobHub(activeJobIds: readonly string[]): void {
 	// Bumped whenever the desired set changes, to trigger the reconcile effect below.
 	const reconcileRef = useRef<((desired: ReadonlySet<string>) => void) | undefined>(undefined);
 
-	const desired = new Set(activeJobIds);
-	desiredJobIdsRef.current = desired;
-
 	// Drive a reconcile whenever the active-job set changes (a new job enqueued / a job reaching terminal). Keyed on the
 	// sorted-joined id string so it fires exactly when membership should change, not on every render. The set is rebuilt
 	// from that key inside the effect (job ids are GUIDs — no embedded commas) so the effect body uses its only dep.
-	const desiredKey = [...desired].sort().join(",");
+	const desiredKey = activeJobIds.toSorted().join(",");
+	const desired = useMemo<ReadonlySet<string>>(() => new Set(desiredKey ? desiredKey.split(",") : []), [desiredKey]);
+	useLayoutEffect(() => {
+		desiredJobIdsRef.current = desired;
+	}, [desired]);
 	useEffect(() => {
-		const target = new Set(desiredKey ? desiredKey.split(",") : []);
-		reconcileRef.current?.(target);
-	}, [desiredKey]);
+		reconcileRef.current?.(desired);
+	}, [desired]);
 
 	useEffect(() => {
 		// Shared refcounted connection: reused across mounts so re-opening the images page does not pay a fresh negotiate +

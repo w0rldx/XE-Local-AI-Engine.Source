@@ -1,8 +1,8 @@
 # Benchmarks — Task Suites, Frozen Runs, Discriminating Scores
 
-> Baseline: `feature/benchmark-p3-suites` · Reviewed: 2026-08-26 · Code-grounded.
+> Reviewed: 2026-08-26 · Code-grounded.
 
-The **benchmark** module measures a frozen suite of questions against many local models and ranks the results. P1 made the numbers honest, P2 made them discriminate (quant fidelity, server-side verifiers, pairwise judging), and P3 turned the module into a real harness: a project asks **N questions**, a launch fans out over them, the unit that ranks is a **combination of model settings** rather than a single run, and the difference between two of them comes with an interval.
+The **benchmark** module measures a frozen suite of questions against many local models and ranks the results. Quant fidelity, server-side verifiers and pairwise judging make the scores discriminating; task suites make the module a real harness: a project asks **N questions**, a launch fans out over them, the unit that ranks is a **combination of model settings** rather than a single run, and the difference between two combinations comes with an interval.
 
 Four rules govern everything below and are worth stating before the mechanics:
 
@@ -78,7 +78,7 @@ Not built, deliberately: multi-needle, retrieval-order and aggregation variants 
 - The binary probe and the llama-server variant selection are memoized for the whole launch through `BenchmarkFreezeScope`, so a launch matrix compares cells that saw **one** runtime, not N. A second binary inspection could straddle a runtime swap and freeze two different launch answers into one measurement.
 - **The agent runtime is resolved once per LEAF ITEM.** The task text is `IAgentDefinitionResolver`'s retrieval query, so the resolved system prompt and the skills behind it can legitimately differ per item, and the dependency set guarding the commit derives from that resolution — hence one `FreezeCommitGuard` per item (the store de-duplicates guards by reference).
 - Every run stores a **`BenchmarkRuntimeSnapshotV1`** — model identity and member hashes, resolved launch arguments, KV-cache types, sampling. The record is **frozen at schema v1 and validated by re-hashing its own serialized bytes** against an embedded `ConfigurationHash`. Adding a member to it, or to any nested record, makes every stored run fail to deserialize. Per-run facts go in **flat columns** instead — that is why `RepeatGroupId`, `RepeatIndex`, `RepeatMode`, the four identity stamps and the whole fidelity projection are columns rather than snapshot members.
-- **The snapshot cache is keyed `(itemId, seedValue)`, not on the seed alone.** P1 turned the single serialized snapshot into a per-seed dictionary for answer-variance repeats; widening the fan-out without widening that key hands every item the *first* item's snapshot — every run answers item 0's prompt while its `task_item_id` column claims otherwise, and nothing fails loudly. `Start_WithThreeItems_FreezesThreeDistinctCoreTasks` is the guard.
+- **The snapshot cache is keyed `(itemId, seedValue)`, not on the seed alone.** Answer-variance repeats already require a per-seed dictionary; suite fan-out also requires the item id in that key. Without it, every item receives the *first* item's snapshot — every run answers item 0's prompt while its `task_item_id` column claims otherwise, and nothing fails loudly. `Start_WithThreeItems_FreezesThreeDistinctCoreTasks` is the guard.
 - **Commands are built repeat-major, item-minor.** A partially drained queue then yields whole comparable cells rather than one item spread across every cell.
 - Caps: `MaxRepeatCount = 10`, `MaxRunsPerRequest = 100` — the latter checked in a pre-flight that names the computed count. A whole repeat group is inserted in **one** transaction by `IBenchmarkStore.StartRunsAsync`, which checks the project version once and queues the work items FIFO. Per-run CAS would leave orphan queued runs behind on a partial failure.
 
@@ -166,7 +166,7 @@ A rubric of weighted criteria, scored 0..10 each, recomputed to 0..100 by `Bench
 
 ### 5.2 Verifiable criteria — judging with no model
 
-A rubric criterion carries a `Kind` and a `Config` (`BenchmarkJudgeVerifierContracts.cs`, `BenchmarkJudgeCriterionKinds`). `llm` is the default an absent value takes, so every criterion written before P2 keeps its meaning and its stored hash.
+A rubric criterion carries a `Kind` and a `Config` (`BenchmarkJudgeVerifierContracts.cs`, `BenchmarkJudgeCriterionKinds`). `llm` is the legacy-compatible default for an absent value, preserving the meaning and stored hash of criteria without those fields.
 
 | Kind | Decided by |
 |---|---|
@@ -204,7 +204,7 @@ A judging that spawned nothing has no runtime to key on. Having *none* is not `e
 
 **This is safe only because the judging `Mode` and every criterion's `Kind`/`Config` are inside `ComputePolicyHash`.** That is what makes one policy revision provably one rubric composition, so a constant key cannot merge attempts that were graded differently. Move any of the three out and the sentinel starts joining unlike things. `MarkJudgeSucceededAsync` applies it with `??=`, so a measured key written at launch is never overwritten.
 
-> Adding a member to `BenchmarkJudgeRubricCriterionV1` changes the judge's **prompt** unless you stop it: the payload builder serializes the rubric with `DefaultIgnoreCondition.Never`. `BuildUserPayloadJson` strips `kind`/`config`, so a re-judge under a revision stored before P2 asks byte-identically the same question. The model never sees a verifiable criterion anyway.
+> Adding a member to `BenchmarkJudgeRubricCriterionV1` changes the judge's **prompt** unless you stop it: the payload builder serializes the rubric with `DefaultIgnoreCondition.Never`. `BuildUserPayloadJson` strips `kind`/`config`, so a re-judge under a legacy revision stored without those fields asks byte-identically the same question. The model never sees a verifiable criterion anyway.
 
 #### 5.2.3 `pythonTests` — execution scoring
 
@@ -245,7 +245,7 @@ Opt-in per project via the policy's `Mode`. Pointwise stays the default.
 
 `BenchmarkPairwisePolicy`: `MaximumRuns = 12` per cohort (12·11 = **132** judge calls), a UI warning from `WarnAtRuns = 8`, and `MaximumTruncatedShare = 0.20` — a cohort in which more than a fifth of verdicts had a truncated side refuses to aggregate rather than publishing a biased score.
 
-- **Pairs form within a task case, never across one.** `BenchmarkPairwisePlanner.EnsurePairsAsync` groups eligible runs by `(TaskCaseId, TaskInputHash)` and pairs only inside a group: "which answer is better" is meaningless when the two answers are to different questions. With suites this is load-bearing rather than the no-op it was in P2.
+- **Pairs form within a task case, never across one.** `BenchmarkPairwisePlanner.EnsurePairsAsync` groups eligible runs by `(TaskCaseId, TaskInputHash)` and pairs only inside a group: "which answer is better" is meaningless when the two answers are to different questions. The grouping is a natural no-op for a single-case project and load-bearing for a suite.
 - Both presentation orders of every unordered pair are enqueued; position swap is what removes position bias, and the swap bookkeeping lives in exactly one place (`BenchmarkPairwiseResultParser.ToCanonicalVerdict`). Getting it backwards inverts exactly half of every cohort's verdicts. Live, two of six pairs split 1–1 across the orders.
 - Creation is **one transaction, idempotent** — a `UNIQUE` violation from a concurrent caller is swallowed, re-read and returned. `ReconcilePairwiseAsync` re-runs it at startup, healing a crash between "a primary succeeded" and "its pairs were enqueued".
 
@@ -337,7 +337,7 @@ The base model's **fingerprint is never client-writable**: it is an input to the
 
 ## 7. Lifecycle — the work queue, stop reasons, recovery
 
-`BenchmarkWorkKind` is `{ Primary, Judge, Fidelity, Comparison }`. The two P2 kinds are **appended at the end**: the ordinal is persisted, so reordering would silently re-label stored rows.
+`BenchmarkWorkKind` is `{ Primary, Judge, Fidelity, Comparison }`. `Fidelity` and `Comparison` are **appended at the end**: the ordinal is persisted, so reordering would silently re-label stored rows.
 
 `BenchmarkQueueHostedService` is a **single consumer** holding `IGpuWorkGate.TryBeginShared(GpuWorkKind.Benchmark)` across the claim and the execution. Nothing else of ours holds VRAM while a benchmark item runs, which is why a `Fidelity` item needs no gate of its own.
 
@@ -403,7 +403,7 @@ Full detail: [Scheduler](06-scheduler.md) and [Training](18-training.md).
 | Version | Added |
 |---|---|
 | 2 | `repeatGroups`, `llamaBench` |
-| 3 | the P2 axes — a fidelity block on every run, and the pairwise fit |
+| 3 | a fidelity block on every run, and the pairwise fit |
 | 4 | task suites — `taskItems[]` and `cells[]` as top-level sections, and `taskItemId`/`taskItemIndex`/`cellKey`/`taskInputHash`/`taskItemSetHash`/`cellQuality` on every run row |
 
 - **JSON** reuses `BenchmarkRunDetailResponse` verbatim — the same shape `GET benchmarks/runs/{runId}` returns — so an export and a live read of one run can never disagree. `pairwiseFit` is ONE object: a fit is a single immutable row whose key covers the whole comparison set, so smearing it over the runs would say something untrue.

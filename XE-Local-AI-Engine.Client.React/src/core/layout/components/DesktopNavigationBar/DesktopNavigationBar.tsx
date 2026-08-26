@@ -123,7 +123,8 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 			>
 				<m.div
 					className={classes["control-content"]}
-					animate={{ gap: sideBarCollapsed ? 0 : 12 }}
+					layout={true}
+					style={{ gap: sideBarCollapsed ? 0 : 12 }}
 					initial={false}
 					transition={MOTION_SPEC}
 				>
@@ -139,10 +140,7 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 					    swaps in a flyout menu (below) so children stay reachable without the chevron. */}
 					{hasNestedLinks && !sideBarCollapsed && (
 						<m.div variants={labelVariants} initial={false} className={classes["chevron-slot"]}>
-							<IconChevronRight
-								size={16}
-								className={`${classes["chevron"]}${open ? ` ${classes["chevron-open"]}` : ""}`}
-							/>
+							<IconChevronRight size={16} className={`${classes["chevron"]}${open ? ` ${classes["chevron-open"]}` : ""}`} />
 						</m.div>
 					)}
 				</m.div>
@@ -163,7 +161,11 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 							const nestedActive = matchesNavRoute(pathname, nestedLink.to);
 							return (
 								<Menu.Item key={nestedLink.to} onClick={() => handleNavigate(nestedLink.to)}>
-									<Text size="sm" fw={nestedActive ? 600 : 400} c={nestedActive ? "var(--mantine-primary-color-light-color)" : undefined}>
+									<Text
+										size="sm"
+										fw={nestedActive ? 600 : 400}
+										c={nestedActive ? "var(--mantine-primary-color-light-color)" : undefined}
+									>
 										{nestedLink.label}
 									</Text>
 								</Menu.Item>
@@ -239,7 +241,9 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 						<UnstyledButton
 							onClick={toggleSidebar}
 							className={classes["toggle-button"]}
-							aria-label={sideBarCollapsed ? t("components.sideNavigationBar.ariaExpand") : t("components.sideNavigationBar.ariaCollapse")}
+							aria-label={
+								sideBarCollapsed ? t("components.sideNavigationBar.ariaExpand") : t("components.sideNavigationBar.ariaCollapse")
+							}
 						>
 							{sideBarCollapsed ? <IconLayoutSidebarLeftExpand size={20} /> : <IconLayoutSidebarLeftCollapse size={20} />}
 						</UnstyledButton>

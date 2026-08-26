@@ -66,8 +66,7 @@ export function ChatAttachmentChips({ attachments, pendingUploads, onRemove, dis
 			{attachments.map((attachment) => (
 				<Paper key={attachment.fileId} withBorder={true} radius="sm" px="xs" py={4} data-testid="chat-attachment-chip">
 					<Group gap={6} wrap="nowrap">
-						{/* follow-up: render a real thumbnail from the pre-upload File (pendingUploads carries no File
-						    reference today, and the server DTO has no blob URL) — icon-only until that's wired. */}
+						{/* Attachment metadata does not expose image bytes or a blob URL, so uploaded images use the photo icon. */}
 						{attachment.mimeType.startsWith("image/") ? <IconPhoto size={14} /> : <IconFileText size={14} />}
 						<Tooltip label={attachment.originalFileName} withArrow={true}>
 							<Text size="xs" lineClamp={1} style={{ maxWidth: 160 }}>

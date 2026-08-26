@@ -115,7 +115,7 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Benchmark is deferred — this is the recommend-only path. Reject before any snapshot row is created.
+        // Only Recommend is supported; reject every other operation before creating a snapshot row.
         if (request.Operation != ModelFitOperation.Recommend)
         {
             return Failed(snapshotId: null, "Benchmark refresh is not yet enabled.");
@@ -698,8 +698,8 @@ public sealed class ModelFitRefreshService : IModelFitRefreshService
 
                 // Advisory-only quantized-KV estimate (catalog lane). NOT part of membership/ranking — those use the
                 // fp16 estimate above because the default chat launch uses an fp16 KV cache. Rides the diagnostics blob
-                // (no new column/DTO, mirroring the catalog/expert-offload fields) so future UI can hint at the headroom a
-                // flash-attention runtime could unlock. Absent for explore-lane rows and insufficient-metadata files.
+                // (no separate column/DTO, mirroring the catalog/expert-offload fields) so consumers can show the headroom
+                // a flash-attention runtime could unlock. Absent for explore-lane rows and insufficient-metadata files.
                 if (recommendation.KvQuantAdvisory is { } kvAdvisory)
                 {
                     writer.WriteString("kv_quant", kvAdvisory.Quant.ToString());

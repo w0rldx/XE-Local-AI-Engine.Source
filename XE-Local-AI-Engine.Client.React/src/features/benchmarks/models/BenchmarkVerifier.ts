@@ -4,13 +4,21 @@
 // is a pre-check, never a substitute for its validation.
 
 /**
- * `llm` is what every criterion written before P2 carries and the only kind that costs a model turn; every other kind
- * is checked server-side against the graded answer with no inference at all.
+ * `llm` is the compatibility default for criteria without an explicit kind and the only kind that costs a model turn;
+ * every other kind is checked server-side against the graded answer with no inference at all.
  */
-export const benchmarkCriterionKinds = ["llm", "exact", "regex", "jsonSchema", "mathAnswer", "constraint", "pythonTests"] as const;
+export const benchmarkCriterionKinds = [
+	"llm",
+	"exact",
+	"regex",
+	"jsonSchema",
+	"mathAnswer",
+	"constraint",
+	"pythonTests",
+] as const;
 export type BenchmarkCriterionKind = (typeof benchmarkCriterionKinds)[number];
 
-/** An absent or unrecognized kind reads as `llm` — the node's own default for a criterion written before P2. */
+/** An absent or unrecognized kind reads as `llm`, matching the node's legacy-compatible default. */
 export const toBenchmarkCriterionKind = (value: unknown): BenchmarkCriterionKind =>
 	benchmarkCriterionKinds.find((kind) => kind === value) ?? "llm";
 
@@ -215,7 +223,13 @@ function constraintIssue(config: BenchmarkVerifierConfig): BenchmarkVerifierIssu
 		mustNotContain?: unknown;
 		format?: unknown;
 	};
-	if (minWords === undefined && maxWords === undefined && mustContain === undefined && mustNotContain === undefined && format === undefined) {
+	if (
+		minWords === undefined &&
+		maxWords === undefined &&
+		mustContain === undefined &&
+		mustNotContain === undefined &&
+		format === undefined
+	) {
 		return "constraintEmpty";
 	}
 	const words = [minWords, maxWords].filter((value) => value !== undefined);
@@ -244,7 +258,10 @@ function constraintIssue(config: BenchmarkVerifierConfig): BenchmarkVerifierIssu
  * `RegexOptions.NonBacktracking` refuses outright. So this catches a syntax error and the node catches the rest; the
  * upgrade path is a linear-time-construct check here, which is a parser, for a message the save already produces.
  */
-export function verifierConfigIssue(kind: BenchmarkCriterionKind, config: string | null | undefined): BenchmarkVerifierIssue | null {
+export function verifierConfigIssue(
+	kind: BenchmarkCriterionKind,
+	config: string | null | undefined,
+): BenchmarkVerifierIssue | null {
 	if (kind === "llm") {
 		return config === null || config === undefined ? null : "llmConfig";
 	}

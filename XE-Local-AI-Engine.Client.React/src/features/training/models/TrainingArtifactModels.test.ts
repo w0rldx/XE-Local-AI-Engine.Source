@@ -4,11 +4,13 @@ import type { TrainingArtifactView, TrainingRunEvent } from "@/features/training
 import {
 	applyRunEvent,
 	canPromote,
+	defaultTrainingExportQuantization,
 	emptyTrainingRunProgress,
-	isExportRunning,
 	isExportedArtifact,
+	isExportRunning,
 	shortDigest,
 	toTrainingArtifactView,
+	trainingExportQuantizations,
 	trainingRunEventSchema,
 } from "@/features/training/models/TrainingModels";
 
@@ -82,6 +84,11 @@ describe("staged artifact view", () => {
 });
 
 describe("export phase tracking", () => {
+	it("keeps the export choices and default in one ordered contract", () => {
+		expect(trainingExportQuantizations).toEqual(["Q4_K_M", "Q5_K_M", "Q6_K", "Q8_0", "F16"]);
+		expect(defaultTrainingExportQuantization).toBe(trainingExportQuantizations[0]);
+	});
+
 	it("treats every pipeline phase as running until a terminal one arrives", () => {
 		expect(isExportRunning("merging")).toBe(true);
 		expect(isExportRunning("quantizing")).toBe(true);

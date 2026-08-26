@@ -335,4 +335,36 @@ describe("WorkSessionDetailPage", () => {
 		expect(alert.textContent).toContain("no such session");
 		expect(screen.getByTestId("work-session-detail-back")).toBeDefined();
 	});
+
+	it("stops polling subordinate feeds after the session detail is missing", async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		try {
+			const requests = new Map<string, number>();
+			const missing = (path: string) =>
+				http.get(localApiPath(`work-sessions/${sessionId}${path}`), () => {
+					requests.set(path, (requests.get(path) ?? 0) + 1);
+					return HttpResponse.json(
+						{ type: "about:blank", title: "Error", status: 404, detail: "no such session" },
+						{ status: 404, headers: { "content-type": "application/problem+json" } },
+					);
+				});
+
+			server.use(...["", "/tasks", "/findings", "/artifacts", "/checkpoints", "/events"].map(missing));
+			hubMock.connection.invoke.mockRejectedValue(new Error("subscription refused"));
+
+			renderDetail(<WorkSessionDetailPage sessionId={sessionId} />, { withRouter: true });
+
+			const alert = await screen.findByTestId("work-session-detail-error");
+			expect(alert.textContent).toContain("no such session");
+			expect(screen.getByTestId("work-session-detail-back")).toBeDefined();
+
+			await vi.advanceTimersByTimeAsync(6_100);
+
+			for (const path of ["", "/tasks", "/findings", "/artifacts", "/checkpoints", "/events"]) {
+				expect(requests.get(path), path || "/detail").toBe(1);
+			}
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 });

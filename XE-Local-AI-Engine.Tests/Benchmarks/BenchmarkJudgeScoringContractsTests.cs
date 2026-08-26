@@ -188,8 +188,8 @@ public sealed class BenchmarkJudgeScoringContractsTests
     {
         // The judge model is never handed a verifiable criterion — an all-verifiable rubric never reaches inference
         // and a mixed one is filtered first — so `kind` and `config` carry nothing it could use. Emitting them would
-        // change the payload bytes of every judging under a revision stored before P2 while no version moved, which
-        // is exactly the drift the prompt-version rule exists to prevent.
+        // change the payload bytes of every judging under a legacy revision stored without those fields while no
+        // version moved, which is exactly the drift the prompt-version rule exists to prevent.
         var rubric = Rubric(("alpha", 1));
         const string taskJson = "\"Write a haiku.\"";
         var outputParts = Encoding.UTF8.GetString(BenchmarkExecutionSerialization.SerializeParts([new BenchmarkOutputPart("output", Content: "hello")]));

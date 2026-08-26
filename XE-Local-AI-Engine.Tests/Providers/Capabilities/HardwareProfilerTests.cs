@@ -10,8 +10,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="HardwareProfiler" /> tests: Windows and Linux RAM/VRAM/vendor detection, the degrade-to-CPU path when
 ///     VRAM cannot be probed, the SINGLE consolidated <c>nvidia-smi</c> query (name+total+free, multi-GPU first-wins,
 ///     malformed-line skipping), the bounded-probe degrade (a killed/timed-out probe reuses the cached profile or the
-///     CPU default and records the timeout metric), and the gate proving the profiler project carries no HostAgent
-///     dependency. The process + environment probe seams are faked so detection is exercised with canned output and NO
+///     CPU default and records the timeout metric), and the provider-neutral dependency gate. The process and
+///     environment probe seams are faked so detection is exercised with canned output and no
 ///     real GPU, process spawn or platform pin.
 /// </summary>
 public sealed class HardwareProfilerTests
@@ -477,16 +477,16 @@ public sealed class HardwareProfilerTests
     }
 
     [Test]
-    public void HardwareProfiler_NoHostAgentDependency_ExtractionGate()
+    public void HardwareProfiler_ReferencesOnlyProviderAbstractions()
     {
-        // The profiler was extracted out of the now-removed in-Aspire HostAgent; this gate guards that it stays free of
-        // any HostAgent.* dependency so the HostAgent can be deleted.
-        var referencedAssemblies = typeof(HardwareProfiler).Assembly
-                                                           .GetReferencedAssemblies()
-                                                           .Select(name => name.Name ?? string.Empty)
-                                                           .ToList();
+        var engineReferences = typeof(HardwareProfiler).Assembly
+                                                       .GetReferencedAssemblies()
+                                                       .Select(name => name.Name ?? string.Empty)
+                                                       .Where(name => name.StartsWith("XE-Local-AI-Engine.", StringComparison.Ordinal))
+                                                       .ToList();
 
-        AssertEx.Empty(referencedAssemblies.Where(name => name.Contains("HostAgent", StringComparison.OrdinalIgnoreCase)));
+        AssertEx.True(engineReferences.SequenceEqual(["XE-Local-AI-Engine.Providers.Abstractions"], StringComparer.Ordinal),
+            "The capabilities provider must depend only on provider abstractions within the engine.");
     }
 
     private sealed class FakeProcessProbe : IProcessProbe

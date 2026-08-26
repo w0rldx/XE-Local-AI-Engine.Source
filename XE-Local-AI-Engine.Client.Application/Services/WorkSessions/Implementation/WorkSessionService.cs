@@ -322,7 +322,7 @@ internal sealed class WorkSessionService : IWorkSessionService
             // A tampered or missing blob is not content the node can vouch for, so it is not content the node hands
             // over. The row stays, and the read reads as "gone".
             _logger.LogWarning("Work session artifact {ArtifactId} could not be read: {Status}.", artifactId, read.Status);
-            throw new KeyNotFoundException($"Work session artifact '{artifactId}' could not be read.");
+            throw new WorkSessionNotFoundException($"Work session artifact '{artifactId}' could not be read.");
         }
 
         var isBase64 = !IsTextMediaType(artifact.MediaType);
@@ -339,7 +339,7 @@ internal sealed class WorkSessionService : IWorkSessionService
         var artifact = await _store.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
         if (artifact.SessionId != sessionId || !artifact.IsValid)
         {
-            throw new KeyNotFoundException($"Work session artifact '{artifactId}' was not found on session '{sessionId}'.");
+            throw new WorkSessionNotFoundException($"Work session artifact '{artifactId}' was not found on session '{sessionId}'.");
         }
 
         return artifact;

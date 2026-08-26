@@ -75,7 +75,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 	})),
 }));
 
-// The A9 readiness gate eager-connects the shared hub on mount; stub it as already connected so the page
+// The readiness gate eager-connects the shared hub on mount; stub it as already connected so the page
 // renders past the connecting gate (a real SignalR connection can't be built in jsdom).
 vi.mock("@/features/chat/api/NodeChatConnection", () => ({
 	nodeChatConnection: {

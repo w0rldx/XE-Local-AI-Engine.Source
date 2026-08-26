@@ -81,6 +81,30 @@ export const zXeLocalAiEngineClientEndpointsWorkspacesV1ListWorkspacesResponse =
 	items: z.array(zXeLocalAiEngineClientEndpointsWorkspacesV1WorkspaceResponse).optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse = z.object({
+	id: z.guid().optional(),
+	sequence: z.int().optional(),
+	kind: z.string().optional(),
+	name: z.string().optional(),
+	mediaType: z.string().optional(),
+	contentSha256: z.string().optional(),
+	sizeBytes: z.int().optional(),
+	isValid: z.boolean().optional(),
+	createdStep: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse = z.object({
+	artifact: zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse.optional(),
+	content: z.string().optional(),
+	isBase64: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactRequest = z.record(z.string(), z.never());
+
 export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionSummaryResponse = z.object({
 	id: z.guid().optional(),
 	title: z.string().optional(),
@@ -188,22 +212,6 @@ export const zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionFinding
 	lastSequence: z.int().optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse = z.object({
-	id: z.guid().optional(),
-	sequence: z.int().optional(),
-	kind: z.string().optional(),
-	name: z.string().optional(),
-	mediaType: z.string().optional(),
-	contentSha256: z.string().optional(),
-	sizeBytes: z.int().optional(),
-	isValid: z.boolean().optional(),
-	createdStep: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional(),
-});
-
 export const zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionArtifactsResponse = z.object({
 	items: z.array(zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse).optional(),
 	lastSequence: z.int().optional(),
@@ -249,14 +257,6 @@ export const zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionEventsR
 });
 
 export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionEventFeedRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse = z.object({
-	artifact: zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactResponse.optional(),
-	content: z.string().optional(),
-	isBase64: z.boolean().optional(),
-});
-
-export const zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactRequest = z.record(z.string(), z.never());
 
 export const zXeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageResponse = z.object({
 	messageId: z.guid().optional(),
@@ -6071,6 +6071,17 @@ export const zDeleteWorkspacePath = z.object({
  */
 export const zDeleteWorkspaceResponse = z.void();
 
+export const zGetWorkSessionArtifactContentPath = z.object({
+	sessionId: z.guid(),
+	artifactId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetWorkSessionArtifactContentResponse =
+	zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse;
+
 /**
  * Success
  */
@@ -6111,42 +6122,6 @@ export const zUpdateWorkSessionPath = z.object({
  * Success
  */
 export const zUpdateWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
-
-export const zStartWorkSessionPath = z.object({
-	sessionId: z.guid(),
-});
-
-/**
- * Accepted
- */
-export const zStartWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
-
-export const zPauseWorkSessionPath = z.object({
-	sessionId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zPauseWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
-
-export const zResumeWorkSessionPath = z.object({
-	sessionId: z.guid(),
-});
-
-/**
- * Accepted
- */
-export const zResumeWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
-
-export const zCancelWorkSessionPath = z.object({
-	sessionId: z.guid(),
-});
-
-/**
- * Success
- */
-export const zCancelWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
 
 export const zListWorkSessionTasksPath = z.object({
 	sessionId: z.guid(),
@@ -6218,16 +6193,41 @@ export const zListWorkSessionEventsQuery = z.object({
  */
 export const zListWorkSessionEventsResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1ListWorkSessionEventsResponse;
 
-export const zGetWorkSessionArtifactContentPath = z.object({
+export const zStartWorkSessionPath = z.object({
 	sessionId: z.guid(),
-	artifactId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zStartWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
+
+export const zPauseWorkSessionPath = z.object({
+	sessionId: z.guid(),
 });
 
 /**
  * Success
  */
-export const zGetWorkSessionArtifactContentResponse =
-	zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionArtifactContentResponse;
+export const zPauseWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
+
+export const zResumeWorkSessionPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zResumeWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
+
+export const zCancelWorkSessionPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zCancelWorkSessionResponse = zXeLocalAiEngineClientEndpointsWorkSessionsV1WorkSessionResponse;
 
 export const zPostWorkSessionMessageBody = zXeLocalAiEngineClientEndpointsWorkSessionsV1PostWorkSessionMessageRequest;
 

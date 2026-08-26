@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 
 /// <summary>
 ///     Author-time CRUD + validation for the custom-tool library. Validation is the trust boundary that decides what
-///     can ever reach the P2 executors; it reuses the exact same helpers those executors run at execution time
+///     can ever reach the executors; it reuses the exact same helpers those executors run at execution time
 ///     (<see cref="CustomToolValidation" />, <see cref="CustomToolTemplate" />, <see cref="CustomToolSchemaCompiler" />,
 ///     <see cref="CustomToolSsrfGuard" />, <see cref="HostExecutableGuard" />) so author-time acceptance and run-time
 ///     safety can never disagree. The store owns id/version/timestamp stamping; this service never touches versioning.
@@ -285,7 +285,7 @@ internal sealed partial class CustomToolService : ICustomToolService
                            .Where(static host => host.Length > 0)
                            .ToList();
 
-        // H2: a model-fillable host must be pinned to an operator allow-list, otherwise the model could point the fetch
+        // A model-fillable host must be pinned to an operator allow-list, otherwise the model could point the fetch
         // anywhere. The SSRF guard re-checks this at run time; rejecting here gives the author immediate feedback.
         if (hostIsParameterized && allowedHosts.Count == 0)
         {

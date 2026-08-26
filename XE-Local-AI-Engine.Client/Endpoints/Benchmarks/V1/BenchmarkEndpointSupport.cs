@@ -39,9 +39,7 @@ internal static class BenchmarkEndpointSupport
     ///     only while the two match, and the whole cache key — not the base model's fingerprint — is the gate.
     /// </summary>
     public static string? ExpectedKldDigest(BenchmarkProjectRecord? project) =>
-        project is { FidelityKldEnabled: true, FidelityKldBaseFingerprint: { Length: > 0 } fingerprint }
-            ? BenchmarkKldCacheKey.Create(fingerprint, BenchmarkFidelityCorpus.Require().Sha256, BenchmarkFidelityPolicy.ClampChunks(project.FidelityChunks)).Digest
-            : null;
+        BenchmarkFidelityDisplayFacts.FromProject(project).ExpectedKldDigest;
 
     public static IResult Error(Exception exception)
     {

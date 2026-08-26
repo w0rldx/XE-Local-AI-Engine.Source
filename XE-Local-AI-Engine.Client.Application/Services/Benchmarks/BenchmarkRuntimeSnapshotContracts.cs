@@ -191,7 +191,8 @@ public static class BenchmarkFrozenPolicies
     ///         the model. A longer budget cannot change what an already-completed run produced — only how many runs get
     ///         to complete at all.
     ///     </para>
-    ///     follow-up: fold timeouts into a versioned snapshot so a future change is visible in the configuration hash.
+    ///     Timeout values are not part of the versioned configuration hash, so changing a pinned timeout is not
+    ///     reflected in that hash.
     /// </summary>
     public static TimeoutSettings FrozenTimeouts(int? invocationTimeoutSeconds = null) =>
         new()

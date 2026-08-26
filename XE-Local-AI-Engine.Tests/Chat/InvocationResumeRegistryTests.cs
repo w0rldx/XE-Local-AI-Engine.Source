@@ -316,7 +316,7 @@ public sealed class InvocationResumeRegistryTests
     [Test]
     public async Task ResumeAsync_WhenPendingQuestion_ReplaysQuestionRequestedOnceWithTheQuestions()
     {
-        // D6: a mid-turn reload used to lose the prompt permanently — question-requested is emitted from ONE live
+        // A mid-turn reload used to lose the prompt permanently — question-requested is emitted from one live
         // subscription and is never accumulated into parts[], so the pending slot on InvocationState is the only
         // surface a reconnecting browser has. The turn cannot proceed without an answer, so losing it wastes the turn.
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
@@ -364,7 +364,7 @@ public sealed class InvocationResumeRegistryTests
     public async Task ResumeAsync_WhenPendingApproval_ReplaysApprovalRequested()
     {
         // Same defect, pre-existing on the shipped tool-approval feature: a reload lost the Approve/Deny controls and
-        // the turn stayed blocked until it timed out. Closed by D6 through the same replay.
+        // the turn stayed blocked until it timed out. The same replay now closes that gap.
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var registry = CreateRegistry(dispatcher);
         var invocationId = Guid.NewGuid();

@@ -9,10 +9,8 @@ using XE_Local_AI_Engine.Providers.Capabilities.Contracts;
 using XE_Local_AI_Engine.Providers.Capabilities.Options;
 
 /// <summary>
-///     Cross-platform <see cref="IHardwareProfiler" />. Extracted from (and supersedes) the Linux-shell-only
-///     <c>HostAgent.Linux.CapabilityDetector</c> — which measured no RAM/VRAM bytes — and adds RAM + VRAM-bytes +
-///     GPU-vendor detection on both Linux and Windows. Has ZERO <c>HostAgent.*</c> dependency, so the capabilities
-///     provider stays decoupled from the host-agent runtime.
+///     Cross-platform <see cref="IHardwareProfiler" /> that reports RAM, VRAM bytes, GPU vendor, CPU, and free disk
+///     on Linux and Windows. The provider remains independent of any runtime implementation.
 /// </summary>
 /// <remarks>
 ///     Probe order:

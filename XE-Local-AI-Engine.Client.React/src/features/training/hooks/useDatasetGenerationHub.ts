@@ -1,5 +1,5 @@
 import { HubConnectionState } from "@microsoft/signalr";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import type { DatasetGenerationProgress } from "@/features/training/models/TrainingModels";
@@ -25,7 +25,9 @@ export function useDatasetGenerationHub(datasetId: string | null, onResync: () =
 	const [progress, setProgress] = useState<DatasetGenerationProgress>(emptyProgress);
 	const cursorRef = useRef(0);
 	const resyncRef = useRef(onResync);
-	resyncRef.current = onResync;
+	useLayoutEffect(() => {
+		resyncRef.current = onResync;
+	}, [onResync]);
 
 	useEffect(() => {
 		if (!datasetId) {

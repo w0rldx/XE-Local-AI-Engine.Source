@@ -270,10 +270,10 @@ public sealed class WorkSessionEndpointTests
     [Arguments("GET", $"{Session}/events", null)]
     [Arguments("GET", $"{Session}/artifacts/22222222-2222-2222-2222-222222222222/content", null)]
     [Arguments("POST", $"{Session}/messages", """{"text":"hello"}""")]
-    public async Task WorkSessionRoute_WhenTheSessionIsUnknown_ReturnsNotFound(string method, string route, string? body)
+    public async Task WorkSessionRoute_WhenTheSessionIsUnknown_ReturnsBodylessNotFound(string method, string route, string? body)
     {
         var service = Substitute.For<IWorkSessionService>();
-        var missing = new KeyNotFoundException("gone");
+        var missing = CreateWorkSessionNotFoundException("gone");
         service.GetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
         service.UpdateAsync(Arg.Any<Guid>(), Arg.Any<UpdateWorkSessionRequestModel>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
         service.DeleteAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
@@ -293,6 +293,10 @@ public sealed class WorkSessionEndpointTests
         using var response = await SendAsync(factory, method, route, body).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, $"{method} {route} must answer 404 for an unknown session.");
+        AssertEx.Null(response.Content.Headers.ContentType, $"{method} {route} must not attach a content type to a bodyless 404.");
+        AssertEx.Equal(string.Empty,
+            await response.Content.ReadAsStringAsync().ConfigureAwait(false),
+            $"{method} {route} must preserve the existing bodyless 404 contract.");
     }
 
     [Test]
@@ -401,7 +405,7 @@ public sealed class WorkSessionEndpointTests
         var service = SubstituteWithEmptyFeeds();
         service.GetArtifactAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact());
         service.ReadArtifactContentAsync(SessionId, ArtifactId, Arg.Any<CancellationToken>())
-               .ThrowsAsyncForAnyArgs(new KeyNotFoundException("could not be read"));
+               .ThrowsAsyncForAnyArgs(CreateWorkSessionNotFoundException("could not be read"));
         await using var factory = EnabledFactory(service);
 
         using var response = await SendAsync(factory, "GET", $"{Session}/artifacts/{ArtifactId}/content").ConfigureAwait(false);
@@ -593,6 +597,17 @@ public sealed class WorkSessionEndpointTests
             sizeBytes,
             isValid,
             CreatedStep: 2);
+
+    private static Exception CreateWorkSessionNotFoundException(string message)
+    {
+        var exceptionType = AssertEx.NotNull(typeof(IAgentWorkSessionStore).Assembly.GetType(
+                "XE_Local_AI_Engine.Client.Persistence.Stores.WorkSessionNotFoundException",
+                throwOnError: false,
+                ignoreCase: false),
+            "The persistence layer must expose the typed WorkSessionNotFoundException family before endpoint catches are removed.");
+        return AssertEx.NotNull(Activator.CreateInstance(exceptionType, message) as Exception,
+            "WorkSessionNotFoundException must expose a public constructor accepting its sanitized message.");
+    }
 
     private static async Task<HttpResponseMessage> SendAsync(TestServerWebAppFactory factory, string method, string route, string? body = null)
     {

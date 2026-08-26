@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 using System.Text.RegularExpressions;
 
 /// <summary>
-///     Content-validation helpers shared by the executors (P2, execution-time defense in depth) and the CRUD service
-///     (P3, author-time rejection). Kept in one place so the two layers can never disagree on what a legal custom tool
+///     Content-validation helpers shared by the executors (execution-time defense in depth) and the CRUD service
+///     (author-time rejection). Kept in one place so the two layers can never disagree on what a legal custom tool
 ///     is: the same interpreter denylist, MAF-safe name rule, and absolute-path check gate both authoring and execution.
 /// </summary>
 internal static partial class CustomToolValidation
@@ -15,9 +15,9 @@ internal static partial class CustomToolValidation
     // Shell/interpreter/exec-capable basenames (case-insensitive, ".exe" stripped) rejected as a command tool's
     // executable. This is a best-effort blocklist, not a sandbox: it closes the obvious "run an arbitrary script"
     // reopening of shell arg-injection (and the .NET BatBadBut cmd.exe hole), but it cannot enumerate every binary that
-    // can spawn, interpret, or exec something else — a name not on this list is not thereby proven safe. The durable
-    // control is the forced per-call approval plus the deferred rlimit sandbox (see CustomToolConcurrencyLimiter); this
-    // list narrows the easy cases, it does not guarantee a command tool "cannot run an arbitrary script."
+    // can spawn, interpret, or exec something else — a name not on this list is not thereby proven safe. Forced per-call
+    // approval is the durable control; CustomToolConcurrencyLimiter caps concurrency but does not provide OS resource
+    // limits. This list narrows the easy cases; it does not guarantee a command tool cannot run an arbitrary script.
     // "python" is matched by prefix (python3, python3.12, …).
     private static readonly HashSet<string> InterpreterBasenames = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -89,7 +89,7 @@ internal static partial class CustomToolValidation
     /// <summary>
     ///     True when <paramref name="executablePath" />'s basename is a known shell/interpreter/exec-capable binary or
     ///     its extension is a script extension — either of which must be rejected as a command tool's executable
-    ///     (C1/M4). A best-effort blocklist (see <see cref="InterpreterBasenames" />): a <c>false</c> result means the
+    ///     for command tools. A best-effort blocklist (see <see cref="InterpreterBasenames" />): a <c>false</c> result means the
     ///     name is not on the list, not that the executable is safe.
     /// </summary>
     public static bool IsInterpreterOrShell(string? executablePath)

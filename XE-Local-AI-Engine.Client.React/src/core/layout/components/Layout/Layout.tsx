@@ -27,8 +27,8 @@ export function Layout() {
 	const sideBarCollapsed = useDesktopNavigationBarStore((state) => state.sidebarState);
 	const setSideBarCollapsed = useDesktopNavigationBarStore((state) => state.actions.setSidebarState);
 	// The desktop breakpoint is resolved in JS (not a CSS media query) because the
-	// resulting marginLeft/width are fed into framer-motion's `animate` prop to drive
-	// the 0.2s collapse/expand transition. Tradeoff: on first paint before hydration
+	// resulting marginLeft/width define the committed layout that Framer Motion's layout
+	// projection animates with compositor transforms. Tradeoff: on first paint before hydration
 	// `width` reflects the real window, so there is no flash in practice, but SSR/prerender
 	// would briefly render the mobile (100%) layout. Keeping it here avoids duplicating the
 	// breakpoint across JS and CSS and keeps margin/width as a single source of truth.
@@ -55,7 +55,8 @@ export function Layout() {
 				<m.div
 					className="w-full flex flex-col h-dvh overflow-hidden"
 					initial={false}
-					animate={{
+					layout={true}
+					style={{
 						marginLeft: contentMarginLeft,
 						width: contentWidth,
 					}}

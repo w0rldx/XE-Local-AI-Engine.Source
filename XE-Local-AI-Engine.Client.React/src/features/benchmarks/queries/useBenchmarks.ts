@@ -250,7 +250,7 @@ export function useEligibleBenchmarkModels(contextTokens?: number) {
 /**
  * What enabling KL divergence would cost this project in disk. Read BEFORE the operator commits, never after: the base
  * logits are ~1.75 bytes per logit and 200 chunks of a 150k-vocabulary model is 25 GB, which is not a number to
- * discover once the write has already started (plan §2 #3).
+ * discover once the cache write has already started.
  */
 export interface BenchmarkKldDiskEstimate {
 	estimatedBytes: number;
@@ -499,7 +499,11 @@ export function useUpdateBenchmarkJudgePolicy() {
 			confirmRejudge: boolean;
 		}) => {
 			const { data } = await callWithResponseValidation(
-				updateBenchmarkJudgePolicy({ path: { projectId }, body: { policy, expectedVersion, confirmRejudge }, throwOnError: true }),
+				updateBenchmarkJudgePolicy({
+					path: { projectId },
+					body: { policy, expectedVersion, confirmRejudge },
+					throwOnError: true,
+				}),
 			);
 			const enqueuedRunIds = data.enqueuedRunIds ?? [];
 			return { project: toBenchmarkProjectDetail(data.project), enqueuedRunIds, enqueuedRunCount: enqueuedRunIds.length };

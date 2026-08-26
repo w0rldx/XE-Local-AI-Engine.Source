@@ -581,8 +581,8 @@ public sealed class BenchmarkWorkKindLifecycleTests : IDisposable
     }
 
     /// <summary>
-    ///     Inserts a comparison and its work item directly. The pairwise PLANNER that will produce these is S3's; the
-    ///     lifecycle they travel through is this slice's, and it has to be exercised before that planner exists.
+    ///     Inserts a comparison and its work item directly so the work-kind lifecycle is tested independently of
+    ///     pairwise planning.
     /// </summary>
     private static async Task<Guid> InsertComparisonWorkAsync(NodeChatDbContext context,
         Guid projectId,

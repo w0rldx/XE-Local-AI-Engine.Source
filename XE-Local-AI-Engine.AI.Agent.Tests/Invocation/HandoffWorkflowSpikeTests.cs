@@ -68,7 +68,7 @@ public sealed class HandoffWorkflowSpikeTests
     {
         // Reflect the FunctionPrefix const so the fake can target the handoff tool by name.
         var functionPrefix = ReadFunctionPrefix();
-        Console.WriteLine($"[P5][A] FunctionPrefix='{functionPrefix}'");
+        Console.WriteLine($"[handoff][A] FunctionPrefix='{functionPrefix}'");
 
         using var fake = new HandoffScriptedChatClient(functionPrefix, SpecialistAnswer);
         var sp = new ServiceCollection().BuildServiceProvider();
@@ -92,7 +92,7 @@ public sealed class HandoffWorkflowSpikeTests
             NullLoggerFactory.Instance,
             sp);
 
-        Console.WriteLine($"[P5][A] triage.Id='{triage.Id}' specialist.Id='{specialist.Id}'");
+        Console.WriteLine($"[handoff][A] triage.Id='{triage.Id}' specialist.Id='{specialist.Id}'");
 
         var workflow = AgentWorkflowBuilder
                        .CreateHandoffBuilderWith(triage)
@@ -111,7 +111,7 @@ public sealed class HandoffWorkflowSpikeTests
         // the List<ChatMessage> input; it takes its turn (and forwards to the initial agent) only on a
         // TurnToken. So we must enqueue a TurnToken to actually start the conversation.
         var accepted = await run.TrySendMessageAsync(new TurnToken(true));
-        Console.WriteLine($"[P5][A] TrySendMessageAsync(TurnToken) accepted={accepted}");
+        Console.WriteLine($"[handoff][A] TrySendMessageAsync(TurnToken) accepted={accepted}");
 
         // Everything the stream yielded, and — separately — only what the SPECIALIST executor emitted. The second
         // accumulator is what actually proves the handoff: text can reach `outputText` from the terminal workflow
@@ -128,16 +128,16 @@ public sealed class HandoffWorkflowSpikeTests
         {
             await foreach (var evt in run.WatchStreamAsync(timeout.Token))
             {
-                Console.WriteLine($"[P5][A] event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 200)}");
+                Console.WriteLine($"[handoff][A] event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 200)}");
                 switch (evt)
                 {
                     case AgentResponseUpdateEvent updateEvent:
-                        Console.WriteLine($"[P5][A]   AgentResponseUpdateEvent.ExecutorId='{updateEvent.ExecutorId}' text='{Truncate(updateEvent.Update.Text)}'");
+                        Console.WriteLine($"[handoff][A]   AgentResponseUpdateEvent.ExecutorId='{updateEvent.ExecutorId}' text='{Truncate(updateEvent.Update.Text)}'");
                         outputText.Append(updateEvent.Update.Text);
                         AppendIfSpecialist(specialistText, updateEvent.ExecutorId, specialist.Id, updateEvent.Update.Text);
                         break;
                     case AgentResponseEvent are:
-                        Console.WriteLine($"[P5][A]   AgentResponseEvent.ExecutorId='{are.ExecutorId}' text='{Truncate(are.Response.Text)}'");
+                        Console.WriteLine($"[handoff][A]   AgentResponseEvent.ExecutorId='{are.ExecutorId}' text='{Truncate(are.Response.Text)}'");
                         outputText.Append(are.Response.Text);
                         AppendIfSpecialist(specialistText, are.ExecutorId, specialist.Id, are.Response.Text);
                         break;
@@ -148,11 +148,11 @@ public sealed class HandoffWorkflowSpikeTests
                         // both of which fall through to the default branch; the List<ChatMessage> shape 1.8.0 yielded
                         // is still the documented terminal payload. It only ever feeds the loose `outputText` — the
                         // load-bearing assertion reads `specialistText`, which this cannot contribute to.
-                        Console.WriteLine($"[P5][A]   WorkflowOutputEvent data type={woe.Data?.GetType().Name}");
+                        Console.WriteLine($"[handoff][A]   WorkflowOutputEvent data type={woe.Data?.GetType().Name}");
                         AppendChatMessages(outputText, woe.Data);
                         break;
                     case ExecutorFailedEvent fail:
-                        Console.WriteLine($"[P5][A]   ExecutorFailedEvent: {fail.Data?.GetType().Name}: {fail.Data?.Message}");
+                        Console.WriteLine($"[handoff][A]   ExecutorFailedEvent: {fail.Data?.GetType().Name}: {fail.Data?.Message}");
                         break;
                 }
 
@@ -172,9 +172,9 @@ public sealed class HandoffWorkflowSpikeTests
 
         var allOutput = outputText.ToString();
         var specialistOutput = specialistText.ToString();
-        Console.WriteLine($"[P5][A] aggregated output: {Truncate(allOutput, max: 400)}");
-        Console.WriteLine($"[P5][A] specialist-attributed output: {Truncate(specialistOutput, max: 400)}");
-        Console.WriteLine($"[P5][A] specialistInvokedAtLeastOnce={fake.SpecialistInvocations} sawUserQuestionAtSpecialist={fake.SpecialistSawUserQuestion} watchTimedOut={watchTimedOut}");
+        Console.WriteLine($"[handoff][A] aggregated output: {Truncate(allOutput, max: 400)}");
+        Console.WriteLine($"[handoff][A] specialist-attributed output: {Truncate(specialistOutput, max: 400)}");
+        Console.WriteLine($"[handoff][A] specialistInvokedAtLeastOnce={fake.SpecialistInvocations} sawUserQuestionAtSpecialist={fake.SpecialistSawUserQuestion} watchTimedOut={watchTimedOut}");
 
         var diagnostics =
             $" [watchTimedOut={watchTimedOut} specialistInvocations={fake.SpecialistInvocations} allOutput='{Truncate(allOutput, max: 200)}' specialistOutput='{Truncate(specialistOutput, max: 200)}']";
@@ -242,7 +242,7 @@ public sealed class HandoffWorkflowSpikeTests
 
         // HandoffStart only accumulates the messages; a TurnToken triggers the agent turn (same as scenario A).
         var accepted = await run.TrySendMessageAsync(new TurnToken(true));
-        Console.WriteLine($"[P5][B approve={approve}] TrySendMessageAsync(TurnToken) accepted={accepted}");
+        Console.WriteLine($"[handoff][B approve={approve}] TrySendMessageAsync(TurnToken) accepted={accepted}");
 
         // Drain until the workflow surfaces an approval request (a RequestInfoEvent carrying a
         // ToolApprovalRequestContent) or the watch times out.
@@ -252,11 +252,11 @@ public sealed class HandoffWorkflowSpikeTests
         {
             await foreach (var evt in run.WatchStreamAsync(pauseTimeout.Token))
             {
-                Console.WriteLine($"[P5][B approve={approve}] event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 160)}");
+                Console.WriteLine($"[handoff][B approve={approve}] event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 160)}");
                 if (evt is RequestInfoEvent rie)
                 {
                     Console.WriteLine(
-                        $"[P5][B approve={approve}]   RequestInfoEvent RequestId='{rie.Request.RequestId}' DataType={rie.Request.Data?.GetType().Name} portReqType={rie.Request.PortInfo.RequestType} portRespType={rie.Request.PortInfo.ResponseType}");
+                        $"[handoff][B approve={approve}]   RequestInfoEvent RequestId='{rie.Request.RequestId}' DataType={rie.Request.Data?.GetType().Name} portReqType={rie.Request.PortInfo.RequestType} portRespType={rie.Request.PortInfo.ResponseType}");
                     approvalRequestEvent = rie;
                     break;
                 }
@@ -269,7 +269,7 @@ public sealed class HandoffWorkflowSpikeTests
                                    .FirstOrDefault();
                     if (found is not null)
                     {
-                        Console.WriteLine($"[P5][B approve={approve}]   approval content surfaced via AgentResponseEvent: {found.GetType().Name}");
+                        Console.WriteLine($"[handoff][B approve={approve}]   approval content surfaced via AgentResponseEvent: {found.GetType().Name}");
                         approvalContentFromAgentEvent = found;
                     }
                 }
@@ -277,7 +277,7 @@ public sealed class HandoffWorkflowSpikeTests
         }
 
         Console.WriteLine(
-            $"[P5][B approve={approve}] PAUSE: requestInfoEvent={approvalRequestEvent is not null} agentEventApproval={approvalContentFromAgentEvent is not null} executedBeforeResume={executed}");
+            $"[handoff][B approve={approve}] PAUSE: requestInfoEvent={approvalRequestEvent is not null} agentEventApproval={approvalContentFromAgentEvent is not null} executedBeforeResume={executed}");
         AssertEx.Equal(expected: 0, executed, "tool must NOT execute before approval is granted");
         AssertEx.True(approvalRequestEvent is not null, "workflow must pause by surfacing a RequestInfoEvent for the approval");
 
@@ -296,10 +296,10 @@ public sealed class HandoffWorkflowSpikeTests
             {
                 await foreach (var evt in run.WatchStreamAsync(resumeTimeout.Token))
                 {
-                    Console.WriteLine($"[P5][B approve={approve}] (resume) event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 160)}");
+                    Console.WriteLine($"[handoff][B approve={approve}] (resume) event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 160)}");
                     if (evt is ExecutorFailedEvent fail)
                     {
-                        Console.WriteLine($"[P5][B approve={approve}]   (resume) ExecutorFailedEvent {fail.Data?.GetType().Name}: {fail.Data?.Message}");
+                        Console.WriteLine($"[handoff][B approve={approve}]   (resume) ExecutorFailedEvent {fail.Data?.GetType().Name}: {fail.Data?.Message}");
                     }
 
                     if (evt is WorkflowOutputEvent)
@@ -317,11 +317,11 @@ public sealed class HandoffWorkflowSpikeTests
             }
             catch (OperationCanceledException)
             {
-                Console.WriteLine($"[P5][B approve={approve}] (resume) watch timed out (workflow went idle)");
+                Console.WriteLine($"[handoff][B approve={approve}] (resume) watch timed out (workflow went idle)");
             }
         }
 
-        Console.WriteLine($"[P5][B approve={approve}] AFTER RESUME executed={executed} sawTerminalOutput={sawTerminalOutput}");
+        Console.WriteLine($"[handoff][B approve={approve}] AFTER RESUME executed={executed} sawTerminalOutput={sawTerminalOutput}");
         if (approve)
         {
             AssertEx.Equal(expected: 1, executed, "approved tool must execute exactly once after resume");
@@ -393,7 +393,7 @@ public sealed class HandoffWorkflowSpikeTests
             NullLoggerFactory.Instance,
             sp);
 
-        Console.WriteLine($"[P5][C approveFirst={approveFirst}] triage.Id='{triage.Id}' specialist.Id='{specialist.Id}'");
+        Console.WriteLine($"[handoff][C approveFirst={approveFirst}] triage.Id='{triage.Id}' specialist.Id='{specialist.Id}'");
 
         var workflow = AgentWorkflowBuilder
                        .CreateHandoffBuilderWith(triage)
@@ -408,7 +408,7 @@ public sealed class HandoffWorkflowSpikeTests
 
         var run = await InProcessExecution.RunStreamingAsync(workflow, input, $"p5-combined-{approveFirst}", CancellationToken.None);
         var accepted = await run.TrySendMessageAsync(new TurnToken(true));
-        Console.WriteLine($"[P5][C approveFirst={approveFirst}] TurnToken accepted={accepted}");
+        Console.WriteLine($"[handoff][C approveFirst={approveFirst}] TurnToken accepted={accepted}");
 
         // --- Step 1: drain until approval RequestInfoEvent appears ---
         RequestInfoEvent? approvalEvent = null;
@@ -416,29 +416,29 @@ public sealed class HandoffWorkflowSpikeTests
         {
             await foreach (var evt in run.WatchStreamAsync(ph1Cts.Token))
             {
-                Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph1 event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 160)}");
+                Console.WriteLine($"[handoff][C approveFirst={approveFirst}] ph1 event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 160)}");
                 if (evt is RequestInfoEvent rie && rie.Request.PortInfo.RequestType.ToString().Contains("ToolApprovalRequestContent", StringComparison.Ordinal))
                 {
-                    Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph1 APPROVAL PAUSED RequestId='{rie.Request.RequestId}'");
+                    Console.WriteLine($"[handoff][C approveFirst={approveFirst}] ph1 APPROVAL PAUSED RequestId='{rie.Request.RequestId}'");
                     approvalEvent = rie;
                     break;
                 }
 
                 if (evt is ExecutorFailedEvent fail)
                 {
-                    Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph1 FAILED: {fail.Data?.Message}");
+                    Console.WriteLine($"[handoff][C approveFirst={approveFirst}] ph1 FAILED: {fail.Data?.Message}");
                 }
             }
         }
 
-        Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph1 done: approvalEvent={approvalEvent is not null} lookupExecuted={lookupExecuted}");
+        Console.WriteLine($"[handoff][C approveFirst={approveFirst}] ph1 done: approvalEvent={approvalEvent is not null} lookupExecuted={lookupExecuted}");
         AssertEx.Equal(expected: 0, lookupExecuted, "C: lookup tool must NOT execute before approval");
         AssertEx.True(approvalEvent is not null, "C: workflow must pause with RequestInfoEvent for approval-required own tool");
 
         // --- Step 2: send approval/rejection, drain until handoff completes or tool-not-executed confirmed ---
         var approvalResponse = BuildApprovalResponse(approvalEvent!.Request, approveFirst);
         await run.SendResponseAsync(approvalResponse);
-        Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph2 approval sent (approve={approveFirst})");
+        Console.WriteLine($"[handoff][C approveFirst={approveFirst}] ph2 approval sent (approve={approveFirst})");
 
         var sawHandoffToSpecialist = false;
         var sawTerminalOutput = false;
@@ -448,10 +448,10 @@ public sealed class HandoffWorkflowSpikeTests
             {
                 await foreach (var evt in run.WatchStreamAsync(ph2Cts.Token))
                 {
-                    Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph2 event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 180)}");
+                    Console.WriteLine($"[handoff][C approveFirst={approveFirst}] ph2 event={evt.GetType().Name} :: {Truncate(evt.ToString(), max: 180)}");
                     if (evt is AgentResponseEvent are)
                     {
-                        Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph2 AgentResponseEvent executorId='{are.ExecutorId}' text='{Truncate(are.Response.Text)}'");
+                        Console.WriteLine($"[handoff][C approveFirst={approveFirst}] ph2 AgentResponseEvent executorId='{are.ExecutorId}' text='{Truncate(are.Response.Text)}'");
                         if (are.Response.Text?.Contains("SPECIALIST_ANSWER", StringComparison.Ordinal) ?? false)
                         {
                             sawHandoffToSpecialist = true;
@@ -465,7 +465,7 @@ public sealed class HandoffWorkflowSpikeTests
 
                     if (evt is ExecutorFailedEvent fail2)
                     {
-                        Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph2 FAILED: {fail2.Data?.Message}");
+                        Console.WriteLine($"[handoff][C approveFirst={approveFirst}] ph2 FAILED: {fail2.Data?.Message}");
                     }
 
                     // Exit when we have observed the specialist's answer (handoff happened)
@@ -484,12 +484,12 @@ public sealed class HandoffWorkflowSpikeTests
             }
             catch (OperationCanceledException)
             {
-                Console.WriteLine($"[P5][C approveFirst={approveFirst}] ph2 watch timed out (workflow went idle)");
+                Console.WriteLine($"[handoff][C approveFirst={approveFirst}] ph2 watch timed out (workflow went idle)");
             }
         }
 
         Console.WriteLine(
-            $"[P5][C approveFirst={approveFirst}] FINAL lookupExecuted={lookupExecuted} specialistInvocations={fake.SpecialistInvocations} sawHandoff={sawHandoffToSpecialist} sawTerminalOutput={sawTerminalOutput}");
+            $"[handoff][C approveFirst={approveFirst}] FINAL lookupExecuted={lookupExecuted} specialistInvocations={fake.SpecialistInvocations} sawHandoff={sawHandoffToSpecialist} sawTerminalOutput={sawTerminalOutput}");
 
         if (approveFirst)
         {
@@ -508,7 +508,7 @@ public sealed class HandoffWorkflowSpikeTests
     {
         // The request Data is (expected to be) the ToolApprovalRequestContent; build its response and wrap.
         var data = request.Data?.AsType(typeof(object));
-        Console.WriteLine($"[P5][B] request.Data.AsType -> {data?.GetType().FullName}");
+        Console.WriteLine($"[handoff][B] request.Data.AsType -> {data?.GetType().FullName}");
         if (data is ToolApprovalRequestContent approvalReq)
         {
             return request.CreateResponse(approvalReq.CreateResponse(approve));
@@ -630,10 +630,10 @@ public sealed class HandoffWorkflowSpikeTests
             var handoffTool = options?.Tools?
                 .FirstOrDefault(t => t.Name.StartsWith(_functionPrefix, StringComparison.Ordinal));
             var toolNames = options?.Tools is null ? "<none>" : string.Join(",", options.Tools.Select(t => t.Name));
-            Console.WriteLine($"[P5][A][fake] invoked streaming={streaming} msgCount={list.Count} roles=[{string.Join("|", list.Select(m => m.Role.Value))}] optionTools=[{toolNames}]");
+            Console.WriteLine($"[handoff][A][fake] invoked streaming={streaming} msgCount={list.Count} roles=[{string.Join("|", list.Select(m => m.Role.Value))}] optionTools=[{toolNames}]");
             foreach (var m in list)
             {
-                Console.WriteLine($"[P5][A][fake]   {m.Role.Value}: {Truncate(m.Text, max: 90)} contents=[{string.Join(",", m.Contents.Select(c => c.GetType().Name))}]");
+                Console.WriteLine($"[handoff][A][fake]   {m.Role.Value}: {Truncate(m.Text, max: 90)} contents=[{string.Join(",", m.Contents.Select(c => c.GetType().Name))}]");
             }
 
             if (handoffTool is null)
@@ -642,7 +642,7 @@ public sealed class HandoffWorkflowSpikeTests
                 SpecialistInvocations++;
                 SpecialistSawUserQuestion = list.Any(m =>
                     m.Text?.Contains("database migration", StringComparison.Ordinal) ?? false);
-                Console.WriteLine($"[P5][A][fake]   -> SPECIALIST answer (invocation #{SpecialistInvocations}, sawUserQuestion={SpecialistSawUserQuestion})");
+                Console.WriteLine($"[handoff][A][fake]   -> SPECIALIST answer (invocation #{SpecialistInvocations}, sawUserQuestion={SpecialistSawUserQuestion})");
                 return streaming
                     ? (null, new ChatResponseUpdate(ChatRole.Assistant, _specialistAnswer))
                     : (new ChatResponse(new ChatMessage(ChatRole.Assistant, _specialistAnswer)), null);
@@ -650,7 +650,7 @@ public sealed class HandoffWorkflowSpikeTests
 
             // TRIAGE turn: emit the framework-injected handoff tool call by its REAL name (handoff_to_<n>).
             var handoffName = handoffTool.Name;
-            Console.WriteLine($"[P5][A][fake]   -> TRIAGE handoff call '{handoffName}'");
+            Console.WriteLine($"[handoff][A][fake]   -> TRIAGE handoff call '{handoffName}'");
             var call = new FunctionCallContent($"call-{handoffName}", handoffName, new Dictionary<string, object?>());
             return streaming
                 ? (null, new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent>
@@ -710,20 +710,20 @@ public sealed class HandoffWorkflowSpikeTests
         {
             CallCount++;
             var list = messages.ToList();
-            Console.WriteLine($"[P5][B][fake] call#{CallCount} msgCount={list.Count} roles=[{string.Join("|", list.Select(m => m.Role.Value))}]");
+            Console.WriteLine($"[handoff][B][fake] call#{CallCount} msgCount={list.Count} roles=[{string.Join("|", list.Select(m => m.Role.Value))}]");
             foreach (var m in list)
             {
-                Console.WriteLine($"[P5][B][fake]   {m.Role.Value}: '{Truncate(m.Text, max: 70)}' contents=[{string.Join(",", m.Contents.Select(c => c.GetType().Name))}]");
+                Console.WriteLine($"[handoff][B][fake]   {m.Role.Value}: '{Truncate(m.Text, max: 70)}' contents=[{string.Join(",", m.Contents.Select(c => c.GetType().Name))}]");
             }
 
             var toolHasRun = list.SelectMany(m => m.Contents).OfType<FunctionResultContent>().Any();
             if (toolHasRun)
             {
-                Console.WriteLine("[P5][B][fake]   -> tool result present, returning final text");
+                Console.WriteLine("[handoff][B][fake]   -> tool result present, returning final text");
                 return new ChatResponse(new ChatMessage(ChatRole.Assistant, "cleanup complete"));
             }
 
-            Console.WriteLine($"[P5][B][fake]   -> emitting tool call '{_toolName}'");
+            Console.WriteLine($"[handoff][B][fake]   -> emitting tool call '{_toolName}'");
             var call = new FunctionCallContent($"call-{_toolName}", _toolName, new Dictionary<string, object?>
             {
                 ["reason"] = "nightly maintenance"
@@ -803,17 +803,17 @@ public sealed class HandoffWorkflowSpikeTests
             // DISCRIMINATOR: triage has handoff_to_* in options.Tools; specialist does not.
             var handoffTool = options?.Tools?.FirstOrDefault(t => t.Name.StartsWith("handoff_to_", StringComparison.Ordinal));
             var toolNames = options?.Tools is null ? "<none>" : string.Join(",", options.Tools.Select(t => t.Name));
-            Console.WriteLine($"[P5][C][fake] invoked streaming={streaming} msgCount={list.Count} roles=[{string.Join("|", list.Select(m => m.Role.Value))}] optionTools=[{toolNames}]");
+            Console.WriteLine($"[handoff][C][fake] invoked streaming={streaming} msgCount={list.Count} roles=[{string.Join("|", list.Select(m => m.Role.Value))}] optionTools=[{toolNames}]");
             foreach (var m in list)
             {
-                Console.WriteLine($"[P5][C][fake]   {m.Role.Value}: '{Truncate(m.Text, max: 80)}' contents=[{string.Join(",", m.Contents.Select(c => c.GetType().Name))}]");
+                Console.WriteLine($"[handoff][C][fake]   {m.Role.Value}: '{Truncate(m.Text, max: 80)}' contents=[{string.Join(",", m.Contents.Select(c => c.GetType().Name))}]");
             }
 
             if (handoffTool is null)
             {
                 // SPECIALIST turn.
                 SpecialistInvocations++;
-                Console.WriteLine($"[P5][C][fake]   -> SPECIALIST answer (#{SpecialistInvocations})");
+                Console.WriteLine($"[handoff][C][fake]   -> SPECIALIST answer (#{SpecialistInvocations})");
                 return streaming
                     ? (null, new ChatResponseUpdate(ChatRole.Assistant, _specialistAnswer))
                     : (new ChatResponse(new ChatMessage(ChatRole.Assistant, _specialistAnswer)), null);
@@ -826,7 +826,7 @@ public sealed class HandoffWorkflowSpikeTests
             {
                 // Step 2: own-tool result is in history → now emit the handoff call.
                 var handoffName = handoffTool.Name;
-                Console.WriteLine($"[P5][C][fake]   -> TRIAGE phase2 handoff call '{handoffName}'");
+                Console.WriteLine($"[handoff][C][fake]   -> TRIAGE phase2 handoff call '{handoffName}'");
                 var handoffCall = new FunctionCallContent($"call-{handoffName}", handoffName, new Dictionary<string, object?>());
                 return streaming
                     ? (null, new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent>
@@ -840,7 +840,7 @@ public sealed class HandoffWorkflowSpikeTests
             }
 
             // Step 1: no result yet → emit the own-tool call (approval-required, will be intercepted by FICC).
-            Console.WriteLine($"[P5][C][fake]   -> TRIAGE phase1 own-tool call '{_ownToolName}'");
+            Console.WriteLine($"[handoff][C][fake]   -> TRIAGE phase1 own-tool call '{_ownToolName}'");
             var ownCall = new FunctionCallContent($"call-{_ownToolName}", _ownToolName, new Dictionary<string, object?>
             {
                 ["customerId"] = "C-42"

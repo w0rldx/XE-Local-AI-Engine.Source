@@ -32,7 +32,7 @@ export function useCodexStatus(options: UseCodexStatusOptions) {
 	return useQuery({
 		...withResponseValidation(codexStatusOptions()),
 		// Poll while pending and not yet timed out; stop once we know the final state.
-		refetchInterval: polling && !timedOut ? POLL_INTERVAL_MS : false,
+		refetchInterval: (query) => (polling && !timedOut && query.state.data?.signedIn !== true ? POLL_INTERVAL_MS : false),
 		// Status endpoint is always fresh — never serve a stale cached value during polling.
 		staleTime: 0,
 	});

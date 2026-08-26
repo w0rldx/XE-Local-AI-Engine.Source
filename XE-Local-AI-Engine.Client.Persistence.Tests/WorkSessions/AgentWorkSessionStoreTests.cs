@@ -143,7 +143,7 @@ public sealed class AgentWorkSessionStoreTests
         var created = await WorkSessionTestFixture.SeedAsync(store, sessionId).ConfigureAwait(false);
 
         // The declared foreign keys never fire on this connection, so ownership is the store's to check.
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => store.ApplyPlanAsync(new ApplyWorkPlanCommand(sessionId,
                               created.Version,
                               Guid.NewGuid(),
                               AgentWorkSessionTaskOrigin.Agent,
@@ -237,7 +237,23 @@ public sealed class AgentWorkSessionStoreTests
         await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
         var store = WorkSessionTestFixture.StoreFor(context);
 
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => store.GetAsync(Guid.NewGuid())).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<KeyNotFoundException>(() => store.GetArtifactAsync(Guid.NewGuid())).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => store.GetAsync(Guid.NewGuid())).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => store.GetArtifactAsync(Guid.NewGuid())).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task Feeds_ThrowForAnUnknownSessionRatherThanReturningAnEmptyCollection()
+    {
+        using var fixture = new WorkSessionTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = WorkSessionTestFixture.StoreFor(context);
+        var sessionId = Guid.NewGuid();
+
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => store.ListTasksAsync(sessionId)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => store.ListFindingsAsync(sessionId)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => store.ListArtifactsAsync(sessionId)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => store.ListCheckpointsAsync(sessionId)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => store.ListEventsAsync(sessionId)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => store.GetLatestCheckpointAsync(sessionId)).ConfigureAwait(false);
     }
 }

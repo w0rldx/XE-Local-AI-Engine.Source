@@ -13,7 +13,14 @@ function renderWithProviders(ui: ReactElement) {
 }
 
 function noticePart(overrides: Partial<ChatNoticePart> = {}): ChatNoticePart {
-	return { kind: "notice", id: "assistant-1:5", sequence: 5, noticeKind: "ModelSubstituted", text: "Switched to a smaller model.", ...overrides };
+	return {
+		kind: "notice",
+		id: "assistant-1:5",
+		sequence: 5,
+		noticeKind: "ModelSubstituted",
+		text: "Switched to a smaller model.",
+		...overrides,
+	};
 }
 
 describe("ChatNoticeRow", () => {
@@ -61,7 +68,7 @@ describe("ChatNoticeRow", () => {
 	});
 
 	it("renders the orchestration-degraded notice with its own kind tag and server text", () => {
-		// G16: an orchestrator that ran as a single agent must be visible in the turn, not just in a server log.
+		// An orchestrator that ran as a single agent must be visible in the turn, not just in a server log.
 		renderWithProviders(
 			<ChatNoticeRow
 				part={noticePart({

@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 /// <summary>
-///     G1(c): the agent-facing Development sandbox asks for <see cref="SandboxNetworkPolicy.None" />.
+///     The agent-facing Development sandbox asks for <see cref="SandboxNetworkPolicy.None" />.
 ///     <para>
 ///         The request is capability-gated (the operator's 2026-08-25 Option B ruling), so BOTH directions are asserted
 ///         here. A test that only pinned the denial would pass on this Linux host and say nothing about the Windows

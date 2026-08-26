@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 /// <summary>
-///     G5: a repository can carry a COMMITTED credential, and the clone brings it into the sandbox.
+///     A repository can carry a committed credential, and the clone brings it into the sandbox.
 ///     <para>
 ///         The correction that shapes the whole design: the workspace is a <c>git clone</c>, so only TRACKED content
 ///         arrives — an untracked <c>.env</c> in the operator's repository never rides along. What matters is the

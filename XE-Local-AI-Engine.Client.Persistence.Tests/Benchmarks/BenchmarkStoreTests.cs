@@ -59,9 +59,8 @@ public sealed class BenchmarkStoreTests : IDisposable
     [Test]
     public async Task ProjectFidelitySettings_SurviveACreateAnUpdateAndAReadBack_AndFreezeWithTheRestOfTheProject()
     {
-        // BenchmarkProjectInput carried these five from S1 and neither write path assigned them, so every value an
-        // operator picked was accepted by the API and silently dropped. They are on the same write as Name and
-        // ContextTokens, which means they inherit the freeze: a project with runs refuses the whole edit.
+        // These five fidelity fields must round-trip through both project write paths. They share the write with
+        // Name and ContextTokens, so they also inherit the freeze: a project with runs refuses the whole edit.
         var databasePath = GetDatabasePath("project-fidelity.sqlite");
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();
@@ -1068,7 +1067,7 @@ public sealed class BenchmarkStoreTests : IDisposable
     [Test]
     public async Task StartRuns_WithoutIdentityStamps_KeepsEveryRunItsOwnSingletonCell()
     {
-        // R2: a caller written before task suites names none of the stamps and gets exactly the pre-suite shape.
+        // A legacy caller names none of the task-suite identity stamps and gets exactly the pre-suite shape.
         var databasePath = GetDatabasePath("start-runs-legacy-stamps.sqlite");
         await using var context = CreateContext(databasePath);
         await context.Database.EnsureDeletedAsync();

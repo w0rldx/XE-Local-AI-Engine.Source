@@ -220,7 +220,7 @@ public sealed class SandboxedMcpStdioLiveTests
     {
         if (!OperatingSystem.IsLinux())
         {
-            Skip("the isolated launch chain is Linux-only; the Sandboxed tier is unavailable elsewhere until G12.");
+            Skip("the isolated launch chain is Linux-only; the Sandboxed tier is unavailable on other platforms.");
         }
 
         if (!string.Equals(Environment.GetEnvironmentVariable(EnabledVariable), "1", StringComparison.Ordinal))

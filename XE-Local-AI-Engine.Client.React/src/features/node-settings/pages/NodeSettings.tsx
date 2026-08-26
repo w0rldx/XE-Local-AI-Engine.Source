@@ -1,13 +1,13 @@
-import { Alert, Button, Group, Loader, NumberInput, Switch, Text } from "@mantine/core";
-import { IconAlertTriangle, IconCode, IconDeviceFloppy, IconRefresh, IconSettings } from "@tabler/icons-react";
+import { Alert, Button, Group, Loader, NumberInput, Text } from "@mantine/core";
+import { IconAlertTriangle, IconDeviceFloppy, IconRefresh, IconSettings } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type {
-	SaveNodeSettingsResponse,
 	XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest as SaveNodeSettingsRequest,
+	SaveNodeSettingsResponse,
 } from "@/core/api/generated";
 import {
 	downloadRecommendedEmbeddingMutation,
@@ -27,12 +27,12 @@ import { toChatModelOptions, toDraftModelOptions } from "@/features/chat/pages/C
 import { DownloadProgressPanel } from "@/features/models/components/DownloadProgressPanel";
 import { useActiveGgufDownloads, useCancelGgufDownload } from "@/features/models/queries/useGgufDownload";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
-import { HfTokenPanel } from "@/features/node-settings/components/HfTokenPanel";
 import { ImageRuntimeSourceBuildCard } from "@/features/node-settings/components/ImageRuntimeSourceBuildCard";
 import { LlamaCppUpdaterPanel } from "@/features/node-settings/components/LlamaCppUpdaterPanel";
-import { LocalModelProxyKeyPanel } from "@/features/node-settings/components/LocalModelProxyKeyPanel";
-import { McpServerKeyPanel } from "@/features/node-settings/components/McpServerKeyPanel";
-import { McpWorkspaceAllowlistPanel } from "@/features/node-settings/components/McpWorkspaceAllowlistPanel";
+import {
+	NodeSettingsAuxiliaryPanels,
+	NodeSettingsDeveloperModePanel,
+} from "@/features/node-settings/components/NodeSettingsAuxiliaryPanels";
 import { NodeSettingsFieldsCard } from "@/features/node-settings/components/NodeSettingsFieldsCard";
 import { SourceBuildCard } from "@/features/node-settings/components/SourceBuildCard";
 import {
@@ -53,6 +53,180 @@ import { VoiceSettingsCard } from "@/features/voice/components/VoiceSettingsCard
 
 function errorMessage(error: unknown): string {
 	return apiErrorMessage(error, "Unexpected node settings error");
+}
+
+function useNodeSettingsModelOptions(form: NodeSettingsFieldsForm, errors: Readonly<Record<string, string>>) {
+	const { t } = useTranslation();
+	const { data: localModels } = useQuery(withResponseValidation(listLocalModelsOptions()));
+	const draftModelOptions = useMemo(
+		() =>
+			toDraftModelOptions(localModels?.items ?? [], localModels?.isAvailable ?? false).map((option) => ({
+				value: option.value,
+				label: option.label,
+			})),
+		[localModels],
+	);
+	const installedKeepWarmModelOptions = useMemo(
+		() =>
+			toChatModelOptions(
+				(localModels?.items ?? []).filter((model) => (model.provider ?? "").toLowerCase() === "llamacpp"),
+				localModels?.isAvailable ?? false,
+			).map((option) => ({ value: option.value, label: option.label })),
+		[localModels],
+	);
+	const selectedKeepWarmModel = form.keepModelWarmModelName.trim();
+	const keepWarmModelUnavailable =
+		localModels !== undefined &&
+		form.keepModelWarmEnabled &&
+		selectedKeepWarmModel.length > 0 &&
+		!installedKeepWarmModelOptions.some((option) => option.value === selectedKeepWarmModel);
+	const keepWarmModelOptions = useMemo(
+		() =>
+			keepWarmModelUnavailable
+				? [
+						...installedKeepWarmModelOptions,
+						{
+							value: selectedKeepWarmModel,
+							label: t("pages.nodeSettings.fields.keepModelWarm.unavailableOption", "{{model}} (not installed)", {
+								model: selectedKeepWarmModel,
+							}),
+						},
+					]
+				: installedKeepWarmModelOptions,
+		[installedKeepWarmModelOptions, keepWarmModelUnavailable, selectedKeepWarmModel, t],
+	);
+	const rerankerModelOptions = useMemo(
+		() =>
+			(localModels?.items ?? [])
+				.map((model) => ({ value: model.modelName ?? "", label: model.modelName ?? "" }))
+				.filter((option) => option.value.length > 0),
+		[localModels],
+	);
+
+	return {
+		draftModelOptions,
+		keepWarmModelOptions,
+		rerankerModelOptions,
+		keepWarmModelUnavailable,
+		visibleErrors: keepWarmModelUnavailable ? { ...errors, keepModelWarmModelName: "unavailableKeepWarmModel" } : errors,
+	};
+}
+
+function useRecommendedModelDownloads() {
+	const { t } = useTranslation();
+	const downloadStatuses = useActiveGgufDownloads();
+	const inFlightDownloads = useGgufBrowseStore((state) => state.inFlightDownloads);
+	const markInFlight = useGgufBrowseStore((state) => state.actions.markInFlight);
+	const removeInFlight = useGgufBrowseStore((state) => state.actions.removeInFlight);
+	const cancel = useCancelGgufDownload();
+	const [rerankerName, setRerankerName] = useState<string | null>(null);
+	const [embeddingName, setEmbeddingName] = useState<string | null>(null);
+	const rerankerInFlight = rerankerName !== null && inFlightDownloads.includes(rerankerName);
+	const embeddingInFlight = embeddingName !== null && inFlightDownloads.includes(embeddingName);
+	const progressNames = useMemo(
+		() =>
+			[rerankerInFlight ? rerankerName : null, embeddingInFlight ? embeddingName : null].filter(
+				(name): name is string => name !== null,
+			),
+		[embeddingInFlight, embeddingName, rerankerInFlight, rerankerName],
+	);
+
+	const reranker = useMutation({
+		...withResponseValidation(downloadRecommendedRerankerMutation()),
+		onSuccess: (response) => {
+			setRerankerName(response.modelName);
+			if (response.alreadyInstalled) {
+				toast.info(
+					t(
+						"pages.nodeSettings.fields.rerankerModel.downloadAlreadyInstalled",
+						"The recommended reranker ({{model}}) is already installed.",
+						{ model: response.modelName },
+					),
+				);
+				return;
+			}
+			markInFlight(response.modelName);
+			toast.info(
+				response.alreadyInFlight
+					? t(
+							"pages.nodeSettings.fields.rerankerModel.downloadInFlight",
+							"The recommended reranker ({{model}}) is already downloading.",
+							{ model: response.modelName },
+						)
+					: t("pages.nodeSettings.fields.rerankerModel.downloadStarted", "Downloading the recommended reranker ({{model}}).", {
+							model: response.modelName,
+						}),
+			);
+		},
+		onError: (error) =>
+			toast.error(
+				apiErrorMessage(
+					error,
+					t("pages.nodeSettings.fields.rerankerModel.downloadError", "Could not start the recommended reranker download."),
+				),
+			),
+	});
+
+	const embedding = useMutation({
+		...withResponseValidation(downloadRecommendedEmbeddingMutation()),
+		onSuccess: (response) => {
+			setEmbeddingName(response.modelName);
+			if (response.alreadyInstalled) {
+				toast.info(
+					t(
+						"pages.nodeSettings.fields.embeddingModel.downloadAlreadyInstalled",
+						"The recommended embedding model ({{model}}) is already installed.",
+						{ model: response.modelName },
+					),
+				);
+				return;
+			}
+			markInFlight(response.modelName);
+			toast.info(
+				response.alreadyInFlight
+					? t(
+							"pages.nodeSettings.fields.embeddingModel.downloadInFlight",
+							"The recommended embedding model ({{model}}) is already downloading.",
+							{ model: response.modelName },
+						)
+					: t(
+							"pages.nodeSettings.fields.embeddingModel.downloadStarted",
+							"Downloading the recommended embedding model ({{model}}).",
+							{ model: response.modelName },
+						),
+			);
+		},
+		onError: (error) =>
+			toast.error(
+				apiErrorMessage(
+					error,
+					t(
+						"pages.nodeSettings.fields.embeddingModel.downloadError",
+						"Could not start the recommended embedding model download.",
+					),
+				),
+			),
+	});
+
+	const cancelDownload = (modelName: string): void => {
+		cancel.mutate(modelName, {
+			onSuccess: () => {
+				removeInFlight(modelName);
+				toast.success(t("pages.models.gguf.download.cancelled", "Download cancelled."));
+			},
+			onError: (error) =>
+				toast.error(apiErrorMessage(error, t("pages.models.gguf.download.cancelError", "Could not cancel the download."))),
+		});
+	};
+
+	return {
+		downloadStatuses,
+		progressNames,
+		cancelDownload,
+		cancellingModelName: cancel.isPending ? (cancel.variables ?? null) : null,
+		reranker: { start: () => reranker.mutate({}), isPending: reranker.isPending, isInFlight: rerankerInFlight },
+		embedding: { start: () => embedding.mutate({}), isPending: embedding.isPending, isInFlight: embeddingInFlight },
+	};
 }
 
 export function NodeSettings() {
@@ -84,204 +258,9 @@ export function NodeSettings() {
 	const [fieldErrors, setFieldErrors] = useState<Readonly<Record<string, string>>>({});
 	const fieldBounds = useMemo(() => toNodeSettingsFieldBounds(settings), [settings]);
 
-	// Models offered as the speculative draft model (value = model name, resolved server-side). Purpose-built MTP
-	// drafters are `Draft`-kind and so are absent from the chat list — they must be offered HERE, which is the only
-	// place they are usable at all.
-	const { data: localModels } = useQuery(withResponseValidation(listLocalModelsOptions()));
-	const draftModelOptions = useMemo(
-		() =>
-			toDraftModelOptions(localModels?.items ?? [], localModels?.isAvailable ?? false).map((option) => ({
-				value: option.value,
-				label: option.label,
-			})),
-		[localModels],
-	);
+	const modelOptions = useNodeSettingsModelOptions(fieldsForm, fieldErrors);
 
-	// Keep-warm targets the supervised llama-server runtime, so only installed chat models owned by the llama.cpp
-	// provider are eligible. Provider matching is case-insensitive because provider names cross a persisted/API boundary.
-	const installedKeepWarmModelOptions = useMemo(
-		() =>
-			toChatModelOptions(
-				(localModels?.items ?? []).filter((model) => (model.provider ?? "").toLowerCase() === "llamacpp"),
-				localModels?.isAvailable ?? false,
-			).map((option) => ({ value: option.value, label: option.label })),
-		[localModels],
-	);
-	const selectedKeepWarmModel = fieldsForm.keepModelWarmModelName.trim();
-	const keepWarmModelUnavailable =
-		localModels !== undefined &&
-		fieldsForm.keepModelWarmEnabled &&
-		selectedKeepWarmModel.length > 0 &&
-		!installedKeepWarmModelOptions.some((option) => option.value === selectedKeepWarmModel);
-	const keepWarmModelOptions = useMemo(
-		() =>
-			keepWarmModelUnavailable
-				? [
-						...installedKeepWarmModelOptions,
-						{
-							value: selectedKeepWarmModel,
-							label: t("pages.nodeSettings.fields.keepModelWarm.unavailableOption", "{{model}} (not installed)", {
-								model: selectedKeepWarmModel,
-							}),
-						},
-					]
-				: installedKeepWarmModelOptions,
-		[installedKeepWarmModelOptions, keepWarmModelUnavailable, selectedKeepWarmModel, t],
-	);
-	const visibleFieldErrors = keepWarmModelUnavailable
-		? { ...fieldErrors, keepModelWarmModelName: "unavailableKeepWarmModel" }
-		: fieldErrors;
-
-	// Installed models offered as the knowledge-base reranker. Reranker GGUFs are not a chat kind, so this list is NOT
-	// filtered to chat-capable models (value = model name, resolved server-side).
-	const rerankerModelOptions = useMemo(
-		() =>
-			(localModels?.items ?? [])
-				.map((model) => ({ value: model.modelName ?? "", label: model.modelName ?? "" }))
-				.filter((option) => option.value.length > 0),
-		[localModels],
-	);
-
-	// One-click recommended-reranker download. Progress reuses the SAME GgufDownload feed as Model Management: the
-	// coordinator streams status over SignalR, the shared GgufBrowseStore tracks in-flight names, and completion
-	// invalidates the installed-models list (which this page's reranker dropdown reads) — so the model becomes
-	// selectable without a manual refresh. We remember the canonical model name from the mutation response so the
-	// progress panel + duplicate-guard scope to exactly the reranker download this page initiated.
-	const rerankerDownloadStatuses = useActiveGgufDownloads();
-	const inFlightDownloads = useGgufBrowseStore((state) => state.inFlightDownloads);
-	const markInFlight = useGgufBrowseStore((state) => state.actions.markInFlight);
-	const removeInFlight = useGgufBrowseStore((state) => state.actions.removeInFlight);
-	const [recommendedRerankerModelName, setRecommendedRerankerModelName] = useState<string | null>(null);
-	const cancelGgufDownloadMutation = useCancelGgufDownload();
-
-	const isRecommendedRerankerInFlight =
-		recommendedRerankerModelName !== null && inFlightDownloads.includes(recommendedRerankerModelName);
-	const rerankerInFlight = useMemo(
-		() => (isRecommendedRerankerInFlight && recommendedRerankerModelName !== null ? [recommendedRerankerModelName] : []),
-		[isRecommendedRerankerInFlight, recommendedRerankerModelName],
-	);
-
-	const downloadRecommendedReranker = useMutation({
-		...withResponseValidation(downloadRecommendedRerankerMutation()),
-		onSuccess: (response) => {
-			setRecommendedRerankerModelName(response.modelName);
-			if (response.alreadyInstalled) {
-				toast.info(
-					t(
-						"pages.nodeSettings.fields.rerankerModel.downloadAlreadyInstalled",
-						"The recommended reranker ({{model}}) is already installed.",
-						{
-							model: response.modelName,
-						},
-					),
-				);
-				return;
-			}
-			// Mark in-flight immediately so the button duplicate-guards and the progress panel appears without waiting for
-			// the first SignalR push (markInFlight is idempotent, so an already-in-flight rejoin is a no-op).
-			markInFlight(response.modelName);
-			toast.info(
-				response.alreadyInFlight
-					? t(
-							"pages.nodeSettings.fields.rerankerModel.downloadInFlight",
-							"The recommended reranker ({{model}}) is already downloading.",
-							{
-								model: response.modelName,
-							},
-						)
-					: t("pages.nodeSettings.fields.rerankerModel.downloadStarted", "Downloading the recommended reranker ({{model}}).", {
-							model: response.modelName,
-						}),
-			);
-		},
-		onError: (error) =>
-			toast.error(
-				apiErrorMessage(
-					error,
-					t("pages.nodeSettings.fields.rerankerModel.downloadError", "Could not start the recommended reranker download."),
-				),
-			),
-	});
-
-	const handleDownloadRecommendedReranker = (): void => {
-		downloadRecommendedReranker.mutate({});
-	};
-
-	const handleCancelRerankerDownload = (modelName: string): void => {
-		cancelGgufDownloadMutation.mutate(modelName, {
-			onSuccess: () => {
-				removeInFlight(modelName);
-				toast.success(t("pages.models.gguf.download.cancelled", "Download cancelled."));
-			},
-			onError: (error) =>
-				toast.error(apiErrorMessage(error, t("pages.models.gguf.download.cancelError", "Could not cancel the download."))),
-		});
-	};
-
-	// One-click recommended-embedding download. The embedding model is not a node-settings field (there is nothing to
-	// select/save) — it just needs to be installed for the knowledge base to index documents at all. Progress reuses
-	// the same GgufDownload feed and in-flight tracking as the reranker download above.
-	const [recommendedEmbeddingModelName, setRecommendedEmbeddingModelName] = useState<string | null>(null);
-
-	const isRecommendedEmbeddingInFlight =
-		recommendedEmbeddingModelName !== null && inFlightDownloads.includes(recommendedEmbeddingModelName);
-	const embeddingInFlight = useMemo(
-		() => (isRecommendedEmbeddingInFlight && recommendedEmbeddingModelName !== null ? [recommendedEmbeddingModelName] : []),
-		[isRecommendedEmbeddingInFlight, recommendedEmbeddingModelName],
-	);
-
-	const downloadRecommendedEmbedding = useMutation({
-		...withResponseValidation(downloadRecommendedEmbeddingMutation()),
-		onSuccess: (response) => {
-			setRecommendedEmbeddingModelName(response.modelName);
-			if (response.alreadyInstalled) {
-				toast.info(
-					t(
-						"pages.nodeSettings.fields.embeddingModel.downloadAlreadyInstalled",
-						"The recommended embedding model ({{model}}) is already installed.",
-						{
-							model: response.modelName,
-						},
-					),
-				);
-				return;
-			}
-			// Mark in-flight immediately so the button duplicate-guards and the progress panel appears without waiting for
-			// the first SignalR push (markInFlight is idempotent, so an already-in-flight rejoin is a no-op).
-			markInFlight(response.modelName);
-			toast.info(
-				response.alreadyInFlight
-					? t(
-							"pages.nodeSettings.fields.embeddingModel.downloadInFlight",
-							"The recommended embedding model ({{model}}) is already downloading.",
-							{
-								model: response.modelName,
-							},
-						)
-					: t(
-							"pages.nodeSettings.fields.embeddingModel.downloadStarted",
-							"Downloading the recommended embedding model ({{model}}).",
-							{
-								model: response.modelName,
-							},
-						),
-			);
-		},
-		onError: (error) =>
-			toast.error(
-				apiErrorMessage(
-					error,
-					t(
-						"pages.nodeSettings.fields.embeddingModel.downloadError",
-						"Could not start the recommended embedding model download.",
-					),
-				),
-			),
-	});
-
-	const handleDownloadRecommendedEmbedding = (): void => {
-		downloadRecommendedEmbedding.mutate({});
-	};
+	const recommendedDownloads = useRecommendedModelDownloads();
 
 	useEffect(() => {
 		if (settings?.maxMessageRequestTimeoutSeconds !== undefined) {
@@ -345,7 +324,7 @@ export function NodeSettings() {
 		if (timeoutToSave === undefined) {
 			return;
 		}
-		if (keepWarmModelUnavailable) {
+		if (modelOptions.keepWarmModelUnavailable) {
 			setFieldErrors((current) => ({ ...current, keepModelWarmModelName: "unavailableKeepWarmModel" }));
 			toast.error(t("pages.nodeSettings.fields.validationError", "Some settings are invalid. Fix the highlighted fields."));
 			return;
@@ -418,8 +397,8 @@ export function NodeSettings() {
 
 			<SectionCard title="Local chat runtime" icon={<IconSettings size={22} />}>
 				<Text c="dimmed">
-					The maximum message request timeout bounds how long a single local chat message request (send or regenerate) may
-					run before it is cancelled with a timeout. It is also reported to the platform via capability reports.
+					The maximum message request timeout bounds how long a single local chat message request (send or regenerate) may run
+					before it is cancelled with a timeout. It is also reported to the platform via capability reports.
 				</Text>
 				<NumberInput
 					label="Maximum message request timeout"
@@ -463,25 +442,25 @@ export function NodeSettings() {
 			<NodeSettingsFieldsCard
 				form={fieldsForm}
 				bounds={fieldBounds}
-				errors={visibleFieldErrors}
+				errors={modelOptions.visibleErrors}
 				onChange={handleFieldChange}
 				showDeveloperFields={developerMode}
-				draftModelOptions={draftModelOptions}
-				keepWarmModelOptions={keepWarmModelOptions}
-				rerankerModelOptions={rerankerModelOptions}
-				onDownloadRecommendedReranker={handleDownloadRecommendedReranker}
-				isDownloadRecommendedRerankerPending={downloadRecommendedReranker.isPending}
-				isRecommendedRerankerInFlight={isRecommendedRerankerInFlight}
-				onDownloadRecommendedEmbedding={handleDownloadRecommendedEmbedding}
-				isDownloadRecommendedEmbeddingPending={downloadRecommendedEmbedding.isPending}
-				isRecommendedEmbeddingInFlight={isRecommendedEmbeddingInFlight}
+				draftModelOptions={modelOptions.draftModelOptions}
+				keepWarmModelOptions={modelOptions.keepWarmModelOptions}
+				rerankerModelOptions={modelOptions.rerankerModelOptions}
+				onDownloadRecommendedReranker={recommendedDownloads.reranker.start}
+				isDownloadRecommendedRerankerPending={recommendedDownloads.reranker.isPending}
+				isRecommendedRerankerInFlight={recommendedDownloads.reranker.isInFlight}
+				onDownloadRecommendedEmbedding={recommendedDownloads.embedding.start}
+				isDownloadRecommendedEmbeddingPending={recommendedDownloads.embedding.isPending}
+				isRecommendedEmbeddingInFlight={recommendedDownloads.embedding.isInFlight}
 			/>
 
 			<DownloadProgressPanel
-				inFlight={[...rerankerInFlight, ...embeddingInFlight]}
-				downloadStatuses={rerankerDownloadStatuses}
-				onCancel={handleCancelRerankerDownload}
-				cancellingModelName={cancelGgufDownloadMutation.isPending ? (cancelGgufDownloadMutation.variables ?? null) : null}
+				inFlight={recommendedDownloads.progressNames}
+				downloadStatuses={recommendedDownloads.downloadStatuses}
+				onCancel={recommendedDownloads.cancelDownload}
+				cancellingModelName={recommendedDownloads.cancellingModelName}
 			/>
 
 			<Group>
@@ -496,42 +475,17 @@ export function NodeSettings() {
 				</Button>
 			</Group>
 
-			<HfTokenPanel
+			<NodeSettingsAuxiliaryPanels
 				hasToken={hfTokenQuery.data ?? false}
-				isLoading={hfTokenQuery.isLoading}
+				isTokenLoading={hfTokenQuery.isLoading}
 				tokenDraft={tokenDraft}
+				isSavingToken={setHfToken.isPending}
 				onTokenDraftChange={setTokenDraft}
-				onSave={handleSaveToken}
-				onClear={handleClearToken}
-				isSaving={setHfToken.isPending}
+				onSaveToken={handleSaveToken}
+				onClearToken={handleClearToken}
 			/>
-
-			<McpServerKeyPanel />
-
-			<LocalModelProxyKeyPanel />
-
-			<McpWorkspaceAllowlistPanel />
-
 			<VoiceSettingsCard />
-
-			<SectionCard title={t("pages.nodeSettings.developerMode.title", "Developer settings")} icon={<IconCode size={22} />}>
-				{/*
-				 * The recording half of this disclosure is not optional. Enabling developer mode also starts an rrweb
-				 * DOM recording of this browser session (InstallCollectors), which is captured into diagnostic
-				 * snapshots. A description that names only the visible half — "experimental controls" — understates
-				 * what the operator is switching on.
-				 */}
-				<Switch
-					label={t("pages.nodeSettings.developerMode.label", "Developer mode")}
-					description={t(
-						"pages.nodeSettings.developerMode.description",
-						"Enables advanced, experimental controls in the app (e.g. chat sampling options), and starts recording this browser session — DOM changes, clicks and navigation — so it can be attached to a diagnostic snapshot. Stored in this browser only.",
-					)}
-					checked={developerMode}
-					onChange={() => toggleDeveloperMode()}
-					data-testid="developer-mode-switch"
-				/>
-			</SectionCard>
+			<NodeSettingsDeveloperModePanel developerMode={developerMode} onToggleDeveloperMode={toggleDeveloperMode} />
 		</PageShell>
 	);
 }

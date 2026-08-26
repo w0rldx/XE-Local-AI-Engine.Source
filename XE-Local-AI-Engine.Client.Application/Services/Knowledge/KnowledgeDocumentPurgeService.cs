@@ -7,7 +7,7 @@ using static Chat.Implementation.NodeChatPersistenceSql;
 
 /// <summary>
 ///     Default <see cref="IKnowledgeDocumentPurgeService" />. Because foreign-key enforcement is OFF on the runtime
-///     connection (C1), the schema cascade cannot be relied upon: every dependent row is deleted explicitly in
+///     connection, the schema cascade cannot be relied upon: every dependent row is deleted explicitly in
 ///     child-to-parent order inside one transaction. The chunk delete fires the FTS delete trigger so the external-content
 ///     <c>chunk_fts</c> index stays aligned; the vectors are deleted first because they reference the chunk rows. Only
 ///     after the rows commit are the on-disk encrypted bytes removed, with the path derived from the document id plus its

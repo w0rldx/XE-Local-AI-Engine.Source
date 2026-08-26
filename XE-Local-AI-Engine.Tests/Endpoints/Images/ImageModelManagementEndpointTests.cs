@@ -241,6 +241,112 @@ public sealed class ImageModelManagementEndpointTests
     }
 
     [Test]
+    public async Task StartDownload_NormalizesTextParsesEnumsCaseInsensitivelyAndDefaultsKindBeforeStarting()
+    {
+        var coordinator = new RecordingImageModelDownloadCoordinator();
+        await using var factory = FactoryWith(coordinator);
+        using var client = factory.CreateClient();
+
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/images/models/downloads", new
+        {
+            modelName = "  sd-1.5  ",
+            repoId = "  second-state/stable-diffusion-v1-5-GGUF  ",
+            family = "sD15",
+            kind = "   ",
+            revision = "  main  ",
+            parts = new object[]
+            {
+                new
+                {
+                    role = "dIfFuSiOn",
+                    fileName = "  weights.gguf  ",
+                    sha256 = "  abc123  ",
+                    repoId = "  override/repo  ",
+                    sizeBytes = -1L
+                }
+            }
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        var started = coordinator.LastRequest;
+        AssertEx.NotNull(started);
+        AssertEx.Equal("sd-1.5", started!.ModelName);
+        AssertEx.Equal("second-state/stable-diffusion-v1-5-GGUF", started.RepoId);
+        AssertEx.Equal(ImageModelFamily.Sd15, started.Family);
+        AssertEx.Equal(ImageModelKind.Txt2Img, started.Kind);
+        AssertEx.Equal("main", started.Revision);
+        AssertEx.Equal(ImageModelPartRole.Diffusion, started.Parts[0].Role);
+        AssertEx.Equal("weights.gguf", started.Parts[0].FileName);
+        AssertEx.Equal("abc123", started.Parts[0].Sha256);
+        AssertEx.Equal("override/repo", started.Parts[0].RepoId);
+        AssertEx.Null(started.Parts[0].SizeBytes);
+    }
+
+    [Test]
+    public async Task StartDownload_WhenCoordinatorRejoinsAnExistingDownload_ReturnsTheExactAcceptedBody()
+    {
+        var coordinator = new RecordingImageModelDownloadCoordinator
+        {
+            AlreadyInFlight = true
+        };
+        await using var factory = FactoryWith(coordinator);
+        using var client = factory.CreateClient();
+
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/images/models/downloads", ValidStartPayload());
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        var body = document.RootElement;
+        AssertEx.True(body.EnumerateObject()
+                          .Select(static property => property.Name)
+                          .SequenceEqual(["modelName", "accepted", "alreadyInFlight"], StringComparer.Ordinal),
+            "The accepted response must retain its exact three-property wire schema and ordering.");
+        AssertEx.Equal("sd-1.5", body.GetProperty("modelName").GetString());
+        AssertEx.True(body.GetProperty("accepted").GetBoolean());
+        AssertEx.True(body.GetProperty("alreadyInFlight").GetBoolean());
+    }
+
+    [Test]
+    [Arguments("{\"modelName\":\" \",\"repoId\":\"repo/model\",\"family\":\"Sd15\",\"parts\":[{\"role\":\"Diffusion\",\"fileName\":\"weights.gguf\"}]}",
+        "A model name is required.")]
+    [Arguments("{\"modelName\":\"model\",\"repoId\":\" \",\"family\":\"Sd15\",\"parts\":[{\"role\":\"Diffusion\",\"fileName\":\"weights.gguf\"}]}",
+        "A repository id is required.")]
+    [Arguments("{\"modelName\":\"model\",\"repoId\":\"repo/model\",\"family\":\"Unknown\",\"parts\":[{\"role\":\"Diffusion\",\"fileName\":\"weights.gguf\"}]}",
+        "A valid model family is required.")]
+    [Arguments("{\"modelName\":\"model\",\"repoId\":\"repo/model\",\"family\":\"Sd15\",\"kind\":\"video\",\"parts\":[{\"role\":\"Diffusion\",\"fileName\":\"weights.gguf\"}]}",
+        "The model kind is not recognized.")]
+    [Arguments("{\"modelName\":\"model\",\"repoId\":\"repo/model\",\"family\":\"Sd15\",\"parts\":[]}",
+        "At least one weight part is required.")]
+    [Arguments("{\"modelName\":\"model\",\"repoId\":\"repo/model\",\"family\":\"Sd15\",\"parts\":[{\"role\":\"other\",\"fileName\":\"weights.gguf\"}]}",
+        "The part role 'other' is not recognized.")]
+    [Arguments("{\"modelName\":\"model\",\"repoId\":\"repo/model\",\"family\":\"Sd15\",\"parts\":[{\"role\":\"Diffusion\",\"fileName\":\" \"}]}",
+        "Each weight part requires a file name.")]
+    [Arguments("{\"modelName\":\"model\",\"repoId\":\"repo/model\",\"family\":\"Sd15\",\"parts\":[{\"role\":\"Vae\",\"fileName\":\"vae.safetensors\"}]}",
+        "The file-set must include a diffusion part.")]
+    public async Task StartDownload_WithInvalidWireInput_ReturnsTheExactGeneralErrorAndNeverStarts(string json, string expectedError)
+    {
+        var coordinator = new RecordingImageModelDownloadCoordinator();
+        await using var factory = FactoryWith(coordinator);
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/models/downloads")
+        {
+            Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+        };
+        factory.AddNodeBearerToken(request);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = document.RootElement.GetProperty("errors")[0];
+        AssertEx.Equal("generalErrors", error.GetProperty("name").GetString());
+        AssertEx.Equal(expectedError, error.GetProperty("reason").GetString());
+        AssertEx.Null(coordinator.LastRequest);
+    }
+
+    [Test]
     public async Task StartDownload_WithTwoPartsClaimingTheSameRole_Returns400AndNeverStarts()
     {
         // The launch argument builder emits ONE flag per role and iterates the whole set, so a second VAE would pass
@@ -275,6 +381,10 @@ public sealed class ImageModelManagementEndpointTests
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        var error = document.RootElement.GetProperty("errors")[0];
+        AssertEx.Equal("generalErrors", error.GetProperty("name").GetString());
+        AssertEx.Equal("The file-set declares the 'Diffusion' part more than once.", error.GetProperty("reason").GetString());
         AssertEx.Null(coordinator.LastRequest, "A duplicate role must be rejected at the boundary, before any transfer.");
     }
 
@@ -314,6 +424,22 @@ public sealed class ImageModelManagementEndpointTests
         return request;
     }
 
+    private static object ValidStartPayload() =>
+        new
+        {
+            modelName = "sd-1.5",
+            repoId = "second-state/stable-diffusion-v1-5-GGUF",
+            family = "Sd15",
+            parts = new object[]
+            {
+                new
+                {
+                    role = "Diffusion",
+                    fileName = "weights.gguf"
+                }
+            }
+        };
+
     // Records what the endpoint asked for; every other member is unreachable from these two routes.
     private sealed class StubImageModelDownloadCoordinator : IImageModelDownloadCoordinator
     {
@@ -346,12 +472,14 @@ public sealed class ImageModelManagementEndpointTests
     // Captures the request the start endpoint built, so the DTO-to-contract mapping can be asserted field by field.
     private sealed class RecordingImageModelDownloadCoordinator : IImageModelDownloadCoordinator
     {
+        public bool AlreadyInFlight { get; init; }
+
         public ImageModelRequest? LastRequest { get; private set; }
 
         public ImageModelDownloadTicket Start(ImageModelRequest request)
         {
             LastRequest = request;
-            return new ImageModelDownloadTicket(request.ModelName, AlreadyInFlight: false);
+            return new ImageModelDownloadTicket(request.ModelName, AlreadyInFlight);
         }
 
         public bool Cancel(string modelName)

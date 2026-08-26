@@ -161,7 +161,7 @@ internal sealed class CustomToolCatalog : ICustomToolCatalog
         function = new ToolArgumentRepairAIFunction(function, _maxInvalidCalls, rejectUnknownProperties: true);
         function = new BudgetedToolResultAIFunction(function, _maxResultCharacters);
 
-        // Authoritative approval floor — unconditional, never read from a stored flag (C2). ApprovalRequiredAIFunction
+        // Authoritative approval floor — unconditional and never read from a stored flag. ApprovalRequiredAIFunction
         // stays the outermost type so the pipeline's approval detection and the unattended-run filter both see it.
         return new ApprovalRequiredAIFunction(function);
     }

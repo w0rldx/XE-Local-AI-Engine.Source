@@ -4,7 +4,7 @@ using Microsoft.Playwright;
 using XE_Local_AI_Engine.Tests.E2ETests.Common;
 
 /// <summary>
-///     Browser-driven E2E for the Agents page (<c>/agents</c>) CRUD round-trip (gap analysis P0-3).
+///     Browser-driven E2E for the Agents page (<c>/agents</c>) CRUD round-trip.
 ///     The existing <c>AgentsPageE2ETests</c> guards the RC null-ref typing crash and proves a create
 ///     reaches 201; this suite complements it by proving the FULL persistence round-trip:
 ///     <list type="bullet">

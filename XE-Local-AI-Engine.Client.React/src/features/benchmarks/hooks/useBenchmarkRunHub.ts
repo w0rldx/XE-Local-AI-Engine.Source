@@ -1,5 +1,5 @@
 import { HubConnectionState } from "@microsoft/signalr";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { acquireHubConnection } from "@/core/api/signalr/SharedHubConnection";
 import {
@@ -50,8 +50,10 @@ export function useBenchmarkRunHub({ run, refetch }: UseBenchmarkRunHubOptions):
 	const refetchRef = useRef(refetch);
 	const runRef = useRef(run);
 	const activeRunIdRef = useRef(run?.id);
-	refetchRef.current = refetch;
-	runRef.current = run;
+	useLayoutEffect(() => {
+		refetchRef.current = refetch;
+		runRef.current = run;
+	}, [refetch, run]);
 	const serverRevision = run ? `${run.id}:${run.updatedAtUtc}` : "";
 
 	useEffect(() => {

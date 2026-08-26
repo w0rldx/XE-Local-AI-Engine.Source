@@ -1,5 +1,13 @@
 import { Badge, Button, Code, Group, Loader, Progress, ScrollArea, Stack, Tabs, Text, UnstyledButton } from "@mantine/core";
-import { IconDatabase, IconDownload, IconPencil, IconPlayerPlay, IconPlus, IconShieldCheck, IconTrash } from "@tabler/icons-react";
+import {
+	IconDatabase,
+	IconDownload,
+	IconPencil,
+	IconPlayerPlay,
+	IconPlus,
+	IconShieldCheck,
+	IconTrash,
+} from "@tabler/icons-react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -53,8 +61,11 @@ export function DatasetsPage() {
 	const requestFailed = (error: unknown): void =>
 		toast.error(apiErrorMessage(error, t("training.errors.request", "The training request failed.")));
 
-	const datasets = datasetsQuery.data ?? [];
-	const selected = useMemo(() => datasets.find((dataset) => dataset.id === selectedDatasetId) ?? null, [datasets, selectedDatasetId]);
+	const datasets = useMemo(() => datasetsQuery.data ?? [], [datasetsQuery.data]);
+	const selected = useMemo(
+		() => datasets.find((dataset) => dataset.id === selectedDatasetId) ?? null,
+		[datasets, selectedDatasetId],
+	);
 	const generatingDataset = useMemo(() => datasets.find((dataset) => dataset.status === "Generating") ?? null, [datasets]);
 
 	const refetchDatasets = datasetsQuery.refetch;
@@ -212,7 +223,10 @@ export function DatasetsPage() {
 										onSelect={() => setSelectedDatasetId(dataset.id === selectedDatasetId ? null : dataset.id)}
 										onCancel={() => cancelDataset.mutate({ datasetId: dataset.id }, { onError: requestFailed })}
 										onDelete={() =>
-											deleteDataset.mutate({ datasetId: dataset.id, expectedVersion: dataset.version }, { onError: requestFailed })
+											deleteDataset.mutate(
+												{ datasetId: dataset.id, expectedVersion: dataset.version },
+												{ onError: requestFailed },
+											)
 										}
 										onExport={(format) =>
 											exportDataset.mutate(
@@ -261,7 +275,9 @@ export function DatasetsPage() {
 									<Group gap="xs">
 										<Badge
 											size="sm"
-											color={mock.verificationState === "Verified" ? "teal" : mock.verificationState === "Rejected" ? "red" : "gray"}
+											color={
+												mock.verificationState === "Verified" ? "teal" : mock.verificationState === "Rejected" ? "red" : "gray"
+											}
 										>
 											{mock.verificationState}
 										</Badge>
@@ -278,7 +294,10 @@ export function DatasetsPage() {
 											onClick={() =>
 												verifyMock.mutate(
 													{ mockId: mock.id, expectedVersion: mock.version },
-													{ onError: (error) => toast.error(apiErrorMessage(error, t("training.errors.request", "The training request failed."))) },
+													{
+														onError: (error) =>
+															toast.error(apiErrorMessage(error, t("training.errors.request", "The training request failed."))),
+													},
 												)
 											}
 										>
@@ -340,13 +359,17 @@ function DatasetRow({ dataset, isSelected, onSelect, onCancel, onDelete, onExpor
 						</Badge>
 					</Group>
 					<Text size="xs" c="dimmed">
-						{t("training.datasets.counts", "{{total}} samples · {{good}} good · {{bad}} bad · {{rejected}} rejected · {{duplicate}} duplicate", {
-							total: dataset.totalSampleCount,
-							good: dataset.goodSampleCount,
-							bad: dataset.badSampleCount,
-							rejected: dataset.rejectedSampleCount,
-							duplicate: dataset.duplicateSampleCount,
-						})}
+						{t(
+							"training.datasets.counts",
+							"{{total}} samples · {{good}} good · {{bad}} bad · {{rejected}} rejected · {{duplicate}} duplicate",
+							{
+								total: dataset.totalSampleCount,
+								good: dataset.goodSampleCount,
+								bad: dataset.badSampleCount,
+								rejected: dataset.rejectedSampleCount,
+								duplicate: dataset.duplicateSampleCount,
+							},
+						)}
 					</Text>
 					{dataset.workErrorMessage ? (
 						<Text size="xs" c="red">

@@ -8,7 +8,7 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 ///         Separate from that reaper rather than folded into it, because the two share no mechanism: one reads on-disk
 ///         markers and signals process groups, the other queries a daemon by label. Merging them would give the
 ///         process provider's sweep a Docker dependency it must not have — provider selection is per feature, and
-///         AgentHome must not acquire a container runtime requirement by association (ADR 0004, plan D2).
+///         AgentHome must not acquire a container runtime requirement by association (ADR 0004).
 ///     </para>
 ///     <para>
 ///         <b>Three gates before anything is removed</b>, in this order and for different reasons:

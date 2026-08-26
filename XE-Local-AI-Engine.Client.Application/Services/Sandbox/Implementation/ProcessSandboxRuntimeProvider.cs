@@ -13,10 +13,8 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 /// <summary>
 ///     The <c>process</c> sandbox <see cref="ISandboxRuntimeProvider" /> — the <b>process-jail provider</b>: backs
 ///     AgentHome and Coder with a supervised child <see cref="Process" /> rooted at a node-scoped working-directory
-///     jail on the worker host. It owns no Docker, no gRPC, and no HostAgent. It is the drop-in replacement for the
-///     DELETED <c>LocalContainerSandboxProvider</c> (the old Docker/gRPC container provider removed by the runtime
-///     re-architecture epic), holding the exact same provider-neutral contract so AgentHome's copy → run → export →
-///     apply loop is byte-behavior-identical.
+///     jail on the worker host. It implements the provider-neutral copy → run → export → apply lifecycle without
+///     a container dependency.
 ///     <para>
 ///         It is NOT a predecessor of, nor superseded by, the Development Mode container provider added under
 ///         ADR 0004. Those two are SIBLINGS behind one SPI, chosen per feature: Development Mode
@@ -82,7 +80,8 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Reaping;
 ///         Still absent by design: read-only MOUNTS as a per-sandbox concept (the isolated mode's
 ///         <see cref="SandboxCreateRequest.ReadOnlyTrees" /> is a different, narrower surface), a network allowlist,
 ///         and any hardware isolation boundary. The single-user local-node threat model accepts these — risky
-///         execution is approval-gated upstream — and they are deferred to MXC.
+///         execution is approval-gated upstream — and this provider does not claim to supply them. MXC remains an
+///         unintegrated provider behind the same sandbox seam.
 ///     </para>
 /// </summary>
 // Serves BOTH per-feature roles: AgentHome/Coder resolve it through IAgentSandboxRuntimeProvider, and Development
@@ -1017,8 +1016,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
     ///         anything notices. And a sparse or hole-punched file is billed by length rather than by blocks. So this
     ///         bounds a runaway writer that is not trying to evade it, which is the case it exists for; it does NOT
     ///         make a claim against a hostile one. A real ceiling needs the filesystem to enforce it — a project quota,
-    ///         or a size-bounded mount with the memory accounted — and that is deliberately a follow-up rather than
-    ///         something this watchdog is quietly presented as.
+    ///         or a size-bounded mount with the memory accounted. This watchdog supplies neither mechanism and must not
+    ///         be presented as though it does.
     ///     </para>
     ///     <para>
     ///         It is skipped for an engine-managed trusted host workspace: that directory is the user's own checkout,

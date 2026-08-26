@@ -1,9 +1,9 @@
 // Single source of truth for the layout breakpoints and sidebar widths that the app resolves in JS.
 //
-// These exist because a handful of layout decisions cannot be expressed as CSS media queries: the shell feeds
-// marginLeft/width into framer-motion's `animate` prop, and DialogShell / ChatDisplayShell / WorkSessionDetailPage
-// branch on the viewport to swap whole subtrees (drawer vs. persistent pane). Before this module each site carried
-// its own literal, so the shell, the dialogs and the two-pane pages could drift apart silently.
+// These exist because a handful of layout decisions cannot be expressed as CSS media queries: the shell's committed
+// margin and width are animated through Framer Motion layout projection, while DialogShell, ChatDisplayShell and
+// WorkSessionDetailPage branch on the viewport to swap whole subtrees. Before this module each site carried its own
+// literal, so the shell, dialogs and two-pane pages could drift apart silently.
 //
 // The values are plain literals rather than a read of `sourceThemeConfiguration`, on purpose:
 //   * the same numbers are also baked into static UnoCSS classes (`hidden md:block` in Layout) and into CSS files,

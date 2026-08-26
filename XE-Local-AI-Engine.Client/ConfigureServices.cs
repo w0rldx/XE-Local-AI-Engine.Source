@@ -217,12 +217,13 @@ public static class ConfigureServices
         }
 
         // Error handling - the order of the exception handlers is important: specific handlers first, family-specific
-        // Training/Benchmark wire contracts next, and DefaultExceptionHandler last as the catch-all 500.
+        // wire contracts next, and DefaultExceptionHandler last as the catch-all 500.
         builder.Services
                .AddExceptionHandler<ConflictExceptionHandler>()
                .AddExceptionHandler<DomainValidationExceptionHandler>()
                .AddExceptionHandler<TrainingExceptionHandler>()
                .AddExceptionHandler<BenchmarkExceptionHandler>()
+               .AddExceptionHandler<WorkSessionNotFoundExceptionHandler>()
                .AddExceptionHandler<DefaultExceptionHandler>();
         builder.Services.AddProblemDetails();
 

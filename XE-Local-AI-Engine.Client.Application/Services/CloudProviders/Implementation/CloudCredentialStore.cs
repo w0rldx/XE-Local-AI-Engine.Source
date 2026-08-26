@@ -280,7 +280,7 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         ValidateHostSuffixes(connection, nameof(config));
 
         // Enforce the endpoint host is within the effective allowlist (built-in Azure suffixes ∪ operator suffixes) so an
-        // operator can never save a connection whose own endpoint host isn't covered (Locked #14).
+        // operator can never save a connection whose own endpoint host is not covered.
         if (!AzureFoundryEndpoints.IsAllowedHost(endpoint, connection.AdditionalAllowedHostSuffixes))
         {
             throw new ArgumentException("Stored cloud provider endpoint host is not an allowed Azure endpoint.", nameof(config));
@@ -345,8 +345,8 @@ public sealed class CloudCredentialStore : ICloudCredentialStore, IDisposable
         }
     }
 
-    // Defense-in-depth behind the endpoint: reserved names, non-token names, non-field-value values, duplicates, caps
-    // (Locked #6–#9), and a secret header that never resolved to a value (Locked #10/#12).
+    // Defense-in-depth behind the endpoint: reserved names, non-token names, non-field-value values, duplicates, caps,
+    // and any secret header that never resolved to a value.
     private static void ValidateHeaders(StoredAzureFoundryConnection connection, string paramName)
     {
         if (connection.Headers.Count > AzureFoundryHeaderRules.MaxHeaderCount)

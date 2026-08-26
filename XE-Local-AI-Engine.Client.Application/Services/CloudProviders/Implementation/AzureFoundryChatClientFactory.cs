@@ -226,7 +226,7 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         return uri;
     }
 
-    // Attaches the custom-header policy at PerCall when the connection carries headers (Locked #4). Reserved names are
+    // Attaches the custom-header policy at PerCall when the connection carries headers. Reserved names are
     // skipped inside the policy; blank-name rows are dropped here. Diagnostics.IsLoggingContentEnabled is left unset
     // so secret header values are never logged by the SDK.
     private static AzureOpenAIClientOptions BuildClientOptions(IReadOnlyList<StoredAzureFoundryHeader> headers)
@@ -408,13 +408,13 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         }
 
         return new EntraPersistenceFallbackCredential(cacheOptions => new DeviceCodeCredential(new DeviceCodeCredentialOptions
-            {
-                TenantId = connection.EntraTenantId,
-                ClientId = connection.EntraClientId,
-                AuthenticationRecord = record,
-                TokenCachePersistenceOptions = cacheOptions,
-                DeviceCodeCallback = (_, _) => throw new CredentialUnavailableException("Entra ID silent authentication expired for this connection; sign in again via Cloud Settings.")
-            }),
+        {
+            TenantId = connection.EntraTenantId,
+            ClientId = connection.EntraClientId,
+            AuthenticationRecord = record,
+            TokenCachePersistenceOptions = cacheOptions,
+            DeviceCodeCallback = (_, _) => throw new CredentialUnavailableException("Entra ID silent authentication expired for this connection; sign in again via Cloud Settings.")
+        }),
             new TokenCachePersistenceOptions
             {
                 Name = EntraTokenCachePersistenceName

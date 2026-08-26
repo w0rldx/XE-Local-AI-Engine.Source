@@ -30,15 +30,15 @@ public enum ImageModelFamily
 }
 
 /// <summary>
-///     The generation task an image model supports. Step 1 ships <see cref="Txt2Img" /> only; <see cref="Edit" />
-///     (FLUX-Kontext / Qwen-Edit) is admitted by the contract for a later phase.
+///     The generation task an image model supports. The current runtime supports <see cref="Txt2Img" /> only;
+///     <see cref="Edit" /> represents edit-capable models but is not currently supported.
 /// </summary>
 public enum ImageModelKind
 {
     /// <summary>Text-to-image generation.</summary>
     Txt2Img = 0,
 
-    /// <summary>Image editing (edit/inpaint-capable models). Deferred past step 1.</summary>
+    /// <summary>Image editing for edit- or inpaint-capable models; not currently supported by the runtime.</summary>
     Edit = 1
 }
 

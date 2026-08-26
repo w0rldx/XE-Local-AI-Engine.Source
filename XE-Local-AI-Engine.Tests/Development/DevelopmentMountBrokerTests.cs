@@ -69,7 +69,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
     [Test]
     public async Task PrepareAsync_TheWorkspaceControlManifestIsNotReachableFromInsideTheSandbox()
     {
-        // D9, asserted as the absence it is. workspace.json lives directly in RuntimePath and holds the repository
+        // Assert this boundary as the absence it is. workspace.json lives directly in RuntimePath and holds the repository
         // identity, the selected folder and the base commit the whole trust chain is anchored to.
         var (session, _) = await PrepareAsync(CreateMappingSandbox()).ConfigureAwait(false);
         var manifestPath = Path.Combine(session.RuntimePath, "workspace.json");

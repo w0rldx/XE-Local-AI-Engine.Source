@@ -23,7 +23,7 @@ export interface IAboutDialogProps {
 
 /**
  * About dialog for the node client. Built on the shared {@link DialogShell} so it
- * matches every other dialog in the app. Mirrors the C0re platform's About modal:
+ * matches every other dialog in the app. Uses the same centered modal structure as the other application dialogs:
  * Application and Tutorials tabs plus a searchable third-party Licenses tab.
  */
 export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
@@ -142,9 +142,7 @@ export function AboutDialog({ opened, onClose }: IAboutDialogProps) {
 													{t(`onboarding.tutorials.${tutorial.id}.description`)}
 												</Text>
 											</Stack>
-											<Badge variant="light">
-												{t("onboarding.catalog.minutes", { count: tutorial.estimatedMinutes })}
-											</Badge>
+											<Badge variant="light">{t("onboarding.catalog.minutes", { count: tutorial.estimatedMinutes })}</Badge>
 										</Group>
 										<Group justify="space-between">
 											<Badge color={state?.status === "completed" ? "green" : state?.status === "skipped" ? "gray" : "blue"}>

@@ -28,7 +28,7 @@ internal static class CustomToolSchemaCompiler
     /// <summary>
     ///     Compiles <paramref name="parameters" /> (ignored for <see cref="CustomToolMode.Fixed" />) into a JSON-schema
     ///     string suitable for a tool's <c>ParameterSchema</c>. Unknown declared types fall back to <c>string</c> so the
-    ///     grammar stays valid; the CRUD validator (P3) is where an unknown type is rejected at author time.
+    ///     grammar stays valid; the CRUD validator is where an unknown type is rejected at author time.
     /// </summary>
     public static string Compile(CustomToolMode mode, IReadOnlyList<CustomToolParameter> parameters)
     {

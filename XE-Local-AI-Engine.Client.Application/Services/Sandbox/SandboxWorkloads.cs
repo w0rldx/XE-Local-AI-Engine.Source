@@ -103,8 +103,8 @@ public static class SandboxWorkloads
     ///         from a README. The threat model's AB3 is exactly that program reading <c>~/.ssh</c> and the node
     ///         database on its first tool call, and the only control that path had was an environment scrub, which
     ///         does not touch the filesystem. So the floor states the property — the host filesystem absent from the
-    ///         sandbox's view — and a backend that cannot supply it refuses the connection rather than serving the
-    ///         launch that Phase 2 exists to stop.
+    ///         sandbox's view — and a backend that cannot supply it refuses the connection rather than serving an
+    ///         unisolated launch.
     ///     </para>
     ///     <para>
     ///         The network floor is <see cref="SandboxNetworkPolicy.None" /> for the same reason and with the same
@@ -113,7 +113,7 @@ public static class SandboxWorkloads
     ///     </para>
     ///     <para>
     ///         A <c>PrivilegedHost</c> server declares NOTHING here, deliberately: it is not a substrate consumer at
-    ///         all, it is the pre-Phase-2 host launch kept as an explicit, per-server operator grant. See
+    ///         all, but the legacy host launch retained as an explicit, per-server operator grant. See
     ///         <c>docs/security/mcp-trust-tiers.md</c>.
     ///     </para>
     /// </summary>
@@ -136,7 +136,7 @@ public static class SandboxWorkloads
     ///     Development Mode on a node that has NOT been given a container image: the host's toolchain and the worktree
     ///     preserved across kill/restart.
     ///     <para>
-    ///         The network FLOOR stays <see cref="SandboxNetworkPolicy.Unrestricted" /> after G1, and for AgentHome's
+    ///         The network floor stays <see cref="SandboxNetworkPolicy.Unrestricted" />, and for AgentHome's
     ///         reason rather than as a leftover: this feature now creates TWO sandboxes per prepare, and they want
     ///         opposite postures. The short-lived warm-restore sandbox genuinely needs egress — it is what fills the
     ///         package cache from the base commit — and the agent-facing one tightens to
@@ -149,7 +149,7 @@ public static class SandboxWorkloads
     ///     <para>
     ///         The floor is therefore what the workload will ACCEPT, and the served posture is what
     ///         the Development status surface reports. Those are different numbers on a node without network
-    ///         confinement, and G6 exists so the difference is visible rather than assumed.
+    ///         confinement; the status surface makes the difference visible rather than assumed.
     ///     </para>
     /// </summary>
     public static readonly SandboxRequirements DevelopmentModeHostToolchain = new()

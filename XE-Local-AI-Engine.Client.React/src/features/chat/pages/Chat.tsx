@@ -2,10 +2,8 @@ import { Alert, Anchor, Button, Center, Loader, Stack, Text } from "@mantine/cor
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useCommands } from "@/features/commands/queries/useCommands";
-import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -17,7 +15,11 @@ import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { isNodeChatReadOnlyConflict, stripSignalRHubErrorPrefix } from "@/features/chat/api/NodeChatConflict";
-import { clientWatchdogFailureCategory, StreamWatchdogError, streamWatchdogNotice } from "@/features/chat/api/NodeChatStreamGuard";
+import {
+	clientWatchdogFailureCategory,
+	StreamWatchdogError,
+	streamWatchdogNotice,
+} from "@/features/chat/api/NodeChatStreamGuard";
 import {
 	accumulateToolTimelineEntry,
 	appendOptimisticNodeChatSend,
@@ -26,6 +28,7 @@ import {
 } from "@/features/chat/api/NodeChatStreamState";
 import { useNodeChatConnectionReadiness } from "@/features/chat/api/useNodeChatConnectionReadiness";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
+import { useChatRevisionSelection } from "@/features/chat/hooks/useChatRevisionSelection";
 import { useStreamCommitScheduler } from "@/features/chat/hooks/useStreamCommitScheduler";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
 import {
@@ -50,6 +53,7 @@ import { DEFAULT_ASSISTANT_NAME } from "@/features/chat/models/ChatModels";
 import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
+import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 import { resolveContextCapacityTokens, shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
 import {
 	hasNoLocalChatModels,
@@ -61,7 +65,6 @@ import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
-import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import {
 	binaryReasoningEfforts,
 	clampReasoningEffort,
@@ -69,10 +72,12 @@ import {
 	reasoningEfforts,
 	useNodeChatPreferencesStore,
 } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { useCommands } from "@/features/commands/queries/useCommands";
+import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import { useVoicePlayback } from "@/features/voice/useVoicePlayback";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
-/* eslint-disable react-doctor/no-giant-component, react-doctor/prefer-useReducer, react-doctor/js-combine-iterations -- This page is the chat orchestration boundary; its state machines and ordered timeline passes are intentionally kept explicit pending a dedicated decomposition. */
+/* eslint-disable react-doctor/no-giant-component, react-doctor/prefer-useReducer, react-doctor/js-combine-iterations -- This page retains the race-coupled send, stream, resume, and cancellation controller; independent transport and revision-selection lifecycles live in dedicated modules. */
 
 // Base identity for the synthetic "Local default" composer option. Capabilities are filled in dynamically inside
 // modelOptions (see below) from the concrete model the runtime will resolve, so picking "Local default" mirrors the
@@ -220,13 +225,6 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	const [conversationSearchQuery, setConversationSearchQuery] = useState("");
 	const [showArchivedConversations, setShowArchivedConversations] = useState(false);
 	const [mutatingConversationId, setMutatingConversationId] = useState<string | undefined>();
-	// Operator's in-session revision picks (variantGroupId → active messageId), scoped to the conversation they were
-	// made in. Layered over the conversation's persisted selected-path baseline to derive the effective map below, so
-	// the active selection is computed during render rather than copied into state through an effect (no extra render).
-	const [revisionOverrides, setRevisionOverrides] = useState<{ conversationId: string; overrides: Record<string, string> }>({
-		conversationId: "",
-		overrides: {},
-	});
 	const [pendingFeedbackMessageId, setPendingFeedbackMessageId] = useState<string | undefined>();
 	// Conversations whose first message has already promoted their title (avoids re-renaming on every send).
 	// Lazy-init (see deletedConversationIds): build the Set once, not a throwaway per render.
@@ -234,14 +232,6 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	if (!titledConversations.current) {
 		titledConversations.current = new Set<string>();
 	}
-	// The persisted selected-path baseline latched the first time each conversation's full payload loads. Latching
-	// once (keyed by conversation id) means a later background refetch never clobbers an in-session selection the
-	// operator just navigated — the override layer always wins over this frozen baseline.
-	const revisionBaseline = useRef<{ conversationId: string; selectedPath: Record<string, string> }>({
-		conversationId: "",
-		selectedPath: {},
-	});
-
 	const {
 		data: conversationsData,
 		isLoading: conversationsIsLoading,
@@ -521,36 +511,8 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	// Remote conversations are view-only on this node (server enforces the guard; this is the cosmetic UI hide).
 	const isRemoteConversation = activeConversation?.origin === "remote";
 
-	// Latch the persisted selected-path baseline for the current conversation the first time its full payload loads,
-	// so navigating < N/N > variants survives a reload. Latched once per conversation (tracked by ref) — a later
-	// background refetch of the same conversation must not overwrite a selection the operator just made. Computed
-	// during render (no effect → no extra render); writing a ref here is render-safe because it only memoizes and
-	// never schedules a re-render.
 	const loadedConversation = selectedConversationData;
-	if (
-		loadedConversation &&
-		loadedConversation.id === selectedConversationId &&
-		revisionBaseline.current.conversationId !== selectedConversationId
-	) {
-		revisionBaseline.current = { conversationId: selectedConversationId, selectedPath: loadedConversation.selectedPath ?? {} };
-	}
-
-	// Effective active-revision map: the frozen server baseline for the current conversation overlaid with the
-	// operator's in-session picks (only those made in THIS conversation apply). Derived during render instead of
-	// stored in state. Reads loadedConversation so the map recomputes when the full payload loads: the ref-latch block
-	// above sets revisionBaseline.current on that same render, and the fallback below also reads the freshly-loaded
-	// payload directly, so the baseline is correct whether or not the ref has latched yet.
-	const activeRevisionByGroup = useMemo<Record<string, string>>(() => {
-		const isCurrentLoaded = loadedConversation?.id === selectedConversationId;
-		const baseline =
-			revisionBaseline.current.conversationId === selectedConversationId
-				? revisionBaseline.current.selectedPath
-				: isCurrentLoaded
-					? (loadedConversation?.selectedPath ?? {})
-					: {};
-		const overrides = revisionOverrides.conversationId === selectedConversationId ? revisionOverrides.overrides : {};
-		return { ...baseline, ...overrides };
-	}, [revisionOverrides, selectedConversationId, loadedConversation]);
+	const { activeRevisionByGroup, selectRevision } = useChatRevisionSelection(selectedConversationId, loadedConversation);
 
 	// Node-local feedback travels on each message in the loaded conversation:
 	// derive the by-message map from the conversation read instead of firing a GET per assistant turn (which
@@ -901,7 +863,10 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 					const watchdogNotice = error instanceof StreamWatchdogError ? streamWatchdogNotice(error.category) : undefined;
 					let message: string;
 					if (isNodeChatReadOnlyConflict(error)) {
-						message = t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node.");
+						message = t(
+							"pages.chat.remoteViewOnly",
+							"This conversation was started from a paired client and is view-only on this node.",
+						);
 					} else if (watchdogNotice) {
 						message = t(watchdogNotice.key, watchdogNotice.fallback);
 					} else {
@@ -1194,7 +1159,9 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	// commitRef): re-running the effect on an unrelated dependency change would abort a live re-attach in its
 	// cleanup, losing the very question card this exists to restore.
 	const resumeActiveTurnRef = useRef(resumeActiveTurn);
-	resumeActiveTurnRef.current = resumeActiveTurn;
+	useLayoutEffect(() => {
+		resumeActiveTurnRef.current = resumeActiveTurn;
+	}, [resumeActiveTurn]);
 
 	// The conversation whose FULL payload has loaded — id-matched, so never a keepPreviousData placeholder from the
 	// thread we just switched away from. The re-attach waits for it because the resumed events are folded onto the
@@ -1391,14 +1358,7 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 
 	const handleSelectRevision = useCallback(
 		(variantGroupId: string, messageId: string): void => {
-			const nextSelection: Record<string, string> = { ...activeRevisionByGroup, [variantGroupId]: messageId };
-			// Record the pick as an in-session override scoped to the current conversation; the effective map is
-			// derived from baseline + overrides during render. A conversation switch carries a fresh overrides bucket
-			// (keyed by conversationId), so picks never leak across threads.
-			setRevisionOverrides((current) => {
-				const base = current.conversationId === selectedConversationId ? current.overrides : {};
-				return { conversationId: selectedConversationId, overrides: { ...base, [variantGroupId]: messageId } };
-			});
+			const nextSelection = selectRevision(variantGroupId, messageId);
 			// Persist the navigated selection so a reload restores it even without sending a message. Fire-and-forget,
 			// consistent with other adapter calls; a failure surfaces in the error banner but never blocks the UI.
 			if (selectedConversationId) {
@@ -1407,7 +1367,7 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 					.catch((error: unknown) => setStreamError(errorMessage(error)));
 			}
 		},
-		[activeRevisionByGroup, selectedConversationId],
+		[selectRevision, selectedConversationId],
 	);
 
 	const branchConversation = useCallback(
@@ -1482,38 +1442,34 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 
 	// Only an actual error / remote-view-only condition surfaces a notice; the always-on informational banner
 	// was dropped. When undefined, ChatDisplayShell renders no alert.
-	const notice = useMemo(
-		() =>
-			streamError ? (
-				<Stack gap={2}>
-					<Text fw={700}>Local chat stream failed.</Text>
-					<Text size="sm">{streamError}</Text>
-				</Stack>
-			) : conversationsIsError ? (
-				<Stack gap={2}>
-					<Text fw={700}>Unable to load local chat history.</Text>
-					<Text size="sm">{errorMessage(conversationsError)}</Text>
-				</Stack>
-			) : isRemoteConversation ? (
-				<Stack gap={2}>
-					<Text fw={700}>{t("pages.chat.remoteViewOnlyTitle", "Remote conversation")}</Text>
-					<Text size="sm">
-						{t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node.")}
-					</Text>
-				</Stack>
-			) : showNoModelGuidance ? (
-				// Advisory, not blocking — a Codex/Azure sign-in later still routes around this via the picker's
-				// cloud sections, and a send attempted anyway still falls through to ChatMessage's ModelNotInstalled Alert.
-				<Stack gap={2}>
-					<Text fw={700}>{t("pages.chat.noModelGuidance.title", "No chat model installed yet")}</Text>
-					<Text size="sm">{t("pages.chat.noModelGuidance.body", "Install a GGUF model to start chatting locally.")}</Text>
-					<Anchor component={Link} to="/models" size="sm" data-testid="chat-no-model-guidance-models-link">
-						{t("pages.chat.noModelGuidance.goToModels", "Go to Models")}
-					</Anchor>
-				</Stack>
-			) : undefined,
-		[conversationsError, conversationsIsError, isRemoteConversation, showNoModelGuidance, streamError, t],
-	);
+	const notice = streamError ? (
+		<Stack gap={2}>
+			<Text fw={700}>Local chat stream failed.</Text>
+			<Text size="sm">{streamError}</Text>
+		</Stack>
+	) : conversationsIsError ? (
+		<Stack gap={2}>
+			<Text fw={700}>Unable to load local chat history.</Text>
+			<Text size="sm">{errorMessage(conversationsError)}</Text>
+		</Stack>
+	) : isRemoteConversation ? (
+		<Stack gap={2}>
+			<Text fw={700}>{t("pages.chat.remoteViewOnlyTitle", "Remote conversation")}</Text>
+			<Text size="sm">
+				{t("pages.chat.remoteViewOnly", "This conversation was started from a paired client and is view-only on this node.")}
+			</Text>
+		</Stack>
+	) : showNoModelGuidance ? (
+		// Advisory, not blocking — a Codex/Azure sign-in later still routes around this via the picker's
+		// cloud sections, and a send attempted anyway still falls through to ChatMessage's ModelNotInstalled Alert.
+		<Stack gap={2}>
+			<Text fw={700}>{t("pages.chat.noModelGuidance.title", "No chat model installed yet")}</Text>
+			<Text size="sm">{t("pages.chat.noModelGuidance.body", "Install a GGUF model to start chatting locally.")}</Text>
+			<Anchor component={Link} to="/models" size="sm" data-testid="chat-no-model-guidance-models-link">
+				{t("pages.chat.noModelGuidance.goToModels", "Go to Models")}
+			</Anchor>
+		</Stack>
+	) : undefined;
 
 	// Module-readiness gate (platform parity): block the chat behind a connecting/error state until the
 	// shared hub is live. Once connected it latches `ready` and transient reconnects are handled in-band.

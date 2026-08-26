@@ -11,7 +11,7 @@
   <ItemGroup>
     <!-- Microsoft.Extensions.AI.OpenAI brings OpenAI 2.10.0 transitively (the ResponsesClient adapter that
          matches the Codex /responses wire shape). OpenAI is centrally pinned to 2.10.0 to avoid NU1605.
-         DO NOT reference Azure.AI.OpenAI here (plan C3/R9). -->
+         Keep Azure.AI.OpenAI out of this provider to preserve the ResponsesClient-only dependency boundary. -->
     <PackageReference Include="Microsoft.Extensions.AI" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
   </ItemGroup>

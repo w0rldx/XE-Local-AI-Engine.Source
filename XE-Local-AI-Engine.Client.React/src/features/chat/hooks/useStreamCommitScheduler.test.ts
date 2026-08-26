@@ -60,9 +60,7 @@ describe("useStreamCommitScheduler", () => {
 	// derives a delta (rather than a full snapshot) keeps everything emitted inside one frame.
 	it("folds coalesced states through the supplied merge function", () => {
 		const commit = vi.fn();
-		const { result } = renderHook(() =>
-			useStreamCommitScheduler<string>(commit, (previous, next) => previous + next),
-		);
+		const { result } = renderHook(() => useStreamCommitScheduler<string>(commit, (previous, next) => previous + next));
 
 		act(() => {
 			result.current.schedule("a");
@@ -129,7 +127,7 @@ describe("useStreamCommitScheduler", () => {
 
 	// `commit` is read through a ref precisely so the returned callbacks stay referentially stable — the reason the
 	// docs say they are safe to list in a dependency array. Both halves of that claim are asserted here.
-	it("keeps the callbacks stable across renders while committing through the newest callback", () => {
+	it("keeps the callbacks stable with omitted merge while the newest commit callback wins", () => {
 		const first = vi.fn();
 		const second = vi.fn();
 		const { result, rerender } = renderHook(({ commit }) => useStreamCommitScheduler<string>(commit), {

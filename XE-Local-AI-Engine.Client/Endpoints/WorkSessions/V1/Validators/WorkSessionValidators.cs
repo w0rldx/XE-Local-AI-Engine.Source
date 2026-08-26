@@ -30,8 +30,8 @@ public sealed class CreateWorkSessionRequestValidator : Validator<CreateWorkSess
             .MaximumLength(WorkSessionRequestLimits.MaxObjectiveLength)
             .WithMessage($"The objective is longer than the {WorkSessionRequestLimits.MaxObjectiveLength}-character limit.");
 
-        // Development is a real enum member — P1 reserves it — so parsing alone would let it through to a session no
-        // code path can execute. It is refused at the wire, where the caller can be told why.
+        // Development is a real enum member but no work-session execution path supports it. Refuse it at the wire,
+        // where the caller can be told why, rather than accepting a session that cannot run.
         RuleFor(static request => request.Kind)
             .Must(static kind => Enum.TryParse<AgentWorkSessionKind>(kind, ignoreCase: true, out var parsed)
                                  && parsed is AgentWorkSessionKind.General or AgentWorkSessionKind.Research)

@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     The container half of the mount broker, driven through the fake Docker client.
 ///     <para>
 ///         Two properties matter here and neither is "the mount was passed along". First, the engine's mounts must flow
-///         through the SAME requested-set the D7 verification checks the daemon's read-back against — a broker that
+///         through the same requested set used to verify the daemon's read-back — a broker that
 ///         composed its own list would route them around that check while leaving it looking intact. Second, the
 ///         overlap sweep has to be N-way: with the workspace, the scratch tmpfs and four runtime mounts there is no
 ///         fixed number of pairwise comparisons that covers it.

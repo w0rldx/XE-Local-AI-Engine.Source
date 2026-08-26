@@ -54,6 +54,7 @@ export function BenchmarkItemBreakdown({ cell, items, selectedRunIds, onToggleRu
 	const { runs } = useBenchmarkRunDetails(cell.items.map((item) => item.runId));
 	const details = new Map(runs.map((run) => [run.id, run]));
 	const itemsById = new Map(items.map((item) => [item.id, item]));
+	const selectedRunIdSet = new Set(selectedRunIds);
 	const missing = missingBenchmarkCellItems(cell, scorableBenchmarkTaskItems(items));
 
 	const label = (taskItemId: string | null, index: number | null): string => {
@@ -78,7 +79,7 @@ export function BenchmarkItemBreakdown({ cell, items, selectedRunIds, onToggleRu
 							<Table.Tr key={answer.runId} data-testid={`benchmark-cell-item-${answer.runId}`}>
 								<Table.Td width={40}>
 									<Checkbox
-										checked={selectedRunIds.includes(answer.runId)}
+										checked={selectedRunIdSet.has(answer.runId)}
 										aria-label={t("pages.benchmarks.cells.selectRun", "Show this item's run in the detail view")}
 										onChange={() => onToggleRun(answer.runId)}
 										data-testid={`benchmark-cell-item-select-${answer.runId}`}

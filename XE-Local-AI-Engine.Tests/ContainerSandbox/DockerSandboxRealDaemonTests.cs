@@ -23,7 +23,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         be made to dishonour one on request.
 ///     </para>
 ///     <para>
-///         D4's rule, implemented literally: an unavailable daemon <b>skips with a reason</b> and never passes. A suite
+///         An unavailable daemon <b>skips with a reason</b> and never passes. A suite
 ///         that went green because it quietly skipped the only tests exercising isolation would be worse than a red
 ///         one, so every skip below names what was missing and how to supply it.
 ///     </para>
@@ -392,7 +392,7 @@ public sealed class DockerSandboxRealDaemonTests
     }
 
     /// <summary>
-    ///     G5 on the container backend. The unit suite can only assert what the engine ASKED for; this is what the
+    ///     Credential shadowing on the container backend. The unit suite can only assert what the engine ASKED for; this is what the
     ///     daemon did with it — the container reads an EMPTY <c>certs/server.pem</c> while the same file on the host is
     ///     still the credential, byte for byte. The second half is the load-bearing one: a scheme that neutralized the
     ///     secret by mutating the worktree would make the tree dirty against its base commit, and an apply would carry
@@ -414,7 +414,7 @@ public sealed class DockerSandboxRealDaemonTests
     }
 
     /// <summary>
-    ///     G1(c) on the container backend, composed the way the caller composes it. The flag and the mechanism are two
+    ///     Agent-facing egress denial on the container backend, composed the way the caller composes it. The flag and the mechanism are two
     ///     separate facts; this asserts they MEET on a Development-shaped container — the workspace plus the four
     ///     per-task runtime mounts plus the read-only <c>.git/config</c> — and that the daemon really applied it.
     /// </summary>
@@ -445,7 +445,7 @@ public sealed class DockerSandboxRealDaemonTests
     public async Task RealDaemon_WhenUnrestrictedIsRequested_TheContainerIsCreatedOnTheDefaultBridge()
     {
         // Development Mode still requests this — for its WARM RESTORE sandbox, the short-lived one that fills the
-        // package cache from the base commit before the agent-facing sandbox is created. After G1 the agent-facing
+        // package cache from the base commit before the agent-facing sandbox is created. The agent-facing
         // sandbox asks for `None` (see the test above); this posture did not become dead, it moved. Egress itself is
         // not asserted here — that would make the suite depend on this machine having working outbound DNS — but the
         // applied network mode is read back off the daemon, which is the guarantee the provider makes.
@@ -708,7 +708,7 @@ public sealed class DockerSandboxRealDaemonTests
     [Test]
     public async Task RealDaemon_TheWorkspaceControlManifestIsNotReachableFromInsideTheContainer()
     {
-        // D9. workspace.json sits directly in the runtime root and holds the repository identity, the selected folder
+        // workspace.json sits directly in the runtime root and holds the repository identity, the selected folder
         // and the base commit. Mounting the four named subdirectories rather than their parent is the whole of the
         // exclusion, so this asserts the parent is not reachable by any route the mounts provide.
         var options = await RequireDaemonAsync();
@@ -1016,7 +1016,7 @@ public sealed class DockerSandboxRealDaemonTests
         /// <summary>
         ///     The fixture in the shape Development Mode actually asks for: the workspace, the four per-task runtime
         ///     subdirectories, and a read-only <c>.git/config</c> nested inside the workspace. Deliberately mounts the
-        ///     four subdirectories and NOT their parent, which is what keeps <c>workspace.json</c> out (D9).
+        ///     four subdirectories and not their parent, which is what keeps <c>workspace.json</c> out.
         /// </summary>
         public static Task<ContainerFixture> CreateWithRuntimeMountsAsync(ContainerSandboxOptions options)
         {
@@ -1062,7 +1062,7 @@ public sealed class DockerSandboxRealDaemonTests
                     ReadOnly = true
                 });
 
-                // G5's shadow, in the exact shape DevelopmentWorkspaceProvider requests it: a committed credential in
+                // The credential shadow, in the exact shape DevelopmentWorkspaceProvider requests it: a committed credential in
                 // the workspace, an engine-generated EMPTY file OUTSIDE it, and a workspace-relative target so the
                 // empty one lands on top of the real one. The real file is left byte-unchanged on disk, which is what
                 // keeps the diff model from seeing a deletion.

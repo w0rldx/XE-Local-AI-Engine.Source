@@ -1,13 +1,6 @@
-import { ActionIcon, Alert, Anchor, Badge, Drawer, Group, Loader, Menu, Stack, Text, Tooltip } from "@mantine/core";
+import { Alert, Anchor, Loader, Stack, Text } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import {
-	IconAlertTriangle,
-	IconDotsVertical,
-	IconLayoutSidebar,
-	IconLayoutSidebarRight,
-	IconPencil,
-	IconTrash,
-} from "@tabler/icons-react";
+import { IconAlertTriangle } from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -20,6 +13,7 @@ import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import type { ChatScope } from "@/features/chat/models/ChatModels";
 import { Chat } from "@/features/chat/pages/Chat";
 import { EditWorkSessionDialog } from "@/features/workSessions/components/EditWorkSessionDialog";
+import { WorkSessionDetailLayout } from "@/features/workSessions/components/WorkSessionDetailLayout";
 import { WorkSessionFollowUpNotice } from "@/features/workSessions/components/WorkSessionFollowUpNotice";
 import { WorkSessionPlanPanel } from "@/features/workSessions/components/WorkSessionPlanPanel";
 import { WorkSessionSidePanel } from "@/features/workSessions/components/WorkSessionSidePanel";
@@ -44,11 +38,6 @@ import {
 	workSessionEventsPageSize,
 } from "@/features/workSessions/queries/useWorkSessions";
 
-// The app shell keeps its expanded sidebar from DESKTOP_NAV_BREAKPOINT up, so a 320 plan + chat + 380 side-panel row
-// has no room to breathe below TWO_PANE_BREAKPOINT — the same threshold, for the same reason, that ChatDisplayShell
-// records. jsdom defaults innerWidth to 1024, so `<` (not `<=`) keeps the desktop layout the default under the
-// existing tests.
-
 export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
@@ -65,8 +54,10 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 	const sessionQuery = useWorkSession(sessionId);
 	const conversationId = sessionQuery.data?.conversationId;
 	const live = useWorkSessionHub(sessionId, conversationId);
-	// One cadence for every query on the page: the hub reports it while it is down, and nothing polls while it is up.
-	const poll = { pollIntervalMs: live.pollIntervalMs };
+	// Start every feed in parallel with the detail request, but once that authoritative request has terminally failed,
+	// stop subordinate work even if a failed hub subscription has enabled fallback polling.
+	const feedsEnabled = !sessionQuery.isError;
+	const poll = { pollIntervalMs: feedsEnabled ? live.pollIntervalMs : undefined, enabled: feedsEnabled };
 
 	const tasksQuery = useWorkSessionTasks(sessionId, poll);
 	const findingsQuery = useWorkSessionFindings(sessionId, poll);
@@ -240,136 +231,46 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 		</Stack>
 	);
 
+	const editDialogNode = (
+		<EditWorkSessionDialog
+			opened={editDialogOpened}
+			status={status}
+			initialTitle={sessionQuery.data.title ?? ""}
+			initialObjective={sessionQuery.data.objective ?? ""}
+			isSubmitting={updateSession.isPending}
+			errorMessage={
+				updateSession.isError
+					? apiErrorMessage(updateSession.error, t("pages.workSessions.edit.failed", "Could not save those changes."))
+					: undefined
+			}
+			onClose={() => {
+				updateSession.reset();
+				editDialog.close();
+			}}
+			onSubmit={handleSaveEdits}
+		/>
+	);
+
 	return (
-		<FullHeightPage data-testid="work-session-detail-page">
-			<Stack gap="sm" h="100%" style={{ minHeight: 0 }}>
-				<Group gap="xs" wrap="nowrap">
-					{isMobile ? (
-						<Tooltip label={t("pages.workSessions.detail.showPlan", "Show plan")}>
-							<ActionIcon
-								variant="subtle"
-								onClick={planDrawer.open}
-								aria-label={t("pages.workSessions.detail.showPlan", "Show plan")}
-								data-testid="work-session-plan-toggle"
-							>
-								<IconLayoutSidebar size={18} />
-							</ActionIcon>
-						</Tooltip>
-					) : null}
-					<Text fw={700} lineClamp={1} style={{ flex: 1, minWidth: 0 }} data-testid="work-session-title">
-						{sessionQuery.data.title}
-					</Text>
-					<Badge size="sm" variant="light" color="gray">
-						{t(`pages.workSessions.kind.${toWorkSessionKind(sessionQuery.data.kind)}`, sessionQuery.data.kind ?? "")}
-					</Badge>
-					<Menu position="bottom-end" withinPortal={true}>
-						<Menu.Target>
-							<ActionIcon
-								variant="subtle"
-								aria-label={t("pages.workSessions.detail.actions", "Session actions")}
-								data-testid="work-session-actions"
-							>
-								<IconDotsVertical size={18} />
-							</ActionIcon>
-						</Menu.Target>
-						<Menu.Dropdown>
-							<Menu.Item leftSection={<IconPencil size={14} />} onClick={editDialog.open} data-testid="work-session-edit">
-								{t("pages.workSessions.edit.open", "Edit")}
-							</Menu.Item>
-							<Menu.Item
-								color="red"
-								leftSection={<IconTrash size={14} />}
-								onClick={() => {
-									handleDelete().catch(() => undefined);
-								}}
-								data-testid="work-session-delete"
-							>
-								{t("pages.workSessions.delete.open", "Delete")}
-							</Menu.Item>
-						</Menu.Dropdown>
-					</Menu>
-					{isMobile ? (
-						<Tooltip label={t("pages.workSessions.detail.showDetails", "Show findings and artifacts")}>
-							<ActionIcon
-								variant="subtle"
-								onClick={sideDrawer.open}
-								aria-label={t("pages.workSessions.detail.showDetails", "Show findings and artifacts")}
-								data-testid="work-session-side-toggle"
-							>
-								<IconLayoutSidebarRight size={18} />
-							</ActionIcon>
-						</Tooltip>
-					) : null}
-				</Group>
-
-				{deleteError ? (
-					<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="work-session-delete-error">
-						{deleteError}
-					</Alert>
-				) : null}
-
-				<EditWorkSessionDialog
-					opened={editDialogOpened}
-					status={status}
-					initialTitle={sessionQuery.data.title ?? ""}
-					initialObjective={sessionQuery.data.objective ?? ""}
-					isSubmitting={updateSession.isPending}
-					errorMessage={
-						updateSession.isError
-							? apiErrorMessage(updateSession.error, t("pages.workSessions.edit.failed", "Could not save those changes."))
-							: undefined
-					}
-					onClose={() => {
-						updateSession.reset();
-						editDialog.close();
-					}}
-					onSubmit={handleSaveEdits}
-				/>
-
-				{isMobile ? (
-					<>
-						<div style={{ flex: 1, minHeight: 0 }}>{conversationPane}</div>
-						<Drawer
-							opened={planDrawerOpened}
-							onClose={planDrawer.close}
-							position="left"
-							size="85%"
-							title={t("pages.workSessions.plan.title", "Plan")}
-							// On `content`, not the root: Mantine spreads an unknown prop onto the zero-size portal root,
-							// which Playwright reports as hidden. Same rule DialogShell applies.
-							attributes={{ content: { "data-testid": "work-session-plan-drawer" } }}
-						>
-							{planPanel}
-						</Drawer>
-						<Drawer
-							opened={sideDrawerOpened}
-							onClose={sideDrawer.close}
-							position="right"
-							size="85%"
-							title={t("pages.workSessions.detail.details", "Details")}
-							attributes={{ content: { "data-testid": "work-session-side-drawer" } }}
-						>
-							{sidePanel}
-						</Drawer>
-					</>
-				) : (
-					<div
-						data-testid="work-session-detail-grid"
-						style={{
-							display: "grid",
-							gridTemplateColumns: "320px minmax(0, 1fr) minmax(380px, 420px)",
-							gridTemplateRows: "minmax(0, 1fr)",
-							gap: "var(--mantine-spacing-md)",
-							flex: 1,
-							minHeight: 0,
-						}}
-					>
-						{planPanel}
-						{conversationPane}
-						{sidePanel}
-					</div>
-				)}
-			</Stack>
-		</FullHeightPage>
+		<WorkSessionDetailLayout
+			title={sessionQuery.data.title ?? ""}
+			kindLabel={t(`pages.workSessions.kind.${toWorkSessionKind(sessionQuery.data.kind)}`, sessionQuery.data.kind ?? "")}
+			isMobile={isMobile}
+			deleteError={deleteError}
+			planDrawerOpened={planDrawerOpened}
+			sideDrawerOpened={sideDrawerOpened}
+			onOpenPlan={planDrawer.open}
+			onClosePlan={planDrawer.close}
+			onOpenSide={sideDrawer.open}
+			onCloseSide={sideDrawer.close}
+			onEdit={editDialog.open}
+			onDelete={() => {
+				handleDelete().catch(() => undefined);
+			}}
+			planPanel={planPanel}
+			sidePanel={sidePanel}
+			conversationPane={conversationPane}
+			editDialog={editDialogNode}
+		/>
 	);
 }

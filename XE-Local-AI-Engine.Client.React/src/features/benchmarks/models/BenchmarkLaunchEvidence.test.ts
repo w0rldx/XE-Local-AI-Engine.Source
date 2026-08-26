@@ -141,9 +141,7 @@ describe("diffLaunchEvidence", () => {
 			launchEvidenceEntries(facts(), receipt({ benchmarkLaunchPolicy: "benchmark" }), environment()),
 		]);
 
-		expect(
-			rows.some((row) => row.key === "receipt.benchmarkLaunchPolicy" && row.values[0] === null && row.differs),
-		).toBe(true);
+		expect(rows.some((row) => row.key === "receipt.benchmarkLaunchPolicy" && row.values[0] === null && row.differs)).toBe(true);
 		expect(rows.some((row) => row.key === "environment.llamaRuntime.version" && row.differs)).toBe(true);
 	});
 
@@ -179,7 +177,7 @@ describe("formatEvidenceValue", () => {
 	});
 });
 
-// E2: the engine compares a SET, not a pair. A pairwise engine run N-1 times would report each row against whichever
+// The engine compares a set, not a pair. A pairwise engine run N-1 times would report each row against whichever
 // run happened to be first rather than against the set — which is the difference between "these three disagree" and
 // "these two disagree with the one on the left".
 describe("diffLaunchEvidence across more than two runs", () => {
@@ -200,9 +198,7 @@ describe("diffLaunchEvidence across more than two runs", () => {
 	});
 
 	it("flags nothing when every side agrees", () => {
-		expect(differingEvidenceKeys(diffLaunchEvidence([side("b1", "cuda"), side("b1", "cuda"), side("b1", "cuda")]))).toEqual(
-			[],
-		);
+		expect(differingEvidenceKeys(diffLaunchEvidence([side("b1", "cuda"), side("b1", "cuda"), side("b1", "cuda")]))).toEqual([]);
 	});
 
 	// A field only one run recorded is a real difference, and it must not shift the other runs' columns: column N is

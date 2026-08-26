@@ -14,6 +14,7 @@ public sealed class RuntimeLicensePackagingTests
 
         AssertEx.Equal("10.0.11", Property(releaseVersion, "DotNetRuntimeVersion"));
         AssertEx.NotEmpty(Property(releaseVersion, "VersionPrefix"));
+        AssertEx.Equal("14.0", Property(buildProps, "LangVersion"));
         AssertEx.True(buildProps.Descendants("Import").Any(import =>
             string.Equals((string?)import.Attribute("Project"), "eng/ReleaseVersion.props", StringComparison.Ordinal)));
     }

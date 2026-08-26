@@ -14,9 +14,8 @@ if (builder.Environment.IsDevelopment())
     nodeSqlite = nodeSqlite.WithSqliteWeb();
 }
 
-// The in-Aspire HostAgent.Linux (Docker) sandbox/runtime project and the HostAgent gRPC client were removed:
-// inference and the AgentHome sandbox now run as host processes (process sandbox provider), so no HostAgent
-// resource or socket/HMAC/startup-gate wiring exists.
+// Inference and AgentHome use host-process providers, so the AppHost needs no sandbox sidecar,
+// remote runtime client, socket authentication, or startup gate.
 
 var app = builder.AddProject<XE_Local_AI_Engine_Client>("app", "https")
                  .WithExternalHttpEndpoints()

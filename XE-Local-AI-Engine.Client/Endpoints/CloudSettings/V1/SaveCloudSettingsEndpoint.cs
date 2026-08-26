@@ -24,14 +24,14 @@ public sealed class SaveCloudSettingsEndpoint(
 
     public override async Task HandleAsync(SaveCloudSettingsRequest req, CancellationToken ct)
     {
-        // Load prior state so a secret header re-sent with a blank value keeps its stored value (Locked #12). The mapper
+        // Load prior state so a secret header re-sent with a blank value keeps its stored value. The mapper
         // stays pure — the merge is the only impure step and it runs here. Loaded before validation so the validator can
         // tell a fresh/renamed blank secret header (rejected, 400) apart from one that resolves via the stored merge.
         var existing = await _cloudCredentialStore.LoadConfigAsync(ct).ConfigureAwait(false);
         var existingHeaders = existing?.AzureFoundry?.Headers ?? [];
 
-        // Reserved / charset / caps / host-suffix validation. Error messages carry the offending header NAME only —
-        // never a value (Locked #6–#9, #14).
+        // Reserved-name, character-set, capacity, and host-suffix validation. Error messages carry only the offending
+        // header name, never its value.
         var headerErrors = CloudSettingsPolicy.ValidateHeadersAndSuffixes(req.Headers.ToPolicyHeaders(),
             req.AdditionalAllowedHostSuffixes,
             existingHeaders);

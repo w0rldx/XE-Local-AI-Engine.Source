@@ -35,7 +35,7 @@ const workSessionStatuses = [
 ] as const;
 export type WorkSessionStatus = (typeof workSessionStatuses)[number];
 
-// `Development` is reserved by the brief (Q1) and deliberately not offered until the Dev-Mode chat series lands.
+// `Development` has no work-session execution path and is deliberately not offered by this client.
 export const workSessionKinds = ["General", "Research"] as const;
 export type WorkSessionKind = (typeof workSessionKinds)[number];
 

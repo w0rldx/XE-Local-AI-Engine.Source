@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Decision D10 — daemon attestation — and the operator-facing preflight built on it.
+///     Daemon attestation and the operator-facing preflight built on it.
 ///     <para>
 ///         Two properties are being defended, and they pull in opposite directions. The control must notice a
 ///         substituted daemon, because <c>DOCKER_HOST</c> is an ordinary environment variable and a substituted daemon

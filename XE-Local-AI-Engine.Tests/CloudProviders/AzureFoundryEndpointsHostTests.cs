@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Covers the effective host allowlist (built-in Azure suffixes ∪ shape-valid operator suffixes) and the operator
-///     suffix shape guard (Locked #14): a bare TLD, a wildcard, or a suffix with no leading dot never widens the list.
+///     suffix shape guard: a bare TLD, a wildcard, or a suffix with no leading dot never widens the list.
 /// </summary>
 public sealed class AzureFoundryEndpointsHostTests
 {

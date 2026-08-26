@@ -75,21 +75,33 @@ export function BenchmarkCellsTable({
 	onRerunCell,
 }: BenchmarkCellsTableProps) {
 	const { t } = useTranslation();
-	const [expanded, setExpanded] = useState<string[]>([]);
+	const [expanded, setExpanded] = useState(() => new Set<string>());
 	const ordered = useMemo(() => sortBenchmarkCells(cells), [cells]);
 	const scorable = useMemo(() => scorableBenchmarkTaskItems(items), [items]);
 	// A needle is found or missed according to ONE criterion's verifier, and that evidence lives on the run's detail
 	// rather than on the cell projection. Only the runs that answered a NIAH case are read — a project without one asks
 	// for nothing — and they go through the same per-run cache the breakdown and the live panes already use, so opening
 	// a cell below re-requests none of it.
-	const caseIds = useMemo(() => new Set(items.filter((item) => item.kind === "niahCase").map((item) => item.id)), [items]);
-	const caseRunIds = useMemo(
-		() =>
-			cells.flatMap((cell) =>
-				cell.items.filter((answer) => answer.taskItemId !== null && caseIds.has(answer.taskItemId)).map((answer) => answer.runId),
-			),
-		[cells, caseIds],
-	);
+	const caseIds = useMemo(() => {
+		const ids = new Set<string>();
+		for (const item of items) {
+			if (item.kind === "niahCase") {
+				ids.add(item.id);
+			}
+		}
+		return ids;
+	}, [items]);
+	const caseRunIds = useMemo(() => {
+		const runIds: string[] = [];
+		for (const cell of cells) {
+			for (const answer of cell.items) {
+				if (answer.taskItemId !== null && caseIds.has(answer.taskItemId)) {
+					runIds.push(answer.runId);
+				}
+			}
+		}
+		return runIds;
+	}, [cells, caseIds]);
 	const { runs: caseRuns } = useBenchmarkRunDetails(caseRunIds);
 	const verifiersByRunId = useMemo(() => new Map(caseRuns.map((run) => [run.id, run.judge.verifiers])), [caseRuns]);
 	// A project whose every leaf is on its own axis — a pure long-context probe — has nothing to take a mean OF, so the
@@ -133,7 +145,7 @@ export function BenchmarkCellsTable({
 					</Table.Thead>
 					<Table.Tbody>
 						{ordered.map((cell) => {
-							const isOpen = expanded.includes(cell.cellKey);
+							const isOpen = expanded.has(cell.cellKey);
 							const quant = benchmarkQuantTag(cell.primaryModelName);
 							const recall = benchmarkNiahRecall(cell, items, verifiersByRunId);
 							const answered = scorable.length - missingBenchmarkCellItems(cell, scorable).length;
@@ -147,11 +159,15 @@ export function BenchmarkCellsTable({
 												aria-label={t("pages.benchmarks.cells.expand", "Show this combination item by item")}
 												aria-expanded={isOpen}
 												onClick={() =>
-													setExpanded((current) =>
-														current.includes(cell.cellKey)
-															? current.filter((key) => key !== cell.cellKey)
-															: [...current, cell.cellKey],
-													)
+													setExpanded((current) => {
+														const next = new Set(current);
+														if (next.has(cell.cellKey)) {
+															next.delete(cell.cellKey);
+														} else {
+															next.add(cell.cellKey);
+														}
+														return next;
+													})
 												}
 												data-testid={`benchmark-cell-toggle-${cell.cellKey}`}
 											>

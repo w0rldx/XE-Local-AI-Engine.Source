@@ -486,7 +486,7 @@ with no per-run options and no human-in-the-loop round-trip: an approval-gated t
 `ToolApprovalRequestContent` the child can never answer, silently failing every call. Before this work,
 `AttachSkillsProvider` attached the provider with its default (all-gated) options anyway, because it
 rides `AIContextProviders` and bypasses `CurateChildTools` entirely — so **a skill assigned to a spawned
-child could never be loaded** (defect D7).
+child could never be loaded**.
 
 The fix constructs the child's provider with `DisableLoadSkillApproval = true` and
 `DisableReadSkillResourceApproval = true` (`SubAgentSpawnService.cs`). The justification is the

@@ -6,8 +6,8 @@ import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { isDevelopmentContainerProvider } from "@/features/development/models/DevelopmentModels";
-import { useDevelopmentConsentStore } from "@/features/development/stores/DevelopmentConsentStore";
 import { useDevelopmentCapability } from "@/features/development/queries/useDevelopment";
+import { useDevelopmentConsentStore } from "@/features/development/stores/DevelopmentConsentStore";
 
 interface DevelopmentConsentGateProps {
 	readonly children: ReactNode;
@@ -28,7 +28,7 @@ interface DevelopmentConsentGateProps {
  * restriction, while on Linux the same code path enforces real containment. Saying only one of those would be
  * inaccurate on half the installs, so the notice says both and names which is which.
  *
- * Egress is conditioned on the same thing the backend conditions it on. Since G1 the sandbox the agent's work runs in
+ * Egress is conditioned on the same thing the backend conditions it on. The sandbox the agent's work runs in
  * asks for SandboxNetworkPolicy.None wherever the backend advertises SupportsNetworkPolicy
  * (DevelopmentWorkspaceProvider.ResolveAgentFacingNetworkPolicy) — which is Linux with a working `unshare` probe, and
  * the container provider — and Unrestricted where it does not, because a backend fails a confinement request it cannot
@@ -36,7 +36,7 @@ interface DevelopmentConsentGateProps {
  * sandbox that keeps egress by design is the engine's own warm restore against the BASE COMMIT, which runs before the
  * agent has written anything. So this copy says "denied where this node can enforce it", names the exception, and
  * points at the Sandbox isolation panel for which of the two was actually served — it must not promise denial, and it
- * must not repeat the pre-G1 claim that nothing restricts what a command can reach.
+ * must not repeat the obsolete claim that nothing restricts what a command can reach.
  *
  * Rendered as a gate rather than an overlay on a live page: an operator who has not read it should not be able to
  * start an attempt behind it.
@@ -137,10 +137,7 @@ export function DevelopmentConsentGate({ children }: DevelopmentConsentGateProps
 						</>
 					)}
 					<List.Item>
-						{t(
-							"pages.development.consent.trust",
-							"Register only repositories you trust. Repository code executes either way.",
-						)}
+						{t("pages.development.consent.trust", "Register only repositories you trust. Repository code executes either way.")}
 					</List.Item>
 				</List>
 
@@ -157,10 +154,7 @@ export function DevelopmentConsentGate({ children }: DevelopmentConsentGateProps
 						const checked = event.currentTarget.checked;
 						setConfirmed(checked);
 					}}
-					label={t(
-						"pages.development.consent.checkbox",
-						"I understand what Development Mode executes on this machine.",
-					)}
+					label={t("pages.development.consent.checkbox", "I understand what Development Mode executes on this machine.")}
 					data-testid="development-consent-checkbox"
 				/>
 			</Stack>

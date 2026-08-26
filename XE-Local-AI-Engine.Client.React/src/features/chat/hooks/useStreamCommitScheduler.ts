@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 
 export interface StreamCommitScheduler<TState> {
 	// Record the latest pending state and ensure a single requestAnimationFrame flush is queued. Repeated calls
@@ -9,6 +9,10 @@ export interface StreamCommitScheduler<TState> {
 	flush: () => void;
 	// Drop any pending state without committing (aborted/deleted turn, or component unmount).
 	cancel: () => void;
+}
+
+function takeLatestState<TState>(_previous: TState, next: TState): TState {
+	return next;
 }
 
 /**
@@ -23,14 +27,16 @@ export interface StreamCommitScheduler<TState> {
  */
 export function useStreamCommitScheduler<TState>(
 	commit: (state: TState) => void,
-	merge: (previous: TState, next: TState) => TState = (_previous, next) => next,
+	merge: (previous: TState, next: TState) => TState = takeLatestState,
 ): StreamCommitScheduler<TState> {
 	const pendingRef = useRef<{ state: TState } | undefined>(undefined);
 	const frameRef = useRef<number | undefined>(undefined);
 	const commitRef = useRef(commit);
-	commitRef.current = commit;
 	const mergeRef = useRef(merge);
-	mergeRef.current = merge;
+	useLayoutEffect(() => {
+		commitRef.current = commit;
+		mergeRef.current = merge;
+	}, [commit, merge]);
 
 	const runFlush = useCallback(() => {
 		frameRef.current = undefined;

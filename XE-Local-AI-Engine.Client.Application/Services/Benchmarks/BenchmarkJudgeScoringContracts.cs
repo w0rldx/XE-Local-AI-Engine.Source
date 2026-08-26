@@ -11,7 +11,7 @@ public sealed record BenchmarkJudgeVerifierResultV1(string Id, string Kind, bool
 
 /// <param name="Verifiers">
 ///     The evidence behind every non-<c>llm</c> criterion, or <see langword="null" /> for a judging that had none.
-///     Written only when present, so a stored result from before P2 round-trips unchanged.
+///     Written only when present, so a legacy stored result without verifier evidence round-trips unchanged.
 /// </param>
 public sealed record BenchmarkJudgeResultV2(
     int SchemaVersion,
@@ -306,10 +306,10 @@ public static class BenchmarkJudgePromptV2
     /// </param>
     /// <summary>
     ///     The rubric as the judge model sees it: the four members it has always seen, with the server-side
-    ///     <c>kind</c>/<c>config</c> members of P2 removed. The model is never handed a verifiable criterion (an
+    ///     <c>kind</c>/<c>config</c> members removed. The model is never handed a verifiable criterion (an
     ///     all-verifiable rubric never reaches inference, a mixed one is filtered first), so those two members carry
-    ///     nothing it could use — and emitting them would change the payload bytes of every judging under a revision
-    ///     stored before P2, which is exactly the silent drift the prompt-version rule exists to prevent.
+    ///     nothing it could use — and emitting them would change the payload bytes of every judging under a legacy
+    ///     revision stored without those fields, which is exactly the drift the prompt-version rule exists to prevent.
     /// </summary>
     private static JsonNode? SerializeRubricForPrompt(BenchmarkJudgeRubricV1 rubric)
     {

@@ -5,7 +5,6 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -39,10 +38,9 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IInferenceChatClientFactory _chatClientFactory;
-    private readonly IHardwareProfiler _hardwareProfiler;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<InferenceBenchmarkHarness> _logger;
-    private readonly IProcessVramBudgetProbe _processVramBudgetProbe;
+    private readonly InferenceBenchmarkResourceSampler _resourceSampler;
 
     public InferenceBenchmarkHarness(IInferenceChatClientFactory chatClientFactory,
         IHttpClientFactory httpClientFactory,
@@ -58,8 +56,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
         _chatClientFactory = chatClientFactory;
         _httpClientFactory = httpClientFactory;
-        _hardwareProfiler = hardwareProfiler;
-        _processVramBudgetProbe = processVramBudgetProbe;
+        _resourceSampler = new InferenceBenchmarkResourceSampler(hardwareProfiler, processVramBudgetProbe);
         _logger = logger;
     }
 
@@ -82,7 +79,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
                 spec.RejectPreSpawnVramPressure,
                 spec.IncrementalVramDivergenceAbsoluteThresholdBytes,
                 spec.IncrementalVramDivergenceRatioThreshold);
-            var load = await CaptureResourcesAsync(spec, context.ProcessId, ct).ConfigureAwait(false);
+            var load = await _resourceSampler.CaptureAsync(spec, context.ProcessId, ct).ConfigureAwait(false);
             resources.Add(load);
 
             if (resources.PreSpawnVram?.ExternalPressureDetected == true)
@@ -101,7 +98,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
             async Task CapturePassResourcesAsync(CancellationToken innerCt)
             {
-                resources.Add(await CaptureResourcesAsync(spec, context.ProcessId, innerCt).ConfigureAwait(false));
+                resources.Add(await _resourceSampler.CaptureAsync(spec, context.ProcessId, innerCt).ConfigureAwait(false));
             }
 
             var metrics = role switch
@@ -112,7 +109,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
                 _ => InferenceBenchmarkMetrics.Failed($"Benchmark role '{role}' is unsupported.")
             };
 
-            resources.Add(await CaptureResourcesAsync(spec, context.ProcessId, ct).ConfigureAwait(false));
+            resources.Add(await _resourceSampler.CaptureAsync(spec, context.ProcessId, ct).ConfigureAwait(false));
             return ApplyResourceEvidence(metrics, context, resources);
         }
         catch (OperationCanceledException)
@@ -271,13 +268,13 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
         double? toolLoopMs;
         using (var toolInnerClient = _chatClientFactory.CreateChatClient(endpoint.BaseAddress, endpoint.ModelName))
-            using (var toolInvokingClient = toolInnerClient.AsBuilder().UseFunctionInvocation().Build())
-            {
-                var toolStopwatch = Stopwatch.StartNew();
-                _ = await toolInvokingClient.GetResponseAsync(toolMessages, toolOptions, ct).ConfigureAwait(false);
-                toolStopwatch.Stop();
-                toolLoopMs = Volatile.Read(ref toolInvocations) > 0 ? toolStopwatch.Elapsed.TotalMilliseconds : null;
-            }
+        using (var toolInvokingClient = toolInnerClient.AsBuilder().UseFunctionInvocation().Build())
+        {
+            var toolStopwatch = Stopwatch.StartNew();
+            _ = await toolInvokingClient.GetResponseAsync(toolMessages, toolOptions, ct).ConfigureAwait(false);
+            toolStopwatch.Stop();
+            toolLoopMs = Volatile.Read(ref toolInvocations) > 0 ? toolStopwatch.Elapsed.TotalMilliseconds : null;
+        }
 
         var longMessages = new List<ChatMessage>
         {
@@ -327,12 +324,12 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
         var measuredRuns = Math.Max(1, spec.MeasuredRuns);
         var metricsUri = new Uri(endpoint.BaseAddress, "/metrics");
-        var endpointUri = BuildRoleUri(endpoint.BaseAddress, "embeddings");
+        var endpointUri = InferenceBenchmarkHttpProtocol.BuildRoleUri(endpoint.BaseAddress, "embeddings");
         using var client = _httpClientFactory.CreateClient();
 
         for (var warmup = 0; warmup < Math.Max(0, spec.WarmupRuns); warmup++)
         {
-            _ = await PostEmbeddingAsync(client, endpointUri, endpoint.ModelName, inputs, ct).ConfigureAwait(false);
+            _ = await InferenceBenchmarkHttpProtocol.PostEmbeddingAsync(client, endpointUri, endpoint.ModelName, inputs, ct).ConfigureAwait(false);
             await captureResources(ct).ConfigureAwait(false);
         }
 
@@ -346,7 +343,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         for (var run = 0; run < measuredRuns; run++)
         {
             var stopwatch = Stopwatch.StartNew();
-            var vectors = await PostEmbeddingAsync(client, endpointUri, endpoint.ModelName, inputs, ct).ConfigureAwait(false);
+            var vectors = await InferenceBenchmarkHttpProtocol.PostEmbeddingAsync(client, endpointUri, endpoint.ModelName, inputs, ct).ConfigureAwait(false);
             stopwatch.Stop();
             latencies.Add(stopwatch.Elapsed.TotalMilliseconds);
             await captureResources(ct).ConfigureAwait(false);
@@ -422,12 +419,12 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
         var measuredRuns = Math.Max(1, spec.MeasuredRuns);
         var metricsUri = new Uri(endpoint.BaseAddress, "/metrics");
-        var endpointUri = BuildRoleUri(endpoint.BaseAddress, "rerank");
+        var endpointUri = InferenceBenchmarkHttpProtocol.BuildRoleUri(endpoint.BaseAddress, "rerank");
         using var client = _httpClientFactory.CreateClient();
 
         for (var warmup = 0; warmup < Math.Max(0, spec.WarmupRuns); warmup++)
         {
-            _ = await PostRerankAsync(client, endpointUri, spec.RerankerQuery, documents, ct).ConfigureAwait(false);
+            _ = await InferenceBenchmarkHttpProtocol.PostRerankAsync(client, endpointUri, spec.RerankerQuery, documents, ct).ConfigureAwait(false);
             await captureResources(ct).ConfigureAwait(false);
         }
 
@@ -441,7 +438,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         for (var run = 0; run < measuredRuns; run++)
         {
             var stopwatch = Stopwatch.StartNew();
-            var scores = await PostRerankAsync(client, endpointUri, spec.RerankerQuery, documents, ct).ConfigureAwait(false);
+            var scores = await InferenceBenchmarkHttpProtocol.PostRerankAsync(client, endpointUri, spec.RerankerQuery, documents, ct).ConfigureAwait(false);
             stopwatch.Stop();
             latencies.Add(stopwatch.Elapsed.TotalMilliseconds);
             await captureResources(ct).ConfigureAwait(false);
@@ -499,21 +496,6 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             DeterministicOutput: deterministic);
     }
 
-    private async Task<ResourceObservation> CaptureResourcesAsync(InferenceBenchmarkSpec spec,
-        int? processId,
-        CancellationToken ct)
-    {
-        var hardware = await _hardwareProfiler.GetProfileAsync(forceRefresh: true, ct).ConfigureAwait(false);
-        var processBudget = await _processVramBudgetProbe.TryGetProcessBudgetBytesAsync(spec.Backend, ct).ConfigureAwait(false);
-        var globalFree = string.Equals(spec.Backend, InferenceBackends.Cpu, StringComparison.OrdinalIgnoreCase)
-            ? null
-            : hardware.AvailableVramBytes;
-
-        return new ResourceObservation(VramObservation.Create(globalFree,
-                processBudget),
-            TryGetWorkingSetBytes(processId));
-    }
-
     private static InferenceBenchmarkMetrics ApplyResourceEvidence(InferenceBenchmarkMetrics metrics,
         LlamaServerProfilingContext context,
         ResourceEvidenceCollector resources)
@@ -532,56 +514,56 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         }
 
         var diagnostics = JsonSerializer.Serialize(new
+        {
+            role = role.ToString(),
+            workload = new
             {
-                role = role.ToString(),
-                workload = new
-                {
-                    metrics.ItemsPerSecond,
-                    metrics.InputTokensPerSecond,
-                    metrics.P50LatencyMs,
-                    metrics.P95LatencyMs,
-                    metrics.BatchSize,
-                    metrics.OutputDimension,
-                    metrics.ValuesFinite,
-                    metrics.DeterministicOutput
-                },
-                server = new
-                {
-                    metrics.RequestsProcessingAtLastScrape,
-                    metrics.RequestsDeferredAtLastScrape,
-                    metrics.ContextTokensHighWatermark,
-                    metrics.AverageBusySlotsPerDecode,
-                    metrics.SpeculativeDraftTokens,
-                    metrics.SpeculativeAcceptedTokens,
-                    metrics.SpeculativeVerificationSteps,
-                    metrics.SpeculativeAcceptanceRate
-                },
-                vram = new
-                {
-                    preSpawn = resources.PreSpawnVram,
-                    load,
-                    after,
-                    minimumGlobalFreeBytes = resources.MinimumGlobalFreeBytes,
-                    minimumProcessBudgetBytes = resources.MinimumProcessBudgetBytes,
-                    externalPressure
-                },
-                process = new
-                {
-                    peakWorkingSetBytes = resources.PeakWorkingSetBytes,
-                    samples = resources.Samples.Count
-                },
-                runtime = new
-                {
-                    version = context.LoadObservation?.RuntimeVersion,
-                    sha256 = context.LoadObservation?.RuntimeSha256,
-                    launchArgumentsSha256 = HashSemanticLaunchArguments(context.SuccessfulLaunchArguments),
-                    readinessDurationMs = context.LoadObservation?.ReadinessDurationMs,
-                    outcome = context.LoadObservation?.Outcome.ToString(),
-                    placement = context.LoadObservation?.Placement.ToString(),
-                    attemptKind = context.LoadObservation?.AttemptKind.ToString(),
-                    speculationClass = context.LoadObservation?.SpeculativeModeClass.ToString()
-                }
+                metrics.ItemsPerSecond,
+                metrics.InputTokensPerSecond,
+                metrics.P50LatencyMs,
+                metrics.P95LatencyMs,
+                metrics.BatchSize,
+                metrics.OutputDimension,
+                metrics.ValuesFinite,
+                metrics.DeterministicOutput
             },
+            server = new
+            {
+                metrics.RequestsProcessingAtLastScrape,
+                metrics.RequestsDeferredAtLastScrape,
+                metrics.ContextTokensHighWatermark,
+                metrics.AverageBusySlotsPerDecode,
+                metrics.SpeculativeDraftTokens,
+                metrics.SpeculativeAcceptedTokens,
+                metrics.SpeculativeVerificationSteps,
+                metrics.SpeculativeAcceptanceRate
+            },
+            vram = new
+            {
+                preSpawn = resources.PreSpawnVram,
+                load,
+                after,
+                minimumGlobalFreeBytes = resources.MinimumGlobalFreeBytes,
+                minimumProcessBudgetBytes = resources.MinimumProcessBudgetBytes,
+                externalPressure
+            },
+            process = new
+            {
+                peakWorkingSetBytes = resources.PeakWorkingSetBytes,
+                samples = resources.Samples.Count
+            },
+            runtime = new
+            {
+                version = context.LoadObservation?.RuntimeVersion,
+                sha256 = context.LoadObservation?.RuntimeSha256,
+                launchArgumentsSha256 = HashSemanticLaunchArguments(context.SuccessfulLaunchArguments),
+                readinessDurationMs = context.LoadObservation?.ReadinessDurationMs,
+                outcome = context.LoadObservation?.Outcome.ToString(),
+                placement = context.LoadObservation?.Placement.ToString(),
+                attemptKind = context.LoadObservation?.AttemptKind.ToString(),
+                speculationClass = context.LoadObservation?.SpeculativeModeClass.ToString()
+            }
+        },
             SerializerOptions);
 
         return metrics with
@@ -628,29 +610,6 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(serialized)));
     }
 
-    private static long? TryGetWorkingSetBytes(int? processId)
-    {
-        if (processId is not { } pid || pid <= 0)
-        {
-            return null;
-        }
-
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            process.Refresh();
-            return process.HasExited ? null : process.WorkingSet64;
-        }
-        catch (ArgumentException)
-        {
-            return null;
-        }
-        catch (InvalidOperationException)
-        {
-            return null;
-        }
-    }
-
     private static string BuildPreSpawnPressureFailureReason(VramObservation? observation)
     {
         if (observation is not { GlobalFreeBytes: { } globalFree, ProcessBudgetBytes: { } processBudget, PressureAboveBaselineBytes: { } pressureAboveBaseline })
@@ -660,64 +619,6 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
         return string.Create(CultureInfo.InvariantCulture,
             $"Benchmark invalid: pre-spawn VRAM pressure exceeded the configured ambient allowance (global free {globalFree} bytes, process budget {processBudget} bytes, pressure above baseline {pressureAboveBaseline} bytes). Close other GPU workloads and retry, or use the explicit pre-spawn pressure override.");
-    }
-
-    private static async Task<IReadOnlyList<IReadOnlyList<double>>> PostEmbeddingAsync(HttpClient client,
-        Uri endpoint,
-        string modelName,
-        IReadOnlyList<string> inputs,
-        CancellationToken ct)
-    {
-        using var response = await client.PostAsJsonAsync(endpoint, new EmbeddingRequest(modelName, inputs), SerializerOptions, ct).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        var payload = await response.Content.ReadFromJsonAsync<EmbeddingResponse>(SerializerOptions, ct).ConfigureAwait(false);
-        if (payload?.Data is null || payload.Data.Count != inputs.Count)
-        {
-            throw new InvalidDataException("Embedding response did not contain one vector per input.");
-        }
-
-        var ordered = payload.Data.OrderBy(item => item.Index).ToArray();
-        if (ordered.Select(item => item.Index).Where((index, position) => index != position).Any())
-        {
-            throw new InvalidDataException("Embedding response indices were incomplete or duplicated.");
-        }
-
-        return ordered.Select(item => item.Embedding).ToArray();
-    }
-
-    private static async Task<IReadOnlyList<double>> PostRerankAsync(HttpClient client,
-        Uri endpoint,
-        string query,
-        IReadOnlyList<string> documents,
-        CancellationToken ct)
-    {
-        using var response = await client.PostAsJsonAsync(endpoint, new RerankRequest(query, documents), SerializerOptions, ct).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        var payload = await response.Content.ReadFromJsonAsync<RerankResponse>(SerializerOptions, ct).ConfigureAwait(false);
-        if (payload?.Results is null || payload.Results.Count != documents.Count)
-        {
-            throw new InvalidDataException("Reranker response did not contain one score per document.");
-        }
-
-        var scores = new double[documents.Count];
-        var assigned = new bool[documents.Count];
-        foreach (var result in payload.Results)
-        {
-            if (result.Index < 0 || result.Index >= documents.Count || assigned[result.Index])
-            {
-                throw new InvalidDataException("Reranker response indices were incomplete or duplicated.");
-            }
-
-            scores[result.Index] = result.RelevanceScore;
-            assigned[result.Index] = true;
-        }
-
-        return scores;
-    }
-
-    private static Uri BuildRoleUri(Uri baseAddress, string route)
-    {
-        return new Uri($"{baseAddress.AbsoluteUri.TrimEnd('/')}/{route}");
     }
 
     private static bool VectorsEqual(IReadOnlyList<IReadOnlyList<double>> expected,
@@ -862,186 +763,6 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         var beforeValue = TryParsePromMetric(before, metric) ?? 0d;
         var delta = afterValue.Value - beforeValue;
         return delta >= 0 ? delta : afterValue;
-    }
-
-    private sealed record EmbeddingRequest(
-        [property: JsonPropertyName("model")]
-        string Model,
-        [property: JsonPropertyName("input")]
-        IReadOnlyList<string> Input);
-
-    private sealed record EmbeddingResponse(
-        [property: JsonPropertyName("data")]
-        IReadOnlyList<EmbeddingResult>? Data);
-
-    private sealed record EmbeddingResult(
-        [property: JsonPropertyName("index")]
-        int Index,
-        [property: JsonPropertyName("embedding")]
-        IReadOnlyList<double> Embedding);
-
-    private sealed record RerankRequest(
-        [property: JsonPropertyName("query")]
-        string Query,
-        [property: JsonPropertyName("documents")]
-        IReadOnlyList<string> Documents);
-
-    private sealed record RerankResponse(
-        [property: JsonPropertyName("results")]
-        IReadOnlyList<RerankResult>? Results);
-
-    private sealed record RerankResult(
-        [property: JsonPropertyName("index")]
-        int Index,
-        [property: JsonPropertyName("relevance_score")]
-        double RelevanceScore);
-
-    private sealed record VramObservation(
-        long? GlobalFreeBytes,
-        long? ProcessBudgetBytes,
-        long? ProcessBudgetExcessBytes,
-        double? ProcessBudgetExcessRatio,
-        long? PressureAboveBaselineBytes,
-        double? PressureAboveBaselineRatio,
-        bool ExternalPressureDetected)
-    {
-        public static VramObservation Create(long? globalFreeBytes,
-            long? processBudgetBytes)
-        {
-            if (globalFreeBytes is not { } global || processBudgetBytes is not { } process || process <= global)
-            {
-                return new VramObservation(globalFreeBytes,
-                    processBudgetBytes,
-                    ProcessBudgetExcessBytes: null,
-                    ProcessBudgetExcessRatio: null,
-                    PressureAboveBaselineBytes: null,
-                    PressureAboveBaselineRatio: null,
-                    ExternalPressureDetected: false);
-            }
-
-            var excess = process - global;
-            var ratio = process > 0 ? (double)excess / process : 0d;
-            return new VramObservation(globalFreeBytes,
-                processBudgetBytes,
-                excess,
-                ratio,
-                PressureAboveBaselineBytes: null,
-                PressureAboveBaselineRatio: null,
-                ExternalPressureDetected: false);
-        }
-    }
-
-    private sealed record ResourceObservation(VramObservation Vram, long? WorkingSetBytes);
-
-    private sealed class ResourceEvidenceCollector
-    {
-        private readonly long _incrementalAbsoluteThresholdBytes;
-        private readonly double _incrementalRatioThreshold;
-        private readonly long _preSpawnAmbientBaselineBytes;
-        private readonly long _preSpawnPressureAbsoluteThresholdBytes;
-        private readonly double _preSpawnPressureRatioThreshold;
-        private readonly bool _rejectPreSpawnVramPressure;
-        private readonly List<ResourceObservation> _samples = [];
-
-        public ResourceEvidenceCollector(LlamaServerProfilingVramSnapshot? preSpawnVram,
-            long preSpawnAmbientBaselineBytes,
-            long preSpawnPressureAbsoluteThresholdBytes,
-            double preSpawnPressureRatioThreshold,
-            bool rejectPreSpawnVramPressure,
-            long incrementalAbsoluteThresholdBytes,
-            double incrementalRatioThreshold)
-        {
-            _preSpawnAmbientBaselineBytes = Math.Max(0, preSpawnAmbientBaselineBytes);
-            _preSpawnPressureAbsoluteThresholdBytes = Math.Max(0, preSpawnPressureAbsoluteThresholdBytes);
-            _preSpawnPressureRatioThreshold = Math.Max(0d, preSpawnPressureRatioThreshold);
-            _rejectPreSpawnVramPressure = rejectPreSpawnVramPressure;
-            _incrementalAbsoluteThresholdBytes = Math.Max(0, incrementalAbsoluteThresholdBytes);
-            _incrementalRatioThreshold = Math.Max(0d, incrementalRatioThreshold);
-            PreSpawnVram = preSpawnVram is null
-                ? null
-                : ClassifyPreSpawnPressure(VramObservation.Create(preSpawnVram.GlobalFreeBytes, preSpawnVram.ProcessBudgetBytes));
-        }
-
-        public IReadOnlyList<ResourceObservation> Samples => _samples;
-
-        public VramObservation? PreSpawnVram { get; }
-
-        public bool ExternalPressureDetected =>
-            PreSpawnVram?.ExternalPressureDetected == true
-            || _samples.Any(static sample => sample.Vram.ExternalPressureDetected);
-
-        public ResourceObservation First => _samples[0];
-
-        public ResourceObservation Last => _samples[^1];
-
-        public long? PeakWorkingSetBytes => MaxNullable(_samples.Select(static sample => sample.WorkingSetBytes));
-
-        public long? MinimumGlobalFreeBytes => MinNullable(_samples.Select(static sample => sample.Vram.GlobalFreeBytes));
-
-        public long? MinimumProcessBudgetBytes => MinNullable(_samples.Select(static sample => sample.Vram.ProcessBudgetBytes));
-
-        public void Add(ResourceObservation sample)
-        {
-            // Pre-existing pressure is decided from the pre-spawn sample. Once the profiling server is resident, its own
-            // VRAM becomes a stable gap between the global-free and per-process-budget readers. Only growth beyond that
-            // post-load gap indicates pressure introduced during measurement.
-            if (_samples.Count > 0
-                && _samples[0].Vram.GlobalFreeBytes is not null
-                && _samples[0].Vram.ProcessBudgetBytes is not null
-                && sample.Vram.ProcessBudgetExcessBytes is { } currentExcess
-                && sample.Vram.ProcessBudgetBytes is > 0)
-            {
-                var baselineExcess = _samples[0].Vram.ProcessBudgetExcessBytes ?? 0L;
-                var additionalExcess = Math.Max(0L, currentExcess - baselineExcess);
-                var additionalRatio = (double)additionalExcess / sample.Vram.ProcessBudgetBytes.Value;
-                var material = additionalExcess >= _incrementalAbsoluteThresholdBytes
-                               && additionalRatio >= _incrementalRatioThreshold;
-                sample = sample with
-                {
-                    Vram = sample.Vram with
-                    {
-                        PressureAboveBaselineBytes = additionalExcess,
-                        PressureAboveBaselineRatio = additionalRatio,
-                        ExternalPressureDetected = material
-                    }
-                };
-            }
-
-            _samples.Add(sample);
-        }
-
-        private VramObservation ClassifyPreSpawnPressure(VramObservation observation)
-        {
-            if (observation.ProcessBudgetExcessBytes is not { } rawExcess
-                || observation.ProcessBudgetBytes is not > 0)
-            {
-                return observation;
-            }
-
-            var pressureAboveBaseline = Math.Max(0L, rawExcess - _preSpawnAmbientBaselineBytes);
-            var pressureAboveBaselineRatio = (double)pressureAboveBaseline / observation.ProcessBudgetBytes.Value;
-            var material = _rejectPreSpawnVramPressure
-                           && pressureAboveBaseline >= _preSpawnPressureAbsoluteThresholdBytes
-                           && pressureAboveBaselineRatio >= _preSpawnPressureRatioThreshold;
-            return observation with
-            {
-                PressureAboveBaselineBytes = pressureAboveBaseline,
-                PressureAboveBaselineRatio = pressureAboveBaselineRatio,
-                ExternalPressureDetected = material
-            };
-        }
-
-        private static long? MaxNullable(IEnumerable<long?> values)
-        {
-            var present = values.Where(static value => value.HasValue).Select(static value => value!.Value).ToArray();
-            return present.Length == 0 ? null : present.Max();
-        }
-
-        private static long? MinNullable(IEnumerable<long?> values)
-        {
-            var present = values.Where(static value => value.HasValue).Select(static value => value!.Value).ToArray();
-            return present.Length == 0 ? null : present.Min();
-        }
     }
 
     private sealed record ChatPassMetrics(

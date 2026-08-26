@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.CloudSettings.V1;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 /// <summary>
-///     Secret-preserving merge of incoming custom headers against the previously stored set (Locked #10/#12). Lives in
+///     Secret-preserving merge of incoming custom headers against the previously stored set. Lives in
 ///     the endpoint (not the pure mapper): the stored value is inherited ONLY when a header is sent secret with a blank
 ///     value AND matches a stored secret header of the same name. A secret→non-secret transition, a rename, or any
 ///     non-secret blank value NEVER inherits — there is no secret resurrection on toggle or rename.

@@ -181,7 +181,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
     }
 
     /// <summary>
-    ///     G1(b), asserted as the SHAPE of the failure rather than only its wording. A dependency-manifest change is a
+    ///     Dependency-manifest rejection, asserted as the shape of the failure rather than only its wording. A change is a
     ///     verdict: the task returns to <c>InProgress</c> carrying <c>dependency_manifest_changed</c>, the report
     ///     records it, and the attempt is NOT aborted as a security violation the way the test-write policy aborts.
     ///     The distinction is the point — "delete the failing test" is an attack, "add a package" is a legitimate task
@@ -420,8 +420,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         // Known cost of the redact-don't-reject policy, pinned deliberately rather than left to be rediscovered:
         // the failing test's NAME is itself high-entropy enough to be redacted, so the operator sees that a test
         // failed but not which one. That is a diagnostic loss; it is not a correctness loss, and it is strictly
-        // better than the whole report being rejected. Narrowing the fallback so ordinary identifiers survive is
-        // follow-up work on the shared scanner.
+        // better than the whole report being rejected. The shared scanner currently applies this broad fallback to
+        // ordinary identifiers with the same shape.
         AssertEx.Contains(sanitized.StandardOutput, "[REDACTED:high-entropy-token]");
 
         // A genuine credential is still removed — redacted rather than leaked.
@@ -620,7 +620,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         AssertEx.Equal(expected: 1, outcome.Executed);
         AssertEx.Equal(expected: 1, outcome.Passed);
 
-        // G1's acceptance criterion, asserted on what the run ACTUALLY asked for rather than on what this host can
+        // The egress-policy acceptance criterion is asserted on what the run actually asked for rather than on what this host can
         // do. A full attempt against the synthetic solution — coder, then the whole validation gate — completed green
         // while every agent-facing sandbox it created carried the posture this backend can actually serve, and the
         // only sandbox that had egress by design was the short-lived warm restore. The agent-facing posture is
@@ -1019,7 +1019,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         services.AddSingleton<INodeDataDirectory>(new FakeNodeDataDirectory(dataRoot));
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IOptions<DevelopmentOptions>>(options);
-        // Registered under the Development ROLE, not the bare contract: per-feature selection (D2) means nothing
+        // Registered under the Development role, not the bare contract: per-feature selection means nothing
         // resolves ISandboxRuntimeProvider any more, so a bare registration here would build a container in which
         // every Development service failed to resolve its sandbox.
         services.AddSingleton<IDevelopmentSandboxRuntimeProvider>(_ => new RecordingDevelopmentSandbox(new ProcessSandboxRuntimeProvider(Options.Create(new LocalContainerOptions()),

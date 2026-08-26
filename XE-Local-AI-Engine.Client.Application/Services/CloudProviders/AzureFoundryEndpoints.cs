@@ -6,7 +6,7 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders;
 /// <remarks>
 ///     Shared by store validation and the chat-client factory so a managed-identity Entra token can never be
 ///     sent to an arbitrary operator-entered host. Operators may widen the allowlist with shape-guarded
-///     extra suffixes (Locked #14) — e.g. an APIM gateway host — but the built-in Azure suffixes are never removable.
+///     extra suffixes, such as an APIM gateway host, but the built-in Azure suffixes are never removable.
 /// </remarks>
 public static class AzureFoundryEndpoints
 {
@@ -30,7 +30,7 @@ public static class AzureFoundryEndpoints
 
     /// <summary>
     ///     Returns true when the endpoint host ends with a built-in Azure suffix OR a shape-valid operator-added suffix
-    ///     (case-insensitive, Locked #14). Malformed operator suffixes never widen the allowlist.
+    ///     case-insensitively. Malformed operator suffixes never widen the allowlist.
     /// </summary>
     public static bool IsAllowedHost(Uri endpoint, IEnumerable<string> extraSuffixes)
     {
@@ -48,7 +48,7 @@ public static class AzureFoundryEndpoints
     }
 
     /// <summary>
-    ///     Shape guard for an operator-added allowed host suffix (Locked #14). A valid suffix starts with <c>.</c>, has
+    ///     Shape guard for an operator-added allowed host suffix. A valid suffix starts with <c>.</c>, has
     ///     at least two non-empty dot-separated DNS labels (so <c>.azure-api.net</c> ✓ but a bare TLD <c>.com</c> ✗),
     ///     is at most 253 characters, contains only DNS label characters, and carries no wildcard.
     /// </summary>

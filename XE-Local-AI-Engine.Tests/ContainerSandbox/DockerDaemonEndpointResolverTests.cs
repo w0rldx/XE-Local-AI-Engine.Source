@@ -61,7 +61,7 @@ public sealed class DockerDaemonEndpointResolverTests
     public void Resolve_WhenTheSystemSocketExists_PrefersItOverAPerUserSocket()
     {
         // The load-bearing direction. Preferring a per-user socket whenever one exists would move an operator who has
-        // both from the daemon they installed to whichever their shell happens to run — a substitution D10 exists to
+        // both from the daemon they installed to whichever their shell happens to run — exactly the substitution attestation exists to
         // surface, not to perform silently.
         var endpoint = Resolve(new ContainerSandboxOptions(),
             environment: new Dictionary<string, string>

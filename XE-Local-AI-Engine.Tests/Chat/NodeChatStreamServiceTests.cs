@@ -2130,7 +2130,7 @@ public sealed class NodeChatStreamServiceTests
     [Test]
     public async Task SendMessageAsync_WhenOrchestrationDegrades_EmitsOneNoticeNamingTheReason()
     {
-        // G16: an orchestrator whose orchestration does not compile runs as a lone single agent. That used to be visible
+        // An orchestrator whose orchestration does not compile runs as a lone single agent. That used to be visible
         // only in a server log, so the operator saw an ordinary answer and no hint the team never ran.
         var events = await RunOrchestrationDegradeAsync(AgentDefinitionKind.Orchestrator,
                 OrchestrationResolution.Degraded(OrchestrationDegradationReason.TooFewCapableParticipants,

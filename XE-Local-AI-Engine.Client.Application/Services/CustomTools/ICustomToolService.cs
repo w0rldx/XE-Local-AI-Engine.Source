@@ -4,7 +4,7 @@ namespace XE_Local_AI_Engine.Client.Services.CustomTools;
 ///     Application-layer orchestration over <see cref="XE_Local_AI_Engine.Client.Persistence.Stores.ICustomToolStore" />:
 ///     validates operator-authored custom tools and delegates persistence. The store owns id/version/timestamp stamping
 ///     and the content-affecting version-bump rule; this service never re-implements versioning. Validation is the
-///     author-time trust boundary that gates what can ever reach the executors (P2): a MAF-safe <c>custom__</c> name,
+///     author-time trust boundary that gates what can ever reach the executors: a MAF-safe <c>custom__</c> name,
 ///     no collision with a built-in or MCP tool name, a shell/interpreter-free absolute command executable, a
 ///     GBNF-safe compiled parameter schema, every template placeholder declared, the mandatory SSRF allow-list for a
 ///     parameterized fetch host, and — server-side, not just in the client checkbox — the danger acknowledgement.

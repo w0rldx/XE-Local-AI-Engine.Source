@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 /// <summary>
 ///     <c>AddBenchmarkJudgePolicies</c> makes judging repeatable: policy revisions per project, one attempt row per
 ///     judging, and judge work keyed by attempt instead of by run. Its Up deliberately deletes every pre-existing
-///     benchmark row (operator decision C4), which is asserted here rather than trusted.
+///     benchmark row by explicit operator decision, which is asserted here rather than trusted.
 /// </summary>
 public sealed class AddBenchmarkJudgePoliciesMigrationTests
 {
@@ -95,7 +95,7 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
 
         await probe.MigrateToAsync(ThisMigration).ConfigureAwait(false);
 
-        // Operator decision C4: the feature is unused, so the migration drops the rows rather than mapping them.
+        // The feature is unused, so the migration drops the rows rather than mapping them.
         AssertEx.Equal(expected: 0L, await probe.ScalarAsync("SELECT COUNT(*) FROM benchmark_work_items;").ConfigureAwait(false));
         AssertEx.Equal(expected: 0L, await probe.ScalarAsync("SELECT COUNT(*) FROM benchmark_runs;").ConfigureAwait(false));
         AssertEx.Equal(expected: 0L, await probe.ScalarAsync("SELECT COUNT(*) FROM benchmark_projects;").ConfigureAwait(false));

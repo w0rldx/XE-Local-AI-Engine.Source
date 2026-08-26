@@ -1,5 +1,5 @@
 import { useComputedColorScheme } from "@mantine/core";
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 import type { CodeEditorProps } from "@/core/ui/components/CodeEditor/CodeEditor.types";
 import { monaco } from "@/core/ui/components/CodeEditor/MonacoRuntime";
@@ -22,7 +22,9 @@ export default function MonacoCodeEditor({
 	const containerRef = useRef<HTMLDivElement>(null);
 	const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 	const onChangeRef = useRef(onChange);
-	onChangeRef.current = onChange;
+	useLayoutEffect(() => {
+		onChangeRef.current = onChange;
+	}, [onChange]);
 	// True while a prop-driven `setValue` runs: Monaco emits `onDidChangeModelContent` for that write too, and echoing
 	// it back through `onChange` would report the parent's own value as a user edit (duplicate persistence / loops).
 	const applyingPropValueRef = useRef(false);

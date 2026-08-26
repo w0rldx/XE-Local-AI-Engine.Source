@@ -1,7 +1,7 @@
 # Development Mode container implementation status
 
 - **Decision:** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)
-- **Status authority:** this living page; the implementation plan is not tracked at repository baseline `9405df91`
+- **Status authority:** this living page
 - **Last verified against the tree:** 2026-08-08
 - **Overall state:** Implemented as an opt-in Development Mode provider; Docker is not the default.
 

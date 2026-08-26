@@ -1,17 +1,10 @@
-import { Box, Button, Group, Loader, ScrollArea, Stack, Text } from "@mantine/core";
-import { IconArrowLeft, IconBinaryTree2, IconDeviceFloppy, IconPlus } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/core/api/errors/ApiError";
-import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
-import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
-import { ActiveRunsPanel } from "@/features/preview/components/ActiveRunsPanel";
-import { PreviewActiveRunContext } from "@/features/preview/components/PreviewActiveRunContext";
-import { WorkflowCanvas } from "@/features/preview/components/WorkflowCanvas";
-import { WorkflowList } from "@/features/preview/components/WorkflowList";
+import { PreviewPagePresentation } from "@/features/preview/components/PreviewPagePresentation";
 import { usePreviewWorkflowHub } from "@/features/preview/hooks/usePreviewWorkflowHub";
 import { graphsEqual, graphToCanvas } from "@/features/preview/models/PreviewCanvasModels";
 import type {
@@ -157,9 +150,7 @@ export function PreviewPage({ routeRunId = null, onRouteRunIdChange }: PreviewPa
 	const handleCancelAll = useCallback(() => {
 		cancelAllMutation.mutate(undefined, {
 			onSuccess: (result) =>
-				toast.success(
-					t("pages.preview.runs.cancelledCount", "Cancelled {{count}} run(s).", { count: result.cancelledCount }),
-				),
+				toast.success(t("pages.preview.runs.cancelledCount", "Cancelled {{count}} run(s).", { count: result.cancelledCount })),
 			onError: (error) => toast.error(errorMessage(error, t("pages.preview.errors.cancelAll", "Could not cancel the runs."))),
 		});
 	}, [cancelAllMutation, t]);
@@ -178,10 +169,7 @@ export function PreviewPage({ routeRunId = null, onRouteRunIdChange }: PreviewPa
 	const { nodes: initialNodes, edges: initialEdges } = useMemo(() => graphToCanvas(canvasGraph), [canvasGraph]);
 
 	const isControlBusy =
-		executeSavedMutation.isPending ||
-		executeUnsavedMutation.isPending ||
-		continueMutation.isPending ||
-		cancelMutation.isPending;
+		executeSavedMutation.isPending || executeUnsavedMutation.isPending || continueMutation.isPending || cancelMutation.isPending;
 
 	const handleDelete = useCallback(
 		async (workflow: PreviewWorkflowSummary) => {
@@ -276,7 +264,9 @@ export function PreviewPage({ routeRunId = null, onRouteRunIdChange }: PreviewPa
 						onSuccess: () => toast.success(t("pages.preview.saved", "Workflow saved.")),
 						onError: (error) => {
 							if (error instanceof ApiError && error.statusCode === 409) {
-								toast.error(t("pages.preview.errors.conflict", "This workflow changed elsewhere. Reload and reapply your edits."));
+								toast.error(
+									t("pages.preview.errors.conflict", "This workflow changed elsewhere. Reload and reapply your edits."),
+								);
 								return;
 							}
 							toast.error(errorMessage(error, t("pages.preview.errors.save", "Could not save the workflow.")));
@@ -306,108 +296,41 @@ export function PreviewPage({ routeRunId = null, onRouteRunIdChange }: PreviewPa
 	const handleSaveCurrent = useCallback(() => handleSave(liveGraph ?? canvasGraph), [handleSave, liveGraph, canvasGraph]);
 
 	return (
-		<FullHeightPage>
-			{/*
-			 * PageShell wraps normal pages in a fluid Container, whose `padding-inline: md` is what puts every other
-			 * page's header 16px in from the Layout's own gutter. FullHeightPage owns vertical rhythm only, so without
-			 * this the Open Canvas header sat visibly further left than the header on every page next to it.
-			 */}
-			<Stack gap="lg" px="md" style={{ flex: 1, minHeight: 0 }}>
-				<PageHeader
-					title={t("pages.preview.title", "Open Canvas")}
-					icon={<IconBinaryTree2 size={24} />}
-					subtitle={t(
-						"pages.preview.subtitle",
-						"Drag Start, Agent, Debug, Pause, and End blocks onto the canvas, wire them into a linear chain, and run the workflow with live per-node output.",
-					)}
-					actions={
-						isCanvasOpen ? (
-							<>
-								<Button
-									variant="subtle"
-									leftSection={<IconArrowLeft size={16} />}
-									onClick={closeCanvas}
-									data-testid="preview-back"
-								>
-									{t("pages.preview.back", "Back to list")}
-								</Button>
-								<Button
-									leftSection={<IconDeviceFloppy size={16} />}
-									loading={isSaving}
-									onClick={handleSaveCurrent}
-									data-testid="preview-save"
-								>
-									{t("common.save", "Save")}
-								</Button>
-							</>
-						) : (
-							<Button leftSection={<IconPlus size={16} />} onClick={openNew} data-testid="preview-create-button">
-								{t("pages.preview.createButton", "New workflow")}
-							</Button>
-						)
-					}
-				/>
-
-				<Box style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-					{isCanvasOpen ? (
-						openId !== null && detailQuery.isLoading ? (
-							<Group gap="sm" data-testid="preview-canvas-loading">
-								<Loader size="sm" />
-								<Text c="dimmed">{t("pages.preview.canvasLoading", "Loading workflow…")}</Text>
-							</Group>
-						) : (
-							<PreviewActiveRunContext.Provider value={activeRunId}>
-								<WorkflowCanvas
-									key={openId ?? "new"}
-									initialNodes={initialNodes}
-									initialEdges={initialEdges}
-									initialStartText={canvasGraph.startText}
-									runState={{
-										isRunning: activeRun?.status === "running",
-										isPaused: activeRun?.status === "paused",
-									}}
-									isControlBusy={isControlBusy}
-									onExecute={handleExecute}
-									onCancel={handleCancel}
-									onContinue={handleContinue}
-									onGraphChange={setLiveGraph}
-								/>
-							</PreviewActiveRunContext.Provider>
-						)
-					) : workflowsQuery.isLoading ? (
-						<Group gap="sm" data-testid="preview-list-loading">
-							<Loader size="sm" />
-							<Text c="dimmed">{t("pages.preview.listLoading", "Loading workflows…")}</Text>
-						</Group>
-					) : (
-						/*
-						 * The list branch is the one part of this page that grows without bound (a run panel plus every
-						 * saved workflow), and FullHeightPage's contract is that a region INSIDE it scrolls rather than
-						 * the page. Without this the overflow escaped to the Layout's outer scroller — the same
-						 * second-scrollbar shape chat and the work-session detail page already solved — so the run panel
-						 * and page header scrolled away with the list. `offsetScrollbars` keeps the cards from shifting
-						 * when the scrollbar appears.
-						 */
-						<ScrollArea type="auto" scrollbarSize={8} offsetScrollbars="y" style={{ flex: 1, minHeight: 0 }}>
-							<Stack gap="lg">
-								<ActiveRunsPanel
-									runs={runsQuery.data ?? []}
-									isCancelling={cancelMutation.isPending || cancelAllMutation.isPending}
-									onReattach={handleReattach}
-									onCancel={handleCancelRun}
-									onCancelAll={handleCancelAll}
-								/>
-								<WorkflowList
-									workflows={workflows}
-									isMutating={deleteMutation.isPending}
-									onOpen={openWorkflow}
-									onDelete={handleDelete}
-								/>
-							</Stack>
-						</ScrollArea>
-					)}
-				</Box>
-			</Stack>
-		</FullHeightPage>
+		<PreviewPagePresentation
+			t={t}
+			actions={{
+				isCanvasOpen,
+				closeCanvas,
+				openNew,
+				isSaving,
+				onSave: handleSaveCurrent,
+			}}
+			canvas={{
+				openId,
+				detailLoading: detailQuery.isLoading,
+				activeRunId,
+				initialNodes,
+				initialEdges,
+				graph: canvasGraph,
+				activeRunStatus: activeRun?.status,
+				isControlBusy,
+				onExecute: handleExecute,
+				onCancel: handleCancel,
+				onContinue: handleContinue,
+				onGraphChange: setLiveGraph,
+			}}
+			list={{
+				workflowsLoading: workflowsQuery.isLoading,
+				runs: runsQuery.data ?? [],
+				isCancellingRuns: cancelMutation.isPending || cancelAllMutation.isPending,
+				onReattach: handleReattach,
+				onCancelRun: handleCancelRun,
+				onCancelAll: handleCancelAll,
+				workflows,
+				isDeletingWorkflow: deleteMutation.isPending,
+				onOpenWorkflow: openWorkflow,
+				onDeleteWorkflow: handleDelete,
+			}}
+		/>
 	);
 }

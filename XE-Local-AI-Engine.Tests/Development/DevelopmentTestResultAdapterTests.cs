@@ -239,8 +239,8 @@ public sealed class DevelopmentTestResultAdapterTests
 
     /// <summary>
     ///     The reward-hacking case, stated as a rule rather than a hope: a test command that <em>exits zero</em> while
-    ///     having executed nothing must not pass. Every check the gate had before this slice — the exit code, the
-    ///     command being recorded, the profile digest — is satisfied here.
+    ///     having executed nothing must not pass. The other gate checks — exit code, recorded command, and profile
+    ///     digest — are all satisfied here.
     /// </summary>
     [Test]
     public void Verdict_RejectsATestCommandThatExitedZeroWithoutExecutingAnything()

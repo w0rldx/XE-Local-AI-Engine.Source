@@ -24,7 +24,7 @@ internal sealed class ContainerSandboxOptionsValidator : IValidateOptions<Contai
         if (!string.IsNullOrWhiteSpace(options.Image) && !options.Image.Contains("@sha256:", StringComparison.Ordinal))
         {
             failures.Add($"'{nameof(ContainerSandboxOptions.Image)}' must be digest-pinned (contain '@sha256:'). "
-                         + "A tag names whatever the registry last pushed, not the bytes the operator approved (plan D7).");
+                         + "A tag names whatever the registry last pushed, not the bytes the operator approved.");
         }
 
         // Deliberately NOT rejecting UID/GID 0 here. Whether zero is root depends on the daemon, and this validator

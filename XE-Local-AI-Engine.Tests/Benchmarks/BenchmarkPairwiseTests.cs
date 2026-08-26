@@ -59,8 +59,8 @@ public sealed class BenchmarkPairwiseTests
     [Test]
     public void Plan_RunsAnsweringDifferentTaskCases_AreNeverPaired()
     {
-        // P2 has one case per project, so this asserts the CONTRACT P3 widens: "which answer is better" is meaningless
-        // across two different questions, and the grouping is what makes that unrepresentable rather than unlikely.
+        // A suite can carry multiple task cases, but "which answer is better" is meaningless across two different
+        // questions. Grouping by case identity makes such a comparison unrepresentable rather than merely unlikely.
         BenchmarkPairwiseCandidate[] candidates =
         [
             new(RunA, null, "hash-one"),

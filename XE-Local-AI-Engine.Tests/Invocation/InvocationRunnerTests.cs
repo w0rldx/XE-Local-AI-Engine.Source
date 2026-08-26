@@ -1796,7 +1796,7 @@ public sealed class InvocationRunnerTests
     public async Task RunAsync_WhenUnattendedAskUserQuestionSurfaces_ContinuesImmediatelyWithoutAnAnswer()
     {
         // The asymmetry with the approval path, asserted: an unattended APPROVAL fails the turn fast, an unattended
-        // QUESTION continues with "not answered" (D4) — and neither one waits out the pending-approval window.
+        // QUESTION continues with "not answered" — and neither one waits out the pending-approval window.
         var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();
         var stash = new UserQuestionAnswerStash(TimeProvider.System);
@@ -1812,7 +1812,7 @@ public sealed class InvocationRunnerTests
         await RunAsync(runner, RuntimePackageBuilder.Valid().WithAllowedTool(AskUserTool.ToolName).AsUnattended().Build());
         elapsed.Stop();
 
-        AssertEx.Equal(expected: 2, segment, "the turn must continue threadlessly, not fail — D4 holds for an unattended run too");
+        AssertEx.Equal(expected: 2, segment, "the turn must continue threadlessly rather than fail for an unattended run");
         AssertEx.Equal(expected: 0, sender.SentEncryptedFailures.Count, "an unanswered question must never fail the turn, unlike an unattended approval");
         await dispatcher.DidNotReceive().ReportUserQuestionAsync(Arg.Any<UserQuestionLifecyclePayload>()).ConfigureAwait(false);
         AssertEx.True(elapsed.Elapsed < TimeSpan.FromSeconds(30),
@@ -1958,7 +1958,7 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenParkedOnAQuestion_TheOperatorsThinkingTimeIsNotChargedToTheTurnDeadline()
     {
-        // D5 regression. The invocation deadline (CancelAfter(InvocationTimeout)) used to keep running while a human
+        // Regression guard: the invocation deadline (CancelAfter(InvocationTimeout)) used to keep running while a human
         // was thinking, so the operator got "300 s minus whatever the model already spent" and the 10-minute
         // MaxPendingToolCallAge cap was dead code. Here the turn budget is 1 s and the operator takes ~2 s — without the
         // re-arm the turn dies as a Timeout before the answer can land.
@@ -1990,7 +1990,7 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenParkedOnAToolApproval_TheOperatorsThinkingTimeIsNotChargedToTheTurnDeadline()
     {
-        // The same D5 re-arm applies to the SHIPPING tool-approval round-trip — a deliberate, separately reviewable
+        // The same deadline re-arm applies to the shipping tool-approval round-trip — a deliberate, separately reviewable
         // behaviour change to an existing feature, so it gets its own regression test.
         var sender = new MockHubMessageSender();
         var dispatcher = Substitute.For<IWorkerEventDispatcher>();

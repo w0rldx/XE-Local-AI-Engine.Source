@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.Services.WorkSessions;
 
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+
 /// <summary>
 ///     The whole work-session surface the REST layer sits on: CRUD, the lifecycle verbs, the five sequence-filtered
 ///     feeds, artifact content, and the user follow-up.
 ///     <para>
-///         Three exception types cross this boundary and nothing else: <see cref="KeyNotFoundException" /> for an
+///         Three exception types cross this boundary and nothing else: <see cref="WorkSessionNotFoundException" /> for an
 ///         unknown session, task, finding or artifact; <c>WorkSessionInvalidTransitionException</c> (the store's, in
 ///         Persistence) for a lifecycle call the session's status forbids; and
 ///         <see cref="WorkSessionValidationException" /> for a bad input. Every reader throws rather than returning a
@@ -68,14 +70,14 @@ public interface IWorkSessionService
     Task<IReadOnlyList<WorkSessionEventDto>> ListEventsAsync(Guid sessionId, long sinceSequence, int limit, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     One artifact's metadata, without opening its bytes. Throws <see cref="KeyNotFoundException" /> for an unknown
+    ///     One artifact's metadata, without opening its bytes. Throws <see cref="WorkSessionNotFoundException" /> for an unknown
     ///     artifact or one that belongs to a different session — same ownership rule as the content read below, so a
     ///     caller that only needs the size (a ceiling check) never has to scan the whole artifact feed for it.
     /// </summary>
     Task<WorkSessionArtifactDto> GetArtifactAsync(Guid sessionId, Guid artifactId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Reads one artifact's bytes. Throws <see cref="KeyNotFoundException" /> for an unknown artifact, one that
+    ///     Reads one artifact's bytes. Throws <see cref="WorkSessionNotFoundException" /> for an unknown artifact, one that
     ///     belongs to a different session, or one whose bytes no longer verify — a caller must not be handed content the
     ///     node cannot vouch for.
     /// </summary>

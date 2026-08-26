@@ -744,7 +744,7 @@ public sealed class ConversationContextBudgeterTests
     [Test]
     public void Budget_EveryRewrite_PreservesMessageIdentity()
     {
-        // N13: every rewrite used to reconstruct a message from role + contents, silently dropping the id, author name,
+        // Every rewrite used to reconstruct a message from role + contents, silently dropping the id, author name,
         // provider raw representation and additional properties. All three rewriting passes are covered here — Pass 1's
         // historical excerpt, Pass 4's reasoning strip, Pass 5's protected excerpt.
         var raw = new object();

@@ -89,7 +89,7 @@
 	/* Left-aligned; the icon-slot container keeps the icon at a fixed horizontal
 	   position in both states so there is no jump when collapsing/expanding */
 
-	/* gap is animated by framer-motion; no static value here */
+	/* gap comes from the component so layout projection can animate the committed positions. */
 	min-width: 0;
 }
 

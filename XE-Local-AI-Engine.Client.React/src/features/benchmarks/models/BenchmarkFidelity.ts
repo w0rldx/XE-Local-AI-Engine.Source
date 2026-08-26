@@ -3,7 +3,7 @@ import type { BenchmarkRunFidelity, BenchmarkRunSummary } from "@/features/bench
 
 // One vocabulary for the quant-fidelity numbers, shared by the runs table, the fidelity panel and the compare view.
 // Perplexity and KL divergence measure how far a quantized build drifted from the weights it was made from; both are
-// DISPLAY ONLY and neither is ever a ranking input (plan §2 #4). Nothing here interprets a number as "better".
+// DISPLAY ONLY and neither is ever a ranking input. Nothing here interprets a number as "better".
 
 /** A perplexity reading is a mean over chunks and the standard error of that mean; one without the other is not a measurement. */
 export function formatPerplexity(fidelity: Pick<BenchmarkRunFidelity, "perplexityMean" | "perplexityStdErr">): string | null {
@@ -13,9 +13,7 @@ export function formatPerplexity(fidelity: Pick<BenchmarkRunFidelity, "perplexit
 	}
 	// Four decimals because the whole point is separating two quants of one model: the live pair on this box differ by
 	// 0.152 with standard errors of ~0.075, and rounding to two would print their bands as touching when they do not.
-	return perplexityStdErr === null
-		? perplexityMean.toFixed(4)
-		: `${perplexityMean.toFixed(4)} ± ${perplexityStdErr.toFixed(4)}`;
+	return perplexityStdErr === null ? perplexityMean.toFixed(4) : `${perplexityMean.toFixed(4)} ± ${perplexityStdErr.toFixed(4)}`;
 }
 
 /** `0.9421` → `"94.2 %"`. The share of tokens where the quant's most likely token is the base model's. */
@@ -26,7 +24,7 @@ export const formatKldValue = (value: number | null): string | null => (value ==
 
 /**
  * Whether the KLD trio may be RENDERED AS NUMBERS. The node already withholds them unless the run's stored base-logit
- * digest is the one the project currently expects (plan §2 #14 / R3), and this repeats the gate on the reading side so
+ * digest is the one the project currently expects, and this repeats the gate on the reading side so
  * a future contract that sends a figure alongside a non-`ok` state still cannot leak one into a comparison. A stale
  * measurement gets a badge, never a greyed-out figure — a number a reader can still see is a number they will compare.
  */

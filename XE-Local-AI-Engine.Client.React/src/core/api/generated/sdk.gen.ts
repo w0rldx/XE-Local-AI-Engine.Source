@@ -1889,6 +1889,36 @@ export const deleteWorkspace = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
+export const getWorkSessionArtifactContent = <ThrowOnError extends boolean = false>(
+	options: Options<GetWorkSessionArtifactContentData, ThrowOnError>,
+): RequestResult<GetWorkSessionArtifactContentResponses, GetWorkSessionArtifactContentErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetWorkSessionArtifactContentResponses, GetWorkSessionArtifactContentErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetWorkSessionArtifactContentPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetWorkSessionArtifactContentResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/work-sessions/{sessionId}/artifacts/{artifactId}/content",
+		...options,
+	});
+
 export const listWorkSessions = <ThrowOnError extends boolean = false>(
 	options?: Options<ListWorkSessionsData, ThrowOnError>,
 ): RequestResult<ListWorkSessionsResponses, ListWorkSessionsErrors, ThrowOnError> =>
@@ -2046,126 +2076,6 @@ export const updateWorkSession = <ThrowOnError extends boolean = false>(
 		},
 	});
 
-export const startWorkSession = <ThrowOnError extends boolean = false>(
-	options: Options<StartWorkSessionData, ThrowOnError>,
-): RequestResult<StartWorkSessionResponses, StartWorkSessionErrors, ThrowOnError> =>
-	(options.client ?? client).post<StartWorkSessionResponses, StartWorkSessionErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zStartWorkSessionPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zStartWorkSessionResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/work-sessions/{sessionId}/start",
-		...options,
-	});
-
-export const pauseWorkSession = <ThrowOnError extends boolean = false>(
-	options: Options<PauseWorkSessionData, ThrowOnError>,
-): RequestResult<PauseWorkSessionResponses, PauseWorkSessionErrors, ThrowOnError> =>
-	(options.client ?? client).post<PauseWorkSessionResponses, PauseWorkSessionErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zPauseWorkSessionPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zPauseWorkSessionResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/work-sessions/{sessionId}/pause",
-		...options,
-	});
-
-export const resumeWorkSession = <ThrowOnError extends boolean = false>(
-	options: Options<ResumeWorkSessionData, ThrowOnError>,
-): RequestResult<ResumeWorkSessionResponses, ResumeWorkSessionErrors, ThrowOnError> =>
-	(options.client ?? client).post<ResumeWorkSessionResponses, ResumeWorkSessionErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zResumeWorkSessionPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zResumeWorkSessionResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/work-sessions/{sessionId}/resume",
-		...options,
-	});
-
-export const cancelWorkSession = <ThrowOnError extends boolean = false>(
-	options: Options<CancelWorkSessionData, ThrowOnError>,
-): RequestResult<CancelWorkSessionResponses, CancelWorkSessionErrors, ThrowOnError> =>
-	(options.client ?? client).post<CancelWorkSessionResponses, CancelWorkSessionErrors, ThrowOnError>({
-		requestValidator: async (data) =>
-			await z
-				.object({
-					body: z.never().optional(),
-					path: zCancelWorkSessionPath,
-					query: z.never().optional(),
-				})
-				.parseAsync(data),
-		responseType: "json",
-		responseValidator: async (data) => await zCancelWorkSessionResponse.parseAsync(data),
-		security: [
-			{
-				key: "JWTBearerAuth",
-				scheme: "bearer",
-				type: "http",
-			},
-			{
-				key: "Bearer",
-				scheme: "bearer",
-				type: "http",
-			},
-		],
-		url: "/api/local/v1/work-sessions/{sessionId}/cancel",
-		...options,
-	});
-
 export const listWorkSessionTasks = <ThrowOnError extends boolean = false>(
 	options: Options<ListWorkSessionTasksData, ThrowOnError>,
 ): RequestResult<ListWorkSessionTasksResponses, ListWorkSessionTasksErrors, ThrowOnError> =>
@@ -2316,20 +2226,20 @@ export const listWorkSessionEvents = <ThrowOnError extends boolean = false>(
 		...options,
 	});
 
-export const getWorkSessionArtifactContent = <ThrowOnError extends boolean = false>(
-	options: Options<GetWorkSessionArtifactContentData, ThrowOnError>,
-): RequestResult<GetWorkSessionArtifactContentResponses, GetWorkSessionArtifactContentErrors, ThrowOnError> =>
-	(options.client ?? client).get<GetWorkSessionArtifactContentResponses, GetWorkSessionArtifactContentErrors, ThrowOnError>({
+export const startWorkSession = <ThrowOnError extends boolean = false>(
+	options: Options<StartWorkSessionData, ThrowOnError>,
+): RequestResult<StartWorkSessionResponses, StartWorkSessionErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartWorkSessionResponses, StartWorkSessionErrors, ThrowOnError>({
 		requestValidator: async (data) =>
 			await z
 				.object({
 					body: z.never().optional(),
-					path: zGetWorkSessionArtifactContentPath,
+					path: zStartWorkSessionPath,
 					query: z.never().optional(),
 				})
 				.parseAsync(data),
 		responseType: "json",
-		responseValidator: async (data) => await zGetWorkSessionArtifactContentResponse.parseAsync(data),
+		responseValidator: async (data) => await zStartWorkSessionResponse.parseAsync(data),
 		security: [
 			{
 				key: "JWTBearerAuth",
@@ -2342,7 +2252,97 @@ export const getWorkSessionArtifactContent = <ThrowOnError extends boolean = fal
 				type: "http",
 			},
 		],
-		url: "/api/local/v1/work-sessions/{sessionId}/artifacts/{artifactId}/content",
+		url: "/api/local/v1/work-sessions/{sessionId}/start",
+		...options,
+	});
+
+export const pauseWorkSession = <ThrowOnError extends boolean = false>(
+	options: Options<PauseWorkSessionData, ThrowOnError>,
+): RequestResult<PauseWorkSessionResponses, PauseWorkSessionErrors, ThrowOnError> =>
+	(options.client ?? client).post<PauseWorkSessionResponses, PauseWorkSessionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zPauseWorkSessionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zPauseWorkSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/work-sessions/{sessionId}/pause",
+		...options,
+	});
+
+export const resumeWorkSession = <ThrowOnError extends boolean = false>(
+	options: Options<ResumeWorkSessionData, ThrowOnError>,
+): RequestResult<ResumeWorkSessionResponses, ResumeWorkSessionErrors, ThrowOnError> =>
+	(options.client ?? client).post<ResumeWorkSessionResponses, ResumeWorkSessionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zResumeWorkSessionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zResumeWorkSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/work-sessions/{sessionId}/resume",
+		...options,
+	});
+
+export const cancelWorkSession = <ThrowOnError extends boolean = false>(
+	options: Options<CancelWorkSessionData, ThrowOnError>,
+): RequestResult<CancelWorkSessionResponses, CancelWorkSessionErrors, ThrowOnError> =>
+	(options.client ?? client).post<CancelWorkSessionResponses, CancelWorkSessionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCancelWorkSessionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelWorkSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/work-sessions/{sessionId}/cancel",
 		...options,
 	});
 

@@ -175,7 +175,10 @@ describe("nodeChatAdapter SignalR streaming", () => {
 	});
 
 	it("omits attachmentFileIds from the payload when there are no attachments", async () => {
-		nodeChatAdapter.sendMessage({ ...streamRequest, attachmentFileIds: [] }, new AbortController().signal)[Symbol.asyncIterator]().next();
+		nodeChatAdapter
+			.sendMessage({ ...streamRequest, attachmentFileIds: [] }, new AbortController().signal)
+			[Symbol.asyncIterator]()
+			.next();
 		await settle();
 
 		expect(connectionMock.state.lastMethod).toBe("SendMessage");
@@ -346,7 +349,7 @@ describe("nodeChatAdapter SignalR streaming", () => {
 	});
 
 	it("carries the developer-mode sampling overrides as the trailing regenerate hub arg", async () => {
-		// G2: the per-send sampling overrides were dropped on regenerate — the rerun silently ignored the knobs the
+		// The per-send sampling overrides were once dropped on regenerate, so the rerun silently ignored the knobs the
 		// original send used.
 		const iterator = nodeChatAdapter
 			.regenerateMessage(
@@ -381,7 +384,16 @@ describe("nodeChatAdapter SignalR streaming", () => {
 
 	it("resumes a regenerate via ResumeMessage using the invocation id latched from the first event", async () => {
 		const iterator = nodeChatAdapter
-			.regenerateMessage("conversation-1", "assistant-1", "medium", false, false, undefined, undefined, new AbortController().signal)
+			.regenerateMessage(
+				"conversation-1",
+				"assistant-1",
+				"medium",
+				false,
+				false,
+				undefined,
+				undefined,
+				new AbortController().signal,
+			)
 			[Symbol.asyncIterator]();
 		const first = iterator.next();
 		await settle();

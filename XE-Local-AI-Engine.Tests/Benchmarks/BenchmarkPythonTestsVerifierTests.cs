@@ -318,7 +318,7 @@ public sealed class BenchmarkPythonTestsVerifierTests
     public async Task PythonTests_PrctlUnavailable_FailsJudging_VerifierUnavailable()
     {
         // The parent refuses to run un-hardened rather than running without PR_SET_DUMPABLE. That is unscorable, not
-        // a zero -- the distinction R4 exists for.
+        // a zero, because unavailable infrastructure is distinct from a failed verification.
         var gateway = new StubGateway(program => Completed(Marker(program, """{"status":"unavailable","reason":"prctl"}""")));
 
         var exception = await AssertEx.ThrowsAsync<BenchmarkExecutionException>(() =>

@@ -6,7 +6,7 @@ using System.Text;
 
 /// <summary>
 ///     Derives the deterministic operation id a supervisor write stamps on its event row. The phase rides INSIDE the
-///     id, so P1's two-column <c>(session_id, operation_id)</c> idempotency index holds one row per phase without a
+///     id, so the two-column <c>(session_id, operation_id)</c> idempotency index holds one row per phase without a
 ///     phase column — and a step replayed after a crash short-circuits on the store's query-first path instead of
 ///     double-appending.
 /// </summary>

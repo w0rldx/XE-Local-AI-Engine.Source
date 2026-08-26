@@ -79,7 +79,7 @@ public sealed class AgentSkillServiceTests
         }
 
         AssertEx.Equal(mafAccepts, serviceAccepted,
-            $"The service and MAF must agree on the name '{candidate}'; a disagreement is the D1 defect class.");
+            $"The service and MAF must agree on the name '{candidate}'; a disagreement breaks tool invocation.");
 
         // A name we accept must actually build into a MAF skill — the construction the invocation factory and the
         // sub-agent spawn path both perform. Anything else is the same defect wearing a different hat.

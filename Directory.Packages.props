@@ -9,7 +9,7 @@
     <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.5.2" />
     <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.5.2" />
     <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />
-    <!-- DefaultAzureCredential for Azure Foundry managed-identity auth (consumed by the Application factory, lane B). -->
+    <!-- DefaultAzureCredential for Azure Foundry managed-identity auth, consumed by the Application factory. -->
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
     <!-- MSAL ConfidentialClientApplication for the Entra ID authorization-code sign-in flow (Postman-parity delegated
          token via a confidential client + PKCE). Not pulled in transitively by Azure.Identity 1.21.0 (which depends
@@ -26,7 +26,7 @@
     <PackageVersion Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageVersion Include="UTF.Unknown" Version="2.7.0" />
     <!-- Docker Engine API client for the Development Mode container sandbox, permitted by ADR 0004 for Development
-         Mode build/test/lint execution ONLY. It is not on the inference path and does not reintroduce HostAgent.
+         Mode build/test/lint execution ONLY. It is isolated from the inference path.
 
          NOTE the package id. `Docker.DotNet` (3.125.15) is the ORIGINAL, last published 2023-05-18, netstandard-only,
          and it drags in Newtonsoft.Json. `Docker.DotNet.Enhanced` is the MAINTAINED fork at

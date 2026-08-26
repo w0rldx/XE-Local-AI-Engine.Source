@@ -50,9 +50,9 @@ public sealed class WorkSessionOptions
     ///         (<c>StoredNodeSettings.MaxMaxPendingToolCallAgeMinutes</c>), so nothing above that could ever validate.
     ///     </para>
     ///     <para>
-    ///         follow-up: that check reads the configured value only. <c>INodeRuntimeSettings.GetMaxPendingToolCallAgeMinutes</c>
-    ///         lets the database override the tool-call age at runtime, and a startup check cannot see a value written
-    ///         after it ran — an operator who lowers it below this park budget re-opens the gap.
+    ///         The startup check reads only the configured value.
+    ///         <c>INodeRuntimeSettings.GetMaxPendingToolCallAgeMinutes</c> can override the tool-call age from the database
+    ///         after startup; lowering it below this park budget re-opens the gap.
     ///     </para>
     /// </summary>
     [Range(1, 3599)]

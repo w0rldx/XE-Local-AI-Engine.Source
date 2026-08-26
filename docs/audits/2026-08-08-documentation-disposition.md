@@ -203,7 +203,11 @@ The Codex OAuth row now states that its ChatGPT-login endpoint is integration-se
 
 ## Windows runbook classification
 
-`docs/runbooks/windows-rc-verification-runbook.md` remains **Living/current** because it is the active procedure for product behavior that can only be verified on Windows. Its dated 2026-08-02/03 transcripts remain explicitly labeled historical evidence inside that procedure. The separate `windows-rc-remaining-work-agent-prompt.md` remains a protected historical handoff. Current runtime requirements and release paths were compared with `eng/ReleaseVersion.props`, `release.yml`, launcher code, and current verification scripts.
+`docs/runbooks/windows-rc-verification-runbook.md` remains **Living/current** because it is the active procedure for product behavior that can only be verified on Windows. Its dated 2026-08-02/03 transcripts remain explicitly labeled historical evidence inside that procedure. At this audit's base revision, the separate `windows-rc-remaining-work-agent-prompt.md` was retained as a protected historical handoff. Current runtime requirements and release paths were compared with `eng/ReleaseVersion.props`, `release.yml`, launcher code, and current verification scripts.
+
+### Later disposition — 2026-08-26
+
+The cleanup after this audit removed `docs/runbooks/windows-rc-remaining-work-agent-prompt.md`. The disposition row above remains the point-in-time finding for base revision `9405df91`; it does not assert that the handoff still exists. The file was a transient execution prompt rather than a durable operator procedure, and its continuing technical requirements remain in `docs/runbooks/windows-rc-verification-runbook.md` and the repository validation instructions.
 
 ## Controlled-record contradiction log
 

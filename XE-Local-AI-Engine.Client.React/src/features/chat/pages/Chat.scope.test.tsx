@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-// Regression guard for the `scope` seam (P4/D3). Two contracts live here: `/chat` — the prop-less mount — must be
+// Regression guard for the `scope` seam. Two contracts live here: `/chat` — the prop-less mount — must be
 // unchanged, and a scoped mount must pin the conversation, hide the list, freeze the selectors, route the composer
 // through the override, and never write the GLOBAL chat preference store.
 
