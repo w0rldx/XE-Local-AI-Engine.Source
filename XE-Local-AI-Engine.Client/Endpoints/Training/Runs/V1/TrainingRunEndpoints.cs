@@ -47,10 +47,6 @@ public sealed class CreateTrainingRunEndpoint(ITrainingRunService runs) : Endpoi
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
     }
 }
 
@@ -66,21 +62,14 @@ public sealed class ListTrainingRunsEndpoint(ITrainingRunService runs) : Endpoin
 
     public override async Task HandleAsync(ListTrainingRunsRequest req, CancellationToken ct)
     {
-        try
+        var page = await _runs.ListAsync(new TrainingRunQuery(req.Page, req.PageSize, req.DatasetId), ct).ConfigureAwait(false);
+        await Send.OkAsync(new ListTrainingRunsResponse
         {
-            var page = await _runs.ListAsync(new TrainingRunQuery(req.Page, req.PageSize, req.DatasetId), ct).ConfigureAwait(false);
-            await Send.OkAsync(new ListTrainingRunsResponse
-            {
-                Items = page.Items.Select(item => item.ToResponse()).ToArray(),
-                TotalCount = page.TotalCount,
-                Page = req.Page,
-                PageSize = req.PageSize
-            }, ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+            Items = page.Items.Select(item => item.ToResponse()).ToArray(),
+            TotalCount = page.TotalCount,
+            Page = req.Page,
+            PageSize = req.PageSize
+        }, ct).ConfigureAwait(false);
     }
 }
 
@@ -122,20 +111,13 @@ public sealed class CancelTrainingRunEndpoint(ITrainingRunService runs) : Endpoi
 
     public override async Task HandleAsync(TrainingRunByIdRequest req, CancellationToken ct)
     {
-        try
+        if (!await _runs.CancelAsync(req.RunId, ct).ConfigureAwait(false))
         {
-            if (!await _runs.CancelAsync(req.RunId, ct).ConfigureAwait(false))
-            {
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
-                return;
-            }
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
 
-            await Send.NoContentAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }
 

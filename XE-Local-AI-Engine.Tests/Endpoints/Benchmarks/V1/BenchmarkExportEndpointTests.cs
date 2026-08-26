@@ -351,9 +351,16 @@ public sealed class BenchmarkExportEndpointTests
         using var request = Authorized(context.Factory, Api + $"/projects/{ProjectId}/export");
 
         using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
         AssertEx.Equal(expected: 2, context.Snapshots.Deserialized, "Four runs, two groups: one snapshot read per group.");
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(expected: 4, document.RootElement.GetProperty("runs").GetArrayLength(),
+            "Unreadable snapshot facts must not discard otherwise exportable runs.");
+        AssertEx.Equal(expected: 2, document.RootElement.GetProperty("repeatGroups").GetArrayLength(),
+            "Snapshot recovery must retain both repeat groups.");
     }
 
     [Test]

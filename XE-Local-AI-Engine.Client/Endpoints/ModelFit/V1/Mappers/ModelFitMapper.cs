@@ -269,7 +269,7 @@ internal static class ModelFitMapper
         ArgumentException.ThrowIfNullOrWhiteSpace(recommendedTag);
 
         // A managed source build is NOT on the prebuilt update channel: suppress the catalog-driven "update available"
-        // and surface "rebuild available" instead when its tag differs from the engine's current pinned tag. [archMED-2/4]
+        // and surface "rebuild available" instead when its tag differs from the engine's current pinned tag.
         var isSourceBuild = installed?.SourceBuildPath is { Length: > 0 };
         var rebuildAvailable = isSourceBuild
                                && installed is not null

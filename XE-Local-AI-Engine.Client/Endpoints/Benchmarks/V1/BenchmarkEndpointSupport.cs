@@ -4,13 +4,17 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 /// <summary>
-///     Central benchmark exception → HTTP mapper. Every benchmark endpoint routes its handled exceptions through
-///     <see cref="Error" /> so the status code, the machine-readable <c>code</c> and the operator-safe message stay in
-///     one place. Bodies are RFC 7807 <c>application/problem+json</c>: the message is the ProblemDetails
+///     Central benchmark exception → HTTP mapper. The global handler and the batch endpoint route handled exceptions
+///     through this type so the status code, machine-readable <c>code</c>, and operator-safe message stay in one place.
+///     Bodies are RFC 7807 <c>application/problem+json</c>: the message is the ProblemDetails
 ///     <c>detail</c> and the <see cref="BenchmarkErrorCode" /> name is carried in the <c>code</c> extension member.
 /// </summary>
 internal static class BenchmarkEndpointSupport
 {
+    public static bool IsHandled(Exception exception) =>
+        exception is BenchmarkNotFoundException or BenchmarkValidationException or BenchmarkConflictException or BenchmarkEligibilityException
+            or BenchmarkUnsupportedKvCacheTypeException or BenchmarkJudgePolicyChangedException;
+
     /// <summary>
     ///     The run's current judge verdict, decrypted, or null when it has no attempt or no stored result. EVERY
     ///     endpoint that returns the run detail shape reads it here: a mutation response that skipped it would render

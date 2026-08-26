@@ -130,15 +130,8 @@ public sealed class DeleteTrainingArtifactEndpoint(ITrainingExportService export
 
     public override async Task HandleAsync(DeleteTrainingArtifactRequest req, CancellationToken ct)
     {
-        try
-        {
-            await _exports.DeleteArtifactAsync(req.ArtifactId, req.ExpectedVersion, ct).ConfigureAwait(false);
-            await Send.NoContentAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        await _exports.DeleteArtifactAsync(req.ArtifactId, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }
 
@@ -176,10 +169,6 @@ public sealed class RunTrainingArtifactSmokeEndpoint(ITrainingExportService expo
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
     }
 }
 
@@ -213,10 +202,6 @@ public sealed class PromoteTrainingArtifactEndpoint(IArtifactPromotionService pr
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
     }
 }
 
@@ -247,10 +232,6 @@ public sealed class DecideTrainingArtifactQualityEndpoint(IArtifactQualityServic
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
         }
     }
 
@@ -302,10 +283,6 @@ public sealed class OverrideTrainingArtifactQualityEndpoint(IArtifactQualityServ
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
     }
 }
 
@@ -337,10 +314,6 @@ public sealed class BeginTrainingArtifactQualityRevalidationEndpoint(IArtifactQu
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
     }
 }
 
@@ -361,15 +334,8 @@ public sealed class DiscardTrainingArtifactQualityEndpoint(ITrainingExportServic
 
     public override async Task HandleAsync(DiscardArtifactQualityRequest req, CancellationToken ct)
     {
-        try
-        {
-            var artifact = await _exports.DiscardArtifactQualityAsync(req.ArtifactId, req.ExpectedVersion.GetValueOrDefault(), req.Reason, ct)
-                                         .ConfigureAwait(false);
-            await Send.OkAsync(DecideTrainingArtifactQualityEndpoint.ToQualityResponse(artifact), ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var artifact = await _exports.DiscardArtifactQualityAsync(req.ArtifactId, req.ExpectedVersion.GetValueOrDefault(), req.Reason, ct)
+                                     .ConfigureAwait(false);
+        await Send.OkAsync(DecideTrainingArtifactQualityEndpoint.ToQualityResponse(artifact), ct).ConfigureAwait(false);
     }
 }

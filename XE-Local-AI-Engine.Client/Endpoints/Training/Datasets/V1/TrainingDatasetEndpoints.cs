@@ -66,15 +66,8 @@ public sealed class DeleteTrainingDatasetEndpoint(ITrainingDatasetStore store)
 
     public override async Task HandleAsync(DeleteTrainingDatasetRequest req, CancellationToken ct)
     {
-        try
-        {
-            await _store.DeleteDatasetAsync(req.DatasetId, req.ExpectedVersion, ct).ConfigureAwait(false);
-            await Send.NoContentAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        await _store.DeleteDatasetAsync(req.DatasetId, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }
 
@@ -98,20 +91,13 @@ public sealed class CancelTrainingDatasetEndpoint(IDatasetGenerationService gene
 
     public override async Task HandleAsync(CancelTrainingDatasetRequest req, CancellationToken ct)
     {
-        try
+        if (!await _generation.CancelAsync(req.DatasetId, ct).ConfigureAwait(false))
         {
-            if (!await _generation.CancelAsync(req.DatasetId, ct).ConfigureAwait(false))
-            {
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
-                return;
-            }
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
 
-            await Send.NoContentAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }
 
@@ -135,22 +121,15 @@ public sealed class ListTrainingSamplesEndpoint(ITrainingDatasetStore store)
             return;
         }
 
-        try
+        var page = await _store.ListSamplesAsync(new TrainingSampleQuery(req.DatasetId, req.Page, req.PageSize, req.Label, req.ReviewState, req.Kind), ct)
+                               .ConfigureAwait(false);
+        await Send.OkAsync(new ListTrainingSamplesResponse
         {
-            var page = await _store.ListSamplesAsync(new TrainingSampleQuery(req.DatasetId, req.Page, req.PageSize, req.Label, req.ReviewState, req.Kind), ct)
-                                   .ConfigureAwait(false);
-            await Send.OkAsync(new ListTrainingSamplesResponse
-            {
-                Items = page.Items.Select(item => item.ToResponse()).ToArray(),
-                TotalCount = page.TotalCount,
-                Page = req.Page,
-                PageSize = req.PageSize
-            }, ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+            Items = page.Items.Select(item => item.ToResponse()).ToArray(),
+            TotalCount = page.TotalCount,
+            Page = req.Page,
+            PageSize = req.PageSize
+        }, ct).ConfigureAwait(false);
     }
 }
 
@@ -168,15 +147,8 @@ public sealed class ReviewTrainingSampleEndpoint(ITrainingDatasetStore store)
 
     public override async Task HandleAsync(ReviewTrainingSampleRequest req, CancellationToken ct)
     {
-        try
-        {
-            var record = await _store.ReviewSampleAsync(new TrainingSampleReviewCommand(req.SampleId, req.Verb, req.Label), ct).ConfigureAwait(false);
-            await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var record = await _store.ReviewSampleAsync(new TrainingSampleReviewCommand(req.SampleId, req.Verb, req.Label), ct).ConfigureAwait(false);
+        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
     }
 }
 
@@ -193,20 +165,13 @@ public sealed class ExportTrainingDatasetEndpoint(IDatasetExportService export)
 
     public override async Task HandleAsync(ExportTrainingDatasetRequest req, CancellationToken ct)
     {
-        try
+        var content = await _export.ExportAsync(req.DatasetId, req.Format, ct).ConfigureAwait(false);
+        await Send.OkAsync(new ExportTrainingDatasetResponse
         {
-            var content = await _export.ExportAsync(req.DatasetId, req.Format, ct).ConfigureAwait(false);
-            await Send.OkAsync(new ExportTrainingDatasetResponse
-            {
-                DatasetId = req.DatasetId,
-                Format = req.Format,
-                Content = content,
-                LineCount = content.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length
-            }, ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+            DatasetId = req.DatasetId,
+            Format = req.Format,
+            Content = content,
+            LineCount = content.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length
+        }, ct).ConfigureAwait(false);
     }
 }

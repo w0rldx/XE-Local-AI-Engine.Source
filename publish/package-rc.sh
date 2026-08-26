@@ -156,15 +156,13 @@ TXT
   fi
 }
 
-# Fail the build if any per-node runtime/state artifact leaked into the staged bundle. CL-1 relocated all of these out
-# of ContentRoot into the per-user data dir, so a clean publish never produces them; this guard codifies that and stops
+# Fail the build if any per-node runtime/state artifact leaked into the staged bundle. These artifacts belong under
+# the per-user data directory rather than ContentRoot, so a clean publish never produces them; this guard stops
 # a regression (e.g. a re-committed dev node-settings.json, or a *.enc credential file) from ever shipping.
 #
 # Intended publish allowlist (everything else under the stage is one of these, by design):
-#   - appsettings*.json            (app configuration; carries no secrets — validated in the CL-2 audit.
-#                                   "No secrets" was never the whole story: nothing checked that a
-#                                   REPLACE_/CHANGE_ME/TODO stub was not shipping as if it were real
-#                                   configuration. assert_app_config_sane below closes that gap.)
+#   - appsettings*.json            (app configuration; carries no secrets or placeholder values —
+#                                   assert_app_config_sane below enforces both requirements.)
 #   - *.runtimeconfig.json         (the .NET runtime host config)
 #   - *.deps.json                  (the .NET dependency manifest)
 #   - manifest.json                (AgentHome layout manifests are runtime-only; the app's own manifest.json is an asset)
@@ -181,7 +179,7 @@ assert_no_runtime_state() {
   if [[ -n "${leak}" ]]; then
     echo "Error: runtime/state files leaked into the published bundle (must never ship):" >&2
     echo "${leak}" >&2
-    echo "These belong under the per-user data dir at runtime (CL-1). Check the csproj Content items / a stray committed file." >&2
+    echo "These belong under the per-user data dir at runtime. Check the csproj Content items / a stray committed file." >&2
     exit 1
   fi
 }

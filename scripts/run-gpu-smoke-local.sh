@@ -431,8 +431,8 @@ assert_gpu_was_used() {
 }
 
 # Step 5. Assert a tool was OFFERED AND INVOKED. Asserting the allowlist config would have passed
-# while the feature was broken (F-001/F-025: the allowlist was correct but seeded once at startup,
-# so tools were silently withheld) — so only the turn's own tool-call events count.
+# while the feature was broken: the allowlist was correct but seeded only once at startup, so tools were silently
+# withheld. Only the turn's own tool-call events therefore count.
 assert_tool_call() {
   local records="$1"
   local requested completed

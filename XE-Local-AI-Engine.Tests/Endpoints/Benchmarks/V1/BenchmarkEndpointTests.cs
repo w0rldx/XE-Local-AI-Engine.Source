@@ -385,6 +385,7 @@ public sealed class BenchmarkEndpointTests
         // Per-item, not all-or-nothing: one ineligible model must not cost the operator the rest of the matrix. The
         // refused cell did NOT consume a project version, so the next one still presents 4.
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
         using var document = JsonDocument.Parse(body);
         AssertEx.Equal(expected: 1, document.RootElement.GetProperty("started").GetArrayLength());
         AssertEx.Equal("good-model", document.RootElement.GetProperty("started")[0].GetProperty("modelName").GetString());
@@ -472,6 +473,7 @@ public sealed class BenchmarkEndpointTests
         // not find them and a retry would enqueue duplicates. The started cell survives, the conflicting cell and every
         // cell after it are reported, and projectVersion is what the resubmission has to present.
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
         using var document = JsonDocument.Parse(body);
         AssertEx.Equal(expected: 1, document.RootElement.GetProperty("started").GetArrayLength());
         AssertEx.Equal("model-a", document.RootElement.GetProperty("started")[0].GetProperty("modelName").GetString());
@@ -641,6 +643,30 @@ public sealed class BenchmarkEndpointTests
 
         AssertProblem(response, body, HttpStatusCode.UnprocessableEntity, BenchmarkErrorCode.IneligibleModel,
             "The selected model could not be verified against its installed registry entry.");
+    }
+
+    [Test]
+    public async Task StartRun_WhenTheRequestedModelDisappeared_MapsContextualKeyNotFoundWithoutLeakingItsMessage()
+    {
+        await using var context = CreateContext();
+        context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "missing-model", 4, null, 1, false),
+                     Arg.Any<BenchmarkFreezeScope?>(),
+                     Arg.Any<CancellationToken>())
+               .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new KeyNotFoundException("secret registry path: /node/models/private"));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs", new
+        {
+            modelName = "missing-model",
+            expectedProjectVersion = 4
+        });
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertProblem(response, body, HttpStatusCode.NotFound, BenchmarkErrorCode.NotFound,
+            "The requested benchmark resource was not found.");
+        AssertEx.False(body.Contains("secret registry path", StringComparison.Ordinal),
+            "The route-specific KeyNotFound mapping must keep provider context out of the response.");
     }
 
     [Test]
@@ -887,8 +913,10 @@ public sealed class BenchmarkEndpointTests
                 expectedVersion = 3
             });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertProblem(response, body, HttpStatusCode.Conflict, BenchmarkErrorCode.InvalidLifecycleTransition,
+            "The benchmark lifecycle transition is not allowed.");
         await context.Cancellation.Received(1).CancelAsync(RunId,
             3,
             BenchmarkCancellationTarget.Primary,
@@ -982,7 +1010,7 @@ public sealed class BenchmarkEndpointTests
     private static void AssertProblem(HttpResponseMessage response, string body, HttpStatusCode status, BenchmarkErrorCode code, string detail)
     {
         AssertEx.Equal(status, response.StatusCode);
-        AssertEx.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        AssertEx.Equal("application/problem+json", response.Content.Headers.ContentType?.ToString());
         using var document = JsonDocument.Parse(body);
         AssertEx.Equal((int)status, document.RootElement.GetProperty("status").GetInt32());
         AssertEx.Equal(code.ToString(), document.RootElement.GetProperty("code").GetString());

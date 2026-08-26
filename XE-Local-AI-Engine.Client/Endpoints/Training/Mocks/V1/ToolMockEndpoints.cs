@@ -66,19 +66,12 @@ public sealed class CreateToolMockEndpoint(IToolMockService mocks)
 
     public override async Task HandleAsync(CreateToolMockRequest req, CancellationToken ct)
     {
-        try
-        {
-            var record = await _mocks.CreateAsync(new ToolMockDraft(req.ToolName, req.Body, req.Enabled), ct).ConfigureAwait(false);
-            await Send.CreatedAtAsync<GetToolMockEndpoint>(new
-                      {
-                          mockId = record.Id
-                      }, record.ToResponse(), cancellation: ct)
-                      .ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var record = await _mocks.CreateAsync(new ToolMockDraft(req.ToolName, req.Body, req.Enabled), ct).ConfigureAwait(false);
+        await Send.CreatedAtAsync<GetToolMockEndpoint>(new
+                  {
+                      mockId = record.Id
+                  }, record.ToResponse(), cancellation: ct)
+                  .ConfigureAwait(false);
     }
 }
 
@@ -95,16 +88,9 @@ public sealed class UpdateToolMockEndpoint(IToolMockService mocks)
 
     public override async Task HandleAsync(UpdateToolMockRequest req, CancellationToken ct)
     {
-        try
-        {
-            var record = await _mocks.UpdateAsync(req.MockId, req.ExpectedVersion, new ToolMockDraft(req.ToolName, req.Body, req.Enabled), ct)
-                                     .ConfigureAwait(false);
-            await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var record = await _mocks.UpdateAsync(req.MockId, req.ExpectedVersion, new ToolMockDraft(req.ToolName, req.Body, req.Enabled), ct)
+                                 .ConfigureAwait(false);
+        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
     }
 }
 
@@ -121,15 +107,8 @@ public sealed class DeleteToolMockEndpoint(ITrainingDatasetStore store)
 
     public override async Task HandleAsync(DeleteToolMockRequest req, CancellationToken ct)
     {
-        try
-        {
-            await _store.DeleteMockAsync(req.MockId, req.ExpectedVersion, ct).ConfigureAwait(false);
-            await Send.NoContentAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        await _store.DeleteMockAsync(req.MockId, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }
 
@@ -147,14 +126,7 @@ public sealed class VerifyToolMockEndpoint(IToolMockService mocks)
 
     public override async Task HandleAsync(VerifyToolMockRequest req, CancellationToken ct)
     {
-        try
-        {
-            var result = await _mocks.VerifyAsync(req.MockId, req.ExpectedVersion, ct).ConfigureAwait(false);
-            await Send.OkAsync(result.Mock.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var result = await _mocks.VerifyAsync(req.MockId, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await Send.OkAsync(result.Mock.ToResponse(), ct).ConfigureAwait(false);
     }
 }

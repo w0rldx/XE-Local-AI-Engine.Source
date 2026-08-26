@@ -8,7 +8,7 @@ import { isTerminalWorkSessionStatus, resumesOnFollowUp, type WorkSessionStatus 
  * notice only promises when it gets *used* — and the three promises are not interchangeable:
  *
  * - `Draft` has no next step until Start, so it must never say "queued for the next step".
- * - `Paused`/`Interrupted` auto-resume on post (P3 row 16 / X20) — "sent — resuming".
+ * - `Paused`/`Interrupted` auto-resume on post, so the notice says "sent — resuming".
  * - `WaitingFor*` behave like `Running`: a step is live right now, parked on a card and holding the node's single
  *   invocation slot, so there is nothing to resume and the message waits for the next step.
  */

@@ -39,10 +39,6 @@ public sealed class CreateEvaluationEndpoint(IEvaluationRunService evaluations) 
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
     }
 }
 
@@ -115,10 +111,6 @@ public sealed class ResumeEvaluationEndpoint(IEvaluationRunService evaluations) 
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
         }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
     }
 }
 
@@ -135,20 +127,13 @@ public sealed class CancelEvaluationEndpoint(IEvaluationRunService evaluations) 
 
     public override async Task HandleAsync(EvaluationByIdRequest req, CancellationToken ct)
     {
-        try
+        if (!await _evaluations.CancelAsync(req.EvaluationId, ct).ConfigureAwait(false))
         {
-            if (!await _evaluations.CancelAsync(req.EvaluationId, ct).ConfigureAwait(false))
-            {
-                await Send.NotFoundAsync(ct).ConfigureAwait(false);
-                return;
-            }
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
 
-            await Send.NoContentAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }
 
@@ -167,14 +152,7 @@ public sealed class DeleteEvaluationEndpoint(IEvaluationRunService evaluations) 
 
     public override async Task HandleAsync(DeleteEvaluationRequest req, CancellationToken ct)
     {
-        try
-        {
-            await _evaluations.DeleteAsync(req.EvaluationId, req.ExpectedVersion, ct).ConfigureAwait(false);
-            await Send.NoContentAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        await _evaluations.DeleteAsync(req.EvaluationId, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }

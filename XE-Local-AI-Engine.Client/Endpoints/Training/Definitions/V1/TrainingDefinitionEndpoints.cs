@@ -65,19 +65,12 @@ public sealed class CreateTrainingDefinitionEndpoint(IDatasetDefinitionService d
 
     public override async Task HandleAsync(CreateTrainingDefinitionRequest req, CancellationToken ct)
     {
-        try
-        {
-            var record = await _definitions.CreateAsync(new DatasetDefinitionDraft(req.Name, req.Body), ct).ConfigureAwait(false);
-            await Send.CreatedAtAsync<GetTrainingDefinitionEndpoint>(new
-                      {
-                          definitionId = record.Id
-                      }, record.ToResponse(), cancellation: ct)
-                      .ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var record = await _definitions.CreateAsync(new DatasetDefinitionDraft(req.Name, req.Body), ct).ConfigureAwait(false);
+        await Send.CreatedAtAsync<GetTrainingDefinitionEndpoint>(new
+                  {
+                      definitionId = record.Id
+                  }, record.ToResponse(), cancellation: ct)
+                  .ConfigureAwait(false);
     }
 }
 
@@ -94,16 +87,9 @@ public sealed class UpdateTrainingDefinitionEndpoint(IDatasetDefinitionService d
 
     public override async Task HandleAsync(UpdateTrainingDefinitionRequest req, CancellationToken ct)
     {
-        try
-        {
-            var record = await _definitions.UpdateAsync(req.DefinitionId, req.ExpectedVersion, new DatasetDefinitionDraft(req.Name, req.Body), ct)
-                                           .ConfigureAwait(false);
-            await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var record = await _definitions.UpdateAsync(req.DefinitionId, req.ExpectedVersion, new DatasetDefinitionDraft(req.Name, req.Body), ct)
+                                       .ConfigureAwait(false);
+        await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
     }
 }
 
@@ -120,15 +106,8 @@ public sealed class DeleteTrainingDefinitionEndpoint(IDatasetDefinitionService d
 
     public override async Task HandleAsync(DeleteTrainingDefinitionRequest req, CancellationToken ct)
     {
-        try
-        {
-            await _definitions.DeleteAsync(req.DefinitionId, req.ExpectedVersion, ct).ConfigureAwait(false);
-            await Send.NoContentAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        await _definitions.DeleteAsync(req.DefinitionId, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }
 
@@ -147,14 +126,7 @@ public sealed class GenerateTrainingDatasetEndpoint(IDatasetGenerationService ge
 
     public override async Task HandleAsync(GenerateTrainingDatasetRequest req, CancellationToken ct)
     {
-        try
-        {
-            var dataset = await _generation.StartAsync(req.DefinitionId, req.ExpectedVersion, req.Name, ct).ConfigureAwait(false);
-            await Send.ResultAsync(TypedResults.Accepted((string?)null, dataset.ToResponse())).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (TrainingEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(TrainingEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+        var dataset = await _generation.StartAsync(req.DefinitionId, req.ExpectedVersion, req.Name, ct).ConfigureAwait(false);
+        await Send.ResultAsync(TypedResults.Accepted((string?)null, dataset.ToResponse())).ConfigureAwait(false);
     }
 }
