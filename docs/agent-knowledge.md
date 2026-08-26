@@ -778,6 +778,14 @@ Eligible-model listing reads recorded registry facts without hashing for respons
 
 Rank exclusion is projected onto every API path returning runs, not only the ranking query. `TotalScored` uses the same rankable result so a permanently truncated warm-up does not leave the UI waiting forever. Truncation recognition is shared between ranking and judge execution; adding a stop-reason token to one copy only creates inconsistent verdicts.
 
+### Benchmark export (P2 S5, 2026-08-26)
+
+- **CSV columns are APPENDED, never inserted.** The export is flat *because* consumers read it by column index; inserting a column silently turns a sampling seed into a token count and nothing errors. `BenchmarkExportProjection.SchemaVersion` is bumped with every column change (now 3), and the snapshot test pins the whole header line plus one whole row — including the trailing empty cells, because a SHORT row is what actually breaks an index reader.
+- **The export must apply the SAME comparability gate as the live read, and it did not.** `ToDetail` takes the expected KLD digest as an optional argument, so the export called it without one, a null expected digest matched nothing, and every exported KLD figure came out `kldState=stale` with its numbers nulled — a download that silently disagreed with the page it was downloaded from. Any new caller of `ToDetail`/`ToSummary`/`ToFidelity` has to pass `BenchmarkEndpointSupport.ExpectedKldDigest(project)`.
+- **Fidelity numbers need more decimals than throughput does.** The CSV's `Rate` helper formats `0.###`, which rounds a perplexity of 6.7977 to 6.798 — and the measured Q4_K_M/UD-Q3_K_XL gap is 6.7977 vs 6.9497 at standard errors near 0.074, so three decimals discards exactly the digits that decide whether two quants separate. Fidelity uses a six-decimal formatter.
+- **A withheld figure still exports its digest.** The three KLD cells go empty on a stale row, but `kldBaseLogitsDigest` is written anyway: it is the evidence for the withholding, and a reader comparing it against the project's current digest can see what moved.
+- **A fit is exported as ONE object, not smeared over the runs.** `BenchmarkPairwiseFit` is a single immutable row whose `FitKey` covers the whole comparison set; per-run strengths stay on the run rows where every other score already is. The CSV, having nowhere else to put it, repeats the fit key on every row of the cohort so a filtered subset does not lose which fit its numbers came from.
+
 ### Knowledge base / RAG
 
 - SQLite foreign keys are not enabled; cascades do not fire. Explicitly delete vectors → chunks (FTS trigger) → sections → document → file. EF graph tests can false-pass.

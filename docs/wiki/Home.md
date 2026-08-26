@@ -110,6 +110,7 @@ action, never implicit. Prebuilt download stays the default. If you read anywher
 | 17 | [Writing Tests](17-writing-tests.md) | Contributor authoring guide: which project a test belongs in, the `TestServerWebAppFactory` patterns, parallelism keys, migration/hub/hosted-service/React/E2E recipes, how to run a scoped subset |
 | 18 | [Training](18-training.md) | Local fine-tuning: the `Providers.Training` uv/Python runtime, dataset generation, training runs, export/promote/eval |
 | 19 | [Compute Tools](19-compute-tools.md) | Sandboxed code execution: the `run_python` tool, process-sandbox isolation, uv-pinned venv (numpy/scipy/sympy), security/gating (WriteExecute + approval-required, profile-opt-in), Linux-only v1, operator enablement |
+| 20 | [Benchmarks](20-benchmarks.md) | Frozen runs and snapshots, the four-kind work queue, repeat modes and stop reasons, quant fidelity (perplexity/KLD, base-logit cache, comparability digest), verifiable rubric criteria, pairwise judging + Bradley-Terry, ranking, export schema 3 |
 
 ## Conventions in this wiki
 
