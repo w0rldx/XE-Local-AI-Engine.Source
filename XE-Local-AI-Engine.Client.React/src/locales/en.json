@@ -4327,6 +4327,24 @@
 					"skipped": "Not measured"
 				},
 				"differs": "Quant fidelity differs: {{fields}}"
+			},
+			"charts": {
+				"title": "Charts",
+				"show": "Show charts",
+				"hide": "Hide charts",
+				"loading": "Loading charts…",
+				"empty": "No measured runs to chart yet.",
+				"throughputTitle": "Decode speed per repeat",
+				"repeatAxis": "Repeat",
+				"cohortsHidden": "Showing {{shown}} of {{total}} repeat cohorts.",
+				"speedTitle": "Prefill and decode speed per model",
+				"ttftTitle": "Time to first token per model",
+				"perplexityTitle": "Perplexity per quant — {{model}}",
+				"perplexity": "Perplexity",
+				"kldTitle": "KL divergence per quant — {{model}}",
+				"kld": "KL divergence",
+				"reasoningBudgetTitle": "Quality against the frozen reasoning budget",
+				"reasoningBudgetNote": "Across the runs currently selected for comparison."
 			}
 		},
 		"customTools": {

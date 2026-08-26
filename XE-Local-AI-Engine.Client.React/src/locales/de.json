@@ -4327,6 +4327,24 @@
 					"skipped": "Nicht gemessen"
 				},
 				"differs": "Quantisierungstreue unterscheidet sich: {{fields}}"
+			},
+			"charts": {
+				"title": "Diagramme",
+				"show": "Diagramme anzeigen",
+				"hide": "Diagramme ausblenden",
+				"loading": "Diagramme werden geladen…",
+				"empty": "Noch keine gemessenen Läufe zum Darstellen.",
+				"throughputTitle": "Dekodiergeschwindigkeit je Wiederholung",
+				"repeatAxis": "Wiederholung",
+				"cohortsHidden": "{{shown}} von {{total}} Wiederholungskohorten werden angezeigt.",
+				"speedTitle": "Prefill- und Dekodiergeschwindigkeit je Modell",
+				"ttftTitle": "Zeit bis zum ersten Token je Modell",
+				"perplexityTitle": "Perplexität je Quantisierung — {{model}}",
+				"perplexity": "Perplexität",
+				"kldTitle": "KL-Divergenz je Quantisierung — {{model}}",
+				"kld": "KL-Divergenz",
+				"reasoningBudgetTitle": "Qualität gegenüber dem eingefrorenen Reasoning-Budget",
+				"reasoningBudgetNote": "Über die aktuell zum Vergleich ausgewählten Läufe."
 			}
 		},
 		"customTools": {

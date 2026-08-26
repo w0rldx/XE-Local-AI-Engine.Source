@@ -15,6 +15,7 @@ import {
 } from "@mantine/core";
 import {
 	IconAlertTriangle,
+	IconChartHistogram,
 	IconFlask,
 	IconLock,
 	IconPlus,
@@ -24,7 +25,7 @@ import {
 	IconScale,
 	IconSettings,
 } from "@tabler/icons-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -65,6 +66,7 @@ import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useB
 import {
 	useBenchmarkProject,
 	useBenchmarkProjects,
+	useBenchmarkRunDetails,
 	useBenchmarkRubricPresets,
 	useBenchmarkRuns,
 	useCreateBenchmarkProject,
@@ -78,6 +80,10 @@ import {
 	useUpdateBenchmarkJudgePolicy,
 	useUpdateBenchmarkProject,
 } from "@/features/benchmarks/queries/useBenchmarks";
+
+// recharts is ~400 kB of JavaScript that a route's first paint has no reason to pay for: the charts sit below the
+// runs table, and a project with no measured run never renders them at all.
+const BenchmarkCharts = lazy(() => import("@/features/benchmarks/components/BenchmarkCharts"));
 
 const emptyProject: BenchmarkProjectDraft = {
 	name: "",
@@ -141,7 +147,11 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	const startRun = useStartBenchmarkRun();
 	const startBatch = useStartBenchmarkRunBatch();
 	const measureFidelity = useStartBenchmarkRunFidelity();
+	// Already in cache for the compare view and the live panes; read here for the frozen reasoning budget, which the
+	// list projection does not carry.
+	const selectedRunDetails = useBenchmarkRunDetails(selectedRunIds);
 	const runs = useMemo(() => runsQuery.data?.items ?? [], [runsQuery.data]);
+	const [chartsOpen, setChartsOpen] = useState(false);
 	const batchProgress = useMemo(
 		() => (batchLaunch && batchLaunch.projectId === selectedProjectId ? benchmarkBatchProgress(runs, batchLaunch.runIds) : null),
 		[batchLaunch, selectedProjectId, runs],
@@ -649,6 +659,34 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						onDeleteRun={removeRun}
 					/>
 					{selectedRunIds.length >= 2 ? <BenchmarkLaunchCompare runIds={selectedRunIds} /> : null}
+					{/* Opened on demand: mounting the charts pulls the charting library, and an operator reading the table
+					    has not asked for it. */}
+					<Group>
+						<Button
+							variant="subtle"
+							size="xs"
+							leftSection={<IconChartHistogram size={14} />}
+							onClick={() => setChartsOpen((current) => !current)}
+							aria-expanded={chartsOpen}
+							data-testid="benchmark-charts-toggle"
+						>
+							{chartsOpen
+								? t("pages.benchmarks.charts.hide", "Hide charts")
+								: t("pages.benchmarks.charts.show", "Show charts")}
+						</Button>
+					</Group>
+					{chartsOpen ? (
+						<Suspense
+							fallback={
+								<Group gap="sm">
+									<Loader size="sm" />
+									<Text c="dimmed">{t("pages.benchmarks.charts.loading", "Loading charts…")}</Text>
+								</Group>
+							}
+						>
+							<BenchmarkCharts runs={runs} selectedRuns={selectedRunDetails.runs} />
+						</Suspense>
+					) : null}
 					<SimpleGrid cols={{ base: 1, lg: selectedRunIds.length > 1 ? 2 : 1 }}>
 						{selectedRunIds.map((runId) => (
 							<BenchmarkRunLivePane key={runId} runId={runId} />
