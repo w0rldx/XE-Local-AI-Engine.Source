@@ -32677,7 +32677,8 @@
           "default",
           "programming",
           "reasoning",
-          "verifiable"
+          "verifiable",
+          "codeExecution"
         ],
         "properties": {
           "default": {
@@ -32690,6 +32691,9 @@
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRubricDto"
           },
           "verifiable": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRubricDto"
+          },
+          "codeExecution": {
             "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsBenchmarksV1BenchmarkRubricDto"
           }
         }

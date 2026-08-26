@@ -5225,6 +5225,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricPresetsRe
 	programming: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto,
 	reasoning: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto,
 	verifiable: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto,
+	codeExecution: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto,
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkRunsResponse = z.object({

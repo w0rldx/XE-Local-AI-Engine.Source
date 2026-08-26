@@ -4171,6 +4171,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricPresetsResp
 	programming: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
 	reasoning: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
 	verifiable: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
+	codeExecution: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkRunsResponse = {
