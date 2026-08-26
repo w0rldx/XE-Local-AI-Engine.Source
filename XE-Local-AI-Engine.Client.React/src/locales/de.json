@@ -4139,9 +4139,10 @@
 				"clear": "Vorgabe entfernen"
 			},
 			"export": {
-				"json": "JSON exportieren",
-				"csv": "CSV exportieren",
-				"error": "Dieses Benchmark-Projekt konnte nicht exportiert werden."
+				"json": "JSON exportieren (v{{version}})",
+				"csv": "CSV exportieren (v{{version}})",
+				"error": "Dieses Benchmark-Projekt konnte nicht exportiert werden.",
+				"schemaHelp": "Schema {{version}}: jeder Lauf in voller Tiefe, dazu die Aufgaben des Projekts, die Aufgaben- und Kombinationsstempel jedes Laufs und die Kombinationstabelle."
 			},
 			"judge": {
 				"title": "Automatische Bewertung",

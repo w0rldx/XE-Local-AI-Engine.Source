@@ -4139,9 +4139,10 @@
 				"clear": "Clear override"
 			},
 			"export": {
-				"json": "Export JSON",
-				"csv": "Export CSV",
-				"error": "Could not export this benchmark project."
+				"json": "Export JSON (v{{version}})",
+				"csv": "Export CSV (v{{version}})",
+				"error": "Could not export this benchmark project.",
+				"schemaHelp": "Schema {{version}}: every run at full detail, plus the project's task items, each run's item and combination stamps, and the combination table."
 			},
 			"judge": {
 				"title": "Automated judge",
