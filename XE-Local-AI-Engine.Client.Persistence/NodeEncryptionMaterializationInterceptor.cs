@@ -145,6 +145,28 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     benchmarkProject.Id,
                     "benchmark_core_task_json");
                 break;
+            case BenchmarkTaskItem taskItem:
+                taskItem.PromptJson = NodePayloadProtector.Decrypt(taskItem.PromptJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    taskItem.Id,
+                    "benchmark_task_item_prompt_json");
+                taskItem.ReferenceAnswerJson = DecryptIfPresent(taskItem.ReferenceAnswerJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    taskItem.Id,
+                    "benchmark_task_item_reference_json");
+                taskItem.VerifierConfigJson = DecryptIfPresent(taskItem.VerifierConfigJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    taskItem.Id,
+                    "benchmark_task_item_verifier_json");
+                taskItem.GeneratorConfigJson = DecryptIfPresent(taskItem.GeneratorConfigJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    taskItem.Id,
+                    "benchmark_task_item_generator_json");
+                break;
             case BenchmarkRun benchmarkRun:
                 benchmarkRun.RuntimeSnapshotJson = NodePayloadProtector.Decrypt(benchmarkRun.RuntimeSnapshotJson,
                     context.NodeEncryptionKey.Span,

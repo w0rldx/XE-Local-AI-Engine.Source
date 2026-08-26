@@ -307,6 +307,36 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
+        // A distinct AAD column name per payload, as everywhere else: a verifier config carries expected answers and
+        // a generator config carries the parameters that produce them, so neither may be presentable as the prompt.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkTaskItem>())
+        {
+            EncryptRequiredProperty(entry,
+                entry.Property(entity => entity.PromptJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_task_item_prompt_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.ReferenceAnswerJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_task_item_reference_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.VerifierConfigJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_task_item_verifier_json",
+                trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.GeneratorConfigJson),
+                Guid.Empty,
+                entry.Entity.Id,
+                "benchmark_task_item_generator_json",
+                trackedProperties);
+        }
+
         foreach (var entry in nodeContext.ChangeTracker.Entries<BenchmarkRun>())
         {
             EncryptRequiredProperty(entry,

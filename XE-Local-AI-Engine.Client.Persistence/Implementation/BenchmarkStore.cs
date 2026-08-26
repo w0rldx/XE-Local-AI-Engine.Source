@@ -13,6 +13,12 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     internal const string FidelityKindPerplexity = "ppl";
     internal const string FidelityKindKld = "kld";
     private const string UnresolvedJudgeRuntimeMessage = "judge runtime unresolved";
+
+    /// <summary>
+    ///     What a run frozen before task items existed was asked, and what a project with no items still asks. It is a
+    ///     constant on BOTH sides of the staleness comparison, so a legacy run is never read as revised.
+    /// </summary>
+    internal const string LegacyTaskHash = "v1:legacy";
     private const string VerdictA = "a";
     private const string VerdictB = "b";
     private const string VerdictTie = "tie";
@@ -230,6 +236,12 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 CreatedAtUtc = now,
                 UpdatedAtUtc = now
             };
+
+            // The identity stamps are NOT NULL, so a freeze that names no item still names a cell: its own singleton.
+            // A project with one item and no repeats is exactly this case and ranks as it always has.
+            run.CellKey = SingletonCellKey(run.Id);
+            run.TaskInputHash = LegacyTaskHash;
+            run.TaskItemSetHash = project.TaskItemSetHash ?? LegacyTaskHash;
 
             // Added in caller order, and the queue sequence is assigned in insert order, which is what makes a repeat
             // group run back-to-back — warm-up first, then 1..N — rather than interleaved with whatever else is queued.
@@ -696,6 +708,13 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     ///     re-expresses this rule as an EF predicate because a method cannot be translated; the two must change together.
     /// </summary>
     private static bool IsFidelityMeasuredCell(BenchmarkRun run) => !run.IsWarmup && run.RepeatIndex is null or 1;
+
+    /// <summary>
+    ///     The cell key of a run that is a cell of one. Derived from the run's own id, so it is unique by construction
+    ///     rather than by hoping the column was populated, and two freezes of one project never share a cell.
+    /// </summary>
+    internal static string SingletonCellKey(Guid runId) =>
+        "cell:" + runId.ToString("D");
 
     public Task<BenchmarkRunRecord> MarkPrimaryFailedAsync(Guid runId, long expectedRunVersion, string errorMessage, CancellationToken cancellationToken = default) =>
         TerminalizePrimaryNonSuccessAsync(runId, expectedRunVersion, BenchmarkPrimaryStatus.Failed, BenchmarkWorkStatus.Failed, errorMessage,
