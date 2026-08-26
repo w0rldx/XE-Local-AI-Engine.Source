@@ -26,6 +26,13 @@ public sealed class BenchmarkProjectServiceTests
         _ = await context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "  exact task  ", 4096, context.AgentId));
 
         AssertEx.Equal("  exact task  ", BenchmarkProjectService.DecodeCoreTask(AssertEx.NotNull(context.CreatedInput).CoreTaskJson.Span));
+
+        // Item 0 rides the SAME store call as the project, so a project never exists without a question to ask and no
+        // read path has to invent one. The lazy backfill survives only for projects created before task items existed.
+        var items = AssertEx.NotNull(context.CreatedItems);
+        AssertEx.Equal(expected: 1, items.Count);
+        AssertEx.Equal("  exact task  ", BenchmarkProjectService.DecodeCoreTask(items[0].PromptJson.Span), "Item 0 asks exactly what the core task asked.");
+        AssertEx.Equal(BenchmarkTaskItemKinds.Prompt, items[0].Kind);
         _ = context.Store.DidNotReceive().ActivateJudgePolicyAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
             Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>());
     }

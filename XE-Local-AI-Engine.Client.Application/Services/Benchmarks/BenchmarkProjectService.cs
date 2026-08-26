@@ -74,9 +74,14 @@ public sealed class BenchmarkProjectService(
     {
         var (input, policy) = await ValidateAsync(draft, cancellationToken).ConfigureAwait(false);
 
-        // Project and judge in one store call, so a failure between them cannot persist a project with judging off
-        // that the operator could only retry into a duplicate.
-        return await _benchmarkStore.CreateProjectAsync(input, ToPolicyChange(policy), cancellationToken: cancellationToken).ConfigureAwait(false);
+        // Project, judge AND item 0 in one store call, so a failure between them cannot persist a project with
+        // judging off — or with no question to ask — that the operator could only retry into a duplicate. Every
+        // project created from here therefore has its items already; the lazy backfill is left for older rows only.
+        return await _benchmarkStore.CreateProjectAsync(input,
+                                        ToPolicyChange(policy),
+                                        [new BenchmarkTaskItemInput(input.CoreTaskJson)],
+                                        cancellationToken)
+                                    .ConfigureAwait(false);
     }
 
     public async Task<BenchmarkProjectRecord> UpdateAsync(Guid projectId,

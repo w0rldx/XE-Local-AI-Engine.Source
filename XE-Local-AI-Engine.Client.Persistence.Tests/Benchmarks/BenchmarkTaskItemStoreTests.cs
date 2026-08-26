@@ -271,6 +271,35 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
         AssertEx.Equal("v1:legacy", storedLegacy.TaskInputHash);
     }
 
+    /// <summary>
+    ///     The project's core task and its first item must keep asking the same question. The project edit is refused
+    ///     once the project has runs, so this is only ever reached while there is no history to unrank.
+    /// </summary>
+    [Test]
+    public async Task UpdateProject_ChangingTheCoreTask_KeepsTheFirstItemInSync()
+    {
+        var (context, store) = await CreateStoreAsync("core-task-sync.sqlite").ConfigureAwait(false);
+        await using var scope = context;
+        var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first"), Item("second")]).ConfigureAwait(false);
+        var before = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
+
+        var edited = NewProject(project.Id) with { CoreTaskJson = Encoding.UTF8.GetBytes("a different question") };
+        var updated = await store.UpdateProjectAsync(project.Id, project.Version, edited).ConfigureAwait(false);
+
+        var after = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
+        AssertEx.Equal("a different question", Encoding.UTF8.GetString(after[0].PromptJson.Span));
+        AssertEx.Equal(expected: 2, after[0].Revision, "A rewritten prompt is a new revision of that item.");
+        AssertEx.True(!string.Equals(before[0].InputHash, after[0].InputHash, StringComparison.Ordinal));
+        AssertEx.Equal(before[1].InputHash, after[1].InputHash, "The items the edit did not touch keep their identity.");
+        AssertEx.True(!string.Equals(project.TaskItemSetHash, updated.TaskItemSetHash, StringComparison.Ordinal),
+            "A different question is a different question set.");
+
+        // An unchanged core task must not churn a revision: an edit of the name alone is not an edit of the question.
+        var renamed = await store.UpdateProjectAsync(project.Id, updated.Version, edited with { Name = "Renamed" }).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, (await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false))[0].Revision);
+        AssertEx.Equal(AssertEx.NotNull(updated.TaskItemSetHash), AssertEx.NotNull(renamed.TaskItemSetHash));
+    }
+
     [Test]
     public async Task TaskItemWrites_RejectAnEmptyPromptAndAnUnknownKind()
     {

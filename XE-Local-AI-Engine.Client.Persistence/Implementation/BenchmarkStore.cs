@@ -182,9 +182,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
 
         var now = Now();
         item.PromptJson = input.PromptJson.ToArray();
-        item.ReferenceAnswerJson = input.ReferenceAnswerJson?.ToArray();
-        item.VerifierConfigJson = input.VerifierConfigJson?.ToArray();
-        item.GeneratorConfigJson = input.GeneratorConfigJson?.ToArray();
+        item.ReferenceAnswerJson = OptionalPayload(input.ReferenceAnswerJson);
+        item.VerifierConfigJson = OptionalPayload(input.VerifierConfigJson);
+        item.GeneratorConfigJson = OptionalPayload(input.GeneratorConfigJson);
         item.CountsTowardScore = input.CountsTowardScore;
 
         // The revision is inside the input hash, so a payload that is edited BACK to its previous bytes still reads as
@@ -268,6 +268,33 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     }
 
     /// <summary>
+    ///     Keeps the project's core task and its FIRST item asking the same question. The project edit is refused once
+    ///     the project has runs, so this is only ever reached while there is no history to unrank — which is why it
+    ///     bumps the item's revision and the set hash without resetting a cohort that cannot exist yet.
+    /// </summary>
+    private async Task SyncFirstItemPromptAsync(BenchmarkProject project, ReadOnlyMemory<byte> coreTaskJson, long now, CancellationToken cancellationToken)
+    {
+        if (project.CoreTaskJson.AsSpan().SequenceEqual(coreTaskJson.Span))
+        {
+            return;
+        }
+
+        var items = await TaskItemsAsync(project.Id, tracking: true, cancellationToken).ConfigureAwait(false);
+        var first = items.Where(static entity => BenchmarkTaskItemKinds.IsLeaf(entity.Kind)).MinBy(static entity => entity.Index);
+        if (first is null)
+        {
+            return;
+        }
+
+        first.PromptJson = coreTaskJson.ToArray();
+        first.Revision = checked(first.Revision + 1);
+        first.InputHash = BenchmarkTaskItemHashing.ComputeInputHash(first);
+        first.Version++;
+        first.UpdatedAtUtc = now;
+        project.TaskItemSetHash = BenchmarkTaskItemHashing.ComputeSetHash(items);
+    }
+
+    /// <summary>
     ///     Recomputes the project's item-set hash over <paramref name="items" /> and, when it MOVED, bumps the project
     ///     version and resets the rank cohort — the same reset a judge-policy activation performs, and for the same
     ///     reason: the project score is a mean over the item set, so a different set is a different score.
@@ -336,9 +363,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             Revision = 1,
             CountsTowardScore = input.CountsTowardScore,
             PromptJson = input.PromptJson.ToArray(),
-            ReferenceAnswerJson = input.ReferenceAnswerJson?.ToArray(),
-            VerifierConfigJson = input.VerifierConfigJson?.ToArray(),
-            GeneratorConfigJson = input.GeneratorConfigJson?.ToArray(),
+            ReferenceAnswerJson = OptionalPayload(input.ReferenceAnswerJson),
+            VerifierConfigJson = OptionalPayload(input.VerifierConfigJson),
+            GeneratorConfigJson = OptionalPayload(input.GeneratorConfigJson),
             Version = 1,
             CreatedAtUtc = now,
             UpdatedAtUtc = now
@@ -346,6 +373,14 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         item.InputHash = BenchmarkTaskItemHashing.ComputeInputHash(item);
         return item;
     }
+
+    /// <summary>
+    ///     An absent optional payload is NULL, never an empty blob. The two are indistinguishable to a reader once
+    ///     encrypted, and "this item has no reference answer" is a different fact from "its reference answer is empty"
+    ///     — the second one participates in the input hash and would make an untouched item look edited.
+    /// </summary>
+    private static byte[]? OptionalPayload(ReadOnlyMemory<byte>? payload) =>
+        payload is { IsEmpty: false } value ? value.ToArray() : null;
 
     private static void ValidateTaskItem(BenchmarkTaskItemInput input)
     {
@@ -398,6 +433,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         }
 
         var now = Now();
+        await SyncFirstItemPromptAsync(project, input.CoreTaskJson, now, cancellationToken).ConfigureAwait(false);
         project.Name = input.Name.Trim();
         project.CoreTaskJson = input.CoreTaskJson.ToArray();
         project.ContextTokens = input.ContextTokens;
