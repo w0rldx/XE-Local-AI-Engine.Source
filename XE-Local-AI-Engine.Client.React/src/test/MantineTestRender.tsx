@@ -31,6 +31,14 @@ export function installJsdomEnvironmentMocks(): void {
 			disconnect = vi.fn();
 		},
 	});
+	// jsdom has no layout engine, so Element.prototype.scrollIntoView does not exist. Mantine's combobox calls it on a
+	// TIMER after the dropdown opens, which lands after the test that opened it has finished — an uncaught exception
+	// rather than a failed assertion, and one that fails the run without naming a broken expectation.
+	Object.defineProperty(Element.prototype, "scrollIntoView", {
+		writable: true,
+		configurable: true,
+		value: vi.fn(),
+	});
 	Object.defineProperty(document, "fonts", {
 		writable: true,
 		configurable: true,
