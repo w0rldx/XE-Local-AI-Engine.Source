@@ -519,6 +519,13 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         project.CurrentJudgePolicyRevisionId = null;
         await SaveAsync(cancellationToken).ConfigureAwait(false);
 
+        // The guard above refuses a project that still holds runs, so every run-scoped child (work items, judge and
+        // fidelity attempts, comparisons) went with its run. What is scoped to the PROJECT did not: task items hold
+        // encrypted prompts, reference answers and verifier overrides and outlive every run, and a pairwise fit is
+        // only DEACTIVATED when the runs it was fitted over are deleted. Both are children of the project row, so
+        // both go before it.
+        await _dbContext.BenchmarkTaskItems.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        await _dbContext.BenchmarkPairwiseFits.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         await _dbContext.BenchmarkJudgePolicyRevisions.Where(entity => entity.ProjectId == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
         _dbContext.ChangeTracker.Clear();
         _ = await _dbContext.BenchmarkProjects.Where(entity => entity.Id == projectId).ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);

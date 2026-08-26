@@ -319,6 +319,53 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
                           .ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     Foreign keys are OFF on this database, so the ordered delete in <c>DeleteProjectAsync</c> IS the referential
+    ///     integrity: a table left out of it does not error, its rows simply outlive the project for good. Task items
+    ///     carry the encrypted prompts, reference answers and verifier overrides, and a pairwise fit is only
+    ///     DEACTIVATED when the runs it was fitted over go — so both would survive a project nobody can reach any more.
+    /// </summary>
+    [Test]
+    public async Task DeleteProject_LeavesNoProjectScopedRowsBehind()
+    {
+        var (context, store) = await CreateStoreAsync("delete-project-orphans.sqlite").ConfigureAwait(false);
+        await using var scope = context;
+        var project = await store.CreateProjectAsync(NewProject(),
+                                     new BenchmarkJudgePolicyChangeInput(PolicyBytes, PolicyHash),
+                                     [Item("first"), Item("second")])
+                                 .ConfigureAwait(false);
+        _ = context.BenchmarkPairwiseFits.Add(new BenchmarkPairwiseFit
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = project.Id,
+            PolicyRevisionId = project.CurrentJudgePolicyRevisionId!.Value,
+            CohortGeneration = 1,
+            FitKey = "v1:" + new string('a', count: 64),
+            JudgeExecutionKey = "v1:" + new string('b', count: 64),
+            ComparisonSetVersion = 1,
+            FittedSetJson = "[]",
+            ScoresJson = "[]",
+            Iterations = 1,
+            BootstrapReplicates = 1,
+            IsActive = false,
+            CreatedAtUtc = 1,
+            Version = 1
+        });
+        _ = await context.SaveChangesAsync().ConfigureAwait(false);
+        context.ChangeTracker.Clear();
+
+        await store.DeleteProjectAsync(project.Id, project.Version).ConfigureAwait(false);
+
+        context.ChangeTracker.Clear();
+        AssertEx.Equal(expected: 0, await context.BenchmarkTaskItems.CountAsync(entity => entity.ProjectId == project.Id).ConfigureAwait(false),
+            "The items hold encrypted prompts and expected answers; a deleted project must not leave them behind.");
+        AssertEx.Equal(expected: 0, await context.BenchmarkPairwiseFits.CountAsync(entity => entity.ProjectId == project.Id).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0, await context.BenchmarkJudgePolicyRevisions.CountAsync(entity => entity.ProjectId == project.Id).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0, await context.BenchmarkComparisons.CountAsync(entity => entity.ProjectId == project.Id).ConfigureAwait(false));
+        AssertEx.Equal(expected: 0, await context.BenchmarkRuns.CountAsync(entity => entity.ProjectId == project.Id).ConfigureAwait(false));
+        AssertEx.Null(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
+    }
+
     private static BenchmarkTaskItemInput Item(string prompt) =>
         new(Encoding.UTF8.GetBytes(prompt));
 
