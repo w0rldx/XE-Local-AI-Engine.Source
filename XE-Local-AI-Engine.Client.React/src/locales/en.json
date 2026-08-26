@@ -4601,6 +4601,7 @@
 				"b": "B",
 				"hint": "Pick two different combinations to compare them over the items they share.",
 				"loading": "Comparing…",
+				"failed": "Could not compare these two combinations.",
 				"insufficient": "These two share fewer than three scored items answered rankably, which cannot support an interval. That is a gap in the measurement, not a tie.",
 				"value": "A − B = {{delta}} [{{low}}, {{high}}]",
 				"separated": "separated",

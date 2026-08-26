@@ -10,6 +10,7 @@ vi.mock("@/core/api/generated", async (importOriginal) => ({
 	compareBenchmarkCells: compareMock,
 }));
 
+import { ApiError } from "@/core/api/errors/ApiError";
 import { BenchmarkPairedDelta } from "@/features/benchmarks/components/BenchmarkPairedDelta";
 import { benchmarkCellFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
 
@@ -97,6 +98,36 @@ describe("BenchmarkPairedDelta", () => {
 		await waitFor(() =>
 			expect(screen.getByTestId("benchmark-paired-insufficient").textContent).toContain("not a tie"),
 		);
+	});
+
+	// A failed request reports NOTHING about how many items the two share. Reading its empty result as "fewer than three
+	// shared items" states a finding about the measurement that the node never made, and buries the only actionable
+	// thing the operator has.
+	it("shows the node's own failure instead of calling it too few shared items", async () => {
+		compareMock.mockRejectedValue(
+			new ApiError(500, { type: "", title: "Internal Server Error", status: 500, detail: "The comparison cache is rebuilding." }),
+		);
+		renderWithProviders(<BenchmarkPairedDelta projectId="project-1" cells={cells} />);
+
+		pick("owner/Repo:Q4_K_M · q8_0", "owner/Repo:Q8_0 · q8_0");
+
+		const error = await screen.findByTestId("benchmark-paired-error");
+		expect(error.textContent).toContain("The comparison cache is rebuilding.");
+		expect(error.textContent).toContain("500");
+		expect(screen.queryByTestId("benchmark-paired-insufficient")).toBeNull();
+	});
+
+	it("retries the comparison on demand", async () => {
+		compareMock.mockRejectedValueOnce(new ApiError(503, { type: "", title: "Unavailable", status: 503, detail: "Busy." }));
+		renderWithProviders(<BenchmarkPairedDelta projectId="project-1" cells={cells} />);
+
+		pick("owner/Repo:Q4_K_M · q8_0", "owner/Repo:Q8_0 · q8_0");
+		compareMock.mockResolvedValue(
+			answer({ aCellKey: "cell:a", bCellKey: "cell:b", sharedItemCount: 5, delta: 6.2, ciLow: 1.4, ciHigh: 13.9, separated: true }),
+		);
+		fireEvent.click(await screen.findByTestId("benchmark-paired-retry"));
+
+		expect((await screen.findByTestId("benchmark-paired-value")).textContent).toBe("A − B = +6.2 [+1.4, +13.9]");
 	});
 
 	it("asks the node for exactly the two cells that were picked", async () => {

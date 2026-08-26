@@ -1,7 +1,10 @@
-import { Group, Select, Stack, Text } from "@mantine/core";
+import { Alert, Button, Group, Select, Stack, Text } from "@mantine/core";
+import { IconAlertTriangle } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ApiError } from "@/core/api/errors/ApiError";
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
 import { benchmarkCellLabel, benchmarkPairedDeltaFor, formatBenchmarkDelta } from "@/features/benchmarks/models/BenchmarkCells";
@@ -21,6 +24,10 @@ interface BenchmarkPairedDeltaProps {
  * The two readings it can produce are equally important. `separated` is the node's own flag and is rendered, never
  * re-derived from the bounds; and a pair the node reports NO entry for shares fewer than three items, which is
  * "this suite cannot answer that", not a delta of zero.
+ *
+ * A FAILED request is neither of those. It also produces no entry, so it has to be caught before the absence is read:
+ * telling an operator their two combinations share too few items when the node in fact answered 500 is a wrong finding
+ * about the measurement, and it hides the one thing they could act on.
  */
 export function BenchmarkPairedDelta({ projectId, cells }: BenchmarkPairedDeltaProps) {
 	const { t } = useTranslation();
@@ -61,15 +68,31 @@ export function BenchmarkPairedDelta({ projectId, cells }: BenchmarkPairedDeltaP
 				<Text size="xs" c="dimmed" data-testid="benchmark-paired-hint">
 					{t("pages.benchmarks.paired.hint", "Pick two different combinations to compare them over the items they share.")}
 				</Text>
+			) : comparison.isError ? (
+				// Checked BEFORE the absent entry below: a request that failed reports nothing about how many items the
+				// two share, and the node's own sentence plus its status is what makes the failure actionable.
+				<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-paired-error">
+					<Stack gap="sm" align="flex-start">
+						<Text size="sm">
+							{apiErrorMessage(comparison.error, t("pages.benchmarks.paired.failed", "Could not compare these two combinations."))}
+							{comparison.error instanceof ApiError ? ` (${comparison.error.statusCode})` : ""}
+						</Text>
+						<Button size="xs" variant="light" onClick={() => comparison.refetch()} data-testid="benchmark-paired-retry">
+							{t("common.retry", "Retry")}
+						</Button>
+					</Stack>
+				</Alert>
+			) : comparison.isLoading ? (
+				<Text size="sm" c="dimmed" data-testid="benchmark-paired-loading">
+					{t("pages.benchmarks.paired.loading", "Comparing…")}
+				</Text>
 			) : delta === null ? (
 				// The node omits the entry rather than sending an interval three points cannot support.
 				<Text size="sm" c="dimmed" data-testid="benchmark-paired-insufficient">
-					{comparison.isLoading
-						? t("pages.benchmarks.paired.loading", "Comparing…")
-						: t(
-								"pages.benchmarks.paired.insufficient",
-								"These two share fewer than three scored items answered rankably, which cannot support an interval. That is a gap in the measurement, not a tie.",
-							)}
+					{t(
+						"pages.benchmarks.paired.insufficient",
+						"These two share fewer than three scored items answered rankably, which cannot support an interval. That is a gap in the measurement, not a tie.",
+					)}
 				</Text>
 			) : (
 				<Stack gap={4}>
