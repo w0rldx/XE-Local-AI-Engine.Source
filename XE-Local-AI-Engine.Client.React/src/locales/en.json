@@ -4459,7 +4459,8 @@
 					"constraintWords": "The word bounds are inconsistent.",
 					"constraintContains": "A contains entry cannot be empty.",
 					"constraintFormat": "That format is not supported."
-				}
+				},
+				"kindLocked": "Decided by: {{kind}} — set by the judge policy."
 			},
 			"pairwise": {
 				"title": "Pairwise verdicts",
@@ -4486,6 +4487,67 @@
 				"estimateCapped": "{{capped}} runs are left out — the cohort caps at {{maximum}}. They rank as pairwise-cap until removed.",
 				"truncated": "truncated",
 				"truncatedHint": "One of the two answers was cut off by the token budget, so this verdict compared a fragment."
+			},
+			"items": {
+				"section": "Task items",
+				"count": "{{count}} of {{max}} items — a model's project score is the mean over them",
+				"add": "Add item",
+				"historyWarning": "This project has runs. Editing an item unranks every measurement of it (item-revised); adding or deleting one unranks every combination measured under the old set (item-set-revised). Reordering changes nothing — the set is identified by its items, not their positions.",
+				"caseCount": "{{count}} probe cases",
+				"notScored": "own axis",
+				"hasOverride": "verifier override",
+				"revision": "r{{revision}}",
+				"showCases": "Show the generated probe cases",
+				"moveUp": "Move up",
+				"moveDown": "Move down",
+				"newTitle": "New task item",
+				"editTitle": "Task item {{index}}",
+				"niahKind": "Long-context probe (NIAH)",
+				"reviseWarning": "Saving bumps this item to r{{revision}}. Every run that answered r{{current}} of it is excluded as item-revised — the answers were given to a different question.",
+				"prompt": "Prompt",
+				"niahPrompt": "Probe description",
+				"niahPromptHelp": "Shown in the item list. The cases carry their own generated prompts.",
+				"niahContextTokens": "Probe lengths (tokens)",
+				"niahContextTokensHelp": "Comma separated. Each must fit the project's {{context}}-token window.",
+				"niahDepths": "Needle depths (%)",
+				"niahDepthsHelp": "Comma separated, 0..100 — where in the haystack the needle is hidden.",
+				"niahNeedle": "Needle template",
+				"niahNeedleHelp": "Must contain {city} and {code}.",
+				"niahQuestion": "Question template",
+				"niahQuestionHelp": "Must contain {city}.",
+				"niahCriterion": "Criterion to override",
+				"niahCriterionHelp": "An exact-match criterion of the judge policy. Each case supplies its own passcode as that criterion's expected answer.",
+				"niahSeed": "Seed",
+				"niahSummary": "Expands into {{count}} cases — {{count}} runs per combination, and {{count}} against the item cap.",
+				"niahIssues": {
+					"contextTokensRequired": "Name at least one probe length.",
+					"depthsRequired": "Name at least one needle depth.",
+					"depthRange": "A needle depth is a percentage between 0 and 100.",
+					"contextTooSmall": "A probe under 512 tokens is too short to hide anything, and its depths stop being distinguishable.",
+					"contextTooLarge": "A probe longer than the project's {{context}}-token window would be truncated to it, and a truncated probe measures the window rather than the model.",
+					"caseCap": "One probe expands into at most 20 cases.",
+					"itemCap": "That expansion would take the project past {{max}} task items.",
+					"needleTemplate": "The needle template must contain both {city} and {code} — the passcode IS what the model has to find.",
+					"questionTemplate": "The question template must contain {city}, so the question names what it is asking about."
+				},
+				"referenceAnswer": "Reference answer (optional)",
+				"referenceAnswerHelp": "Overrides the judge policy's reference answer for this item only.",
+				"countsTowardScore": "Counts toward the project score",
+				"countsTowardScoreHelp": "Off = measured and reported on its own axis, never averaged into the rubric mean. A long-context probe starts off, because recall is a capability rather than answer quality.",
+				"overrides": "Verifier overrides",
+				"overridesHelp": "Give one criterion a different expected answer for this item. Left empty, the judge policy's own configuration is used.",
+				"deleteTitle": "Delete this task item?",
+				"deleteConfirm": "Deleting an item changes what the project measures. Every combination that was already measured is excluded as item-set-revised — it was scored against a suite this project no longer has, and a partial one never becomes complete by losing the question it missed.",
+				"deleteCases": "Its {{count}} generated probe cases are deleted with it.",
+				"validation": {
+					"prompt": "A prompt is required."
+				},
+				"errors": {
+					"create": "Could not add this task item.",
+					"update": "Could not save this task item.",
+					"delete": "Could not delete this task item.",
+					"reorder": "Could not reorder the task items."
+				}
 			}
 		},
 		"customTools": {

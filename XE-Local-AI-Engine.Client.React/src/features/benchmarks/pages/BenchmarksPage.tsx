@@ -48,6 +48,7 @@ import { BenchmarkProjectForm } from "@/features/benchmarks/components/Benchmark
 import { BenchmarkRepeatModePicker } from "@/features/benchmarks/components/BenchmarkRepeatModePicker";
 import { BenchmarkRunLivePane } from "@/features/benchmarks/components/BenchmarkRunLivePane";
 import { BenchmarkRunsTable } from "@/features/benchmarks/components/BenchmarkRunsTable";
+import { BenchmarkTaskItemEditor } from "@/features/benchmarks/components/BenchmarkTaskItemEditor";
 import { benchmarkJudgeFamilyOverlap } from "@/features/benchmarks/models/BenchmarkJudgeFamily";
 import type {
 	BenchmarkKvCacheType,
@@ -64,6 +65,7 @@ import {
 	toggleBenchmarkRunSelection,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { hasActiveJudgeAttempt, succeededRunCount } from "@/features/benchmarks/models/BenchmarkRanking";
+import { isVerifiableCriterionKind, toBenchmarkCriterionKind } from "@/features/benchmarks/models/BenchmarkVerifier";
 import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarks";
 import {
 	useBenchmarkComparisons,
@@ -299,7 +301,13 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 		setSaveError(null);
 		// Switching a project INTO pairwise commits its queue to a quadratic number of judge calls, so it is confirmed
 		// against the node's own estimate rather than saved on the click that selected the mode.
-		if (editorMode === "edit" && detail && draft.judgeEnabled && draft.judgeMode === "pairwise" && detail.judge.mode !== "pairwise") {
+		if (
+			editorMode === "edit" &&
+			detail &&
+			draft.judgeEnabled &&
+			draft.judgeMode === "pairwise" &&
+			detail.judge.mode !== "pairwise"
+		) {
 			setPendingProjectDraft(draft);
 			setConfirmMode("pairwise");
 			return;
@@ -548,11 +556,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 									</Alert>
 								) : null}
 								{detail.judge.enabled && detail.judge.promptVersionOutdated ? (
-									<Alert
-										color="yellow"
-										icon={<IconAlertTriangle size={16} />}
-										data-testid="benchmark-judge-prompt-outdated"
-									>
+									<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-judge-prompt-outdated">
 										<Group justify="space-between" align="center" wrap="nowrap">
 											<Text size="sm">
 												{t(
@@ -588,6 +592,16 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										)}
 									</Alert>
 								) : null}
+								<BenchmarkTaskItemEditor
+									projectId={detail.id}
+									projectContextTokens={detail.contextTokens}
+									hasRuns={runs.length > 0}
+									// Only a verifiable criterion has configuration to override; an `llm` one is decided by reading the
+									// rubric, and an item cannot hand the judge a different opinion of it.
+									criteria={(detail.judge.rubric?.criteria ?? []).filter((criterion) =>
+										isVerifiableCriterionKind(toBenchmarkCriterionKind(criterion.kind)),
+									)}
+								/>
 								<Group grow={true} align="flex-end">
 									<Select
 										label={t("pages.benchmarks.run.model", "Primary model")}
@@ -709,9 +723,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 							aria-expanded={chartsOpen}
 							data-testid="benchmark-charts-toggle"
 						>
-							{chartsOpen
-								? t("pages.benchmarks.charts.hide", "Hide charts")
-								: t("pages.benchmarks.charts.show", "Show charts")}
+							{chartsOpen ? t("pages.benchmarks.charts.hide", "Hide charts") : t("pages.benchmarks.charts.show", "Show charts")}
 						</Button>
 					</Group>
 					{chartsOpen ? (
@@ -806,16 +818,16 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 									"Every eligible run is judged against every other, in both orders. The comparisons are queued at once and the ranking only appears once the fit completes.",
 								)
 							: confirmMode === "judgePolicy"
-							? t(
-									"pages.benchmarks.project.rejudgeConfirmPolicy",
-									"Changing the judge re-scores this project. All {{count}} succeeded runs will be re-judged and the ranking is rebuilt from the new cohort.",
-									{ count: affectedRunCount },
-								)
-							: t(
-									"pages.benchmarks.project.rejudgeConfirmAll",
-									"All {{count}} succeeded runs will be re-judged under the current policy, and the ranked cohort moves to the current judge runtime.",
-									{ count: affectedRunCount },
-								)}
+								? t(
+										"pages.benchmarks.project.rejudgeConfirmPolicy",
+										"Changing the judge re-scores this project. All {{count}} succeeded runs will be re-judged and the ranking is rebuilt from the new cohort.",
+										{ count: affectedRunCount },
+									)
+								: t(
+										"pages.benchmarks.project.rejudgeConfirmAll",
+										"All {{count}} succeeded runs will be re-judged under the current policy, and the ranked cohort moves to the current judge runtime.",
+										{ count: affectedRunCount },
+									)}
 					</Text>
 					<Group justify="flex-end">
 						<Button variant="default" onClick={() => setConfirmMode(null)}>
@@ -824,31 +836,31 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						<Button
 							loading={updateJudge.isPending || rejudgeProject.isPending}
 							onClick={() => {
-							if (confirmMode === "pairwise") {
-								const draft = pendingProjectDraft;
-								setConfirmMode(null);
-								setPendingProjectDraft(null);
-								if (draft && detail) {
-									saveJudgePolicy(
-										{
-											modelName: draft.judgeModelName ?? "",
-											contextTokens: draft.judgeContextTokens ?? 0,
-											mode: draft.judgeMode,
-											rubric: draft.rubric,
-											referenceAnswer: draft.referenceAnswer,
-										},
-										true,
-									);
+								if (confirmMode === "pairwise") {
+									const draft = pendingProjectDraft;
+									setConfirmMode(null);
+									setPendingProjectDraft(null);
+									if (draft && detail) {
+										saveJudgePolicy(
+											{
+												modelName: draft.judgeModelName ?? "",
+												contextTokens: draft.judgeContextTokens ?? 0,
+												mode: draft.judgeMode,
+												rubric: draft.rubric,
+												referenceAnswer: draft.referenceAnswer,
+											},
+											true,
+										);
+									}
+									return;
 								}
-								return;
-							}
-							confirmMode === "judgePolicy" ? saveJudgePolicy(pendingPolicy, true) : rejudgeAll();
-						}}
+								confirmMode === "judgePolicy" ? saveJudgePolicy(pendingPolicy, true) : rejudgeAll();
+							}}
 							data-testid="benchmark-rejudge-confirm-accept"
 						>
 							{confirmMode === "pairwise"
-							? t("pages.benchmarks.project.pairwiseConfirmAccept", "Switch and queue")
-							: t("pages.benchmarks.project.rejudgeConfirmAccept", "Re-judge")}
+								? t("pages.benchmarks.project.pairwiseConfirmAccept", "Switch and queue")
+								: t("pages.benchmarks.project.rejudgeConfirmAccept", "Re-judge")}
 						</Button>
 					</Group>
 				</Stack>

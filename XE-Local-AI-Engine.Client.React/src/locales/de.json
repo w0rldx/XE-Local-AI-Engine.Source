@@ -4459,7 +4459,8 @@
 					"constraintWords": "Die Wortgrenzen widersprechen sich.",
 					"constraintContains": "Ein Eintrag darf nicht leer sein.",
 					"constraintFormat": "Dieses Format wird nicht unterstützt."
-				}
+				},
+				"kindLocked": "Entschieden durch: {{kind}} — von der Judge-Richtlinie festgelegt."
 			},
 			"pairwise": {
 				"title": "Paarweise Urteile",
@@ -4486,6 +4487,67 @@
 				"estimateCapped": "{{capped}} Läufe bleiben außen vor — die Kohorte ist auf {{maximum}} begrenzt. Sie gelten als pairwise-cap, bis sie entfernt werden.",
 				"truncated": "abgeschnitten",
 				"truncatedHint": "Eine der beiden Antworten wurde vom Token-Budget abgeschnitten; dieses Urteil verglich also ein Fragment."
+			},
+			"items": {
+				"section": "Aufgaben",
+				"count": "{{count}} von {{max}} Aufgaben — die Projektbewertung eines Modells ist der Mittelwert darüber",
+				"add": "Aufgabe hinzufügen",
+				"historyWarning": "Dieses Projekt hat Läufe. Eine Aufgabe zu bearbeiten nimmt jeder Messung davon die Wertung (item-revised); eine hinzuzufügen oder zu löschen nimmt jeder Kombination die Wertung, die unter der alten Sammlung gemessen wurde (item-set-revised). Umsortieren ändert nichts — die Sammlung wird über ihre Aufgaben identifiziert, nicht über deren Reihenfolge.",
+				"caseCount": "{{count}} Sondenfälle",
+				"notScored": "eigene Achse",
+				"hasOverride": "Prüfer-Override",
+				"revision": "r{{revision}}",
+				"showCases": "Erzeugte Sondenfälle anzeigen",
+				"moveUp": "Nach oben",
+				"moveDown": "Nach unten",
+				"newTitle": "Neue Aufgabe",
+				"editTitle": "Aufgabe {{index}}",
+				"niahKind": "Long-Context-Sonde (NIAH)",
+				"reviseWarning": "Beim Speichern steigt diese Aufgabe auf r{{revision}}. Jeder Lauf, der r{{current}} beantwortet hat, wird als item-revised ausgeschlossen — die Antworten galten einer anderen Frage.",
+				"prompt": "Prompt",
+				"niahPrompt": "Beschreibung der Sonde",
+				"niahPromptHelp": "Wird in der Aufgabenliste angezeigt. Die Fälle tragen ihre eigenen erzeugten Prompts.",
+				"niahContextTokens": "Sondenlängen (Tokens)",
+				"niahContextTokensHelp": "Kommagetrennt. Jede muss in das {{context}}-Token-Fenster des Projekts passen.",
+				"niahDepths": "Nadeltiefen (%)",
+				"niahDepthsHelp": "Kommagetrennt, 0..100 — wo im Heuhaufen die Nadel liegt.",
+				"niahNeedle": "Nadel-Vorlage",
+				"niahNeedleHelp": "Muss {city} und {code} enthalten.",
+				"niahQuestion": "Fragen-Vorlage",
+				"niahQuestionHelp": "Muss {city} enthalten.",
+				"niahCriterion": "Zu überschreibendes Kriterium",
+				"niahCriterionHelp": "Ein Exakt-Kriterium der Judge-Richtlinie. Jeder Fall liefert seinen eigenen Passcode als dessen erwartete Antwort.",
+				"niahSeed": "Seed",
+				"niahSummary": "Wird zu {{count}} Fällen — {{count}} Läufe je Kombination und {{count}} gegen die Aufgabengrenze.",
+				"niahIssues": {
+					"contextTokensRequired": "Nennen Sie mindestens eine Sondenlänge.",
+					"depthsRequired": "Nennen Sie mindestens eine Nadeltiefe.",
+					"depthRange": "Eine Nadeltiefe ist ein Prozentwert zwischen 0 und 100.",
+					"contextTooSmall": "Eine Sonde unter 512 Tokens ist zu kurz, um etwas zu verstecken, und ihre Tiefen sind nicht mehr unterscheidbar.",
+					"contextTooLarge": "Eine Sonde, die länger ist als das {{context}}-Token-Fenster des Projekts, würde darauf abgeschnitten — und eine abgeschnittene Sonde misst das Fenster statt des Modells.",
+					"caseCap": "Eine Sonde wird zu höchstens 20 Fällen.",
+					"itemCap": "Diese Erweiterung brächte das Projekt über {{max}} Aufgaben.",
+					"needleTemplate": "Die Nadel-Vorlage muss {city} UND {code} enthalten — der Passcode ist genau das, was das Modell finden soll.",
+					"questionTemplate": "Die Fragen-Vorlage muss {city} enthalten, damit die Frage benennt, wonach sie fragt."
+				},
+				"referenceAnswer": "Referenzantwort (optional)",
+				"referenceAnswerHelp": "Überschreibt die Referenzantwort der Judge-Richtlinie nur für diese Aufgabe.",
+				"countsTowardScore": "Zählt zur Projektbewertung",
+				"countsTowardScoreHelp": "Aus = wird gemessen und auf einer eigenen Achse berichtet, nie in den Rubrik-Mittelwert gemittelt. Eine Long-Context-Sonde startet aus, weil Recall eine Fähigkeit ist und keine Antwortqualität.",
+				"overrides": "Prüfer-Overrides",
+				"overridesHelp": "Geben Sie einem Kriterium für diese Aufgabe eine andere erwartete Antwort. Leer gelassen gilt die Konfiguration der Judge-Richtlinie.",
+				"deleteTitle": "Diese Aufgabe löschen?",
+				"deleteConfirm": "Eine Aufgabe zu löschen ändert, was das Projekt misst. Jede bereits gemessene Kombination wird als item-set-revised ausgeschlossen — sie wurde gegen eine Sammlung bewertet, die dieses Projekt nicht mehr hat, und eine unvollständige wird nicht dadurch vollständig, dass die verfehlte Frage verschwindet.",
+				"deleteCases": "Ihre {{count}} erzeugten Sondenfälle werden mitgelöscht.",
+				"validation": {
+					"prompt": "Ein Prompt ist erforderlich."
+				},
+				"errors": {
+					"create": "Diese Aufgabe konnte nicht hinzugefügt werden.",
+					"update": "Diese Aufgabe konnte nicht gespeichert werden.",
+					"delete": "Diese Aufgabe konnte nicht gelöscht werden.",
+					"reorder": "Die Aufgaben konnten nicht umsortiert werden."
+				}
 			}
 		},
 		"customTools": {

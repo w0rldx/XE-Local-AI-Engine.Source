@@ -101,28 +101,45 @@ export const benchmarkTaskItemChildren = (items: readonly BenchmarkTaskItem[], p
 	items.filter((item) => item.parentItemId === parentId).sort((left, right) => left.index - right.index);
 
 /**
- * A NIAH generator's parameters, as plan §7.6 specifies them. Held loosely on purpose: the node owns the schema, and
- * an item written by a newer node must still open in this editor rather than lose members it does not know.
+ * A NIAH generator's parameters, mirroring `BenchmarkNiahConfigV1`. Every default here is the node's own, so an
+ * omitted member and the value shown in the form mean the same thing.
  */
 export interface BenchmarkNiahGeneratorConfig {
 	contextTokens: number[];
 	needleDepthPercent: number[];
 	needleTemplate: string;
 	questionTemplate: string;
-	seed: number | null;
+	/**
+	 * Which rubric criterion each generated case overrides with its own passcode. It must name an `exact` criterion of
+	 * the judge policy: the case supplies the answer, the policy supplies the kind.
+	 */
+	criterionId: string;
+	/** Mixed into every case's derivation, so two projects can probe the same sizes over different text. */
+	seed: number;
+	/**
+	 * Whether the generated CASES enter the ranked mean. False by default: recall is a capability, not quality, and
+	 * averaging a 0-or-10 needle score into a rubric mean says a model that missed the needle wrote a worse answer.
+	 */
+	countsTowardScore: boolean;
 }
+
+/** The node's own generator bounds (`BenchmarkNiahGenerator`), re-checked here so a form error never costs a request. */
+export const benchmarkNiahLimits = { minimumContextTokens: 512, maximumCases: 20 } as const;
 
 export const defaultNiahGeneratorConfig: BenchmarkNiahGeneratorConfig = {
 	contextTokens: [8192],
 	needleDepthPercent: [10, 50, 90],
 	needleTemplate: "The secret passcode for {city} is {code}.",
 	questionTemplate: "What is the secret passcode for {city}?",
+	criterionId: "recall",
 	seed: 0,
+	countsTowardScore: false,
 };
 
 const numberList = (value: unknown): number[] =>
 	Array.isArray(value) ? value.filter((entry): entry is number => typeof entry === "number" && Number.isFinite(entry)) : [];
-const stringOr = (value: unknown, fallback: string): string => (typeof value === "string" ? value : fallback);
+const stringOr = (value: unknown, fallback: string): string =>
+	typeof value === "string" && value.trim().length > 0 ? value : fallback;
 
 export function parseNiahGeneratorConfig(config: BenchmarkVerifierConfig | null): BenchmarkNiahGeneratorConfig {
 	if (config === null) {
@@ -133,23 +150,49 @@ export function parseNiahGeneratorConfig(config: BenchmarkVerifierConfig | null)
 		needleDepthPercent: numberList(config["needleDepthPercent"]),
 		needleTemplate: stringOr(config["needleTemplate"], defaultNiahGeneratorConfig.needleTemplate),
 		questionTemplate: stringOr(config["questionTemplate"], defaultNiahGeneratorConfig.questionTemplate),
-		seed: typeof config["seed"] === "number" ? config["seed"] : null,
+		criterionId: stringOr(config["criterionId"], defaultNiahGeneratorConfig.criterionId),
+		seed: typeof config["seed"] === "number" ? config["seed"] : defaultNiahGeneratorConfig.seed,
+		countsTowardScore: config["countsTowardScore"] === true,
 	};
 }
+
+/**
+ * The node stores the axes distinct and ordered, because the generator config is inside the item's input hash — two
+ * operators who typed the same set in different orders must get the same cases at the same indices.
+ */
+export const serializeNiahGeneratorConfig = (config: BenchmarkNiahGeneratorConfig): BenchmarkVerifierConfig => ({
+	contextTokens: [...new Set(config.contextTokens)].sort((left, right) => left - right),
+	needleDepthPercent: [...new Set(config.needleDepthPercent)].sort((left, right) => left - right),
+	needleTemplate: config.needleTemplate,
+	questionTemplate: config.questionTemplate,
+	criterionId: config.criterionId,
+	seed: config.seed,
+	countsTowardScore: config.countsTowardScore,
+});
 
 /**
  * How many LEAF items this generator becomes — one per (context length x depth) pair. The operator sees this before
  * saving because six cases is six runs per cell and six against the item cap, not one.
  */
 export const niahCaseCount = (config: BenchmarkNiahGeneratorConfig): number =>
-	config.contextTokens.length * config.needleDepthPercent.length;
+	new Set(config.contextTokens).size * new Set(config.needleDepthPercent).size;
 
 /** Why the node would refuse this generator, as an i18n key suffix, or null. */
-export type BenchmarkNiahIssue = "contextTokensRequired" | "depthsRequired" | "depthRange" | "contextTooLarge" | "caseCap";
+export type BenchmarkNiahIssue =
+	| "contextTokensRequired"
+	| "depthsRequired"
+	| "depthRange"
+	| "contextTooSmall"
+	| "contextTooLarge"
+	| "caseCap"
+	| "itemCap"
+	| "needleTemplate"
+	| "questionTemplate";
 
 /**
  * The node refuses a probe longer than the project's frozen window at expansion, naming both numbers — a NIAH case
- * silently truncated to the window measures nothing. It is re-checked here so the operator learns it while editing.
+ * silently truncated to the window measures the window, not the model. It is re-checked here so the operator learns
+ * it while editing rather than an hour into a batch.
  */
 export function niahGeneratorIssue(
 	config: BenchmarkNiahGeneratorConfig,
@@ -165,10 +208,36 @@ export function niahGeneratorIssue(
 	if (config.needleDepthPercent.some((depth) => depth < 0 || depth > 100)) {
 		return "depthRange";
 	}
+	if (config.contextTokens.some((tokens) => tokens < benchmarkNiahLimits.minimumContextTokens)) {
+		return "contextTooSmall";
+	}
 	if (config.contextTokens.some((tokens) => tokens > projectContextTokens)) {
 		return "contextTooLarge";
 	}
-	return existingLeafCount + niahCaseCount(config) > benchmarkTaskItemLimits.maxLeafItems ? "caseCap" : null;
+	// The needle IS the passcode, so a template without {code} would hide nothing to find; both templates name the
+	// subject the question asks about.
+	if (!config.needleTemplate.includes("{city}") || !config.needleTemplate.includes("{code}")) {
+		return "needleTemplate";
+	}
+	if (!config.questionTemplate.includes("{city}")) {
+		return "questionTemplate";
+	}
+	if (niahCaseCount(config) > benchmarkNiahLimits.maximumCases) {
+		return "caseCap";
+	}
+	return existingLeafCount + niahCaseCount(config) > benchmarkTaskItemLimits.maxLeafItems ? "itemCap" : null;
+}
+
+/**
+ * The label a generated case carries on its own `generatorConfig` — hedged (`≈32k @ 50%`) by the node, because the
+ * haystack is sized by an approximation that under-counts. Null for anything that is not a generated case.
+ */
+export function benchmarkNiahCaseLabel(item: BenchmarkTaskItem): string | null {
+	if (item.kind !== "niahCase" || item.generatorConfig === null) {
+		return null;
+	}
+	const label = item.generatorConfig["label"];
+	return typeof label === "string" && label.length > 0 ? label : null;
 }
 
 /** What the item form edits. The index, the revision and the input hash are the node's — a client may not name them. */
@@ -190,7 +259,7 @@ export const emptyBenchmarkTaskItemDraft = (kind: BenchmarkTaskItemKind = "promp
 	prompt: "",
 	referenceAnswer: null,
 	verifierConfig: null,
-	generatorConfig: kind === "niah" ? { ...defaultNiahGeneratorConfig } : null,
+	generatorConfig: kind === "niah" ? serializeNiahGeneratorConfig(defaultNiahGeneratorConfig) : null,
 	countsTowardScore: kind !== "niah",
 });
 
@@ -214,15 +283,36 @@ export const pruneVerifierOverrides = (
 	return kept.length === 0 ? null : Object.fromEntries(kept);
 };
 
-/** The move an operator just made, as a whole new order. Naming every current id IS the node's concurrency check. */
+/**
+ * Authored items in index order, each immediately followed by the cases it expanded into. This is the unit an
+ * operator moves: a generator that ended up behind its own cases would be an order no read path expects.
+ */
+export function benchmarkTaskItemGroups(items: readonly BenchmarkTaskItem[]): BenchmarkTaskItem[][] {
+	const ordered = [...items].sort((left, right) => left.index - right.index);
+	const parents = ordered.filter((item) => item.parentItemId === null);
+	const grouped = parents.map((parent) => [parent, ...ordered.filter((item) => item.parentItemId === parent.id)]);
+	// A case whose generator is missing cannot happen — a delete takes the children with it — but dropping one here
+	// would silently shrink the id set the reorder names, which the node reads as a concurrent write and refuses.
+	const claimed = new Set(grouped.flat().map((item) => item.id));
+	const orphans = ordered.filter((item) => !claimed.has(item.id));
+	return orphans.length === 0 ? grouped : [...grouped, ...orphans.map((item) => [item])];
+}
+
+/**
+ * The move an operator just made, as a whole new order. Naming every current id IS the node's concurrency check, so
+ * there is no version token: an item added or deleted mid-drag makes the two sets disagree and the reorder is refused.
+ *
+ * A reorder does NOT unrank anything — the project's item-set hash is taken over the items' ids, not their positions.
+ */
 export function reorderBenchmarkTaskItems(items: readonly BenchmarkTaskItem[], itemId: string, direction: -1 | 1): string[] {
-	const ids = items.map((item) => item.id);
-	const from = ids.indexOf(itemId);
+	const groups = benchmarkTaskItemGroups(items);
+	const flatten = (list: readonly BenchmarkTaskItem[][]): string[] => list.flat().map((item) => item.id);
+	const from = groups.findIndex((group) => (group[0] as BenchmarkTaskItem).id === itemId);
 	const to = from + direction;
-	if (from < 0 || to < 0 || to >= ids.length) {
-		return ids;
+	if (from < 0 || to < 0 || to >= groups.length) {
+		return flatten(groups);
 	}
-	const moved = [...ids];
-	[moved[from], moved[to]] = [moved[to] as string, moved[from] as string];
-	return moved;
+	const moved = [...groups];
+	[moved[from], moved[to]] = [moved[to] as BenchmarkTaskItem[], moved[from] as BenchmarkTaskItem[]];
+	return flatten(moved);
 }

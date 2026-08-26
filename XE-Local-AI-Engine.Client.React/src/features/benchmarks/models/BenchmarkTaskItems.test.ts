@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	benchmarkNiahCaseLabel,
 	benchmarkTaskItemChildren,
 	benchmarkTaskItemLimits,
 	defaultNiahGeneratorConfig,
@@ -12,6 +13,7 @@ import {
 	pruneVerifierOverrides,
 	reorderBenchmarkTaskItems,
 	scorableBenchmarkTaskItems,
+	serializeNiahGeneratorConfig,
 	toBenchmarkTaskItem,
 	toBenchmarkTaskItemKind,
 } from "@/features/benchmarks/models/BenchmarkTaskItems";
@@ -99,12 +101,35 @@ describe("NIAH generator", () => {
 		expect(niahCaseCount({ ...defaultNiahGeneratorConfig, contextTokens: [8192, 32_768], needleDepthPercent: [10, 50, 90] })).toBe(6);
 	});
 
-	it("keeps the stored parameters and falls back to the defaults for the templates", () => {
+	it("keeps the stored parameters and falls back to the node's own defaults", () => {
 		const parsed = parseNiahGeneratorConfig({ contextTokens: [4096], needleDepthPercent: [50] });
 
 		expect(parsed.contextTokens).toEqual([4096]);
 		expect(parsed.needleTemplate).toBe(defaultNiahGeneratorConfig.needleTemplate);
-		expect(parsed.seed).toBeNull();
+		expect(parsed.criterionId).toBe("recall");
+		expect(parsed.seed).toBe(0);
+		expect(parsed.countsTowardScore).toBe(false);
+	});
+
+	// The generator config is inside the item's input hash, so two operators who typed the same set in different
+	// orders must produce the same bytes — and therefore the same cases at the same indices.
+	it("writes the axes distinct and ordered", () => {
+		const written = serializeNiahGeneratorConfig({
+			...defaultNiahGeneratorConfig,
+			contextTokens: [32_768, 8192, 8192],
+			needleDepthPercent: [90, 10],
+		});
+
+		expect(written["contextTokens"]).toEqual([8192, 32_768]);
+		expect(written["needleDepthPercent"]).toEqual([10, 90]);
+	});
+
+	// The node hedges the label because the haystack is sized by an approximation that under-counts.
+	it("reads a generated case's own label and nothing else's", () => {
+		expect(benchmarkNiahCaseLabel(benchmarkTaskItemFixture({ kind: "niahCase", generatorConfig: { label: "~32k @ 50%" } }))).toBe(
+			"~32k @ 50%",
+		);
+		expect(benchmarkNiahCaseLabel(benchmarkTaskItemFixture({ generatorConfig: { label: "~32k @ 50%" } }))).toBeNull();
 	});
 
 	// A probe longer than the frozen window is truncated to it and therefore measures nothing — the node refuses at
@@ -118,8 +143,34 @@ describe("NIAH generator", () => {
 	it("refuses an expansion that would pass the leaf-item cap", () => {
 		const config = { ...defaultNiahGeneratorConfig, contextTokens: [1024, 2048], needleDepthPercent: [10, 50, 90] };
 
-		expect(niahGeneratorIssue(config, 4096, benchmarkTaskItemLimits.maxLeafItems - 5)).toBe("caseCap");
+		expect(niahGeneratorIssue(config, 4096, benchmarkTaskItemLimits.maxLeafItems - 5)).toBe("itemCap");
 		expect(niahGeneratorIssue(config, 4096, benchmarkTaskItemLimits.maxLeafItems - 6)).toBeNull();
+	});
+
+	// The generator has a cap of its own, below the project's, and it applies before the item count is even consulted.
+	it("refuses an expansion past the generator's own case cap", () => {
+		const config = {
+			...defaultNiahGeneratorConfig,
+			contextTokens: [1024, 2048, 4096, 8192, 16_384, 32_768, 65_536],
+			needleDepthPercent: [10, 50, 90],
+		};
+
+		expect(niahGeneratorIssue(config, 131_072, 0)).toBe("caseCap");
+	});
+
+	// A haystack under the floor cannot hide anything and its depths stop being distinguishable.
+	it("refuses a probe under the node's length floor", () => {
+		expect(niahGeneratorIssue({ ...defaultNiahGeneratorConfig, contextTokens: [256] }, 4096, 0)).toBe("contextTooSmall");
+	});
+
+	// The needle IS the passcode: a template without {code} hides nothing to find.
+	it("requires both placeholders in the needle and the subject in the question", () => {
+		expect(niahGeneratorIssue({ ...defaultNiahGeneratorConfig, needleTemplate: "A note about {city}." }, 32_768, 0)).toBe(
+			"needleTemplate",
+		);
+		expect(niahGeneratorIssue({ ...defaultNiahGeneratorConfig, questionTemplate: "What is the passcode?" }, 32_768, 0)).toBe(
+			"questionTemplate",
+		);
 	});
 
 	it("names the empty axes before anything else", () => {
@@ -156,6 +207,19 @@ describe("reorderBenchmarkTaskItems", () => {
 	it("names the whole new order, which is also the node's concurrency check", () => {
 		expect(reorderBenchmarkTaskItems(items, "b", -1)).toEqual(["b", "a", "c"]);
 		expect(reorderBenchmarkTaskItems(items, "b", 1)).toEqual(["a", "c", "b"]);
+	});
+
+	// A generator moves with the cases it expanded into: leaving it behind its own children is an order no read path
+	// expects, and the node's id-set check would not catch it because the set is unchanged.
+	it("moves a generator together with its cases", () => {
+		const withGenerator = [
+			benchmarkTaskItemFixture({ id: "p", index: 0 }),
+			benchmarkTaskItemFixture({ id: "gen", index: 1, kind: "niah", isLeaf: false }),
+			benchmarkTaskItemFixture({ id: "c1", index: 2, kind: "niahCase", parentItemId: "gen" }),
+			benchmarkTaskItemFixture({ id: "c2", index: 3, kind: "niahCase", parentItemId: "gen" }),
+		];
+
+		expect(reorderBenchmarkTaskItems(withGenerator, "gen", -1)).toEqual(["gen", "c1", "c2", "p"]);
 	});
 
 	it("returns the current order unchanged at either end", () => {

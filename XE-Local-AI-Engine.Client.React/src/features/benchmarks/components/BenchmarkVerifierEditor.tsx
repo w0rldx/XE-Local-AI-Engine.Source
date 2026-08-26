@@ -1,7 +1,11 @@
 import { Checkbox, Group, JsonInput, NumberInput, Select, Stack, Switch, TagsInput, Text, TextInput } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import type { BenchmarkCriterionKind, BenchmarkVerifierConfig, BenchmarkVerifierIssue } from "@/features/benchmarks/models/BenchmarkVerifier";
+import type {
+	BenchmarkCriterionKind,
+	BenchmarkVerifierConfig,
+	BenchmarkVerifierIssue,
+} from "@/features/benchmarks/models/BenchmarkVerifier";
 import {
 	benchmarkConstraintFormats,
 	benchmarkCriterionKinds,
@@ -17,6 +21,12 @@ interface BenchmarkVerifierEditorProps {
 	config: string | null;
 	/** The pre-check this criterion currently fails, or null. Shown on the field it belongs to. */
 	issue: BenchmarkVerifierIssue | null;
+	/**
+	 * Renders the kind as a fact rather than a choice. A per-ITEM override supplies one criterion's configuration and
+	 * nothing else — the policy owns how the criterion is decided, and offering the picker here would imply an item
+	 * can change that for itself.
+	 */
+	lockKind?: boolean;
 	onChange: (patch: { kind: BenchmarkCriterionKind; config: string | null }) => void;
 	testId: string;
 }
@@ -37,11 +47,20 @@ const readList = (config: BenchmarkVerifierConfig, key: string): string[] =>
  * substitute for that validator: saving a judge policy re-validates everything and its refusal is what the operator
  * sees for anything this misses.
  */
-export function BenchmarkVerifierEditor({ kind, config, issue, onChange, testId }: BenchmarkVerifierEditorProps) {
+export function BenchmarkVerifierEditor({
+	kind,
+	config,
+	issue,
+	lockKind = false,
+	onChange,
+	testId,
+}: BenchmarkVerifierEditorProps) {
 	const { t } = useTranslation();
 	const parsed = parseVerifierConfig(config);
 	const message = (...codes: BenchmarkVerifierIssue[]): string | undefined =>
-		issue !== null && codes.includes(issue) ? t(`pages.benchmarks.verifier.issues.${issue}`, "Invalid configuration.") : undefined;
+		issue !== null && codes.includes(issue)
+			? t(`pages.benchmarks.verifier.issues.${issue}`, "Invalid configuration.")
+			: undefined;
 	// Every write goes through here so a field edit can never leave the stored blob as something other than this
 	// kind's shape — changing one key rewrites the whole config from the parsed copy.
 	const write = (patch: BenchmarkVerifierConfig): void => {
@@ -58,24 +77,35 @@ export function BenchmarkVerifierEditor({ kind, config, issue, onChange, testId 
 
 	return (
 		<Stack gap="xs" data-testid={testId}>
-			<Select
-				w={220}
-				label={t("pages.benchmarks.verifier.kind", "Decided by")}
-				description={t("pages.benchmarks.verifier.kindHelp", "Anything but the model is checked server-side, with no inference.")}
-				allowDeselect={false}
-				value={kind}
-				data={benchmarkCriterionKinds.map((option) => ({
-					value: option,
-					label: t(`pages.benchmarks.verifier.kinds.${option}`, option),
-				}))}
-				// Switching kind replaces the config wholesale: a regex pattern is not an expected answer, and carrying
-				// the old keys over would send the node a blob that cannot be parsed as the new kind.
-				onChange={(value) => {
-					const next = benchmarkCriterionKinds.find((option) => option === value) ?? "llm";
-					onChange({ kind: next, config: defaultVerifierConfig(next) });
-				}}
-				data-testid={`${testId}-kind`}
-			/>
+			{lockKind ? (
+				<Text size="xs" c="dimmed" data-testid={`${testId}-kind-locked`}>
+					{t("pages.benchmarks.verifier.kindLocked", "Decided by: {{kind}} — set by the judge policy.", {
+						kind: t(`pages.benchmarks.verifier.kinds.${kind}`, kind),
+					})}
+				</Text>
+			) : (
+				<Select
+					w={220}
+					label={t("pages.benchmarks.verifier.kind", "Decided by")}
+					description={t(
+						"pages.benchmarks.verifier.kindHelp",
+						"Anything but the model is checked server-side, with no inference.",
+					)}
+					allowDeselect={false}
+					value={kind}
+					data={benchmarkCriterionKinds.map((option) => ({
+						value: option,
+						label: t(`pages.benchmarks.verifier.kinds.${option}`, option),
+					}))}
+					// Switching kind replaces the config wholesale: a regex pattern is not an expected answer, and carrying
+					// the old keys over would send the node a blob that cannot be parsed as the new kind.
+					onChange={(value) => {
+						const next = benchmarkCriterionKinds.find((option) => option === value) ?? "llm";
+						onChange({ kind: next, config: defaultVerifierConfig(next) });
+					}}
+					data-testid={`${testId}-kind`}
+				/>
+			)}
 
 			{kind === "exact" ? (
 				<Stack gap={4}>
