@@ -137,7 +137,7 @@ A rubric criterion carries a `Kind` and a `Config` (`BenchmarkJudgeVerifierContr
 | `jsonSchema` | a structural subset — `type`, `properties`, `required`, `items`, `enum`, `const`, `additionalProperties` |
 | `mathAnswer` | the final number, extracted in a documented order |
 | `constraint` | IFEval-style word counts, substrings, format |
-| `pythonTests` | **reserved for P3** — named in the vocabulary, refused at activation |
+| `pythonTests` | **running the answer's code** against the operator's hidden tests in the compute sandbox (§4.3) |
 
 `BenchmarkJudgeVerifierConfig.Parse` (`:92`) is the **one** parser, called by the policy validator at activation *and* by `BenchmarkJudgeVerifiers` at execution. A second parser is how an activation-time check and a run-time check drift into disagreeing about the same config.
 
@@ -162,6 +162,35 @@ A judging that spawned nothing has no runtime to key on. Having *none* is not `e
 **This is safe only because the judging `Mode` and every criterion's `Kind`/`Config` are inside `ComputePolicyHash`.** That is what makes one policy revision provably one rubric composition, so a constant key cannot merge attempts that were graded differently. Move any of the three out of the policy hash and the sentinel starts joining unlike things. `MarkJudgeSucceededAsync` applies it with `??=`, so a measured key written at launch is never overwritten.
 
 > Adding a member to `BenchmarkJudgeRubricCriterionV1` changes the judge's **prompt** unless you stop it: the payload builder serializes the rubric with `DefaultIgnoreCondition.Never`. `BuildUserPayloadJson` strips `kind`/`config`, so a re-judge under a revision stored before P2 asks byte-identically the same question. The model never sees a verifiable criterion anyway.
+
+### 4.3 `pythonTests` — execution scoring
+
+The only kind that RUNS anything, and the only one that can be *unscorable* rather than merely failed. A judge model scoring code it never ran was the failure this replaces.
+
+```json
+{ "testCode": "assert solve(10) == 20", "exports": ["solve"], "timeoutSeconds": 30, "extract": "firstPythonFence" }
+```
+
+The candidate is extracted from the answer in a documented order — a `python`-tagged fence, then any fence, then the whole trimmed text — and the extracted text is stored in the attempt's verifier evidence, so a wrong extraction is visible rather than silent.
+
+**Two processes in one jail.** A trusted **parent** (the gateway's `python -I -` on stdin) holds the nonce and the operator's `testCode`, calls `prctl(PR_SET_DUMPABLE, 0)` before spawning, runs the tests itself against a proxy, and prints exactly one nonce-marked verdict line. An untrusted **child** `exec`s the candidate and answers JSON `call`/`eval` requests over its own inherited pipes. Both are inside the same per-invocation bwrap jail; the new boundary is a *process* boundary inside it.
+
+Why not one interpreter with a "trusted harness" namespace: a namespace is not a trust boundary against code in the same address space. That design was defeated by walking the ancestor frames for the nonce, writing a passing marker to `sys.__stdout__` and calling `os._exit(0)` before the real harness printed.
+
+| Markers on the sandbox's stdout | Verdict |
+|---|---|
+| exactly 1, `failed == 0 && collected > 0` | **10** |
+| exactly 1, otherwise | **0** |
+| **0** | **0** — the parent never reached its final line. Denying a verdict is a failure |
+| **≥ 2** | **0**, logged as forged |
+
+The operator's tests reach the candidate only through a proxy: `candidate.solve(10)`, the `exports` shorthand `solve(10)`, `pycall(name, args, kwargs)`, or `pyeval(src)` — which runs arbitrary setup *in the child* and crosses only the final expression's value. The cost is stated rather than hidden: **arguments and returns must be JSON-serializable and exceptions match by name**. A child that names `SystemExit` gets an ordinary test failure, because the parent re-raises only a `builtins` `Exception` subclass.
+
+`collected`/`passed`/`failed` are best-effort evidence, not the verdict: `unittest.TestCase` subclasses in the parent's namespace are run with a `TextTestRunner` and read as objects; a bare test script is one implicit case. Scoring is binary either way.
+
+**Unscorable vs. zero.** The verifier calls `ExecuteDetailedAsync(request, requireResourceLimits: true, ct)` — stricter than the `run_python` tool, which passes `false`, because this is operator code executed unattended. Every refusal (`compute-disabled`, `invalid-request`, `no-isolation`, `no-resource-limits`, `no-jail-root`, an unprovisionable interpreter, or a failed `PR_SET_DUMPABLE`) fails the judging and gives the run `rankExclusionReason = verifier-unavailable`, which tells the operator to fix the node. A **timeout** is the opposite: the code ran and did not finish, which is a real result about the code, so it scores 0.
+
+The `codeExecution` rubric preset (`GET benchmarks/rubric-presets`) ships this as one criterion at full weight, with the test code and exported names as placeholders to edit.
 
 ---
 
