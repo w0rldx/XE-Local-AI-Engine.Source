@@ -160,7 +160,7 @@ public sealed class BenchmarkFidelityExecutor(
         }
 
         var kld = string.Equals(attempt.Kind, "kld", StringComparison.Ordinal)
-            ? await PrepareKldAsync(project, corpus, chunks, binary, executable, snapshot, token).ConfigureAwait(false)
+            ? await PrepareKldAsync(project, corpus, chunks, executable, snapshot, token).ConfigureAwait(false)
             : null;
 
         var arguments = BuildArguments(modelPath, corpus.Path, chunks, snapshot.PrimaryRuntime, kld?.BaseFilePath, isBasePhase: false);
@@ -205,7 +205,6 @@ public sealed class BenchmarkFidelityExecutor(
     private async Task<KldPreparation> PrepareKldAsync(BenchmarkProjectRecord project,
         BenchmarkFidelityCorpusFile corpus,
         int chunks,
-        LlamaBinary binary,
         string executable,
         BenchmarkRuntimeSnapshotV1 snapshot,
         CancellationToken token)
@@ -265,7 +264,6 @@ public sealed class BenchmarkFidelityExecutor(
         }
 
         _ = cache.Trim(cacheOptions.Value.KldCacheMaxBytes, await store.ListLiveFidelityDigestsAsync(token).ConfigureAwait(false));
-        _ = binary;
         return new KldPreparation(key, cache.PathFor(key), baseModelName, baseFingerprint);
     }
 
