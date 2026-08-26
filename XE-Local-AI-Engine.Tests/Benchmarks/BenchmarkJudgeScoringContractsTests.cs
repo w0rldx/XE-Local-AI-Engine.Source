@@ -184,6 +184,37 @@ public sealed class BenchmarkJudgeScoringContractsTests
     }
 
     [Test]
+    public void Prompt_RubricCarriesTheFourMembersTheJudgeHasAlwaysSeen_NotTheServerSideKindAndConfig()
+    {
+        // The judge model is never handed a verifiable criterion — an all-verifiable rubric never reaches inference
+        // and a mixed one is filtered first — so `kind` and `config` carry nothing it could use. Emitting them would
+        // change the payload bytes of every judging under a revision stored before P2 while no version moved, which
+        // is exactly the drift the prompt-version rule exists to prevent.
+        var rubric = Rubric(("alpha", 1));
+        const string taskJson = "\"Write a haiku.\"";
+        var outputParts = Encoding.UTF8.GetString(BenchmarkExecutionSerialization.SerializeParts([new BenchmarkOutputPart("output", Content: "hello")]));
+
+        var payload = BenchmarkJudgePromptV2.BuildUserPayloadJson(taskJson, null, rubric, outputParts, BenchmarkJudgeOutputSchemaV2.Json);
+        var annotated = BenchmarkJudgePromptV2.BuildUserPayloadJson(taskJson,
+            null,
+            rubric with
+            {
+                Criteria = [.. rubric.Criteria.Select(static criterion => criterion with
+                {
+                    Kind = BenchmarkJudgeCriterionKinds.Llm
+                })]
+            },
+            outputParts,
+            BenchmarkJudgeOutputSchemaV2.Json);
+
+        using var document = JsonDocument.Parse(payload);
+        AssertEx.True(document.RootElement.GetProperty("rubric").GetProperty("criteria")[0].EnumerateObject()
+                              .Select(static property => property.Name)
+                              .SequenceEqual(["id", "title", "description", "weight"], StringComparer.Ordinal));
+        AssertEx.Equal(payload, annotated, "An explicit llm kind must not change the bytes either.");
+    }
+
+    [Test]
     public void Prompt_SystemPromptNamesTheRubricAndForbidsMarkdown()
     {
         AssertEx.Contains(BenchmarkJudgePromptV2.SystemPrompt, "rubric");

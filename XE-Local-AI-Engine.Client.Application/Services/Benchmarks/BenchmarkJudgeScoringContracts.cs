@@ -6,12 +6,21 @@ using System.Text.Json.Serialization;
 
 public sealed record BenchmarkJudgeCriterionScoreV2(string Id, int Score, string Rationale);
 
+/// <summary>One verifiable criterion's server-side evidence, stored so a verified score is auditable after the fact.</summary>
+public sealed record BenchmarkJudgeVerifierResultV1(string Id, string Kind, bool Passed, string Detail);
+
+/// <param name="Verifiers">
+///     The evidence behind every non-<c>llm</c> criterion, or <see langword="null" /> for a judging that had none.
+///     Written only when present, so a stored result from before P2 round-trips unchanged.
+/// </param>
 public sealed record BenchmarkJudgeResultV2(
     int SchemaVersion,
     IReadOnlyList<BenchmarkJudgeCriterionScoreV2> Criteria,
     string Summary,
     int Score,
-    string JudgeModelContentFingerprint);
+    string JudgeModelContentFingerprint,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<BenchmarkJudgeVerifierResultV1>? Verifiers = null);
 
 /// <summary>
 /// The judge's output schema in two shapes. <see cref="Json"/> is the documentation copy embedded in the prompt: bounded,
@@ -295,6 +304,30 @@ public static class BenchmarkJudgePromptV2
     ///     Emits <c>primaryOutputIncomplete: true</c> on the same terms, for a run that finished cleanly and answered
     ///     nothing. Mutually exclusive with <paramref name="primaryOutputTruncated" />.
     /// </param>
+    /// <summary>
+    ///     The rubric as the judge model sees it: the four members it has always seen, with the server-side
+    ///     <c>kind</c>/<c>config</c> members of P2 removed. The model is never handed a verifiable criterion (an
+    ///     all-verifiable rubric never reaches inference, a mixed one is filtered first), so those two members carry
+    ///     nothing it could use — and emitting them would change the payload bytes of every judging under a revision
+    ///     stored before P2, which is exactly the silent drift the prompt-version rule exists to prevent.
+    /// </summary>
+    private static JsonNode? SerializeRubricForPrompt(BenchmarkJudgeRubricV1 rubric)
+    {
+        var node = JsonSerializer.SerializeToNode(rubric, PayloadOptions);
+        if (node?["criteria"] is not JsonArray criteria)
+        {
+            return node;
+        }
+
+        foreach (var criterion in criteria.OfType<JsonObject>())
+        {
+            _ = criterion.Remove("kind");
+            _ = criterion.Remove("config");
+        }
+
+        return node;
+    }
+
     public static string BuildUserPayloadJson(string taskJson,
         string? referenceAnswer,
         BenchmarkJudgeRubricV1 rubric,
@@ -313,7 +346,7 @@ public static class BenchmarkJudgePromptV2
             payload["referenceAnswer"] = JsonValue.Create(referenceAnswer);
         }
 
-        payload["rubric"] = JsonSerializer.SerializeToNode(rubric, PayloadOptions);
+        payload["rubric"] = SerializeRubricForPrompt(rubric);
         payload["primaryOutputParts"] = JsonNode.Parse(primaryOutputPartsJson);
         if (primaryOutputTruncated)
         {

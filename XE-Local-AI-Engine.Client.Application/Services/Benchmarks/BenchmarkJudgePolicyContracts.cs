@@ -25,6 +25,17 @@ public static class BenchmarkJudgePolicyVersions
     public const int OutputSchemaVersion = 2;
     public const int RubricVersion = 1;
 
+    /// <summary>
+    ///     The pairwise prompt and output-schema versions, kept beside the pointwise pair for the same reason: the
+    ///     prompt TEXT is hashed nowhere. They are POLICY MEMBERS rather than bare constants (orders 8 and 9), exactly
+    ///     as <see cref="PromptVersion" /> and <see cref="OutputSchemaVersion" /> are at orders 2 and 3, so a pairwise
+    ///     wording change lands inside <c>ComputePolicyHash</c> — and a pointwise prompt edit still does not churn
+    ///     pairwise verdicts, nor the reverse.
+    /// </summary>
+    public const int PairwisePromptVersion = 1;
+
+    public const int PairwiseOutputSchemaVersion = 1;
+
     public const int MinimumCriterionCount = 1;
     public const int MaximumCriterionCount = 8;
     public const int MinimumCriterionWeight = 1;
@@ -38,6 +49,16 @@ public static class BenchmarkJudgePolicyVersions
 // Every record below is serialized into the policy hash, so each one pins its property order explicitly with
 // JsonPropertyOrder. Reordering a declaration must never silently change a hash, and the policy must never inherit the
 // declaration order of a type it does not own.
+/// <param name="Kind">
+///     How this criterion is decided: <see cref="BenchmarkJudgeCriterionKinds.Llm" /> (the default, and what every
+///     criterion written before P2 carries) hands it to the judge model; every other kind is checked server-side by
+///     <see cref="BenchmarkJudgeVerifiers" /> with no inference at all.
+/// </param>
+/// <param name="Config">
+///     The kind's configuration as canonical JSON, or <see langword="null" /> for <c>llm</c>. Canonicalized by
+///     <see cref="BenchmarkJudgePolicyCanonicalizer" /> so two operators who typed the same rules in a different key
+///     order hash identically.
+/// </param>
 public sealed record BenchmarkJudgeRubricCriterionV1(
     [property: JsonPropertyOrder(0)]
     string Id,
@@ -46,7 +67,11 @@ public sealed record BenchmarkJudgeRubricCriterionV1(
     [property: JsonPropertyOrder(2)]
     string Description,
     [property: JsonPropertyOrder(3)]
-    int Weight);
+    int Weight,
+    [property: JsonPropertyOrder(4)]
+    string Kind = BenchmarkJudgeCriterionKinds.Llm,
+    [property: JsonPropertyOrder(5)]
+    string? Config = null);
 
 public sealed record BenchmarkJudgeRubricV1(
     [property: JsonPropertyOrder(0)]
@@ -137,7 +162,13 @@ public sealed record BenchmarkJudgePolicyV1(
     [property: JsonPropertyOrder(5)]
     BenchmarkJudgeRubricV1 Rubric,
     [property: JsonPropertyOrder(6)]
-    string? ReferenceAnswer);
+    string? ReferenceAnswer,
+    [property: JsonPropertyOrder(7)]
+    string Mode = BenchmarkJudgePolicyModes.Pointwise,
+    [property: JsonPropertyOrder(8)]
+    int PairwisePromptVersion = BenchmarkJudgePolicyVersions.PairwisePromptVersion,
+    [property: JsonPropertyOrder(9)]
+    int PairwiseOutputSchemaVersion = BenchmarkJudgePolicyVersions.PairwiseOutputSchemaVersion);
 
 /// <summary>Stable codes carried by <see cref="BenchmarkJudgePolicyValidationException"/>; safe to map to an API error body.</summary>
 public static class BenchmarkJudgePolicyValidationCodes
@@ -156,6 +187,18 @@ public static class BenchmarkJudgePolicyValidationCodes
     public const string CriterionDescriptionInvalid = "judge-policy-criterion-description-invalid";
     public const string CriterionWeightOutOfRange = "judge-policy-criterion-weight-out-of-range";
     public const string ReferenceAnswerTooLong = "judge-policy-reference-answer-too-long";
+    public const string CriterionKindUnsupported = "judge-policy-criterion-kind-unsupported";
+    public const string CriterionConfigInvalid = "judge-policy-criterion-config-invalid";
+    public const string ModeUnsupported = "judge-policy-mode-unsupported";
+    public const string PairwiseVersionUnsupported = "judge-policy-pairwise-version-unsupported";
+
+    /// <summary>
+    ///     The policy names <c>pairwise</c>, which this build cannot execute: the pairwise planner, executor and
+    ///     Bradley-Terry fit are S3. The MODE ships in S2 regardless, because it is inside <c>ComputePolicyHash</c>
+    ///     and every policy schema change costs the operator a forced re-judge — two slices would cost two.
+    ///     follow-up: S3 deletes this refusal when the pairwise pipeline lands.
+    /// </summary>
+    public const string PairwiseNotAvailable = "judge-policy-pairwise-not-available";
 }
 
 public sealed class BenchmarkJudgePolicyValidationException(string code, string message) : InvalidOperationException(message)
@@ -212,7 +255,39 @@ public static class BenchmarkJudgePolicyValidator
             throw Invalid(BenchmarkJudgePolicyValidationCodes.ReferenceAnswerTooLong, "The judge policy reference answer is too long.");
         }
 
+        ValidateMode(policy, strictVersions);
         ValidateRubric(policy.Rubric, strictVersions);
+    }
+
+    /// <summary>
+    ///     The judging mode, and the pairwise versions that ride with it. Checked on WRITE and EXECUTION only: a
+    ///     stored blob must still READ, or the constant moving would take the project header down with it — the same
+    ///     rule the prompt/output-schema versions live under.
+    /// </summary>
+    private static void ValidateMode(BenchmarkJudgePolicyV1 policy, bool strictVersions)
+    {
+        if (!strictVersions)
+        {
+            return;
+        }
+
+        var mode = BenchmarkJudgePolicyModes.Normalize(policy.Mode);
+        if (mode is not (BenchmarkJudgePolicyModes.Pointwise or BenchmarkJudgePolicyModes.Pairwise))
+        {
+            throw Invalid(BenchmarkJudgePolicyValidationCodes.ModeUnsupported, "The judge policy mode is not supported.");
+        }
+
+        if (string.Equals(mode, BenchmarkJudgePolicyModes.Pairwise, StringComparison.Ordinal))
+        {
+            throw Invalid(BenchmarkJudgePolicyValidationCodes.PairwiseNotAvailable,
+                "Pairwise judging is not available in this build. Save the judge in pointwise mode.");
+        }
+
+        if (policy.PairwisePromptVersion != BenchmarkJudgePolicyVersions.PairwisePromptVersion
+            || policy.PairwiseOutputSchemaVersion != BenchmarkJudgePolicyVersions.PairwiseOutputSchemaVersion)
+        {
+            throw Invalid(BenchmarkJudgePolicyValidationCodes.PairwiseVersionUnsupported, "The judge policy pairwise version is unsupported.");
+        }
     }
 
     /// <summary>Whether every version this policy carries is one this build still writes and executes under.</summary>
@@ -271,6 +346,15 @@ public static class BenchmarkJudgePolicyValidator
                 throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionWeightOutOfRange,
                     $"A judge rubric criterion weight must be between {BenchmarkJudgePolicyVersions.MinimumCriterionWeight} and {BenchmarkJudgePolicyVersions.MaximumCriterionWeight}.");
             }
+
+            // Verifiable configuration is parsed HERE, at activation, and by the same parser the executor uses. A
+            // config the validator waves through is a judging that fails at run time with nothing to show for the GPU
+            // it already reserved — and R5 forbids scoring it 0, so the operator's only signal would be a failed
+            // attempt. Strict path only: a stored revision must stay readable.
+            if (strictVersions)
+            {
+                _ = BenchmarkJudgeVerifierConfig.Parse(criterion.Kind, criterion.Config);
+            }
         }
     }
 
@@ -321,9 +405,18 @@ public static class BenchmarkJudgePolicyCanonicalizer
             {
                 MemberHashes = [.. policy.Model.MemberHashes.Order(StringComparer.Ordinal)]
             },
+            Mode = BenchmarkJudgePolicyModes.Normalize(policy.Mode),
             Rubric = policy.Rubric with
             {
-                Criteria = [.. policy.Rubric.Criteria.OrderBy(static criterion => criterion.Id, StringComparer.Ordinal)]
+                Criteria =
+                [
+                    .. policy.Rubric.Criteria.OrderBy(static criterion => criterion.Id, StringComparer.Ordinal)
+                             .Select(static criterion => criterion with
+                             {
+                                 Kind = BenchmarkJudgeCriterionKinds.Normalize(criterion.Kind),
+                                 Config = BenchmarkJudgeVerifierConfig.Canonicalize(criterion.Config)
+                             })
+                ]
             }
         };
     }
