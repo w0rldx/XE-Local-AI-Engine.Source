@@ -240,6 +240,19 @@ export function benchmarkNiahCaseLabel(item: BenchmarkTaskItem): string | null {
 	return typeof label === "string" && label.length > 0 ? label : null;
 }
 
+/**
+ * The rubric criterion a generated case decides its needle on — the sole key of the `exact` override the generator
+ * wrote onto the case (`{criterionId: {expected, normalize}}`). That id is what names this case's entry in the run's
+ * verifier evidence, which is the only place a found/missed needle is actually recorded. Null for anything that is
+ * not a generated case, or a case whose override never made it.
+ */
+export function niahCaseCriterionId(item: BenchmarkTaskItem): string | null {
+	if (item.kind !== "niahCase" || item.verifierConfig === null) {
+		return null;
+	}
+	return Object.keys(item.verifierConfig)[0] ?? null;
+}
+
 /** What the item form edits. The index, the revision and the input hash are the node's — a client may not name them. */
 export interface BenchmarkTaskItemDraft {
 	kind: BenchmarkTaskItemKind;

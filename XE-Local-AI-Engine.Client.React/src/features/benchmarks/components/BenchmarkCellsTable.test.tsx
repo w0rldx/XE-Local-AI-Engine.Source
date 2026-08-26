@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // The breakdown reads run DETAILS for the cell that is opened, through the same per-run cache the live panes use.
@@ -17,6 +17,10 @@ import { benchmarkCellFixture, benchmarkTaskItemFixture } from "@/features/bench
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const cohort = { policyRevision: 1, executionKey: "k", cohortGeneration: 1, rankedCount: 1, totalScored: 2 };
+
+/** A generated case carries the `exact` override that names the criterion its needle is decided on. */
+const niahCase = (id: string) =>
+	benchmarkTaskItemFixture({ id, kind: "niahCase", countsTowardScore: false, verifierConfig: { recall: { expected: "x" } } });
 
 const items = [
 	benchmarkTaskItemFixture({ id: "a", index: 0, prompt: "Capital of France?" }),
@@ -64,17 +68,24 @@ const render = (props: Partial<Parameters<typeof BenchmarkCellsTable>[0]> = {}) 
 	return { onRerunCell, onToggleRun };
 };
 
+// A needle's verdict lives on the run's own verifier evidence, so the mock answers per run id rather than with one
+// canned detail: a run with no entry here is a run whose verdict is genuinely not on record.
+let verifiersByRun: Record<string, { id: string; kind: string; passed: boolean; detail: string }[]> = {};
+
 describe("BenchmarkCellsTable", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		getRunMock.mockResolvedValue({
-			data: {
-				id: "run-a",
-				projectId: "project-1",
-				primaryModelName: "owner/Repo:Q4_K_M",
-				judge: { state: "succeeded", score: 80, verifiers: [{ id: "accuracy", kind: "exact", passed: true, detail: "Matched 'Paris'." }] },
-			},
-		});
+		verifiersByRun = { "run-a": [{ id: "accuracy", kind: "exact", passed: true, detail: "Matched 'Paris'." }] };
+		getRunMock.mockImplementation(({ path }: { path: { runId: string } }) =>
+			Promise.resolve({
+				data: {
+					id: path.runId,
+					projectId: "project-1",
+					primaryModelName: "owner/Repo:Q4_K_M",
+					judge: { state: "succeeded", score: 80, verifiers: verifiersByRun[path.runId] ?? [] },
+				},
+			}),
+		);
 	});
 	afterEach(cleanup);
 
@@ -121,52 +132,132 @@ describe("BenchmarkCellsTable", () => {
 	});
 
 	// Recall is measured and reported, and deliberately NOT in the mean beside it: recall at 32k and answer quality
-	// are different measurements, and their average is neither.
-	it("reports needle recall on its own axis", () => {
+	// are different measurements, and their average is neither. Each needle is read from its own criterion's verdict —
+	// the aggregate beside it carries the rest of the rubric's weight and cannot answer "was the needle found".
+	it("reports needle recall from each case's own criterion, not from its aggregate score", async () => {
+		verifiersByRun = {
+			// Found the needle, mediocre answer; missed it, good answer. A midpoint split on the aggregate reads BOTH
+			// of these backwards.
+			r1: [{ id: "recall", kind: "exact", passed: true, detail: "Found." }],
+			r2: [{ id: "recall", kind: "exact", passed: false, detail: "Not found." }],
+		};
 		const withProbes = benchmarkCellFixture({
 			cellKey: "cell:niah:1",
 			quality: 80,
 			rank: 1,
 			items: [
-				{ runId: "r1", taskItemId: "n1", taskItemIndex: 0, qualityScore: 100, primaryStopReason: "stop", rankExclusionReason: null },
-				{ runId: "r2", taskItemId: "n2", taskItemIndex: 1, qualityScore: 0, primaryStopReason: "stop", rankExclusionReason: null },
+				{
+					runId: "r1",
+					taskItemId: "n1",
+					taskItemIndex: 0,
+					qualityScore: 31,
+					primaryStopReason: "stop",
+					rankExclusionReason: null,
+				},
+				{
+					runId: "r2",
+					taskItemId: "n2",
+					taskItemIndex: 1,
+					qualityScore: 72,
+					primaryStopReason: "stop",
+					rankExclusionReason: null,
+				},
 			],
 		});
-		render({
-			cells: [withProbes],
-			items: [
-				benchmarkTaskItemFixture({ id: "n1", kind: "niahCase", countsTowardScore: false }),
-				benchmarkTaskItemFixture({ id: "n2", kind: "niahCase", countsTowardScore: false }),
-			],
-			scorableItemCount: 0,
-		});
+		render({ cells: [withProbes], items: [niahCase("n1"), niahCase("n2")], scorableItemCount: 0 });
 
-		expect(screen.getByTestId("benchmark-cell-recall-cell:niah:1").textContent).toBe("1 of 2 needles");
+		// The cell renders from the first paint holding "recall unknown", so the wait is on the TEXT settling, not on
+		// the node appearing.
+		await waitFor(() => expect(screen.getByTestId("benchmark-cell-recall-cell:niah:1").textContent).toBe("1 of 2 needles"));
 		expect(screen.getByTestId("benchmark-cell-quality-cell:niah:1").textContent).toBe("80");
+	});
+
+	// Absent evidence is not a miss: "0 of 2 needles" would report a failure the suite never measured.
+	it("says recall is unknown rather than zero when no verdict is on record", async () => {
+		const withProbes = benchmarkCellFixture({
+			cellKey: "cell:niah:2",
+			items: [
+				{
+					runId: "r1",
+					taskItemId: "n1",
+					taskItemIndex: 0,
+					qualityScore: 100,
+					primaryStopReason: "stop",
+					rankExclusionReason: null,
+				},
+				{
+					runId: "r2",
+					taskItemId: "n2",
+					taskItemIndex: 1,
+					qualityScore: 100,
+					primaryStopReason: "stop",
+					rankExclusionReason: null,
+				},
+			],
+		});
+		render({ cells: [withProbes], items: [niahCase("n1"), niahCase("n2")], scorableItemCount: 0 });
+
+		await waitFor(() => expect(getRunMock).toHaveBeenCalled());
+		expect(screen.getByTestId("benchmark-cell-recall-cell:niah:2").textContent).toBe("recall unknown");
+	});
+
+	// A partly-known axis says both halves rather than quietly reporting the known ones as the whole measurement.
+	it("names how many needles have no verdict beside the ones that do", async () => {
+		verifiersByRun = { r1: [{ id: "recall", kind: "exact", passed: true, detail: "Found." }] };
+		const withProbes = benchmarkCellFixture({
+			cellKey: "cell:niah:3",
+			items: [
+				{
+					runId: "r1",
+					taskItemId: "n1",
+					taskItemIndex: 0,
+					qualityScore: 100,
+					primaryStopReason: "stop",
+					rankExclusionReason: null,
+				},
+				{
+					runId: "r2",
+					taskItemId: "n2",
+					taskItemIndex: 1,
+					qualityScore: 100,
+					primaryStopReason: "stop",
+					rankExclusionReason: null,
+				},
+			],
+		});
+		render({ cells: [withProbes], items: [niahCase("n1"), niahCase("n2")], scorableItemCount: 0 });
+
+		await waitFor(() =>
+			expect(screen.getByTestId("benchmark-cell-recall-cell:niah:3").textContent).toBe("1 of 1 needles · 1 unknown"),
+		);
 	});
 
 	// A pure long-context probe project has nothing to take a mean OF, so the node excludes its cells as `no-score`.
 	// The ordinary reading of that reason — "set an operator score" — is wrong there: no score an operator could give
 	// would enter a mean that does not exist.
-	it("does not tell an operator to score a project where nothing counts", () => {
+	it("does not tell an operator to score a project where nothing counts", async () => {
+		verifiersByRun = { r1: [{ id: "recall", kind: "exact", passed: true, detail: "Found." }] };
 		const unscored = benchmarkCellFixture({
 			cellKey: "cell:probe",
 			quality: null,
 			rank: null,
 			rankExclusionReason: "no-score",
 			items: [
-				{ runId: "r1", taskItemId: "n1", taskItemIndex: 0, qualityScore: 100, primaryStopReason: "stop", rankExclusionReason: null },
+				{
+					runId: "r1",
+					taskItemId: "n1",
+					taskItemIndex: 0,
+					qualityScore: 100,
+					primaryStopReason: "stop",
+					rankExclusionReason: null,
+				},
 			],
 		});
-		render({
-			cells: [unscored],
-			items: [benchmarkTaskItemFixture({ id: "n1", kind: "niahCase", countsTowardScore: false })],
-			scorableItemCount: 0,
-		});
+		render({ cells: [unscored], items: [niahCase("n1")], scorableItemCount: 0 });
 
 		expect(screen.getByTestId("benchmark-cells-display-only").textContent).toContain("Recall is the measurement here");
 		expect(screen.queryByTestId("benchmark-cell-exclusion-cell:probe")).toBeNull();
-		expect(screen.getByTestId("benchmark-cell-recall-cell:probe").textContent).toBe("1 of 1 needles");
+		await waitFor(() => expect(screen.getByTestId("benchmark-cell-recall-cell:probe").textContent).toBe("1 of 1 needles"));
 	});
 
 	it("says so when a project has nothing measured yet", () => {

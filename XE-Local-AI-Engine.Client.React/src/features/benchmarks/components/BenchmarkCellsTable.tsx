@@ -6,13 +6,14 @@ import { useTranslation } from "react-i18next";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkItemBreakdown } from "@/features/benchmarks/components/BenchmarkItemBreakdown";
-import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
+import type { BenchmarkCell, BenchmarkNiahRecall } from "@/features/benchmarks/models/BenchmarkCells";
 import { benchmarkNiahRecall, missingBenchmarkCellItems, sortBenchmarkCells } from "@/features/benchmarks/models/BenchmarkCells";
 import type { BenchmarkRankCohort } from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkBaseModelLabel, benchmarkQuantTag } from "@/features/benchmarks/models/BenchmarkModels";
 import { rankExclusionAction } from "@/features/benchmarks/models/BenchmarkRanking";
 import type { BenchmarkTaskItem } from "@/features/benchmarks/models/BenchmarkTaskItems";
 import { scorableBenchmarkTaskItems } from "@/features/benchmarks/models/BenchmarkTaskItems";
+import { useBenchmarkRunDetails } from "@/features/benchmarks/queries/useBenchmarks";
 
 interface BenchmarkCellsTableProps {
 	cells: readonly BenchmarkCell[];
@@ -28,6 +29,31 @@ interface BenchmarkCellsTableProps {
 	 * the smallest thing that can answer a missing or revised item is the whole cell, and the button says so.
 	 */
 	onRerunCell: (cell: BenchmarkCell) => void;
+}
+
+/**
+ * One cell's needle axis. Three readings, and the third is the one that matters: a case whose verifier verdict is not
+ * on record is UNKNOWN, never a miss — "0 of 3 needles" off absent evidence would report a failure the suite never
+ * measured.
+ */
+function RecallCell({ recall, cellKey }: { recall: BenchmarkNiahRecall; cellKey: string }) {
+	const { t } = useTranslation();
+	const pending =
+		recall.unknown === 0
+			? ""
+			: ` · ${t("pages.benchmarks.cells.recallUnknownSome", "{{count}} unknown", { count: recall.unknown })}`;
+	return (
+		<Text size="sm" c="dimmed" data-testid={`benchmark-cell-recall-${cellKey}`}>
+			{recall.graded + recall.unknown === 0
+				? "—"
+				: recall.recall === null
+					? t("pages.benchmarks.cells.recallUnknown", "recall unknown")
+					: t("pages.benchmarks.cells.recallValue", "{{found}} of {{graded}} needles", {
+							found: recall.found,
+							graded: recall.graded,
+						}) + pending}
+		</Text>
+	);
 }
 
 /**
@@ -52,6 +78,20 @@ export function BenchmarkCellsTable({
 	const [expanded, setExpanded] = useState<string[]>([]);
 	const ordered = useMemo(() => sortBenchmarkCells(cells), [cells]);
 	const scorable = useMemo(() => scorableBenchmarkTaskItems(items), [items]);
+	// A needle is found or missed according to ONE criterion's verifier, and that evidence lives on the run's detail
+	// rather than on the cell projection. Only the runs that answered a NIAH case are read — a project without one asks
+	// for nothing — and they go through the same per-run cache the breakdown and the live panes already use, so opening
+	// a cell below re-requests none of it.
+	const caseIds = useMemo(() => new Set(items.filter((item) => item.kind === "niahCase").map((item) => item.id)), [items]);
+	const caseRunIds = useMemo(
+		() =>
+			cells.flatMap((cell) =>
+				cell.items.filter((answer) => answer.taskItemId !== null && caseIds.has(answer.taskItemId)).map((answer) => answer.runId),
+			),
+		[cells, caseIds],
+	);
+	const { runs: caseRuns } = useBenchmarkRunDetails(caseRunIds);
+	const verifiersByRunId = useMemo(() => new Map(caseRuns.map((run) => [run.id, run.judge.verifiers])), [caseRuns]);
 	// A project whose every leaf is on its own axis — a pure long-context probe — has nothing to take a mean OF, so the
 	// node excludes its cells as `no-score`. The ordinary reading of that reason ("set an operator score") is wrong
 	// here: no score an operator could give would enter a mean that does not exist. The recall column IS the reading.
@@ -95,7 +135,7 @@ export function BenchmarkCellsTable({
 						{ordered.map((cell) => {
 							const isOpen = expanded.includes(cell.cellKey);
 							const quant = benchmarkQuantTag(cell.primaryModelName);
-							const recall = benchmarkNiahRecall(cell, items);
+							const recall = benchmarkNiahRecall(cell, items, verifiersByRunId);
 							const answered = scorable.length - missingBenchmarkCellItems(cell, scorable).length;
 							return (
 								<Fragment key={cell.cellKey}>
@@ -195,14 +235,7 @@ export function BenchmarkCellsTable({
 										</Table.Td>
 										<Table.Td>
 											{/* Reported, never averaged in: the mean beside it is a mean of answer quality. */}
-											<Text size="sm" c="dimmed" data-testid={`benchmark-cell-recall-${cell.cellKey}`}>
-												{recall.recall === null
-													? "—"
-													: t("pages.benchmarks.cells.recallValue", "{{found}} of {{graded}} needles", {
-															found: recall.found,
-															graded: recall.graded,
-														})}
-											</Text>
+											<RecallCell recall={recall} cellKey={cell.cellKey} />
 										</Table.Td>
 										<Table.Td>
 											<Button

@@ -8,6 +8,7 @@ import {
 	emptyBenchmarkTaskItemDraft,
 	leafBenchmarkTaskItems,
 	niahCaseCount,
+	niahCaseCriterionId,
 	niahGeneratorIssue,
 	parseNiahGeneratorConfig,
 	pruneVerifierOverrides,
@@ -98,7 +99,9 @@ describe("leaf and scorable items", () => {
 
 describe("NIAH generator", () => {
 	it("expands to one case per context length x depth", () => {
-		expect(niahCaseCount({ ...defaultNiahGeneratorConfig, contextTokens: [8192, 32_768], needleDepthPercent: [10, 50, 90] })).toBe(6);
+		expect(
+			niahCaseCount({ ...defaultNiahGeneratorConfig, contextTokens: [8192, 32_768], needleDepthPercent: [10, 50, 90] }),
+		).toBe(6);
 	});
 
 	it("keeps the stored parameters and falls back to the node's own defaults", () => {
@@ -183,6 +186,21 @@ describe("NIAH generator", () => {
 	it("starts a NIAH draft off the ranked mean", () => {
 		expect(emptyBenchmarkTaskItemDraft("niah").countsTowardScore).toBe(false);
 		expect(emptyBenchmarkTaskItemDraft("prompt").countsTowardScore).toBe(true);
+	});
+});
+
+describe("niahCaseCriterionId", () => {
+	// The needle's verdict is recorded against ONE criterion, and this is the only place that names it — reading the
+	// case's aggregate score instead is what turns a weighted rubric into a wrong found/missed.
+	it("names the criterion the case's own exact override wrote", () => {
+		const item = benchmarkTaskItemFixture({ kind: "niahCase", verifierConfig: { recall: { expected: "SW-4417" } } });
+
+		expect(niahCaseCriterionId(item)).toBe("recall");
+	});
+
+	it("has no criterion to name for an authored item or a case that carries no override", () => {
+		expect(niahCaseCriterionId(benchmarkTaskItemFixture({ verifierConfig: { recall: { expected: "x" } } }))).toBeNull();
+		expect(niahCaseCriterionId(benchmarkTaskItemFixture({ kind: "niahCase" }))).toBeNull();
 	});
 });
 

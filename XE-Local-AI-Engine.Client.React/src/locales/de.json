@@ -4583,6 +4583,8 @@
 				"itemsOf": "{{answered}} von {{total}}",
 				"recall": "Recall",
 				"recallValue": "{{found}} von {{graded}} Nadeln",
+				"recallUnknown": "Recall unbekannt",
+				"recallUnknownSome": "{{count}} unbekannt",
 				"expand": "Diese Kombination Aufgabe für Aufgabe anzeigen",
 				"rerun": "Erneut",
 				"unranked": "Nicht gewertet.",

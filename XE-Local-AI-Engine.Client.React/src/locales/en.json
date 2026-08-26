@@ -4583,6 +4583,8 @@
 				"itemsOf": "{{answered}} of {{total}}",
 				"recall": "Recall",
 				"recallValue": "{{found}} of {{graded}} needles",
+				"recallUnknown": "recall unknown",
+				"recallUnknownSome": "{{count}} unknown",
 				"expand": "Show this combination item by item",
 				"rerun": "Re-run",
 				"unranked": "Not ranked.",

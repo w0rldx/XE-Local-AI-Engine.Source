@@ -3,9 +3,10 @@ import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkCellResponse as CellResponse,
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkPairedDeltaResponse as PairedDeltaResponse,
 } from "@/core/api/generated";
-import type { BenchmarkRankExclusionReason } from "@/features/benchmarks/models/BenchmarkModels";
+import type { BenchmarkRankExclusionReason, BenchmarkRunVerifier } from "@/features/benchmarks/models/BenchmarkModels";
 import { toBenchmarkRankExclusionReason } from "@/features/benchmarks/models/BenchmarkModels";
 import type { BenchmarkTaskItem } from "@/features/benchmarks/models/BenchmarkTaskItems";
+import { niahCaseCriterionId } from "@/features/benchmarks/models/BenchmarkTaskItems";
 
 // A CELL is what a suite ranks: one model, one KV type, one repeat group — holding one run per task item. Its score is
 // the mean over the items that count, and it ranks only when every one of them produced a rankable score. A
@@ -88,10 +89,12 @@ export function scorableCellItems(cell: BenchmarkCell, scorableItems: readonly B
 }
 
 export interface BenchmarkNiahRecall {
-	/** Cases whose answer was graded at all. Ungraded ones are not counted as misses. */
+	/** Cases the node reported a verifier verdict for. Only these can be found or missed. */
 	graded: number;
 	found: number;
-	/** 0..1, or null when nothing was graded. */
+	/** Cases with no verdict on record — evidence not loaded, or the criterion never ran. Never counted as misses. */
+	unknown: number;
+	/** 0..1 over the graded cases, or null when none of them was graded. */
 	recall: number | null;
 }
 
@@ -99,19 +102,37 @@ export interface BenchmarkNiahRecall {
  * The long-context axis: how many of a cell's NIAH cases retrieved their needle. Kept OUT of the mean on purpose —
  * recall at 32k and answer quality are different measurements and their average is neither.
  *
- * A case is scored by an exact-match verifier, so its quality is effectively binary; the midpoint split is what turns
- * a weighted rubric's 0/100 into found/not-found without assuming the rubric holds exactly one criterion.
+ * Read from the CRITERION, never from the case's aggregate score. A needle is decided by one `exact` verifier the
+ * generator wrote onto the case, and the aggregate is that criterion's weight mixed with every other criterion in the
+ * rubric — so a case can score 60 with the needle missed, or 40 with it found, and any threshold on the aggregate is a
+ * guess dressed as a measurement. A case whose verdict is not on record counts as unknown, which is the one honest
+ * answer when the evidence is absent.
  */
-export function benchmarkNiahRecall(cell: BenchmarkCell, items: readonly BenchmarkTaskItem[]): BenchmarkNiahRecall {
-	const cases = new Set(items.filter((item) => item.kind === "niahCase").map((item) => item.id));
-	const graded = cell.items.filter(
-		(item) => item.taskItemId !== null && cases.has(item.taskItemId) && item.qualityScore !== null,
-	);
-	return {
-		graded: graded.length,
-		found: graded.filter((item) => (item.qualityScore as number) >= 50).length,
-		recall: graded.length === 0 ? null : graded.filter((item) => (item.qualityScore as number) >= 50).length / graded.length,
-	};
+export function benchmarkNiahRecall(
+	cell: BenchmarkCell,
+	items: readonly BenchmarkTaskItem[],
+	verifiersByRunId: ReadonlyMap<string, readonly BenchmarkRunVerifier[]>,
+): BenchmarkNiahRecall {
+	const cases = new Map(items.filter((item) => item.kind === "niahCase").map((item) => [item.id, item]));
+	let graded = 0;
+	let found = 0;
+	let unknown = 0;
+	for (const answer of cell.items) {
+		const item = answer.taskItemId === null ? undefined : cases.get(answer.taskItemId);
+		if (item === undefined) {
+			continue;
+		}
+		const criterionId = niahCaseCriterionId(item);
+		const verdict =
+			criterionId === null ? undefined : verifiersByRunId.get(answer.runId)?.find((verifier) => verifier.id === criterionId);
+		if (verdict === undefined) {
+			unknown += 1;
+			continue;
+		}
+		graded += 1;
+		found += verdict.passed ? 1 : 0;
+	}
+	return { graded, found, unknown, recall: graded === 0 ? null : found / graded };
 }
 
 /**
