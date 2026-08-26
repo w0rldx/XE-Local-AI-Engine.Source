@@ -20,6 +20,19 @@ public sealed class BenchmarkJudgePolicyContractsTests
     }
 
     [Test]
+    public void VerifiablePreset_ActivatesAndNeedsNoJudgeModel()
+    {
+        var rubric = BenchmarkJudgeRubricDefaults.Verifiable();
+
+        BenchmarkJudgePolicyValidator.Validate(Policy(rubric));
+
+        AssertEx.Equal(100, rubric.Criteria.Sum(static criterion => criterion.Weight));
+        AssertEx.True(rubric.Criteria.All(static criterion => BenchmarkJudgeCriterionKinds.IsVerifiable(criterion.Kind)),
+            "Every criterion must be verifiable, or the preset still spawns a judge.");
+        AssertEx.True(rubric.Criteria.All(static criterion => BenchmarkJudgeVerifierConfig.Parse(criterion.Kind, criterion.Config) is not null));
+    }
+
+    [Test]
     public void Validator_RejectsCriterionCountOutOfRange()
     {
         var empty = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() => BenchmarkJudgePolicyValidator.Validate(Policy(Rubric([]))));

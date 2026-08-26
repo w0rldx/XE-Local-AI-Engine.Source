@@ -56,6 +56,11 @@ internal static class BenchmarkEndpointSupport
             BenchmarkNotFoundException or KeyNotFoundException => (StatusCodes.Status404NotFound, BenchmarkErrorCode.NotFound,
                 "The requested benchmark resource was not found."),
             BenchmarkValidationException => (StatusCodes.Status400BadRequest, BenchmarkErrorCode.InvalidRequest, exception.Message),
+
+            // The one policy-validation failure that reaches here unwrapped: its fix is not "correct the field", so it
+            // keeps its own code rather than flattening into invalid-request.
+            BenchmarkJudgePolicyValidationException { Code: BenchmarkJudgePolicyValidationCodes.PairwiseNotAvailable } =>
+                (StatusCodes.Status422UnprocessableEntity, BenchmarkErrorCode.PairwiseNotAvailable, exception.Message),
             BenchmarkEligibilityException => (StatusCodes.Status422UnprocessableEntity, ClassifyEligibility(exception.Message), exception.Message),
             BenchmarkUnsupportedKvCacheTypeException => (StatusCodes.Status422UnprocessableEntity, BenchmarkErrorCode.UnsupportedKvCacheType,
                 exception.Message),

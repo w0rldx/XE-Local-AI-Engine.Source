@@ -600,11 +600,16 @@ public sealed record BenchmarkEligibleModel(
 ///     new policy revision and — on a project that already has runs — a re-judge.
 /// </summary>
 /// <param name="Rubric">The weighted criteria; <see langword="null" /> takes <see cref="BenchmarkJudgeRubricDefaults.Default" />.</param>
+/// <param name="Mode">
+///     <c>pointwise</c> (the default and the only mode this build executes) or <c>pairwise</c>. Absent means
+///     pointwise, so a caller written before the mode existed keeps working.
+/// </param>
 public sealed record BenchmarkJudgePolicyDraft(
     string ModelName,
     int ContextTokens,
     BenchmarkJudgeRubricV1? Rubric = null,
-    string? ReferenceAnswer = null);
+    string? ReferenceAnswer = null,
+    string? Mode = null);
 
 /// <param name="MaxOutputTokens">
 ///     The per-run output-token budget frozen into every run's sampling, or <see langword="null" /> to leave generation

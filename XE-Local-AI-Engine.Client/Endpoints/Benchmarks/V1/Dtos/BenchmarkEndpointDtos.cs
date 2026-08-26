@@ -27,6 +27,12 @@ public enum BenchmarkErrorCode
     JudgeDisabled,
     PrimaryNotSucceeded,
 
+    /// <summary>
+    ///     The judge policy names pairwise mode, which this build cannot execute. The policy is otherwise valid — the
+    ///     operator's fix is to save it pointwise, not to correct a field.
+    /// </summary>
+    PairwiseNotAvailable,
+
     /// <summary>Batch only: the cell never reached the freeze because an earlier cell stopped the batch.</summary>
     NotAttempted,
 
@@ -315,6 +321,12 @@ public sealed class BenchmarkJudgePolicyDraftDto
     public string ModelName { get; init; } = string.Empty;
     public int ContextTokens { get; init; }
 
+    /// <summary>
+    ///     <c>pointwise</c> (the default an omitted value takes) or <c>pairwise</c>. Saving <c>pairwise</c> is
+    ///     currently refused with <see cref="BenchmarkErrorCode.PairwiseNotAvailable" />.
+    /// </summary>
+    public string? Mode { get; init; }
+
     /// <summary>Omitted takes the default rubric.</summary>
     public BenchmarkRubricDto? Rubric { get; init; }
 
@@ -327,6 +339,16 @@ public sealed class BenchmarkRubricCriterionDto
     public string Title { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
     public int Weight { get; init; }
+
+    /// <summary>
+    ///     How the criterion is decided: <c>llm</c> (the default an omitted value takes), <c>exact</c>, <c>regex</c>,
+    ///     <c>jsonSchema</c>, <c>mathAnswer</c> or <c>constraint</c>. Optional on the way in so a caller written
+    ///     before verifiable criteria existed keeps working unchanged; always present on the way out.
+    /// </summary>
+    public string? Kind { get; init; }
+
+    /// <summary>The kind's configuration as JSON, or null for <c>llm</c>. Validated when the judge policy is saved.</summary>
+    public string? Config { get; init; }
 }
 
 public sealed class BenchmarkRubricDto
@@ -346,6 +368,10 @@ public sealed class BenchmarkJudgePolicyResponse
     public int? RequestedContextTokens { get; init; }
     public BenchmarkRubricDto? Rubric { get; init; }
     public string? ReferenceAnswer { get; init; }
+
+    /// <summary>The judging mode this revision was stored under: <c>pointwise</c> or <c>pairwise</c>.</summary>
+    public string? Mode { get; init; }
+
     public int? CohortGeneration { get; init; }
     public string? ReferenceExecutionKey { get; init; }
 
@@ -373,6 +399,18 @@ public sealed class BenchmarkRubricPresetsResponse
     public required BenchmarkRubricDto Default { get; init; }
     public required BenchmarkRubricDto Programming { get; init; }
     public required BenchmarkRubricDto Reasoning { get; init; }
+
+    /// <summary>The all-verifiable preset: judged server-side, with no llama-server spawn at all.</summary>
+    public required BenchmarkRubricDto Verifiable { get; init; }
+}
+
+/// <summary>One verifiable criterion's server-side evidence. Detail responses only.</summary>
+public sealed class BenchmarkJudgeVerifierResponse
+{
+    public required string Id { get; init; }
+    public required string Kind { get; init; }
+    public bool Passed { get; init; }
+    public required string Detail { get; init; }
 }
 
 /// <summary>One rubric criterion as the judge scored it. Detail responses only.</summary>
@@ -400,6 +438,12 @@ public sealed class BenchmarkRunJudgeResponse
     public string? ErrorMessage { get; init; }
     public string? Summary { get; init; }
     public IReadOnlyList<BenchmarkJudgeCriterionScoreResponse>? Criteria { get; init; }
+
+    /// <summary>
+    ///     The evidence behind each server-side criterion, or null for a judging that had none. An attempt whose
+    ///     rubric was entirely verifiable also carries <c>executionKey</c> <c>verified:v1</c> and no launch receipt.
+    /// </summary>
+    public IReadOnlyList<BenchmarkJudgeVerifierResponse>? Verifiers { get; init; }
 }
 
 /// <summary>

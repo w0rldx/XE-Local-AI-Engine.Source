@@ -4276,6 +4276,8 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricCriterion
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
+	kind: z.string().nullish(),
+	config: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto = z.object({
@@ -4304,6 +4306,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyResp
 		.nullish(),
 	rubric: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto.nullish(),
 	referenceAnswer: z.string().nullish(),
+	mode: z.string().nullish(),
 	cohortGeneration: z
 		.int()
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
@@ -4389,6 +4392,13 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeCriterionS
 	rationale: z.string(),
 });
 
+export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeVerifierResponse = z.object({
+	id: z.string(),
+	kind: z.string(),
+	passed: z.boolean().optional(),
+	detail: z.string(),
+});
+
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunJudgeResponse = z.object({
 	state: z.string(),
 	score: z
@@ -4417,6 +4427,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunJudgeRespons
 	errorMessage: z.string().nullish(),
 	summary: z.string().nullish(),
 	criteria: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeCriterionScoreResponse).nullish(),
+	verifiers: z.array(zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeVerifierResponse).nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse = z.object({
@@ -4821,6 +4832,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyDraf
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.optional(),
+	mode: z.string().nullish(),
 	rubric: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto.nullish(),
 	referenceAnswer: z.string().nullish(),
 });
@@ -4839,6 +4851,7 @@ export const zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricPresetsRe
 	default: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto,
 	programming: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto,
 	reasoning: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto,
+	verifiable: zXeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto,
 });
 
 export const zXeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkRunsResponse = z.object({

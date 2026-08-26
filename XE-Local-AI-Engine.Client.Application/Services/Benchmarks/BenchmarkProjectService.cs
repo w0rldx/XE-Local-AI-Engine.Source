@@ -326,7 +326,8 @@ public sealed class BenchmarkProjectService(
             BenchmarkJudgePolicyVersions.OutputSchemaVersion,
             BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
             draft.Rubric ?? BenchmarkJudgeRubricDefaults.Default(),
-            NormalizeReferenceAnswer(draft.ReferenceAnswer));
+            NormalizeReferenceAnswer(draft.ReferenceAnswer),
+            BenchmarkJudgePolicyModes.Normalize(draft.Mode));
         return string.Equals(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(candidate), current.PolicyHash, StringComparison.Ordinal);
     }
 
@@ -349,7 +350,8 @@ public sealed class BenchmarkProjectService(
                 BenchmarkJudgePolicyVersions.OutputSchemaVersion,
                 BenchmarkJudgePolicySamplingV1.FromSnapshot(BenchmarkFrozenPolicies.DeterministicSampling()),
                 draft.Rubric ?? BenchmarkJudgeRubricDefaults.Default(),
-                NormalizeReferenceAnswer(draft.ReferenceAnswer));
+                NormalizeReferenceAnswer(draft.ReferenceAnswer),
+                BenchmarkJudgePolicyModes.Normalize(draft.Mode));
             BenchmarkJudgePolicyValidator.Validate(policy);
             return policy;
         }
@@ -367,7 +369,11 @@ public sealed class BenchmarkProjectService(
                 Source = exception.Source
             };
         }
+        // A pairwise refusal is deliberately NOT flattened into the generic invalid-request code: it is the one
+        // validation failure whose fix is "wait for the pairwise slice", not "correct the field", and the UI needs to
+        // say so. follow-up: S3 removes the refusal and this arm with it.
         catch (BenchmarkJudgePolicyValidationException exception)
+            when (!string.Equals(exception.Code, BenchmarkJudgePolicyValidationCodes.PairwiseNotAvailable, StringComparison.Ordinal))
         {
             throw new BenchmarkValidationException(exception.Message)
             {

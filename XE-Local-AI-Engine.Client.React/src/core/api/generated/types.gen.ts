@@ -3656,6 +3656,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyRespon
 	requestedContextTokens?: number | null;
 	rubric?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto | null;
 	referenceAnswer?: string | null;
+	mode?: string | null;
 	cohortGeneration?: number | null;
 	referenceExecutionKey?: string | null;
 	promptVersion?: number | null;
@@ -3672,6 +3673,8 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricCriterionDt
 	title?: string;
 	description?: string;
 	weight?: number;
+	kind?: string | null;
+	config?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRankCohortResponse = {
@@ -3772,12 +3775,20 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRunJudgeResponse 
 	errorMessage?: string | null;
 	summary?: string | null;
 	criteria?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeCriterionScoreResponse> | null;
+	verifiers?: Array<XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeVerifierResponse> | null;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeCriterionScoreResponse = {
 	id: string;
 	score?: number;
 	rationale: string;
+};
+
+export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgeVerifierResponse = {
+	id: string;
+	kind: string;
+	passed?: boolean;
+	detail: string;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkFidelityResponse = {
@@ -3950,6 +3961,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1UpdateBenchmarkJudgePolicy
 export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyDraftDto = {
 	modelName?: string;
 	contextTokens?: number;
+	mode?: string | null;
 	rubric?: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto | null;
 	referenceAnswer?: string | null;
 };
@@ -3962,6 +3974,7 @@ export type XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricPresetsResp
 	default: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
 	programming: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
 	reasoning: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
+	verifiable: XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkRubricDto;
 };
 
 export type XeLocalAiEngineClientEndpointsBenchmarksV1ListBenchmarkRunsResponse = {

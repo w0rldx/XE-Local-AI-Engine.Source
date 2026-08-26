@@ -198,6 +198,56 @@ public sealed class BenchmarkProjectServiceTests
     }
 
     [Test]
+    public async Task UpdateJudgePolicy_InPairwiseMode_IsRefusedWithItsOwnCodeUntilTheSliceLands()
+    {
+        // The mode ships inside the policy hash now — every schema change costs one project-wide re-judge, so the
+        // pairwise members ride along with the verifiable ones. Executing it is S3, and the refusal says so rather
+        // than reading as "your judge configuration is malformed".
+        var context = new ServiceContext();
+
+        var exception = await AssertEx.ThrowsAsync<BenchmarkJudgePolicyValidationException>(() =>
+            context.Service.UpdateJudgePolicyAsync(ProjectId,
+                1,
+                new BenchmarkJudgePolicyDraft("judge-model", 4096, Mode: BenchmarkJudgePolicyModes.Pairwise),
+                confirmRejudge: false));
+
+        AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.PairwiseNotAvailable, exception.Code);
+        _ = context.Store.DidNotReceive().ActivateJudgePolicyAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
+            Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UpdateJudgePolicy_WithAnAllVerifiableRubric_ActivatesAndStoresTheConfig()
+    {
+        var context = new ServiceContext();
+
+        var change = await context.Service.UpdateJudgePolicyAsync(ProjectId,
+            1,
+            new BenchmarkJudgePolicyDraft("judge-model", 4096, BenchmarkJudgeRubricDefaults.Verifiable()),
+            confirmRejudge: false);
+
+        AssertEx.NotNull(change);
+        _ = context.Store.Received(1).ActivateJudgePolicyAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
+            Arg.Any<BenchmarkJudgeAttemptSeed?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UpdateJudgePolicy_WithAnUnrunnableVerifierConfig_IsRefusedAtActivation()
+    {
+        var context = new ServiceContext();
+        var rubric = new BenchmarkJudgeRubricV1(BenchmarkJudgePolicyVersions.RubricVersion,
+        [
+            new BenchmarkJudgeRubricCriterionV1("c0", "Title", "Description", 100, BenchmarkJudgeCriterionKinds.Regex,
+                """{"pattern":"(?=lookahead)"}""")
+        ]);
+
+        var exception = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
+            context.Service.UpdateJudgePolicyAsync(ProjectId, 1, new BenchmarkJudgePolicyDraft("judge-model", 4096, rubric), confirmRejudge: false));
+
+        AssertEx.Contains(exception.Message, "linear time");
+    }
+
+    [Test]
     public async Task UpdateJudgePolicy_WithADifferentHashOnAProjectWithRuns_RequiresConfirmation()
     {
         var context = new ServiceContext(runCount: 2);

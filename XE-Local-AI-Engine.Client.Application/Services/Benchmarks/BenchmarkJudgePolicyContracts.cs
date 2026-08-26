@@ -470,6 +470,42 @@ public static class BenchmarkJudgeRubricDefaults
             "Clarity",
             "Can a reader follow the argument end to end? 0 = incoherent; 5 = followable but disorganised; 10 = a clean chain from premises to conclusion.");
 
+    public const string FinalAnswerId = "final_answer";
+    public const string OutputLengthId = "output_length";
+    public const string NoRefusalId = "no_refusal";
+
+    /// <summary>
+    ///     The one preset that costs no GPU: every criterion is decided server-side, so a project judging under it
+    ///     completes with no llama-server spawn at all.
+    ///     <para>
+    ///         Unlike the three model-judged presets, this one does NOT share their criterion ids and weights — it
+    ///         cannot, because a verifiable criterion is a different question. <see cref="FinalAnswerId" />'s expected
+    ///         value is a placeholder the operator must edit to their task; the other two are usable as they stand.
+    ///     </para>
+    /// </summary>
+    public static BenchmarkJudgeRubricV1 Verifiable() =>
+        new(BenchmarkJudgePolicyVersions.RubricVersion,
+        [
+            new BenchmarkJudgeRubricCriterionV1(FinalAnswerId,
+                "Final answer",
+                "The final numeric answer, read from \\boxed{}, from a #### marker, from an \"answer is\" phrase, or as the last number in the output. Edit the expected value to your task.",
+                60,
+                BenchmarkJudgeCriterionKinds.MathAnswer,
+                """{"expected":0}"""),
+            new BenchmarkJudgeRubricCriterionV1(OutputLengthId,
+                "Output length",
+                "The answer stays inside a sane length budget instead of padding.",
+                20,
+                BenchmarkJudgeCriterionKinds.Constraint,
+                """{"maxWords":800}"""),
+            new BenchmarkJudgeRubricCriterionV1(NoRefusalId,
+                "No refusal",
+                "The model attempted the task rather than declining it.",
+                20,
+                BenchmarkJudgeCriterionKinds.Regex,
+                """{"pattern":"(?i:i (?:cannot|can not|am unable to|won't|will not) )","mustMatch":false}""")
+        ]);
+
     private static BenchmarkJudgeRubricV1 Build(string correctnessTitle,
         string correctnessDescription,
         string reasoningTitle,

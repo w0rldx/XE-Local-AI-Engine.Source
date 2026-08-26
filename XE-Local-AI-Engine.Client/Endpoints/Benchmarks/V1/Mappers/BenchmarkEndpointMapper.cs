@@ -288,7 +288,15 @@ internal static class BenchmarkEndpointMapper
                                   Score = criterion.Score,
                                   Rationale = criterion.Rationale
                               })
-                              .ToArray()
+                              .ToArray(),
+            Verifiers = verdict?.Verifiers?.Select(static verifier => new BenchmarkJudgeVerifierResponse
+                               {
+                                   Id = verifier.Id,
+                                   Kind = verifier.Kind,
+                                   Passed = verifier.Passed,
+                                   Detail = verifier.Detail
+                               })
+                               .ToArray()
         };
     }
 
@@ -301,7 +309,9 @@ internal static class BenchmarkEndpointMapper
                                  Id = criterion.Id,
                                  Title = criterion.Title,
                                  Description = criterion.Description,
-                                 Weight = criterion.Weight
+                                 Weight = criterion.Weight,
+                                 Kind = BenchmarkJudgeCriterionKinds.Normalize(criterion.Kind),
+                                 Config = criterion.Config
                              })
                              .ToArray()
         };
@@ -313,7 +323,9 @@ internal static class BenchmarkEndpointMapper
                 dto.Criteria.Select(static criterion => new BenchmarkJudgeRubricCriterionV1(criterion.Id,
                        criterion.Title,
                        criterion.Description,
-                       criterion.Weight))
+                       criterion.Weight,
+                       BenchmarkJudgeCriterionKinds.Normalize(criterion.Kind),
+                       criterion.Config))
                    .ToArray());
 
     /// <summary>
@@ -336,6 +348,7 @@ internal static class BenchmarkEndpointMapper
                 RequestedContextTokens = policy.RequestedContextTokens,
                 Rubric = policy.Rubric.ToDto(),
                 ReferenceAnswer = policy.ReferenceAnswer,
+                Mode = BenchmarkJudgePolicyModes.Normalize(policy.Mode),
                 CohortGeneration = revision.CohortGeneration,
                 ReferenceExecutionKey = revision.ReferenceExecutionKey,
                 PromptVersion = policy.PromptVersion,
