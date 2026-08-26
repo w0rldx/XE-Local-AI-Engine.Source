@@ -117,8 +117,7 @@ internal sealed class DevelopmentOpenApiDocumentProcessor : IDocumentProcessor
                       .ToDictionary(static item => item.Key, static item => item.Value, StringComparer.Ordinal);
     }
 
-    private static void OrderEntries<TValue>(
-        IDictionary<string, TValue> entries,
+    private static void OrderEntries<TValue>(IDictionary<string, TValue> entries,
         Func<string, bool> isDevelopmentEntry,
         IReadOnlyDictionary<string, int> knownRanks)
     {
@@ -154,9 +153,12 @@ internal sealed class DevelopmentOpenApiDocumentProcessor : IDocumentProcessor
         || schema.StartsWith(ServiceSchemaPrefix, StringComparison.Ordinal)
         || schema.StartsWith(PersistenceSchemaPrefix, StringComparison.Ordinal);
 
-    private static string LocalPath(string route) => $"/{LocalApiRoutes.Prefix}/{route}";
+    private static string LocalPath(string route) =>
+        $"/{LocalApiRoutes.Prefix}/{route}";
 
-    private static string EndpointSchema(string typeName) => EndpointSchemaPrefix + typeName;
+    private static string EndpointSchema(string typeName) =>
+        EndpointSchemaPrefix + typeName;
 
-    private static string ServiceSchema(string typeName) => ServiceSchemaPrefix + typeName;
+    private static string ServiceSchema(string typeName) =>
+        ServiceSchemaPrefix + typeName;
 }

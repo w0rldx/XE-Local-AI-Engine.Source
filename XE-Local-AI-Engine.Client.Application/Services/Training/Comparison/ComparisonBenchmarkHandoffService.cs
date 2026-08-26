@@ -21,7 +21,8 @@ public sealed record CreateBenchmarkFromComparisonCommand(
     bool Warmup = false);
 
 /// <param name="BaseRunIds">The base model's runs, in the order they were enqueued. The tuned group follows them.</param>
-public sealed record ComparisonBenchmarkHandoff(Guid ProjectId,
+public sealed record ComparisonBenchmarkHandoff(
+    Guid ProjectId,
     string BaseModelName,
     string TunedModelName,
     IReadOnlyList<Guid> BaseRunIds,
@@ -77,8 +78,7 @@ public sealed class ComparisonBenchmarkHandoffService(
         ArgumentNullException.ThrowIfNull(command);
         if (string.IsNullOrWhiteSpace(command.CoreTask))
         {
-            throw new BenchmarkValidationException(
-                "A benchmark task is required. A comparison's evaluation prompt scores the hold-out samples; it is not the task to benchmark the two models on.");
+            throw new BenchmarkValidationException("A benchmark task is required. A comparison's evaluation prompt scores the hold-out samples; it is not the task to benchmark the two models on.");
         }
 
         if (command.RepeatCount is < 1 or > 10)
@@ -119,7 +119,11 @@ public sealed class ComparisonBenchmarkHandoffService(
         // an hour of base runs queued while the caller got an error carrying no ids, so the only retry available
         // queued a SECOND base group. One commit and one compare-and-swap: on any failure nothing is persisted.
         var plans = new List<BenchmarkFrozenRunPlan>(2);
-        foreach (var modelName in new[] { baseModelName, tunedModelName })
+        foreach (var modelName in new[]
+                 {
+                     baseModelName,
+                     tunedModelName
+                 })
         {
             plans.Add(await FreezeAsync(project.Id, modelName, project.Version, kvCacheType, command, scope, cancellationToken).ConfigureAwait(false));
         }
@@ -148,10 +152,10 @@ public sealed class ComparisonBenchmarkHandoffService(
         }
 
         return await _projects.CreateAsync(new BenchmarkProjectDraft(Guid.Empty,
-                                   Disambiguate(name, existing),
-                                   command.CoreTask,
-                                   command.ContextTokens,
-                                   command.AgentDefinitionId), cancellationToken)
+                                  Disambiguate(name, existing),
+                                  command.CoreTask,
+                                  command.ContextTokens,
+                                  command.AgentDefinitionId), cancellationToken)
                               .ConfigureAwait(false);
     }
 
@@ -205,11 +209,11 @@ public sealed class ComparisonBenchmarkHandoffService(
         try
         {
             return await _freeze.FreezeAsync(new BenchmarkRunStartRequest(projectId,
-                                     modelName,
-                                     expectedVersion,
-                                     kvCacheType,
-                                     command.RepeatCount,
-                                     command.Warmup), scope, cancellationToken)
+                                    modelName,
+                                    expectedVersion,
+                                    kvCacheType,
+                                    command.RepeatCount,
+                                    command.Warmup), scope, cancellationToken)
                                 .ConfigureAwait(false);
         }
         catch (KeyNotFoundException)
@@ -245,8 +249,7 @@ public sealed class ComparisonBenchmarkHandoffService(
                        ?? throw new BenchmarkValidationException($"The {side} evaluation's staged artifact no longer exists, so its model cannot be benchmarked.");
         if (string.IsNullOrWhiteSpace(artifact.CommittedModelName))
         {
-            throw new BenchmarkValidationException(
-                $"The {side} model of this comparison is still a staged artifact. Register it as an installed model before benchmarking it.");
+            throw new BenchmarkValidationException($"The {side} model of this comparison is still a staged artifact. Register it as an installed model before benchmarking it.");
         }
 
         return artifact.CommittedModelName;

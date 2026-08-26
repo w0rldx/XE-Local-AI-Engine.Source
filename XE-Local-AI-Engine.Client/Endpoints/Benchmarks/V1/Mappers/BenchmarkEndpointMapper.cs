@@ -208,6 +208,7 @@ internal static class BenchmarkEndpointMapper
         {
             kldState = comparable ? BenchmarkFidelityKldStates.Ok : BenchmarkFidelityKldStates.Stale;
         }
+
         return new BenchmarkFidelityResponse
         {
             Status = fidelity.Status ?? "queued",

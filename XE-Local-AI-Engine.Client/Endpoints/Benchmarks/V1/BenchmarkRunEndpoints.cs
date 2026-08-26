@@ -104,13 +104,13 @@ public sealed class StartBenchmarkRunEndpoint(IBenchmarkRunFreezeService runs)
             // The FIRST run of the group is the response: it is the one that starts, so it is the one an operator's
             // live pane should open on. The rest are reachable through its repeatGroupId.
             var created = await _runs.StartAsync(new BenchmarkRunStartRequest(req.ProjectId,
-                                             req.ModelName,
-                                             req.ExpectedProjectVersion,
-                                             kvCacheType,
-                                             req.RepeatCount,
-                                             req.Warmup,
-                                             req.RepeatMode,
-                                             req.AnswerVarianceTemperature), scope: null, ct)
+                                         req.ModelName,
+                                         req.ExpectedProjectVersion,
+                                         kvCacheType,
+                                         req.RepeatCount,
+                                         req.Warmup,
+                                         req.RepeatMode,
+                                         req.AnswerVarianceTemperature), scope: null, ct)
                                      .ConfigureAwait(false);
             await Send.ResultAsync(Results.Accepted(value: created[0].ToDetail())).ConfigureAwait(false);
         }
@@ -223,14 +223,14 @@ public sealed class StartBenchmarkRunBatchEndpoint(IBenchmarkRunFreezeService ru
             try
             {
                 var created = await _runs.StartAsync(new BenchmarkRunStartRequest(req.ProjectId,
-                                                 item.ModelName,
-                                                 expectedVersion,
-                                                 kvCacheType,
-                                                 req.RepeatCount,
-                                                 req.Warmup,
-                                                 req.RepeatMode,
-                                                 req.AnswerVarianceTemperature), scope, ct)
-                                             .ConfigureAwait(false);
+                                             item.ModelName,
+                                             expectedVersion,
+                                             kvCacheType,
+                                             req.RepeatCount,
+                                             req.Warmup,
+                                             req.RepeatMode,
+                                             req.AnswerVarianceTemperature), scope, ct)
+                                         .ConfigureAwait(false);
                 expectedVersion += created.Count;
                 started.Add(new StartedBenchmarkRunBatchItemResponse
                 {
@@ -369,8 +369,8 @@ public sealed class CancelBenchmarkRunEndpoint(IBenchmarkCancellationService can
     {
         var run = await _cancellation.CancelAsync(req.RunId, req.ExpectedVersion, req.Target, ct).ConfigureAwait(false);
         await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false),
-                  BenchmarkEndpointSupport.ExpectedKldDigest(await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
-              .ConfigureAwait(false);
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
+                  .ConfigureAwait(false);
     }
 }
 
@@ -400,8 +400,8 @@ public sealed class ScoreBenchmarkRunEndpoint(IBenchmarkStore store)
 
         var run = await _store.SetUserScoreAsync(req.RunId, score, req.ExpectedVersion, ct).ConfigureAwait(false);
         await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false),
-                  BenchmarkEndpointSupport.ExpectedKldDigest(await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
-              .ConfigureAwait(false);
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
+                  .ConfigureAwait(false);
     }
 }
 
@@ -423,8 +423,8 @@ public sealed class ClearBenchmarkRunScoreEndpoint(IBenchmarkStore store)
     {
         var run = await _store.SetUserScoreAsync(req.RunId, score: null, req.ExpectedVersion, ct).ConfigureAwait(false);
         await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false),
-                  BenchmarkEndpointSupport.ExpectedKldDigest(await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
-              .ConfigureAwait(false);
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
+                  .ConfigureAwait(false);
     }
 }
 
@@ -449,7 +449,7 @@ public sealed class RejudgeBenchmarkRunEndpoint(IBenchmarkProjectService project
         var run = await _store.GetRunAsync(req.RunId, ct).ConfigureAwait(false)
                   ?? throw new BenchmarkNotFoundException("Benchmark run was not found.");
         await Send.OkAsync(run.ToDetail(await BenchmarkEndpointSupport.ReadVerdictAsync(_store, run, ct).ConfigureAwait(false),
-                  BenchmarkEndpointSupport.ExpectedKldDigest(await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
-              .ConfigureAwait(false);
+                      BenchmarkEndpointSupport.ExpectedKldDigest(await _store.GetProjectAsync(run.ProjectId, ct).ConfigureAwait(false))), ct)
+                  .ConfigureAwait(false);
     }
 }

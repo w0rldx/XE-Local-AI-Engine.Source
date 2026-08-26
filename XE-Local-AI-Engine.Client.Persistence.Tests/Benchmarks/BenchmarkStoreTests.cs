@@ -1097,16 +1097,23 @@ public sealed class BenchmarkStoreTests : IDisposable
         var store = new BenchmarkStore(context, TimeProvider.System);
         var project = await store.CreateProjectAsync(CreateProject());
         var cellKey = "cell:" + Guid.NewGuid().ToString("D") + ":1";
-        var itemIds = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
-
-        _ = await store.StartRunsAsync([.. itemIds.Select((itemId, index) => CreateRun(project) with
+        var itemIds = new[]
         {
-            TaskItemId = itemId,
-            TaskItemIndex = index,
-            CellKey = cellKey,
-            TaskInputHash = "v1:item-" + index,
-            TaskItemSetHash = "v1:set"
-        })], project.Version);
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid()
+        };
+
+        _ = await store.StartRunsAsync([
+            .. itemIds.Select((itemId, index) => CreateRun(project) with
+            {
+                TaskItemId = itemId,
+                TaskItemIndex = index,
+                CellKey = cellKey,
+                TaskInputHash = "v1:item-" + index,
+                TaskItemSetHash = "v1:set"
+            })
+        ], project.Version);
 
         var stored = await context.BenchmarkRuns.AsNoTracking()
                                   .Where(entity => entity.ProjectId == project.Id)
@@ -1135,14 +1142,16 @@ public sealed class BenchmarkStoreTests : IDisposable
             FidelityEnabled = true
         });
         var cellKey = "cell:" + Guid.NewGuid().ToString("D") + ":1";
-        var runs = await store.StartRunsAsync([.. Enumerable.Range(0, 3).Select(index => CreateRun(project) with
-        {
-            TaskItemId = Guid.NewGuid(),
-            TaskItemIndex = index,
-            CellKey = cellKey,
-            TaskInputHash = "v1:item-" + index,
-            TaskItemSetHash = "v1:set"
-        })], project.Version);
+        var runs = await store.StartRunsAsync([
+            .. Enumerable.Range(0, 3).Select(index => CreateRun(project) with
+            {
+                TaskItemId = Guid.NewGuid(),
+                TaskItemIndex = index,
+                CellKey = cellKey,
+                TaskInputHash = "v1:item-" + index,
+                TaskItemSetHash = "v1:set"
+            })
+        ], project.Version);
 
         var marked = await context.BenchmarkRuns.AsNoTracking()
                                   .Where(entity => entity.ProjectId == project.Id && entity.FidelityStatus == "skipped")

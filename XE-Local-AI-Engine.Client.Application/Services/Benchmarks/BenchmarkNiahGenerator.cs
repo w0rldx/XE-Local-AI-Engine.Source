@@ -172,9 +172,8 @@ public static class BenchmarkNiahGenerator
 
         if (sizes.Count * depths.Count > MaximumCases)
         {
-            throw new BenchmarkValidationException(
-                $"A long-context probe expands into {sizes.Count * depths.Count} cases ({sizes.Count} lengths x {depths.Count} depths). "
-                + $"The maximum is {MaximumCases}.");
+            throw new BenchmarkValidationException($"A long-context probe expands into {sizes.Count * depths.Count} cases ({sizes.Count} lengths x {depths.Count} depths). "
+                                                   + $"The maximum is {MaximumCases}.");
         }
 
         if (sizes.FirstOrDefault(static size => size < MinimumContextTokens) is var tooShort and > 0)
@@ -186,8 +185,7 @@ public static class BenchmarkNiahGenerator
         // window; naming both numbers is the difference between a fixable form error and a wasted batch.
         if (sizes.FirstOrDefault(size => size > projectContextTokens) is var tooLong and > 0)
         {
-            throw new BenchmarkValidationException(
-                $"A long-context probe of {tooLong} tokens does not fit the project's {projectContextTokens}-token context window.");
+            throw new BenchmarkValidationException($"A long-context probe of {tooLong} tokens does not fit the project's {projectContextTokens}-token context window.");
         }
 
         if (depths.Where(static depth => depth is < 0 or > 100).Select(static depth => (int?)depth).FirstOrDefault() is { } outside)
@@ -296,8 +294,7 @@ public static class BenchmarkNiahGenerator
         var prompt = BuildPrompt(haystack, question, corpus.Attribution);
         var approximateTokens = ChunkTokenApproximation.EstimateTokens(prompt);
         var label = string.Create(CultureInfo.InvariantCulture, $"NIAH ≈{Kilo(contextTokens)} @ {depthPercent}%");
-        return new GeneratedCase(
-            new BenchmarkNiahCaseV1(contextTokens, depthPercent, approximateTokens, seed, label, subject, corpus.CorpusId),
+        return new GeneratedCase(new BenchmarkNiahCaseV1(contextTokens, depthPercent, approximateTokens, seed, label, subject, corpus.CorpusId),
             prompt,
             passcode);
     }

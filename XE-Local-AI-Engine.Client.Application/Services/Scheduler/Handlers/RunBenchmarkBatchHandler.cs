@@ -179,8 +179,7 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
         {
             // Named per kind, because "still busy" and "still busy JUDGING" are different operator actions.
             var breakdown = string.Join(", ", active.OrderBy(static entry => entry.Key).Select(static entry => $"{entry.Key} {entry.Value}"));
-            _logger.LogInformation(
-                "Scheduled benchmark batch for project {ProjectId} was skipped: {ActiveCount} work item(s) of that project are still queued or running ({Breakdown}).",
+            _logger.LogInformation("Scheduled benchmark batch for project {ProjectId} was skipped: {ActiveCount} work item(s) of that project are still queued or running ({Breakdown}).",
                 parameters.ProjectId,
                 activeCount,
                 breakdown);
@@ -230,11 +229,11 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
             try
             {
                 var created = await freezeService.StartAsync(new BenchmarkRunStartRequest(parameters.ProjectId,
-                                                       modelName,
-                                                       expectedVersion,
-                                                       kvCacheType,
-                                                       parameters.RepeatCount,
-                                                       parameters.Warmup), freezeScope, cancellationToken)
+                                                     modelName,
+                                                     expectedVersion,
+                                                     kvCacheType,
+                                                     parameters.RepeatCount,
+                                                     parameters.Warmup), freezeScope, cancellationToken)
                                                  .ConfigureAwait(false);
                 expectedVersion += created.Count;
                 runsCreated += created.Count;
@@ -357,7 +356,10 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
         // Absent means "one cell per model at the project's own KV setting", which is what a null KV type is everywhere
         // else in the module. An explicitly empty array is an operator mistake, not that.
         var kvCacheTypes = dto.KvCacheTypes is null
-            ? new string?[] { null }
+            ? new string?[]
+            {
+                null
+            }
             : dto.KvCacheTypes.Select(static type => string.IsNullOrWhiteSpace(type) ? null : type.Trim()).ToArray();
         if (kvCacheTypes.Length == 0 || kvCacheTypes.Length > MaxKvCacheTypes)
         {
@@ -388,8 +390,7 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
                           .ToArray();
         if (cells.Length > MaxCells)
         {
-            throw new ScheduledJobValidationException(
-                $"The scheduled matrix expands to {cells.Length.ToString(CultureInfo.InvariantCulture)} cells, past the {MaxCells}-cell ceiling.");
+            throw new ScheduledJobValidationException($"The scheduled matrix expands to {cells.Length.ToString(CultureInfo.InvariantCulture)} cells, past the {MaxCells}-cell ceiling.");
         }
 
         return new RunBenchmarkBatchParameters(projectId, cells, repeatCount, dto.Warmup ?? false);

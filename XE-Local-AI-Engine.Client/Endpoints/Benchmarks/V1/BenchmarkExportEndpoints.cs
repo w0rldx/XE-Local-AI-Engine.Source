@@ -469,8 +469,7 @@ internal static class BenchmarkExportStatistics
     ///         run's: those genuinely vary across an answer-variance group.
     ///     </para>
     /// </summary>
-    public static IReadOnlyList<BenchmarkExportLlamaBenchRowResponse> LlamaBenchRows(
-        IReadOnlyList<BenchmarkExportRepeatGroupResponse> groups,
+    public static IReadOnlyList<BenchmarkExportLlamaBenchRowResponse> LlamaBenchRows(IReadOnlyList<BenchmarkExportRepeatGroupResponse> groups,
         IReadOnlyDictionary<Guid, BenchmarkExportRunFacts> facts)
     {
         ArgumentNullException.ThrowIfNull(groups);

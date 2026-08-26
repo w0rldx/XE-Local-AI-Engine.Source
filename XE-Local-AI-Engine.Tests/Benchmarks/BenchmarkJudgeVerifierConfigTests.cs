@@ -42,7 +42,10 @@ public sealed class BenchmarkJudgeVerifierConfigTests
             BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.PythonTests, """{"exports":["solve"]}"""));
         var oversized = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
             BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.PythonTests,
-                JsonSerializer.Serialize(new { testCode = new string('x', BenchmarkPythonTestsHarness.TestCodeMaxChars + 1) })));
+                JsonSerializer.Serialize(new
+                {
+                    testCode = new string('x', BenchmarkPythonTestsHarness.TestCodeMaxChars + 1)
+                })));
         var badExport = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
             BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.PythonTests,
                 """{"testCode":"assert True","exports":["not an identifier"]}"""));
@@ -53,13 +56,19 @@ public sealed class BenchmarkJudgeVerifierConfigTests
             BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.PythonTests,
                 """{"testCode":"assert True","extract":"telepathy"}"""));
 
-        foreach (var refusal in new[] { missingTests, oversized, badExport, badTimeout, badExtract })
+        foreach (var refusal in new[]
+                 {
+                     missingTests,
+                     oversized,
+                     badExport,
+                     badTimeout,
+                     badExtract
+                 })
         {
             AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid, refusal.Code);
         }
 
-        var accepted = AssertEx.NotNull(AssertEx.NotNull(BenchmarkJudgeVerifierConfig.Parse(
-            BenchmarkJudgeCriterionKinds.PythonTests,
+        var accepted = AssertEx.NotNull(AssertEx.NotNull(BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.PythonTests,
             """{"testCode":"assert solve(1) == 2","exports":["solve"],"timeoutSeconds":20}""")).PythonTests);
 
         AssertEx.Equal("assert solve(1) == 2", accepted.TestCode);
@@ -74,8 +83,7 @@ public sealed class BenchmarkJudgeVerifierConfigTests
         AssertEx.True(BenchmarkJudgeCriterionKinds.IsExecutionVerified(BenchmarkJudgeCriterionKinds.PythonTests));
         AssertEx.False(BenchmarkJudgeCriterionKinds.IsExecutionVerified(BenchmarkJudgeCriterionKinds.Exact));
 
-        _ = AssertEx.Throws<BenchmarkExecutionException>(() => BenchmarkJudgeVerifiers.Verify(
-            new BenchmarkJudgeRubricCriterionV1("solution", "Solution", "Runs.", 100,
+        _ = AssertEx.Throws<BenchmarkExecutionException>(() => BenchmarkJudgeVerifiers.Verify(new BenchmarkJudgeRubricCriterionV1("solution", "Solution", "Runs.", 100,
                 BenchmarkJudgeCriterionKinds.PythonTests, """{"testCode":"assert True"}"""),
             "answer"));
     }
@@ -85,8 +93,10 @@ public sealed class BenchmarkJudgeVerifierConfigTests
     {
         foreach (var kind in new[]
                  {
-                     BenchmarkJudgeCriterionKinds.Exact, BenchmarkJudgeCriterionKinds.Regex,
-                     BenchmarkJudgeCriterionKinds.JsonSchema, BenchmarkJudgeCriterionKinds.MathAnswer,
+                     BenchmarkJudgeCriterionKinds.Exact,
+                     BenchmarkJudgeCriterionKinds.Regex,
+                     BenchmarkJudgeCriterionKinds.JsonSchema,
+                     BenchmarkJudgeCriterionKinds.MathAnswer,
                      BenchmarkJudgeCriterionKinds.Constraint
                  })
         {

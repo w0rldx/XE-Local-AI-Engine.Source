@@ -300,8 +300,7 @@ public sealed class RunBenchmarkBatchHandlerTests
                       }
 
                       StartedCells.Add(request);
-                      return Task.FromResult<IReadOnlyList<BenchmarkRunRecord>>(
-                          [.. Enumerable.Range(0, request.RepeatCount).Select(static _ => Run(BenchmarkPrimaryStatus.Queued))]);
+                      return Task.FromResult<IReadOnlyList<BenchmarkRunRecord>>([.. Enumerable.Range(0, request.RepeatCount).Select(static _ => Run(BenchmarkPrimaryStatus.Queued))]);
                   });
 
             var services = new ServiceCollection();

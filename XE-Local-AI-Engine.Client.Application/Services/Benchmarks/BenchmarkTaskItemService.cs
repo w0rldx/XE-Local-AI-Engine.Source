@@ -146,8 +146,7 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
     {
         if (existing.Any(item => item.Id == itemId && string.Equals(item.Kind, BenchmarkTaskItemKinds.NiahCase, StringComparison.Ordinal)))
         {
-            throw new BenchmarkValidationException(
-                "A generated long-context case cannot be edited or deleted on its own. Change the probe it was generated from.");
+            throw new BenchmarkValidationException("A generated long-context case cannot be edited or deleted on its own. Change the probe it was generated from.");
         }
     }
 
@@ -181,8 +180,7 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
         {
             // A case is written by the generator that owns it, never by an operator: one written by hand would carry
             // a parent that does not describe it.
-            throw new BenchmarkValidationException(
-                $"A task item is either '{BenchmarkTaskItemKinds.Prompt}' or '{BenchmarkTaskItemKinds.Niah}'.");
+            throw new BenchmarkValidationException($"A task item is either '{BenchmarkTaskItemKinds.Prompt}' or '{BenchmarkTaskItemKinds.Niah}'.");
         }
 
         var input = new BenchmarkTaskItemInput(JsonSerializer.SerializeToUtf8Bytes(draft.Prompt),
@@ -264,8 +262,7 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
         foreach (var (criterionId, config) in ReadOverrides(element))
         {
             var criterion = rubric.Criteria.FirstOrDefault(entry => string.Equals(entry.Id, criterionId, StringComparison.Ordinal))
-                            ?? throw new BenchmarkValidationException(
-                                $"The verifier override names criterion '{criterionId}', which the judge rubric does not have.");
+                            ?? throw new BenchmarkValidationException($"The verifier override names criterion '{criterionId}', which the judge rubric does not have.");
             try
             {
                 // The policy's own parser, not a second one: an override must never be able to mean something a
@@ -337,12 +334,10 @@ public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : I
         return
         [
             .. BenchmarkNiahGenerator.Expand(itemId, config, project.ContextTokens)
-                                     .Select(generated => new BenchmarkTaskItemInput(
-                                         JsonSerializer.SerializeToUtf8Bytes(generated.Prompt),
+                                     .Select(generated => new BenchmarkTaskItemInput(JsonSerializer.SerializeToUtf8Bytes(generated.Prompt),
                                          BenchmarkTaskItemKinds.NiahCase,
                                          ReferenceAnswerJson: JsonSerializer.SerializeToUtf8Bytes(generated.ExpectedAnswer),
-                                         VerifierConfigJson: Encoding.UTF8.GetBytes(
-                                             BenchmarkNiahGenerator.VerifierConfigJson(criterionId, generated.ExpectedAnswer)),
+                                         VerifierConfigJson: Encoding.UTF8.GetBytes(BenchmarkNiahGenerator.VerifierConfigJson(criterionId, generated.ExpectedAnswer)),
                                          GeneratorConfigJson: JsonSerializer.SerializeToUtf8Bytes(generated.Case, BenchmarkNiahGenerator.SerializerOptions),
                                          ParentItemId: itemId,
 

@@ -110,12 +110,12 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
         await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-task-items-identical.sqlite", PreTaskItemsMigrationId).ConfigureAwait(false);
         await SeedProjectAndRunsAsync(probe).ConfigureAwait(false);
         var beforeProject = await ScalarStringAsync(probe, "SELECT hex(core_task_json) || '|' || name || '|' || context_tokens || '|' || version FROM benchmark_projects WHERE id = $id;",
-                                    ProjectId)
-                                .ConfigureAwait(false);
+                ProjectId)
+            .ConfigureAwait(false);
         var beforeRun = await ScalarStringAsync(probe,
-                                "SELECT hex(runtime_snapshot_json) || '|' || primary_model_name || '|' || primary_status || '|' || version FROM benchmark_runs WHERE id = $id;",
-                                RunId)
-                            .ConfigureAwait(false);
+                "SELECT hex(runtime_snapshot_json) || '|' || primary_model_name || '|' || primary_status || '|' || version FROM benchmark_runs WHERE id = $id;",
+                RunId)
+            .ConfigureAwait(false);
 
         await probe.MigrateToAsync(targetMigration: null).ConfigureAwait(false);
 
@@ -138,13 +138,13 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
         AssertEx.True(unstamped[0] == 0, "A pre-suite run names no item; it is read as item 0 rather than claiming one.");
 
         var alone = await probe.LongsAsync("SELECT COUNT(*) FROM benchmark_runs WHERE cell_key = (SELECT cell_key FROM benchmark_runs WHERE id = $id);",
-                                    command => command.Parameters.AddWithValue("$id", RunId))
+                                   command => command.Parameters.AddWithValue("$id", RunId))
                                .ConfigureAwait(false);
         AssertEx.True(alone[0] == 1, "A legacy run's cell holds exactly itself, so its cell mean is its own score.");
 
         AssertEx.Null(await probe.ScalarAsync("SELECT task_item_set_hash FROM benchmark_projects WHERE id = $id;",
-                              command => command.Parameters.AddWithValue("$id", ProjectId))
-                          .ConfigureAwait(false) as string,
+                                     command => command.Parameters.AddWithValue("$id", ProjectId))
+                                 .ConfigureAwait(false) as string,
             "The project's set hash stays null until its first item write.");
     }
 
@@ -188,10 +188,10 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
         await InsertItemAsync(probe, index: 2, kind: "niahCase").ConfigureAwait(false);
 
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertItemAsync(probe, index: 3, kind: "whatever"),
-                                "A kind outside the vocabulary must be refused by the schema, not only by the store.")
+                              "A kind outside the vocabulary must be refused by the schema, not only by the store.")
                           .ConfigureAwait(false);
         _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertItemAsync(probe, index: 0, kind: "prompt"),
-                                "Two items of one project cannot share an index.")
+                              "Two items of one project cannot share an index.")
                           .ConfigureAwait(false);
     }
 
@@ -206,10 +206,10 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
 
     private static Task InsertItemAsync(MigrationSchemaProbe probe, int index, string kind) =>
         probe.ExecuteAsync("""
-            INSERT INTO benchmark_task_items (id, project_id, parent_item_id, "index", kind, revision, input_hash, counts_toward_score,
-                                              prompt_json, version, created_at_utc, updated_at_utc)
-            VALUES ($id, $project, NULL, $index, $kind, 1, 'v1:0', 1, x'00', 1, 1, 1);
-            """, command =>
+                           INSERT INTO benchmark_task_items (id, project_id, parent_item_id, "index", kind, revision, input_hash, counts_toward_score,
+                                                             prompt_json, version, created_at_utc, updated_at_utc)
+                           VALUES ($id, $project, NULL, $index, $kind, 1, 'v1:0', 1, x'00', 1, 1, 1);
+                           """, command =>
         {
             command.Parameters.AddWithValue("$id", Guid.NewGuid());
             command.Parameters.AddWithValue("$project", ProjectId);
@@ -230,14 +230,14 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
     private static async Task SeedProjectAndRunsAsync(MigrationSchemaProbe probe)
     {
         await probe.ExecuteAsync("""
-            INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, version, created_at_utc, updated_at_utc)
-            VALUES ($project, 'task-item-probe', x'0badc0de', 4096, $agent, 1, 1, 1);
-            INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint,
-                                        agent_name, agent_version, requested_context_tokens, primary_status, last_stream_sequence,
-                                        is_warmup, version, created_at_utc, updated_at_utc)
-            VALUES ($run, $project, x'0badbeef', 'probe-model', 'v1:0', 'probe-agent', 1, 4096, 'Succeeded', 0, 0, 3, 1, 1),
-                   ($second, $project, x'0badbeef', 'probe-model', 'v1:0', 'probe-agent', 1, 4096, 'Succeeded', 0, 0, 3, 1, 1);
-            """, command =>
+                                 INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, version, created_at_utc, updated_at_utc)
+                                 VALUES ($project, 'task-item-probe', x'0badc0de', 4096, $agent, 1, 1, 1);
+                                 INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint,
+                                                             agent_name, agent_version, requested_context_tokens, primary_status, last_stream_sequence,
+                                                             is_warmup, version, created_at_utc, updated_at_utc)
+                                 VALUES ($run, $project, x'0badbeef', 'probe-model', 'v1:0', 'probe-agent', 1, 4096, 'Succeeded', 0, 0, 3, 1, 1),
+                                        ($second, $project, x'0badbeef', 'probe-model', 'v1:0', 'probe-agent', 1, 4096, 'Succeeded', 0, 0, 3, 1, 1);
+                                 """, command =>
         {
             command.Parameters.AddWithValue("$project", ProjectId);
             command.Parameters.AddWithValue("$run", RunId);

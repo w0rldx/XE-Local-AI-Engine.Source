@@ -114,7 +114,9 @@ public sealed class BenchmarkKldBaseCacheTests : IDisposable
         Directory.CreateDirectory(cache.Root);
         foreach (var (key, accessed) in new[]
                  {
-                     (oldest, DateTime.UtcNow.AddHours(-3)), (middle, DateTime.UtcNow.AddHours(-2)), (newest, DateTime.UtcNow.AddHours(-1))
+                     (oldest, DateTime.UtcNow.AddHours(-3)),
+                     (middle, DateTime.UtcNow.AddHours(-2)),
+                     (newest, DateTime.UtcNow.AddHours(-1))
                  })
         {
             File.WriteAllBytes(cache.PathFor(key), new byte[1000]);
@@ -122,7 +124,10 @@ public sealed class BenchmarkKldBaseCacheTests : IDisposable
         }
 
         // The oldest is the one a queued attempt names, so the next-oldest must be evicted in its place.
-        var remaining = cache.Trim(maximumBytes: 2500, new HashSet<string>(StringComparer.Ordinal) { oldest.Digest });
+        var remaining = cache.Trim(maximumBytes: 2500, new HashSet<string>(StringComparer.Ordinal)
+        {
+            oldest.Digest
+        });
 
         AssertEx.True(File.Exists(cache.PathFor(oldest)), "A file a queued measurement is about to read must survive eviction.");
         AssertEx.False(File.Exists(cache.PathFor(middle)), "The next-least-recently-used file is evicted instead.");
@@ -151,6 +156,7 @@ public sealed class BenchmarkKldBaseCacheTests : IDisposable
 
     private sealed class StubFreeSpace(long freeBytes) : IFreeSpaceProbe
     {
-        public long GetAvailableFreeBytes(string path) => freeBytes;
+        public long GetAvailableFreeBytes(string path) =>
+            freeBytes;
     }
 }

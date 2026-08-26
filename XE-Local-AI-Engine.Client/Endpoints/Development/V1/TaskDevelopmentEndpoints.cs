@@ -1,17 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Development.V1;
 
 using FastEndpoints;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Development.V1.Mappers;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Client.Services.Sandbox;
-using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
-using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
-using XE_Local_AI_Engine.Client.Services.Sandbox.Implementation.Launch;
 
 public sealed class GetDevelopmentTaskEndpoint(IDevelopmentManagementService service)
     : Endpoint<DevelopmentTaskRequest, DevelopmentTaskDetailResponse>, IDevelopmentEndpoint

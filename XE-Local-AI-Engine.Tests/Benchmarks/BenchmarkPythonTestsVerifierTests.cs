@@ -516,8 +516,7 @@ public sealed class BenchmarkPythonTestsVerifierTests
             exports = exports ?? ["solve"],
             timeoutSeconds
         });
-        return await verifier.VerifyAsync(
-            new BenchmarkJudgeRubricCriterionV1("solution", "Solution", "The code passes the hidden tests.", 100,
+        return await verifier.VerifyAsync(new BenchmarkJudgeRubricCriterionV1("solution", "Solution", "The code passes the hidden tests.", 100,
                 BenchmarkJudgeCriterionKinds.PythonTests, config),
             candidate);
     }

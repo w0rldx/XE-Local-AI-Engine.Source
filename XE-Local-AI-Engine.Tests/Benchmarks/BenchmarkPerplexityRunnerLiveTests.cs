@@ -109,6 +109,7 @@ public sealed class BenchmarkPerplexityRunnerLiveTests : IDisposable
 
     private sealed class UnlimitedFreeSpace : IFreeSpaceProbe
     {
-        public long GetAvailableFreeBytes(string path) => long.MaxValue;
+        public long GetAvailableFreeBytes(string path) =>
+            long.MaxValue;
     }
 }

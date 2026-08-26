@@ -305,8 +305,9 @@ public sealed class ComparisonBenchmarkHandoffServiceTests
                   {
                       var plans = callInfo.Arg<IReadOnlyList<BenchmarkFrozenRunPlan>>();
                       CommittedBatches.Add(plans);
-                      return Task.FromResult<IReadOnlyList<IReadOnlyList<BenchmarkRunRecord>>>(
-                          [.. plans.Select(static plan => (IReadOnlyList<BenchmarkRunRecord>)[.. plan.Commands.Select(static _ => Run())])]);
+                      return Task.FromResult<IReadOnlyList<IReadOnlyList<BenchmarkRunRecord>>>([
+                          .. plans.Select(static plan => (IReadOnlyList<BenchmarkRunRecord>)[.. plan.Commands.Select(static _ => Run())])
+                      ]);
                   });
 
             Service = new ComparisonBenchmarkHandoffService(Evaluations, Runs, Benchmarks, Projects, Freeze);

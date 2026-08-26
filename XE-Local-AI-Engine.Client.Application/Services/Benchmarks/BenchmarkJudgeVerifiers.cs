@@ -75,8 +75,7 @@ public static class BenchmarkJudgeVerifiers
             // Not decidable here by construction: this class is pure and synchronous, and pythonTests needs the
             // compute sandbox. Throwing rather than falling through to the constraint branch keeps a routing mistake a
             // failed judging (R5) instead of a criterion silently decided by the wrong verifier.
-            throw new BenchmarkExecutionException(
-                $"Rubric criterion '{criterion.Id}' is decided by execution, not by a pure verifier.");
+            throw new BenchmarkExecutionException($"Rubric criterion '{criterion.Id}' is decided by execution, not by a pure verifier.");
         }
 
         BenchmarkVerifierSpec spec;

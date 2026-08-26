@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+
 /// <summary>
 ///     One question a benchmark project asks. A project holds 1..N of them and a single item is the degenerate case:
 ///     a project created before task items existed materializes item 0 from its <see cref="BenchmarkProject.CoreTaskJson" />
@@ -27,7 +29,7 @@ internal sealed record class BenchmarkTaskItem
     public int Index { get; set; }
 
     /// <summary><see cref="Stores.BenchmarkTaskItemKinds" />. Only a LEAF kind is a run target.</summary>
-    public string Kind { get; set; } = Stores.BenchmarkTaskItemKinds.Prompt;
+    public string Kind { get; set; } = BenchmarkTaskItemKinds.Prompt;
 
     /// <summary>1..n, incremented on every mutation of this item and hashed into <see cref="InputHash" />.</summary>
     public int Revision { get; set; }

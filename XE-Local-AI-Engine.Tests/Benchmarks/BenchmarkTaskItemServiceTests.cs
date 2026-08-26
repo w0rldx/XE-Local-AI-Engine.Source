@@ -25,7 +25,8 @@ public sealed class BenchmarkTaskItemServiceTests
         var store = Substitute.For<IBenchmarkStore>();
         BenchmarkTaskItemInput? captured = null;
         _ = store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Array.Empty<BenchmarkTaskItemRecord>());
-        _ = store.CreateTaskItemAsync(ProjectId, Arg.Any<long>(), Arg.Do<BenchmarkTaskItemInput>(input => captured = input), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>())
+        _ = store.CreateTaskItemAsync(ProjectId, Arg.Any<long>(), Arg.Do<BenchmarkTaskItemInput>(input => captured = input), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(),
+                     Arg.Any<CancellationToken>())
                  .Returns(call => Record(call.Arg<BenchmarkTaskItemInput>()));
         var service = new BenchmarkTaskItemService(store);
 
@@ -45,7 +46,8 @@ public sealed class BenchmarkTaskItemServiceTests
         var store = Substitute.For<IBenchmarkStore>();
         BenchmarkTaskItemInput? captured = null;
         _ = store.ListTaskItemsAsync(ProjectId, Arg.Any<CancellationToken>()).Returns(Array.Empty<BenchmarkTaskItemRecord>());
-        _ = store.CreateTaskItemAsync(ProjectId, Arg.Any<long>(), Arg.Do<BenchmarkTaskItemInput>(input => captured = input), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>())
+        _ = store.CreateTaskItemAsync(ProjectId, Arg.Any<long>(), Arg.Do<BenchmarkTaskItemInput>(input => captured = input), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(),
+                     Arg.Any<CancellationToken>())
                  .Returns(call => Record(call.Arg<BenchmarkTaskItemInput>()));
         var service = new BenchmarkTaskItemService(store);
         using var config = JsonDocument.Parse("""{"correctness":{"expected":"[1,2,3]"}}""");
@@ -75,7 +77,8 @@ public sealed class BenchmarkTaskItemServiceTests
 
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft("one more")));
 
-        _ = store.DidNotReceive().CreateTaskItemAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkTaskItemInput>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
+        _ = store.DidNotReceive().CreateTaskItemAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkTaskItemInput>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(),
+            Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -97,11 +100,12 @@ public sealed class BenchmarkTaskItemServiceTests
                      "invented"
                  })
         {
-            _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(
-                () => service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft("probe", kind)), $"'{kind}' must be refused for now.");
+            _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft("probe", kind)),
+                $"'{kind}' must be refused for now.");
         }
 
-        _ = store.DidNotReceive().CreateTaskItemAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkTaskItemInput>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
+        _ = store.DidNotReceive().CreateTaskItemAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<BenchmarkTaskItemInput>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -112,8 +116,7 @@ public sealed class BenchmarkTaskItemServiceTests
         var service = new BenchmarkTaskItemService(store);
 
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.CreateAsync(ProjectId, expectedProjectVersion: 1, new BenchmarkTaskItemDraft("   ")));
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(
-            () => service.UpdateAsync(ProjectId, Guid.NewGuid(), expectedVersion: 1, new BenchmarkTaskItemDraft("")));
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.UpdateAsync(ProjectId, Guid.NewGuid(), expectedVersion: 1, new BenchmarkTaskItemDraft("")));
     }
 
     /// <summary>

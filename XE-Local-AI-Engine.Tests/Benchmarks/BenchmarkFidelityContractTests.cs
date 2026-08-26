@@ -42,7 +42,12 @@ public sealed class BenchmarkFidelityContractTests
     {
         var key = BenchmarkKldCacheKey.Create(Qwen3Fingerprint, CorpusSha, chunks: 200);
 
-        foreach (var name in new[] { key.FileName, key.SidecarFileName, key.LockFileName })
+        foreach (var name in new[]
+                 {
+                     key.FileName,
+                     key.SidecarFileName,
+                     key.LockFileName
+                 })
         {
             AssertEx.False(name.Contains(':', StringComparison.Ordinal), $"A cache file name must not contain a colon; got {name}.");
             AssertEx.False(name.Contains(Qwen3Fingerprint, StringComparison.Ordinal), $"A cache file name must not embed the fingerprint; got {name}.");

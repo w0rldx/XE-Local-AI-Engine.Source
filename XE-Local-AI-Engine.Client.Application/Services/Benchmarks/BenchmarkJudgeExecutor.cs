@@ -5,10 +5,10 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
-using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -320,12 +320,15 @@ public sealed class BenchmarkJudgeExecutor(
 
         var criteria = overrides.Count == 0
             ? policy.Rubric.Criteria
-            : [.. policy.Rubric.Criteria.Select(criterion => overrides.TryGetValue(criterion.Id, out var config)
-                ? criterion with
-                {
-                    Config = config
-                }
-                : criterion)];
+            :
+            [
+                .. policy.Rubric.Criteria.Select(criterion => overrides.TryGetValue(criterion.Id, out var config)
+                    ? criterion with
+                    {
+                        Config = config
+                    }
+                    : criterion)
+            ];
 
         return policy with
         {

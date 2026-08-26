@@ -2,8 +2,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
 using System.Globalization;
 using FastEndpoints;
-using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
@@ -160,28 +158,31 @@ public sealed class ListBenchmarkFidelityAttemptsEndpoint(IBenchmarkStore store)
         var attempts = await _store.ListFidelityAttemptsAsync(req.RunId, ct).ConfigureAwait(false);
         await Send.OkAsync(new ListBenchmarkFidelityAttemptsResponse
                   {
-                      Items = [.. attempts.Select(static attempt => new BenchmarkFidelityAttemptResponse
-                      {
-                          Id = attempt.Id,
-                          Sequence = attempt.Sequence,
-                          Kind = attempt.Kind,
-                          Status = attempt.Status.ToString(),
-                          PerplexityMean = attempt.PerplexityMean,
-                          PerplexityStdErr = attempt.PerplexityStdErr,
-                          PerplexityChunks = attempt.PerplexityChunks,
-                          PerplexityContextTokens = attempt.PerplexityContextTokens,
-                          CorpusId = attempt.CorpusId,
-                          KldMean = attempt.KldMean,
-                          KldP99 = attempt.KldP99,
-                          TopTokenAgreement = attempt.TopTokenAgreement,
-                          BaseModelName = attempt.BaseModelName,
-                          BaseModelContentFingerprint = attempt.BaseModelContentFingerprint,
-                          BaseLogitsDigest = attempt.BaseLogitsDigest,
-                          ErrorMessage = attempt.ErrorMessage,
-                          EnqueuedAtUtc = attempt.EnqueuedAtUtc,
-                          StartedAtUtc = attempt.StartedAtUtc,
-                          CompletedAtUtc = attempt.CompletedAtUtc
-                      })]
+                      Items =
+                      [
+                          .. attempts.Select(static attempt => new BenchmarkFidelityAttemptResponse
+                          {
+                              Id = attempt.Id,
+                              Sequence = attempt.Sequence,
+                              Kind = attempt.Kind,
+                              Status = attempt.Status.ToString(),
+                              PerplexityMean = attempt.PerplexityMean,
+                              PerplexityStdErr = attempt.PerplexityStdErr,
+                              PerplexityChunks = attempt.PerplexityChunks,
+                              PerplexityContextTokens = attempt.PerplexityContextTokens,
+                              CorpusId = attempt.CorpusId,
+                              KldMean = attempt.KldMean,
+                              KldP99 = attempt.KldP99,
+                              TopTokenAgreement = attempt.TopTokenAgreement,
+                              BaseModelName = attempt.BaseModelName,
+                              BaseModelContentFingerprint = attempt.BaseModelContentFingerprint,
+                              BaseLogitsDigest = attempt.BaseLogitsDigest,
+                              ErrorMessage = attempt.ErrorMessage,
+                              EnqueuedAtUtc = attempt.EnqueuedAtUtc,
+                              StartedAtUtc = attempt.StartedAtUtc,
+                              CompletedAtUtc = attempt.CompletedAtUtc
+                          })
+                      ]
                   }, ct)
                   .ConfigureAwait(false);
     }

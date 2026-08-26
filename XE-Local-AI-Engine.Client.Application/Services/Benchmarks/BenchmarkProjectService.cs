@@ -348,10 +348,10 @@ public sealed class BenchmarkProjectService(
         }
 
         var baseFingerprint = await ResolveKldBaseFingerprintAsync(draft.FidelityKldEnabled,
-                                        draft.FidelityChunks,
-                                        NormalizeModelName(draft.FidelityKldBaseModelName),
-                                        cancellationToken)
-                                    .ConfigureAwait(false);
+                draft.FidelityChunks,
+                NormalizeModelName(draft.FidelityKldBaseModelName),
+                cancellationToken)
+            .ConfigureAwait(false);
         var policy = draft.Judge is null ? null : await BuildPolicyAsync(draft.Judge, cancellationToken).ConfigureAwait(false);
         return (new BenchmarkProjectInput(draft.Id,
                 draft.Name.Trim(),
@@ -406,8 +406,7 @@ public sealed class BenchmarkProjectService(
     {
         if (chunks is { } value && value is < BenchmarkFidelityPolicy.MinimumChunks or > BenchmarkFidelityPolicy.MaximumChunks)
         {
-            throw new BenchmarkValidationException(
-                $"The fidelity chunk count must be between {BenchmarkFidelityPolicy.MinimumChunks} and {BenchmarkFidelityPolicy.MaximumChunks}.");
+            throw new BenchmarkValidationException($"The fidelity chunk count must be between {BenchmarkFidelityPolicy.MinimumChunks} and {BenchmarkFidelityPolicy.MaximumChunks}.");
         }
     }
 

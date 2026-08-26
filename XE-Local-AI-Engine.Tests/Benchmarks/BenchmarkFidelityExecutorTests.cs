@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
+using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
@@ -133,7 +133,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
 
         // The reduced evidence block, labelled as reduced: llama-perplexity has no readiness probe, so there is no
         // launch receipt, and storing this under the receipt's shape would let a UI present it as complete evidence.
-        var receipt = System.Text.Encoding.UTF8.GetString(recorded.ReceiptJson.Span);
+        var receipt = Encoding.UTF8.GetString(recorded.ReceiptJson.Span);
         AssertEx.True(receipt.Contains("\"kind\":\"fidelity-evidence\"", StringComparison.Ordinal), $"The evidence must say what it is; got {receipt}.");
         AssertEx.True(receipt.Contains("\"argv\"", StringComparison.Ordinal), "The argv is the auditable part of a measurement with no receipt.");
     }
@@ -216,23 +216,23 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
     }
 
     private const string BasePhaseOutput = """
-        0.31.519.491 I perplexity: 7.18 seconds per pass - ETA 5.97 minutes
-        1.12.579.214 I Final estimate: PPL = 5.7712 +/- 0.38886
-        """;
+                                           0.31.519.491 I perplexity: 7.18 seconds per pass - ETA 5.97 minutes
+                                           1.12.579.214 I Final estimate: PPL = 5.7712 +/- 0.38886
+                                           """;
 
     /// <summary>A real <c>--kl-divergence</c> tail: no `Final estimate` line, `±` separators, `Same top p`.</summary>
     private const string KlDivergenceOutput = """
-        ====== Perplexity statistics ======
-        Mean PPL(Q)                   :   5.886524 ±   0.398426
-        Mean PPL(base)                :   5.771204 ±   0.388860
+                                              ====== Perplexity statistics ======
+                                              Mean PPL(Q)                   :   5.886524 ±   0.398426
+                                              Mean PPL(base)                :   5.771204 ±   0.388860
 
-        ====== KL divergence statistics ======
-        Mean    KLD:   0.030165 ±   0.002043
-        99.0%   KLD:   0.388019
+                                              ====== KL divergence statistics ======
+                                              Mean    KLD:   0.030165 ±   0.002043
+                                              99.0%   KLD:   0.388019
 
-        ====== Token probability statistics ======
-        Same top p: 91.529 ± 0.780 %
-        """;
+                                              ====== Token probability statistics ======
+                                              Same top p: 91.529 ± 0.780 %
+                                              """;
 
     private static string? ValueAfter(IReadOnlyList<string> arguments, string flag)
     {
@@ -272,7 +272,10 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
                      .Returns(new BenchmarkFidelityAttemptRecord(AttemptId, RunId, 1, kind, BenchmarkJudgeAttemptStatus.Running,
                          null, null, null, null, null, null, null, null, null, null, null, null, 1, null, null));
             _ = Store.GetProjectAsync(_run.ProjectId, Arg.Any<CancellationToken>())
-                     .Returns(new BenchmarkProjectRecord(_run.ProjectId, "p", new byte[] { 1 }, 4096, Guid.NewGuid(), false, null, true, 1, 1, 1,
+                     .Returns(new BenchmarkProjectRecord(_run.ProjectId, "p", new byte[]
+                         {
+                             1
+                         }, 4096, Guid.NewGuid(), false, null, true, 1, 1, 1,
                          FidelityEnabled: true,
                          FidelityKldEnabled: kind == "kld",
                          FidelityKldBaseModelName: BaseModelName,
@@ -299,6 +302,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
 
         /// <summary>The base-logit cache the executor writes to, so a test can hold its lease the way a rival process would.</summary>
         public BenchmarkKldBaseCache Cache => _cache;
+
         /// <summary>Whether the resolved runtime directory contains the perplexity helper at all.</summary>
         public bool RuntimeHasPerplexityTool { get; set; } = true;
 
@@ -309,9 +313,9 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         public Queue<string> ScriptedOutputs { get; } = new();
 
         public string Output { get; set; } = """
-            0.31.519.491 I perplexity: 7.18 seconds per pass - ETA 5.97 minutes
-            1.12.579.214 I Final estimate: PPL = 6.7983 +/- 0.07405
-            """;
+                                             0.31.519.491 I perplexity: 7.18 seconds per pass - ETA 5.97 minutes
+                                             1.12.579.214 I Final estimate: PPL = 6.7983 +/- 0.07405
+                                             """;
 
         public BenchmarkClaimedWork Work() =>
             new(3, RunId, BenchmarkWorkKind.Fidelity, 1, WorkVersion, _run, null, AttemptId);
@@ -426,7 +430,10 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
         private static BenchmarkRunRecord RunFor(BenchmarkRuntimeSnapshotV1 snapshot) =>
             new(Guid.NewGuid(),
                 snapshot.ProjectId,
-                new byte[] { 1 },
+                new byte[]
+                {
+                    1
+                },
                 snapshot.PrimaryModel.ModelName,
                 snapshot.PrimaryModel.Origin,
                 snapshot.PrimaryModel.ModelContentFingerprint,
@@ -451,9 +458,14 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
 
     private sealed class FixedSnapshots(BenchmarkRuntimeSnapshotV1 snapshot) : IBenchmarkRuntimeSnapshotFactory
     {
-        public BenchmarkRuntimeSnapshotV1 Create(BenchmarkRuntimeSnapshotInput input) => throw new NotSupportedException();
-        public byte[] Serialize(BenchmarkRuntimeSnapshotV1 snapshot) => throw new NotSupportedException();
-        public BenchmarkRuntimeSnapshotV1 Deserialize(ReadOnlySpan<byte> payload) => snapshot;
+        public BenchmarkRuntimeSnapshotV1 Create(BenchmarkRuntimeSnapshotInput input) =>
+            throw new NotSupportedException();
+
+        public byte[] Serialize(BenchmarkRuntimeSnapshotV1 snapshot) =>
+            throw new NotSupportedException();
+
+        public BenchmarkRuntimeSnapshotV1 Deserialize(ReadOnlySpan<byte> payload) =>
+            snapshot;
     }
 
     /// <summary>
@@ -469,7 +481,9 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
     internal sealed class StubLease(InstalledModelSnapshot snapshot) : IBenchmarkInstalledModelLease
     {
         public InstalledModelSnapshot Snapshot { get; } = snapshot;
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+        public ValueTask DisposeAsync() =>
+            ValueTask.CompletedTask;
     }
 
     /// <summary>A child process that never returns on its own — only the watchdog ends it.</summary>
@@ -510,6 +524,7 @@ public sealed class BenchmarkFidelityExecutorTests : IDisposable
 
     private sealed class StubFreeSpace(long freeBytes) : IFreeSpaceProbe
     {
-        public long GetAvailableFreeBytes(string path) => freeBytes;
+        public long GetAvailableFreeBytes(string path) =>
+            freeBytes;
     }
 }

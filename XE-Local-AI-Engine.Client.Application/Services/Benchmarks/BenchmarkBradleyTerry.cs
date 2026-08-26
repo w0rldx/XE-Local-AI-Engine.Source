@@ -92,7 +92,11 @@ public static class BenchmarkBradleyTerry
         int maximumIterations = MaximumIterations)
     {
         ArgumentNullException.ThrowIfNull(verdicts);
-        var runs = verdicts.SelectMany(static verdict => new[] { verdict.RunAId, verdict.RunBId }).Distinct().Order().ToArray();
+        var runs = verdicts.SelectMany(static verdict => new[]
+        {
+            verdict.RunAId,
+            verdict.RunBId
+        }).Distinct().Order().ToArray();
         if (runs.Length < 2)
         {
             return new BenchmarkBradleyTerryFit([.. runs.Select(static run => new BenchmarkPairwiseRunScore(run, null, null, null, 0, 0, ReasonInsufficient))],
@@ -170,8 +174,11 @@ public static class BenchmarkBradleyTerry
             byPair[key] = (current.WinsA + creditA, current.WinsB + creditB, current.Total + 1);
         }
 
-        return [.. byPair.OrderBy(static entry => entry.Key.A).ThenBy(static entry => entry.Key.B)
-                         .Select(static entry => new PairAggregate(entry.Key.A, entry.Key.B, entry.Value.WinsA, entry.Value.WinsB, entry.Value.Total))];
+        return
+        [
+            .. byPair.OrderBy(static entry => entry.Key.A).ThenBy(static entry => entry.Key.B)
+                     .Select(static entry => new PairAggregate(entry.Key.A, entry.Key.B, entry.Value.WinsA, entry.Value.WinsB, entry.Value.Total))
+        ];
     }
 
     /// <summary>

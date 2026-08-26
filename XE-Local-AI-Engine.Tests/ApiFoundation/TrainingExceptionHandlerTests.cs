@@ -106,7 +106,8 @@ public sealed class TrainingExceptionHandlerTests
         new("unrelated InvalidOperationException", new InvalidOperationException("unrelated"))
     ];
 
-    private sealed record TrainingHandlerCase(string Name,
+    private sealed record TrainingHandlerCase(
+        string Name,
         Exception Exception,
         int StatusCode,
         TrainingErrorCode Code,

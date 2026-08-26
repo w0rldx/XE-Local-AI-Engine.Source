@@ -9,6 +9,7 @@ public sealed class DevelopmentOpenApiDocumentProcessorTests
 {
     private const string EndpointSchemaPrefix = "XE_Local_AI_EngineClientEndpointsDevelopmentV1";
     private const string ServiceSchemaPrefix = "XE_Local_AI_EngineClientServicesDevelopment";
+
     private static readonly string[] ExpectedDevelopmentPaths =
     [
         "/api/local/v1/development/capability",
@@ -76,8 +77,7 @@ public sealed class DevelopmentOpenApiDocumentProcessorTests
     [Test]
     public void OrderPaths_SortsTheKnownDevelopmentSurfaceWithoutMovingOtherPaths()
     {
-        var document = Document(
-        [
+        var document = Document([
             "/health/live",
             .. ExpectedDevelopmentPaths.Reverse(),
             "/api/local/v1/models"
@@ -94,8 +94,7 @@ public sealed class DevelopmentOpenApiDocumentProcessorTests
     {
         const string unknownFirst = "/api/local/v1/development/future/first";
         const string unknownSecond = "/api/local/v1/development/future/second";
-        var document = Document(
-        [
+        var document = Document([
             "/health/live",
             unknownFirst,
             ExpectedDevelopmentPaths[^1],
@@ -184,7 +183,9 @@ public sealed class DevelopmentOpenApiDocumentProcessorTests
         }
     }
 
-    private static string EndpointSchema(string typeName) => EndpointSchemaPrefix + typeName;
+    private static string EndpointSchema(string typeName) =>
+        EndpointSchemaPrefix + typeName;
 
-    private static string ServiceSchema(string typeName) => ServiceSchemaPrefix + typeName;
+    private static string ServiceSchema(string typeName) =>
+        ServiceSchemaPrefix + typeName;
 }

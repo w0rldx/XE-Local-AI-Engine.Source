@@ -191,7 +191,6 @@ public static class BenchmarkJudgePolicyValidationCodes
     public const string CriterionConfigInvalid = "judge-policy-criterion-config-invalid";
     public const string ModeUnsupported = "judge-policy-mode-unsupported";
     public const string PairwiseVersionUnsupported = "judge-policy-pairwise-version-unsupported";
-
 }
 
 public sealed class BenchmarkJudgePolicyValidationException(string code, string message) : InvalidOperationException(message)

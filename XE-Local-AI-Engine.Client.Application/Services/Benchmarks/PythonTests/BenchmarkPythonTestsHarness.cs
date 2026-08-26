@@ -80,8 +80,7 @@ internal static class BenchmarkPythonTestsHarness
         // Upper-case hex, because the analyzer is right that lower-casing is the culture-sensitive direction and the
         // nonce is compared byte-for-byte against what the harness prints, never parsed or displayed.
         var nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
-        var configBase64 = Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(
-            new HarnessConfig(callTimeoutSeconds, exports), VerdictOptions));
+        var configBase64 = Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(new HarnessConfig(callTimeoutSeconds, exports), VerdictOptions));
         var testsBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(testCode));
         var candidateBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(candidateSource));
 
@@ -123,7 +122,7 @@ internal static class BenchmarkPythonTestsHarness
                                      .ToArray();
         var foreignMarkers = standardOutput.Split('\n')
                                            .Count(line => line.StartsWith(MarkerPrefix, StringComparison.Ordinal))
-                                    - payloads.Length;
+                             - payloads.Length;
         if (payloads.Length == 0)
         {
             return BenchmarkPythonTestsVerdict.NoVerdict(foreignMarkers);
@@ -192,8 +191,10 @@ internal static class BenchmarkPythonTestsHarness
     }
 
     private sealed record HarnessConfig(
-        [property: JsonPropertyName("callTimeoutSeconds")] int CallTimeoutSeconds,
-        [property: JsonPropertyName("exports")] IReadOnlyList<string> Exports);
+        [property: JsonPropertyName("callTimeoutSeconds")]
+        int CallTimeoutSeconds,
+        [property: JsonPropertyName("exports")]
+        IReadOnlyList<string> Exports);
 
     private sealed record HarnessVerdict(string? Status, string? Reason, int Collected, int Passed, int Failed, string? Phase, string? Error);
 }

@@ -332,8 +332,7 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
     }
 
     /// <summary>A judged project whose runs all succeeded with stored output — the eligible set a cohort pairs.</summary>
-    private static async Task<(BenchmarkProjectRecord Project, BenchmarkJudgePolicyRevisionRecord Revision, Guid[] Runs)> SeedCohortAsync(
-        BenchmarkStore store,
+    private static async Task<(BenchmarkProjectRecord Project, BenchmarkJudgePolicyRevisionRecord Revision, Guid[] Runs)> SeedCohortAsync(BenchmarkStore store,
         int runCount)
     {
         var created = await store.CreateProjectAsync(CreateProject()).ConfigureAwait(false);
@@ -346,8 +345,8 @@ public sealed class BenchmarkPairwiseStoreTests : IDisposable
             var run = await store.StartRunAsync(CreateRun(current)).ConfigureAwait(false);
             var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
             _ = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(run.Id, claimed.Run.Version,
-                    Encoding.UTF8.GetBytes("[{\"kind\":\"output\",\"content\":\"answer\"}]"), index + 1, 4096, 100, 12, 120))
-                .ConfigureAwait(false);
+                               Encoding.UTF8.GetBytes("[{\"kind\":\"output\",\"content\":\"answer\"}]"), index + 1, 4096, 100, 12, 120))
+                           .ConfigureAwait(false);
             runs.Add(run.Id);
         }
 

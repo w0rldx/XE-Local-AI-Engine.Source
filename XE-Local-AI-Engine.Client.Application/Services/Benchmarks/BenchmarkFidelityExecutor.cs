@@ -4,7 +4,6 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
-using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
@@ -114,12 +113,12 @@ public sealed class BenchmarkFidelityExecutor(
             // Fail CLOSED. A measurement that could not be taken is recorded as a failure with a reason, never as a
             // success carrying nulls — a null perplexity beside a real one reads as "this quant has no loss".
             _ = await store.MarkFidelityFailedAsync(work.RunId,
-                    work.Version,
-                    exception is BenchmarkExecutionException or BenchmarkSnapshotException or LlamaRuntimeException
-                        ? exception.Message
-                        : "The fidelity measurement failed. See local logs for details.",
-                    CancellationToken.None)
-                .ConfigureAwait(false);
+                               work.Version,
+                               exception is BenchmarkExecutionException or BenchmarkSnapshotException or LlamaRuntimeException
+                                   ? exception.Message
+                                   : "The fidelity measurement failed. See local logs for details.",
+                               CancellationToken.None)
+                           .ConfigureAwait(false);
         }
     }
 

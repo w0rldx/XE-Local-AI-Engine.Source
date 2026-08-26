@@ -87,10 +87,10 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
         await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-p2-rebuild.sqlite", PreP2MigrationId).ConfigureAwait(false);
         await SeedProjectRunAsync(probe).ConfigureAwait(false);
         await probe.ExecuteAsync("""
-            INSERT INTO benchmark_work_items (queue_sequence, run_id, kind, judge_attempt_id, status, attempt, version, enqueued_at_utc)
-            VALUES (41, $run, 'Primary', NULL, 'Queued', 1, 1, 100),
-                   (77, $run, 'Judge', $attempt, 'Running', 1, 1, 200);
-            """, command =>
+                                 INSERT INTO benchmark_work_items (queue_sequence, run_id, kind, judge_attempt_id, status, attempt, version, enqueued_at_utc)
+                                 VALUES (41, $run, 'Primary', NULL, 'Queued', 1, 1, 100),
+                                        (77, $run, 'Judge', $attempt, 'Running', 1, 1, 200);
+                                 """, command =>
         {
             command.Parameters.AddWithValue("$run", RunId);
             command.Parameters.AddWithValue("$attempt", Guid.NewGuid());
@@ -113,20 +113,17 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
         await InsertWorkItemAsync(probe, 3, "Fidelity", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: Guid.NewGuid()).ConfigureAwait(false);
         await InsertWorkItemAsync(probe, 4, "Comparison", judgeAttemptId: null, comparisonId: Guid.NewGuid(), fidelityAttemptId: null).ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<SqliteException>(
-                () => InsertWorkItemAsync(probe, 5, "Comparison", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: null),
-                "A Comparison item with no comparison id names nothing to execute and must be rejected.")
-            .ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<SqliteException>(
-                () => InsertWorkItemAsync(probe, 6, "Fidelity", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: null),
-                "A Fidelity item with no attempt id names nothing to measure and must be rejected.")
-            .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertWorkItemAsync(probe, 5, "Comparison", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: null),
+                              "A Comparison item with no comparison id names nothing to execute and must be rejected.")
+                          .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertWorkItemAsync(probe, 6, "Fidelity", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: null),
+                              "A Fidelity item with no attempt id names nothing to measure and must be rejected.")
+                          .ConfigureAwait(false);
 
         // Each arm names EVERY id column, so one item cannot claim to be two kinds of work at once.
-        _ = await AssertEx.ThrowsAsync<SqliteException>(
-                () => InsertWorkItemAsync(probe, 7, "Fidelity", judgeAttemptId: null, comparisonId: Guid.NewGuid(), fidelityAttemptId: Guid.NewGuid()),
-                "A Fidelity item carrying a comparison id must be rejected.")
-            .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<SqliteException>(() => InsertWorkItemAsync(probe, 7, "Fidelity", judgeAttemptId: null, comparisonId: Guid.NewGuid(), fidelityAttemptId: Guid.NewGuid()),
+                              "A Fidelity item carrying a comparison id must be rejected.")
+                          .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -175,13 +172,12 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
         AssertEx.True(workItemColumns.Contains("judge_attempt_id"), "Rollback must retain the original work-item schema.");
 
         await SeedProjectRunAsync(probe).ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<SqliteException>(
-                () => probe.ExecuteAsync("""
-                    INSERT INTO benchmark_work_items (queue_sequence, run_id, kind, judge_attempt_id, status, attempt, version, enqueued_at_utc)
-                    VALUES (9, $run, 'Fidelity', NULL, 'Queued', 1, 1, 1);
-                    """, command => command.Parameters.AddWithValue("$run", RunId)),
-                "The restored two-kind CHECK must reject a Fidelity item again.")
-            .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<SqliteException>(() => probe.ExecuteAsync("""
+                                                                                 INSERT INTO benchmark_work_items (queue_sequence, run_id, kind, judge_attempt_id, status, attempt, version, enqueued_at_utc)
+                                                                                 VALUES (9, $run, 'Fidelity', NULL, 'Queued', 1, 1, 1);
+                                                                                 """, command => command.Parameters.AddWithValue("$run", RunId)),
+                              "The restored two-kind CHECK must reject a Fidelity item again.")
+                          .ConfigureAwait(false);
     }
 
     [Test]
@@ -196,7 +192,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     private static async Task<string> IndexSqlAsync(MigrationSchemaProbe probe, string indexName)
     {
         var sql = await probe.ScalarAsync("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = $name;",
-                                   command => command.Parameters.AddWithValue("$name", indexName))
+                                 command => command.Parameters.AddWithValue("$name", indexName))
                              .ConfigureAwait(false);
         return AssertEx.NotNull(Convert.ToString(sql, CultureInfo.InvariantCulture), $"Index {indexName} must exist.");
     }
@@ -210,13 +206,13 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
         // The work item's FK needs a run, and the run's needs a project. Written as SQL rather than through the entity
         // model on purpose: the model describes the schema at head, and half these tests observe it before P2 applies.
         await probe.ExecuteAsync("""
-            INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, version, created_at_utc, updated_at_utc)
-            VALUES ($project, 'p2-probe', x'00', 4096, $agent, 1, 1, 1);
-            INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint,
-                                        agent_name, agent_version, requested_context_tokens, primary_status, last_stream_sequence,
-                                        is_warmup, version, created_at_utc, updated_at_utc)
-            VALUES ($run, $project, x'00', 'probe-model', 'v1:0', 'probe-agent', 1, 4096, 'Queued', 0, 0, 1, 1, 1);
-            """, command =>
+                                 INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, version, created_at_utc, updated_at_utc)
+                                 VALUES ($project, 'p2-probe', x'00', 4096, $agent, 1, 1, 1);
+                                 INSERT INTO benchmark_runs (id, project_id, runtime_snapshot_json, primary_model_name, model_content_fingerprint,
+                                                             agent_name, agent_version, requested_context_tokens, primary_status, last_stream_sequence,
+                                                             is_warmup, version, created_at_utc, updated_at_utc)
+                                 VALUES ($run, $project, x'00', 'probe-model', 'v1:0', 'probe-agent', 1, 4096, 'Queued', 0, 0, 1, 1, 1);
+                                 """, command =>
         {
             command.Parameters.AddWithValue("$project", ProjectId);
             command.Parameters.AddWithValue("$run", RunId);
@@ -231,10 +227,10 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
         Guid? comparisonId,
         Guid? fidelityAttemptId) =>
         probe.ExecuteAsync("""
-            INSERT INTO benchmark_work_items (queue_sequence, run_id, kind, judge_attempt_id, comparison_id, fidelity_attempt_id,
-                                              status, attempt, version, enqueued_at_utc)
-            VALUES ($sequence, $run, $kind, $judge, $comparison, $fidelity, 'Queued', 1, 1, 1);
-            """, command =>
+                           INSERT INTO benchmark_work_items (queue_sequence, run_id, kind, judge_attempt_id, comparison_id, fidelity_attempt_id,
+                                                             status, attempt, version, enqueued_at_utc)
+                           VALUES ($sequence, $run, $kind, $judge, $comparison, $fidelity, 'Queued', 1, 1, 1);
+                           """, command =>
         {
             command.Parameters.AddWithValue("$sequence", queueSequence);
             command.Parameters.AddWithValue("$run", RunId);

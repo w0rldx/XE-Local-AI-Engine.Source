@@ -67,7 +67,16 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
         var duplicate = Guid.NewGuid();
         _ = await AssertEx.ThrowsAsync<Exception>(() => store.CreateProjectAsync(input,
                                   judgePolicy: null,
-                                  [Item("first") with { Id = duplicate }, Item("second") with { Id = duplicate }]),
+                                  [
+                                      Item("first") with
+                                      {
+                                          Id = duplicate
+                                      },
+                                      Item("second") with
+                                      {
+                                          Id = duplicate
+                                      }
+                                  ]),
                               "An item insert that cannot succeed must take the project creation down with it.")
                           .ConfigureAwait(false);
 
@@ -152,7 +161,10 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
         var withReference = await store.UpdateTaskItemAsync(project.Id,
                                            item.Id,
                                            updated.Version,
-                                           Item("first edited") with { ReferenceAnswerJson = Encoding.UTF8.GetBytes("expected") })
+                                           Item("first edited") with
+                                           {
+                                               ReferenceAnswerJson = Encoding.UTF8.GetBytes("expected")
+                                           })
                                        .ConfigureAwait(false);
         AssertEx.True(!string.Equals(updated.InputHash, withReference.InputHash, StringComparison.Ordinal),
             "A reference answer participates in the input hash.");
@@ -160,8 +172,10 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
         _ = await AssertEx.ThrowsAsync<BenchmarkConflictException>(() => store.UpdateTaskItemAsync(project.Id, item.Id, updated.Version, Item("stale")),
                               "The item's version is the write's compare-and-swap target.")
                           .ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(
-                              () => store.UpdateTaskItemAsync(project.Id, item.Id, withReference.Version, Item("first edited") with { Kind = BenchmarkTaskItemKinds.Niah }),
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.UpdateTaskItemAsync(project.Id, item.Id, withReference.Version, Item("first edited") with
+                              {
+                                  Kind = BenchmarkTaskItemKinds.Niah
+                              }),
                               "A kind change under a stable id is a different item wearing the old identity.")
                           .ConfigureAwait(false);
     }
@@ -179,11 +193,19 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
                           .ConfigureAwait(false);
 
         var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
-        var generator = await store.CreateTaskItemAsync(project.Id, current.Version, Item("generator") with { Kind = BenchmarkTaskItemKinds.Niah }).ConfigureAwait(false);
+        var generator = await store.CreateTaskItemAsync(project.Id, current.Version, Item("generator") with
+        {
+            Kind = BenchmarkTaskItemKinds.Niah
+        }).ConfigureAwait(false);
         current = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
         _ = await store.CreateTaskItemAsync(project.Id,
                            current.Version,
-                           Item("case") with { Kind = BenchmarkTaskItemKinds.NiahCase, ParentItemId = generator.Id, CountsTowardScore = false })
+                           Item("case") with
+                           {
+                               Kind = BenchmarkTaskItemKinds.NiahCase,
+                               ParentItemId = generator.Id,
+                               CountsTowardScore = false
+                           })
                        .ConfigureAwait(false);
 
         // Foreign keys are off on this connection, so the delete order IS the referential integrity — a child left
@@ -283,7 +305,10 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
         var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first"), Item("second")]).ConfigureAwait(false);
         var before = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
 
-        var edited = NewProject(project.Id) with { CoreTaskJson = Encoding.UTF8.GetBytes("a different question") };
+        var edited = NewProject(project.Id) with
+        {
+            CoreTaskJson = Encoding.UTF8.GetBytes("a different question")
+        };
         var updated = await store.UpdateProjectAsync(project.Id, project.Version, edited).ConfigureAwait(false);
 
         var after = await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false);
@@ -295,7 +320,10 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
             "A different question is a different question set.");
 
         // An unchanged core task must not churn a revision: an edit of the name alone is not an edit of the question.
-        var renamed = await store.UpdateProjectAsync(project.Id, updated.Version, edited with { Name = "Renamed" }).ConfigureAwait(false);
+        var renamed = await store.UpdateProjectAsync(project.Id, updated.Version, edited with
+        {
+            Name = "Renamed"
+        }).ConfigureAwait(false);
         AssertEx.Equal(expected: 2, (await store.ListTaskItemsAsync(project.Id).ConfigureAwait(false))[0].Revision);
         AssertEx.Equal(AssertEx.NotNull(updated.TaskItemSetHash), AssertEx.NotNull(renamed.TaskItemSetHash));
     }
@@ -308,13 +336,17 @@ public sealed class BenchmarkTaskItemStoreTests : IDisposable
         var project = await store.CreateProjectAsync(NewProject(), judgePolicy: null, [Item("first")]).ConfigureAwait(false);
         var current = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
 
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(
-                              () => store.CreateTaskItemAsync(project.Id, current.Version, new BenchmarkTaskItemInput(ReadOnlyMemory<byte>.Empty)))
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.CreateTaskItemAsync(project.Id, current.Version, new BenchmarkTaskItemInput(ReadOnlyMemory<byte>.Empty)))
                           .ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.CreateTaskItemAsync(project.Id, current.Version, Item("x") with { Kind = "invented" }))
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.CreateTaskItemAsync(project.Id, current.Version, Item("x") with
+                          {
+                              Kind = "invented"
+                          }))
                           .ConfigureAwait(false);
-        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(
-                              () => store.CreateTaskItemAsync(project.Id, current.Version, Item("x") with { ParentItemId = Guid.NewGuid() }),
+        _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => store.CreateTaskItemAsync(project.Id, current.Version, Item("x") with
+                              {
+                                  ParentItemId = Guid.NewGuid()
+                              }),
                               "A parent from another project is not a parent.")
                           .ConfigureAwait(false);
     }

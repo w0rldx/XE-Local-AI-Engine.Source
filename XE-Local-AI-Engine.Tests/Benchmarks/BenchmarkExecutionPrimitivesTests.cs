@@ -188,7 +188,12 @@ public sealed class BenchmarkExecutionPrimitivesTests
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
         var third = Guid.NewGuid();
-        foreach (var runId in new[] { first, second, third })
+        foreach (var runId in new[]
+                 {
+                     first,
+                     second,
+                     third
+                 })
         {
             _ = buffer.Append(runId, BenchmarkRunStreamEventKind.OutputDelta, new BenchmarkRunStreamPayload(Content: "out"));
             buffer.EvictPlaintext(runId);
@@ -238,24 +243,24 @@ public sealed class BenchmarkExecutionPrimitivesTests
 
         AssertEx.True(validator.Validate(name: null, new BenchmarkQueueOptions()).Succeeded, "the default poll interval must validate");
         AssertEx.True(validator.Validate(name: null,
-                                    new BenchmarkQueueOptions
-                                    {
-                                        PollInterval = BenchmarkQueueOptions.MaxPollInterval
-                                    })
+                                   new BenchmarkQueueOptions
+                                   {
+                                       PollInterval = BenchmarkQueueOptions.MaxPollInterval
+                                   })
                                .Succeeded,
             "the ceiling itself is a legal interval");
         AssertEx.True(validator.Validate(name: null,
-                                    new BenchmarkQueueOptions
-                                    {
-                                        PollInterval = TimeSpan.Zero
-                                    })
+                                   new BenchmarkQueueOptions
+                                   {
+                                       PollInterval = TimeSpan.Zero
+                                   })
                                .Failed,
             "a zero interval would spin the queue");
         AssertEx.True(validator.Validate(name: null,
-                                    new BenchmarkQueueOptions
-                                    {
-                                        PollInterval = BenchmarkQueueOptions.MaxPollInterval + TimeSpan.FromSeconds(1)
-                                    })
+                                   new BenchmarkQueueOptions
+                                   {
+                                       PollInterval = BenchmarkQueueOptions.MaxPollInterval + TimeSpan.FromSeconds(1)
+                                   })
                                .Failed,
             "an interval past the ceiling would strand queued work");
     }

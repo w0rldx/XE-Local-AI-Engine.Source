@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.Benchmarks;
 
 using System.Text;
-using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
@@ -182,21 +181,22 @@ public sealed class BenchmarkNiahStoreTests : IDisposable
         var project = AssertEx.NotNull(await store.GetProjectAsync(projectId).ConfigureAwait(false));
         var leaves = (await store.ListTaskItemsAsync(projectId).ConfigureAwait(false)).Where(static item => item.IsLeaf).ToArray();
         var key = "cell:" + Guid.NewGuid().ToString("D") + ":1";
-        var runs = await store.StartRunsAsync([.. leaves.Select(item => NewRun(project) with
-        {
-            TaskItemId = item.Id,
-            TaskItemIndex = item.Index,
-            CellKey = key,
-            TaskInputHash = item.InputHash,
-            TaskItemSetHash = project.TaskItemSetHash
-        })], project.Version).ConfigureAwait(false);
+        var runs = await store.StartRunsAsync([
+            .. leaves.Select(item => NewRun(project) with
+            {
+                TaskItemId = item.Id,
+                TaskItemIndex = item.Index,
+                CellKey = key,
+                TaskInputHash = item.InputHash,
+                TaskItemSetHash = project.TaskItemSetHash
+            })
+        ], project.Version).ConfigureAwait(false);
 
         var ids = new List<Guid>(runs.Count);
         for (var index = 0; index < runs.Count; index++)
         {
             var claimed = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
-            var succeeded = await store.MarkPrimarySucceededAsync(
-                new BenchmarkPrimarySuccessCommand(claimed.RunId, claimed.Run.Version,
+            var succeeded = await store.MarkPrimarySucceededAsync(new BenchmarkPrimarySuccessCommand(claimed.RunId, claimed.Run.Version,
                     Encoding.UTF8.GetBytes("""[{"text":"answer"}]"""), 1, 4096, 10, 12, 120) with
                 {
                     PrimaryStopReason = "stop"

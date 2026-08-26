@@ -19,6 +19,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     ///     constant on BOTH sides of the staleness comparison, so a legacy run is never read as revised.
     /// </summary>
     internal const string LegacyTaskHash = "v1:legacy";
+
     private const string VerdictA = "a";
     private const string VerdictB = "b";
     private const string VerdictTie = "tie";
@@ -157,7 +158,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         var nextIndex = items.Count == 0 ? 0 : items.Max(entity => entity.Index) + 1;
         var item = NewTaskItem(projectId, input, nextIndex, now);
         _dbContext.BenchmarkTaskItems.Add(item);
-        var written = new List<BenchmarkTaskItem>(items) { item };
+        var written = new List<BenchmarkTaskItem>(items)
+        {
+            item
+        };
         written.AddRange(AddChildren(projectId, item.Id, children, nextIndex + 1, now));
         await ApplyItemSetChangeAsync(project, written, now, cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -279,7 +283,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         // Naming exactly the current set is this call's concurrency check: an item added or deleted while the operator
         // was dragging makes the two sets disagree, and the reorder is refused instead of renumbering a stale list.
         if (orderedItemIds.Count != items.Count || orderedItemIds.Distinct().Count() != orderedItemIds.Count
-            || orderedItemIds.Any(id => items.All(entity => entity.Id != id)))
+                                                || orderedItemIds.Any(id => items.All(entity => entity.Id != id)))
         {
             throw new BenchmarkConflictException("VersionConflict");
         }
@@ -988,58 +992,58 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                     run.StartedAtUtc = now;
                     break;
                 case BenchmarkWorkKind.Judge:
-                {
-                    // The judging's whole lifecycle lives on its attempt; the run only bumps its version so a reader
-                    // polling the run still sees that something about it changed.
-                    var attempt = await RequireJudgeAttemptAsync(work.JudgeAttemptId ?? throw new BenchmarkConflictException("InvalidJudgeTransition"),
-                            cancellationToken)
-                        .ConfigureAwait(false);
-                    if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
                     {
-                        throw new BenchmarkConflictException("InvalidJudgeTransition");
-                    }
+                        // The judging's whole lifecycle lives on its attempt; the run only bumps its version so a reader
+                        // polling the run still sees that something about it changed.
+                        var attempt = await RequireJudgeAttemptAsync(work.JudgeAttemptId ?? throw new BenchmarkConflictException("InvalidJudgeTransition"),
+                                cancellationToken)
+                            .ConfigureAwait(false);
+                        if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
+                        {
+                            throw new BenchmarkConflictException("InvalidJudgeTransition");
+                        }
 
-                    attempt.Status = BenchmarkJudgeAttemptStatus.Running;
-                    attempt.StartedAtUtc = now;
-                    attempt.Version++;
-                    break;
-                }
+                        attempt.Status = BenchmarkJudgeAttemptStatus.Running;
+                        attempt.StartedAtUtc = now;
+                        attempt.Version++;
+                        break;
+                    }
 
                 case BenchmarkWorkKind.Fidelity:
-                {
-                    var attempt = await RequireFidelityAttemptAsync(work.FidelityAttemptId ?? throw new BenchmarkConflictException("InvalidFidelityTransition"),
-                            cancellationToken)
-                        .ConfigureAwait(false);
-                    if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
                     {
-                        throw new BenchmarkConflictException("InvalidFidelityTransition");
+                        var attempt = await RequireFidelityAttemptAsync(work.FidelityAttemptId ?? throw new BenchmarkConflictException("InvalidFidelityTransition"),
+                                cancellationToken)
+                            .ConfigureAwait(false);
+                        if (attempt.Status != BenchmarkJudgeAttemptStatus.Queued)
+                        {
+                            throw new BenchmarkConflictException("InvalidFidelityTransition");
+                        }
+
+                        attempt.Status = BenchmarkJudgeAttemptStatus.Running;
+                        attempt.StartedAtUtc = now;
+                        attempt.Version++;
+
+                        // The projection follows the attempt through every transition, not only the terminal ones. Left
+                        // reading 'queued' for the hours a measurement actually takes, it says nothing has started.
+                        run.FidelityStatus = ToFidelityStatus(BenchmarkJudgeAttemptStatus.Running);
+                        break;
                     }
-
-                    attempt.Status = BenchmarkJudgeAttemptStatus.Running;
-                    attempt.StartedAtUtc = now;
-                    attempt.Version++;
-
-                    // The projection follows the attempt through every transition, not only the terminal ones. Left
-                    // reading 'queued' for the hours a measurement actually takes, it says nothing has started.
-                    run.FidelityStatus = ToFidelityStatus(BenchmarkJudgeAttemptStatus.Running);
-                    break;
-                }
 
                 case BenchmarkWorkKind.Comparison:
-                {
-                    var comparison = await RequireComparisonAsync(work.ComparisonId ?? throw new BenchmarkConflictException("InvalidComparisonTransition"),
-                            cancellationToken)
-                        .ConfigureAwait(false);
-                    if (comparison.Status != BenchmarkJudgeAttemptStatus.Queued)
                     {
-                        throw new BenchmarkConflictException("InvalidComparisonTransition");
-                    }
+                        var comparison = await RequireComparisonAsync(work.ComparisonId ?? throw new BenchmarkConflictException("InvalidComparisonTransition"),
+                                cancellationToken)
+                            .ConfigureAwait(false);
+                        if (comparison.Status != BenchmarkJudgeAttemptStatus.Queued)
+                        {
+                            throw new BenchmarkConflictException("InvalidComparisonTransition");
+                        }
 
-                    comparison.Status = BenchmarkJudgeAttemptStatus.Running;
-                    comparison.StartedAtUtc = now;
-                    comparison.Version++;
-                    break;
-                }
+                        comparison.Status = BenchmarkJudgeAttemptStatus.Running;
+                        comparison.StartedAtUtc = now;
+                        comparison.Version++;
+                        break;
+                    }
 
                 default:
                     throw new BenchmarkConflictException("UnknownWorkKind");
@@ -1177,7 +1181,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     /// <summary>
     ///     The repeat half of the measured-cell rule: non-warm-up, first of its group.
     /// </summary>
-    private static bool IsFidelityMeasuredRepeat(BenchmarkRun run) => !run.IsWarmup && run.RepeatIndex is null or 1;
+    private static bool IsFidelityMeasuredRepeat(BenchmarkRun run) =>
+        !run.IsWarmup && run.RepeatIndex is null or 1;
 
     /// <summary>
     ///     The one run of a cell that a fidelity measurement is attached to: the repeat half above, plus the
@@ -1394,8 +1399,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         if (await _dbContext.BenchmarkWorkItems.AnyAsync(entity => entity.RunId == runId
                                                                    && entity.Kind == BenchmarkWorkKind.Fidelity
                                                                    && (entity.Status == BenchmarkWorkStatus.Queued || entity.Status == BenchmarkWorkStatus.Running),
-                    cancellationToken)
-                .ConfigureAwait(false))
+                                cancellationToken)
+                            .ConfigureAwait(false))
         {
             throw new BenchmarkConflictException("FidelityAlreadyQueued");
         }
@@ -1672,8 +1677,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         // is the whole reason the live-slot uniqueness index is filtered on status: a cancelled comparison must be
         // re-enqueueable at the next attempt sequence, or its cohort never completes and never publishes a score.
         var taken = existing.Where(static entry => entry.Status is BenchmarkJudgeAttemptStatus.Queued
-                                        or BenchmarkJudgeAttemptStatus.Running
-                                        or BenchmarkJudgeAttemptStatus.Succeeded)
+                                or BenchmarkJudgeAttemptStatus.Running
+                                or BenchmarkJudgeAttemptStatus.Succeeded)
                             .Select(static entry => (entry.RunAId, entry.RunBId, entry.Order))
                             .ToHashSet();
         var sequence = existing.Length == 0 ? 0 : existing.Max(static entry => entry.Sequence);
@@ -1920,7 +1925,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                       && attempt.StartedAtUtc != null
                       && attempt.CompletedAtUtc != null
                 select attempt.CompletedAtUtc!.Value - attempt.StartedAtUtc!.Value).ToArrayAsync(cancellationToken)
-            .ConfigureAwait(false);
+                                                                                   .ConfigureAwait(false);
         if (durations.Length == 0)
         {
             return null;
@@ -3346,7 +3351,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     ///     The item's hash now, or <see langword="null" /> when the run names no item (pre-suite) or names one that no
     ///     longer exists — in which case the set hash has moved and is the accurate reason.
     /// </param>
-    private sealed record BenchmarkRunIdentity(string? TaskInputHash,
+    private sealed record BenchmarkRunIdentity(
+        string? TaskInputHash,
         string? CurrentInputHash,
         string? TaskItemSetHash,
         string? CurrentItemSetHash)
@@ -3354,11 +3360,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         /// <summary>A run frozen before task suites, or a projection that has no project state to compare against.</summary>
         public static BenchmarkRunIdentity Unstamped { get; } = new(null, null, null, null);
 
-        public bool Revised =>
-            CurrentInputHash is not null && !string.Equals(TaskInputHash, CurrentInputHash, StringComparison.Ordinal);
+        public bool Revised => CurrentInputHash is not null && !string.Equals(TaskInputHash, CurrentInputHash, StringComparison.Ordinal);
 
-        public bool SetRevised =>
-            TaskItemSetHash is not null && !string.Equals(TaskItemSetHash, CurrentItemSetHash ?? LegacyTaskHash, StringComparison.Ordinal);
+        public bool SetRevised => TaskItemSetHash is not null && !string.Equals(TaskItemSetHash, CurrentItemSetHash ?? LegacyTaskHash, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -3489,7 +3493,8 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     /// </param>
     private sealed record CellRanking(int? Quality, string? Reason, bool Countable);
 
-    private sealed record BenchmarkProjectRanking(IReadOnlyDictionary<Guid, BenchmarkRunRanking> Runs,
+    private sealed record BenchmarkProjectRanking(
+        IReadOnlyDictionary<Guid, BenchmarkRunRanking> Runs,
         BenchmarkRankCohort Cohort,
         IReadOnlyDictionary<string, CellRanking> Cells,
         int ScorableItemCount);

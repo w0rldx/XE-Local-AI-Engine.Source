@@ -51,7 +51,7 @@ public sealed class BenchmarkPairwiseFitter(IBenchmarkStore store, ILogger<Bench
         }
 
         var succeeded = cohort.Comparisons.Where(static comparison => comparison.Status == BenchmarkJudgeAttemptStatus.Succeeded
-                                                                     && comparison.Verdict is not null)
+                                                                      && comparison.Verdict is not null)
                               .OrderBy(static comparison => comparison.Sequence)
                               .ToArray();
         var fitKey = ComputeFitKey(policy, revisionId, cohort);

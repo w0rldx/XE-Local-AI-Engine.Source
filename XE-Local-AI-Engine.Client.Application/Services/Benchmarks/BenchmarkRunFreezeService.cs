@@ -268,8 +268,7 @@ public sealed class BenchmarkRunFreezeService(
         // own inside the freeze, so this only bites a multi-plan commit whose sides are individually legal.
         if (commands.Length > MaxRunsPerRequest)
         {
-            throw new BenchmarkValidationException(
-                $"This request would start {commands.Length} runs across {plans.Count} models. The maximum is {MaxRunsPerRequest}.");
+            throw new BenchmarkValidationException($"This request would start {commands.Length} runs across {plans.Count} models. The maximum is {MaxRunsPerRequest}.");
         }
 
         var runs = await _benchmarkStore.StartRunsAsync(commands, first.ExpectedProjectVersion, cancellationToken).ConfigureAwait(false);
@@ -367,9 +366,8 @@ public sealed class BenchmarkRunFreezeService(
         {
             if (BenchmarkNiahCase.TryRead(probe) is { } probeCase && probeCase.ContextTokens > project.ContextTokens)
             {
-                throw new BenchmarkValidationException(
-                    $"The long-context probe '{probeCase.Label}' asks for {probeCase.ContextTokens} tokens, which does not fit the project's "
-                    + $"{project.ContextTokens}-token context window.");
+                throw new BenchmarkValidationException($"The long-context probe '{probeCase.Label}' asks for {probeCase.ContextTokens} tokens, which does not fit the project's "
+                                                       + $"{project.ContextTokens}-token context window.");
             }
         }
 
@@ -377,9 +375,8 @@ public sealed class BenchmarkRunFreezeService(
         var runCount = leafItems.Length * repeatIndexes.Length;
         if (runCount > MaxRunsPerRequest)
         {
-            throw new BenchmarkValidationException(
-                $"This request would start {runCount} runs ({leafItems.Length} task items x {repeatIndexes.Length} runs each). "
-                + $"The maximum is {MaxRunsPerRequest}.");
+            throw new BenchmarkValidationException($"This request would start {runCount} runs ({leafItems.Length} task items x {repeatIndexes.Length} runs each). "
+                                                   + $"The maximum is {MaxRunsPerRequest}.");
         }
 
         var primarySnapshot = BenchmarkInstalledModelSnapshotMapper.ToSnapshot(primary);
@@ -607,7 +604,8 @@ public sealed class BenchmarkRunFreezeService(
     ///     the dependency set captured from that resolution, and the guard that re-checks the set at commit. One per
     ///     item, because the task text is the resolver's retrieval query.
     /// </summary>
-    private sealed record FrozenTaskItem(BenchmarkTaskItemRecord Item,
+    private sealed record FrozenTaskItem(
+        BenchmarkTaskItemRecord Item,
         string CoreTask,
         ResolvedAgentRuntime Eligible,
         FreezeCommitGuard Guard,

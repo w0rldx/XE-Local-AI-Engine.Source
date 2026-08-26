@@ -229,8 +229,8 @@ public sealed class BenchmarkRankingStoreTests : IDisposable
         var complete = await JudgedRunAsync(store, project, revision, score: 70, executionKey: "key-a").ConfigureAwait(false);
         var refreshed = AssertEx.NotNull(await store.GetProjectAsync(project.Id).ConfigureAwait(false));
         var incomplete = await JudgedRunAsync(store, refreshed, revision, score: 95, executionKey: "key-a",
-                                       stopReason: BenchmarkPrimaryStopReasons.Incomplete)
-                                   .ConfigureAwait(false);
+                stopReason: BenchmarkPrimaryStopReasons.Incomplete)
+            .ConfigureAwait(false);
 
         var page = await store.ListRunsAsync(project.Id, skip: 0, take: 10).ConfigureAwait(false);
 

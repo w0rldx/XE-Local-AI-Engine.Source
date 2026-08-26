@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using System.Diagnostics;
+using System.Globalization;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -68,11 +69,10 @@ public sealed class BenchmarkJudgeVerifiersTests
     [Test]
     public void AnswerText_ReadsOnlyTheVisibleOutputParts()
     {
-        var graded = BenchmarkOutputParts.ForJudge(
-        [
-            new BenchmarkOutputPart("reasoning", Content: "hidden scratchpad"),
-            new BenchmarkOutputPart("output", Content: "the answer is 7")
-        ],
+        var graded = BenchmarkOutputParts.ForJudge([
+                new BenchmarkOutputPart("reasoning", Content: "hidden scratchpad"),
+                new BenchmarkOutputPart("output", Content: "the answer is 7")
+            ],
             judgeContextTokens: 4096);
 
         AssertEx.Equal("the answer is 7", BenchmarkJudgeVerifiers.AnswerText(graded));
@@ -180,7 +180,7 @@ public sealed class BenchmarkJudgeVerifiersTests
     }
 
     private static string Expected(double value) =>
-        $$"""{"expected":{{value.ToString(System.Globalization.CultureInfo.InvariantCulture)}}}""";
+        $$"""{"expected":{{value.ToString(CultureInfo.InvariantCulture)}}}""";
 
     private static BenchmarkJudgeVerifierResultV1 Verify(string kind, string config, string answer) =>
         BenchmarkJudgeVerifiers.Verify(new BenchmarkJudgeRubricCriterionV1("c0", "Title", "Description", 10, kind, config), answer);

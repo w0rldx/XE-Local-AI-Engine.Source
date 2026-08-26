@@ -199,10 +199,13 @@ public sealed class BenchmarkJudgeScoringContractsTests
             null,
             rubric with
             {
-                Criteria = [.. rubric.Criteria.Select(static criterion => criterion with
-                {
-                    Kind = BenchmarkJudgeCriterionKinds.Llm
-                })]
+                Criteria =
+                [
+                    .. rubric.Criteria.Select(static criterion => criterion with
+                    {
+                        Kind = BenchmarkJudgeCriterionKinds.Llm
+                    })
+                ]
             },
             outputParts,
             BenchmarkJudgeOutputSchemaV2.Json);

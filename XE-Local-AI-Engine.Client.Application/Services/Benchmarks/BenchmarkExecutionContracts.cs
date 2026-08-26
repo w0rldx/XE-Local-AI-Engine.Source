@@ -305,6 +305,7 @@ public sealed class BenchmarkEventBuffer : IBenchmarkEventBuffer
 
         /// <summary>Whether this run's id is currently in the tombstone queue. Owned by the queue, not by a phase.</summary>
         public bool Queued { get; set; }
+
         public bool HistoryTruncated { get; set; }
         public LinkedList<BufferedEvent> Events { get; } = [];
     }

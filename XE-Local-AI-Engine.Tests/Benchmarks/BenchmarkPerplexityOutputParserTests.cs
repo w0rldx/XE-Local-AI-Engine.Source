@@ -12,33 +12,33 @@ public sealed class BenchmarkPerplexityOutputParserTests
 {
     /// <summary>A plain perplexity run, tail-trimmed. The log prefix in front of the line is real and load-bearing.</summary>
     private const string PlainPerplexityOutput = """
-        0.24.342.828 I perplexity: calculating perplexity over 200 chunks, n_ctx=512, batch_size=2048, n_seq=4
-        0.31.519.491 I perplexity: 7.18 seconds per pass - ETA 5.97 minutes
-        [1]4.3196,[2]6.0868,[3]5.7473,[4]5.7262,[5]5.7436,[199]6.7956,[200]6.7983,
-        1.12.579.214 I Final estimate: PPL = 6.7983 +/- 0.07405
-        """;
+                                                 0.24.342.828 I perplexity: calculating perplexity over 200 chunks, n_ctx=512, batch_size=2048, n_seq=4
+                                                 0.31.519.491 I perplexity: 7.18 seconds per pass - ETA 5.97 minutes
+                                                 [1]4.3196,[2]6.0868,[3]5.7473,[4]5.7262,[5]5.7436,[199]6.7956,[200]6.7983,
+                                                 1.12.579.214 I Final estimate: PPL = 6.7983 +/- 0.07405
+                                                 """;
 
     /// <summary>A <c>--kl-divergence</c> run. Note there is no <c>Final estimate</c> line anywhere in it.</summary>
     private const string KlDivergenceOutput = """
-        ====== Perplexity statistics ======
-        Mean PPL(Q)                   :   5.886524 ±   0.398426
-        Mean PPL(base)                :   5.771204 ±   0.388860
-        Cor(ln(PPL(Q)), ln(PPL(base))):  99.31%
-        Mean ln(PPL(Q)/PPL(base))     :   0.019785 ±   0.007938
+                                              ====== Perplexity statistics ======
+                                              Mean PPL(Q)                   :   5.886524 ±   0.398426
+                                              Mean PPL(base)                :   5.771204 ±   0.388860
+                                              Cor(ln(PPL(Q)), ln(PPL(base))):  99.31%
+                                              Mean ln(PPL(Q)/PPL(base))     :   0.019785 ±   0.007938
 
-        ====== KL divergence statistics ======
-        Mean    KLD:   0.030165 ±   0.002043
-        Maximum KLD:   0.885166
-        99.9%   KLD:   0.821833
-        99.0%   KLD:   0.388019
-        95.0%   KLD:   0.114668
-        Median  KLD:   0.010790
-        Minimum KLD:  -0.000002
+                                              ====== KL divergence statistics ======
+                                              Mean    KLD:   0.030165 ±   0.002043
+                                              Maximum KLD:   0.885166
+                                              99.9%   KLD:   0.821833
+                                              99.0%   KLD:   0.388019
+                                              95.0%   KLD:   0.114668
+                                              Median  KLD:   0.010790
+                                              Minimum KLD:  -0.000002
 
-        ====== Token probability statistics ======
-        RMS Δp    :  5.243 ± 0.394 %
-        Same top p: 91.529 ± 0.780 %
-        """;
+                                              ====== Token probability statistics ======
+                                              RMS Δp    :  5.243 ± 0.394 %
+                                              Same top p: 91.529 ± 0.780 %
+                                              """;
 
     [Test]
     public void TryParsePerplexity_OnARealPlainRun_ReadsTheMeanAndItsStandardError()

@@ -75,8 +75,8 @@ public sealed class BenchmarkFidelityDisplayGateTests
         AssertEx.Null(Run(fidelity: null).ToFidelity(Digest(chunks: 200)), "No measurement is no block, not a block of nulls.");
 
         var perplexityOnly = AssertEx.NotNull(Run(new BenchmarkRunFidelity("succeeded", Guid.NewGuid(), 6.7983, 0.07405, 200, 512,
-                                                      "wikitext2-raw-test@abc", null, null, null, null, null, null))
-                                              .ToFidelity(Digest(chunks: 200)));
+                "wikitext2-raw-test@abc", null, null, null, null, null, null))
+            .ToFidelity(Digest(chunks: 200)));
         AssertEx.Equal(BenchmarkFidelityKldStates.None, perplexityOnly.KldState, "A perplexity-only run measured no divergence — that is not staleness.");
     }
 
@@ -101,7 +101,10 @@ public sealed class BenchmarkFidelityDisplayGateTests
     private static BenchmarkRunRecord Run(BenchmarkRunFidelity? fidelity) =>
         new(Guid.NewGuid(),
             Guid.NewGuid(),
-            new byte[] { 1 },
+            new byte[]
+            {
+                1
+            },
             "quant.gguf",
             LocalModelOrigin.Imported,
             "v1:" + new string('e', 64),

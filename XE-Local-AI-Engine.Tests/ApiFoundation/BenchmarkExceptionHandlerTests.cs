@@ -142,7 +142,8 @@ public sealed class BenchmarkExceptionHandlerTests
         new("unrelated InvalidOperationException", new InvalidOperationException("unrelated"))
     ];
 
-    private sealed record BenchmarkHandlerCase(string Name,
+    private sealed record BenchmarkHandlerCase(
+        string Name,
         Exception Exception,
         int StatusCode,
         BenchmarkErrorCode Code,

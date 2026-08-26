@@ -179,7 +179,10 @@ public sealed class BenchmarkPairwiseTests
         var store = StubStore(out _);
         store.GetCurrentJudgePolicyRevisionAsync(ProjectId, Arg.Any<CancellationToken>())
              .Returns(new BenchmarkJudgePolicyRevisionRecord(RevisionId, ProjectId, 1,
-                 BenchmarkJudgeSerialization.SerializePolicy(PairwisePolicy() with { Mode = BenchmarkJudgePolicyModes.Pointwise }),
+                 BenchmarkJudgeSerialization.SerializePolicy(PairwisePolicy() with
+                 {
+                     Mode = BenchmarkJudgePolicyModes.Pointwise
+                 }),
                  PolicyHash, ExecutionKey, 1, 1, 7));
         var runtimes = Substitute.For<IBenchmarkJudgeRuntimeResolver>();
         var planner = new BenchmarkPairwisePlanner(store, runtimes, Fitter(store), Substitute.For<IBenchmarkQueueSignal>(),

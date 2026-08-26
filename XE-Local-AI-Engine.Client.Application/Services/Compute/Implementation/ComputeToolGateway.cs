@@ -174,8 +174,7 @@ internal sealed class ComputeToolGateway : IComputeToolGateway
         // regression for run_python, which does not ask.
         if (requireResourceLimits && !_provider.Capabilities.HasFlag(SandboxProviderCapabilities.SupportsResourceLimits))
         {
-            _logger.LogWarning(
-                "A compute execution requiring enforceable resource ceilings was refused: the '{Provider}' sandbox provider cannot impose CPU, memory or process limits on this host.",
+            _logger.LogWarning("A compute execution requiring enforceable resource ceilings was refused: the '{Provider}' sandbox provider cannot impose CPU, memory or process limits on this host.",
                 _provider.ProviderName);
             return ComputeExecutionOutcome.Refused(ComputeRefusalCodes.NoResourceLimits,
                 "run_python rejected: this node's sandbox cannot enforce CPU, memory and process ceilings, and unattended execution is not run without them.");

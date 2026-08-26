@@ -297,7 +297,9 @@ public static class LocalApiRoutes
         public const string ProjectKldEstimate = "benchmarks/projects/{projectId}/fidelity/kld-estimate";
         public const string ProjectFidelityCache = "benchmarks/projects/{projectId}/fidelity/cache";
         public const string RunFidelity = "benchmarks/runs/{runId}/fidelity";
+
         public const string RunFidelityAttempts = "benchmarks/runs/{runId}/fidelity/attempts";
+
         // The verdict matrix and the fit it produced are ONE question: a score shown beside a verdict set that did
         // not produce it is undetectable from the client, so they are never split across two routes.
         public const string ProjectComparisons = "benchmarks/projects/{projectId}/comparisons";

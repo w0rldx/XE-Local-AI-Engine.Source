@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
 ///     The two plaintext hashes the whole task-suite staleness story rests on: what ONE item asks, and what the WHOLE
@@ -19,8 +20,10 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 internal static class BenchmarkTaskItemHashing
 {
     private const string Prefix = "v1:";
+
     /// <summary>ASCII UNIT SEPARATOR, and RECORD SEPARATOR below: bytes no kind name and no JSON payload carries.</summary>
     private static readonly byte[] FieldSeparator = "\u001f"u8.ToArray();
+
     private static readonly byte[] RecordSeparator = "\u001e"u8.ToArray();
 
     /// <summary>
@@ -70,7 +73,7 @@ internal static class BenchmarkTaskItemHashing
     public static string? ComputeSetHash(IEnumerable<BenchmarkTaskItem> items)
     {
         ArgumentNullException.ThrowIfNull(items);
-        var leaves = items.Where(static item => Stores.BenchmarkTaskItemKinds.IsLeaf(item.Kind)).OrderBy(static item => item.Id).ToArray();
+        var leaves = items.Where(static item => BenchmarkTaskItemKinds.IsLeaf(item.Kind)).OrderBy(static item => item.Id).ToArray();
         if (leaves.Length == 0)
         {
             return null;

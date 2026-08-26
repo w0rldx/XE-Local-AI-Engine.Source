@@ -256,17 +256,19 @@ public sealed class BenchmarkCellRankingStoreTests : IDisposable
         var items = await store.ListTaskItemsAsync(projectId).ConfigureAwait(false);
         var targets = items.Take(itemLimit ?? items.Count).ToArray();
         var key = cellKey ?? "cell:" + Guid.NewGuid().ToString("D") + ":1";
-        var runs = await store.StartRunsAsync([.. targets.Select(item => NewRun(project) with
-        {
-            TaskItemId = item.Id,
-            TaskItemIndex = item.Index,
-            CellKey = key,
-            TaskInputHash = item.InputHash,
-            TaskItemSetHash = project.TaskItemSetHash,
-            IsWarmup = warmup,
-            RepeatGroupId = warmup ? Guid.NewGuid() : null,
-            RepeatIndex = warmup ? 0 : null
-        })], project.Version).ConfigureAwait(false);
+        var runs = await store.StartRunsAsync([
+            .. targets.Select(item => NewRun(project) with
+            {
+                TaskItemId = item.Id,
+                TaskItemIndex = item.Index,
+                CellKey = key,
+                TaskInputHash = item.InputHash,
+                TaskItemSetHash = project.TaskItemSetHash,
+                IsWarmup = warmup,
+                RepeatGroupId = warmup ? Guid.NewGuid() : null,
+                RepeatIndex = warmup ? 0 : null
+            })
+        ], project.Version).ConfigureAwait(false);
 
         var ids = new List<Guid>(runs.Count);
         for (var index = 0; index < runs.Count; index++)

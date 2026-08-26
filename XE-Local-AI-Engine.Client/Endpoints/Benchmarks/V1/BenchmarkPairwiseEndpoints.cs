@@ -41,24 +41,27 @@ public sealed class ListBenchmarkComparisonsEndpoint(IBenchmarkStore store)
                       CohortGeneration = cohort.CohortGeneration,
                       ComparisonSetVersion = cohort.ComparisonSetVersion,
                       ReferenceExecutionKey = cohort.ReferenceExecutionKey,
-                      Items = [.. cohort.Comparisons.Select(static comparison => new BenchmarkComparisonResponse
-                      {
-                          Id = comparison.Id,
-                          RunAId = comparison.RunAId,
-                          RunBId = comparison.RunBId,
-                          Order = comparison.Order,
-                          AttemptSequence = comparison.AttemptSequence,
-                          Sequence = comparison.Sequence,
-                          TaskCaseId = comparison.TaskCaseId,
-                          Status = comparison.Status.ToString(),
-                          Verdict = comparison.Verdict,
-                          AnswerATruncated = comparison.AnswerATruncated,
-                          AnswerBTruncated = comparison.AnswerBTruncated,
-                          JudgeExecutionKey = comparison.JudgeExecutionKey,
-                          ErrorMessage = comparison.ErrorMessage,
-                          EnqueuedAtUtc = comparison.EnqueuedAtUtc,
-                          CompletedAtUtc = comparison.CompletedAtUtc
-                      })],
+                      Items =
+                      [
+                          .. cohort.Comparisons.Select(static comparison => new BenchmarkComparisonResponse
+                          {
+                              Id = comparison.Id,
+                              RunAId = comparison.RunAId,
+                              RunBId = comparison.RunBId,
+                              Order = comparison.Order,
+                              AttemptSequence = comparison.AttemptSequence,
+                              Sequence = comparison.Sequence,
+                              TaskCaseId = comparison.TaskCaseId,
+                              Status = comparison.Status.ToString(),
+                              Verdict = comparison.Verdict,
+                              AnswerATruncated = comparison.AnswerATruncated,
+                              AnswerBTruncated = comparison.AnswerBTruncated,
+                              JudgeExecutionKey = comparison.JudgeExecutionKey,
+                              ErrorMessage = comparison.ErrorMessage,
+                              EnqueuedAtUtc = comparison.EnqueuedAtUtc,
+                              CompletedAtUtc = comparison.CompletedAtUtc
+                          })
+                      ],
                       Fit = ToResponse(fit, cohort)
                   }, ct)
                   .ConfigureAwait(false);
@@ -87,16 +90,19 @@ public sealed class ListBenchmarkComparisonsEndpoint(IBenchmarkStore store)
                         && string.Equals(fit.JudgeExecutionKey, cohort.ReferenceExecutionKey ?? string.Empty, StringComparison.Ordinal),
             CreatedAtUtc = fit.CreatedAtUtc,
             FittedSetJson = fit.FittedSetJson,
-            Scores = [.. scores.Select(static score => new BenchmarkPairwiseRunScoreResponse
-            {
-                RunId = score.RunId,
-                Score = score.Score,
-                CiLow = score.CiLow,
-                CiHigh = score.CiHigh,
-                Comparisons = score.Comparisons,
-                BootstrapAppearances = score.BootstrapAppearances,
-                Reason = score.Reason
-            })]
+            Scores =
+            [
+                .. scores.Select(static score => new BenchmarkPairwiseRunScoreResponse
+                {
+                    RunId = score.RunId,
+                    Score = score.Score,
+                    CiLow = score.CiLow,
+                    CiHigh = score.CiHigh,
+                    Comparisons = score.Comparisons,
+                    BootstrapAppearances = score.BootstrapAppearances,
+                    Reason = score.Reason
+                })
+            ]
         };
     }
 }

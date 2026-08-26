@@ -47,7 +47,8 @@ public sealed class BenchmarkProjectServiceTests
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
             context.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, context.AgentId)));
 
-        _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
+        _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -172,7 +173,8 @@ public sealed class BenchmarkProjectServiceTests
 
         AssertEx.True(exception.Message.Contains("auxiliary asset", StringComparison.Ordinal),
             "A judging from an aux-asset model can never be ranked, so it is refused at the policy.");
-        _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
+        _ = context.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -186,8 +188,10 @@ public sealed class BenchmarkProjectServiceTests
         _ = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() =>
             incomplete.Service.CreateAsync(new BenchmarkProjectDraft(ProjectId, "Benchmark", "task", 4096, incomplete.AgentId, new BenchmarkJudgePolicyDraft("   ", 4096))));
 
-        _ = missing.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
-        _ = incomplete.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(), Arg.Any<CancellationToken>());
+        _ = missing.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(),
+            Arg.Any<CancellationToken>());
+        _ = incomplete.Store.DidNotReceive().CreateProjectAsync(Arg.Any<BenchmarkProjectInput>(), Arg.Any<BenchmarkJudgePolicyChangeInput?>(), Arg.Any<IReadOnlyList<BenchmarkTaskItemInput>?>(),
+            Arg.Any<CancellationToken>());
     }
 
     [Test]

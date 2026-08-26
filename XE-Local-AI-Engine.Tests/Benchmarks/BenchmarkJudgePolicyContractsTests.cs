@@ -469,11 +469,13 @@ public sealed class BenchmarkJudgePolicyContractsTests
         var hash = BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(baseline);
         var verifiable = baseline with
         {
-            Rubric = Rubric([Criterion("correctness") with
-            {
-                Kind = BenchmarkJudgeCriterionKinds.Exact,
-                Config = """{"expected":"4"}"""
-            }])
+            Rubric = Rubric([
+                Criterion("correctness") with
+                {
+                    Kind = BenchmarkJudgeCriterionKinds.Exact,
+                    Config = """{"expected":"4"}"""
+                }
+            ])
         };
 
         AssertEx.NotEqual(hash, BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(baseline with
@@ -491,11 +493,13 @@ public sealed class BenchmarkJudgePolicyContractsTests
         AssertEx.NotEqual(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(verifiable),
             BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(verifiable with
             {
-                Rubric = Rubric([Criterion("correctness") with
-                {
-                    Kind = BenchmarkJudgeCriterionKinds.Exact,
-                    Config = """{"expected":"5"}"""
-                }])
+                Rubric = Rubric([
+                    Criterion("correctness") with
+                    {
+                        Kind = BenchmarkJudgeCriterionKinds.Exact,
+                        Config = """{"expected":"5"}"""
+                    }
+                ])
             }),
             "Editing a verifier's expected answer must mint a new revision.");
         AssertEx.NotEqual(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(verifiable),
@@ -508,16 +512,20 @@ public sealed class BenchmarkJudgePolicyContractsTests
     [Test]
     public void Canonicalizer_NormalizesTheKindAndTheConfigItHashes()
     {
-        var spaced = Policy(Rubric([Criterion("c0") with
-        {
-            Kind = BenchmarkJudgeCriterionKinds.Exact,
-            Config = """{ "normalize" : { "trim" : true } , "expected" : "4" }"""
-        }]));
-        var compact = Policy(Rubric([Criterion("c0") with
-        {
-            Kind = BenchmarkJudgeCriterionKinds.Exact,
-            Config = """{"expected":"4","normalize":{"trim":true}}"""
-        }]));
+        var spaced = Policy(Rubric([
+            Criterion("c0") with
+            {
+                Kind = BenchmarkJudgeCriterionKinds.Exact,
+                Config = """{ "normalize" : { "trim" : true } , "expected" : "4" }"""
+            }
+        ]));
+        var compact = Policy(Rubric([
+            Criterion("c0") with
+            {
+                Kind = BenchmarkJudgeCriterionKinds.Exact,
+                Config = """{"expected":"4","normalize":{"trim":true}}"""
+            }
+        ]));
 
         AssertEx.Equal(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(spaced), BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(compact));
     }
@@ -525,11 +533,13 @@ public sealed class BenchmarkJudgePolicyContractsTests
     [Test]
     public void ValidateRubric_ParsesEveryVerifiableConfigAtActivationOnly()
     {
-        var broken = Policy(Rubric([Criterion("c0") with
-        {
-            Kind = BenchmarkJudgeCriterionKinds.Regex,
-            Config = """{"pattern":"(?=a)b"}"""
-        }]));
+        var broken = Policy(Rubric([
+            Criterion("c0") with
+            {
+                Kind = BenchmarkJudgeCriterionKinds.Regex,
+                Config = """{"pattern":"(?=a)b"}"""
+            }
+        ]));
 
         var write = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() => BenchmarkJudgePolicyValidator.Validate(broken));
 

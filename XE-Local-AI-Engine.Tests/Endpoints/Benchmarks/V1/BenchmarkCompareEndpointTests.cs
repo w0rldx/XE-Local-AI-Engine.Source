@@ -38,7 +38,8 @@ public sealed class BenchmarkCompareEndpointTests
         // the interval is degenerate and the two cells ARE separated.
         await using var context = Seeded([
             Cell("cell:one", 76, [Item(0, 76), Item(1, 66), Item(2, 86), Item(3, 56)]),
-            Cell("cell:two", 70, [Item(0, 70), Item(1, 60), Item(2, 80), Item(3, 50)])]);
+            Cell("cell:two", 70, [Item(0, 70), Item(1, 60), Item(2, 80), Item(3, 50)])
+        ]);
 
         var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
 
@@ -63,7 +64,8 @@ public sealed class BenchmarkCompareEndpointTests
         // sides, so the comparison falls to the two items that have one — and two cannot support an interval.
         await using var context = Seeded([
             Cell("cell:one", null, [Item(0, 76), Item(1, 66), Item(2, 86), Item(3, null, "item-revised")]),
-            Cell("cell:two", null, [Item(0, null, "item-revised"), Item(1, 60), Item(2, 80), Item(3, 50)])]);
+            Cell("cell:two", null, [Item(0, null, "item-revised"), Item(1, 60), Item(2, 80), Item(3, 50)])
+        ]);
 
         var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
 
@@ -83,7 +85,8 @@ public sealed class BenchmarkCompareEndpointTests
         // longer has, and a delta against it would be a difference between two different questions.
         await using var context = Seeded([
             Cell("cell:one", 76, [Item(0, 76), Item(1, 66), Item(2, 86)]),
-            Cell("cell:two", null, [Item(0, null), Item(1, null), Item(2, null)], "item-set-revised")]);
+            Cell("cell:two", null, [Item(0, null), Item(1, null), Item(2, null)], "item-set-revised")
+        ]);
 
         var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
 
@@ -100,7 +103,8 @@ public sealed class BenchmarkCompareEndpointTests
         await using var context = Seeded([
             Cell("cell:one", 80, [Item(0, 80), Item(1, 80), Item(2, 80)]),
             Cell("cell:two", 70, [Item(0, 70), Item(1, 70), Item(2, 70)]),
-            Cell("cell:three", 60, [Item(0, 60), Item(1, 60), Item(2, 60)])]);
+            Cell("cell:three", 60, [Item(0, 60), Item(1, 60), Item(2, 60)])
+        ]);
 
         var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two&cellKeys=cell:three").ConfigureAwait(false);
 
@@ -118,7 +122,8 @@ public sealed class BenchmarkCompareEndpointTests
     {
         await using var context = Seeded([
             Cell("cell:one", 70, [Item(0, 80), Item(1, 70), Item(2, 60)]),
-            Cell("cell:two", 70, [Item(0, 60), Item(1, 70), Item(2, 80)])]);
+            Cell("cell:two", 70, [Item(0, 60), Item(1, 70), Item(2, 80)])
+        ]);
 
         var (status, content) = await GetAsync(context, "cellKeys=cell:one&cellKeys=cell:two").ConfigureAwait(false);
 
@@ -134,8 +139,7 @@ public sealed class BenchmarkCompareEndpointTests
     {
         // Item 3 is a NIAH case: judged, scored, and excluded from every quality aggregate. Both cells answered it,
         // and A "wins" it by 40 - which must not move the delta at all. The other three items are a flat +6.
-        await using var context = Seeded(
-        [
+        await using var context = Seeded([
             Cell("cell:one", 76, [Item(0, 76), Item(1, 66), Item(2, 86), Item(3, 90)]),
             Cell("cell:two", 70, [Item(0, 70), Item(1, 60), Item(2, 80), Item(3, 50)])
         ], displayOnlyIndexes: 3);

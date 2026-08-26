@@ -104,8 +104,7 @@ public sealed class BenchmarkNiahTaskItemTests
                  .Returns([Item(probeId, BenchmarkTaskItemKinds.Niah, null), Item(caseId, BenchmarkTaskItemKinds.NiahCase, probeId)]);
         var service = new BenchmarkTaskItemService(store);
 
-        var edit = await AssertEx.ThrowsAsync<BenchmarkValidationException>(
-            () => service.UpdateAsync(ProjectId, caseId, expectedVersion: 1, new BenchmarkTaskItemDraft("rewritten")));
+        var edit = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.UpdateAsync(ProjectId, caseId, expectedVersion: 1, new BenchmarkTaskItemDraft("rewritten")));
         var delete = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => service.DeleteAsync(ProjectId, caseId, expectedVersion: 1));
 
         AssertEx.Contains(edit.Message, "generated", StringComparison.OrdinalIgnoreCase);
@@ -163,8 +162,7 @@ public sealed class BenchmarkNiahTaskItemTests
         var store = StoreWith(contextTokens: 16384);
         var (_, children) = await CreateProbeAsync(store, "{\"contextTokens\":[4096],\"needleDepthPercent\":[50],\"criterionId\":\"needle\"}");
 
-        var overrides = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
-            Encoding.UTF8.GetString(AssertEx.NotNull(children)[0].VerifierConfigJson!.Value.Span))!;
+        var overrides = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(Encoding.UTF8.GetString(AssertEx.NotNull(children)[0].VerifierConfigJson!.Value.Span))!;
         AssertEx.True(overrides.ContainsKey("needle"), "The override is keyed by the criterion the configuration named.");
 
         var spec = AssertEx.NotNull(BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.Exact, overrides["needle"].GetRawText()));
@@ -206,8 +204,7 @@ public sealed class BenchmarkNiahTaskItemTests
         AssertEx.Equal(1, AssertEx.NotNull(children).Count);
     }
 
-    private static async Task<(BenchmarkTaskItemInput Input, IReadOnlyList<BenchmarkTaskItemInput>? Children)> CreateProbeAsync(
-        IBenchmarkStore store,
+    private static async Task<(BenchmarkTaskItemInput Input, IReadOnlyList<BenchmarkTaskItemInput>? Children)> CreateProbeAsync(IBenchmarkStore store,
         string generatorConfigJson)
     {
         BenchmarkTaskItemInput? input = null;

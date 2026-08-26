@@ -153,8 +153,8 @@ public sealed class BenchmarkBradleyTerryTests
     /// <summary>Both presentation orders of one pair, both won by the first run.</summary>
     private static BenchmarkPairwiseVerdict[] Sweep(Guid winner, Guid loser) =>
         winner.CompareTo(loser) < 0
-                ? [new BenchmarkPairwiseVerdict(winner, loser, "a"), new BenchmarkPairwiseVerdict(winner, loser, "a")]
-                : [new BenchmarkPairwiseVerdict(loser, winner, "b"), new BenchmarkPairwiseVerdict(loser, winner, "b")];
+            ? [new BenchmarkPairwiseVerdict(winner, loser, "a"), new BenchmarkPairwiseVerdict(winner, loser, "a")]
+            : [new BenchmarkPairwiseVerdict(loser, winner, "b"), new BenchmarkPairwiseVerdict(loser, winner, "b")];
 
     private static BenchmarkPairwiseVerdict[] Tied(Guid first, Guid second) =>
         [new BenchmarkPairwiseVerdict(first, second, "tie"), new BenchmarkPairwiseVerdict(first, second, "tie")];

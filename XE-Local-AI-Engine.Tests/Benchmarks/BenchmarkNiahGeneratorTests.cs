@@ -96,8 +96,7 @@ public sealed class BenchmarkNiahGeneratorTests
     [Test]
     public void Expand_RefusesAProbeLongerThanTheProjectWindow()
     {
-        var failure = AssertEx.Throws<BenchmarkValidationException>(
-            () => BenchmarkNiahGenerator.Expand(ParentId, Config([32768], [50]), projectContextTokens: 8192));
+        var failure = AssertEx.Throws<BenchmarkValidationException>(() => BenchmarkNiahGenerator.Expand(ParentId, Config([32768], [50]), projectContextTokens: 8192));
 
         AssertEx.Contains(failure.Message, "32768", message: "The refusal names what was asked for.");
         AssertEx.Contains(failure.Message, "8192", message: "And what the project can hold.");
@@ -106,8 +105,7 @@ public sealed class BenchmarkNiahGeneratorTests
     [Test]
     public void Expand_RefusesAProbeShorterThanTheFloor()
     {
-        var failure = AssertEx.Throws<BenchmarkValidationException>(
-            () => BenchmarkNiahGenerator.Expand(ParentId, Config([256], [50]), projectContextTokens: 8192));
+        var failure = AssertEx.Throws<BenchmarkValidationException>(() => BenchmarkNiahGenerator.Expand(ParentId, Config([256], [50]), projectContextTokens: 8192));
 
         AssertEx.Contains(failure.Message, "512");
     }
@@ -116,8 +114,7 @@ public sealed class BenchmarkNiahGeneratorTests
     public void Expand_RefusesMoreCasesThanTheMaximum()
     {
         var sizes = Enumerable.Range(1, 7).Select(static step => 1024 * step).ToArray();
-        var failure = AssertEx.Throws<BenchmarkValidationException>(
-            () => BenchmarkNiahGenerator.Expand(ParentId, Config(sizes, [10, 50, 90]), projectContextTokens: 65536));
+        var failure = AssertEx.Throws<BenchmarkValidationException>(() => BenchmarkNiahGenerator.Expand(ParentId, Config(sizes, [10, 50, 90]), projectContextTokens: 65536));
 
         AssertEx.Contains(failure.Message, "21", message: "The refusal names the count it computed, not just the cap.");
     }
@@ -125,8 +122,7 @@ public sealed class BenchmarkNiahGeneratorTests
     [Test]
     public void Expand_RefusesADepthOutsideTheRange()
     {
-        _ = AssertEx.Throws<BenchmarkValidationException>(
-            () => BenchmarkNiahGenerator.Expand(ParentId, Config([2048], [140]), projectContextTokens: 8192));
+        _ = AssertEx.Throws<BenchmarkValidationException>(() => BenchmarkNiahGenerator.Expand(ParentId, Config([2048], [140]), projectContextTokens: 8192));
     }
 
     [Test]
@@ -203,8 +199,7 @@ public sealed class BenchmarkNiahGeneratorTests
 
     private static BenchmarkJudgeRubricCriterionV1 ExactCriterionFrom(string expectedAnswer)
     {
-        var config = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
-            BenchmarkNiahGenerator.VerifierConfigJson(BenchmarkNiahGenerator.DefaultCriterionId, expectedAnswer))!;
+        var config = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(BenchmarkNiahGenerator.VerifierConfigJson(BenchmarkNiahGenerator.DefaultCriterionId, expectedAnswer))!;
         return new BenchmarkJudgeRubricCriterionV1(BenchmarkNiahGenerator.DefaultCriterionId,
             "Recall",
             "Did the model find the needle?",

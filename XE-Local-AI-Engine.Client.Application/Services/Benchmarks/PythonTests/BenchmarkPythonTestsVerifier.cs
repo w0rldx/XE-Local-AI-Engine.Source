@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 using System.Text;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Benchmarks;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Sandbox;
 
@@ -100,8 +99,7 @@ internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifi
 
         if (verdict.MarkerCount > 1)
         {
-            _logger.LogWarning(
-                "A pythonTests verification saw {MarkerCount} verdict markers for criterion '{CriterionId}'; scoring it 0 and treating the extra markers as forged.",
+            _logger.LogWarning("A pythonTests verification saw {MarkerCount} verdict markers for criterion '{CriterionId}'; scoring it 0 and treating the extra markers as forged.",
                 verdict.MarkerCount,
                 criterion.Id);
         }
@@ -120,8 +118,7 @@ internal sealed class BenchmarkPythonTestsVerifier : IBenchmarkPythonTestsVerifi
 
     private BenchmarkExecutionException Unavailable(BenchmarkJudgeRubricCriterionV1 criterion, string code, string message)
     {
-        _logger.LogWarning(
-            "A pythonTests verification for criterion '{CriterionId}' could not run: {RefusalCode}. The run is unranked rather than scored zero.",
+        _logger.LogWarning("A pythonTests verification for criterion '{CriterionId}' could not run: {RefusalCode}. The run is unranked rather than scored zero.",
             criterion.Id,
             code);
 

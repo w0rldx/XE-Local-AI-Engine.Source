@@ -833,11 +833,13 @@ public sealed class BenchmarkRunFreezeServiceTests
 
         /// <summary>The project's leaf items, in index order — what the freeze fans out over.</summary>
         public IReadOnlyList<BenchmarkTaskItemRecord> TaskItems { get; }
+
         public IAgentDefinitionResolver Resolver { get; }
         public RecordingLeaseProvider LeaseProvider { get; }
 
         /// <summary>The llama-server probe, so a test can count how many times a request actually inspected it.</summary>
         public ILlamaServerLaunchCapabilityInspector LaunchInspector { get; }
+
         public BenchmarkStartRunCommand? Command { get; private set; }
 
         /// <summary>Every insert in order — a repeat group is several, and their ORDER is the contract.</summary>
