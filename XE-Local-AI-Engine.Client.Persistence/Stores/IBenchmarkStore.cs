@@ -144,6 +144,67 @@ public interface IBenchmarkStore
     /// </summary>
     Task MarkComparisonFailedAsync(long queueSequence, long expectedWorkVersion, string errorMessage, CancellationToken cancellationToken = default);
 
+    /// <inheritdoc cref="MarkComparisonFailedAsync" />
+    Task MarkComparisonCancelledAsync(long queueSequence, long expectedWorkVersion, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Everything the pairwise planner, the fitter and the pre-flight estimate read: the project's current cohort
+    ///     scope, the runs eligible to be paired inside it, and the comparisons that already exist. One read, because
+    ///     all three questions are about the same consistent moment.
+    /// </summary>
+    Task<BenchmarkPairwiseCohortState> GetPairwiseCohortAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Inserts BOTH presentation orders of every slot that has no live-or-succeeded comparison yet, plus their work
+    ///     items, in ONE transaction, and bumps the revision's <c>ComparisonSetVersion</c> in the same one. Idempotent:
+    ///     a slot a concurrent caller already created violates the filtered unique index, and the violation is
+    ///     swallowed — a half-created cohort is a cohort that never completes and therefore never publishes a score.
+    /// </summary>
+    /// <returns>How many comparison rows this call created.</returns>
+    Task<int> EnsureComparisonsAsync(Guid projectId,
+        IReadOnlyList<BenchmarkPairwiseSlot> slots,
+        ReadOnlyMemory<byte>? judgeRuntimeJson,
+        BenchmarkRunLaunchIntent? launchIntent,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>One comparison by id, payloads included, or null when it is gone.</summary>
+    Task<BenchmarkComparisonRecord?> GetComparisonAsync(Guid comparisonId, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="MarkJudgeLaunchReadyAsync" />
+    Task<bool> MarkComparisonLaunchReadyAsync(Guid comparisonId,
+        long workItemId,
+        long claimedWorkVersion,
+        BenchmarkLaunchReceiptCommand command,
+        string? judgeExecutionKey,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Records one comparison's verdict and terminalizes its work item, bumping the cohort's
+    ///     <c>ComparisonSetVersion</c> in the same transaction — inserting and terminalizing are the only two ways the
+    ///     fitted set can change, so they are the only two places that bump it.
+    /// </summary>
+    Task MarkComparisonSucceededAsync(BenchmarkComparisonSuccessCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Publishes a fit as ONE pointer switch: deactivate the scope's active row and insert the new one, in one
+    ///     transaction. A duplicate publication violates <c>ux_benchmark_pairwise_fits_key</c> and no-ops, and the
+    ///     filtered active index makes two active fits in one scope unrepresentable rather than merely unlikely.
+    /// </summary>
+    /// <returns><see langword="true" /> when this call published; <see langword="false" /> when it was a duplicate.</returns>
+    Task<bool> PublishPairwiseFitAsync(BenchmarkPairwiseFitCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>The active fit of the project's current cohort scope, or null when nothing has published one.</summary>
+    Task<BenchmarkPairwiseFitRecord?> GetActivePairwiseFitAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The median wall-clock seconds a completed judge attempt of this project took, or null when none has
+    ///     completed. The pre-flight ETA is omitted rather than guessed when this is null.
+    /// </summary>
+    Task<double?> GetMedianJudgeDurationSecondsAsync(Guid projectId, CancellationToken cancellationToken = default);
+
+    /// <summary>Every project that currently points at a judge policy revision — the startup reconciliation's set.</summary>
+    Task<IReadOnlyList<Guid>> ListJudgedProjectIdsAsync(CancellationToken cancellationToken = default);
+
     Task<BenchmarkRunRecord> MarkJudgeCancelledAsync(Guid runId,
         long expectedRunVersion,
         long lastStreamSequence,
@@ -438,6 +499,113 @@ public sealed record BenchmarkEnqueueJudgeAttemptCommand(
     bool Force = false,
     BenchmarkRunLaunchIntent? LaunchIntent = null);
 
+/// <summary>
+///     One run that may be paired against another. <paramref name="TaskCaseId" /> and <paramref name="TaskInputHash" />
+///     are the identity of WHAT WAS ASKED: pairs form only inside one of them, because "which answer is better" is
+///     meaningless when the two answers are to different questions. In P2 a project is one case, so both are the
+///     constant below and the grouping is a no-op — it is the contract P3 widens, and the columns already carry it.
+/// </summary>
+public sealed record BenchmarkPairwiseCandidate(Guid RunId, Guid? TaskCaseId, string TaskInputHash);
+
+/// <summary>One unordered pair to compare, canonical (<paramref name="RunAId" /> &lt; <paramref name="RunBId" />).</summary>
+public sealed record BenchmarkPairwiseSlot(Guid RunAId, Guid RunBId, Guid? TaskCaseId, string TaskInputHash);
+
+/// <summary>
+///     One pairwise judging, as the planner, the fitter and the verdict-matrix read see it. The encrypted rationale is
+///     read only by the detail path; a list never decrypts one.
+/// </summary>
+public sealed record BenchmarkComparisonRecord(
+    Guid Id,
+    Guid ProjectId,
+    Guid PolicyRevisionId,
+    int CohortGeneration,
+    Guid? TaskCaseId,
+    string TaskInputHash,
+    Guid RunAId,
+    Guid RunBId,
+    int Order,
+    int AttemptSequence,
+    int Sequence,
+    BenchmarkJudgeAttemptStatus Status,
+    string? Verdict,
+    bool AnswerATruncated,
+    bool AnswerBTruncated,
+    string? JudgeExecutionKey,
+    string? ErrorMessage,
+    ReadOnlyMemory<byte>? JudgeRuntimeJson,
+    long EnqueuedAtUtc,
+    long? StartedAtUtc,
+    long? CompletedAtUtc,
+    long Version);
+
+/// <summary>The whole pairwise picture of one project at one consistent moment.</summary>
+/// <param name="PolicyRevisionId">Null when judging is off — there is no cohort to pair inside.</param>
+public sealed record BenchmarkPairwiseCohortState(
+    Guid? PolicyRevisionId,
+    int CohortGeneration,
+    int ComparisonSetVersion,
+    string? ReferenceExecutionKey,
+    long ProjectVersion,
+    IReadOnlyList<BenchmarkPairwiseCandidate> Candidates,
+    IReadOnlyList<BenchmarkComparisonRecord> Comparisons);
+
+/// <param name="Verdict"><c>a</c>, <c>b</c> or <c>tie</c>, already normalized back to the canonical pair.</param>
+public sealed record BenchmarkComparisonSuccessCommand(
+    long QueueSequence,
+    long ExpectedWorkVersion,
+    string Verdict,
+    ReadOnlyMemory<byte>? ResultJson,
+    bool AnswerATruncated,
+    bool AnswerBTruncated);
+
+/// <inheritdoc cref="IBenchmarkStore.PublishPairwiseFitAsync" />
+public sealed record BenchmarkPairwiseFitCommand(
+    Guid ProjectId,
+    Guid PolicyRevisionId,
+    int CohortGeneration,
+    Guid? TaskCaseId,
+    string FitKey,
+    string JudgeExecutionKey,
+    int ComparisonSetVersion,
+    string FittedSetJson,
+    string ScoresJson,
+    int Iterations,
+    int BootstrapReplicates);
+
+/// <summary>
+///     One run's row inside a fit's <c>ScoresJson</c> — one entry per ELIGIBLE run, not per fitted one, because a run
+///     the cap left out or the comparison graph stranded must be able to say why it has no score from this row alone.
+/// </summary>
+/// <param name="Reason">
+///     Null when <paramref name="Score" /> ranks. Otherwise the <see cref="BenchmarkRunJudgeStates" /> pairwise reason:
+///     a whole-fit refusal puts the same one on every entry, so a refusal reaches the ranking read without it having
+///     to open a single comparison row.
+/// </param>
+public sealed record BenchmarkPairwiseScoreEntry(
+    Guid RunId,
+    int? Score,
+    int? CiLow,
+    int? CiHigh,
+    int Comparisons,
+    int BootstrapAppearances,
+    string? Reason);
+
+/// <summary>One published fit. <see cref="ScoresJson" /> is the rank input, so it is plaintext and read once per page.</summary>
+public sealed record BenchmarkPairwiseFitRecord(
+    Guid Id,
+    Guid ProjectId,
+    Guid PolicyRevisionId,
+    int CohortGeneration,
+    Guid? TaskCaseId,
+    string FitKey,
+    string JudgeExecutionKey,
+    int ComparisonSetVersion,
+    string FittedSetJson,
+    string ScoresJson,
+    int Iterations,
+    int BootstrapReplicates,
+    long CreatedAtUtc);
+
 /// <param name="PolicyJson">Null on a listing, which never decrypts the payload.</param>
 public sealed record BenchmarkJudgePolicyRevisionRecord(
     Guid Id,
@@ -447,7 +615,8 @@ public sealed record BenchmarkJudgePolicyRevisionRecord(
     string PolicyHash,
     string? ReferenceExecutionKey,
     int CohortGeneration,
-    long CreatedAtUtc);
+    long CreatedAtUtc,
+    int ComparisonSetVersion = 0);
 
 /// <param name="SucceededRunIds">
 ///     The project's succeeded runs with stored output — the complete eligible set. With a cohort attempt seed these
@@ -803,6 +972,40 @@ public static class BenchmarkRunJudgeStates
     ///     every other reason here, an operator score does not override it: a warm-up is not a contender.
     /// </summary>
     public const string ReasonWarmup = "warmup";
+
+    /// <summary>Pairwise mode, comparisons of this cohort still outstanding. Waiting is all it needs.</summary>
+    public const string ReasonPairwisePending = "pairwise-pending";
+
+    /// <summary>
+    ///     Pairwise mode, and this run carries no fitted strength: fewer than two verdicts, a minority component of a
+    ///     disconnected comparison graph, or a cohort too truncated to aggregate. More runs, or more comparisons.
+    /// </summary>
+    public const string ReasonPairwiseInsufficient = "pairwise-insufficient";
+
+    /// <summary>
+    ///     Pairwise mode, and this run is past the per-cohort cap, so nothing was ever compared against it. Removing
+    ///     runs is the fix — a sampled subset of the tournament would be a silently biased one.
+    /// </summary>
+    public const string ReasonPairwiseCap = "pairwise-cap";
+
+    /// <summary>The active fit was fit over a set the cohort has since changed. Re-fitting is automatic; this is transient.</summary>
+    public const string ReasonPairwiseStale = "pairwise-stale";
+
+    /// <summary>The Bradley–Terry sweep did not converge, so no strength was published rather than a half-fit one.</summary>
+    public const string ReasonPairwiseUnfitted = "pairwise-unfitted";
+
+    /// <summary>Two answers to different questions were never comparable. Unreachable in P2, where a project is one case.</summary>
+    public const string ReasonPairwiseCrossCase = "pairwise-cross-case";
+
+    /// <summary>
+    ///     A comparison in the fitted set was judged by a runtime other than the one the cohort was claimed with. The
+    ///     whole fit is refused rather than fitted over the matching subset: dropping comparisons changes the graph and
+    ///     can disconnect it, publishing a number over a set the operator never chose. Re-judging heals it.
+    /// </summary>
+    public const string ReasonPairwiseExecutionMismatch = "pairwise-execution-mismatch";
+
+    /// <summary>Nothing has promoted a reference execution key yet, so no fit can be shown to belong to a cohort.</summary>
+    public const string ReasonPairwiseExecutionIdentityIncomplete = "pairwise-execution-identity-incomplete";
 }
 
 /// <summary>
@@ -824,6 +1027,10 @@ public static class BenchmarkQualityScoreSources
 {
     public const string User = "user";
     public const string Judge = "judge";
+
+    /// <summary>The Bradley–Terry strength read out of the cohort's active fit, in a project judging pairwise.</summary>
+    public const string Pairwise = "pairwise";
+
     public const string None = "none";
 }
 

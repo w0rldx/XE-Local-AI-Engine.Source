@@ -63,6 +63,11 @@ public sealed class BenchmarkQueueHostedService(
                                                     .ExecuteAsync(work, stoppingToken)
                                                     .ConfigureAwait(false);
                                 break;
+                            case BenchmarkWorkKind.Comparison:
+                                await executionScope.ServiceProvider.GetRequiredService<IBenchmarkComparisonExecutor>()
+                                                    .ExecuteAsync(work, stoppingToken)
+                                                    .ConfigureAwait(false);
+                                break;
                             default:
                                 await TerminalizeUnsupportedAsync(executionScope.ServiceProvider, work, stoppingToken).ConfigureAwait(false);
                                 break;
@@ -97,9 +102,8 @@ public sealed class BenchmarkQueueHostedService(
     ///     Running item nothing will ever finish stalls the single-consumer queue behind it forever, and an item that
     ///     silently succeeded would publish a measurement nothing took.
     ///     <para>
-    ///         follow-up: the Comparison arm is the pairwise executor's slot (P2 S3). Until it exists, reaching here
-    ///         is a real state — a database written by a newer build, or a Comparison item enqueued by a partially
-    ///         applied feature — so it fails closed with a reason an operator can act on.
+    ///         Every kind this build knows has an arm above, so reaching here means a database written by a NEWER
+    ///         build. That is a real state, and it fails closed with a reason an operator can act on.
     ///     </para>
     /// </summary>
     private async Task TerminalizeUnsupportedAsync(IServiceProvider services, BenchmarkClaimedWork work, CancellationToken cancellationToken)
@@ -127,5 +131,12 @@ public sealed class BenchmarkQueueHostedService(
         }
 
         logger.LogInformation("Recovered {RunCount} interrupted benchmark runs.", recovered.Count);
+
+        // The sweep above terminalizes what the kill interrupted; this re-enqueues what it left missing. A crash
+        // between a primary succeeding and its pairs being enqueued would otherwise leave a cohort permanently one
+        // comparison short, with every run in it stuck pending and nothing that would ever notice.
+        await scope.ServiceProvider.GetRequiredService<IBenchmarkPairwisePlanner>()
+                   .ReconcilePairwiseAsync(cancellationToken)
+                   .ConfigureAwait(false);
     }
 }

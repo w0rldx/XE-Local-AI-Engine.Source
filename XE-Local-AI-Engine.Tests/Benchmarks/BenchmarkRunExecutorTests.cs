@@ -65,6 +65,7 @@ public sealed class BenchmarkRunExecutorTests
             new BenchmarkCancellationRegistry(),
             new RecordingEnvironmentFacts(),
             Substitute.For<IBenchmarkJudgeRuntimeResolver>(),
+            Substitute.For<IBenchmarkPairwisePlanner>(),
             new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
             NullLogger<BenchmarkRunExecutor>.Instance);
 
@@ -935,6 +936,7 @@ public sealed class BenchmarkRunExecutorTests
             cancellations,
             environmentFacts ?? new RecordingEnvironmentFacts(),
             Substitute.For<IBenchmarkJudgeRuntimeResolver>(),
+            Substitute.For<IBenchmarkPairwisePlanner>(),
             // Default: decide ONCE and never wait, so every test but the wait tests stays instant.
             admissionRetry ?? new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
             logger ?? NullLogger<BenchmarkRunExecutor>.Instance);

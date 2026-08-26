@@ -37,6 +37,9 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddScoped<IBenchmarkRunExecutor, BenchmarkRunExecutor>();
         builder.Services.AddScoped<IBenchmarkJudgeExecutor, BenchmarkJudgeExecutor>();
         builder.Services.AddScoped<IBenchmarkFidelityExecutor, BenchmarkFidelityExecutor>();
+        builder.Services.AddScoped<IBenchmarkComparisonExecutor, BenchmarkComparisonExecutor>();
+        builder.Services.AddScoped<IBenchmarkPairwiseFitter, BenchmarkPairwiseFitter>();
+        builder.Services.AddScoped<IBenchmarkPairwisePlanner, BenchmarkPairwisePlanner>();
         builder.Services.AddSingleton<IBenchmarkPerplexityRunner, BenchmarkPerplexityRunner>();
         builder.Services.AddOptions<BenchmarkKldCacheOptions>().BindConfiguration(BenchmarkKldCacheOptions.SectionName);
         builder.Services.AddSingleton(static services => new BenchmarkKldBaseCache(services.GetRequiredService<IFreeSpaceProbe>()));
