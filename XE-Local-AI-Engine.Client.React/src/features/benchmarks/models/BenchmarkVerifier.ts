@@ -33,7 +33,7 @@ export const benchmarkPythonExtractModes = ["firstPythonFence", "wholeText"] as 
 export type BenchmarkPythonExtractMode = (typeof benchmarkPythonExtractModes)[number];
 
 /** The structural JSON-Schema subset the node enforces. A schema naming anything else is refused rather than under-checked. */
-export const supportedSchemaKeywords = ["type", "properties", "required", "items", "enum", "const", "additionalProperties"];
+const supportedSchemaKeywords = ["type", "properties", "required", "items", "enum", "const", "additionalProperties"];
 
 export const benchmarkConstraintFormats = ["json", "markdownList", "noMarkdown"] as const;
 export type BenchmarkConstraintFormat = (typeof benchmarkConstraintFormats)[number];

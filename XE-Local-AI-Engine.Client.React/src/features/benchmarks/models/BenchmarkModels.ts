@@ -308,7 +308,7 @@ export const noBenchmarkRunJudge: BenchmarkRunJudge = {
 
 /** What the project's ranking is computed against, so the table can say "n of m ranked" honestly. */
 /** Which answer the judge preferred, already normalized to the canonical pair — never to the order it was shown in. */
-export const benchmarkVerdicts = ["a", "b", "tie"] as const;
+const benchmarkVerdicts = ["a", "b", "tie"] as const;
 export type BenchmarkVerdict = (typeof benchmarkVerdicts)[number];
 export const toBenchmarkVerdict = (value: unknown): BenchmarkVerdict | null =>
 	benchmarkVerdicts.find((verdict) => verdict === value) ?? null;
@@ -484,7 +484,7 @@ export type BenchmarkEvidenceObject = Readonly<Record<string, unknown>>;
  * The fidelity measurement's own lifecycle, verbatim from the wire. `skipped` is a real terminal answer, not a failure:
  * the project did not ask for a measurement, so there is nothing to report and nothing to fix.
  */
-export const benchmarkFidelityStatuses = ["queued", "running", "succeeded", "failed", "cancelled", "skipped"] as const;
+const benchmarkFidelityStatuses = ["queued", "running", "succeeded", "failed", "cancelled", "skipped"] as const;
 export type BenchmarkFidelityStatus = (typeof benchmarkFidelityStatuses)[number];
 /** An unrecognized status reads as `queued` — the node's own default for a fidelity row it has not terminalized. */
 export const toBenchmarkFidelityStatus = (value: unknown): BenchmarkFidelityStatus =>
@@ -495,7 +495,7 @@ export const toBenchmarkFidelityStatus = (value: unknown): BenchmarkFidelityStat
  * than a boolean, because "never measured" and "measured against something else" are different facts and the UI says
  * different things: the first renders a dash, the second a `kld-stale` badge with a re-measure hint.
  */
-export const benchmarkFidelityKldStates = ["none", "ok", "kld-stale"] as const;
+const benchmarkFidelityKldStates = ["none", "ok", "kld-stale"] as const;
 export type BenchmarkFidelityKldState = (typeof benchmarkFidelityKldStates)[number];
 /** Fail-closed: an unknown state reads as "nothing measured", never as a comparable number. */
 export const toBenchmarkFidelityKldState = (value: unknown): BenchmarkFidelityKldState =>
