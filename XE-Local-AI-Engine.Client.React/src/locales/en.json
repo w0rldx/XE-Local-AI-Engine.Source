@@ -4280,7 +4280,11 @@
 					"pairwise-unfitted": "not in the active fit",
 					"pairwise-cross-case": "compared under a different task case",
 					"pairwise-execution-mismatch": "fitted under a different judge runtime",
-					"pairwise-execution-identity-incomplete": "judge runtime not fully recorded"
+					"pairwise-execution-identity-incomplete": "judge runtime not fully recorded",
+					"item-incomplete": "At least one task item of this combination has no rankable answer, so its mean would be over a different suite than the ones beside it.",
+					"item-revised": "The task item this run answered has been edited since. The answer is to a question the project no longer asks.",
+					"item-set-revised": "A task item was added or removed after this combination was measured, so it was scored against a suite the project no longer has.",
+					"verifier-unavailable": "A deterministic verifier could not run on this node, so the answer was never checked. That is not a zero."
 				},
 				"exclusionShort": {
 					"no-score": "unscored",
@@ -4301,7 +4305,11 @@
 					"pairwise-unfitted": "unfitted",
 					"pairwise-cross-case": "cross-case",
 					"pairwise-execution-mismatch": "runtime differs",
-					"pairwise-execution-identity-incomplete": "runtime unknown"
+					"pairwise-execution-identity-incomplete": "runtime unknown",
+					"item-incomplete": "item missing",
+					"item-revised": "item edited",
+					"item-set-revised": "suite changed",
+					"verifier-unavailable": "verifier unavailable"
 				},
 				"action": {
 					"score": "Set an operator score.",
@@ -4309,7 +4317,10 @@
 					"wait": "Wait for the judging to finish.",
 					"rerun": "Rerun it — with more room when it was cut off.",
 					"none": "Nothing to do — a warm-up is meant to sit outside the ranking.",
-					"remove-runs": "Remove runs to bring the cohort under the cap."
+					"remove-runs": "Remove runs to bring the cohort under the cap.",
+					"rerun-item": "Run that task item again for this model.",
+					"rerun-cell": "Run this whole combination again under the current task items.",
+					"enable-compute": "Enable Compute on this node — and give it a host where the sandbox can be bounded — then re-judge."
 				},
 				"comparing": "Comparing {{count}} runs"
 			},

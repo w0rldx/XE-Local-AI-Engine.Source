@@ -51,6 +51,14 @@ export const benchmarkRankExclusionReasons = [
 	"truncated",
 	"incomplete",
 	"warmup",
+	// Suites. A cell ranks only when every scorable item in it produced a rankable score, and only while the question
+	// it answered AND the question set it was measured under are still the project's current ones.
+	"item-incomplete",
+	"item-revised",
+	"item-set-revised",
+	// A deterministic verifier could not run at all — the compute sandbox is off, or cannot be bounded on this host.
+	// Never a 0: a verifier that did not run has not read the answer, and 0 would rank a model on the node's config.
+	"verifier-unavailable",
 	// Pairwise: a fitted score is read THROUGH the active fit, so every way that read can fail is its own reason.
 	"pairwise-pending",
 	"pairwise-insufficient",

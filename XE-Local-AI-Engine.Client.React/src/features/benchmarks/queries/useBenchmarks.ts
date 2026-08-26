@@ -5,18 +5,23 @@ import {
 	clearBenchmarkFidelityCache,
 	clearBenchmarkRunScore,
 	createBenchmarkProject,
+	createBenchmarkTaskItem,
 	deleteBenchmarkRun,
+	deleteBenchmarkTaskItem,
 	getBenchmarkKldDiskEstimate,
 	getBenchmarkPairwiseEstimate,
 	getBenchmarkProject,
 	getBenchmarkRubricPresets,
 	getBenchmarkRun,
+	listBenchmarkCells,
 	listBenchmarkComparisons,
 	listBenchmarkProjects,
 	listBenchmarkRuns,
+	listBenchmarkTaskItems,
 	listEligibleBenchmarkModels,
 	rejudgeBenchmarkProject,
 	rejudgeBenchmarkRun,
+	reorderBenchmarkTaskItems,
 	scoreBenchmarkRun,
 	startBenchmarkRun,
 	startBenchmarkRunBatch,
@@ -24,6 +29,7 @@ import {
 	updateBenchmarkJudgePolicy,
 	updateBenchmarkProject,
 	updateBenchmarkProjectFidelity,
+	updateBenchmarkTaskItem,
 } from "@/core/api/generated";
 import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1BenchmarkJudgePolicyDraftDto as JudgePolicyDraft,
@@ -31,6 +37,8 @@ import type {
 	XeLocalAiEngineClientEndpointsBenchmarksV1StartBenchmarkRunRequest as StartBenchmarkRunRequest,
 } from "@/core/api/generated";
 import { callWithResponseValidation } from "@/core/api/ResponseValidation";
+import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
+import { toBenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
 import { isFidelityActive } from "@/features/benchmarks/models/BenchmarkFidelity";
 import {
 	toBenchmarkComparisonList,
@@ -60,6 +68,8 @@ import type {
 	BenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { isJudgeActive } from "@/features/benchmarks/models/BenchmarkModels";
+import type { BenchmarkTaskItem, BenchmarkTaskItemDraft } from "@/features/benchmarks/models/BenchmarkTaskItems";
+import { pruneVerifierOverrides, toBenchmarkTaskItem } from "@/features/benchmarks/models/BenchmarkTaskItems";
 
 // Server state for the benchmarks surface. Calls the generated hey-api SDK fns DIRECTLY through the shared
 // `callWithResponseValidation` bridge (the same imperative pattern as useLoadedModels / the chat adapter) rather than
@@ -70,6 +80,8 @@ const benchmarkQueryKeys = {
 	projects: ["benchmarks", "projects"] as const,
 	project: (id: string) => ["benchmarks", "projects", id] as const,
 	runs: (projectId: string) => ["benchmarks", "projects", projectId, "runs"] as const,
+	taskItems: (projectId: string) => ["benchmarks", "projects", projectId, "items"] as const,
+	cells: (projectId: string) => ["benchmarks", "projects", projectId, "cells"] as const,
 	run: (id: string) => ["benchmarks", "runs", id] as const,
 	/** The prefix every {@link benchmarkQueryKeys.run} entry sits under, for the rare change that touches runs it cannot name. */
 	runDetails: ["benchmarks", "runs"] as const,
@@ -376,6 +388,10 @@ function useBenchmarkInvalidation() {
 			await Promise.all([
 				queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.project(projectId) }),
 				queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.runs(projectId) }),
+				// The cell table and the item list are re-read for the same reason the runs are: a freeze adds cells, an
+				// item edit unranks the ones that answered the old question, and neither is visible in a run row alone.
+				queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.cells(projectId) }),
+				queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.taskItems(projectId) }),
 			]);
 		}
 		await Promise.all(runIds.map((runId) => queryClient.invalidateQueries({ queryKey: benchmarkQueryKeys.run(runId) })));
@@ -751,5 +767,161 @@ export function useDeleteBenchmarkRun() {
 			);
 		},
 		onSuccess: (_, run) => invalidate(run.projectId, run.id),
+	});
+}
+
+// --- Task items -----------------------------------------------------------------------------------------------
+// A project holds 1..N of them. Every mutation below moves the project's item-set hash, which resets the ranked
+// cohort and unranks the cells that answered the old set — so all of them invalidate the runs and the cells too, and
+// the caller is expected to say so BEFORE the operator clicks.
+
+/** One project's task items, in index order, with the set hash the node currently computes over them. */
+export interface BenchmarkTaskItemList {
+	items: BenchmarkTaskItem[];
+	/** Null until the first item write. A run stamped with a different one is excluded as `item-set-revised`. */
+	taskItemSetHash: string | null;
+	/** The version an item CREATE must be made against — adding an item changes what a freeze would produce. */
+	projectVersion: number;
+}
+
+export function useBenchmarkTaskItems(projectId: string | null) {
+	return useQuery<BenchmarkTaskItemList>({
+		queryKey: benchmarkQueryKeys.taskItems(projectId ?? ""),
+		enabled: Boolean(projectId),
+		queryFn: async ({ signal }) => {
+			const { data } = await callWithResponseValidation(
+				listBenchmarkTaskItems({ path: { projectId: projectId as string }, signal, throwOnError: true }),
+			);
+			return {
+				items: (data.items ?? []).map(toBenchmarkTaskItem).sort((left, right) => left.index - right.index),
+				taskItemSetHash: data.taskItemSetHash ?? null,
+				projectVersion: data.projectVersion ?? 0,
+			};
+		},
+	});
+}
+
+// The generator members are omitted rather than sent as null when unset, exactly as the project body does it: an
+// absent blob is "this item has none", and a present empty one is a blob the node has to parse and refuse.
+const taskItemMutationBody = (draft: BenchmarkTaskItemDraft) => ({
+	prompt: draft.prompt,
+	kind: draft.kind,
+	countsTowardScore: draft.countsTowardScore,
+	...(draft.referenceAnswer === null ? {} : { referenceAnswer: draft.referenceAnswer }),
+	...(pruneVerifierOverrides(draft.verifierConfig) === null ? {} : { verifierConfig: pruneVerifierOverrides(draft.verifierConfig) }),
+	...(draft.generatorConfig === null ? {} : { generatorConfig: draft.generatorConfig }),
+});
+
+export function useCreateBenchmarkTaskItem() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async ({
+			projectId,
+			expectedProjectVersion,
+			draft,
+		}: {
+			projectId: string;
+			expectedProjectVersion: number;
+			draft: BenchmarkTaskItemDraft;
+		}) => {
+			const { data } = await callWithResponseValidation(
+				createBenchmarkTaskItem({
+					path: { projectId },
+					body: { ...taskItemMutationBody(draft), expectedProjectVersion },
+					throwOnError: true,
+				}),
+			);
+			return toBenchmarkTaskItem(data);
+		},
+		onSuccess: (_item, variables) => invalidate(variables.projectId),
+	});
+}
+
+export function useUpdateBenchmarkTaskItem() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async ({
+			projectId,
+			item,
+			draft,
+		}: {
+			projectId: string;
+			/** The ITEM's version, not the project's — an edit is a write to one item. */
+			item: Pick<BenchmarkTaskItem, "id" | "version">;
+			draft: BenchmarkTaskItemDraft;
+		}) => {
+			const { data } = await callWithResponseValidation(
+				updateBenchmarkTaskItem({
+					path: { projectId, itemId: item.id },
+					body: { ...taskItemMutationBody(draft), expectedVersion: item.version },
+					throwOnError: true,
+				}),
+			);
+			return toBenchmarkTaskItem(data);
+		},
+		onSuccess: (_item, variables) => invalidate(variables.projectId),
+	});
+}
+
+export function useDeleteBenchmarkTaskItem() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: ({ projectId, item }: { projectId: string; item: Pick<BenchmarkTaskItem, "id" | "version"> }) =>
+			callWithResponseValidation(
+				deleteBenchmarkTaskItem({
+					path: { projectId, itemId: item.id },
+					body: { expectedVersion: item.version },
+					throwOnError: true,
+				}),
+			),
+		onSuccess: (_result, variables) => invalidate(variables.projectId),
+	});
+}
+
+/**
+ * The whole new order at once. Naming every current id IS the concurrency check — an item added or deleted while the
+ * operator was dragging makes the two sets disagree and the node refuses — so there is no version token to send.
+ */
+export function useReorderBenchmarkTaskItems() {
+	const invalidate = useBenchmarkInvalidation();
+	return useMutation({
+		mutationFn: async ({ projectId, itemIds }: { projectId: string; itemIds: readonly string[] }) => {
+			const { data } = await callWithResponseValidation(
+				reorderBenchmarkTaskItems({ path: { projectId }, body: { itemIds: [...itemIds] }, throwOnError: true }),
+			);
+			return (data.items ?? []).map(toBenchmarkTaskItem).sort((left, right) => left.index - right.index);
+		},
+		onSuccess: (_items, variables) => invalidate(variables.projectId),
+	});
+}
+
+// --- Cells ----------------------------------------------------------------------------------------------------
+
+/** The ranked cell table: one row per (model, KV, repeat group), each holding its per-item answers. */
+export interface BenchmarkCellList {
+	cells: BenchmarkCell[];
+	cohort: BenchmarkRankCohort;
+	/** How many leaf items count toward the score right now. A cell holding fewer is why a reader sees `item-incomplete`. */
+	scorableItemCount: number;
+}
+
+/**
+ * Read only while the project actually has more than one item: a single-item project's cell table is its runs table
+ * with extra indirection, and the runs query already polls that.
+ */
+export function useBenchmarkCells(projectId: string | null, enabled: boolean) {
+	return useQuery<BenchmarkCellList>({
+		queryKey: benchmarkQueryKeys.cells(projectId ?? ""),
+		enabled: enabled && Boolean(projectId),
+		queryFn: async ({ signal }) => {
+			const { data } = await callWithResponseValidation(
+				listBenchmarkCells({ path: { projectId: projectId as string }, signal, throwOnError: true }),
+			);
+			return {
+				cells: (data.cells ?? []).map(toBenchmarkCell),
+				cohort: toBenchmarkRankCohort(data.rankCohort),
+				scorableItemCount: data.scorableItemCount ?? 0,
+			};
+		},
 	});
 }
