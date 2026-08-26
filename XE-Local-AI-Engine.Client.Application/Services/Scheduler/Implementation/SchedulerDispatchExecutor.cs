@@ -15,7 +15,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///         <see cref="IScheduledJobRunStore.UpsertByFireInstanceAsync" /> (keyed on the Quartz fire-instance id) opens a
 ///         <see cref="ScheduledRunStatus.Running" /> row, the handler runs with a live progress callback that appends
 ///         <see cref="ScheduledRunEventLevel.Progress" /> events, and a terminal lifecycle update records the outcome:
-///         <see cref="ScheduledRunStatus.Succeeded" />, <see cref="ScheduledRunStatus.Failed" /> (sanitized — no message
+///         <see cref="ScheduledRunStatus.Succeeded" /> (recording the handler's own
+///         <see cref="ScheduledJobExecutionContext.Summary" /> when it set one, else a generic "Completed."),
+///         <see cref="ScheduledRunStatus.Failed" /> (sanitized — no message
 ///         text or stack trace leaves the process), <see cref="ScheduledRunStatus.Cancelled" /> (operator cancel) or
 ///         <see cref="ScheduledRunStatus.TimedOut" /> (auto-interrupt). Cancellation is re-thrown so Quartz still
 ///         observes the interrupt / shutdown; ordinary failures are swallowed (the run row is the record of failure) so a
@@ -164,11 +166,17 @@ internal sealed class SchedulerDispatchExecutor(
             await handler.ExecuteAsync(context, cancellationToken).ConfigureAwait(false);
 
             var completedMs = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
+            // The handler's own summary is what the run list is worth reading for — "3/4 cell(s) enqueued" or
+            // "Skipped: ..." rather than a constant that reads identically for a real fire and a no-op. Handlers that
+            // set nothing keep the generic constant.
+            var summary = string.IsNullOrWhiteSpace(context.Summary) ? "Completed." : context.Summary.Trim();
+
             var updated = await _runStore.UpdateLifecycleAsync(run.Id,
                 ScheduledRunStatus.Succeeded,
                 completedMs,
                 completedMs - actualFireMs,
-                "Completed.",
+                summary,
                 cancellationToken: CancellationToken.None).ConfigureAwait(false);
 
             await SafePublishRunAsync(updated ?? run, SchedulerHubEvents.RunCompleted).ConfigureAwait(false);

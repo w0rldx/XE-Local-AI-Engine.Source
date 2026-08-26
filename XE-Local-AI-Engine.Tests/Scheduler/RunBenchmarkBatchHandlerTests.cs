@@ -71,8 +71,9 @@ public sealed class RunBenchmarkBatchHandlerTests
     public async Task ExecuteAsync_WhenMatrixIsValid_EnqueuesEveryCellAndChainsTheProjectVersion()
     {
         var harness = new Harness();
+        var context = harness.Fire(TwoByTwoMatrix());
 
-        await harness.Handler.ExecuteAsync(harness.Fire(TwoByTwoMatrix()), CancellationToken.None);
+        await harness.Handler.ExecuteAsync(context, CancellationToken.None);
 
         // 2 models × 2 KV types = 4 cells, in model-major order.
         AssertEx.Equal(expected: 4, harness.FreezeCalls.Count);
@@ -97,6 +98,10 @@ public sealed class RunBenchmarkBatchHandlerTests
         // It enqueues and returns: nothing in the fire waits on a run reaching a terminal state.
         AssertEx.Contains(harness.Progress.Single(), "4/4 cell(s) enqueued", StringComparison.Ordinal);
         AssertEx.Contains(harness.Progress.Single(), "8 run(s) created", StringComparison.Ordinal);
+
+        // The same sentence is what the dispatcher persists on the run row, so the run list distinguishes a real fire
+        // from a busy-skip by more than its duration.
+        AssertEx.Equal(harness.Progress.Single(), context.Summary!);
     }
 
     [Test]
@@ -118,13 +123,18 @@ public sealed class RunBenchmarkBatchHandlerTests
     {
         var harness = new Harness();
         harness.SetExistingRuns(BenchmarkPrimaryStatus.Succeeded, BenchmarkPrimaryStatus.Queued);
+        var context = harness.Fire(TwoByTwoMatrix());
 
-        await harness.Handler.ExecuteAsync(harness.Fire(TwoByTwoMatrix()), CancellationToken.None);
+        await harness.Handler.ExecuteAsync(context, CancellationToken.None);
 
         // A nightly matrix that fires while the previous night's is still draining must not queue a second matrix.
         AssertEx.Equal(expected: 0, harness.FreezeCalls.Count);
         AssertEx.Contains(harness.Progress.Single(), "Skipped", StringComparison.Ordinal);
         AssertEx.Contains(harness.Progress.Single(), "1 run(s) queued or running", StringComparison.Ordinal);
+
+        // A busy-skip must say so on the run row too — it is a Succeeded run that did nothing.
+        AssertEx.Contains(context.Summary!, "Skipped", StringComparison.Ordinal);
+        AssertEx.Contains(context.Summary!, "1 run(s) queued or running", StringComparison.Ordinal);
     }
 
     [Test]

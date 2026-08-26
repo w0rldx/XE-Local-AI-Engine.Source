@@ -28,7 +28,9 @@ using XE_Local_AI_Engine.Client.Services.Benchmarks;
 ///     <para>
 ///         <b>Owns no scheduler state.</b> It records a content-safe summary (project id, cells requested, runs created,
 ///         per-cell failure reasons — never a prompt, never a model answer) through
-///         <see cref="ScheduledJobExecutionContext.ReportProgressAsync" />, and throws
+///         <see cref="ScheduledJobExecutionContext.ReportProgressAsync" /> and on
+///         <see cref="ScheduledJobExecutionContext.Summary" /> (which the dispatcher persists onto the run row), and
+///         throws
 ///         <see cref="ScheduledJobExecutionException" /> with an operator-safe reason only when EVERY cell failed.
 ///     </para>
 /// </summary>
@@ -295,8 +297,14 @@ public sealed class RunBenchmarkBatchHandler : IScheduledJobHandler
     private static string Describe(string modelName, string? kvCacheType) =>
         kvCacheType is null ? modelName : $"{modelName} ({kvCacheType})";
 
+    /// <summary>
+    ///     Records the fire's content-safe outcome in both places it belongs: the live progress event stream, and
+    ///     <see cref="ScheduledJobExecutionContext.Summary" /> so the run row carries the same sentence rather than a
+    ///     generic "Completed." that reads identically for an enqueued matrix and a busy-skip.
+    /// </summary>
     private static Task ReportAsync(ScheduledJobExecutionContext context, string summary, CancellationToken cancellationToken)
     {
+        context.Summary = summary;
         var reportProgress = context.ReportProgressAsync;
         return reportProgress is null ? Task.CompletedTask : reportProgress(summary, 100, cancellationToken);
     }
