@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -23,16 +24,60 @@ public sealed class BenchmarkJudgeVerifierConfigTests
     }
 
     [Test]
-    public void Parse_ForAReservedOrUnknownKind_IsRefusedWithItsOwnCode()
+    public void Parse_ForAnUnknownKind_IsRefusedWithItsOwnCode()
     {
-        var reserved = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
-            BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.PythonTests, """{"tests":"x"}"""));
         var unknown = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
             BenchmarkJudgeVerifierConfig.Parse("telepathy", "{}"));
 
-        AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.CriterionKindUnsupported, reserved.Code);
-        AssertEx.Contains(reserved.Message, "reserved");
         AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.CriterionKindUnsupported, unknown.Code);
+    }
+
+    [Test]
+    public void Parse_ForPythonTests_ValidatesTestCodeExportsTimeoutAndExtract()
+    {
+        // pythonTests is no longer a reserved name, so the interesting refusals are about its CONFIG. Each one is
+        // raised at activation rather than at judging, because an operator who learns an hour into a batch learns it
+        // from a failed run instead of from the form they were filling in.
+        var missingTests = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
+            BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.PythonTests, """{"exports":["solve"]}"""));
+        var oversized = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
+            BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.PythonTests,
+                JsonSerializer.Serialize(new { testCode = new string('x', BenchmarkPythonTestsHarness.TestCodeMaxChars + 1) })));
+        var badExport = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
+            BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.PythonTests,
+                """{"testCode":"assert True","exports":["not an identifier"]}"""));
+        var badTimeout = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
+            BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.PythonTests,
+                """{"testCode":"assert True","timeoutSeconds":0}"""));
+        var badExtract = AssertEx.Throws<BenchmarkJudgePolicyValidationException>(() =>
+            BenchmarkJudgeVerifierConfig.Parse(BenchmarkJudgeCriterionKinds.PythonTests,
+                """{"testCode":"assert True","extract":"telepathy"}"""));
+
+        foreach (var refusal in new[] { missingTests, oversized, badExport, badTimeout, badExtract })
+        {
+            AssertEx.Equal(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid, refusal.Code);
+        }
+
+        var accepted = AssertEx.NotNull(AssertEx.NotNull(BenchmarkJudgeVerifierConfig.Parse(
+            BenchmarkJudgeCriterionKinds.PythonTests,
+            """{"testCode":"assert solve(1) == 2","exports":["solve"],"timeoutSeconds":20}""")).PythonTests);
+
+        AssertEx.Equal("assert solve(1) == 2", accepted.TestCode);
+        AssertEx.Equal(expected: 20, accepted.TimeoutSeconds);
+    }
+
+    [Test]
+    public void PythonTests_IsVerifiable_ButNotByThePureVerifier()
+    {
+        // The split that keeps a routing mistake a failed judging rather than a criterion decided by the wrong code.
+        AssertEx.True(BenchmarkJudgeCriterionKinds.IsVerifiable(BenchmarkJudgeCriterionKinds.PythonTests));
+        AssertEx.True(BenchmarkJudgeCriterionKinds.IsExecutionVerified(BenchmarkJudgeCriterionKinds.PythonTests));
+        AssertEx.False(BenchmarkJudgeCriterionKinds.IsExecutionVerified(BenchmarkJudgeCriterionKinds.Exact));
+
+        _ = AssertEx.Throws<BenchmarkExecutionException>(() => BenchmarkJudgeVerifiers.Verify(
+            new BenchmarkJudgeRubricCriterionV1("solution", "Solution", "Runs.", 100,
+                BenchmarkJudgeCriterionKinds.PythonTests, """{"testCode":"assert True"}"""),
+            "answer"));
     }
 
     [Test]

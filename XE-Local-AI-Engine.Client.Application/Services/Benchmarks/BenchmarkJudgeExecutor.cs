@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -32,6 +33,7 @@ public sealed class BenchmarkJudgeExecutor(
     IBenchmarkCancellationRegistry cancellations,
     IRuntimeEnvironmentFactsProvider environmentFacts,
     BenchmarkAdmissionRetry admissionRetry,
+    IBenchmarkPythonTestsVerifier pythonTests,
     ILogger<BenchmarkJudgeExecutor> logger) : IBenchmarkJudgeExecutor
 {
     private const string FingerprintChangedMessage = "The installed judge model changed after the benchmark was created.";
@@ -110,9 +112,19 @@ public sealed class BenchmarkJudgeExecutor(
             var graded = BenchmarkOutputParts.ForJudge(BenchmarkExecutionSerialization.DeserializeParts(output.Span),
                 Math.Min(runtime.RequestedContextTokens, runtime.Runtime.ContextTokens));
             var verifiable = policy.Rubric.Criteria.Where(static criterion => BenchmarkJudgeCriterionKinds.IsVerifiable(criterion.Kind)).ToArray();
-            IReadOnlyList<BenchmarkJudgeVerifierResultV1> verifierResults = verifiable.Length == 0
-                ? []
-                : [.. verifiable.Select(criterion => BenchmarkJudgeVerifiers.Verify(criterion, BenchmarkJudgeVerifiers.AnswerText(graded)))];
+            var answerText = verifiable.Length == 0 ? string.Empty : BenchmarkJudgeVerifiers.AnswerText(graded);
+            List<BenchmarkJudgeVerifierResultV1> verified = [];
+            foreach (var criterion in verifiable)
+            {
+                // Two paths, because only one of them can be unscorable. A pure verifier is a function of the answer
+                // text; pythonTests runs the answer's code in the compute sandbox, so it is async and it refuses —
+                // fail-closed, with the run left unranked — on a host that cannot be trusted to run it.
+                verified.Add(BenchmarkJudgeCriterionKinds.IsExecutionVerified(criterion.Kind)
+                    ? await pythonTests.VerifyAsync(criterion, answerText, token).ConfigureAwait(false)
+                    : BenchmarkJudgeVerifiers.Verify(criterion, answerText));
+            }
+
+            IReadOnlyList<BenchmarkJudgeVerifierResultV1> verifierResults = verified;
             if (verifiable.Length == policy.Rubric.Criteria.Count)
             {
                 await CompleteVerifiedAsync(work, policy, verifierResults, token).ConfigureAwait(false);

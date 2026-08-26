@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 
 internal static class AddNodeBenchmarksExtensions
@@ -36,6 +37,7 @@ internal static class AddNodeBenchmarksExtensions
         builder.Services.AddSingleton<IBenchmarkQueueSignal, BenchmarkQueueSignal>();
         builder.Services.AddSingleton(BenchmarkAdmissionRetry.Default);
         builder.Services.AddScoped<IBenchmarkRunExecutor, BenchmarkRunExecutor>();
+        builder.Services.AddScoped<IBenchmarkPythonTestsVerifier, BenchmarkPythonTestsVerifier>();
         builder.Services.AddScoped<IBenchmarkJudgeExecutor, BenchmarkJudgeExecutor>();
         builder.Services.AddScoped<IBenchmarkFidelityExecutor, BenchmarkFidelityExecutor>();
         builder.Services.AddScoped<IBenchmarkComparisonExecutor, BenchmarkComparisonExecutor>();

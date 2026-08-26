@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -413,6 +414,7 @@ public sealed class BenchmarkJudgeExecutorTests
             cancellations,
             new StubEnvironmentFacts(),
             new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
+            Substitute.For<IBenchmarkPythonTestsVerifier>(),
             NullLogger<BenchmarkJudgeExecutor>.Instance);
 
         await executor.ExecuteAsync(new BenchmarkClaimedWork(2, run.Id, BenchmarkWorkKind.Judge, 1, workVersion, run, AttemptId), CancellationToken.None);
@@ -652,7 +654,8 @@ public sealed class BenchmarkJudgeExecutorTests
         ILlamaServerProcessSupervisor? supervisor = null,
         IBenchmarkCancellationRegistry? cancellations = null,
         ILogger<BenchmarkJudgeExecutor>? logger = null,
-        BenchmarkAdmissionRetry? admissionRetry = null) =>
+        BenchmarkAdmissionRetry? admissionRetry = null,
+        IBenchmarkPythonTestsVerifier? pythonTests = null) =>
         new(store,
             new FixedSnapshotFactory(snapshot),
             new FixedLeaseProvider(lease),
@@ -669,6 +672,7 @@ public sealed class BenchmarkJudgeExecutorTests
             // Default: decide ONCE and never wait, so the tests that assert the rejection path stay instant. Tests
             // about the wait itself pass their own budget with a zero interval.
             admissionRetry ?? new BenchmarkAdmissionRetry(MaxRetries: 0, TimeSpan.Zero),
+            pythonTests ?? Substitute.For<IBenchmarkPythonTestsVerifier>(),
             logger ?? NullLogger<BenchmarkJudgeExecutor>.Instance);
 
     /// <summary>

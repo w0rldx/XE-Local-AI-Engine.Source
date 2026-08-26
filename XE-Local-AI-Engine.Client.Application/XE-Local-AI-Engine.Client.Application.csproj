@@ -63,6 +63,12 @@
          CONTENT, not a host path, so a file on disk is not something the daemon would ever open. See
          DockerSeccompProfile for the provenance and the measured evidence. -->
     <EmbeddedResource Include="Services\Sandbox\Container\seccomp-default.json"/>
+    <!-- The two halves of the pythonTests execution harness. Embedded rather than kept as C# string literals because
+         they are the reviewed statement of a security boundary and have to read as Python; and rather than shipped as
+         files because nothing about pythonTests writes to disk on either side: the parent goes to the sandbox on
+         stdin and the child goes to a pipe the parent owns. Loaded by manifest-resource-name suffix. -->
+    <EmbeddedResource Include="Services\Benchmarks\PythonTests\xe-pythontests-parent.py"/>
+    <EmbeddedResource Include="Services\Benchmarks\PythonTests\xe-pythontests-child.py"/>
   </ItemGroup>
 
   <ItemGroup>

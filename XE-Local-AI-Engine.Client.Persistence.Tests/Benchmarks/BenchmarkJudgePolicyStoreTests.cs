@@ -478,6 +478,30 @@ public sealed class BenchmarkJudgePolicyStoreTests : IDisposable
         AssertEx.Equal(BenchmarkRunJudgeStates.ReasonJudgeFailed, failed.RankExclusionReason);
     }
 
+    // A verifier that could not RUN is a third fact again: the run is unranked, but the fix is an operator action on
+    // the node (enable Compute, install bubblewrap) rather than a re-judge, and it is emphatically not a score of 0 --
+    // 0 is something an answer earns, and "unmeasurable" is not.
+    [Test]
+    public async Task RunJudgeView_ReportsAnUnusableVerifierSeparatelyFromAFailedJudging()
+    {
+        await using var context = await CreateDatabaseAsync("judge-view-verifier-unavailable.sqlite").ConfigureAwait(false);
+        var store = new BenchmarkStore(context, TimeProvider.System);
+        var (project, revision) = await CreateJudgeProjectAsync(store).ConfigureAwait(false);
+
+        var run = await SucceedRunAsync(store, project, revision).ConfigureAwait(false);
+        var work = AssertEx.NotNull(await store.ClaimNextAsync().ConfigureAwait(false));
+        _ = await store.MarkJudgeFailedAsync(run.Id,
+                           work.Version,
+                           BenchmarkRunJudgeStates.VerifierUnavailablePrefix
+                           + "The Python compute tool is disabled on this node (Compute:Enabled=false).")
+                       .ConfigureAwait(false);
+
+        var judge = AssertEx.NotNull(AssertEx.NotNull(await store.GetRunAsync(run.Id).ConfigureAwait(false)).Judge);
+
+        AssertEx.Equal(BenchmarkRunJudgeStates.Failed, judge.State);
+        AssertEx.Equal(BenchmarkRunJudgeStates.ReasonVerifierUnavailable, judge.RankExclusionReason);
+    }
+
     [Test]
     public async Task ActivatePolicy_WithACohortSeed_EnqueuesEveryEligibleRunInTheNewGeneration()
     {

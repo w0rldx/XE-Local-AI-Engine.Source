@@ -663,6 +663,61 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             .ConfigureAwait(false);
     }
 
+    /// <inheritdoc />
+    public async Task<BenchmarkCellPage> ListCellsAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        // ONE ranking, then one flat read of the runs it ranked — the same two reads the export makes, grouped by the
+        // key the ranking already decided rather than by re-deriving anything. Warm-ups never form a rankable cell, so
+        // they are absent here for the same reason they are absent from the denominator.
+        var ranking = await LoadRankingAsync(projectId, cancellationToken).ConfigureAwait(false);
+        var rows = await _dbContext.BenchmarkRuns.AsNoTracking()
+                                   .Where(entity => entity.ProjectId == projectId && !entity.IsWarmup)
+                                   .OrderBy(entity => entity.CreatedAtUtc)
+                                   .Select(entity => new
+                                   {
+                                       entity.Id,
+                                       entity.CellKey,
+                                       entity.PrimaryModelName,
+                                       entity.ModelContentFingerprint,
+                                       entity.PrimaryKvCacheType,
+                                       entity.RepeatGroupId,
+                                       entity.RepeatIndex,
+                                       entity.TaskItemId,
+                                       entity.TaskItemIndex,
+                                       entity.PrimaryStopReason
+                                   })
+                                   .ToArrayAsync(cancellationToken)
+                                   .ConfigureAwait(false);
+
+        var cells = new List<BenchmarkCellRecord>();
+        foreach (var group in rows.GroupBy(static row => row.CellKey, StringComparer.Ordinal))
+        {
+            var members = group.OrderBy(static row => row.TaskItemIndex ?? int.MinValue).ThenBy(static row => row.Id).ToArray();
+            var cell = ranking.Cells.TryGetValue(group.Key, out var entry) ? entry : new CellRanking(null, null, Countable: false);
+            cells.Add(new BenchmarkCellRecord(group.Key,
+                members[0].PrimaryModelName,
+                members[0].ModelContentFingerprint,
+                members[0].PrimaryKvCacheType,
+                members[0].RepeatGroupId,
+                members[0].RepeatIndex,
+                cell.Quality,
+
+                // Every run of a cell reports its cell's rank, so the first one carries it.
+                ranking.Runs[members[0].Id].Rank,
+                cell.Reason,
+                [
+                    .. members.Select(member => new BenchmarkCellItemRecord(member.Id,
+                        member.TaskItemId,
+                        member.TaskItemIndex,
+                        ranking.Runs[member.Id].QualityScore,
+                        member.PrimaryStopReason,
+                        ranking.Runs[member.Id].Judge.RankExclusionReason))
+                ]));
+        }
+
+        return new BenchmarkCellPage(cells, ranking.Cohort, ranking.ScorableItemCount);
+    }
+
     private async Task<BenchmarkRunPage> PageAsync(BenchmarkProjectRanking ranking,
         Guid projectId,
         int skip,
@@ -3109,7 +3164,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 current?.ReferenceExecutionKey,
                 current?.CohortGeneration,
                 cells.Values.Count(static entry => entry.Quality is not null),
-                cells.Values.Count(static entry => entry.Countable)));
+                cells.Values.Count(static entry => entry.Countable)),
+            cells,
+            scorableItemIds.Count);
     }
 
     /// <summary>
@@ -3346,7 +3403,10 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     /// </param>
     private sealed record CellRanking(int? Quality, string? Reason, bool Countable);
 
-    private sealed record BenchmarkProjectRanking(IReadOnlyDictionary<Guid, BenchmarkRunRanking> Runs, BenchmarkRankCohort Cohort);
+    private sealed record BenchmarkProjectRanking(IReadOnlyDictionary<Guid, BenchmarkRunRanking> Runs,
+        BenchmarkRankCohort Cohort,
+        IReadOnlyDictionary<string, CellRanking> Cells,
+        int ScorableItemCount);
 
     private static BenchmarkRunJudgeView JudgeViewFor(IReadOnlyDictionary<Guid, BenchmarkRunJudgeView> views, Guid runId, int? userScore)
     {

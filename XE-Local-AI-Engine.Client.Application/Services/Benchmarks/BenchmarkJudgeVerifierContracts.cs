@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Client.Services.Benchmarks.PythonTests;
 
 /// <summary>
 ///     The rubric-criterion vocabulary. <see cref="Llm" /> is what every criterion written before P2 carries by
@@ -19,15 +20,23 @@ public static class BenchmarkJudgeCriterionKinds
     public const string Constraint = "constraint";
 
     /// <summary>
-    ///     Reserved for P3's <c>run_python</c> execution scoring. Named here so the vocabulary is complete and a
-    ///     policy carrying it is refused with a specific reason instead of the generic "unknown kind"; P2 does not
-    ///     implement it.
+    ///     Execution scoring: the answer's code is run against the operator's tests in the compute sandbox, and the
+    ///     criterion passes iff every collected case passed. The only kind that is not a pure function of the answer
+    ///     text, and the only one that can be UNSCORABLE rather than merely failed.
     /// </summary>
     public const string PythonTests = "pythonTests";
 
-    /// <summary>Whether this kind is decided by <see cref="BenchmarkJudgeVerifiers" /> rather than by a model.</summary>
+    /// <summary>Whether this kind is decided server-side rather than by a model.</summary>
     public static bool IsVerifiable(string? kind) =>
-        kind is Exact or Regex or JsonSchema or MathAnswer or Constraint;
+        kind is Exact or Regex or JsonSchema or MathAnswer or Constraint or PythonTests;
+
+    /// <summary>
+    ///     Whether deciding this kind means EXECUTING something. Pure kinds go through
+    ///     <see cref="BenchmarkJudgeVerifiers" />, which is side-effect free and synchronous; this one goes through the
+    ///     compute sandbox and is therefore async, refusable, and kept on its own path.
+    /// </summary>
+    public static bool IsExecutionVerified(string? kind) =>
+        string.Equals(Normalize(kind), PythonTests, StringComparison.Ordinal);
 
     /// <summary>The kind a criterion carries, treating an absent value as the pre-P2 default.</summary>
     public static string Normalize(string? kind) =>
@@ -65,6 +74,20 @@ public sealed record BenchmarkConstraintConfigV1(
 }
 
 /// <summary>
+///     A <c>pythonTests</c> criterion's configuration.
+///     <para>
+///         <c>exports</c> names the symbols the operator's tests call directly (<c>solve(10)</c>); omitted, the tests
+///         reach the candidate through the <c>candidate.…</c> proxy, or through <c>pycall</c> / <c>pyeval</c>, which
+///         are always in the test namespace and need no flag of their own.
+///     </para>
+/// </summary>
+public sealed record BenchmarkPythonTestsConfigV1(
+    string? TestCode = null,
+    IReadOnlyList<string>? Exports = null,
+    int? TimeoutSeconds = null,
+    string? Extract = null);
+
+/// <summary>
 ///     One criterion's verifiable configuration, parsed and validated once. Produced by
 ///     <see cref="BenchmarkJudgeVerifierConfig.Parse" />, which BOTH the policy validator (at activation, discarding
 ///     the result) and <see cref="BenchmarkJudgeVerifiers" /> (at execution) call — a second parser is how an
@@ -82,6 +105,7 @@ public sealed record BenchmarkVerifierSpec
     public double RelativeTolerance { get; init; }
     public double AbsoluteTolerance { get; init; }
     public BenchmarkConstraintConfigV1? Constraint { get; init; }
+    public BenchmarkPythonTestsConfigV1? PythonTests { get; init; }
 }
 
 /// <summary>
@@ -93,6 +117,12 @@ public static class BenchmarkJudgeVerifierConfig
 {
     /// <summary>The longest regex pattern a policy may carry.</summary>
     public const int MaximumPatternLength = 512;
+
+    /// <summary>How many symbols a pythonTests criterion may seed into the test namespace.</summary>
+    public const int MaximumExports = 16;
+
+    /// <summary>The ceiling a pythonTests criterion's own timeout is validated against; the node clamps it further.</summary>
+    public const int MaximumTimeoutSeconds = 600;
 
     /// <summary>How long one regex match may run before it is abandoned — belt beside <c>NonBacktracking</c>'s braces.</summary>
     public static readonly TimeSpan MatchTimeout = TimeSpan.FromMilliseconds(250);
@@ -130,12 +160,6 @@ public static class BenchmarkJudgeVerifierConfig
                     "An llm rubric criterion carries no configuration.");
         }
 
-        if (string.Equals(resolved, BenchmarkJudgeCriterionKinds.PythonTests, StringComparison.Ordinal))
-        {
-            throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionKindUnsupported,
-                "The pythonTests criterion kind is reserved and not available yet.");
-        }
-
         if (!BenchmarkJudgeCriterionKinds.IsVerifiable(resolved))
         {
             throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionKindUnsupported,
@@ -156,6 +180,7 @@ public static class BenchmarkJudgeVerifierConfig
                 BenchmarkJudgeCriterionKinds.Regex => ParseRegex(configJson),
                 BenchmarkJudgeCriterionKinds.JsonSchema => ParseJsonSchema(configJson),
                 BenchmarkJudgeCriterionKinds.MathAnswer => ParseMathAnswer(configJson),
+                BenchmarkJudgeCriterionKinds.PythonTests => ParsePythonTests(configJson),
                 _ => ParseConstraint(configJson)
             };
         }
@@ -381,6 +406,67 @@ public static class BenchmarkJudgeVerifierConfig
             Constraint = config
         };
     }
+
+    private static BenchmarkVerifierSpec ParsePythonTests(string configJson)
+    {
+        var config = JsonSerializer.Deserialize<BenchmarkPythonTestsConfigV1>(configJson, ConfigOptions)
+                     ?? throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid, "The pythonTests criterion configuration is empty.");
+        if (string.IsNullOrWhiteSpace(config.TestCode))
+        {
+            throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid, "A pythonTests criterion requires the operator's test code.");
+        }
+
+        // Bounded at ACTIVATION rather than at judging: the composed harness has to fit inside the sandbox's script
+        // ceiling alongside the model's answer, and an operator who learns that an hour into a batch learns it from
+        // a failed run instead of from the form they were filling in.
+        if (config.TestCode.Length > BenchmarkPythonTestsHarness.TestCodeMaxChars)
+        {
+            throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid,
+                $"A pythonTests criterion's test code must be at most {BenchmarkPythonTestsHarness.TestCodeMaxChars} characters.");
+        }
+
+        // Exports are seeded into the test namespace as `solve(10)` shorthands for `candidate.solve(10)`, so each one
+        // has to be a name Python can bind. Refusing here is what keeps the composed program's config a list of plain
+        // identifiers rather than something an operator can shape.
+        var exports = config.Exports ?? [];
+        if (exports.Count > MaximumExports)
+        {
+            throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid,
+                $"A pythonTests criterion may name at most {MaximumExports} exports.");
+        }
+
+        if (exports.Any(static name => !IsIdentifier(name)))
+        {
+            throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid,
+                "A pythonTests criterion's exports must be plain Python identifiers.");
+        }
+
+        if (config.TimeoutSeconds is { } timeout && (timeout < 1 || timeout > MaximumTimeoutSeconds))
+        {
+            throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid,
+                $"A pythonTests criterion's timeoutSeconds must be between 1 and {MaximumTimeoutSeconds}.");
+        }
+
+        if (!BenchmarkPythonCodeExtraction.IsSupported(config.Extract))
+        {
+            throw Invalid(BenchmarkJudgePolicyValidationCodes.CriterionConfigInvalid,
+                $"A pythonTests criterion's extract must be '{BenchmarkPythonCodeExtraction.FirstPythonFence}' or '{BenchmarkPythonCodeExtraction.WholeText}'.");
+        }
+
+        return new BenchmarkVerifierSpec
+        {
+            Kind = BenchmarkJudgeCriterionKinds.PythonTests,
+            PythonTests = config with
+            {
+                Exports = exports
+            }
+        };
+    }
+
+    private static bool IsIdentifier(string? name) =>
+        !string.IsNullOrEmpty(name)
+        && (char.IsLetter(name[0]) || name[0] == '_')
+        && name.All(static character => char.IsLetterOrDigit(character) || character == '_');
 
     private static BenchmarkJudgePolicyValidationException Invalid(string code, string message, Exception? inner = null) =>
         new(code, message)
