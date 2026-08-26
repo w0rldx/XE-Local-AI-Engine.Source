@@ -3,20 +3,22 @@ import { describe, expect, it } from "vitest";
 import { ApiError } from "@/core/api/errors/ApiError";
 import type { ProblemDetails } from "@/core/api/models/ProblemDetails";
 import { RESPONSE_VALIDATION_PROBLEM_TITLE } from "@/core/api/ResponseValidation";
+import type { BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import {
 	applyBenchmarkEvent,
-	benchmarkBatchProgress,
 	type BenchmarkOutputPart,
+	benchmarkBatchProgress,
 	benchmarkRankExclusionReasons,
 	benchmarkRunEventSchema,
 	isBenchmarkRunIncomplete,
 	isBenchmarkRunReasoningExhausted,
 	isBenchmarkRunTruncated,
 	isUnsupportedKvCacheTypeError,
+	maxComparedBenchmarkRuns,
 	toBenchmarkRankExclusionReason,
 	toChatMessageParts,
+	toggleBenchmarkRunSelection,
 } from "@/features/benchmarks/models/BenchmarkModels";
-import type { BenchmarkRunSummary } from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkRunSummaryFixture } from "@/features/benchmarks/models/BenchmarkTestFixtures";
 
 describe("benchmark output mapping", () => {
@@ -145,5 +147,33 @@ describe("benchmark batch progress", () => {
 		const progress = benchmarkBatchProgress([run("a", "Succeeded"), run("b", "Failed")], ["a", "b"]);
 
 		expect(progress.done).toBe(progress.total);
+	});
+});
+
+// The compare table is one column per run and the live pane under it is a full transcript each, so the selection is
+// capped. What the cap must not do is refuse a click: an operator working down a quant ladder means "and this one
+// too", and a checkbox that silently does nothing reads as a broken table.
+describe("toggleBenchmarkRunSelection", () => {
+	it("prepends a new run, newest first", () => {
+		expect(toggleBenchmarkRunSelection(["a"], "b")).toEqual(["b", "a"]);
+	});
+
+	it("removes a run that was already selected", () => {
+		expect(toggleBenchmarkRunSelection(["b", "a"], "b")).toEqual(["a"]);
+	});
+
+	it("drops the oldest selection rather than refusing the click once the cap is reached", () => {
+		const full = ["f", "e", "d", "c", "b", "a"];
+
+		expect(toggleBenchmarkRunSelection(full, "g")).toEqual(["g", "f", "e", "d", "c", "b"]);
+	});
+
+	it("caps at six by default", () => {
+		expect(maxComparedBenchmarkRuns).toBe(6);
+		expect(toggleBenchmarkRunSelection(["f", "e", "d", "c", "b", "a"], "g")).toHaveLength(6);
+	});
+
+	it("deselecting never drops anything else, even at the cap", () => {
+		expect(toggleBenchmarkRunSelection(["f", "e", "d", "c", "b", "a"], "a")).toEqual(["f", "e", "d", "c", "b"]);
 	});
 });

@@ -4272,7 +4272,8 @@
 					"wait": "Warten Sie, bis die Bewertung fertig ist.",
 					"rerun": "Erneut starten — mit mehr Raum, falls er abgeschnitten wurde.",
 					"none": "Nichts zu tun — ein Aufwärmlauf soll außerhalb der Wertung stehen."
-				}
+				},
+				"comparing": "{{count}} Läufe im Vergleich"
 			},
 			"rubric": {
 				"title": "Bewertungsraster",
@@ -4324,7 +4325,8 @@
 					"failed": "Treuemessung fehlgeschlagen",
 					"cancelled": "Treuemessung abgebrochen",
 					"skipped": "Nicht gemessen"
-				}
+				},
+				"differs": "Quantisierungstreue unterscheidet sich: {{fields}}"
 			}
 		},
 		"customTools": {

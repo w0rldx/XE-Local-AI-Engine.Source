@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
 	cancelBenchmarkRun,
@@ -166,14 +166,33 @@ export function useBenchmarkRuns(projectId: string | null) {
 	return { ...query, loadMore: query.fetchNextPage };
 }
 
+// Shared by the single-run hook and the N-run one so both read through ONE cache entry per run: the compare view, the
+// charts and the live pane all want the same run's detail, and three query keys for it would be three polls of it.
+const benchmarkRunDetailQuery = (runId: string) => ({
+	queryKey: benchmarkQueryKeys.run(runId),
+	refetchInterval: (query: { state: { data?: BenchmarkRunDetail } }) =>
+		query.state.data && isRunActive(query.state.data) ? activeRunPollIntervalMs : (false as const),
+	queryFn: async ({ signal }: { signal: AbortSignal }): Promise<BenchmarkRunDetail> => {
+		const { data } = await callWithResponseValidation(getBenchmarkRun({ path: { runId }, signal, throwOnError: true }));
+		return toBenchmarkRunDetail(data);
+	},
+});
+
 export function useBenchmarkRun(runId: string) {
-	return useQuery<BenchmarkRunDetail>({
-		queryKey: benchmarkQueryKeys.run(runId),
-		refetchInterval: (query) => (query.state.data && isRunActive(query.state.data) ? activeRunPollIntervalMs : false),
-		queryFn: async ({ signal }) => {
-			const { data } = await callWithResponseValidation(getBenchmarkRun({ path: { runId }, signal, throwOnError: true }));
-			return toBenchmarkRunDetail(data);
-		},
+	return useQuery<BenchmarkRunDetail>(benchmarkRunDetailQuery(runId));
+}
+
+/**
+ * Several runs' details at once, in the order asked for. Nothing extra is fetched: the query keys are the ones
+ * {@link useBenchmarkRun} already uses, so a run whose pane is open is read from that entry rather than re-requested.
+ */
+export function useBenchmarkRunDetails(runIds: readonly string[]) {
+	return useQueries({
+		queries: runIds.map((runId) => benchmarkRunDetailQuery(runId)),
+		combine: (results) => ({
+			runs: results.map((result) => result.data).filter((run): run is BenchmarkRunDetail => run !== undefined),
+			isLoading: results.some((result) => result.isLoading),
+		}),
 	});
 }
 

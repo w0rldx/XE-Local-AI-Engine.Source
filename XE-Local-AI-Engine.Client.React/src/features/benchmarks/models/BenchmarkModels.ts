@@ -730,6 +730,26 @@ export function benchmarkQuantTag(modelName: string): string {
 	return separator < 0 || separator === modelName.length - 1 ? "" : modelName.slice(separator + 1);
 }
 
+/**
+ * How many runs may be compared at once. A hard cap rather than a scrollable table: the compare view is one column per
+ * run over a field set in the hundreds, and the live pane under it renders a full transcript each. Six covers the case
+ * the cap exists for — one model's quant ladder — and the operator deselects to look at a seventh.
+ */
+export const maxComparedBenchmarkRuns = 6;
+
+/**
+ * Adds or removes one run from the compare selection, newest-first and capped. Selecting past the cap drops the OLDEST
+ * selection rather than refusing the click: an operator working down a quant ladder means "and this one too", and a
+ * silently ignored checkbox reads as a broken table.
+ */
+export function toggleBenchmarkRunSelection(
+	current: readonly string[],
+	runId: string,
+	cap = maxComparedBenchmarkRuns,
+): string[] {
+	return current.includes(runId) ? current.filter((id) => id !== runId) : [runId, ...current].slice(0, cap);
+}
+
 export const isPrimaryActive = (status: BenchmarkPrimaryStatus): boolean =>
 	status === "Queued" || status === "Running" || status === "CancelRequested";
 export const isJudgeActive = (state: BenchmarkJudgeState): boolean => state === "queued" || state === "running";

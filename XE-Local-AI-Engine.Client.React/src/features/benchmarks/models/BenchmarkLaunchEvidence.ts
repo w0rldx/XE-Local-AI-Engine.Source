@@ -12,10 +12,14 @@ export interface BenchmarkEvidenceEntry {
 	value: unknown;
 }
 
+/**
+ * One field across every compared run, in the order the runs were given. `values` is always as long as the compared
+ * set — a run that never recorded the field contributes `null` rather than a hole, so column N of the table is always
+ * run N.
+ */
 export interface BenchmarkEvidenceDiffRow {
 	key: string;
-	left: unknown;
-	right: unknown;
+	values: readonly unknown[];
 	differs: boolean;
 }
 
@@ -64,21 +68,31 @@ const toMap = (entries: readonly BenchmarkEvidenceEntry[]): Map<string, unknown>
 const isInformationalEvidenceKey = (key: string): boolean => lastSegment(key) === "capturedAtUtc";
 
 /**
- * Union of both sides' fields, in left-then-right-only order, each row flagged when the two values disagree.
- * Informational fields never flag, so callers deriving a banner from `differs` inherit the exclusion.
+ * Union of every side's fields, in first-seen order, each row flagged when the sides do not all agree. Informational
+ * fields never flag, so callers deriving a banner from `differs` inherit the exclusion.
+ *
+ * N-ary rather than pairwise because the operator compares a model's quants, not two runs — and a pairwise engine
+ * generalized by running it N-1 times would report "differs" against whichever run happened to be first rather than
+ * against the set. One side in is a valid degenerate case: every row renders, nothing differs.
  */
-export function diffLaunchEvidence(
-	left: readonly BenchmarkEvidenceEntry[],
-	right: readonly BenchmarkEvidenceEntry[],
-): BenchmarkEvidenceDiffRow[] {
-	const leftValues = toMap(left);
-	const rightValues = toMap(right);
-	const keys = [...leftValues.keys(), ...[...rightValues.keys()].filter((key) => !leftValues.has(key))];
+export function diffLaunchEvidence(sides: readonly (readonly BenchmarkEvidenceEntry[])[]): BenchmarkEvidenceDiffRow[] {
+	const maps = sides.map(toMap);
+	const keys: string[] = [];
+	const seen = new Set<string>();
+	for (const map of maps) {
+		for (const key of map.keys()) {
+			if (!seen.has(key)) {
+				seen.add(key);
+				keys.push(key);
+			}
+		}
+	}
 	return keys.map((key) => {
-		const leftValue = leftValues.get(key) ?? null;
-		const rightValue = rightValues.get(key) ?? null;
-		const differs = !isInformationalEvidenceKey(key) && !Object.is(leftValue, rightValue);
-		return { key, left: leftValue, right: rightValue, differs };
+		const values = maps.map((map) => map.get(key) ?? null);
+		// Compared against the FIRST side rather than pairwise across all of them: `Object.is` is transitive here
+		// because every value is a primitive leaf, so "some value differs from the first" is exactly "not all equal".
+		const differs = !isInformationalEvidenceKey(key) && values.some((value) => !Object.is(value, values[0] ?? null));
+		return { key, values, differs };
 	});
 }
 

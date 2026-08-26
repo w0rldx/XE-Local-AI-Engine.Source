@@ -4272,7 +4272,8 @@
 					"wait": "Wait for the judging to finish.",
 					"rerun": "Rerun it — with more room when it was cut off.",
 					"none": "Nothing to do — a warm-up is meant to sit outside the ranking."
-				}
+				},
+				"comparing": "Comparing {{count}} runs"
 			},
 			"rubric": {
 				"title": "Rubric",
@@ -4324,7 +4325,8 @@
 					"failed": "Fidelity failed",
 					"cancelled": "Fidelity cancelled",
 					"skipped": "Not measured"
-				}
+				},
+				"differs": "Quant fidelity differs: {{fields}}"
 			}
 		},
 		"customTools": {

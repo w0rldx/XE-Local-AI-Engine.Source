@@ -57,6 +57,8 @@ import {
 	benchmarkErrorCode,
 	benchmarkKvCacheTypes,
 	isUnsupportedKvCacheTypeError,
+	maxComparedBenchmarkRuns,
+	toggleBenchmarkRunSelection,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { hasActiveJudgeAttempt, succeededRunCount } from "@/features/benchmarks/models/BenchmarkRanking";
 import type { BenchmarkBatchRejection } from "@/features/benchmarks/queries/useBenchmarks";
@@ -175,9 +177,9 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 		setSelectedRunIds((current) => {
 			const valid = current.filter((id) => runs.some((run) => run.id === id));
 			if (latest[0] && !valid.includes(latest[0])) {
-				return [latest[0], ...valid].slice(0, 2);
+				return [latest[0], ...valid].slice(0, maxComparedBenchmarkRuns);
 			}
-			return valid.length > 0 ? valid.slice(0, 2) : latest;
+			return valid.length > 0 ? valid.slice(0, maxComparedBenchmarkRuns) : latest;
 		});
 	}, [runs, linkedRunIds]);
 
@@ -316,10 +318,10 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 	// started run is the newest one), so prepending it unguarded selected the same run twice: two identical detail
 	// panes, and a launch comparison of a run against itself.
 	const selectRun = (id: string): void => {
-		setSelectedRunIds((current) => [id, ...current.filter((item) => item !== id)].slice(0, 2));
+		setSelectedRunIds((current) => [id, ...current.filter((item) => item !== id)].slice(0, maxComparedBenchmarkRuns));
 	};
 	const toggleRun = (id: string): void => {
-		setSelectedRunIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [id, ...current].slice(0, 2)));
+		setSelectedRunIds((current) => toggleBenchmarkRunSelection(current, id));
 	};
 	const rejudgeAll = (): void => {
 		if (!detail) {
@@ -646,9 +648,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						onMeasureFidelity={measureRunFidelity}
 						onDeleteRun={removeRun}
 					/>
-					{selectedRunIds.length === 2 && selectedRunIds[0] && selectedRunIds[1] ? (
-						<BenchmarkLaunchCompare leftRunId={selectedRunIds[0]} rightRunId={selectedRunIds[1]} />
-					) : null}
+					{selectedRunIds.length >= 2 ? <BenchmarkLaunchCompare runIds={selectedRunIds} /> : null}
 					<SimpleGrid cols={{ base: 1, lg: selectedRunIds.length > 1 ? 2 : 1 }}>
 						{selectedRunIds.map((runId) => (
 							<BenchmarkRunLivePane key={runId} runId={runId} />

@@ -70,16 +70,21 @@ export function BenchmarkEvidenceTable({
 	);
 }
 
-/** Both sides of a comparison over the same field set; only the rows whose values disagree are highlighted. */
+/**
+ * Every compared side over the same field set, one column each; only the rows whose values disagree are highlighted.
+ * Column N is side N by construction — {@link diffLaunchEvidence} pads a missing field with null rather than a hole,
+ * so a run that never recorded a field still occupies its own column.
+ *
+ * A differing row renders its values UNTRUNCATED: two different hashes sharing a 12-character prefix would otherwise
+ * print as the same string, which reads as a highlighted row whose values are identical.
+ */
 export function BenchmarkEvidenceDiffTable({
 	rows,
-	leftLabel,
-	rightLabel,
+	labels,
 	"data-testid": testId,
 }: {
 	rows: readonly BenchmarkEvidenceDiffRow[];
-	leftLabel: string;
-	rightLabel: string;
+	labels: readonly string[];
 	"data-testid"?: string;
 }) {
 	const { t } = useTranslation();
@@ -89,8 +94,12 @@ export function BenchmarkEvidenceDiffTable({
 				<Table.Thead>
 					<Table.Tr>
 						<Table.Th>{t("pages.benchmarks.launch.field", "Field")}</Table.Th>
-						<Table.Th>{leftLabel}</Table.Th>
-						<Table.Th>{rightLabel}</Table.Th>
+						{labels.map((label, index) => (
+							// The label is the run's own name, which repeats across a model's quants; the index is what keeps
+							// two columns of one model apart as React keys.
+							// biome-ignore lint/suspicious/noArrayIndexKey: a column IS its position in the compared set.
+							<Table.Th key={`${label}-${index}`}>{label}</Table.Th>
+						))}
 					</Table.Tr>
 				</Table.Thead>
 				<Table.Tbody>
@@ -101,12 +110,12 @@ export function BenchmarkEvidenceDiffTable({
 							bg={row.differs ? "var(--mantine-color-yellow-light)" : undefined}
 						>
 							<Table.Td>{fieldCell(row.key)}</Table.Td>
-							<Table.Td>
-								<EvidenceValue entryKey={row.key} value={row.left} truncate={!row.differs} />
-							</Table.Td>
-							<Table.Td>
-								<EvidenceValue entryKey={row.key} value={row.right} truncate={!row.differs} />
-							</Table.Td>
+							{labels.map((label, index) => (
+								// biome-ignore lint/suspicious/noArrayIndexKey: a column IS its position in the compared set.
+								<Table.Td key={`${label}-${index}`}>
+									<EvidenceValue entryKey={row.key} value={row.values[index] ?? null} truncate={!row.differs} />
+								</Table.Td>
+							))}
 						</Table.Tr>
 					))}
 				</Table.Tbody>
