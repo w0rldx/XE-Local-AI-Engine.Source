@@ -535,6 +535,15 @@ public sealed record BenchmarkJudgePolicyChangeInput(ReadOnlyMemory<byte>? Polic
     public static BenchmarkJudgePolicyChangeInput Disabled { get; } = new(null, null);
 }
 
+/// <summary>
+///     One run as it is frozen. The last five members are the immutable identity stamps: which leaf item this run
+///     answered, which cell its per-item score aggregates into, exactly what it was asked, and what the whole question
+///     set was at the time. A caller that names none of them — every caller written before task suites existed — gets
+///     the pre-suite shape: no item, its own singleton cell, and the legacy hashes.
+/// </summary>
+/// <param name="CellKey">
+///     Null lets the store derive the run's own singleton cell, which is what a single-item single-repeat freeze is.
+/// </param>
 public sealed record BenchmarkStartRunCommand(
     Guid RunId,
     Guid ProjectId,
@@ -554,7 +563,12 @@ public sealed record BenchmarkStartRunCommand(
     int? InvocationTimeoutSeconds = null,
     BenchmarkRepeatMode RepeatMode = BenchmarkRepeatMode.Throughput,
     string? SamplingSeed = null,
-    double? SamplingTemperature = null);
+    double? SamplingTemperature = null,
+    Guid? TaskItemId = null,
+    int? TaskItemIndex = null,
+    string? CellKey = null,
+    string? TaskInputHash = null,
+    string? TaskItemSetHash = null);
 
 /// <summary>
 ///     Application-owned dependency guard executed by <see cref="IBenchmarkStore.StartRunAsync" /> inside the same

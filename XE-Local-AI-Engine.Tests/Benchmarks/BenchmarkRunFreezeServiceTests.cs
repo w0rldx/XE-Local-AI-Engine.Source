@@ -470,6 +470,192 @@ public sealed class BenchmarkRunFreezeServiceTests
         AssertEx.Null(harness.Command);
     }
 
+    [Test]
+    public async Task Start_OnASingleItemProject_FreezesExactlyWhatItAlwaysDid()
+    {
+        var harness = new FreezeHarness();
+
+        _ = await harness.StartAsync();
+
+        // R2: the degenerate case is byte-identical. One snapshot, the project's own task, no repeat group, and a
+        // NULL cell key — which is the store's instruction to stamp the run's own singleton cell, exactly what every
+        // pre-suite run already carries.
+        AssertEx.Equal(1, harness.SnapshotsCreated);
+        AssertEx.Equal("exact task", AssertEx.NotNull(harness.SnapshotInput).CoreTask);
+        AssertEx.Equal(1, harness.Commands.Count);
+        AssertEx.Null(harness.Commands[0].CellKey, "A one-item, one-repeat freeze names no cell group.");
+        AssertEx.Null(harness.Commands[0].RepeatGroupId);
+        AssertEx.Null(harness.Commands[0].RepeatIndex);
+        AssertEx.Equal<Guid?>(harness.TaskItems[0].Id, harness.Commands[0].TaskItemId);
+        AssertEx.Equal<int?>(0, harness.Commands[0].TaskItemIndex);
+    }
+
+    [Test]
+    public async Task Start_WithThreeItemsAndNoRepeats_ProducesOneCellOfThreeInOneStoreCall()
+    {
+        var harness = new FreezeHarness(itemPrompts: ["item a", "item b", "item c"]);
+
+        _ = await harness.StartAsync();
+
+        // THE finding: deriving the cell from repeat_group_id alone left every run of a plain multi-item suite in its
+        // own singleton cell, so every cell was missing two of three items and the project ranked nothing.
+        AssertEx.Equal(3, harness.Commands.Count);
+        AssertEx.Equal(1, harness.StoreCalls, "A suite is inserted by a single, atomic store call.");
+        var cells = harness.Commands.Select(static command => command.CellKey).Distinct(StringComparer.Ordinal).ToArray();
+        AssertEx.Equal(1, cells.Length, "Three items measured together are ONE cell.");
+        AssertEx.True(cells[0]?.StartsWith("cell:", StringComparison.Ordinal) is true && cells[0]!.EndsWith(":1", StringComparison.Ordinal),
+            "The single measured repeat is index 1 by the existing convention.");
+    }
+
+    [Test]
+    public async Task Start_WithThreeItemsAndNoRepeats_LeavesRepeatGroupIdAndRepeatIndexNull()
+    {
+        var harness = new FreezeHarness(itemPrompts: ["item a", "item b", "item c"]);
+
+        _ = await harness.StartAsync();
+
+        // The no-regression half. Fabricating a repeat group to get a cell would change repeat semantics — and the
+        // meaning of repeat_group_id — for every existing query.
+        AssertEx.True(harness.Commands.TrueForAll(static command => command.RepeatGroupId is null));
+        AssertEx.True(harness.Commands.TrueForAll(static command => command.RepeatIndex is null));
+    }
+
+    [Test]
+    public async Task Start_WithThreeItems_FreezesThreeDistinctCoreTasks()
+    {
+        var harness = new FreezeHarness(itemPrompts: ["item a", "item b", "item c"]);
+
+        _ = await harness.StartAsync();
+
+        // The snapshot cache is keyed on (item, seed), not on the seed alone. Keyed on the seed, all three runs would
+        // have shared item a's serialized snapshot — every run answering the first prompt while its task_item_id
+        // column claimed otherwise, and nothing failing loudly.
+        AssertEx.Equal(3, harness.SnapshotsCreated);
+        AssertEx.True(harness.SnapshotInputs.Select(static input => input.CoreTask).SequenceEqual(["item a", "item b", "item c"], StringComparer.Ordinal));
+        AssertEx.Equal(3, harness.Commands.Count);
+    }
+
+    [Test]
+    public async Task Start_WithThreeItemsAndTwoAnswerVarianceRepeats_FreezesOneSnapshotPerItemAndSeedPair()
+    {
+        var harness = new FreezeHarness(itemPrompts: ["item a", "item b", "item c"]);
+
+        _ = await harness.StartAsync(repeatCount: 2, BenchmarkRepeatMode.AnswerVariance, temperature: 0.9d);
+
+        // Six runs, six distinct (item, seed) pairs, six snapshots. A cache keyed on either half alone collapses to
+        // three and silently mislabels half the batch.
+        AssertEx.Equal(6, harness.SnapshotsCreated);
+        var pairs = harness.SnapshotInputs.Select(static input => input.CoreTask + "|" + input.PrimarySampling.SeedValue)
+                           .Distinct(StringComparer.Ordinal)
+                           .Count();
+        AssertEx.Equal(6, pairs);
+    }
+
+    [Test]
+    public async Task Start_WithThreeItemsAndTwoRepeats_ProducesTwoCellsOfThree()
+    {
+        var harness = new FreezeHarness(itemPrompts: ["item a", "item b", "item c"]);
+
+        var runs = await harness.StartAsync(repeatCount: 2, warmup: false);
+
+        AssertEx.Equal(6, runs.Count);
+        var cells = harness.Commands.GroupBy(static command => command.CellKey, StringComparer.Ordinal).ToArray();
+        AssertEx.Equal(2, cells.Length, "Two repeats of a three-item suite are two cells.");
+        AssertEx.True(cells.All(static cell => cell.Count() == 3), "Each cell holds every item once.");
+        AssertEx.True(cells.All(static cell => cell.Select(static command => command.TaskItemId).Distinct().Count() == 3));
+    }
+
+    [Test]
+    public async Task Start_WhenARepeatGroupAndACellGroupBothExist_TheyAreTheSameGuid()
+    {
+        var harness = new FreezeHarness(itemPrompts: ["item a", "item b"]);
+
+        _ = await harness.StartAsync(repeatCount: 2, warmup: false);
+
+        // One identity, not two to keep in sync: the cell key is built from the repeat group's own GUID whenever
+        // there is one.
+        var groupId = harness.Commands[0].RepeatGroupId;
+        AssertEx.True(groupId is not null && groupId != Guid.Empty, "A repeat group must carry a real id.");
+        AssertEx.True(harness.Commands.TrueForAll(command =>
+                command.CellKey == "cell:" + groupId!.Value.ToString("D") + ":" + command.RepeatIndex),
+            "The cell key is the repeat group's GUID plus the repeat index.");
+    }
+
+    [Test]
+    public async Task Start_WithAWarmup_PutsTheWarmupRunsInTheirOwnCell()
+    {
+        var harness = new FreezeHarness(itemPrompts: ["item a", "item b"]);
+
+        _ = await harness.StartAsync(repeatCount: 1, warmup: true);
+
+        // A warm-up is stamped like everything else — an identity is not a ranking decision — and sits at repeat
+        // index 0, so it forms a cell the ranking read drops before it groups anything.
+        var warmupCells = harness.Commands.Where(static command => command.IsWarmup).Select(static command => command.CellKey).Distinct(StringComparer.Ordinal).ToArray();
+        var measuredCells = harness.Commands.Where(static command => !command.IsWarmup).Select(static command => command.CellKey).Distinct(StringComparer.Ordinal).ToArray();
+        AssertEx.Equal(1, warmupCells.Length);
+        AssertEx.Equal(1, measuredCells.Length);
+        AssertEx.True(warmupCells[0]!.EndsWith(":0", StringComparison.Ordinal));
+        AssertEx.True(measuredCells[0]!.EndsWith(":1", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public async Task Start_StampsTheFourIdentityColumnsOnEveryRun()
+    {
+        var harness = new FreezeHarness(itemPrompts: ["item a", "item b", "item c"], taskItemSetHash: "v1:set-hash");
+
+        _ = await harness.StartAsync();
+
+        for (var index = 0; index < 3; index++)
+        {
+            var command = harness.Commands[index];
+            AssertEx.Equal<Guid?>(harness.TaskItems[index].Id, command.TaskItemId);
+            AssertEx.Equal<int?>(index, command.TaskItemIndex);
+            AssertEx.Equal(harness.TaskItems[index].InputHash, AssertEx.NotNull(command.TaskInputHash));
+            AssertEx.Equal("v1:set-hash", AssertEx.NotNull(command.TaskItemSetHash));
+            AssertEx.NotNull(command.CellKey);
+        }
+    }
+
+    [Test]
+    public async Task Start_OrdersTheBatchItemMajorWithinEachRepeat()
+    {
+        var harness = new FreezeHarness(itemPrompts: ["item a", "item b", "item c"]);
+
+        _ = await harness.StartAsync(repeatCount: 2, warmup: false);
+
+        // Items are the INNER loop, so a partially drained queue yields whole comparable cells rather than one item
+        // across every cell.
+        AssertEx.True(harness.Commands.Select(static command => command.TaskItemIndex).SequenceEqual<int?>([0, 1, 2, 0, 1, 2]));
+        AssertEx.True(harness.Commands.Select(static command => command.RepeatIndex).SequenceEqual<int?>([1, 1, 1, 2, 2, 2]));
+    }
+
+    [Test]
+    public async Task Start_PastTheRunCap_IsRefusedWithTheComputedCount()
+    {
+        var harness = new FreezeHarness(itemPrompts: [.. Enumerable.Range(0, 12).Select(index => "item " + index)]);
+
+        var failure = await AssertEx.ThrowsAsync<BenchmarkValidationException>(() => harness.StartAsync(repeatCount: 9, warmup: false));
+
+        // 12 items x 9 repeats = 108. The count is in the message because "too many runs" without it tells the
+        // operator nothing about which knob to turn.
+        AssertEx.True(failure.Message.Contains("108", StringComparison.Ordinal), "The refusal must name the computed run count.");
+        AssertEx.Equal(0, harness.StoreCalls, "Nothing is inserted when the cap refuses the request.");
+    }
+
+    [Test]
+    public async Task Start_WithThreeItems_InspectsTheRuntimeOnce()
+    {
+        var harness = new FreezeHarness(itemPrompts: ["item a", "item b", "item c"]);
+
+        _ = await harness.StartAsync();
+
+        // One manifest digest per freeze. A second inspection could straddle a runtime swap and give two items of one
+        // measurement different launch answers.
+        _ = harness.LaunchInspector.Received(1).InspectAsync(Arg.Any<CancellationToken>());
+        // The agent runtime, by contrast, is resolved PER ITEM: the task text is the resolver's retrieval query.
+        _ = harness.Resolver.Received(3).ResolveAsync(harness.AgentId, "a-primary.gguf", Arg.Any<string>(), true, false, false, Arg.Any<CancellationToken>());
+    }
+
     /// <summary>
     ///     One freeze wired end to end. Everything but the KV decision is held constant so a matrix test reads as the
     ///     single input it varies.
@@ -493,14 +679,21 @@ public sealed class BenchmarkRunFreezeServiceTests
             int? invocationTimeoutSeconds = null,
             int? reasoningBudgetTokens = null,
             bool supportsThinking = false,
-            bool unverifiableModel = false)
+            bool unverifiableModel = false,
+            IReadOnlyList<string>? itemPrompts = null,
+            string? taskItemSetHash = null)
         {
             _primaryModel = primaryModel;
             AgentId = Guid.NewGuid();
             _project = Project(Guid.NewGuid(), AgentId, judgeModel is not null, judgeModel, maxOutputTokens, invocationTimeoutSeconds,
-                reasoningBudgetTokens);
+                reasoningBudgetTokens, taskItemSetHash);
+            TaskItems = [.. (itemPrompts ?? ["exact task"]).Select((prompt, index) => Item(_project.Id, index, prompt))];
             var store = Substitute.For<IBenchmarkStore>();
             store.GetProjectAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(_project);
+            store.ListTaskItemsAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(TaskItems);
+            // Only reached by a project frozen before task items existed; a test that sees it called has found the
+            // freeze writing on a path that should only read.
+            store.GetOrCreateItemsAsync(_project.Id, Arg.Any<CancellationToken>()).Returns(TaskItems);
             // ONE store call per freeze, however many repeats: the group is inserted atomically, so a mid-group
             // conflict can no longer leave orphan runs queued behind an exception the caller reads as "nothing started".
             store.StartRunsAsync(Arg.Do<IReadOnlyList<BenchmarkStartRunCommand>>(batch =>
@@ -516,7 +709,9 @@ public sealed class BenchmarkRunFreezeServiceTests
             var definitions = Substitute.For<IAgentDefinitionStore>();
             definitions.GetByIdAsync(AgentId, Arg.Any<CancellationToken>()).Returns(Definition(AgentId));
             Resolver = Substitute.For<IAgentDefinitionResolver>();
-            Resolver.ResolveAsync(AgentId, Arg.Any<string>(), "exact task", true, false, false, Arg.Any<CancellationToken>()).Returns(Runtime(AgentId));
+            // The task text is the RETRIEVAL QUERY, so it differs per item; the resolution itself is held constant.
+            Resolver.ResolveAsync(AgentId, Arg.Any<string>(), Arg.Any<string>(), true, false, false, Arg.Any<CancellationToken>())
+                    .Returns(Runtime(AgentId));
             var capabilities = Substitute.For<IGgufModelCapabilityResolver>();
             // ReasoningBudgetEnforceable is left at its own default (true) on purpose: it is the inert answer for a
             // model nothing was detected about, and freezing it ALONE is what claimed enforceability for a model that
@@ -566,6 +761,9 @@ public sealed class BenchmarkRunFreezeServiceTests
         }
 
         public Guid AgentId { get; }
+
+        /// <summary>The project's leaf items, in index order — what the freeze fans out over.</summary>
+        public IReadOnlyList<BenchmarkTaskItemRecord> TaskItems { get; }
         public IAgentDefinitionResolver Resolver { get; }
         public RecordingLeaseProvider LeaseProvider { get; }
 
@@ -608,13 +806,19 @@ public sealed class BenchmarkRunFreezeServiceTests
             string? judgeModel,
             int? maxOutputTokens,
             int? invocationTimeoutSeconds,
-            int? reasoningBudgetTokens)
+            int? reasoningBudgetTokens,
+            string? taskItemSetHash)
         {
             _ = judgeModel;
             return new BenchmarkProjectRecord(id, "Benchmark", JsonSerializer.SerializeToUtf8Bytes("exact task"), 4096, agentId,
                 judgeEnabled, judgeEnabled ? Guid.NewGuid() : null, IsFrozen: false, 7, 1, 1, maxOutputTokens, invocationTimeoutSeconds,
-                reasoningBudgetTokens);
+                reasoningBudgetTokens, TaskItemSetHash: taskItemSetHash);
         }
+
+        /// <summary>One leaf item, with the prompt encoded exactly as the item store encodes it.</summary>
+        private static BenchmarkTaskItemRecord Item(Guid projectId, int index, string prompt) =>
+            new(Guid.NewGuid(), projectId, null, index, BenchmarkTaskItemKinds.Prompt, 1, "v1:item-" + index, true,
+                JsonSerializer.SerializeToUtf8Bytes(prompt), null, null, null, 1, 1, 1);
 
         private static AgentDefinitionRecord Definition(Guid id) =>
             new(id, "Agent", null, "instructions", null, null, AgentDefinitionKind.Single, [], new Dictionary<string, bool>(), null, 3, 1, 1);

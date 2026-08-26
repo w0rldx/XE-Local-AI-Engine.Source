@@ -186,6 +186,13 @@ public sealed class BenchmarkRunFreezeService(
     public const int MaxRepeatCount = 10;
 
     /// <summary>
+    ///     The most runs one freeze may enqueue, counting the product of LEAF task items and repeats (warm-up
+    ///     included). <see cref="MaxRepeatCount" /> bounds one cell; this bounds the whole request, because a suite
+    ///     multiplies the two and a matrix past this point is unschedulable rather than merely slow.
+    /// </summary>
+    public const int MaxRunsPerRequest = 100;
+
+    /// <summary>
     ///     The temperature an answer-variance group samples at when the request pins none. 0.7 is the everyday chat
     ///     default: high enough that repeats actually diverge, low enough that the divergence is still the model
     ///     answering rather than wandering.
@@ -247,26 +254,33 @@ public sealed class BenchmarkRunFreezeService(
             throw new BenchmarkEligibilityException("The selected Single agent definition no longer exists.");
         }
 
-        var exactCoreTask = BenchmarkProjectService.DecodeCoreTask(project.CoreTaskJson.Span);
         var capabilities = await _modelCapabilities.TryResolveAsync(primary.ModelName, cancellationToken).ConfigureAwait(false)
                            ?? throw new BenchmarkEligibilityException("The selected primary model capabilities are unavailable.");
 
-        var resolved = await _agentResolver.ResolveAsync(project.AgentDefinitionId,
-                                               primaryModelName,
-                                               exactCoreTask,
-                                               capabilities.SupportsTools,
-                                               honorModelProfile: false,
-                                               activeModelIsCloud: false,
-                                               cancellationToken)
-                                           .ConfigureAwait(false)
-                       ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
-        var eligible = _eligibilityPolicy.Apply(resolved);
-        var dependencySet = await _dependencies.CaptureAsync(project.AgentDefinitionId,
-                                                   eligible,
-                                                   primaryModelName,
-                                                   judgeModelName: null,
-                                                   cancellationToken)
-                                               .ConfigureAwait(false);
+        // What a freeze fans out over. A project created before task suites has no item rows until something
+        // materializes item 0 from its core task; that lazy backfill is the only remaining reason a freeze writes.
+        var items = await _benchmarkStore.ListTaskItemsAsync(project.Id, cancellationToken).ConfigureAwait(false);
+        if (items.Count == 0)
+        {
+            items = await _benchmarkStore.GetOrCreateItemsAsync(project.Id, cancellationToken).ConfigureAwait(false);
+        }
+
+        // A generator is never a run target; the cases it expanded into are.
+        var leafItems = items.Where(static item => item.IsLeaf).OrderBy(static item => item.Index).ToArray();
+        if (leafItems.Length == 0)
+        {
+            throw new BenchmarkValidationException("The project has no runnable task item.");
+        }
+
+        var repeatIndexes = RepeatIndexes(repeatCount, warmup).ToArray();
+        var runCount = leafItems.Length * repeatIndexes.Length;
+        if (runCount > MaxRunsPerRequest)
+        {
+            throw new BenchmarkValidationException(
+                $"This request would start {runCount} runs ({leafItems.Length} task items x {repeatIndexes.Length} runs each). "
+                + $"The maximum is {MaxRunsPerRequest}.");
+        }
+
         var primarySnapshot = BenchmarkInstalledModelSnapshotMapper.ToSnapshot(primary);
 
         // One capability read per REQUEST: the primary and the judge launch the same binary, asking twice could
@@ -292,15 +306,49 @@ public sealed class BenchmarkRunFreezeService(
             project.ReasoningBudgetTokens is null ? null : reasoningBudgetEnforceable);
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
 
-        // One snapshot per DISTINCT sampling, memoized by seed. Throughput mode has exactly one, so its group is
-        // byte-for-byte the single shared payload it has always been; answer-variance mode gets one per repeat,
-        // differing ONLY in the seed. Everything a launch is built from is identical either way, which is what
-        // keeps a group's runs sharing one LaunchIdentity.
-        var serializedSnapshots = new Dictionary<string, byte[]>(StringComparer.Ordinal);
-
-        byte[] SnapshotFor(BenchmarkSamplingSnapshotV1 sampling)
+        // ONE resolution per LEAF ITEM. The task text is the resolver's retrieval query, so the system prompt and the
+        // skills behind it can legitimately differ between items, and the dependency set that guards the commit is
+        // derived from that resolution. The binary capability probe and the variant selection above stay ONCE per
+        // freeze — a second selection could disagree with the manifest whose digest we record.
+        var frozenItems = new List<FrozenTaskItem>(leafItems.Length);
+        foreach (var item in leafItems)
         {
-            if (serializedSnapshots.TryGetValue(sampling.SeedValue ?? string.Empty, out var cached))
+            var itemCoreTask = BenchmarkTaskItemService.DecodePrompt(item.PromptJson.Span);
+            var resolved = await _agentResolver.ResolveAsync(project.AgentDefinitionId,
+                                                   primaryModelName,
+                                                   itemCoreTask,
+                                                   capabilities.SupportsTools,
+                                                   honorModelProfile: false,
+                                                   activeModelIsCloud: false,
+                                                   cancellationToken)
+                                               .ConfigureAwait(false)
+                           ?? throw new BenchmarkEligibilityException("The selected agent definition no longer exists.");
+            var eligible = _eligibilityPolicy.Apply(resolved);
+            var dependencySet = await _dependencies.CaptureAsync(project.AgentDefinitionId,
+                                                       eligible,
+                                                       primaryModelName,
+                                                       judgeModelName: null,
+                                                       cancellationToken)
+                                                   .ConfigureAwait(false);
+            frozenItems.Add(new FrozenTaskItem(item,
+                itemCoreTask,
+                eligible,
+                new FreezeCommitGuard(_dependencies, dependencySet, project.AgentDefinitionId, eligible, primaryModelName, judgeModelName: null),
+                dependencySet));
+        }
+
+        // One snapshot per DISTINCT (item, sampling), memoized. Throughput mode has exactly one sampling, so a
+        // single-item project's group is byte-for-byte the single shared payload it has always been; answer-variance
+        // mode gets one per repeat, differing ONLY in the seed. The ITEM half of the key is load-bearing: P1 keyed
+        // this cache on the seed alone, and fanning out over items without widening it would hand every item the
+        // FIRST item's serialized snapshot — every run answering item 0's prompt while its task_item_id column
+        // claimed otherwise, with nothing failing loudly.
+        var serializedSnapshots = new Dictionary<(Guid ItemId, string Seed), byte[]>();
+
+        byte[] SnapshotFor(FrozenTaskItem item, BenchmarkSamplingSnapshotV1 sampling)
+        {
+            var key = (item.Item.Id, sampling.SeedValue ?? string.Empty);
+            if (serializedSnapshots.TryGetValue(key, out var cached))
             {
                 return cached;
             }
@@ -308,45 +356,58 @@ public sealed class BenchmarkRunFreezeService(
             var created = _snapshots.Serialize(_snapshots.Create(new BenchmarkRuntimeSnapshotInput(project.Id,
                 definition.Id,
                 definition.Version,
-                exactCoreTask,
+                item.CoreTask,
                 project.ContextTokens,
-                eligible,
+                item.Eligible,
                 primaryLaunch.Runtime,
                 sampling,
                 primarySnapshot,
-                dependencySet,
+                item.Dependencies,
                 GetApplicationVersion(),
                 createdAtUtc)));
-            serializedSnapshots[sampling.SeedValue ?? string.Empty] = created;
+            serializedSnapshots[key] = created;
             return created;
         }
 
-        var guard = new FreezeCommitGuard(_dependencies, dependencySet, project.AgentDefinitionId, eligible, primaryModelName,
-            judgeModelName: null);
-
-        // A group only exists when there is something to group: a plain single run keeps NULL in all three columns
-        // so nothing about the old shape changes for it.
+        // A repeat group only exists when there is something to group: a plain single run keeps NULL in all three
+        // columns so nothing about the old shape changes for it.
         var isGroup = repeatCount > 1 || warmup;
         var repeatGroupId = isGroup ? Guid.NewGuid() : (Guid?)null;
 
+        // A CELL groups the ITEMS of one measurement; a REPEAT GROUP groups the REPEATS of one item. They coincide
+        // whenever both exist — same GUID, one identity, nothing to keep in sync — and a multi-item freeze needs a
+        // cell even when it has no repeats to group. Deriving the cell from the repeat group alone put every run of a
+        // 3-item single-repeat suite in its own singleton cell, so every cell was missing two of three items and the
+        // project ranked nothing.
+        var cellGroupId = repeatGroupId ?? (leafItems.Length > 1 ? Guid.NewGuid() : (Guid?)null);
+
+        // Null lets the store stamp the run's own singleton cell, which is what a one-item one-repeat freeze is and
+        // what every pre-suite run already carries. A warm-up sits at index 0 and so forms its own cell, which the
+        // ranking read drops before grouping — a stamp is an identity, not a ranking decision.
+        string? CellKeyFor(int repeatIndex) =>
+            cellGroupId is { } id
+                ? "cell:" + id.ToString("D") + ":" + repeatIndex.ToString(CultureInfo.InvariantCulture)
+                : null;
+
         // The work queue is FIFO by queue sequence, so building the commands in this order is what makes the
         // repeats run back-to-back — warm-up first, then 1..N — rather than interleaved with whatever else is
-        // queued. The whole group goes in through ONE store call: a per-run insert, each chaining its
-        // compare-and-swap on its predecessor, let a concurrent writer land mid-group, so the caller got a
+        // queued. Items are the INNER loop, so a partially drained queue yields whole comparable cells rather than
+        // one item across every cell. The whole group goes in through ONE store call: a per-run insert, each chaining
+        // its compare-and-swap on its predecessor, let a concurrent writer land mid-group, so the caller got a
         // conflict and no ids while the runs already inserted stayed queued and ran anyway.
-        var commands = RepeatIndexes(repeatCount, warmup)
+        var commands = repeatIndexes
                        .Select(repeatIndex => SamplingFor(primarySampling, request.RepeatMode, temperature, repeatIndex))
-                       .Select(sampling => new BenchmarkStartRunCommand(Guid.NewGuid(),
+                       .SelectMany(sampling => frozenItems.Select(item => new BenchmarkStartRunCommand(Guid.NewGuid(),
                            project.Id,
                            expectedProjectVersion,
-                           SnapshotFor(sampling.Sampling),
+                           SnapshotFor(item, sampling.Sampling),
                            primary.ModelName,
                            primary.Origin,
                            primary.ModelContentFingerprint,
-                           eligible.AgentName,
-                           eligible.AgentDefinitionVersion,
+                           item.Eligible.AgentName,
+                           item.Eligible.AgentDefinitionVersion,
                            project.ContextTokens,
-                           guard,
+                           item.Guard,
                            primaryLaunch.Intent,
                            repeatGroupId,
                            isGroup ? sampling.RepeatIndex : null,
@@ -356,7 +417,12 @@ public sealed class BenchmarkRunFreezeService(
                            project.InvocationTimeoutSeconds,
                            request.RepeatMode,
                            sampling.Sampling.SeedValue,
-                           sampling.Sampling.Temperature))
+                           sampling.Sampling.Temperature,
+                           item.Item.Id,
+                           item.Item.Index,
+                           CellKeyFor(isGroup ? sampling.RepeatIndex : 1),
+                           item.Item.InputHash,
+                           project.TaskItemSetHash)))
                        .ToArray();
         var runs = await _benchmarkStore.StartRunsAsync(commands, expectedProjectVersion, cancellationToken).ConfigureAwait(false);
 
@@ -437,6 +503,17 @@ public sealed class BenchmarkRunFreezeService(
         typeof(BenchmarkRunFreezeService).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
         ?? typeof(BenchmarkRunFreezeService).Assembly.GetName().Version?.ToString()
         ?? "unknown";
+
+    /// <summary>
+    ///     One leaf task item, resolved: the prompt a run of it is asked, the agent runtime that prompt resolved to,
+    ///     the dependency set captured from that resolution, and the guard that re-checks the set at commit. One per
+    ///     item, because the task text is the resolver's retrieval query.
+    /// </summary>
+    private sealed record FrozenTaskItem(BenchmarkTaskItemRecord Item,
+        string CoreTask,
+        ResolvedAgentRuntime Eligible,
+        FreezeCommitGuard Guard,
+        BenchmarkFreezeDependencySetV1 Dependencies);
 
     private sealed class FreezeCommitGuard(
         IBenchmarkFreezeDependencyService dependencies,

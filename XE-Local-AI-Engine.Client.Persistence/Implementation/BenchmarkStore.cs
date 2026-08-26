@@ -560,11 +560,13 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                 UpdatedAtUtc = now
             };
 
-            // The identity stamps are NOT NULL, so a freeze that names no item still names a cell: its own singleton.
-            // A project with one item and no repeats is exactly this case and ranks as it always has.
-            run.CellKey = SingletonCellKey(run.Id);
-            run.TaskInputHash = LegacyTaskHash;
-            run.TaskItemSetHash = project.TaskItemSetHash ?? LegacyTaskHash;
+            // The identity stamps are NOT NULL, so a freeze that names no cell still names one: the run's own
+            // singleton. A project with one item and no repeats is exactly this case and ranks as it always has.
+            run.TaskItemId = command.TaskItemId;
+            run.TaskItemIndex = command.TaskItemIndex;
+            run.CellKey = string.IsNullOrEmpty(command.CellKey) ? SingletonCellKey(run.Id) : command.CellKey;
+            run.TaskInputHash = command.TaskInputHash ?? LegacyTaskHash;
+            run.TaskItemSetHash = command.TaskItemSetHash ?? project.TaskItemSetHash ?? LegacyTaskHash;
 
             // Added in caller order, and the queue sequence is assigned in insert order, which is what makes a repeat
             // group run back-to-back — warm-up first, then 1..N — rather than interleaved with whatever else is queued.
@@ -583,18 +585,27 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
             // primary then fails or is cancelled, hours of GPU work stay queued against a run that has no answer to
             // measure. It is seeded on primary SUCCESS instead, exactly where the judge attempt is seeded.
             //
-            // What freeze does record is the cells that will never be measured. One fidelity item per measured CELL,
-            // not per repeat: perplexity is deterministic given the same weights and the same arguments, so N repeats
-            // of one cell would produce N identical numbers at N times the cost, and a warm-up is never measured at
-            // all — it exists to absorb first-launch costs, not to be compared.
-            if (project.FidelityEnabled && !IsFidelityMeasuredCell(run))
+            runs.Add(run);
+        }
+
+        // What freeze does record is the cells that will never be measured. One fidelity item per measured CELL, not
+        // per repeat and not per ITEM: perplexity and KL divergence measure the model file against a corpus, so they
+        // are identical for every repeat and every task item of one cell and would otherwise cost N times the GPU
+        // hours (and, for KLD, N times ~25 GB of base logits) to produce N copies of one number. A warm-up is never
+        // measured at all — it exists to absorb first-launch costs, not to be compared. Decided over the batch rather
+        // than by a query because these rows are not saved yet.
+        if (project.FidelityEnabled)
+        {
+            var measured = runs.Where(IsFidelityMeasuredRepeat)
+                               .GroupBy(static run => run.CellKey, StringComparer.Ordinal)
+                               .Select(static cell => cell.OrderBy(static run => run.TaskItemIndex ?? int.MinValue).First().Id)
+                               .ToHashSet();
+            foreach (var run in runs.Where(run => !measured.Contains(run.Id)))
             {
                 // Recorded rather than left null: "this cell's repeats are covered by repeat 1" and "fidelity was
                 // never asked for" are different facts, and the UI shows a different thing for each.
                 run.FidelityStatus = "skipped";
             }
-
-            runs.Add(run);
         }
 
         project.Version += commands.Count;
@@ -1013,7 +1024,7 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
         // answer, so it must not exist until there IS one. The eligibility rule is the per-cell one shared with the
         // freeze marker and with EnqueueMissingFidelityAsync — the current project settings decide it, because the
         // fidelity settings deliberately write through the freeze.
-        if (settings is { FidelityEnabled: true } && IsFidelityMeasuredCell(run))
+        if (settings is { FidelityEnabled: true } && await IsFidelityMeasuredCellAsync(run, cancellationToken).ConfigureAwait(false))
         {
             _ = await AppendFidelityWorkAsync(run, settings.FidelityKldEnabled ? FidelityKindKld : FidelityKindPerplexity, now, cancellationToken)
                 .ConfigureAwait(false);
@@ -1025,12 +1036,31 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
     }
 
     /// <summary>
-    ///     The measured cell of a repeat group: non-warm-up, first of its group. One rule, three callers — freeze's
-    ///     "skipped" marker, the seed on primary success, and the measure-existing sweep — because a cell measured by
-    ///     one of them and a cell measured by another must mean the same thing. <c>EnqueueMissingFidelityAsync</c>
-    ///     re-expresses this rule as an EF predicate because a method cannot be translated; the two must change together.
+    ///     The repeat half of the measured-cell rule: non-warm-up, first of its group.
     /// </summary>
-    private static bool IsFidelityMeasuredCell(BenchmarkRun run) => !run.IsWarmup && run.RepeatIndex is null or 1;
+    private static bool IsFidelityMeasuredRepeat(BenchmarkRun run) => !run.IsWarmup && run.RepeatIndex is null or 1;
+
+    /// <summary>
+    ///     The one run of a cell that a fidelity measurement is attached to: the repeat half above, plus the
+    ///     lowest-indexed task item of the cell. One rule, three callers — freeze's "skipped" marker, the seed on
+    ///     primary success, and the measure-existing sweep — because a cell measured by one of them and a cell measured
+    ///     by another must mean the same thing. Freeze decides it over its own batch (those rows are not saved yet) and
+    ///     <c>EnqueueMissingFidelityAsync</c> re-expresses it as an EF predicate; all three must change together.
+    ///     <para>
+    ///         The item half exists because perplexity and KL divergence measure the model file against a corpus, not
+    ///         the task: every item of one cell would otherwise queue an identical measurement at N times the cost.
+    ///         A pre-suite run carries a null <c>TaskItemIndex</c>, which no sibling can undercut, so nothing about it
+    ///         changes.
+    ///     </para>
+    /// </summary>
+    private async Task<bool> IsFidelityMeasuredCellAsync(BenchmarkRun run, CancellationToken cancellationToken) =>
+        IsFidelityMeasuredRepeat(run)
+        && !await _dbContext.BenchmarkRuns.AsNoTracking()
+                            .AnyAsync(other => other.ProjectId == run.ProjectId
+                                               && other.CellKey == run.CellKey
+                                               && other.TaskItemIndex < run.TaskItemIndex,
+                                cancellationToken)
+                            .ConfigureAwait(false);
 
     /// <summary>
     ///     The cell key of a run that is a cell of one. Derived from the run's own id, so it is unique by construction
@@ -2399,6 +2429,9 @@ public sealed class BenchmarkStore(NodeChatDbContext dbContext, TimeProvider tim
                                                           && entity.PrimaryStatus == BenchmarkPrimaryStatus.Succeeded
                                                           && !entity.IsWarmup
                                                           && (entity.RepeatIndex == null || entity.RepeatIndex == 1)
+                                                          && !_dbContext.BenchmarkRuns.Any(other => other.ProjectId == entity.ProjectId
+                                                                                                    && other.CellKey == entity.CellKey
+                                                                                                    && other.TaskItemIndex < entity.TaskItemIndex)
                                                           && !_dbContext.BenchmarkFidelityAttempts.Any(attempt => attempt.RunId == entity.Id))
                                          .OrderBy(entity => entity.CreatedAtUtc)
                                          .ToListAsync(cancellationToken)
