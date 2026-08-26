@@ -784,6 +784,12 @@ public static class LocalApiRoutes
         /// <summary>Lineage auto-suggest: the two model names and evaluations one training run implies.</summary>
         public const string ComparisonSuggest = "training/comparisons/suggest";
 
+        /// <summary>
+        ///     Hand-off into the benchmark module: creates (or reuses) the benchmark project for one comparison and
+        ///     enqueues its paired base/tuned runs. The existing deep link only SELECTS runs that already exist.
+        /// </summary>
+        public const string ComparisonBenchmark = "training/comparisons/{comparisonId}/benchmark";
+
         // Exports. Starting one and listing what a run produced are run-scoped; every action ON an artifact addresses
         // it by its own id, because an artifact outlives the export that produced it and is acted on without the run
         // in hand.
