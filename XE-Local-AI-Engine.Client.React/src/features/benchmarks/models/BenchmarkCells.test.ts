@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	benchmarkNiahRecall,
+	canComparePairedDeltas,
 	missingBenchmarkCellItems,
 	scorableCellItems,
 	sortBenchmarkCells,
@@ -125,5 +126,15 @@ describe("benchmarkNiahRecall", () => {
 
 	it("has no recall to report when the project has no cases", () => {
 		expect(benchmarkNiahRecall(benchmarkCellFixture(), [benchmarkTaskItemFixture({ id: "item-1" })]).recall).toBeNull();
+	});
+});
+
+describe("canComparePairedDeltas", () => {
+	// A two-item suite maxes out at two shared items, which is below the node's minimum — so the panel would render
+	// "too few shared items" forever, no matter how the runs go.
+	it("refuses a project that can never produce a delta", () => {
+		expect(canComparePairedDeltas(2, 2)).toBe(false);
+		expect(canComparePairedDeltas(1, 5)).toBe(false);
+		expect(canComparePairedDeltas(2, 3)).toBe(true);
 	});
 });

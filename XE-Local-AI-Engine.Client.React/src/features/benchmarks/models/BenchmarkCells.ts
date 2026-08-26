@@ -172,3 +172,11 @@ export const benchmarkCellLabel = (cell: BenchmarkCell, autoLabel: string): stri
 	const repeat = cell.repeatIndex === null ? "" : ` #${cell.repeatIndex}`;
 	return `${cell.primaryModelName} · ${cell.kvCacheType ?? autoLabel}${repeat}`;
 };
+
+/**
+ * Whether a paired delta can exist at all. The node reports NO entry below three shared scoring items, so a project
+ * with fewer than three of them renders a panel that can never fill however its runs go — honest, and indistinguishable
+ * from a bug. Two combinations to compare is the other half.
+ */
+export const canComparePairedDeltas = (cellCount: number, scorableItemCount: number): boolean =>
+	cellCount >= 2 && scorableItemCount >= 3;

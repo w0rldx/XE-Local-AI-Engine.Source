@@ -4599,7 +4599,7 @@
 				"b": "B",
 				"hint": "Wählen Sie zwei verschiedene Kombinationen, um sie über die gemeinsamen Aufgaben zu vergleichen.",
 				"loading": "Wird verglichen…",
-				"insufficient": "Diese beiden teilen sich weniger als drei wertbar beantwortete Aufgaben, was kein Intervall trägt. Das ist eine Lücke in der Messung, kein Gleichstand.",
+				"insufficient": "Diese beiden teilen sich weniger als drei bewertete, wertbar beantwortete Aufgaben, was kein Intervall trägt. Das ist eine Lücke in der Messung, kein Gleichstand.",
 				"value": "A − B = {{delta}} [{{low}}, {{high}}]",
 				"separated": "getrennt",
 				"notSeparated": "nicht getrennt",

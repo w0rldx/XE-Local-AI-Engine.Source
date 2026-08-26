@@ -42,6 +42,7 @@ import { BenchmarkExportButtons } from "@/features/benchmarks/components/Benchma
 import { BenchmarkFidelityPanel } from "@/features/benchmarks/components/BenchmarkFidelityPanel";
 import { BenchmarkLaunchCompare } from "@/features/benchmarks/components/BenchmarkLaunchCompare";
 import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
+import { canComparePairedDeltas } from "@/features/benchmarks/models/BenchmarkCells";
 import type { BenchmarkMatrixSelection } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkLaunchMatrix } from "@/features/benchmarks/components/BenchmarkLaunchMatrix";
 import { BenchmarkPairedDelta } from "@/features/benchmarks/components/BenchmarkPairedDelta";
@@ -798,8 +799,11 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						/>
 					)}
 					{/* "A beats B by 6" is only a finding with an interval on it, and the interval is paired over the items
-					    the two combinations share. Offered wherever a suite is ranked. */}
-					{showCells && (cellsQuery.data?.cells.length ?? 0) >= 2 && detail ? (
+					    the two combinations share. Gated on THREE scoring items, not on a suite existing: below that the
+					    node reports no delta at all, so a two-item project would render a panel that can never fill. */}
+					{showCells &&
+					detail &&
+					canComparePairedDeltas(cellsQuery.data?.cells.length ?? 0, cellsQuery.data?.scorableItemCount ?? 0) ? (
 						<BenchmarkPairedDelta projectId={detail.id} cells={cellsQuery.data?.cells ?? []} />
 					) : null}
 					{/* One fit covers the cohort, so the matrix is mounted once here rather than under each run pane. */}

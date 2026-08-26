@@ -68,7 +68,7 @@ export function BenchmarkPairedDelta({ projectId, cells }: BenchmarkPairedDeltaP
 						? t("pages.benchmarks.paired.loading", "Comparing…")
 						: t(
 								"pages.benchmarks.paired.insufficient",
-								"These two share fewer than three rankably answered items, which cannot support an interval. That is a gap in the measurement, not a tie.",
+								"These two share fewer than three scored items answered rankably, which cannot support an interval. That is a gap in the measurement, not a tie.",
 							)}
 				</Text>
 			) : (
