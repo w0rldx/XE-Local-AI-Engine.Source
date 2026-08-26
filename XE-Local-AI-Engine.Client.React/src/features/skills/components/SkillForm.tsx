@@ -289,22 +289,28 @@ export function SkillForm({
 					<Text size="sm" fw={600}>
 						{t("pages.skills.form.metadata.label", "Metadata")}
 					</Text>
-					<Table withTableBorder={true} verticalSpacing={4} horizontalSpacing="sm">
-						<Table.Tbody>
-							{metadataEntries.map(([key, value]) => (
-								<Table.Tr key={key}>
-									<Table.Td>
-										<Text size="xs" ff="monospace">
-											{key}
-										</Text>
-									</Table.Td>
-									<Table.Td>
-										<Text size="xs">{value}</Text>
-									</Table.Td>
-								</Table.Tr>
-							))}
-						</Table.Tbody>
-					</Table>
+					{/* Frontmatter keys and values are free text of unknown length: the scroll container keeps a wide pair from
+					 widening the dialog, and the value cell breaks inside a long unspaced token rather than overflowing. */}
+					<Table.ScrollContainer minWidth={320} data-testid="skill-form-metadata-scroll">
+						<Table withTableBorder={true} verticalSpacing={4} horizontalSpacing="sm">
+							<Table.Tbody>
+								{metadataEntries.map(([key, value]) => (
+									<Table.Tr key={key}>
+										<Table.Td>
+											<Text size="xs" ff="monospace">
+												{key}
+											</Text>
+										</Table.Td>
+										<Table.Td>
+											<Text size="xs" style={{ wordBreak: "break-word" }}>
+												{value}
+											</Text>
+										</Table.Td>
+									</Table.Tr>
+								))}
+							</Table.Tbody>
+						</Table>
+					</Table.ScrollContainer>
 					<Text size="xs" c="dimmed">
 						{t("pages.skills.form.metadata.readOnly", "Carried through unchanged from the skill's frontmatter.")}
 					</Text>

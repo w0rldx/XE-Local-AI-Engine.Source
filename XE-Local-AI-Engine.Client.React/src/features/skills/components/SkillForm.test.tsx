@@ -244,3 +244,35 @@ describe("SkillForm", () => {
 		expect(screen.getByTestId("skill-form-enabled")).toBeTruthy();
 	});
 });
+
+// Frontmatter metadata is free text of unknown length carried through from the imported skill. Rendered as a bare
+// two-column table it widened the dialog on a phone; the scroll container gives the pair its own horizontal overflow
+// and the value cell breaks inside a long unspaced token.
+describe("SkillForm metadata table", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+		vi.clearAllMocks();
+	});
+
+	it("wraps the metadata table in a scroll container with a minimum width", () => {
+		renderForm({ initialValues: { metadata: { source: "https://example.test/a-very-long-unspaced-metadata-value-that-cannot-wrap" } } });
+
+		const container = screen.getByTestId("skill-form-metadata-scroll");
+
+		expect(container.querySelector("table")).toBeTruthy();
+		expect(container.style.getPropertyValue("--table-min-width")).toContain("20rem");
+	});
+
+	it("breaks a long metadata value instead of letting it push the row wider", () => {
+		const value = "https://example.test/a-very-long-unspaced-metadata-value-that-cannot-wrap";
+		renderForm({ initialValues: { metadata: { source: value } } });
+
+		const cell = screen.getByText(value);
+
+		expect(cell.style.wordBreak).toBe("break-word");
+	});
+});

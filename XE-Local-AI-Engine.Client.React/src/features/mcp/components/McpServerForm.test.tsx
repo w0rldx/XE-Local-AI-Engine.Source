@@ -95,3 +95,25 @@ describe("McpServerForm masked env values", () => {
 		expect(onSubmit.mock.lastCall?.[0].env).toEqual([{ key: "TOKEN", value: "rotated" }]);
 	});
 });
+
+// KEY, VALUE and the remove button do not fit the ~358px body of a full-screen dialog on a phone. Two <input>s cannot
+// shrink below their intrinsic width, so a nowrap row pushed the trash button off-screen instead of absorbing it.
+describe("McpServerForm env row layout", () => {
+	it("lets an env row wrap instead of forcing one line", () => {
+		renderForm(vi.fn());
+
+		const row = screen.getByTestId("mcp-form-env-row-0");
+
+		expect(row.style.getPropertyValue("--group-wrap")).not.toBe("nowrap");
+	});
+
+	it("gives both env inputs a flex basis so the row breaks before it squeezes them", () => {
+		renderForm(vi.fn());
+
+		const row = screen.getByTestId("mcp-form-env-row-0");
+		const [key, value] = Array.from(row.querySelectorAll<HTMLElement>(".mantine-TextInput-root"));
+
+		expect(key?.style.flexBasis).toBe("140px");
+		expect(value?.style.flexBasis).toBe("200px");
+	});
+});

@@ -82,4 +82,16 @@ describe("ToolSourceBadge", () => {
 		const badge = screen.getByTestId("tool-source-badge-mcp");
 		expect(badge.textContent).toBe("MCP");
 	});
+
+	// The badge sits in nowrap rows beside a tool name that will not shrink either. Letting it shrink clipped the label
+	// to "BUILT…" on a phone, which reads as a different word rather than as a truncation.
+	it.each([
+		["builtin", { kind: "builtin", serverSlug: null }],
+		["custom", { kind: "custom", serverSlug: null }],
+		["mcp", { kind: "mcp", serverSlug: "filesystem-tools" }],
+	] as const)("keeps the %s badge from being squeezed by its row", (kind, source) => {
+		renderWithProviders(<ToolSourceBadge source={source} />);
+
+		expect(screen.getByTestId(`tool-source-badge-${kind}`).style.flexShrink).toBe("0");
+	});
 });
