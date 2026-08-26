@@ -84,6 +84,10 @@ const draft: BenchmarkProjectDraft = {
 	judgeContextTokens: null,
 	rubric: null,
 	referenceAnswer: null,
+	fidelityEnabled: false,
+	fidelityKldEnabled: false,
+	fidelityChunks: null,
+	fidelityKldBaseModelName: null,
 };
 
 describe("benchmark queries over the real client", () => {

@@ -4,8 +4,10 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { toast } from "@/core/ui/notifications/Toast";
+import type { BenchmarkProjectFidelity } from "@/features/benchmarks/models/BenchmarkModels";
 import { useBenchmarkKldDiskEstimate, useClearBenchmarkFidelityCache } from "@/features/benchmarks/queries/useBenchmarks";
 
 /**
@@ -20,10 +22,12 @@ import { useBenchmarkKldDiskEstimate, useClearBenchmarkFidelityCache } from "@/f
  * DTOs in S1. Both controls go in unchanged the moment those four members reach the generated client; until then this
  * panel reports the cost and manages the cache, and the measurement itself is triggered per run from the runs table.
  */
-export function BenchmarkFidelityPanel({ projectId }: { projectId: string }) {
+export function BenchmarkFidelityPanel({ projectId, fidelity }: { projectId: string; fidelity: BenchmarkProjectFidelity }) {
 	const { t } = useTranslation();
 	const [opened, setOpened] = useState(false);
-	const estimateQuery = useBenchmarkKldDiskEstimate(projectId, undefined, opened);
+	// Asked for while the section is open whether or not KLD is on: the estimate is exactly what the operator needs
+	// BEFORE deciding to enable it, so gating it on the setting would hide the number that informs the setting.
+	const estimateQuery = useBenchmarkKldDiskEstimate(projectId, fidelity.chunks ?? undefined, opened);
 	const clearCache = useClearBenchmarkFidelityCache();
 	const estimate = estimateQuery.data;
 
@@ -40,6 +44,17 @@ export function BenchmarkFidelityPanel({ projectId }: { projectId: string }) {
 				>
 					{t("pages.benchmarks.fidelity.title", "Quant fidelity (PPL / KLD)")}
 				</Button>
+				<StatusBadge
+					color={fidelity.enabled ? "blue" : "gray"}
+					label={
+						fidelity.enabled
+							? fidelity.kldEnabled
+								? t("pages.benchmarks.fidelity.onWithKld", "PPL + KLD")
+								: t("pages.benchmarks.fidelity.onPplOnly", "PPL")
+							: t("pages.benchmarks.fidelity.off", "off")
+					}
+					data-testid="benchmark-fidelity-state"
+				/>
 			</Group>
 			{opened ? (
 				<Stack gap="xs">
@@ -48,6 +63,14 @@ export function BenchmarkFidelityPanel({ projectId }: { projectId: string }) {
 							"pages.benchmarks.fidelity.explanation",
 							"Perplexity and KL divergence measure how far a quantized build drifted from the weights it was made from. Both are display only and neither ever ranks a run.",
 						)}
+					</Text>
+					<Text size="xs" c="dimmed" data-testid="benchmark-fidelity-settings">
+						{fidelity.enabled
+							? t("pages.benchmarks.fidelity.settings", "Scoring {{chunks}} chunks{{base}}.", {
+									chunks: fidelity.chunksEffective,
+									base: fidelity.kldBaseModelName === null ? "" : `, KLD against ${fidelity.kldBaseModelName}`,
+								})
+							: t("pages.benchmarks.fidelity.disabled", "Not measured. Enable it in the project settings before the first run.")}
 					</Text>
 					{estimateQuery.isLoading ? (
 						<Group gap="sm">

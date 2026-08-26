@@ -4044,7 +4044,17 @@
 				"invocationTimeout": "Zeitlimit der Generierung (s)",
 				"invocationTimeoutHint": "Sekunden; Standard 900. Erhöhen Sie den Wert für lange Reasoning-Läufe — ein von der Uhr abgebrochener Lauf misst die Testumgebung, nicht das Modell.",
 				"reasoningBudget": "Denkbudget (Token)",
-				"reasoningBudgetHint": "Leer = so viel, wie das Fenster zulässt. Der Kontext muss Prompt, dieses Budget UND die maximale Ausgabe abdecken — ein Paar, das das Fenster füllt, schneidet jeden Lauf ab."
+				"reasoningBudgetHint": "Leer = so viel, wie das Fenster zulässt. Der Kontext muss Prompt, dieses Budget UND die maximale Ausgabe abdecken — ein Paar, das das Fenster füllt, schneidet jeden Lauf ab.",
+				"fidelitySection": "Quantisierungstreue",
+				"fidelityFrozen": "Die Treue-Einstellungen sind zusammen mit der Aufgabe des Projekts eingefroren. Miss stattdessen einen einzelnen Lauf über die Lauftabelle erneut.",
+				"fidelityEnabled": "Perplexität neben jedem Lauf messen",
+				"fidelityEnabledHelp": "Bewertet einen festen Korpus mit der eingefrorenen Platzierung des Laufs. Nur zur Anzeige — bewertet nie einen Lauf.",
+				"fidelityChunks": "Zu bewertende Chunks",
+				"fidelityChunksHelp": "{{min}}–{{max}}; leer verwendet {{fallback}}.",
+				"fidelityKldEnabled": "Zusätzlich KL-Divergenz messen",
+				"fidelityKldEnabledHelp": "Benötigt eine zwischengespeicherte Logit-Datei des Basismodells — mehrere zehn Gigabyte. Prüfe vorher die Schätzung im Projekt.",
+				"fidelityKldBase": "Basismodell für KL-Divergenz",
+				"fidelityKldBaseHelp": "Die Referenz, gegen die die Quantisierungen gemessen werden — normalerweise der unquantisierte Build."
 			},
 			"run": {
 				"model": "Primärmodell",
@@ -4157,7 +4167,9 @@
 				"maxOutputTokens": "Die maximalen Ausgabe-Tokens müssen zwischen 1 und dem angeforderten Kontext liegen.",
 				"invocationTimeout": "Das Zeitlimit der Generierung muss zwischen 60 und 7200 Sekunden liegen.",
 				"reasoningBudget": "Das Denkbudget muss zwischen 1 und dem angeforderten Kontext liegen.",
-				"reasoningBudgetSum": "Denk- und Ausgabebudget müssen mindestens {{reserve}} Token des Kontexts für den Prompt frei lassen."
+				"reasoningBudgetSum": "Denk- und Ausgabebudget müssen mindestens {{reserve}} Token des Kontexts für den Prompt frei lassen.",
+				"fidelityChunks": "Chunks müssen zwischen {{min}} und {{max}} liegen.",
+				"fidelityKldBase": "KL-Divergenz erfordert ein Basismodell."
 			},
 			"errors": {
 				"projectsLoad": "Benchmark-Projekte konnten nicht geladen werden.",
@@ -4328,7 +4340,12 @@
 					"cancelled": "Treuemessung abgebrochen",
 					"skipped": "Nicht gemessen"
 				},
-				"differs": "Quantisierungstreue unterscheidet sich: {{fields}}"
+				"differs": "Quantisierungstreue unterscheidet sich: {{fields}}",
+				"onWithKld": "PPL + KLD",
+				"onPplOnly": "PPL",
+				"off": "aus",
+				"settings": "{{chunks}} Chunks werden bewertet{{base}}.",
+				"disabled": "Nicht gemessen. Aktiviere es in den Projekteinstellungen vor dem ersten Lauf."
 			},
 			"charts": {
 				"title": "Diagramme",

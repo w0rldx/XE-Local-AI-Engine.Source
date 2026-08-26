@@ -4044,7 +4044,17 @@
 				"invocationTimeout": "Generation timeout (s)",
 				"invocationTimeoutHint": "Seconds; default 900. Raise it for long reasoning runs — a run cancelled by the clock measures the harness, not the model.",
 				"reasoningBudget": "Reasoning budget (tokens)",
-				"reasoningBudgetHint": "Leave empty = as much as the window allows. The context must cover the prompt, this budget AND the max output — a pair that fills the window truncates every run."
+				"reasoningBudgetHint": "Leave empty = as much as the window allows. The context must cover the prompt, this budget AND the max output — a pair that fills the window truncates every run.",
+				"fidelitySection": "Quant fidelity",
+				"fidelityFrozen": "Fidelity settings are frozen with the project's task. Re-measure a single run from the runs table instead.",
+				"fidelityEnabled": "Measure perplexity beside each run",
+				"fidelityEnabledHelp": "Scores a fixed corpus with the run's own frozen placement. Display only — it never ranks a run.",
+				"fidelityChunks": "Chunks to score",
+				"fidelityChunksHelp": "{{min}}–{{max}}; empty uses {{fallback}}.",
+				"fidelityKldEnabled": "Also measure KL divergence",
+				"fidelityKldEnabledHelp": "Needs a cached logit file for the base model — tens of gigabytes. Check the estimate on the project before enabling it.",
+				"fidelityKldBase": "KL-divergence base model",
+				"fidelityKldBaseHelp": "The reference the quants are measured against — normally the unquantized build."
 			},
 			"run": {
 				"model": "Primary model",
@@ -4157,7 +4167,9 @@
 				"maxOutputTokens": "Max output tokens must be between 1 and the requested context.",
 				"invocationTimeout": "The generation timeout must be between 60 and 7200 seconds.",
 				"reasoningBudget": "The reasoning budget must be between 1 and the requested context.",
-				"reasoningBudgetSum": "The reasoning and output budgets must leave at least {{reserve}} tokens of the context for the prompt."
+				"reasoningBudgetSum": "The reasoning and output budgets must leave at least {{reserve}} tokens of the context for the prompt.",
+				"fidelityChunks": "Chunks must be between {{min}} and {{max}}.",
+				"fidelityKldBase": "KL divergence requires a base model."
 			},
 			"errors": {
 				"projectsLoad": "Could not load benchmark projects.",
@@ -4328,7 +4340,12 @@
 					"cancelled": "Fidelity cancelled",
 					"skipped": "Not measured"
 				},
-				"differs": "Quant fidelity differs: {{fields}}"
+				"differs": "Quant fidelity differs: {{fields}}",
+				"onWithKld": "PPL + KLD",
+				"onPplOnly": "PPL",
+				"off": "off",
+				"settings": "Scoring {{chunks}} chunks{{base}}.",
+				"disabled": "Not measured. Enable it in the project settings before the first run."
 			},
 			"charts": {
 				"title": "Charts",

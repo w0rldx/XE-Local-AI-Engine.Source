@@ -158,9 +158,34 @@ export interface BenchmarkProjectSummary {
 	updatedAtUtc: number;
 }
 
+/** Chunks the node will score, and the bounds it refuses outside of. */
+export const benchmarkFidelityChunkLimits = { min: 50, max: 655, default: 200 } as const;
+
+/**
+ * What the project measures beside the answer. Detail-only: the listing does not carry these, and the KLD half is
+ * opt-in because the base-logit cache it needs is tens of gigabytes.
+ */
+export interface BenchmarkProjectFidelity {
+	enabled: boolean;
+	kldEnabled: boolean;
+	/** What the operator picked, or null for the node's default. Edit this one. */
+	chunks: number | null;
+	/** What actually runs. Render this one — it resolves the null above. */
+	chunksEffective: number;
+	kldBaseModelName: string | null;
+	/** Resolved server-side from the base model. Read-only: a caller-supplied value could make two figures compare that do not. */
+	kldBaseFingerprint: string | null;
+	/**
+	 * The comparability digest the project currently expects. A run whose stored digest differs renders `kld-stale`.
+	 * Null while KLD is off or no base is selected. Never recomputed client-side — the node owns this expression.
+	 */
+	kldExpectedDigest: string | null;
+}
+
 export interface BenchmarkProjectDetail extends BenchmarkProjectSummary {
 	coreTask: string;
 	judge: BenchmarkJudgePolicy;
+	fidelity: BenchmarkProjectFidelity;
 }
 
 /** What the project form edits. A null `rubric` means "use the node's default rubric", never "no rubric". */
@@ -177,6 +202,12 @@ export interface BenchmarkProjectDraft {
 	judgeContextTokens: number | null;
 	rubric: BenchmarkRubric | null;
 	referenceAnswer: string | null;
+	fidelityEnabled: boolean;
+	fidelityKldEnabled: boolean;
+	/** Null = the node's default. Outside 50..655 the node answers 400. */
+	fidelityChunks: number | null;
+	/** A `modelName` from the eligible-models list. Required by the node whenever KLD is on. */
+	fidelityKldBaseModelName: string | null;
 }
 
 export interface BenchmarkEligibleModel {

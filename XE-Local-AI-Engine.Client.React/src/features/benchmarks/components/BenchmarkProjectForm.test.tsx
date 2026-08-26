@@ -54,6 +54,10 @@ function draft(overrides: Partial<BenchmarkProjectDraft> = {}): BenchmarkProject
 		judgeContextTokens: null,
 		rubric: null,
 		referenceAnswer: null,
+		fidelityEnabled: false,
+		fidelityKldEnabled: false,
+		fidelityChunks: null,
+		fidelityKldBaseModelName: null,
 		...overrides,
 	};
 }
@@ -297,5 +301,87 @@ describe("BenchmarkProjectForm", () => {
 		renderForm(draft(), { saveError: "The reasoning token budget must be between 1 and the requested context. (InvalidRequest)" });
 
 		expect(screen.getByTestId("benchmark-project-save-error").textContent).toContain("(InvalidRequest)");
+	});
+});
+
+// C1: the fidelity settings ride the ordinary project write, so they inherit its freeze — fidelity is enqueued AT
+// freeze beside each run, which is why the setting belongs to a project before it has any.
+describe("BenchmarkProjectForm fidelity settings", () => {
+	afterEach(cleanup);
+
+	it("hides the chunk count and KLD controls until perplexity is enabled", () => {
+		renderForm(draft());
+
+		expect(screen.getByTestId("benchmark-fidelity-enabled")).toBeTruthy();
+		expect(screen.queryByTestId("benchmark-fidelity-chunks")).toBeNull();
+		expect(screen.queryByTestId("benchmark-fidelity-kld-enabled")).toBeNull();
+	});
+
+	it("asks for a base model only once KL divergence is switched on", () => {
+		renderForm(draft({ fidelityEnabled: true }));
+
+		expect(screen.queryByTestId("benchmark-fidelity-kld-base")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("benchmark-fidelity-kld-enabled"));
+
+		expect(screen.getByTestId("benchmark-fidelity-kld-base")).toBeTruthy();
+	});
+
+	// KLD is a strict extra on top of the perplexity pass: with the pass off there is nothing for it to ride.
+	it("switches KL divergence off with the perplexity pass", () => {
+		const { onSubmit, container } = renderForm(
+			draft({ fidelityEnabled: true, fidelityKldEnabled: true, fidelityKldBaseModelName: "base.gguf" }),
+		);
+
+		fireEvent.click(screen.getByTestId("benchmark-fidelity-enabled"));
+		fireEvent.submit(container.querySelector("form") as HTMLFormElement);
+
+		expect(onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({ fidelityEnabled: false, fidelityKldEnabled: false }),
+		);
+	});
+
+	// Both mirror a refusal the node would answer with a 400, and both cost a round-trip that a judge-policy save also
+	// pays for with a forced re-judge.
+	it("refuses KL divergence with no base model, before the node has to", () => {
+		const { onSubmit, container } = renderForm(draft({ fidelityEnabled: true, fidelityKldEnabled: true }));
+
+		fireEvent.submit(container.querySelector("form") as HTMLFormElement);
+
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(container.textContent).toContain("KL divergence requires a base model.");
+	});
+
+	it("refuses a chunk count outside the node's bounds", () => {
+		const { onSubmit, container } = renderForm(draft({ fidelityEnabled: true, fidelityChunks: 900 }));
+
+		fireEvent.submit(container.querySelector("form") as HTMLFormElement);
+
+		expect(onSubmit).not.toHaveBeenCalled();
+	});
+
+	it("submits the settings the node accepts", () => {
+		const { onSubmit, container } = renderForm(
+			draft({ fidelityEnabled: true, fidelityChunks: 100, fidelityKldEnabled: true, fidelityKldBaseModelName: "base.gguf" }),
+		);
+
+		fireEvent.submit(container.querySelector("form") as HTMLFormElement);
+
+		expect(onSubmit).toHaveBeenCalledWith(
+			expect.objectContaining({
+				fidelityEnabled: true,
+				fidelityChunks: 100,
+				fidelityKldEnabled: true,
+				fidelityKldBaseModelName: "base.gguf",
+			}),
+		);
+	});
+
+	// A control that looked editable on a frozen project would produce a 409 the operator could not act on.
+	it("disables the controls on a frozen project and says where to go instead", () => {
+		renderForm(draft({ fidelityEnabled: true }), { frozen: true });
+
+		expect((screen.getByTestId("benchmark-fidelity-enabled") as HTMLInputElement).disabled).toBe(true);
+		expect(screen.getByTestId("benchmark-fidelity-frozen").textContent).toContain("runs table");
 	});
 });

@@ -314,6 +314,13 @@ const projectMutationBody = (draft: BenchmarkProjectDraft) => ({
 	judgeContextTokens: draft.judgeContextTokens,
 	...(draft.rubric === null ? {} : { rubric: draft.rubric }),
 	...(draft.referenceAnswer === null ? {} : { referenceAnswer: draft.referenceAnswer }),
+	fidelityEnabled: draft.fidelityEnabled,
+	fidelityKldEnabled: draft.fidelityKldEnabled,
+	// Omitted rather than null when unset, exactly as the token budgets above: absent means "the node's default", and
+	// the node clamps what it accepts. `fidelityKldBaseFingerprint` is deliberately NOT sent — the node resolves it
+	// from the base model, and a caller-supplied one could make two incomparable figures compare equal.
+	...(draft.fidelityChunks === null ? {} : { fidelityChunks: draft.fidelityChunks }),
+	fidelityKldBaseModelName: draft.fidelityKldBaseModelName,
 });
 
 export function useCreateBenchmarkProject() {

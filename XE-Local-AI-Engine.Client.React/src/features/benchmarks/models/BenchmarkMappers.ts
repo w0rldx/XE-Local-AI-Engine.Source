@@ -22,6 +22,7 @@ import type {
 	BenchmarkOutputPart,
 	BenchmarkPrimaryStatus,
 	BenchmarkProjectDetail,
+	BenchmarkProjectFidelity,
 	BenchmarkProjectSummary,
 	BenchmarkRankCohort,
 	BenchmarkRubric,
@@ -31,6 +32,7 @@ import type {
 	BenchmarkRunSummary,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import {
+	benchmarkFidelityChunkLimits,
 	benchmarkRubricLimits,
 	toBenchmarkFidelityKldState,
 	toBenchmarkFidelityStatus,
@@ -103,11 +105,26 @@ function toBenchmarkJudgePolicy(value: JudgePolicyResponse | undefined): Benchma
 	};
 }
 
+// `chunksEffective` is what runs; `chunks` is what the operator typed. Keeping both is the difference between a form
+// that shows "200" as if it had been chosen and one that shows the default is in force.
+function toBenchmarkProjectFidelity(value: ProjectDetailResponse): BenchmarkProjectFidelity {
+	return {
+		enabled: value.fidelityEnabled === true,
+		kldEnabled: value.fidelityKldEnabled === true,
+		chunks: value.fidelityChunks ?? null,
+		chunksEffective: numberValue(value.fidelityChunksEffective, benchmarkFidelityChunkLimits.default),
+		kldBaseModelName: value.fidelityKldBaseModelName ?? null,
+		kldBaseFingerprint: value.fidelityKldBaseFingerprint ?? null,
+		kldExpectedDigest: value.fidelityKldExpectedDigest ?? null,
+	};
+}
+
 export function toBenchmarkProjectDetail(value: ProjectDetailResponse): BenchmarkProjectDetail {
 	return {
 		...toBenchmarkProjectSummary(value),
 		coreTask: value.coreTask,
 		judge: toBenchmarkJudgePolicy(value.judge),
+		fidelity: toBenchmarkProjectFidelity(value),
 	};
 }
 

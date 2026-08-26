@@ -98,6 +98,10 @@ const emptyProject: BenchmarkProjectDraft = {
 	judgeContextTokens: null,
 	rubric: null,
 	referenceAnswer: null,
+	fidelityEnabled: false,
+	fidelityKldEnabled: false,
+	fidelityChunks: null,
+	fidelityKldBaseModelName: null,
 };
 
 type EditorMode = "create" | "edit" | null;
@@ -215,6 +219,10 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 						judgeContextTokens: detail.judge.requestedContextTokens,
 						rubric: detail.judge.rubric,
 						referenceAnswer: detail.judge.referenceAnswer,
+						fidelityEnabled: detail.fidelity.enabled,
+						fidelityKldEnabled: detail.fidelity.kldEnabled,
+						fidelityChunks: detail.fidelity.chunks,
+						fidelityKldBaseModelName: detail.fidelity.kldBaseModelName,
 					}
 				: emptyProject,
 		[detail],
@@ -621,7 +629,7 @@ export function BenchmarksPage({ baseModelName, tunedModelName }: BenchmarksPage
 										{t("pages.benchmarks.matrix.open", "Batch runs…")}
 									</Button>
 								</Group>
-								<BenchmarkFidelityPanel projectId={detail.id} />
+								<BenchmarkFidelityPanel projectId={detail.id} fidelity={detail.fidelity} />
 								<BenchmarkRepeatModePicker
 									mode={repeatMode}
 									temperature={answerVarianceTemperature}
