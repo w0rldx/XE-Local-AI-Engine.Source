@@ -41,6 +41,22 @@ Both are decided in `BenchmarkRunExecutor.ResolveStopReason` from the **coalesce
 
 Rank-exclusion precedence: **warm-up > user score > (truncated | incomplete) > judge reasons**. An operator user-score suppresses every stop-reason exclusion, because an operator who graded a run has overruled the machine.
 
+### 1.3 Task items — the questions a project asks
+
+A project holds **1..N `BenchmarkTaskItem` rows**, and a single item is the degenerate case: a project with one item freezes, ranks and exports exactly as it always did.
+
+- An item carries a **kind** (`prompt`, and the reserved generator kinds `niah`/`niahCase`), a **revision**, a plaintext **input hash**, a `countsTowardScore` flag, and four encrypted payloads: prompt, reference answer, per-criterion verifier override, generator config. Each payload has its own AAD column name — a verifier config holds expected answers and must never be servable as the prompt.
+- **The store owns identity.** Index, revision, input hash and the project's item-set hash are computed on every write (`BenchmarkTaskItemHashing`); the service and the endpoints cannot name them. A client that could would be able to present an answer to an old question as an answer to the current one.
+- `input_hash` = `v1:` + SHA-256 over `(kind, revision, prompt, reference, verifier, generator)`. `benchmark_projects.task_item_set_hash` = `v1:` + SHA-256 over the **leaf** items ordered by their immutable **`Id`, not by `Index`** — so **adding or deleting** an item moves it and **reordering does not**. A cosmetic drag-and-drop must not unrank a completed suite.
+- A **moved set hash resets the rank cohort**, through the same path a judge-policy activation uses: the project score is a mean over the item set, so a different set is a different score. A reorder does neither.
+- **Item writes are refused while any of the project's work is queued or running.** That is the primary guard; the run-level staleness stamps below are the safety net for completed history.
+- **Creation is atomic.** `IBenchmarkStore.CreateProjectAsync` takes the initial item set and writes it in the project's own transaction, so a project never exists without a question to ask. `GetOrCreateItemsAsync` survives **only** as the legacy backfill for projects created before task items existed, and exactly one endpoint may call it (`GET …/items`) — a migration cannot do it instead, because it runs without the node encryption key and `prompt_json` is AAD-bound to its own item's id. It deliberately leaves the project's set hash **null**: materializing item 0 changes nothing about what the project asks, so it must not move the value every historical run is compared against.
+- Cap: **20 leaf items** (`BenchmarkTaskItemService.MaxTaskItems`), counted over leaves so a generator's cases each count.
+
+Every run is stamped at freeze with **four immutable identities** (`benchmark_runs`): `task_item_id` (which leaf it answered), `cell_key` (**NOT NULL** — which measurement cell its per-item score aggregates into), `task_input_hash` (a copy of the item's input hash: *exactly what it was asked*) and `task_item_set_hash` (a copy of the project's: *what the whole question set was when this cell was measured*). Three are NOT NULL because a missing stamp would otherwise read as "belongs with everything else": a null `cell_key` would drop every ungrouped run of a project into one anonymous bucket and average their scores together, silently. Runs frozen before the columns existed carry `run:<id>` and `v1:legacy`, and `v1:legacy` is also what they are compared **against**, so they are never read as stale.
+
+> **Not built yet:** the freeze does not yet fan out over items, and ranking does not yet aggregate per cell — a run is still its own singleton cell. The columns exist so those land without a second migration.
+
 ---
 
 ## 2. The work queue — four kinds, one consumer
@@ -202,6 +218,7 @@ The whole rank read is a **flat-column scan** across four tables — nothing is 
 | Entities, configurations, store | `XE-Local-AI-Engine.Client.Persistence/{Entities,Configurations,Implementation,Stores}/` |
 | Endpoints, DTOs, mappers | `XE-Local-AI-Engine.Client/Endpoints/Benchmarks/V1/` |
 | Routes | `XE-Local-AI-Engine.Client/Endpoints/Common/LocalApiRoutes.cs:246` (`LocalApiRoutes.Benchmarks`) |
+| Task items | `…/Persistence/Entities/BenchmarkTaskItem.cs`, `…/Persistence/Implementation/BenchmarkTaskItemHashing.cs`, `…/Application/Services/Benchmarks/BenchmarkTaskItemService.cs`, `…/Client/Endpoints/Benchmarks/V1/BenchmarkTaskItemEndpoints.cs` |
 | React feature | `XE-Local-AI-Engine.Client.React/src/features/benchmarks/` |
 | Fidelity corpus + licence | `tools/benchmark/corpus/`, `third-party/data/` |
 
