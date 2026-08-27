@@ -277,6 +277,14 @@ export interface ModelOption {
 	// Used to gate which selections poll the model-details endpoint. Undefined on the local-default sentinel option
 	// (the runtime resolves a concrete model later) and on cloud options (gated by isCloud instead).
 	provider?: string;
+	// External-provider connection this model belongs to (`provider === "external"` only). The picker groups external
+	// models one section per connection, which `provider` alone cannot express — every connection shares that one tag.
+	externalConnectionId?: string;
+	externalConnectionName?: string;
+	// The connection's OPERATOR-DECLARED trust ("local" | "cloud"), straight from the list entry. Deliberately distinct
+	// from `isCloud`, which selects the Codex reasoning-effort vocabulary (minimal/xhigh) that external models must
+	// never be offered: this only decides which section an external model lands in and which egress cue it carries.
+	declaredLocality?: string;
 }
 
 export interface ContextUsageModel {

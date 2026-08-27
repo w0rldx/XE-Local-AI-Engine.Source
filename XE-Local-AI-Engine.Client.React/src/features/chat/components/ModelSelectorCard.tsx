@@ -5,6 +5,7 @@ import {
 	IconChevronRight,
 	IconCloud,
 	IconCpu,
+	IconPlugConnected,
 	IconSearch,
 	IconSparkles,
 } from "@tabler/icons-react";
@@ -14,7 +15,7 @@ import { useTranslation } from "react-i18next";
 
 import { cx, display } from "@/features/chat/components/ModelSelectorCard.helpers";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
-import { hasNoLocalChatModels } from "@/features/chat/pages/ChatModelOptions";
+import { EXTERNAL_PROVIDER, groupExternalModelOptions, hasNoLocalChatModels } from "@/features/chat/pages/ChatModelOptions";
 import { AZURE_FOUNDRY_PROVIDER } from "@/features/chat/queries/useCodexModelOptions";
 
 import classes from "./ModelSelectorCard.module.css";
@@ -129,12 +130,23 @@ interface CloudModelSectionProps {
 	items: ModelOption[];
 	title: string;
 	egressCue: string;
+	// Colour of the egress cue. Orange (the default) means the turn leaves this network; a declared-local external
+	// endpoint uses the dimmed colour instead, because saying "Local network" in a warning colour misreads.
+	egressCueColor?: string;
 	icon: ReactNode;
 	selectedModel: string;
 	onSelect: (value: string) => void;
 }
 
-function CloudModelSection({ items, title, egressCue, icon, selectedModel, onSelect }: CloudModelSectionProps) {
+function CloudModelSection({
+	items,
+	title,
+	egressCue,
+	egressCueColor = "orange.6",
+	icon,
+	selectedModel,
+	onSelect,
+}: CloudModelSectionProps) {
 	if (items.length === 0) {
 		return null;
 	}
@@ -160,7 +172,7 @@ function CloudModelSection({ items, title, egressCue, icon, selectedModel, onSel
 							<Text size="sm" fw={600} lineClamp={1}>
 								{option.displayName ?? option.label}
 							</Text>
-							<Text size="xs" c="orange.6" lineClamp={1} data-testid={`chat-model-selector-cloud-egress-${option.value}`}>
+							<Text size="xs" c={egressCueColor} lineClamp={1} data-testid={`chat-model-selector-cloud-egress-${option.value}`}>
 								{egressCue}
 							</Text>
 						</Stack>
@@ -280,14 +292,19 @@ export function ModelSelectorCard({
 		);
 	}, [cloudModelOptions, searchQuery]);
 
-	// Cloud options render in one labeled group per provider. Azure deployments carry the AzureFoundry tag;
-	// everything else (Codex, or an untagged cloud option) falls into the Codex group.
+	// Cloud options render in one labeled group per provider. Azure deployments carry the AzureFoundry tag; external
+	// endpoints get one group per CONNECTION (below); everything else (Codex, or an untagged cloud option) falls into
+	// the Codex group.
 	const azureCloudOptions = useMemo(
 		() => filteredCloud.filter((option) => option.provider === AZURE_FOUNDRY_PROVIDER),
 		[filteredCloud],
 	);
 	const codexCloudOptions = useMemo(
-		() => filteredCloud.filter((option) => option.provider !== AZURE_FOUNDRY_PROVIDER),
+		() => filteredCloud.filter((option) => option.provider !== AZURE_FOUNDRY_PROVIDER && option.provider !== EXTERNAL_PROVIDER),
+		[filteredCloud],
+	);
+	const externalGroups = useMemo(
+		() => groupExternalModelOptions(filteredCloud.filter((option) => option.provider === EXTERNAL_PROVIDER)),
 		[filteredCloud],
 	);
 
@@ -424,6 +441,32 @@ export function ModelSelectorCard({
 											selectedModel={selectedModel}
 											onSelect={select}
 										/>
+										{/* One section per external connection, because that — not the shared `external` provider
+										    tag — is what tells the operator where a turn actually goes. The cue follows the
+										    connection's DECLARED trust: a declared-local endpoint stays on the network, a
+										    declared-cloud one leaves it. */}
+										{externalGroups.map((group) => (
+											<CloudModelSection
+												key={group.connectionId}
+												items={group.items}
+												title={t("pages.chat.modelSelector.externalGroup", {
+													defaultValue: "External · {{name}}",
+													name: group.connectionName,
+												})}
+												egressCue={
+													group.isDeclaredCloud
+														? t("pages.chat.modelSelector.externalEgressCueCloud", {
+																defaultValue: "Sent to {{name}}",
+																name: group.connectionName,
+															})
+														: t("pages.chat.modelSelector.externalEgressCueLocal", "Local network")
+												}
+												egressCueColor={group.isDeclaredCloud ? undefined : "dimmed"}
+												icon={<IconPlugConnected size={12} color="var(--mantine-color-dimmed)" />}
+												selectedModel={selectedModel}
+												onSelect={select}
+											/>
+										))}
 									</>
 								) : null}
 							</Stack>

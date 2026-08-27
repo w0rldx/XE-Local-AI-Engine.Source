@@ -85,3 +85,18 @@ describe("cloud options honour the backend as the capability authority", () => {
 		expect(option.isReasoningModel).toBe(false);
 	});
 });
+
+describe("toAzureFoundryModelOption — operator display label", () => {
+	it("prefers the operator's display label over the raw deployment name", () => {
+		const option = toAzureFoundryModelOption("gpt-4o-prod-eastus", { displayLabel: "GPT-4o (prod)" });
+
+		expect(option.displayName).toBe("GPT-4o (prod)");
+		// The value still routes by deployment name — only what the picker SHOWS changes.
+		expect(option.value).toBe("gpt-4o-prod-eastus");
+	});
+
+	it("falls back to the deployment name when no label is configured", () => {
+		expect(toAzureFoundryModelOption("gpt-4o", { displayLabel: null }).displayName).toBe("gpt-4o");
+		expect(toAzureFoundryModelOption("gpt-4o").displayName).toBe("gpt-4o");
+	});
+});

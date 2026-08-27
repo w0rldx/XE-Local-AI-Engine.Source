@@ -63,6 +63,7 @@ import {
 } from "@/features/chat/pages/ChatModelOptions";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
+import { useExternalModelOptions } from "@/features/chat/queries/useExternalModelOptions";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
 import {
@@ -265,8 +266,17 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		};
 		return [localDefaultModelOption, ...toChatModelOptions(items, response.isAvailable ?? false)];
 	}, [localModelsData]);
-	// Cloud (Codex) model options — empty array when signed out; non-empty only when Codex session active.
-	const cloudModelOptions = useCodexModelOptions();
+	// Cloud (Codex + Azure) model options — empty array when signed out; non-empty only when Codex session active.
+	const codexModelOptions = useCodexModelOptions();
+	// Models served by an operator-registered external OpenAI-compatible endpoint, one per registered model.
+	const externalModelOptions = useExternalModelOptions();
+	// Everything the node can send to that its own installed-model list will never contain. Send validation, the
+	// stale-selection reconcile and the picker all treat cloud and external entries the same way, so they share one
+	// list; only the picker's grouping tells them apart (external options carry their connection identity).
+	const cloudModelOptions = useMemo(
+		() => [...codexModelOptions, ...externalModelOptions],
+		[codexModelOptions, externalModelOptions],
+	);
 	// Pre-empt the first-send ModelNotInstalled failure with inline guidance, instead of only surfacing it
 	// after a failed send (ChatMessage's error Alert). Gated on BOTH no installed local chat model AND no signed-in
 	// cloud provider — a Codex/Azure session is still a usable send path, so the guidance would be misleading there.
