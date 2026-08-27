@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -17,6 +18,15 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class LocalModelsExternalMappingTests
 {
+    [Test]
+    public void ExternalProviderTag_MatchesTheProvidersOwnName()
+    {
+        // The DTO layer restates the constant rather than referencing the provider assembly (the layer tests freeze
+        // that graph). If the two ever diverge, the picker would tag entries with a provider name the resolver has
+        // never heard of — and nothing else in the build would notice.
+        AssertEx.Equal(ExternalProviderConstants.ProviderName, LocalModelProviders.External);
+    }
+
     [Test]
     public void ToExternalProviderModelResponses_CarriesTheDeclaredCapabilitiesAndTheConnectionIdentity()
     {

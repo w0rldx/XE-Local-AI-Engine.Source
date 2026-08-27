@@ -45,7 +45,12 @@ internal static class AddNodeExternalProvidersExtensions
 
         // Scoped to match the endpoint that drives it. Holds no state: each probe builds, uses and disposes its own
         // HttpClient, because the address it is pinned to is per-request and a pooled client would outlive it.
-        builder.Services.AddScoped<IExternalProviderProbeService, ExternalProviderProbeService>();
+        // Constructed by an explicit factory rather than by type: its last constructor parameter is the test transport
+        // seam, and leaving that to the container's default-value fallback would make a real registration depend on a
+        // detail that exists for tests.
+        builder.Services.AddScoped<IExternalProviderProbeService>(static sp =>
+            new ExternalProviderProbeService(sp.GetRequiredService<IExternalProviderStore>(),
+                sp.GetRequiredService<ILogger<ExternalProviderProbeService>>()));
 
         builder.Services.AddHostedService<ExternalProviderStartupReconciler>();
 

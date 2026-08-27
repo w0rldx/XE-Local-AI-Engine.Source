@@ -167,6 +167,28 @@ public sealed class ExternalProviderProbeEndpointTests
         await probeService.DidNotReceiveWithAnyArgs().ProbeAsync(Arg.Any<ExternalProviderProbeQuery>(), Arg.Any<CancellationToken>());
     }
 
+    [Test]
+    public async Task Probe_ThroughTheRealRegisteredService_ReachesTheEndpointAndReportsAVerdict()
+    {
+        // The only test that constructs the REAL probe service out of the container, so a broken registration surfaces
+        // here rather than the first time an operator presses "Test connection". Port 9 (discard) is closed on a
+        // loopback interface, so the connect is refused immediately and the verdict is the unreachable one.
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory);
+        request.Content = JsonContent.Create(new ExternalProviderProbeRequest
+        {
+            BaseUrl = "http://127.0.0.1:9"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var probe = await ReadJsonAsync<ExternalProviderProbeResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.False(probe.Reachable);
+        AssertEx.NotNull(probe.Error);
+    }
+
     private static TestServerWebAppFactory CreateFactory(IExternalProviderProbeService probeService)
     {
         return new TestServerWebAppFactory
