@@ -52,6 +52,7 @@ import type {
 import { DEFAULT_ASSISTANT_NAME } from "@/features/chat/models/ChatModels";
 import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
 import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
+import { deriveModelDisplay, deriveModelIdDisplay } from "@/features/chat/models/ModelDisplay";
 import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 import { resolveContextCapacityTokens, shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
@@ -550,8 +551,16 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	// Prefer the RUNNING process's effective context window (the launched -c) over the model's advertised
 	// train ceiling, so the meter shows the real capacity once the model is warm; fall back to the ceiling, then unknown.
 	const effectiveMaxContextTokens = resolveContextCapacityTokens(selectedModelDetails);
-	const contextModelLabel =
-		selectedConcreteModelName || selectedModelOption?.displayName || selectedModelOption?.label || "Local runtime default";
+	// The meter names the model the way the picker's trigger does — the same shortening, so the two controls sitting a
+	// few pixels apart cannot spell the same selection differently. The "Local default" sentinel keeps naming the
+	// CONCRETE model the resolver picked, which has no option of its own and so goes through the raw-id shortener.
+	const contextModelLabel = useMemo(() => {
+		if (selectedModelOption !== undefined && selectedModelOption.value !== localDefaultModelValue) {
+			return deriveModelDisplay(selectedModelOption, selectedConcreteModelName).primary;
+		}
+
+		return selectedConcreteModelName.length > 0 ? deriveModelIdDisplay(selectedConcreteModelName).primary : "Local runtime default";
+	}, [selectedConcreteModelName, selectedModelOption]);
 	const isLoadingInitialConversations = conversationsIsLoading && displayConversations.length === 0;
 	const isCreatingConversation = createConversationMutation.isPending;
 	const isSending = Boolean(streamingMessage?.isActive);
