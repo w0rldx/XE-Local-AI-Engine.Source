@@ -88,6 +88,57 @@ public sealed class DatasetGenerationExecutorTests
         _ = await runner.DidNotReceiveWithAnyArgs().RunAsync(default!, default!, default);
     }
 
+    [Test]
+    public async Task Generation_WithAnExternalTeacher_FailsTheRunWithoutBuildingAClient()
+    {
+        // Guarded at the EXECUTOR as well as in the runner: this is the seam that resolves a provider and constructs
+        // the chat client, so reaching it with an ext: id would open a live connection to the external endpoint before
+        // the runner's own guard ever saw the first turn.
+        var store = Substitute.For<ITrainingDatasetStore>();
+        var requestedModels = new List<string>();
+        var executor = new DatasetGenerationExecutor(store,
+            Substitute.For<IStructuredAgentRunner>(),
+            Substitute.For<ISampleValidationPipeline>(),
+            Resolver(requestedModels),
+            Events(),
+            new TrainingRunCancellationRegistry(),
+            NullLogger<DatasetGenerationExecutor>.Instance);
+
+        await executor.ExecuteAsync(Work(Dataset(Body("ext:local-box/qwen3", "instructions", "tool"))), CancellationToken.None);
+
+        AssertEx.Empty(requestedModels);
+        _ = await store.Received(1).CompleteGenerationAsync(Arg.Any<Guid>(),
+            DatasetGenerationWorkStatus.Failed,
+            Arg.Is<string>(reason => reason.Contains("external model", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Generation_WithAnExternalCritic_FailsTheRun()
+    {
+        // The critic never passes through the teacher runner, so the executor is the ONLY place its model is checked.
+        var store = Substitute.For<ITrainingDatasetStore>();
+        var body = Body("teacher.gguf", "instructions", "tool") with
+        {
+            CriticEnabled = true,
+            CriticModelName = "ext:local-box/qwen3"
+        };
+        var executor = new DatasetGenerationExecutor(store,
+            Substitute.For<IStructuredAgentRunner>(),
+            Substitute.For<ISampleValidationPipeline>(),
+            Resolver([]),
+            Events(),
+            new TrainingRunCancellationRegistry(),
+            NullLogger<DatasetGenerationExecutor>.Instance);
+
+        await executor.ExecuteAsync(Work(Dataset(body)), CancellationToken.None);
+
+        _ = await store.Received(1).CompleteGenerationAsync(Arg.Any<Guid>(),
+            DatasetGenerationWorkStatus.Failed,
+            Arg.Is<string>(reason => reason.Contains("external model", StringComparison.Ordinal)),
+            Arg.Any<CancellationToken>());
+    }
+
     private static DatasetDefinitionBodyV1 Body(string teacher, string instructions, string toolName) =>
         new()
         {

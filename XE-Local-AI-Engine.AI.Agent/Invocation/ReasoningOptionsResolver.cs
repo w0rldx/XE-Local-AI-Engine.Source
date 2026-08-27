@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Invocation;
 
+using XE_Local_AI_Engine.Providers.Abstractions.External;
+
 /// <summary>
 ///     Shared reasoning-effort → Ollama <c>think</c> value / Codex side-channel mapping logic, used by both the
 ///     single-agent path (<c>InvocationAgentFactory.CreateAsync</c>) and the orchestration participant path
@@ -41,6 +43,19 @@ internal static class ReasoningOptionsResolver
     ///     not reference the LlamaServer provider); keep the two in sync.
     /// </summary>
     internal const string LlamaReasoningBudgetMarkerKey = "xe.llama.reasoning_budget_tokens";
+
+    /// <summary>
+    ///     In-process marker carrying the turn's SELECTED reasoning effort, in the canonical lowercase vocabulary, for
+    ///     an external OpenAI-compatible model. The external provider reads it, applies its registered default when the
+    ///     marker is absent, and clamps the result to the <c>low|medium|high</c> set that is interoperable across
+    ///     OpenAI, vLLM, llama.cpp and Groq before putting it on the wire as <c>reasoning_effort</c>.
+    ///     <para>
+    ///         The literal is duplicated in <c>ExternalProviderConstants.ReasoningEffortMarkerKey</c> for the same
+    ///         reason the llama budget marker is duplicated in <c>DeferredLlamaServerChatClient</c>: this assembly
+    ///         references no provider project. A test pins the two spellings together — keep them in sync.
+    ///     </para>
+    /// </summary>
+    internal const string ExternalReasoningEffortMarkerKey = "xe.external.reasoning_effort";
 
     /// <summary>
     ///     Maps a normalized reasoning effort to the Ollama <c>think</c> option value for a thinking-capable model:
@@ -141,6 +156,43 @@ internal static class ReasoningOptionsResolver
         return reasoningEffort.Trim().ToUpperInvariant() switch
         {
             "NONE" => "none",
+            "MINIMAL" => "minimal",
+            "LOW" => "low",
+            "MEDIUM" => "medium",
+            "HIGH" => "high",
+            "XHIGH" => "xhigh",
+            _ => null
+        };
+    }
+
+    /// <summary>
+    ///     Returns the effort to carry on <see cref="ExternalReasoningEffortMarkerKey" /> for
+    ///     <paramref name="modelId" />, or <see langword="null" /> to omit the marker entirely.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Omitted for every non-external model — the marker would be inert but the no-override guarantee says the
+    ///         dictionary stays byte-identical for a model that cannot read it — and for a blank or unrecognized
+    ///         effort, where its ABSENCE is meaningful: that is what lets the model's registered default effort apply.
+    ///     </para>
+    ///     <para>
+    ///         The whole vocabulary is carried, including <c>none</c> and the binary <c>on</c> sentinel, even though
+    ///         the provider sends no field for either. Both are turn-level decisions the registered default must NOT
+    ///         override: "off" and "reason by default" are exactly the states where a graded default would
+    ///         misrepresent what the user asked for.
+    ///     </para>
+    /// </remarks>
+    internal static string? ResolveExternalReasoningEffort(string? modelId, string? reasoningEffort)
+    {
+        if (!ExternalModelId.HasExternalScheme(modelId) || string.IsNullOrWhiteSpace(reasoningEffort))
+        {
+            return null;
+        }
+
+        return reasoningEffort.Trim().ToUpperInvariant() switch
+        {
+            "NONE" => "none",
+            "ON" => BinaryReasoningOn,
             "MINIMAL" => "minimal",
             "LOW" => "low",
             "MEDIUM" => "medium",

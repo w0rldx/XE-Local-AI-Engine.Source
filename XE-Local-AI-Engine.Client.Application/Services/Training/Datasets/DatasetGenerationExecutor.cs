@@ -111,6 +111,11 @@ public sealed class DatasetGenerationExecutor(
                          ?? throw new TrainingValidationException(DatasetDefinitionService.UnpinnedDatasetReason);
         var plan = BuildPlan(definition);
 
+        // Checked here as well as in the runner: this is the seam that RESOLVES a provider and builds the client, and
+        // reaching it with an ext: id would construct a live connection to the external endpoint before the runner's
+        // own guard ever saw the first turn.
+        TrainingModelEligibility.EnsureNotExternal(definition.TeacherModelName, "dataset generation teachers");
+
         var provider = await _providerResolver.ResolveProviderForModelAsync(definition.TeacherModelName, cancellationToken).ConfigureAwait(false);
         // One node-local client for the whole run; IChatClient is IDisposable and this one is ours (never the shared singleton).
         using var teacherClient = provider.CreateChatClient(new LocalModelSelection
@@ -191,6 +196,9 @@ public sealed class DatasetGenerationExecutor(
         {
             return null;
         }
+
+        // The critic never passes through the teacher runner, so this is the ONLY place its model is validated.
+        TrainingModelEligibility.EnsureNotExternal(definition.CriticModelName, "dataset generation critics");
 
         var provider = await _providerResolver.ResolveProviderForModelAsync(definition.CriticModelName, cancellationToken).ConfigureAwait(false);
         return provider.CreateChatClient(new LocalModelSelection

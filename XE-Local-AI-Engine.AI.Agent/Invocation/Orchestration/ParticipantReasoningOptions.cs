@@ -25,6 +25,9 @@ internal static class ParticipantReasoningOptions
     /// <summary>Forwards to <see cref="ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey" />.</summary>
     internal const string LlamaReasoningBudgetMarkerKey = ReasoningOptionsResolver.LlamaReasoningBudgetMarkerKey;
 
+    /// <summary>Forwards to <see cref="ReasoningOptionsResolver.ExternalReasoningEffortMarkerKey" />.</summary>
+    internal const string ExternalReasoningEffortMarkerKey = ReasoningOptionsResolver.ExternalReasoningEffortMarkerKey;
+
     /// <summary>
     ///     Produces the reasoning properties for a participant, gated on its resolved model's thinking capability:
     ///     <list type="bullet">
@@ -61,6 +64,15 @@ internal static class ParticipantReasoningOptions
             if (codexEffort is not null)
             {
                 properties[ReasoningOptionsResolver.CodexReasoningEffortKey] = codexEffort;
+            }
+
+            // External-provider side channel, mirroring the single-agent factory so a participant on an ext: model
+            // gets the same effort the composer selected. Absent for every other model, and absent for an unspecified
+            // effort — which is what lets the model's registered default apply instead.
+            var externalEffort = ReasoningOptionsResolver.ResolveExternalReasoningEffort(modelId, reasoningEffort);
+            if (externalEffort is not null)
+            {
+                properties[ExternalReasoningEffortMarkerKey] = externalEffort;
             }
 
             // Per-request thinking budget for the llama.cpp path, mirroring the single-agent factory: an explicit graded
