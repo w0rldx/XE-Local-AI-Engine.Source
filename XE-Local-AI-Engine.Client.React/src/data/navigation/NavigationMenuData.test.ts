@@ -113,11 +113,12 @@ describe("navigationLinks", () => {
 			nodeRoutePaths.modelRecommendations,
 			nodeRoutePaths.loadedModels,
 		]);
-		// cloudSettings capability is on by default (Cloud Settings is a local cloud-provider surface — Codex +
-		// Azure Foundry — needing no Central Platform), so the settings group shows all three children.
+		// cloudSettings and externalProviders are both on by default (each is a node-local provider-credential
+		// surface needing no Central Platform), so the settings group shows all four children.
 		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.nodeSettings,
 			nodeRoutePaths.cloudSettings,
+			nodeRoutePaths.externalProviders,
 			nodeRoutePaths.diagnostics,
 		]);
 		expect(automation?.links?.map((nestedLink) => nestedLink.to)).toEqual([
@@ -180,6 +181,7 @@ describe("navigationLinks", () => {
 		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.nodeSettings,
 			nodeRoutePaths.cloudSettings,
+			nodeRoutePaths.externalProviders,
 			nodeRoutePaths.diagnostics,
 		]);
 	});
@@ -188,12 +190,25 @@ describe("navigationLinks", () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ cloudSettings: false });
 		const settings = gatedLinks.find((link) => link.id === "settings");
 
-		// Settings group still renders (nodeSettings + ungated Diagnostics); cloud settings child is dropped.
+		// Settings group still renders (nodeSettings + External Providers + ungated Diagnostics); only the cloud
+		// settings child is dropped — External Providers carries its own capability.
 		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.nodeSettings,
+			nodeRoutePaths.externalProviders,
 			nodeRoutePaths.diagnostics,
 		]);
 		expect(settings?.links?.some((nestedLink) => nestedLink.to === nodeRoutePaths.cloudSettings)).toBe(false);
+	});
+
+	it("hides External Providers and keeps the rest of the settings group when externalProviders is off", async () => {
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ externalProviders: false });
+		const settings = gatedLinks.find((link) => link.id === "settings");
+
+		expect(settings?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.nodeSettings,
+			nodeRoutePaths.cloudSettings,
+			nodeRoutePaths.diagnostics,
+		]);
 	});
 
 	it("groups Open Canvas, Image Generation and Development Mode under the Preview group as a pure toggle", () => {

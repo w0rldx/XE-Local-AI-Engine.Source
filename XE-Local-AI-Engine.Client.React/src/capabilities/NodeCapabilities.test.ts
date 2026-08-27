@@ -51,6 +51,10 @@ describe("nodeCapabilities", () => {
 		});
 	});
 
+	it("enables the external-provider surface by default", () => {
+		expect(nodeCapabilities.externalProviders).toBe(true);
+	});
+
 	it("enables the work-session surface by default", () => {
 		expect(nodeCapabilities.workSessions).toBe(true);
 	});
@@ -66,6 +70,7 @@ describe("nodeCapabilities", () => {
 			binding: "/node-binding",
 			nodeSettings: "/node-settings",
 			cloudSettings: "/cloud-settings",
+			externalProviders: "/external-providers",
 			models: "/models",
 			invocations: "/invocations",
 			benchmarks: "/benchmarks",
