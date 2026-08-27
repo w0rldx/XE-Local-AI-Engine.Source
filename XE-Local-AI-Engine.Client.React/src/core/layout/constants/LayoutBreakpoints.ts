@@ -13,6 +13,13 @@
 // LayoutBreakpoints.test.ts asserts they still match the theme's md/lg, so a deliberate theme change fails loudly
 // instead of drifting.
 
+/**
+ * Width (px) below which a dense control row drops its secondary text and keeps only what identifies each control.
+ * Theme `sm`. Today: the chat composer's model picker, which shows the model name over its size/connection line and
+ * below this width shows the name alone, so the row still fits beside the send button on a phone.
+ */
+export const COMPACT_CONTROLS_BREAKPOINT = 640;
+
 /** Width (px) at or above which the persistent desktop navigation sidebar replaces the mobile navigation. Theme `md`. */
 export const DESKTOP_NAV_BREAKPOINT = 768;
 

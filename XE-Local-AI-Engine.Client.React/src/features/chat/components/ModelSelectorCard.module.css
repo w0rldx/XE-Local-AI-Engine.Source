@@ -9,11 +9,19 @@
 }
 
 .compact-trigger {
-	/* Flex-basis only: in the composer's nowrap control row the trigger shrinks below this floor (min-width:0 +
-	   flex-shrink) so the row never wraps the send button to a second line on mobile; caps at 220px on roomy layouts. */
-	width: clamp(6rem, 34vw, 13.75rem);
+	/* Flex-basis only: in the composer's control row the trigger shrinks below this floor (min-width:0 + flex-shrink)
+	   so the row never wraps the send button to a second line; caps at 272px on roomy layouts. Wider than the
+	   single-line trigger it replaced because it now carries the model name AND the line saying where it runs. */
+	width: clamp(8rem, 40vw, 17rem);
 	flex: 0 1 auto;
 	min-width: 0;
+}
+
+.compact-trigger-narrow {
+	/* Below the theme's `sm` (COMPACT_CONTROLS_BREAKPOINT — the component drops the second line and the chevron
+	   there): narrow enough to leave the neighbouring action icons and the send button on one row, wide enough that
+	   the model name is still readable rather than a two-character stub. */
+	width: clamp(5.5rem, 34vw, 9rem);
 }
 
 .compact-paper {
@@ -25,29 +33,17 @@
 	padding: 0 var(--mantine-spacing-xs);
 }
 
-/* On small windows collapse the trigger to a 36×36 icon-only button (brain only) so the model name never runs
-   under the neighbouring action icons. The popover still opens on tap. */
-@media (width <= 600px) {
+.trigger-primary {
+	/* Both trigger lines are set tighter than Mantine's default leading: two stacked lines have to fit the 36px
+	   control height the rest of the composer row uses, and a taller trigger would break that row's even height. */
+	font-size: var(--mantine-font-size-xs);
+	font-weight: 600;
+	line-height: 1.25;
+}
 
-	.compact-trigger {
-		width: 36px;
-		min-width: 36px;
-		flex: 0 0 auto;
-	}
-
-	.compact-paper {
-		justify-content: center;
-		padding: 0;
-	}
-
-	.compact-trigger-button {
-		justify-content: center;
-	}
-
-	.trigger-label,
-	.chevron {
-		display: none;
-	}
+.trigger-secondary {
+	font-size: 10px;
+	line-height: 1.25;
 }
 
 .compact-trigger-button {

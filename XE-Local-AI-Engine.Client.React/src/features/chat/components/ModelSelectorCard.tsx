@@ -1,4 +1,17 @@
-import { Badge, Box, Divider, Group, Paper, Popover, ScrollArea, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
+import {
+	Badge,
+	Box,
+	Divider,
+	Group,
+	Paper,
+	Popover,
+	ScrollArea,
+	Stack,
+	Text,
+	TextInput,
+	Tooltip,
+	UnstyledButton,
+} from "@mantine/core";
 import {
 	IconBrandAzure,
 	IconChevronDown,
@@ -9,16 +22,43 @@ import {
 	IconSearch,
 	IconSparkles,
 } from "@tabler/icons-react";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { cx, display } from "@/features/chat/components/ModelSelectorCard.helpers";
+import { COMPACT_CONTROLS_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
+import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
+import { cx } from "@/features/chat/components/ModelSelectorCard.helpers";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
+import type { ModelDisplay } from "@/features/chat/models/ModelDisplay";
+import { deriveModelDisplay } from "@/features/chat/models/ModelDisplay";
 import { EXTERNAL_PROVIDER, groupExternalModelOptions, hasNoLocalChatModels } from "@/features/chat/pages/ChatModelOptions";
 import { AZURE_FOUNDRY_PROVIDER } from "@/features/chat/queries/useCodexModelOptions";
 
 import classes from "./ModelSelectorCard.module.css";
+
+// The identity a shortened name left out — friendly label, raw id, serving connection — on hover and on focus.
+// Never on touch: on a phone the tap has to reach the control underneath, which is the only way to open the picker.
+//
+// DISABLED rather than unmounted when the name was not shortened (so the tooltip never just repeats the text it
+// covers): the trigger sits inside `Popover.Target`, which clones its single child, and swapping that child between
+// `<Tooltip><Paper/></Tooltip>` and a bare `<Paper/>` as the selection changes remounts the target out from under the
+// popover — which left the trigger showing the model it had before.
+function ModelNameTooltip({ display, children }: { display: ModelDisplay; children: ReactElement }): ReactElement {
+	return (
+		<Tooltip
+			label={display.full}
+			disabled={display.full === display.primary}
+			withinPortal={true}
+			openDelay={350}
+			multiline={true}
+			maw={300}
+			events={{ hover: true, focus: true, touch: false }}
+		>
+			{children}
+		</Tooltip>
+	);
+}
 
 // Stable empty default for `cloudModelOptions` so an unset prop doesn't mint a fresh array each render
 // (a new `[]` literal as a default value breaks memo/identity comparisons in this component's useMemo deps).
@@ -51,8 +91,7 @@ function ModelSelectorOption({
 	statusFallback,
 	onSelect,
 }: ModelSelectorOptionProps) {
-	const label = display(option, option.value);
-	const showValue = option.value !== label;
+	const display = deriveModelDisplay(option, option.value);
 
 	return (
 		<UnstyledButton
@@ -74,9 +113,11 @@ function ModelSelectorOption({
 				/>
 				<Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
 					<Group gap={6} wrap="nowrap">
-						<Text size="sm" fw={600} lineClamp={1}>
-							{label}
-						</Text>
+						<ModelNameTooltip display={display}>
+							<Text size="sm" fw={600} lineClamp={1}>
+								{display.primary}
+							</Text>
+						</ModelNameTooltip>
 						{/* Two distinct reasoning capabilities, never both set (the detector makes graded win). Violet =
 						    a graded think:<level> control; teal = reasons natively on a template-baked channel, keeping
 						    the binary On/Off vocabulary. Rendering the second badge is what stops the picker implying a
@@ -105,16 +146,53 @@ function ModelSelectorOption({
 							</Badge>
 						) : null}
 					</Group>
-					<Group gap={6} wrap="nowrap">
-						<Text size="xs" c="dimmed" lineClamp={1}>
-							{option.statusLabel?.trim() || statusFallback(option)}
+					{/* Line two carries what line one dropped (size · quant), or the availability word when the catalog
+					    reported no status at all. The raw id used to sit here too; it now travels in the tooltip, which
+					    is the only place it can be shown untruncated. */}
+					<Text size="xs" c="dimmed" lineClamp={1}>
+						{display.secondary ?? statusFallback(option)}
+					</Text>
+				</Stack>
+				<IconChevronRight
+					size={12}
+					color="var(--mantine-color-dimmed)"
+					className={cx(classes["option-chevron"], selected && classes["option-chevron-visible"])}
+				/>
+			</Group>
+		</UnstyledButton>
+	);
+}
+
+interface CloudModelOptionProps {
+	option: ModelOption;
+	selected: boolean;
+	egressCue: string;
+	egressCueColor: string;
+	onSelect: (value: string) => void;
+}
+
+// A cloud or external row. Line two is the EGRESS CUE rather than the derived secondary: for these models "where does
+// this turn go" outranks "what does it weigh", and it is the one fact a local model never has to answer.
+function CloudModelOption({ option, selected, egressCue, egressCueColor, onSelect }: CloudModelOptionProps) {
+	const display = deriveModelDisplay(option, option.value);
+
+	return (
+		<UnstyledButton
+			data-testid={`chat-model-selector-option-${option.value}`}
+			onClick={() => onSelect(option.value)}
+			className={cx(classes["option-button"], selected && classes["option-button-selected"])}
+		>
+			<Group gap="sm" wrap="nowrap" align="flex-start">
+				<Box className={cx(classes["status-accent"], classes["status-accent-available"])} />
+				<Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
+					<ModelNameTooltip display={display}>
+						<Text size="sm" fw={600} lineClamp={1}>
+							{display.primary}
 						</Text>
-						{showValue ? (
-							<Text size="xs" c="dimmed" opacity={0.6} lineClamp={1}>
-								{option.value}
-							</Text>
-						) : null}
-					</Group>
+					</ModelNameTooltip>
+					<Text size="xs" c={egressCueColor} lineClamp={1} data-testid={`chat-model-selector-cloud-egress-${option.value}`}>
+						{egressCue}
+					</Text>
 				</Stack>
 				<IconChevronRight
 					size={12}
@@ -160,29 +238,14 @@ function CloudModelSection({
 				{icon}
 			</Group>
 			{items.map((option) => (
-				<UnstyledButton
+				<CloudModelOption
 					key={option.value}
-					data-testid={`chat-model-selector-option-${option.value}`}
-					onClick={() => onSelect(option.value)}
-					className={cx(classes["option-button"], option.value === selectedModel && classes["option-button-selected"])}
-				>
-					<Group gap="sm" wrap="nowrap" align="flex-start">
-						<Box className={cx(classes["status-accent"], classes["status-accent-available"])} />
-						<Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
-							<Text size="sm" fw={600} lineClamp={1}>
-								{option.displayName ?? option.label}
-							</Text>
-							<Text size="xs" c={egressCueColor} lineClamp={1} data-testid={`chat-model-selector-cloud-egress-${option.value}`}>
-								{egressCue}
-							</Text>
-						</Stack>
-						<IconChevronRight
-							size={12}
-							color="var(--mantine-color-dimmed)"
-							className={cx(classes["option-chevron"], option.value === selectedModel && classes["option-chevron-visible"])}
-						/>
-					</Group>
-				</UnstyledButton>
+					option={option}
+					selected={option.value === selectedModel}
+					egressCue={egressCue}
+					egressCueColor={egressCueColor}
+					onSelect={onSelect}
+				/>
 			))}
 		</Box>
 	);
@@ -248,7 +311,12 @@ export function ModelSelectorCard({
 	const allOptions = useMemo(() => [...modelOptions, ...cloudModelOptions], [modelOptions, cloudModelOptions]);
 	const selected = allOptions.find((option) => option.value === selectedModel);
 	const placeholder = t("pages.chat.modelPlaceholder", "Select model");
-	const selectedLabel = display(selected, placeholder);
+	const selectedDisplay = deriveModelDisplay(selected, placeholder);
+	// Below the theme's `sm` the composer's control row has no width to spare, so the trigger keeps only the line that
+	// identifies the model. It stays a NAMED control rather than the bare icon it used to collapse to — an icon alone
+	// left the operator with no way to tell which model a phone was about to send to.
+	const { width } = useWindowDimensions();
+	const isCompactViewport = width < COMPACT_CONTROLS_BREAKPOINT;
 	const hasOptions = modelOptions.length > 0;
 	const isDisabled = disabled || !hasOptions;
 	const showSearch = modelOptions.length > 5;
@@ -340,41 +408,64 @@ export function ModelSelectorCard({
 					setSearchQuery("");
 				}
 			}}
-			width={260}
+			width={320}
 		>
 			<Popover.Target>
-				<Paper
-					radius="md"
-					data-testid="chat-model-selector-selected"
-					className={cx(classes["trigger-paper"], classes["compact-trigger"], classes["compact-paper"])}
-				>
-					<UnstyledButton
-						type="button"
-						data-testid="chat-model-selector-trigger"
-						disabled={isDisabled}
-						onClick={() => {
-							if (!isDisabled) {
-								setPickerOpened((previous) => !previous);
-							}
-						}}
-						className={classes["compact-trigger-button"]}
-						aria-disabled={isDisabled}
-						aria-expanded={pickerOpened}
-						aria-label={t("pages.chat.modelLabel", "Model")}
+				{/* The tooltip sits INSIDE Popover.Target so the popover's props still reach the paper underneath (the
+				    same nesting the composer's action icons use). Hover and focus only: a tap must open the picker. */}
+				<ModelNameTooltip display={selectedDisplay}>
+					<Paper
+						radius="md"
+						data-testid="chat-model-selector-selected"
+						className={cx(
+							classes["trigger-paper"],
+							classes["compact-trigger"],
+							isCompactViewport && classes["compact-trigger-narrow"],
+							classes["compact-paper"],
+						)}
 					>
-						<Group gap="xs" wrap="nowrap" align="center">
-							<IconCpu size={16} color="var(--mantine-color-dimmed)" style={{ flexShrink: 0 }} />
-							<Text size="xs" fw={600} lineClamp={1} className={classes["trigger-label"]} style={{ flex: 1, minWidth: 0 }}>
-								{selectedLabel}
-							</Text>
-							<IconChevronDown
-								size={12}
-								color="var(--mantine-color-dimmed)"
-								className={cx(classes["chevron"], pickerOpened && classes["chevron-open"])}
-							/>
-						</Group>
-					</UnstyledButton>
-				</Paper>
+						<UnstyledButton
+							type="button"
+							data-testid="chat-model-selector-trigger"
+							disabled={isDisabled}
+							onClick={() => {
+								if (!isDisabled) {
+									setPickerOpened((previous) => !previous);
+								}
+							}}
+							className={classes["compact-trigger-button"]}
+							aria-disabled={isDisabled}
+							aria-expanded={pickerOpened}
+							aria-label={t("pages.chat.modelLabel", "Model")}
+						>
+							<Group gap="xs" wrap="nowrap" align="center" style={{ width: "100%" }}>
+								<IconCpu size={16} color="var(--mantine-color-dimmed)" style={{ flexShrink: 0 }} />
+								<Stack gap={0} style={{ flex: 1, minWidth: 0 }}>
+									<Text lineClamp={1} className={classes["trigger-primary"]} data-testid="chat-model-selector-trigger-name">
+										{selectedDisplay.primary}
+									</Text>
+									{!isCompactViewport && selectedDisplay.secondary !== undefined ? (
+										<Text
+											lineClamp={1}
+											c="dimmed"
+											className={classes["trigger-secondary"]}
+											data-testid="chat-model-selector-trigger-detail"
+										>
+											{selectedDisplay.secondary}
+										</Text>
+									) : null}
+								</Stack>
+								{isCompactViewport ? null : (
+									<IconChevronDown
+										size={12}
+										color="var(--mantine-color-dimmed)"
+										className={cx(classes["chevron"], pickerOpened && classes["chevron-open"])}
+									/>
+								)}
+							</Group>
+						</UnstyledButton>
+					</Paper>
+				</ModelNameTooltip>
 			</Popover.Target>
 			<Popover.Dropdown p={6}>
 				{hasOptions ? (
