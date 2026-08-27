@@ -1252,8 +1252,8 @@ import {
 	zDeleteEvaluationBody,
 	zDeleteEvaluationPath,
 	zDeleteEvaluationResponse,
-	zDeleteExternalProviderConnectionBody,
 	zDeleteExternalProviderConnectionPath,
+	zDeleteExternalProviderConnectionQuery,
 	zDeleteExternalProviderConnectionResponse,
 	zDeleteGoldenConversationPath,
 	zDeleteGoldenConversationResponse,
@@ -9178,9 +9178,9 @@ export const deleteExternalProviderConnection = <ThrowOnError extends boolean = 
 		requestValidator: async (data) =>
 			await z
 				.object({
-					body: zDeleteExternalProviderConnectionBody,
+					body: z.never().optional(),
 					path: zDeleteExternalProviderConnectionPath,
-					query: z.never().optional(),
+					query: zDeleteExternalProviderConnectionQuery.optional(),
 				})
 				.parseAsync(data),
 		responseType: "json",
@@ -9199,10 +9199,6 @@ export const deleteExternalProviderConnection = <ThrowOnError extends boolean = 
 		],
 		url: "/api/local/v1/external-providers/connections/{connectionId}",
 		...options,
-		headers: {
-			"Content-Type": "application/json",
-			...options.headers,
-		},
 	});
 
 export const getExternalProviderConnection = <ThrowOnError extends boolean = false>(

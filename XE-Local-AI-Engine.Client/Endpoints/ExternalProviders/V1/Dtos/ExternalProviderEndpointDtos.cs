@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ExternalProviders.V1;
 
+using FastEndpoints;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
@@ -104,7 +105,12 @@ public sealed class DeleteExternalProviderConnectionRequest
 {
     public string? ConnectionId { get; init; }
 
-    /// <summary>The revision the caller read, or null to delete unconditionally.</summary>
+    /// <summary>
+    ///     The revision the caller read, or null to delete unconditionally. Bound explicitly from the query string: a
+    ///     DELETE with a request body is a shape not every HTTP stack will send, and without the attribute the
+    ///     generated OpenAPI document declares one.
+    /// </summary>
+    [QueryParam]
     public string? ExpectedRevision { get; init; }
 }
 

@@ -3154,7 +3154,7 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderMod
 };
 
 export type XeLocalAiEngineClientEndpointsExternalProvidersV1DeleteExternalProviderConnectionRequest = {
-	expectedRevision?: string | null;
+	[key: string]: never;
 };
 
 export type XeLocalAiEngineClientEndpointsExternalProvidersV1GetExternalProviderConnectionRequest = {
@@ -12085,11 +12085,13 @@ export type StartStableDiffusionCppSourceBuildResponse =
 	StartStableDiffusionCppSourceBuildResponses[keyof StartStableDiffusionCppSourceBuildResponses];
 
 export type DeleteExternalProviderConnectionData = {
-	body: XeLocalAiEngineClientEndpointsExternalProvidersV1DeleteExternalProviderConnectionRequest;
+	body?: never;
 	path: {
 		connectionId: string;
 	};
-	query?: never;
+	query?: {
+		expectedRevision?: string | null;
+	};
 	url: "/api/local/v1/external-providers/connections/{connectionId}";
 };
 

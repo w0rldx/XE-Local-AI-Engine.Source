@@ -11755,26 +11755,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "expectedRevision",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
           }
         ],
-        "requestBody": {
-          "x-name": "DeleteExternalProviderConnectionRequest",
-          "description": "",
-          "content": {
-            "*/*": {
-              "schema": {
-                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1DeleteExternalProviderConnectionRequest"
-              }
-            },
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1DeleteExternalProviderConnectionRequest"
-              }
-            }
-          },
-          "required": true,
-          "x-position": 1
-        },
         "responses": {
           "200": {
             "description": "Success",
@@ -29603,13 +29593,7 @@
       },
       "XE_Local_AI_EngineClientEndpointsExternalProvidersV1DeleteExternalProviderConnectionRequest": {
         "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "expectedRevision": {
-            "type": "string",
-            "nullable": true
-          }
-        }
+        "additionalProperties": false
       },
       "XE_Local_AI_EngineClientEndpointsExternalProvidersV1GetExternalProviderConnectionRequest": {
         "type": "object",

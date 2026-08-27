@@ -3776,9 +3776,10 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderC
 	connections: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse).optional(),
 });
 
-export const zXeLocalAiEngineClientEndpointsExternalProvidersV1DeleteExternalProviderConnectionRequest = z.object({
-	expectedRevision: z.string().nullish(),
-});
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1DeleteExternalProviderConnectionRequest = z.record(
+	z.string(),
+	z.never(),
+);
 
 export const zXeLocalAiEngineClientEndpointsExternalProvidersV1GetExternalProviderConnectionRequest = z.record(
 	z.string(),
@@ -8100,11 +8101,12 @@ export const zStartStableDiffusionCppSourceBuildBody =
 export const zStartStableDiffusionCppSourceBuildResponse =
 	zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse;
 
-export const zDeleteExternalProviderConnectionBody =
-	zXeLocalAiEngineClientEndpointsExternalProvidersV1DeleteExternalProviderConnectionRequest;
-
 export const zDeleteExternalProviderConnectionPath = z.object({
 	connectionId: z.string(),
+});
+
+export const zDeleteExternalProviderConnectionQuery = z.object({
+	expectedRevision: z.string().nullish(),
 });
 
 /**
