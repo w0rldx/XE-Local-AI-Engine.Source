@@ -268,13 +268,13 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
 
         double? toolLoopMs;
         using (var toolInnerClient = _chatClientFactory.CreateChatClient(endpoint.BaseAddress, endpoint.ModelName))
-        using (var toolInvokingClient = toolInnerClient.AsBuilder().UseFunctionInvocation().Build())
-        {
-            var toolStopwatch = Stopwatch.StartNew();
-            _ = await toolInvokingClient.GetResponseAsync(toolMessages, toolOptions, ct).ConfigureAwait(false);
-            toolStopwatch.Stop();
-            toolLoopMs = Volatile.Read(ref toolInvocations) > 0 ? toolStopwatch.Elapsed.TotalMilliseconds : null;
-        }
+            using (var toolInvokingClient = toolInnerClient.AsBuilder().UseFunctionInvocation().Build())
+            {
+                var toolStopwatch = Stopwatch.StartNew();
+                _ = await toolInvokingClient.GetResponseAsync(toolMessages, toolOptions, ct).ConfigureAwait(false);
+                toolStopwatch.Stop();
+                toolLoopMs = Volatile.Read(ref toolInvocations) > 0 ? toolStopwatch.Elapsed.TotalMilliseconds : null;
+            }
 
         var longMessages = new List<ChatMessage>
         {
@@ -514,56 +514,56 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         }
 
         var diagnostics = JsonSerializer.Serialize(new
-        {
-            role = role.ToString(),
-            workload = new
             {
-                metrics.ItemsPerSecond,
-                metrics.InputTokensPerSecond,
-                metrics.P50LatencyMs,
-                metrics.P95LatencyMs,
-                metrics.BatchSize,
-                metrics.OutputDimension,
-                metrics.ValuesFinite,
-                metrics.DeterministicOutput
+                role = role.ToString(),
+                workload = new
+                {
+                    metrics.ItemsPerSecond,
+                    metrics.InputTokensPerSecond,
+                    metrics.P50LatencyMs,
+                    metrics.P95LatencyMs,
+                    metrics.BatchSize,
+                    metrics.OutputDimension,
+                    metrics.ValuesFinite,
+                    metrics.DeterministicOutput
+                },
+                server = new
+                {
+                    metrics.RequestsProcessingAtLastScrape,
+                    metrics.RequestsDeferredAtLastScrape,
+                    metrics.ContextTokensHighWatermark,
+                    metrics.AverageBusySlotsPerDecode,
+                    metrics.SpeculativeDraftTokens,
+                    metrics.SpeculativeAcceptedTokens,
+                    metrics.SpeculativeVerificationSteps,
+                    metrics.SpeculativeAcceptanceRate
+                },
+                vram = new
+                {
+                    preSpawn = resources.PreSpawnVram,
+                    load,
+                    after,
+                    minimumGlobalFreeBytes = resources.MinimumGlobalFreeBytes,
+                    minimumProcessBudgetBytes = resources.MinimumProcessBudgetBytes,
+                    externalPressure
+                },
+                process = new
+                {
+                    peakWorkingSetBytes = resources.PeakWorkingSetBytes,
+                    samples = resources.Samples.Count
+                },
+                runtime = new
+                {
+                    version = context.LoadObservation?.RuntimeVersion,
+                    sha256 = context.LoadObservation?.RuntimeSha256,
+                    launchArgumentsSha256 = HashSemanticLaunchArguments(context.SuccessfulLaunchArguments),
+                    readinessDurationMs = context.LoadObservation?.ReadinessDurationMs,
+                    outcome = context.LoadObservation?.Outcome.ToString(),
+                    placement = context.LoadObservation?.Placement.ToString(),
+                    attemptKind = context.LoadObservation?.AttemptKind.ToString(),
+                    speculationClass = context.LoadObservation?.SpeculativeModeClass.ToString()
+                }
             },
-            server = new
-            {
-                metrics.RequestsProcessingAtLastScrape,
-                metrics.RequestsDeferredAtLastScrape,
-                metrics.ContextTokensHighWatermark,
-                metrics.AverageBusySlotsPerDecode,
-                metrics.SpeculativeDraftTokens,
-                metrics.SpeculativeAcceptedTokens,
-                metrics.SpeculativeVerificationSteps,
-                metrics.SpeculativeAcceptanceRate
-            },
-            vram = new
-            {
-                preSpawn = resources.PreSpawnVram,
-                load,
-                after,
-                minimumGlobalFreeBytes = resources.MinimumGlobalFreeBytes,
-                minimumProcessBudgetBytes = resources.MinimumProcessBudgetBytes,
-                externalPressure
-            },
-            process = new
-            {
-                peakWorkingSetBytes = resources.PeakWorkingSetBytes,
-                samples = resources.Samples.Count
-            },
-            runtime = new
-            {
-                version = context.LoadObservation?.RuntimeVersion,
-                sha256 = context.LoadObservation?.RuntimeSha256,
-                launchArgumentsSha256 = HashSemanticLaunchArguments(context.SuccessfulLaunchArguments),
-                readinessDurationMs = context.LoadObservation?.ReadinessDurationMs,
-                outcome = context.LoadObservation?.Outcome.ToString(),
-                placement = context.LoadObservation?.Placement.ToString(),
-                attemptKind = context.LoadObservation?.AttemptKind.ToString(),
-                speculationClass = context.LoadObservation?.SpeculativeModeClass.ToString()
-            }
-        },
             SerializerOptions);
 
         return metrics with

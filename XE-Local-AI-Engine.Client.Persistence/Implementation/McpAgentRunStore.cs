@@ -1,13 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
-using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
-using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>SQLite-serialized durable ledger for inbound MCP runs.</summary>

@@ -45,9 +45,9 @@ public sealed class CreateWorkSessionEndpoint(IWorkSessionService service) : End
         var created = await _service.CreateAsync(new CreateWorkSessionRequestModel(req.Title, req.Objective, kind, req.AgentDefinitionId), ct)
                                     .ConfigureAwait(false);
         await Send.CreatedAtAsync<GetWorkSessionEndpoint>(new
-        {
-            sessionId = created.Id
-        },
+            {
+                sessionId = created.Id
+            },
             created.ToResponse(),
             cancellation: ct).ConfigureAwait(false);
     }

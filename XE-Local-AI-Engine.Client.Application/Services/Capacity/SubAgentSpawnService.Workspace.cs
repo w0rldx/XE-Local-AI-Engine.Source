@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
-using XE_Local_AI_Engine.Client.Services.Mcp;
-
 internal sealed partial class SubAgentSpawnService
 {
     private async Task<WorkspaceOpenOutcome> OpenWorkspaceAsync(Guid? workspaceId, CancellationToken cancellationToken)

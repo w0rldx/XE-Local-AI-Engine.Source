@@ -1,11 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
-using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+
 public sealed partial class BenchmarkStore
 {
     private async Task<(BenchmarkJudgePolicyRevision Revision, bool WasCreated)?> ApplyJudgePolicyChangeAsync(BenchmarkProject project,
@@ -139,10 +137,10 @@ public sealed partial class BenchmarkStore
     private async Task EnsureNoActiveJudgeAttemptsAsync(Guid projectId, CancellationToken cancellationToken)
     {
         var active = await (from attempt in _dbContext.BenchmarkJudgeAttempts.AsNoTracking()
-                            join run in _dbContext.BenchmarkRuns.AsNoTracking() on attempt.RunId equals run.Id
-                            where run.ProjectId == projectId
-                                  && (attempt.Status == BenchmarkJudgeAttemptStatus.Queued || attempt.Status == BenchmarkJudgeAttemptStatus.Running)
-                            select attempt.Id).AnyAsync(cancellationToken).ConfigureAwait(false);
+            join run in _dbContext.BenchmarkRuns.AsNoTracking() on attempt.RunId equals run.Id
+            where run.ProjectId == projectId
+                  && (attempt.Status == BenchmarkJudgeAttemptStatus.Queued || attempt.Status == BenchmarkJudgeAttemptStatus.Running)
+            select attempt.Id).AnyAsync(cancellationToken).ConfigureAwait(false);
         if (active)
         {
             throw new BenchmarkConflictException("JudgeAttemptsActive");
@@ -164,5 +162,4 @@ public sealed partial class BenchmarkStore
     private async Task<BenchmarkJudgeComparison> RequireComparisonAsync(Guid comparisonId, CancellationToken cancellationToken) =>
         await _dbContext.BenchmarkComparisons.SingleOrDefaultAsync(entity => entity.Id == comparisonId, cancellationToken).ConfigureAwait(false)
         ?? throw new BenchmarkNotFoundException("Benchmark comparison was not found.");
-
 }

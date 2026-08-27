@@ -8,7 +8,8 @@ public interface IBenchmarkRunBatchService
     Task<BenchmarkRunBatchResult> StartAsync(BenchmarkRunBatchRequest request, CancellationToken cancellationToken = default);
 }
 
-public sealed record BenchmarkRunBatchRequest(Guid ProjectId,
+public sealed record BenchmarkRunBatchRequest(
+    Guid ProjectId,
     long ExpectedProjectVersion,
     IReadOnlyList<BenchmarkRunBatchItem> Items,
     int RepeatCount,
@@ -27,13 +28,15 @@ public enum BenchmarkRunBatchRejectionKind
     TimeBudget
 }
 
-public sealed record BenchmarkRunBatchRejectedItem(string ModelName,
+public sealed record BenchmarkRunBatchRejectedItem(
+    string ModelName,
     string? KvCacheType,
     BenchmarkRunBatchRejectionKind Kind,
     string Message,
     Exception? Failure = null);
 
-public sealed record BenchmarkRunBatchResult(long ProjectVersion,
+public sealed record BenchmarkRunBatchResult(
+    long ProjectVersion,
     IReadOnlyList<BenchmarkRunBatchStartedItem> Started,
     IReadOnlyList<BenchmarkRunBatchRejectedItem> Rejected);
 
@@ -80,14 +83,14 @@ public sealed class BenchmarkRunBatchService(IBenchmarkRunFreezeService runs, Ti
             try
             {
                 var created = await _runs.StartAsync(new BenchmarkRunStartRequest(request.ProjectId,
-                                                 item.ModelName,
-                                                 expectedVersion,
-                                                 kvCacheType,
-                                                 request.RepeatCount,
-                                                 request.Warmup,
-                                                 request.RepeatMode,
-                                                 request.AnswerVarianceTemperature), scope, cancellationToken)
-                                             .ConfigureAwait(false);
+                                             item.ModelName,
+                                             expectedVersion,
+                                             kvCacheType,
+                                             request.RepeatCount,
+                                             request.Warmup,
+                                             request.RepeatMode,
+                                             request.AnswerVarianceTemperature), scope, cancellationToken)
+                                         .ConfigureAwait(false);
                 expectedVersion += created.Count;
                 started.Add(new BenchmarkRunBatchStartedItem(item.ModelName,
                     kvCacheType,

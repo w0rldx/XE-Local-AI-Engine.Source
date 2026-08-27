@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client;
 
 using Serilog.AspNetCore;
 using Serilog.Events;
-using XE_Local_AI_Engine.Client.Common.Extensions;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.Services.Auth;
 
@@ -33,9 +32,9 @@ public sealed partial class Program
         options.GetMessageTemplateProperties = static (httpContext, requestPath, elapsedMilliseconds, statusCode) =>
         [
             new LogEventProperty("RequestMethod", new ScalarValue(RequestLogSanitizer.Sanitize(httpContext.Request.Method))),
-                new LogEventProperty("RequestPath", new ScalarValue(RequestLogSanitizer.Sanitize(requestPath))),
-                new LogEventProperty("StatusCode", new ScalarValue(statusCode)),
-                new LogEventProperty("Elapsed", new ScalarValue(elapsedMilliseconds))
+            new LogEventProperty("RequestPath", new ScalarValue(RequestLogSanitizer.Sanitize(requestPath))),
+            new LogEventProperty("StatusCode", new ScalarValue(statusCode)),
+            new LogEventProperty("Elapsed", new ScalarValue(elapsedMilliseconds))
         ];
     }
 

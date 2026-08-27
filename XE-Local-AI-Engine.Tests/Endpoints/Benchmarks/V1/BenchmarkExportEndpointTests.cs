@@ -542,9 +542,9 @@ public sealed class BenchmarkExportEndpointTests
     {
         context.Store.ListAllRunsAsync(ProjectId, Arg.Any<CancellationToken>())
                .Returns(new BenchmarkRunPage(runs.Select(static run => run with
-               {
-                   Rank = 1
-               }).ToArray(),
+                   {
+                       Rank = 1
+                   }).ToArray(),
                    runs.Length,
                    new BenchmarkRankCohort(2, "cohort-key", 3, RankedCount: 1, TotalScored: 1)));
         foreach (var run in runs)

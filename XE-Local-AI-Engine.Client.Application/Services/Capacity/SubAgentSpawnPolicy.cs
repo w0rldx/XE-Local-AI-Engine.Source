@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
 using Microsoft.Extensions.AI;
-using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Models.Enums;

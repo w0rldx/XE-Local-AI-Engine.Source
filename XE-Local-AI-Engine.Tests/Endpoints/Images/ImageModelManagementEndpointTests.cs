@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.Images;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -332,7 +333,7 @@ public sealed class ImageModelManagementEndpointTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/images/models/downloads")
         {
-            Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
         factory.AddNodeBearerToken(request);
 

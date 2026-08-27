@@ -1,10 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
-using System.Text.Json;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Services.Benchmarks;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-
 public class BenchmarkFidelityResponse
 {
     /// <summary><c>queued</c>, <c>running</c>, <c>succeeded</c>, <c>failed</c>, <c>cancelled</c> or <c>skipped</c>.</summary>

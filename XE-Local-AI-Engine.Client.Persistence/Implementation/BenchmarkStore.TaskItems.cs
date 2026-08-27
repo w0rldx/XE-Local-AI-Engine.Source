@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
-using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -290,9 +287,9 @@ public sealed partial class BenchmarkStore
     private async Task EnsureNoActiveProjectWorkAsync(Guid projectId, CancellationToken cancellationToken)
     {
         var active = await (from work in _dbContext.BenchmarkWorkItems.AsNoTracking()
-                            join run in _dbContext.BenchmarkRuns.AsNoTracking() on work.RunId equals run.Id
-                            where run.ProjectId == projectId && (work.Status == BenchmarkWorkStatus.Queued || work.Status == BenchmarkWorkStatus.Running)
-                            select work.QueueSequence).AnyAsync(cancellationToken).ConfigureAwait(false);
+            join run in _dbContext.BenchmarkRuns.AsNoTracking() on work.RunId equals run.Id
+            where run.ProjectId == projectId && (work.Status == BenchmarkWorkStatus.Queued || work.Status == BenchmarkWorkStatus.Running)
+            select work.QueueSequence).AnyAsync(cancellationToken).ConfigureAwait(false);
         if (active)
         {
             throw new BenchmarkConflictException("ActiveRun");
@@ -358,5 +355,4 @@ public sealed partial class BenchmarkStore
             entity.CountsTowardScore, entity.PromptJson.ToArray(), entity.ReferenceAnswerJson?.ToArray(),
             entity.VerifierConfigJson?.ToArray(), entity.GeneratorConfigJson?.ToArray(),
             entity.Version, entity.CreatedAtUtc, entity.UpdatedAtUtc);
-
 }

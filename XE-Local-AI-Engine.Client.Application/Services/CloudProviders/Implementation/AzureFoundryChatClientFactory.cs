@@ -408,13 +408,13 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         }
 
         return new EntraPersistenceFallbackCredential(cacheOptions => new DeviceCodeCredential(new DeviceCodeCredentialOptions
-        {
-            TenantId = connection.EntraTenantId,
-            ClientId = connection.EntraClientId,
-            AuthenticationRecord = record,
-            TokenCachePersistenceOptions = cacheOptions,
-            DeviceCodeCallback = (_, _) => throw new CredentialUnavailableException("Entra ID silent authentication expired for this connection; sign in again via Cloud Settings.")
-        }),
+            {
+                TenantId = connection.EntraTenantId,
+                ClientId = connection.EntraClientId,
+                AuthenticationRecord = record,
+                TokenCachePersistenceOptions = cacheOptions,
+                DeviceCodeCallback = (_, _) => throw new CredentialUnavailableException("Entra ID silent authentication expired for this connection; sign in again via Cloud Settings.")
+            }),
             new TokenCachePersistenceOptions
             {
                 Name = EntraTokenCachePersistenceName

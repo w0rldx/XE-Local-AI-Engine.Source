@@ -600,8 +600,7 @@ public sealed class WorkSessionEndpointTests
 
     private static Exception CreateWorkSessionNotFoundException(string message)
     {
-        var exceptionType = AssertEx.NotNull(typeof(IAgentWorkSessionStore).Assembly.GetType(
-                "XE_Local_AI_Engine.Client.Persistence.Stores.WorkSessionNotFoundException",
+        var exceptionType = AssertEx.NotNull(typeof(IAgentWorkSessionStore).Assembly.GetType("XE_Local_AI_Engine.Client.Persistence.Stores.WorkSessionNotFoundException",
                 throwOnError: false,
                 ignoreCase: false),
             "The persistence layer must expose the typed WorkSessionNotFoundException family before endpoint catches are removed.");

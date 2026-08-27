@@ -1,15 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Events.Implementation;
 
 using System.Diagnostics.CodeAnalysis;
-using System.Threading.Channels;
-using XE_Local_AI_Engine.Client.Common.Telemetry;
-using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Models.Encrypted;
-using XE_Local_AI_Engine.Client.Models.Enums;
-using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;

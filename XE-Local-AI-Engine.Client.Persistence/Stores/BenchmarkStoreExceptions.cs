@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
-using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-
 public abstract class BenchmarkStoreException(string message) : InvalidOperationException(message);
 
 public sealed class BenchmarkNotFoundException(string message) : BenchmarkStoreException(message);

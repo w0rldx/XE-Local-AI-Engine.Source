@@ -137,5 +137,4 @@ internal sealed partial class AgentWorkSessionStore
             throw new WorkSessionNotFoundException($"Work session '{sessionId}' was not found.");
         }
     }
-
 }

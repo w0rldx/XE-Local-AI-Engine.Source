@@ -292,5 +292,4 @@ internal sealed partial class AgentWorkSessionStore
             throw new WorkSessionNotFoundException($"Work session task '{taskId}' was not found on session '{sessionId}'.");
         }
     }
-
 }

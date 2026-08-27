@@ -44,6 +44,7 @@ public sealed record BenchmarkTaskItemRecord(
     /// <summary>Whether a freeze fans out over this item, or it is only the generator of items that a freeze does.</summary>
     public bool IsLeaf => BenchmarkTaskItemKinds.IsLeaf(Kind);
 }
+
 /// <summary>
 ///     The <see cref="BenchmarkTaskItem.Kind" /> vocabulary. A LEAF kind is a run target; a generator kind is not —
 ///     it expands into leaf children at write time, and every cap counts the leaves.

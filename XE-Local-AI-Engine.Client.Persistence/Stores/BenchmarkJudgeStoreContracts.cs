@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     What the run executor resolved for the automatic first judging, carried into the same transaction that commits

@@ -2,10 +2,8 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity;
 
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
-using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Models;
-using XE_Local_AI_Engine.Client.Services.Agents;
 
 internal sealed partial class SubAgentSpawnService
 {
@@ -123,5 +121,4 @@ internal sealed partial class SubAgentSpawnService
             ? new AdditionalPropertiesDictionary(metadata.Select(static entry => new KeyValuePair<string, object?>(entry.Key, entry.Value)))
             : null;
     }
-
 }

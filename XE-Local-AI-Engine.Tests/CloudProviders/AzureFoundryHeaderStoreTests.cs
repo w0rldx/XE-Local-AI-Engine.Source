@@ -79,23 +79,23 @@ public sealed class AzureFoundryHeaderStoreTests : IDisposable
     {
         Directory.CreateDirectory(_contentRootPath);
         var blob = JsonSerializer.SerializeToUtf8Bytes(new
-        {
-            schemaVersion = 2,
-            providerName = "AzureFoundry",
-            azureFoundry = new
             {
-                endpoint = "https://example.openai.azure.com/",
-                authMode = (int)AzureFoundryAuthMode.ApiKey,
-                apiKey = "k",
-                models = new[]
+                schemaVersion = 2,
+                providerName = "AzureFoundry",
+                azureFoundry = new
+                {
+                    endpoint = "https://example.openai.azure.com/",
+                    authMode = (int)AzureFoundryAuthMode.ApiKey,
+                    apiKey = "k",
+                    models = new[]
                     {
                         new
                         {
                             deploymentName = "gpt-4o"
                         }
                     }
-            }
-        },
+                }
+            },
             JsonOptions);
         await File.WriteAllBytesAsync(GetCredentialsPath(), blob);
         using var store = CreateStore();

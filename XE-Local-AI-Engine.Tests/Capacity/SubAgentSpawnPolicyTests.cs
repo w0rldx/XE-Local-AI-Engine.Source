@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Capacity;
 
 using Microsoft.Extensions.AI;
-using XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -10,10 +9,20 @@ public sealed class SubAgentSpawnPolicyTests
     [Test]
     public void BindingPolicy_RequiresExactlyOneBinding()
     {
-        AssertEx.True(SubAgentSpawnPolicy.HasExactlyOneBinding(new SubAgentSpawnRequest { ModelId = "model" }));
-        AssertEx.True(SubAgentSpawnPolicy.HasExactlyOneBinding(new SubAgentSpawnRequest { SubAgentKey = "agent" }));
+        AssertEx.True(SubAgentSpawnPolicy.HasExactlyOneBinding(new SubAgentSpawnRequest
+        {
+            ModelId = "model"
+        }));
+        AssertEx.True(SubAgentSpawnPolicy.HasExactlyOneBinding(new SubAgentSpawnRequest
+        {
+            SubAgentKey = "agent"
+        }));
         AssertEx.False(SubAgentSpawnPolicy.HasExactlyOneBinding(new SubAgentSpawnRequest()));
-        AssertEx.False(SubAgentSpawnPolicy.HasExactlyOneBinding(new SubAgentSpawnRequest { ModelId = "model", SubAgentKey = "agent" }));
+        AssertEx.False(SubAgentSpawnPolicy.HasExactlyOneBinding(new SubAgentSpawnRequest
+        {
+            ModelId = "model",
+            SubAgentKey = "agent"
+        }));
     }
 
     [Test]

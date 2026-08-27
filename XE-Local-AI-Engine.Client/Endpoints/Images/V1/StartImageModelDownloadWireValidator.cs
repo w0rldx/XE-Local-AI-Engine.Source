@@ -55,18 +55,19 @@ internal static class StartImageModelDownloadWireValidator
         }
 
         return new StartImageModelDownloadWireValidationResult(new StartImageModelDownloadWireValues(request.ModelName.Trim(),
-            request.RepoId.Trim(),
-            family,
-            kind,
-            NormalizeOptional(request.Revision),
-            parts),
+                request.RepoId.Trim(),
+                family,
+                kind,
+                NormalizeOptional(request.Revision),
+                parts),
             Error: null);
     }
 
     private static string? NormalizeOptional(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static StartImageModelDownloadWireValidationResult Invalid(string error) => new(Values: null, error);
+    private static StartImageModelDownloadWireValidationResult Invalid(string error) =>
+        new(Values: null, error);
 }
 
 internal sealed record StartImageModelDownloadWireValidationResult(StartImageModelDownloadWireValues? Values, string? Error)

@@ -181,16 +181,16 @@ public sealed class BenchmarkJudgePolicyContractsTests
         var criteria = BenchmarkJudgeRubricDefaults.Default().Criteria;
         var forward = Policy(BenchmarkJudgeRubricDefaults.Default());
         var reversed = Policy(BenchmarkJudgeRubricDefaults.Default() with
-        {
-            Criteria = [.. criteria.Reverse()]
-        })
-            with
-        {
-            Model = Model() with
             {
-                MemberHashes = ["bbb", "aaa"]
-            }
-        };
+                Criteria = [.. criteria.Reverse()]
+            })
+            with
+            {
+                Model = Model() with
+                {
+                    MemberHashes = ["bbb", "aaa"]
+                }
+            };
 
         AssertEx.Equal(BenchmarkJudgePolicyCanonicalizer.ToCanonicalJson(forward), BenchmarkJudgePolicyCanonicalizer.ToCanonicalJson(reversed));
         AssertEx.Equal(BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(forward), BenchmarkJudgePolicyCanonicalizer.ComputePolicyHash(reversed));

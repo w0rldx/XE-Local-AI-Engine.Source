@@ -1,7 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
-using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -508,24 +506,24 @@ public sealed partial class BenchmarkStore
 
         // Flat columns only across all four tables, so nothing is decrypted to answer "is this run ranked?".
         var rows = await (from run in _dbContext.BenchmarkRuns.AsNoTracking()
-                          join attempt in _dbContext.BenchmarkJudgeAttempts.AsNoTracking() on run.CurrentJudgeAttemptId equals attempt.Id
-                          join revision in _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking() on attempt.PolicyRevisionId equals revision.Id
-                          join project in _dbContext.BenchmarkProjects.AsNoTracking() on run.ProjectId equals project.Id
-                          where runIds.Contains(run.Id)
-                          select new JudgeViewRow(run.Id,
-                              attempt.Id,
-                              run.UserScore,
-                              attempt.Status,
-                              attempt.Score,
-                              attempt.Sequence,
-                              attempt.CohortGeneration,
-                              attempt.JudgeExecutionKey,
-                              attempt.ErrorMessage,
-                              attempt.PolicyRevisionId,
-                              revision.Revision,
-                              revision.CohortGeneration,
-                              revision.ReferenceExecutionKey,
-                              project.CurrentJudgePolicyRevisionId)).ToArrayAsync(cancellationToken).ConfigureAwait(false);
+            join attempt in _dbContext.BenchmarkJudgeAttempts.AsNoTracking() on run.CurrentJudgeAttemptId equals attempt.Id
+            join revision in _dbContext.BenchmarkJudgePolicyRevisions.AsNoTracking() on attempt.PolicyRevisionId equals revision.Id
+            join project in _dbContext.BenchmarkProjects.AsNoTracking() on run.ProjectId equals project.Id
+            where runIds.Contains(run.Id)
+            select new JudgeViewRow(run.Id,
+                attempt.Id,
+                run.UserScore,
+                attempt.Status,
+                attempt.Score,
+                attempt.Sequence,
+                attempt.CohortGeneration,
+                attempt.JudgeExecutionKey,
+                attempt.ErrorMessage,
+                attempt.PolicyRevisionId,
+                revision.Revision,
+                revision.CohortGeneration,
+                revision.ReferenceExecutionKey,
+                project.CurrentJudgePolicyRevisionId)).ToArrayAsync(cancellationToken).ConfigureAwait(false);
         return rows.ToDictionary(static row => row.RunId, BuildJudgeView);
     }
 

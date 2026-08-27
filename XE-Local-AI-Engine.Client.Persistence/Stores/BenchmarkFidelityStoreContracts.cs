@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
-using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-
 /// <summary>
 ///     One succeeded fidelity measurement. <paramref name="ReceiptJson" /> contains the reduced execution evidence;
 ///     llama-perplexity has no readiness probe and therefore produces no launch receipt.

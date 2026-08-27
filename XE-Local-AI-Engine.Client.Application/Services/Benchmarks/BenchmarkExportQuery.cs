@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public interface IBenchmarkExportQuery
@@ -108,9 +107,9 @@ internal sealed class BenchmarkExportQuery(
         runs.Where(static run => !run.IsWarmup && run.Throughput is not null)
             .GroupBy(static run => run.RepeatGroupId ?? run.Id)
             .Select(static group => group.OrderBy(static run => run.RepeatIndex ?? 0)
-                .ThenBy(static run => run.CreatedAtUtc)
-                .First()
-                .Id)
+                                         .ThenBy(static run => run.CreatedAtUtc)
+                                         .First()
+                                         .Id)
             .ToHashSet();
 
     private async Task<BenchmarkJudgeResultV2?> ReadVerdictAsync(BenchmarkRunRecord run, CancellationToken ct)
@@ -123,5 +122,4 @@ internal sealed class BenchmarkExportQuery(
         var attempt = await _store.GetJudgeAttemptAsync(attemptId, ct).ConfigureAwait(false);
         return BenchmarkJudgeSerialization.DeserializeResult(attempt?.ResultJson);
     }
-
 }

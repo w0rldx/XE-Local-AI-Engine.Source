@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
-using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;

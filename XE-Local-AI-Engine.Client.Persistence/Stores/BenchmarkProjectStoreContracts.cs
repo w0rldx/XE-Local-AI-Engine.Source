@@ -1,8 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
-using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-
 /// <param name="MaxOutputTokens">
 ///     The per-run output-token budget frozen into every run's sampling, or <see langword="null" /> to leave generation
 ///     context-limited. Must be <c>1 &lt;= MaxOutputTokens &lt; ContextTokens</c>.

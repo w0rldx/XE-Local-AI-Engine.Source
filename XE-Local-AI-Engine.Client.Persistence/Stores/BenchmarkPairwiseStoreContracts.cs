@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Stores;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 
 /// <summary>
 ///     One run that may be paired against another. <paramref name="TaskCaseId" /> and <paramref name="TaskInputHash" />

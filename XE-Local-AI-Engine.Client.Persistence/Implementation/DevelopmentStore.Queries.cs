@@ -1,11 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
-using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public sealed partial class DevelopmentStore
@@ -32,15 +28,15 @@ public sealed partial class DevelopmentStore
     public async Task<DevelopmentExecutionSnapshot> GetExecutionSnapshotAsync(Guid attemptId, CancellationToken cancellationToken = default)
     {
         var snapshot = await (from attempt in _dbContext.DevelopmentAttempts.AsNoTracking()
-                              join task in _dbContext.DevelopmentTasks.AsNoTracking() on attempt.TaskId equals task.Id
-                              join project in _dbContext.DevelopmentProjects.AsNoTracking() on task.ProjectId equals project.Id
-                              where attempt.Id == attemptId
-                              select new
-                              {
-                                  Project = project,
-                                  Task = task,
-                                  Attempt = attempt
-                              })
+                                 join task in _dbContext.DevelopmentTasks.AsNoTracking() on attempt.TaskId equals task.Id
+                                 join project in _dbContext.DevelopmentProjects.AsNoTracking() on task.ProjectId equals project.Id
+                                 where attempt.Id == attemptId
+                                 select new
+                                 {
+                                     Project = project,
+                                     Task = task,
+                                     Attempt = attempt
+                                 })
                              .SingleOrDefaultAsync(cancellationToken)
                              .ConfigureAwait(false)
                        ?? throw new KeyNotFoundException($"Development attempt '{attemptId}' was not found.");
@@ -224,5 +220,4 @@ public sealed partial class DevelopmentStore
                        ?? throw new KeyNotFoundException($"Development artifact '{artifactId}' was not found.");
         return ArtifactSnapshot(artifact);
     }
-
 }

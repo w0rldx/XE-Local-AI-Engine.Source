@@ -1,9 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using System.Text.Json;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 public sealed record BenchmarkFidelityDisplayFacts(string? ExpectedKldDigest)
@@ -11,9 +9,9 @@ public sealed record BenchmarkFidelityDisplayFacts(string? ExpectedKldDigest)
     public static BenchmarkFidelityDisplayFacts FromProject(BenchmarkProjectRecord? project) =>
         new(project is { FidelityKldEnabled: true, FidelityKldBaseFingerprint: { Length: > 0 } fingerprint }
             ? BenchmarkKldCacheKey.Create(fingerprint,
-                    BenchmarkFidelityCorpus.Require().Sha256,
-                    BenchmarkFidelityPolicy.ClampChunks(project.FidelityChunks))
-                .Digest
+                                      BenchmarkFidelityCorpus.Require().Sha256,
+                                      BenchmarkFidelityPolicy.ClampChunks(project.FidelityChunks))
+                                  .Digest
             : null);
 }
 
@@ -48,8 +46,8 @@ internal sealed class BenchmarkExportFactsResolver(
         {
             var snapshot = _snapshots.Deserialize(run.RuntimeSnapshotJson.Span);
             var weights = snapshot.PrimaryModel.Members
-                .Where(static member => member.Role == InstalledModelPhysicalMemberRole.Weight)
-                .ToArray();
+                                  .Where(static member => member.Role == InstalledModelPhysicalMemberRole.Weight)
+                                  .ToArray();
             modelFilename = snapshot.PrimaryModel.SourceFileName ?? weights.FirstOrDefault()?.RelativePath;
             modelSize = weights.Length == 0 ? null : weights.Sum(static member => member.SizeBytes);
             gpuLayers = snapshot.PrimaryRuntime.GpuLayers;

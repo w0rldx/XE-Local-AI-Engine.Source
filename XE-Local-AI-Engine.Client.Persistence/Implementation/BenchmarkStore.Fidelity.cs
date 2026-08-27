@@ -1,11 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
-using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+
 public sealed partial class BenchmarkStore
 {
     public async Task<BenchmarkFidelityAttemptRecord?> GetFidelityAttemptAsync(Guid attemptId, CancellationToken cancellationToken = default)
@@ -55,8 +53,8 @@ public sealed partial class BenchmarkStore
         if (await _dbContext.BenchmarkWorkItems.AnyAsync(entity => entity.RunId == runId
                                                                    && entity.Kind == BenchmarkWorkKind.Fidelity
                                                                    && (entity.Status == BenchmarkWorkStatus.Queued || entity.Status == BenchmarkWorkStatus.Running),
-                    cancellationToken)
-                .ConfigureAwait(false))
+                                cancellationToken)
+                            .ConfigureAwait(false))
         {
             throw new BenchmarkConflictException("FidelityAlreadyQueued");
         }
@@ -257,5 +255,4 @@ public sealed partial class BenchmarkStore
             BenchmarkJudgeAttemptStatus.Running => "running",
             _ => "queued"
         };
-
 }

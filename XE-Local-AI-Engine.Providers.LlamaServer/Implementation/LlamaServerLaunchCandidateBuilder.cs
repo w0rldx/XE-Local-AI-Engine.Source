@@ -7,8 +7,7 @@ internal sealed class LlamaServerLaunchCandidateBuilder(
     IProcessContextAllocationResolver allocationResolver,
     ILlamaServerLaunchPolicy launchPolicy)
 {
-    public async Task<LlamaServerLaunchPlanSet> BuildAsync(
-        LlamaServerProcessSupervisor.ProcessKey key,
+    public async Task<LlamaServerLaunchPlanSet> BuildAsync(LlamaServerProcessSupervisor.ProcessKey key,
         GpuVariant variant,
         ResolvedLaunchArguments resolved,
         bool applyLaunchPolicy,

@@ -1,10 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
-using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public sealed partial class BenchmarkStore
@@ -72,5 +68,4 @@ public sealed partial class BenchmarkStore
 
         return new BenchmarkCellPage(cells, ranking.Cohort, ranking.ScorableItemCount);
     }
-
 }

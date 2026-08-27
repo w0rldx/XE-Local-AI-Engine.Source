@@ -5,7 +5,6 @@ using System.Text.Json;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
@@ -35,45 +34,45 @@ public sealed class ExportBenchmarkProjectEndpoint(IBenchmarkExportQuery exports
 
         var now = _timeProvider.GetUtcNow();
         var runs = export.Runs.Select(item => (item.Full with
-        {
-            Rank = item.Summary.Rank,
-            CellQuality = item.Summary.CellQuality
-        }).ToDetail(item.Verdict, export.Fidelity.ExpectedKldDigest))
-            .ToArray();
+                         {
+                             Rank = item.Summary.Rank,
+                             CellQuality = item.Summary.CellQuality
+                         }).ToDetail(item.Verdict, export.Fidelity.ExpectedKldDigest))
+                         .ToArray();
         var groups = BenchmarkExportStatistics.Groups(export.Summaries);
 
         HttpContext.Response.Headers.ContentDisposition = BenchmarkExportProjection.Attachment(export.Project.Name, now, "json");
         await Send.OkAsync(new BenchmarkExportResponse
-        {
-            TaskItems = [.. export.TaskItems.Select(BenchmarkEndpointMapper.ToResponse)],
-            Cells = export.Cells.ToResponse().Cells,
-            ScorableItemCount = export.Cells.ScorableItemCount,
-            ExportedAtUtc = now.ToUnixTimeMilliseconds(),
-            Project = new BenchmarkExportProjectResponse
-            {
-                Id = export.Project.Id,
-                Name = export.Project.Name,
-                CoreTask = JsonSerializer.Deserialize<string>(export.Project.CoreTaskJson.Span) ?? string.Empty,
-                ContextTokens = export.Project.ContextTokens,
-                MaxOutputTokens = export.Project.MaxOutputTokens,
-                ReasoningBudgetTokens = export.Project.ReasoningBudgetTokens,
-                InvocationTimeoutSeconds = export.Project.InvocationTimeoutSeconds,
-                Agent = export.Summaries.Count == 0
-                        ? null
-                        : new BenchmarkExportAgentResponse
-                        {
-                            Name = export.Summaries[0].AgentName,
-                            Version = export.Summaries[0].AgentVersion
-                        },
-                Judge = ToJudgePolicy(export.JudgePolicyRevision)
-            },
-            RankCohort = BenchmarkExportProjection.ToResponse(export.RankCohort),
-            Runs = runs,
-            RepeatGroups = groups,
-            LlamaBench = BenchmarkExportStatistics.LlamaBenchRows(groups, export.Facts),
-            PairwiseFit = BenchmarkExportProjection.ToResponse(export.PairwiseFit)
-        }, ct)
-            .ConfigureAwait(false);
+                  {
+                      TaskItems = [.. export.TaskItems.Select(BenchmarkEndpointMapper.ToResponse)],
+                      Cells = export.Cells.ToResponse().Cells,
+                      ScorableItemCount = export.Cells.ScorableItemCount,
+                      ExportedAtUtc = now.ToUnixTimeMilliseconds(),
+                      Project = new BenchmarkExportProjectResponse
+                      {
+                          Id = export.Project.Id,
+                          Name = export.Project.Name,
+                          CoreTask = JsonSerializer.Deserialize<string>(export.Project.CoreTaskJson.Span) ?? string.Empty,
+                          ContextTokens = export.Project.ContextTokens,
+                          MaxOutputTokens = export.Project.MaxOutputTokens,
+                          ReasoningBudgetTokens = export.Project.ReasoningBudgetTokens,
+                          InvocationTimeoutSeconds = export.Project.InvocationTimeoutSeconds,
+                          Agent = export.Summaries.Count == 0
+                              ? null
+                              : new BenchmarkExportAgentResponse
+                              {
+                                  Name = export.Summaries[0].AgentName,
+                                  Version = export.Summaries[0].AgentVersion
+                              },
+                          Judge = ToJudgePolicy(export.JudgePolicyRevision)
+                      },
+                      RankCohort = BenchmarkExportProjection.ToResponse(export.RankCohort),
+                      Runs = runs,
+                      RepeatGroups = groups,
+                      LlamaBench = BenchmarkExportStatistics.LlamaBenchRows(groups, export.Facts),
+                      PairwiseFit = BenchmarkExportProjection.ToResponse(export.PairwiseFit)
+                  }, ct)
+                  .ConfigureAwait(false);
     }
 
     private static BenchmarkJudgePolicyResponse ToJudgePolicy(BenchmarkJudgePolicyRevisionRecord? revision)
@@ -97,7 +96,7 @@ public sealed class ExportBenchmarkProjectCsvEndpoint(IBenchmarkExportQuery expo
         Get(LocalApiRoutes.Benchmarks.ProjectExportCsv);
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder.Produces<string>(StatusCodes.Status200OK, "text/csv")
-            .ProducesProblem(StatusCodes.Status404NotFound));
+                                      .ProducesProblem(StatusCodes.Status404NotFound));
     }
 
     public override async Task HandleAsync(BenchmarkProjectRouteRequest req, CancellationToken ct)
@@ -114,9 +113,9 @@ public sealed class ExportBenchmarkProjectCsvEndpoint(IBenchmarkExportQuery expo
             export.Fidelity.ExpectedKldDigest,
             export.PairwiseFit);
         await Send.BytesAsync(Encoding.UTF8.GetBytes(csv),
-                BenchmarkExportProjection.FileName(export.Project.Name, now, "csv"),
-                "text/csv",
-                cancellation: ct)
-            .ConfigureAwait(false);
+                      BenchmarkExportProjection.FileName(export.Project.Name, now, "csv"),
+                      "text/csv",
+                      cancellation: ct)
+                  .ConfigureAwait(false);
     }
 }

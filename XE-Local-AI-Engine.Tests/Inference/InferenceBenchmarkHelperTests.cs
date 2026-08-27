@@ -51,8 +51,7 @@ public sealed class InferenceBenchmarkHelperTests
     [Test]
     public void ResourceEvidence_DetectsOnlyMaterialGrowthBeyondLoadedBaseline()
     {
-        var collector = new ResourceEvidenceCollector(
-            preSpawnVram: new LlamaServerProfilingVramSnapshot(900, 1000),
+        var collector = new ResourceEvidenceCollector(preSpawnVram: new LlamaServerProfilingVramSnapshot(900, 1000),
             preSpawnAmbientBaselineBytes: 100,
             preSpawnPressureAbsoluteThresholdBytes: 50,
             preSpawnPressureRatioThreshold: 0.05,

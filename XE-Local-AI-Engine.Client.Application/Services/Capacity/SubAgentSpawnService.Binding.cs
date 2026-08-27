@@ -4,7 +4,6 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Instructions;
 using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence;
-using XE_Local_AI_Engine.Client.Services.Agents;
 
 internal sealed partial class SubAgentSpawnService
 {
@@ -98,5 +97,4 @@ internal sealed partial class SubAgentSpawnService
     // The child's reasoning inputs: the resolved effort plus the child model's OWN thinking capability, which together
     // drive ParticipantReasoningOptions.Build exactly as the orchestration-participant path does.
     private sealed record ChildReasoning(string? ReasoningEffort, bool SupportsThinking, bool ReasoningBudgetEnforceable = true);
-
 }

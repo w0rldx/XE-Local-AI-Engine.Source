@@ -443,12 +443,12 @@ public sealed class BenchmarkEndpointTests
     {
         await using var context = CreateContext();
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "old-snapshot", 4, null, 1, false),
-                     Arg.Any<BenchmarkFreezeScope?>(),
-                     Arg.Any<CancellationToken>())
+                   Arg.Any<BenchmarkFreezeScope?>(),
+                   Arg.Any<CancellationToken>())
                .Returns<IReadOnlyList<BenchmarkRunRecord>>(_ => throw new NotSupportedException("The runtime snapshot version is not supported."));
         context.RunFreeze.StartAsync(new BenchmarkRunStartRequest(ProjectId, "current", 4, null, 1, false),
-                     Arg.Any<BenchmarkFreezeScope?>(),
-                     Arg.Any<CancellationToken>()).Returns(Runs());
+            Arg.Any<BenchmarkFreezeScope?>(),
+            Arg.Any<CancellationToken>()).Returns(Runs());
         using var client = context.Factory.CreateClient();
         using var request = Authorized(context.Factory, HttpMethod.Post, Api + $"/projects/{ProjectId}/runs/batch",
             BatchBody("old-snapshot", "current"));

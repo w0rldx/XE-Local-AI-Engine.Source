@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
@@ -70,8 +69,7 @@ internal static class BenchmarkExportStatistics
     ///         run's: those genuinely vary across an answer-variance group.
     ///     </para>
     /// </summary>
-    public static IReadOnlyList<BenchmarkExportLlamaBenchRowResponse> LlamaBenchRows(
-        IReadOnlyList<BenchmarkExportRepeatGroupResponse> groups,
+    public static IReadOnlyList<BenchmarkExportLlamaBenchRowResponse> LlamaBenchRows(IReadOnlyList<BenchmarkExportRepeatGroupResponse> groups,
         IReadOnlyDictionary<Guid, BenchmarkExportRunFacts> facts)
     {
         ArgumentNullException.ThrowIfNull(groups);

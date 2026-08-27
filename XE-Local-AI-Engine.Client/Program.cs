@@ -53,39 +53,20 @@ namespace XE_Local_AI_Engine.Client
 {
     using System.Diagnostics;
     using System.Diagnostics.CodeAnalysis;
-    using System.Security.Claims;
-    using System.Text.Json;
     using FastEndpoints;
     using FastEndpoints.Swagger;
     using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-    using Microsoft.AspNetCore.Hosting.Server;
     using Microsoft.Extensions.Diagnostics.HealthChecks;
-    using Microsoft.Extensions.Options;
     using Microsoft.Net.Http.Headers;
     using Scalar.AspNetCore;
     using Serilog;
-    using Serilog.AspNetCore;
-    using Serilog.Events;
     using XE_Local_AI_Engine.Client.Common.Extensions;
-    using XE_Local_AI_Engine.Client.DependencyInjection;
-    using XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
-    using XE_Local_AI_Engine.Client.Endpoints.Auth.V1.Validators;
     using XE_Local_AI_Engine.Client.Endpoints.Common;
-    using XE_Local_AI_Engine.Client.ExceptionHandling;
     using XE_Local_AI_Engine.Client.Hosting;
     using XE_Local_AI_Engine.Client.Hubs;
-    using XE_Local_AI_Engine.Client.Persistence.Entities;
-    using XE_Local_AI_Engine.Client.Persistence.Stores;
     using XE_Local_AI_Engine.Client.Services.Auth;
-    using XE_Local_AI_Engine.Client.Services.Auth.Implementation;
-    using XE_Local_AI_Engine.Client.Services.Chat;
-    using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
     using XE_Local_AI_Engine.Client.Services.Development;
-    using XE_Local_AI_Engine.Client.Services.Mcp;
-    using XE_Local_AI_Engine.Client.Services.Persistence;
-    using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
     using XE_Local_AI_Engine.Client.Services.Proxy;
-    using XE_Local_AI_Engine.Client.Services.Shutdown;
     using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
     /// <summary>
@@ -717,7 +698,6 @@ namespace XE_Local_AI_Engine.Client
 
             return new ProgramStartResult(app, ExitCode: 0);
         }
-
     }
 
     /// <summary>

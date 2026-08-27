@@ -1,10 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
-using System.Text.Json;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Services.Benchmarks;
-using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
-
 public sealed class UpdateBenchmarkJudgePolicyRequest
 {
     public Guid ProjectId { get; init; }

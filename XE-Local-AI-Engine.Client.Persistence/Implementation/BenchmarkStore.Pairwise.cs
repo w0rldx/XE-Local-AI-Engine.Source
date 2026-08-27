@@ -1,11 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+
 public sealed partial class BenchmarkStore
 {
     public Task MarkComparisonFailedAsync(long queueSequence, long expectedWorkVersion, string errorMessage, CancellationToken cancellationToken = default) =>
@@ -170,8 +169,8 @@ public sealed partial class BenchmarkStore
         // is the whole reason the live-slot uniqueness index is filtered on status: a cancelled comparison must be
         // re-enqueueable at the next attempt sequence, or its cohort never completes and never publishes a score.
         var taken = existing.Where(static entry => entry.Status is BenchmarkJudgeAttemptStatus.Queued
-                                        or BenchmarkJudgeAttemptStatus.Running
-                                        or BenchmarkJudgeAttemptStatus.Succeeded)
+                                or BenchmarkJudgeAttemptStatus.Running
+                                or BenchmarkJudgeAttemptStatus.Succeeded)
                             .Select(static entry => (entry.RunAId, entry.RunBId, entry.Order))
                             .ToHashSet();
         var sequence = existing.Length == 0 ? 0 : existing.Max(static entry => entry.Sequence);
@@ -412,13 +411,13 @@ public sealed partial class BenchmarkStore
     public async Task<double?> GetMedianJudgeDurationSecondsAsync(Guid projectId, CancellationToken cancellationToken = default)
     {
         var durations = await (from attempt in _dbContext.BenchmarkJudgeAttempts.AsNoTracking()
-                               join run in _dbContext.BenchmarkRuns.AsNoTracking() on attempt.RunId equals run.Id
-                               where run.ProjectId == projectId
-                                     && attempt.Status == BenchmarkJudgeAttemptStatus.Succeeded
-                                     && attempt.StartedAtUtc != null
-                                     && attempt.CompletedAtUtc != null
-                               select attempt.CompletedAtUtc!.Value - attempt.StartedAtUtc!.Value).ToArrayAsync(cancellationToken)
-            .ConfigureAwait(false);
+                join run in _dbContext.BenchmarkRuns.AsNoTracking() on attempt.RunId equals run.Id
+                where run.ProjectId == projectId
+                      && attempt.Status == BenchmarkJudgeAttemptStatus.Succeeded
+                      && attempt.StartedAtUtc != null
+                      && attempt.CompletedAtUtc != null
+                select attempt.CompletedAtUtc!.Value - attempt.StartedAtUtc!.Value).ToArrayAsync(cancellationToken)
+                                                                                   .ConfigureAwait(false);
         if (durations.Length == 0)
         {
             return null;
@@ -488,5 +487,4 @@ public sealed partial class BenchmarkStore
             entity.StartedAtUtc,
             entity.CompletedAtUtc,
             entity.Version);
-
 }

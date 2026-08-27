@@ -5,9 +5,7 @@ using XE_Local_AI_Engine.Client.Models.Encrypted;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Models.Events;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation;
-using XE_Local_AI_Engine.Client.Services.Invocation.RuntimePackage;
 
 public sealed partial class WorkerEventDispatcher
 {
@@ -336,5 +334,4 @@ public sealed partial class WorkerEventDispatcher
         PublishStateChanged(snapshot);
         return Task.CompletedTask;
     }
-
 }

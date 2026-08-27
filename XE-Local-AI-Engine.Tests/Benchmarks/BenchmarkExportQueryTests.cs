@@ -108,7 +108,10 @@ public sealed class BenchmarkExportQueryTests
             BenchmarkFidelityCorpus.Require().Sha256,
             BenchmarkFidelityPolicy.ClampChunks(project.FidelityChunks));
         AssertEx.Equal(expected.Digest, facts.ExpectedKldDigest);
-        AssertEx.Null(BenchmarkFidelityDisplayFacts.FromProject(project with { FidelityKldEnabled = false }).ExpectedKldDigest);
+        AssertEx.Null(BenchmarkFidelityDisplayFacts.FromProject(project with
+        {
+            FidelityKldEnabled = false
+        }).ExpectedKldDigest);
     }
 
     private static IBenchmarkStore Store(BenchmarkProjectRecord project, IReadOnlyList<BenchmarkRunRecord> summaries)

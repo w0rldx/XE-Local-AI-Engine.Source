@@ -1,9 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Benchmarks.V1;
 
 using System.Text.Json;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 internal static class BenchmarkExportPairwise
 {
