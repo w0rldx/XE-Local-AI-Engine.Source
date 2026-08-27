@@ -43,6 +43,10 @@ internal static class AddNodeExternalProvidersExtensions
         builder.Services.AddScoped<IExternalProviderReconciler, ExternalProviderReconciler>();
         builder.Services.AddScoped<IExternalProviderAdministrationService, ExternalProviderAdministrationService>();
 
+        // Scoped to match the endpoint that drives it. Holds no state: each probe builds, uses and disposes its own
+        // HttpClient, because the address it is pinned to is per-request and a pooled client would outlive it.
+        builder.Services.AddScoped<IExternalProviderProbeService, ExternalProviderProbeService>();
+
         builder.Services.AddHostedService<ExternalProviderStartupReconciler>();
 
         return builder;

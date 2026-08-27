@@ -127,6 +127,26 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     External OpenAI-compatible provider routes: the operator's named connections (an Unsloth-served
+    ///     llama-server, vLLM, LM Studio, a hosted OpenAI-compatible API) and their manually registered models.
+    ///     Every route is Operator-gated; the read path reports only whether an API key is stored, never the key.
+    /// </summary>
+    public static class ExternalProviders
+    {
+        /// <summary>The whole connection list (GET). Carries the store revision every write compares against.</summary>
+        public const string Connections = "external-providers/connections";
+
+        /// <summary>One connection resource: GET, PUT (insert-or-replace), DELETE. <c>{connectionId}</c> is the slug.</summary>
+        public const string ConnectionById = "external-providers/connections/{connectionId}";
+
+        // Connect-time reachability check against GET {base}/models, run SERVER-side because the browser cannot
+        // reach an arbitrary operator endpoint through CORS. A literal segment beside the collection, so it can never
+        // be parsed as a {connectionId}. POST because the body carries either a stored connection id or an inline
+        // draft (base URL + optional key) that has not been saved yet — a "Test connection" before the first save.
+        public const string Probe = "external-providers/probe";
+    }
+
+    /// <summary>
     ///     Per-user onboarding tour state routes. GET reads the current user's recorded tour entries; PUT upserts one.
     /// </summary>
     public static class Tutorial
