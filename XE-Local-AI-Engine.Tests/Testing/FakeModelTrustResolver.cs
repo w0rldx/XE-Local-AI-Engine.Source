@@ -30,24 +30,25 @@ internal sealed class FakeModelTrustResolver : IModelTrustResolver
         bool supportsReasoningEffort = false,
         string? defaultReasoningEffort = null)
     {
-        var registration = new ExternalProviderModelRegistration(new ExternalProviderConnectionDescriptor
-            {
-                Id = connectionId,
-                DisplayName = connectionId,
-                BaseUrl = new Uri("http://127.0.0.1:18099/v1/", UriKind.Absolute),
-                Locality = locality
-            },
-            new ExternalProviderModelDescriptor
-            {
-                WireId = wireId,
-                ContextLength = contextLength,
-                SupportsTools = supportsTools,
-                SupportsVision = supportsVision,
-                SupportsReasoning = supportsReasoning,
-                SupportsReasoningEffort = supportsReasoningEffort,
-                DefaultReasoningEffort = defaultReasoningEffort
-            });
+        var connection = new ExternalProviderConnectionDescriptor
+        {
+            Id = connectionId,
+            DisplayName = connectionId,
+            BaseUrl = new Uri("http://127.0.0.1:18099/v1/", UriKind.Absolute),
+            Locality = locality
+        };
+        var model = new ExternalProviderModelDescriptor
+        {
+            WireId = wireId,
+            ContextLength = contextLength,
+            SupportsTools = supportsTools,
+            SupportsVision = supportsVision,
+            SupportsReasoning = supportsReasoning,
+            SupportsReasoningEffort = supportsReasoningEffort,
+            DefaultReasoningEffort = defaultReasoningEffort
+        };
 
+        var registration = new ExternalProviderModelRegistration(connection, model);
         _registrations[registration.ModelId] = registration;
         return this;
     }
