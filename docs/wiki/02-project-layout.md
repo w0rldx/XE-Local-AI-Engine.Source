@@ -45,7 +45,7 @@ Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `Proje
 
 ### Providers (`/Src/Providers/`)
 
-All provider projects reference **only** `Providers.Abstractions`. SDK-specific types stay inside each provider; consumers depend on the abstraction seams (`ILocalModelProvider`, `IChatClient`, `IEmbeddingGenerator`).
+Provider projects reference `Providers.Abstractions` and, for the two that speak the OpenAI wire protocol, the leaf `Providers.OpenAICompatible.Core` transport library. SDK-specific types stay inside each provider; consumers depend on the abstraction seams (`ILocalModelProvider`, `IChatClient`, `IEmbeddingGenerator`). No provider references a sibling provider.
 
 | Project | Role | Key symbols |
 |---|---|---|
@@ -53,6 +53,8 @@ All provider projects reference **only** `Providers.Abstractions`. SDK-specific 
 | `XE-Local-AI-Engine.Providers.LlamaServer` | **The default inference runtime.** Host llama.cpp process: `LlamaServerLocalModelProvider`, `LlamaServerProcessSupervisor`, binary manager/updater (`LlamaCppBinaryManager`), GitHub release catalog + pins (`GitHubLlamaCppReleaseCatalog`, `LlamaCppReleasePins`), GPU variant selection (`GpuVariantSelector`, `ProcessGpuVendorProbe`), cross-platform process-group handles (Windows job object / Linux process group). | `LlamaServerProcessSupervisor.cs` (56 sym), `LlamaCppBinaryManager.cs` (44) |
 | `XE-Local-AI-Engine.Providers.HuggingFace` | HuggingFace GGUF discovery + download store (feeds the Model Advisor). See [07-model-fit.md](07-model-fit.md). | — |
 | `XE-Local-AI-Engine.Providers.Ollama` | Ollama provider — still **present** as an `ILocalModelProvider` implementation, but **de-orchestrated** from Aspire dev (llama.cpp is the dev runtime; `AppHost.cs` has no Ollama resource). | — |
+| `XE-Local-AI-Engine.Providers.OpenAICompat` | Operator-registered external OpenAI-compatible endpoints (self-hosted llama-server/vLLM/LM Studio, or a hosted OpenAI-compatible API). ONE multiplexer `ILocalModelProvider` with provider name `external`, dispatching per connection by parsing the namespaced model id `ext:{connectionId}/{wireId}` through `IExternalProviderRegistry`. Adds the outbound endpoint guard, the reasoning-output rewriter (vLLM `reasoning` field + inline `<think>` fallback) and typed `reasoning_effort` injection. No pull/delete/embeddings. | `ExternalOpenAiModelProvider.cs`, `ExternalOpenAiChatClient.cs`, `ExternalEndpointGuardHandler.cs` |
+| `XE-Local-AI-Engine.Providers.OpenAICompatible.Core` | Shared OpenAI-compatible WIRE layer, referenced by both `LlamaServer` and `OpenAICompat`: client construction with a pinned no-retry transport and conditional Bearer/no-auth policy, base-URL normalization to a `/v1/` base, and the request-body patch + `RawRepresentationFactory` chaining discipline for body fields the typed OpenAI schema does not model. A leaf — no project references of its own. | `OpenAICompatibleClientFactory.cs`, `OpenAICompatibleRequestBody.cs`, `OpenAICompatibleBaseAddress.cs` |
 | `XE-Local-AI-Engine.Providers.CodexOAuth` | ChatGPT/Codex OAuth cloud chat provider. | — |
 | `XE-Local-AI-Engine.Providers.Capabilities` | Sanitized hardware profiling (CPU/RAM/GPU/VRAM/disk) behind `IHardwareProfiler`, consumed by model-fit and runtime auditing. | `HardwareProfiler`, `CapabilitiesServiceCollectionExtensions` |
 | `XE-Local-AI-Engine.Providers.StableDiffusionCpp` | Local image-generation provider and supervised `sd-server` runtime. | — |
@@ -90,8 +92,8 @@ Solid arrows are `ProjectReference` edges (verified from each `.csproj`).
                                   ▼                │  │  │
                        Providers.Abstractions ◄────┴──┴──┘
                                   ▲
-       Capabilities / CodexOAuth / HuggingFace / LlamaServer / Ollama / StableDiffusionCpp / Training
-                       (each references ONLY Abstractions)
+  Capabilities / CodexOAuth / HuggingFace / LlamaServer / Ollama / OpenAICompat / StableDiffusionCpp / Training
+     (each references ONLY Abstractions; LlamaServer + OpenAICompat also ► OpenAICompatible.Core, a leaf)
 
 AppHost ──► Client            (orchestrates; not referenced back)
 WindowsLauncher ── child process ──► published Client executable
@@ -104,9 +106,9 @@ orchestration dependencies; provider implementations converge on `Providers.Abst
 
 Notable edges:
 
-- **`Client.Application` is the hub of the product graph** — it references every `Providers.*` project (`Abstractions`, `Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `StableDiffusionCpp`, `Training`), `Client.Persistence`, `AI.Agent`, `ServiceDefaults`, and `AI.Contracts`.
+- **`Client.Application` is the hub of the product graph** — it references every `Providers.*` project (`Abstractions`, `Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `OpenAICompat`, `StableDiffusionCpp`, `Training`), `Client.Persistence`, `AI.Agent`, `ServiceDefaults`, and `AI.Contracts`.
 - **`Client` (Web) references a narrower set** — `AI.Agent`, `Client.Application`, `Client.Persistence`, `Providers.Abstractions`, `Providers.Ollama`, `ServiceDefaults`, `AI.Contracts`. It reaches the other providers transitively through `Client.Application`; only `Ollama` is referenced directly at the web layer (legacy direct dependency).
-- **Every provider references only `Providers.Abstractions`** (verified for `Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `StableDiffusionCpp`, and `Training`). `Capabilities` is the only provider that another non-abstraction project depends on beyond the normal app/test edges.
+- **Providers reference `Providers.Abstractions` only** (verified for `Capabilities`, `CodexOAuth`, `HuggingFace`, `Ollama`, `StableDiffusionCpp`, and `Training`), with ONE reviewed exception: `LlamaServer` and `OpenAICompat` also reference the leaf `Providers.OpenAICompatible.Core` so the OpenAI wire layer exists once instead of twice. `Capabilities` is the only provider that another non-abstraction project depends on beyond the normal app/test edges.
 - **`Client.Persistence` and `Providers.Abstractions` and `AI.Contracts` are leaves** (no outbound project references) — the bottom of the layering.
 - **`AppHost` references `Client`** for dev orchestration but nothing references `AppHost`.
 - **`WindowsLauncher` is an assembly leaf.** It references no product project; the packaged launcher starts the published `Client` executable as a child process after Velopack lifecycle handling.

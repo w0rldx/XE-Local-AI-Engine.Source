@@ -80,6 +80,7 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.HuggingFace\XE-Local-AI-Engine.Providers.HuggingFace.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.LlamaServer\XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.OpenAICompat\XE-Local-AI-Engine.Providers.OpenAICompat.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.StableDiffusionCpp\XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Training\XE-Local-AI-Engine.Providers.Training.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>

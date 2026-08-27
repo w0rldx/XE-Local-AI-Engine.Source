@@ -13,6 +13,8 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -36,6 +38,14 @@ public sealed class LayerDependencyTests
     private const string ApplicationNamespace = "XE_Local_AI_Engine.Client.Application";
 
     private const string OllamaNamespace = "XE_Local_AI_Engine.Providers.Ollama";
+
+    // CAUTION for anyone adding a namespace-prefix rule here: "XE_Local_AI_Engine.Providers.OpenAICompat" is a string
+    // PREFIX of "XE_Local_AI_Engine.Providers.OpenAICompatible.Core", and NetArchTest matches namespaces by prefix. So
+    // forbidding OpenAICompatNamespace also forbids the shared transport core — correct for Abstractions (which must
+    // depend on neither), and WRONG for LlamaServer, which legitimately depends on the core. The exact-name
+    // assembly-reference maps above are the authoritative guard for those edges; do not add OpenAICompatNamespace to a
+    // provider's forbidden list.
+    private const string OpenAICompatNamespace = "XE_Local_AI_Engine.Providers.OpenAICompat";
     private const string LlamaServerNamespace = "XE_Local_AI_Engine.Providers.LlamaServer";
     private const string HuggingFaceNamespace = "XE_Local_AI_Engine.Providers.HuggingFace";
     private const string CodexOAuthNamespace = "XE_Local_AI_Engine.Providers.CodexOAuth";
@@ -47,6 +57,8 @@ public sealed class LayerDependencyTests
     // Marker types anchor each assembly so we test the real compiled IL, not a
     // namespace string. Every marker is a verified public type in its assembly.
     private static readonly Assembly OllamaAssembly = typeof(OllamaLocalModelProvider).Assembly;
+    private static readonly Assembly OpenAICompatAssembly = typeof(ExternalOpenAiModelProvider).Assembly;
+    private static readonly Assembly OpenAICompatibleCoreAssembly = typeof(OpenAICompatibleClientFactory).Assembly;
     private static readonly Assembly LlamaServerAssembly = typeof(IInstalledRuntimeStore).Assembly;
     private static readonly Assembly HuggingFaceAssembly = typeof(HuggingFaceOptions).Assembly;
     private static readonly Assembly CodexOAuthAssembly = typeof(ICodexOAuthChatClientFactory).Assembly;
@@ -92,6 +104,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.HuggingFace",
                 "XE-Local-AI-Engine.Providers.LlamaServer",
                 "XE-Local-AI-Engine.Providers.Ollama",
+                "XE-Local-AI-Engine.Providers.OpenAICompat",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
                 "XE-Local-AI-Engine.Providers.Training",
                 "XE-Local-AI-Engine.ServiceDefaults"
@@ -109,8 +122,23 @@ public sealed class LayerDependencyTests
             ["XE-Local-AI-Engine.Providers.Capabilities"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             ["XE-Local-AI-Engine.Providers.CodexOAuth"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             ["XE-Local-AI-Engine.Providers.HuggingFace"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
-            ["XE-Local-AI-Engine.Providers.LlamaServer"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            // DELIBERATE, reviewed second edge (2026-08-27): both OpenAI-compatible providers build on the shared wire
+            // layer instead of each carrying a private copy of the client construction and the request-body patch
+            // discipline — a duplicated copy is how the two would drift into sending different bodies for the same
+            // intent. OpenAICompatible.Core is a LEAF with no project references of its own, so this widens the graph
+            // by one downward edge and does not weaken the rule that matters: no provider references a sibling provider.
+            ["XE-Local-AI-Engine.Providers.LlamaServer"] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
+            ],
             ["XE-Local-AI-Engine.Providers.Ollama"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            ["XE-Local-AI-Engine.Providers.OpenAICompat"] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
+            ],
+            ["XE-Local-AI-Engine.Providers.OpenAICompatible.Core"] = [],
             ["XE-Local-AI-Engine.Providers.StableDiffusionCpp"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             ["XE-Local-AI-Engine.Providers.Training"] = ["XE-Local-AI-Engine.Providers.Abstractions"]
         };
@@ -131,8 +159,18 @@ public sealed class LayerDependencyTests
             [CapabilitiesAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [CodexOAuthAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [HuggingFaceAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
-            [LlamaServerAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            [LlamaServerAssembly] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
+            ],
             [OllamaAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            [OpenAICompatAssembly] =
+            [
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.OpenAICompatible.Core"
+            ],
+            [OpenAICompatibleCoreAssembly] = [],
             [StableDiffusionCppAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [TrainingAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [ApplicationAssembly] =
@@ -146,6 +184,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.HuggingFace",
                 "XE-Local-AI-Engine.Providers.LlamaServer",
                 "XE-Local-AI-Engine.Providers.Ollama",
+                "XE-Local-AI-Engine.Providers.OpenAICompat",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
                 "XE-Local-AI-Engine.Providers.Training",
                 "XE-Local-AI-Engine.ServiceDefaults"
@@ -346,8 +385,27 @@ public sealed class LayerDependencyTests
     }
 
     [Test]
+    public void ExternalOpenAiProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
+    {
+        // The shared transport core is deliberately absent from the forbidden list — it is this provider's approved
+        // downward dependency, not a sibling. See the OpenAICompatNamespace prefix caution above.
+        AssertNoDependency(OpenAICompatAssembly,
+            OpenAICompatNamespace,
+            ClientNamespace,
+            PersistenceNamespace,
+            OllamaNamespace,
+            LlamaServerNamespace,
+            HuggingFaceNamespace,
+            CodexOAuthNamespace,
+            CapabilitiesNamespace,
+            StableDiffusionCppNamespace);
+    }
+
+    [Test]
     public void ProvidersAbstractions_DoesNotDependOnConcreteProvidersApplicationPersistenceOrHost()
     {
+        // OpenAICompatNamespace covers BOTH the external provider and the shared transport core by namespace prefix,
+        // which is exactly right here: the seam layer must be a leaf and depend on neither.
         AssertNoDependency(AbstractionsAssembly,
             AbstractionsNamespace,
             ClientNamespace,
@@ -357,7 +415,8 @@ public sealed class LayerDependencyTests
             LlamaServerNamespace,
             HuggingFaceNamespace,
             CodexOAuthNamespace,
-            CapabilitiesNamespace);
+            CapabilitiesNamespace,
+            OpenAICompatNamespace);
     }
 
     [Test]
