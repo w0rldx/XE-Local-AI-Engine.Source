@@ -240,6 +240,9 @@ import type {
 	DeleteEvaluationData,
 	DeleteEvaluationErrors,
 	DeleteEvaluationResponses,
+	DeleteExternalProviderConnectionData,
+	DeleteExternalProviderConnectionErrors,
+	DeleteExternalProviderConnectionResponses,
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationErrors,
 	DeleteGoldenConversationResponses,
@@ -450,6 +453,9 @@ import type {
 	GetEvaluationData,
 	GetEvaluationErrors,
 	GetEvaluationResponses,
+	GetExternalProviderConnectionData,
+	GetExternalProviderConnectionErrors,
+	GetExternalProviderConnectionResponses,
 	GetGgufDownloadOperationStatusData,
 	GetGgufDownloadOperationStatusErrors,
 	GetGgufDownloadOperationStatusResponses,
@@ -687,6 +693,9 @@ import type {
 	ListEvaluationsData,
 	ListEvaluationsErrors,
 	ListEvaluationsResponses,
+	ListExternalProviderConnectionsData,
+	ListExternalProviderConnectionsErrors,
+	ListExternalProviderConnectionsResponses,
 	ListGoldenConversationsData,
 	ListGoldenConversationsErrors,
 	ListGoldenConversationsResponses,
@@ -829,6 +838,9 @@ import type {
 	PreviewSkillImportData,
 	PreviewSkillImportErrors,
 	PreviewSkillImportResponses,
+	ProbeExternalProviderData,
+	ProbeExternalProviderErrors,
+	ProbeExternalProviderResponses,
 	PromoteSuggestedPlaybookActionData,
 	PromoteSuggestedPlaybookActionErrors,
 	PromoteSuggestedPlaybookActionResponses,
@@ -925,6 +937,9 @@ import type {
 	SaveCloudSettingsData,
 	SaveCloudSettingsErrors,
 	SaveCloudSettingsResponses,
+	SaveExternalProviderConnectionData,
+	SaveExternalProviderConnectionErrors,
+	SaveExternalProviderConnectionResponses,
 	SaveNodeSettingsData,
 	SaveNodeSettingsErrors,
 	SaveNodeSettingsResponses,
@@ -1237,6 +1252,9 @@ import {
 	zDeleteEvaluationBody,
 	zDeleteEvaluationPath,
 	zDeleteEvaluationResponse,
+	zDeleteExternalProviderConnectionBody,
+	zDeleteExternalProviderConnectionPath,
+	zDeleteExternalProviderConnectionResponse,
 	zDeleteGoldenConversationPath,
 	zDeleteGoldenConversationResponse,
 	zDeleteImageModelPath,
@@ -1370,6 +1388,8 @@ import {
 	zGetDevelopmentTaskResponse,
 	zGetEvaluationPath,
 	zGetEvaluationResponse,
+	zGetExternalProviderConnectionPath,
+	zGetExternalProviderConnectionResponse,
 	zGetGgufDownloadOperationStatusPath,
 	zGetGgufDownloadOperationStatusResponse,
 	zGetGgufDownloadsResponse,
@@ -1502,6 +1522,7 @@ import {
 	zListEligibleBenchmarkModelsResponse,
 	zListEvaluationsQuery,
 	zListEvaluationsResponse,
+	zListExternalProviderConnectionsResponse,
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
 	zListImageJobsResponse,
@@ -1587,6 +1608,8 @@ import {
 	zPreviewGgufImportResponse,
 	zPreviewSkillImportBody,
 	zPreviewSkillImportResponse,
+	zProbeExternalProviderBody,
+	zProbeExternalProviderResponse,
 	zPromoteSuggestedPlaybookActionPath,
 	zPromoteSuggestedPlaybookActionResponse,
 	zPromoteTrainingArtifactBody,
@@ -1653,6 +1676,9 @@ import {
 	zRunTrainingArtifactSmokeResponse,
 	zSaveCloudSettingsBody,
 	zSaveCloudSettingsResponse,
+	zSaveExternalProviderConnectionBody,
+	zSaveExternalProviderConnectionPath,
+	zSaveExternalProviderConnectionResponse,
 	zSaveNodeSettingsBody,
 	zSaveNodeSettingsResponse,
 	zSaveTutorialStateBody,
@@ -9134,6 +9160,172 @@ export const startStableDiffusionCppSourceBuild = <ThrowOnError extends boolean 
 			},
 		],
 		url: "/api/local/v1/images/runtime/source-build",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteExternalProviderConnection = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteExternalProviderConnectionData, ThrowOnError>,
+): RequestResult<DeleteExternalProviderConnectionResponses, DeleteExternalProviderConnectionErrors, ThrowOnError> =>
+	(options.client ?? client).delete<
+		DeleteExternalProviderConnectionResponses,
+		DeleteExternalProviderConnectionErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zDeleteExternalProviderConnectionBody,
+					path: zDeleteExternalProviderConnectionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zDeleteExternalProviderConnectionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-providers/connections/{connectionId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getExternalProviderConnection = <ThrowOnError extends boolean = false>(
+	options: Options<GetExternalProviderConnectionData, ThrowOnError>,
+): RequestResult<GetExternalProviderConnectionResponses, GetExternalProviderConnectionErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetExternalProviderConnectionResponses, GetExternalProviderConnectionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetExternalProviderConnectionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetExternalProviderConnectionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-providers/connections/{connectionId}",
+		...options,
+	});
+
+export const saveExternalProviderConnection = <ThrowOnError extends boolean = false>(
+	options: Options<SaveExternalProviderConnectionData, ThrowOnError>,
+): RequestResult<SaveExternalProviderConnectionResponses, SaveExternalProviderConnectionErrors, ThrowOnError> =>
+	(options.client ?? client).put<SaveExternalProviderConnectionResponses, SaveExternalProviderConnectionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zSaveExternalProviderConnectionBody,
+					path: zSaveExternalProviderConnectionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zSaveExternalProviderConnectionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-providers/connections/{connectionId}",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listExternalProviderConnections = <ThrowOnError extends boolean = false>(
+	options?: Options<ListExternalProviderConnectionsData, ThrowOnError>,
+): RequestResult<ListExternalProviderConnectionsResponses, ListExternalProviderConnectionsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListExternalProviderConnectionsResponses, ListExternalProviderConnectionsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListExternalProviderConnectionsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-providers/connections",
+		...options,
+	});
+
+export const probeExternalProvider = <ThrowOnError extends boolean = false>(
+	options: Options<ProbeExternalProviderData, ThrowOnError>,
+): RequestResult<ProbeExternalProviderResponses, ProbeExternalProviderErrors, ThrowOnError> =>
+	(options.client ?? client).post<ProbeExternalProviderResponses, ProbeExternalProviderErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zProbeExternalProviderBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zProbeExternalProviderResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-providers/probe",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

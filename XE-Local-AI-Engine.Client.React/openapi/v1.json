@@ -11741,6 +11741,306 @@
         ]
       }
     },
+    "/api/local/v1/external-providers/connections/{connectionId}": {
+      "delete": {
+        "tags": [
+          "External-Providers"
+        ],
+        "operationId": "deleteExternalProviderConnection",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DeleteExternalProviderConnectionRequest",
+          "description": "",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1DeleteExternalProviderConnectionRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1DeleteExternalProviderConnectionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "External-Providers"
+        ],
+        "operationId": "getExternalProviderConnection",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "External-Providers"
+        ],
+        "operationId": "saveExternalProviderConnection",
+        "parameters": [
+          {
+            "name": "connectionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "SaveExternalProviderConnectionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1SaveExternalProviderConnectionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-providers/connections": {
+      "get": {
+        "tags": [
+          "External-Providers"
+        ],
+        "operationId": "listExternalProviderConnections",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-providers/probe": {
+      "post": {
+        "tags": [
+          "External-Providers"
+        ],
+        "operationId": "probeExternalProvider",
+        "requestBody": {
+          "x-name": "ExternalProviderProbeRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderProbeRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/development/capability": {
       "get": {
         "tags": [
@@ -26245,6 +26545,22 @@
             "format": "int32",
             "nullable": true
           },
+          "displayLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "externalConnectionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "externalConnectionName": {
+            "type": "string",
+            "nullable": true
+          },
+          "declaredLocality": {
+            "type": "string",
+            "nullable": true
+          },
           "origin": {
             "nullable": true,
             "oneOf": [
@@ -26390,6 +26706,22 @@
           },
           "provider": {
             "type": "string"
+          },
+          "displayLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "externalConnectionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "externalConnectionName": {
+            "type": "string",
+            "nullable": true
+          },
+          "declaredLocality": {
+            "type": "string",
+            "nullable": true
           },
           "sizeBytes": {
             "type": "integer",
@@ -29164,6 +29496,262 @@
           },
           "acknowledgeCustomSourceRisk": {
             "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revision"
+        ],
+        "properties": {
+          "revision": {
+            "type": "string"
+          },
+          "connections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "displayName",
+          "baseUrl",
+          "locality",
+          "hasApiKey"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "locality": {
+            "type": "string"
+          },
+          "hasApiKey": {
+            "type": "boolean"
+          },
+          "timeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderModelResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "wireId",
+          "modelId",
+          "supportsTools",
+          "supportsVision",
+          "supportsReasoning",
+          "supportsReasoningEffort"
+        ],
+        "properties": {
+          "wireId": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "contextLength": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "supportsTools": {
+            "type": "boolean"
+          },
+          "supportsVision": {
+            "type": "boolean"
+          },
+          "supportsReasoning": {
+            "type": "boolean"
+          },
+          "supportsReasoningEffort": {
+            "type": "boolean"
+          },
+          "defaultReasoningEffort": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1DeleteExternalProviderConnectionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedRevision": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1GetExternalProviderConnectionRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reachable"
+        ],
+        "properties": {
+          "reachable": {
+            "type": "boolean"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderProbeModelResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderProbeModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "contextLength": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1ExternalProviderProbeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "connectionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "baseUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "apiKey": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1SaveExternalProviderConnectionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "displayName",
+          "baseUrl",
+          "models"
+        ],
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          },
+          "baseUrl": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          },
+          "locality": {
+            "type": "string",
+            "nullable": true
+          },
+          "apiKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "clearApiKey": {
+            "type": "boolean"
+          },
+          "timeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "models": {
+            "type": "array",
+            "nullable": false,
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalProvidersV1SaveExternalProviderModelRequest"
+            }
+          },
+          "expectedRevision": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalProvidersV1SaveExternalProviderModelRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "wireId": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "contextLength": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "supportsTools": {
+            "type": "boolean"
+          },
+          "supportsVision": {
+            "type": "boolean"
+          },
+          "supportsReasoning": {
+            "type": "boolean"
+          },
+          "supportsReasoningEffort": {
+            "type": "boolean"
+          },
+          "defaultReasoningEffort": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
