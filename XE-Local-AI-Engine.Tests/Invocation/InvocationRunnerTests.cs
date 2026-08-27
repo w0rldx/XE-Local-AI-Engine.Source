@@ -3548,7 +3548,7 @@ public sealed class InvocationRunnerTests
             resolvedValidator,
             resolvedCapabilityReporter,
             resolvedProviderResolver,
-            new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, NullLogger<LocalRuntimeWarmer>.Instance),
+            new LocalRuntimeWarmer(resolvedProviderResolver, resolvedActiveCloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance),
             Substitute.For<IDeadLetterStore>(),
             resolvedProviderStreamResilience,
             new ConversationContextBudgeter(new HeuristicTokenEstimator(), Options.Create(resolvedContextBudgetOptions)),

@@ -464,7 +464,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         using var chat = new ThrowingChatClient();
         var cloud = Substitute.For<IActiveCloudChatClientFactory>();
         cloud.IsCloudProviderSelected("unknown-model").Returns(false);
-        var model = new DevelopmentCoderModel(chat, cloud, LocalModelResolver());
+        var model = new DevelopmentCoderModel(chat, cloud, LocalModelResolver(), new FakeModelTrustResolver());
 
         await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => model.RunAsync("unknown-model",
             "prompt",
@@ -510,19 +510,19 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.Equal(Ceiling, DevelopmentAttemptOutputBudget.Cumulative(PerCall, MaxToolCalls + 1));
 
         using var exactChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: (int)Ceiling);
-        var exact = new DevelopmentCoderModel(exactChat, cloud, resolver);
+        var exact = new DevelopmentCoderModel(exactChat, cloud, resolver, new FakeModelTrustResolver());
         var result = await exact.RunAsync("local-model", "prompt", tools, PerCall, MaxToolCalls).ConfigureAwait(false);
         AssertEx.Equal<long?>(40_000, result.InputTokens);
         AssertEx.Equal<long?>(Ceiling, result.OutputTokens);
 
         // The regression the old expectation inverted: more than ONE call's budget is normal for a tool loop.
         using var multiRoundChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: PerCall + 1);
-        var multiRound = new DevelopmentCoderModel(multiRoundChat, cloud, resolver);
+        var multiRound = new DevelopmentCoderModel(multiRoundChat, cloud, resolver, new FakeModelTrustResolver());
         var accepted = await multiRound.RunAsync("local-model", "prompt", tools, PerCall, MaxToolCalls).ConfigureAwait(false);
         AssertEx.Equal<long?>(PerCall + 1, accepted.OutputTokens);
 
         using var overChat = new SubmittingChatClient(inputTokens: 40_000, outputTokens: (int)Ceiling + 1);
-        var over = new DevelopmentCoderModel(overChat, cloud, resolver);
+        var over = new DevelopmentCoderModel(overChat, cloud, resolver, new FakeModelTrustResolver());
         var failure = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() => over.RunAsync("local-model",
             "prompt",
             tools,

@@ -31,7 +31,7 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         using var cloudClient = new StubChatClient("cloud");
         var bundle = BundleState.Valid();
         var authorizer = new FakeCloudEgressAuthorizer(Now, bundle);
-        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer);
+        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer, new FakeModelTrustResolver());
         var options = CreateOptions(CreateEnvelope(), scenario);
 
         await AssertEx.ThrowsAsync<CloudEgressAuthorizationException>(() =>
@@ -48,7 +48,7 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         using var localClient = new StubChatClient("local");
         using var cloudClient = new StubChatClient("cloud");
         var authorizer = new FakeCloudEgressAuthorizer(Now, BundleState.Valid());
-        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer);
+        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer, new FakeModelTrustResolver());
         var options = CreateOptions(CreateEnvelope(), "missing-envelope");
 
         Task invoke;
@@ -69,7 +69,7 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         using var localClient = new StubChatClient("local");
         using var cloudClient = new StubChatClient("cloud");
         var authorizer = new FakeCloudEgressAuthorizer(Now, BundleState.Valid());
-        using var runtime = new RuntimeChatClient(new ToggleableCloudFactory(cloudClient), () => localClient, authorizer);
+        using var runtime = new RuntimeChatClient(new ToggleableCloudFactory(cloudClient), () => localClient, authorizer, new FakeModelTrustResolver());
         var options = CreateOptions(CreateEnvelope(policy: DevelopmentExecutionPolicy.LocalOnly));
 
         await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "local request")], options);
@@ -86,7 +86,7 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         using var cloudClient = new StubChatClient("cloud");
         var selector = new ToggleableCloudFactory(cloudClient);
         var authorizer = new FakeCloudEgressAuthorizer(Now, BundleState.Valid());
-        using var runtime = new RuntimeChatClient(selector, () => localClient, authorizer);
+        using var runtime = new RuntimeChatClient(selector, () => localClient, authorizer, new FakeModelTrustResolver());
         var options = CreateOptions(CreateEnvelope());
 
         selector.CloudActive = false;
@@ -105,7 +105,7 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         using var localClient = new StubChatClient("local");
         using var cloudClient = new StubChatClient("cloud");
         var authorizer = new FakeCloudEgressAuthorizer(Now, BundleState.Valid());
-        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer);
+        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer, new FakeModelTrustResolver());
         var options = CreateOptions(CreateEnvelope());
 
         await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "raw-secret-sentinel")], options);
@@ -129,7 +129,7 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         using var localClient = new StubChatClient("local");
         using var cloudClient = new TwoRoundCloudChatClient(events);
         var authorizer = new FakeCloudEgressAuthorizer(Now, BundleState.Valid(), events);
-        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer);
+        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer, new FakeModelTrustResolver());
         using var functionLoop = runtime.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
         var envelope = CreateEnvelope();
         var options = CreateFunctionOptions(envelope);
@@ -146,7 +146,7 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         using var localClient = new StubChatClient("local");
         using var cloudClient = new TwoRoundCloudChatClient(events);
         var authorizer = new FakeCloudEgressAuthorizer(Now, BundleState.Valid(), events);
-        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer);
+        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer, new FakeModelTrustResolver());
         using var functionLoop = runtime.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
         var envelope = CreateEnvelope();
         var options = CreateFunctionOptions(envelope);
@@ -166,7 +166,7 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         using var localClient = new StubChatClient("local");
         using var cloudClient = new TwoRoundCloudChatClient(events, removeCarrierAfterFirstRound: true);
         var authorizer = new FakeCloudEgressAuthorizer(Now, BundleState.Valid(), events);
-        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer);
+        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer, new FakeModelTrustResolver());
         using var functionLoop = runtime.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
         var options = CreateFunctionOptions(CreateEnvelope());
 
@@ -185,7 +185,7 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         using var localClient = new StubChatClient("local");
         using var cloudClient = new TwoRoundCloudChatClient(events, removeCarrierAfterFirstRound: true);
         var authorizer = new FakeCloudEgressAuthorizer(Now, BundleState.Valid(), events);
-        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer);
+        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer, new FakeModelTrustResolver());
         using var functionLoop = runtime.AsBuilder().UseFunctionInvocation(NullLoggerFactory.Instance).Build();
         var options = CreateFunctionOptions(CreateEnvelope());
 
@@ -208,7 +208,7 @@ public sealed class DevelopmentCloudEgressAuthorizationTests
         using var localClient = new StubChatClient("local");
         using var cloudClient = new StubChatClient("cloud");
         var authorizer = new FakeCloudEgressAuthorizer(Now, BundleState.Valid());
-        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer);
+        using var runtime = new RuntimeChatClient(new FixedCloudFactory(cloudClient), () => localClient, authorizer, new FakeModelTrustResolver());
         var options = CreateOptions(CreateEnvelope(), "missing-envelope");
 
         await AssertEx.ThrowsAsync<CloudEgressAuthorizationException>(async () =>

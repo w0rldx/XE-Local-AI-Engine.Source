@@ -5,6 +5,8 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 public interface IDevelopmentManagementService
 {
@@ -62,6 +64,7 @@ internal sealed class DevelopmentManagementService(
     IDevelopmentApplyService applyService,
     IDevelopmentRepositoryBindingService repositoryBindings,
     IActiveCloudChatClientFactory cloudFactory,
+    IModelTrustResolver modelTrustResolver,
     IDevelopmentCommandProfileDetector profileDetector,
     IDevelopmentProfileBackfillService profileBackfill,
     IDevelopmentTemplateStore templateStore,
@@ -73,6 +76,7 @@ internal sealed class DevelopmentManagementService(
     private readonly IDevelopmentArtifactBlobStore _blobStore = blobStore ?? throw new ArgumentNullException(nameof(blobStore));
     private readonly IDevelopmentCoordinator _coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
     private readonly IActiveCloudChatClientFactory _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
+    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
     private readonly IDevelopmentProfileBackfillService _profileBackfill = profileBackfill ?? throw new ArgumentNullException(nameof(profileBackfill));
     private readonly IDevelopmentCommandProfileDetector _profileDetector = profileDetector ?? throw new ArgumentNullException(nameof(profileDetector));
     private readonly IDevelopmentRepositoryBindingService _repositoryBindings = repositoryBindings ?? throw new ArgumentNullException(nameof(repositoryBindings));
@@ -303,6 +307,17 @@ internal sealed class DevelopmentManagementService(
         if (string.IsNullOrWhiteSpace(modelId))
         {
             throw new DevelopmentInvalidTransitionException("The Development role has no configured model.");
+        }
+
+        // An ext: id is invisible to the cloud provider resolver by design (it falls through cloud selection), so its
+        // locality is asked separately and refused under BOTH egress policies: the plan admits no dev-mode support for
+        // a declared-cloud external model, and an UNRESOLVED one is refused with it because a deleted connection or an
+        // unreadable store says nothing about where the prompt would go.
+        if (ExternalModelId.HasExternalScheme(modelId)
+            && await _modelTrustResolver.ResolveAsync(modelId, cancellationToken).ConfigureAwait(false) != ModelTrustLocality.Local)
+        {
+            throw new DevelopmentWorkspaceSecurityException(
+                "Development execution cannot start with an external model that is not declared local to this node's trust boundary.");
         }
 
         var cloudProvider = _cloudFactory.ResolveActiveCloudProviderName(modelId);

@@ -145,7 +145,7 @@ public sealed class LocalRuntimeWarmerTests
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
         cloudFactory.IsCloudProviderSelected(Arg.Any<string?>()).Returns(cloudSelected);
 
-        return new LocalRuntimeWarmer(resolver, cloudFactory, NullLogger<LocalRuntimeWarmer>.Instance);
+        return new LocalRuntimeWarmer(resolver, cloudFactory, new FakeModelTrustResolver(), NullLogger<LocalRuntimeWarmer>.Instance);
     }
 
     private static ILocalModelProvider CreateLlamaCppProvider(int? effectiveContextTokens)

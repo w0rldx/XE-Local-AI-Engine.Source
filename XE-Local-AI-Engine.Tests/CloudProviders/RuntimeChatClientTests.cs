@@ -18,7 +18,7 @@ public sealed class RuntimeChatClientTests
         using var localClient = new StubChatClient("local");
         using var cloudClient = new StubChatClient("cloud");
         var selector = new ToggleableCloudFactory(cloudClient);
-        using var runtime = new RuntimeChatClient(selector, () => localClient, new UnexpectedCloudEgressAuthorizer());
+        using var runtime = new RuntimeChatClient(selector, () => localClient, new UnexpectedCloudEgressAuthorizer(), new FakeModelTrustResolver());
 
         // Signed out → routes local.
         selector.CloudActive = false;
@@ -46,7 +46,7 @@ public sealed class RuntimeChatClientTests
     {
         using var localClient = new StubChatClient("local");
         var selector = new ThrowingCloudFactory();
-        using var runtime = new RuntimeChatClient(selector, () => localClient, new UnexpectedCloudEgressAuthorizer());
+        using var runtime = new RuntimeChatClient(selector, () => localClient, new UnexpectedCloudEgressAuthorizer(), new FakeModelTrustResolver());
 
         await AssertEx.ThrowsAsync<InvalidOperationException>(() => runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")]));
 

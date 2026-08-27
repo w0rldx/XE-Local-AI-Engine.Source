@@ -143,6 +143,7 @@ public sealed class ModelCapabilityResolverTests
             providerResolver,
             ggufResolver,
             factory,
+            new FakeModelTrustResolver(),
             NullLogger<ModelCapabilityResolver>.Instance);
     }
 }

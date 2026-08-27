@@ -329,6 +329,11 @@ public sealed class InstalledModelSnapshotCoordinatorTests
 
     private sealed class ReadOnlyMapStore(ModelProviderMapRecord? mapping) : ICoordinatedModelProviderMapStore
     {
+        // Not a reconciliation fixture: only the external-provider pass enumerates the whole map, and this double
+        // exists to drive a single model's leased read.
+        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("This test double does not enumerate the provider map.");
+
         public Task<ModelProviderMapRecord?> ReadWithRevisionAsync(IModelProviderMapReadLease lease,
             string modelName,
             CancellationToken cancellationToken = default)

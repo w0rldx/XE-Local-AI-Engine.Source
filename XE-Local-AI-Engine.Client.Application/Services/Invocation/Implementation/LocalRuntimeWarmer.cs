@@ -6,8 +6,11 @@ using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.OpenAICompat;
 
 /// <summary>
 ///     The turn's model-readiness step: resolves whether the turn pays a real local (llama.cpp) cold-load, warms that
@@ -18,10 +21,12 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 public sealed class LocalRuntimeWarmer(
     ILocalModelProviderResolver providerResolver,
     IActiveCloudChatClientFactory activeCloudFactory,
+    IModelTrustResolver modelTrustResolver,
     ILogger<LocalRuntimeWarmer> logger)
 {
     private readonly IActiveCloudChatClientFactory _activeCloudFactory = activeCloudFactory ?? throw new ArgumentNullException(nameof(activeCloudFactory));
     private readonly ILogger<LocalRuntimeWarmer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
     private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
 
     /// <summary>
@@ -48,6 +53,19 @@ public sealed class LocalRuntimeWarmer(
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(stream);
+
+        // An external OpenAI-compatible model is never warmed — the node does not own the process — but it still has a
+        // context window, and this branch has to run BEFORE the skip-return below or that window can never reach the
+        // turn budgeter. The skip path returns EffectiveContextTokens: null before GetRuntimeInfoAsync is ever called,
+        // and a null there means TurnPolicy falls back to its conservative 8192-token default. Implementing only the
+        // provider's runtime-info method would therefore have been cosmetic: nothing would have called it.
+        if (ExternalModelId.HasExternalScheme(resolvedModel))
+        {
+            stream.ProviderTag = "remote";
+            stream.ModelReadyTimestamp = turnStartedTimestamp;
+            var declaredContextTokens = await ResolveDeclaredExternalContextAsync(resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
+            return new LocalRuntimePreparationResult(declaredContextTokens, ExternalProviderConstants.ProviderName, WarmFailure: null);
+        }
 
         var provider = await ResolveWarmableProviderAsync(resolvedModel, invocationId, cancellationToken).ConfigureAwait(false);
         if (provider is null)
@@ -159,10 +177,33 @@ public sealed class LocalRuntimeWarmer(
     }
 
     /// <summary>
+    ///     The context window an external model's operator DECLARED, or <see langword="null" /> when they declared none
+    ///     (the budgeter then keeps its conservative fallback rather than assuming a window the server may not have).
+    ///     A cancellation propagates; every other failure degrades to the fallback.
+    /// </summary>
+    private async Task<int?> ResolveDeclaredExternalContextAsync(string resolvedModel, Guid invocationId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var registration = await _modelTrustResolver.TryResolveExternalAsync(resolvedModel, cancellationToken).ConfigureAwait(false);
+            return registration?.Model.ContextLength is > 0 ? registration.Model.ContextLength : null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogDebug(exception, "Reading the declared context window for invocation {InvocationId} failed; the configured default window is used.", invocationId);
+            return null;
+        }
+    }
+
+    /// <summary>
     ///     Resolves the local provider that serves <paramref name="resolvedModel" />, returning it only when it is the
     ///     llama.cpp runtime (the one that pays a real cold-load before a watched stream). Any other provider (Ollama /
-    ///     cloud) or a resolution failure returns <see langword="null" /> so the warm phase is skipped; a genuine
-    ///     cancellation propagates.
+    ///     cloud / external) or a resolution failure returns <see langword="null" /> so the warm phase is skipped; a
+    ///     genuine cancellation propagates.
     /// </summary>
     public async Task<ILocalModelProvider?> ResolveWarmableProviderAsync(string resolvedModel, Guid invocationId, CancellationToken cancellationToken)
     {
@@ -171,6 +212,13 @@ public sealed class LocalRuntimeWarmer(
         // resolve to llama-server and fail its cold-load with "model not installed". This is the SAME per-request routing
         // decision RuntimeChatClient makes for the send, so warm and send stay consistent (see IsCloudProviderSelected).
         if (_activeCloudFactory.IsCloudProviderSelected(resolvedModel))
+        {
+            return null;
+        }
+
+        // An external model is served by a process the node does not own, so there is nothing to warm. Checked here as
+        // well as at the caller so any other entry point into this method inherits the skip.
+        if (ExternalModelId.HasExternalScheme(resolvedModel))
         {
             return null;
         }

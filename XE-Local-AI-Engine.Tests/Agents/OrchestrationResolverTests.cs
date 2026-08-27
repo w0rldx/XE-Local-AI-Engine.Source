@@ -264,6 +264,7 @@ public sealed class OrchestrationResolverTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).Build(),
             NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess);
         var runtimeSettings = StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).Build();
 

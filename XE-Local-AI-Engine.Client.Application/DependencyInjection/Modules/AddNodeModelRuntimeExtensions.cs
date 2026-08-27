@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.HuggingFace;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
@@ -223,7 +224,10 @@ internal static class AddNodeModelRuntimeExtensions
             var activeCloudFactory = sp.GetRequiredService<IActiveCloudChatClientFactory>();
             return new RuntimeChatClient(activeCloudFactory,
                 sp.GetRequiredService<ModelRoutingLocalChatClient>,
-                sp.GetRequiredService<ICloudEgressAuthorizer>());
+                sp.GetRequiredService<ICloudEgressAuthorizer>(),
+                // The local branch can now egress: an ext: id routes there by design, so the Development authorization
+                // that previously lived only on the cloud branch needs a backstop on this one too.
+                sp.GetRequiredService<IModelTrustResolver>());
         });
 
         builder.Services.AddLocalAiAgentRuntime(builder.Configuration);

@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Tools;
 using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Coder.Tools;
 using XE_Local_AI_Engine.Client.Services.Compute;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge.Tools;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
@@ -39,6 +40,11 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     // Read LIVE per offer, not captured at construction. See IsToolCapable for why.
     private readonly INodeRuntimeSettings _runtimeSettings;
 
+    // Answers the one question the threaded isCloudModel flag cannot: whether the ACTIVE model id — which may be an
+    // agent-pinned model different from the turn's — is an external endpoint outside the trust boundary. Consulted
+    // synchronously, from the registry's cached generation, exactly like the Codex-catalog check beside it.
+    private readonly IModelTrustResolver _modelTrustResolver;
+
     // This provider is a SINGLETON but the custom-tool catalog is SCOPED (DbContext-backed), so it is resolved from a
     // fresh scope per offer call rather than captured — the established singleton→scoped-store pattern in this codebase.
     private readonly IServiceScopeFactory _scopeFactory;
@@ -54,12 +60,14 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         IMcpToolRegistry mcpToolRegistry,
         INodeRuntimeSettings runtimeSettings,
         IServiceScopeFactory scopeFactory,
+        IModelTrustResolver modelTrustResolver,
         bool allowCloudKnowledgeAccess)
     {
         ArgumentNullException.ThrowIfNull(toolRegistry);
         _mcpToolRegistry = mcpToolRegistry ?? throw new ArgumentNullException(nameof(mcpToolRegistry));
         _runtimeSettings = runtimeSettings ?? throw new ArgumentNullException(nameof(runtimeSettings));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
         _allowCloudKnowledgeAccess = allowCloudKnowledgeAccess;
 
         var builtinDescriptors = toolRegistry.GetLocalChatToolDescriptors();
@@ -300,9 +308,9 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
         // Provider-locality gate: withhold the node-local-data tools (knowledge-base read tools AND coder workspace file
         // tools) from a cloud-hosted model unless the operator opted in. The threaded per-turn flag covers the Azure
-        // case; the synchronous Codex-catalog check also catches a model pinned to a Codex id even when the turn's active
-        // model was local.
-        var gateLocalDataTools = !_allowCloudKnowledgeAccess && (isCloudModel || CodexModelCatalog.IsCodexModel(activeModelId));
+        // case; the synchronous Codex-catalog and external-trust checks also catch a model pinned to a Codex or ext: id
+        // even when the turn's active model was local.
+        var gateLocalDataTools = !_allowCloudKnowledgeAccess && IsOutsideTrustBoundary(activeModelId, isCloudModel);
         var baseOffer = gateLocalDataTools ? _builtinAllToolsNoLocalData : _builtinAllTools;
 
         var mcpDescriptors = _mcpToolRegistry.GetDescriptors();
@@ -324,9 +332,10 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
         // Custom tools are merged ONLY in the tool-capable branch (mirroring the MCP/knowledge gating) and ONLY for a
         // node-local model — a custom command/fetch tool can reach local data and the host, so it is never offered to a
-        // cloud model (Azure Foundry or a Codex-pinned id), independent of the knowledge-tool cloud opt-in. When the model
-        // is non-capable or cloud, the base offer is returned unchanged (byte-identical config hash).
-        if (!IsToolCapable(activeModelId) || isCloudModel || CodexModelCatalog.IsCodexModel(activeModelId))
+        // cloud model (Azure Foundry, a Codex-pinned id, or a declared-cloud external endpoint), independent of the
+        // knowledge-tool cloud opt-in. When the model is non-capable or cloud, the base offer is returned unchanged
+        // (byte-identical config hash).
+        if (!IsToolCapable(activeModelId) || IsOutsideTrustBoundary(activeModelId, isCloudModel))
         {
             return baseOffer;
         }
@@ -390,14 +399,41 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
     ///         The locality gate here is NOT the knowledge/coder tools' content-leak rationale. What is withheld is the
     ///         ability of a REMOTE model to direct code execution on the operator's machine — the same concern that put
     ///         bare interpreters on <c>HostExecutableGuard</c>'s denylist — so it is withheld unconditionally rather than
-    ///         behind the <c>AllowCloudModelAccess</c> opt-in that governs reading node-local data. The synchronous Codex
-    ///         check mirrors the custom-tool gate: it catches a model pinned to a Codex id even when the turn's active
-    ///         model was local.
+    ///         behind the <c>AllowCloudModelAccess</c> opt-in that governs reading node-local data. The synchronous
+    ///         Codex and external-trust checks mirror the custom-tool gate: they catch a model pinned to a Codex or
+    ///         <c>ext:</c> id even when the turn's active model was local.
     ///     </para>
     /// </summary>
     private IReadOnlyList<AllowedToolDto> ComputeOffer(string? activeModelId, bool isCloudModel)
     {
-        return isCloudModel || CodexModelCatalog.IsCodexModel(activeModelId) ? [] : [_computeOfferDto];
+        return IsOutsideTrustBoundary(activeModelId, isCloudModel) ? [] : [_computeOfferDto];
+    }
+
+    /// <summary>
+    ///     Whether prompts for <paramref name="activeModelId" /> leave the node, for the three tool gates above.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The formula is: the turn's own cloud flag, OR a Codex-pinned id, OR an external id whose declared
+    ///         locality is anything other than Local. That last clause is deliberately not "is declared Cloud": an
+    ///         <c>ext:</c> id whose registration cannot be read — a deleted connection, an unreadable store, or the
+    ///         window before the startup pass has primed the registry — resolves UNRESOLVED, and only a positively
+    ///         resolved local declaration may earn local privileges.
+    ///     </para>
+    ///     <para>
+    ///         Synchronous by necessity: this runs inside the offer seam, which has no async boundary, and blocking a
+    ///         send on a file read is not an option. It answers from the registry's cached generation, whose only
+    ///         unprimed window is before the node has finished booting.
+    ///     </para>
+    /// </remarks>
+    private bool IsOutsideTrustBoundary(string? activeModelId, bool isCloudModel)
+    {
+        if (isCloudModel || CodexModelCatalog.IsCodexModel(activeModelId))
+        {
+            return true;
+        }
+
+        return _modelTrustResolver.ClassifyExternalCached(activeModelId) is { } trust && trust != ModelTrustLocality.Local;
     }
 
     public IReadOnlyList<string> GetKnownToolNames()

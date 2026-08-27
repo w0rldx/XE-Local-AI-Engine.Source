@@ -81,6 +81,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
             NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
 
         var beforeEdit = provider.GetOfferedTools("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
@@ -117,6 +118,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
             NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
 
         AssertEx.False(provider.GetOfferedToolsForProfile("some-model").Any(tool => tool.Name == SpawnSubAgentToolDefinition.ToolName),
@@ -484,6 +486,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
             NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
 
         var offered = provider.GetOfferedTools("some-other-model");
@@ -540,6 +543,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
             NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
 
         var offered = provider.GetOfferedToolsForProfile("qwen3:8b");
@@ -621,6 +625,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").WithCustomToolsEnabled(customToolsEnabled).Build(),
             scopeFactory,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
     }
 
@@ -658,6 +663,7 @@ public sealed class LocalToolOfferProviderTests
             mcpToolRegistry,
             StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels).Build(),
             NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess);
     }
 

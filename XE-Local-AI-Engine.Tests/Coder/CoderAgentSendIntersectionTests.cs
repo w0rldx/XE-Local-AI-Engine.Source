@@ -124,6 +124,7 @@ public sealed class CoderAgentSendIntersectionTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(capableModel).Build(),
             NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
 
         store = Substitute.For<IAgentDefinitionStore>();

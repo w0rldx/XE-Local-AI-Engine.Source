@@ -120,6 +120,7 @@ public sealed class CoderOfferSeamTests
             mcpRegistry,
             StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels).Build(),
             NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
     }
 }
