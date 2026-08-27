@@ -3,10 +3,12 @@ namespace XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Providers.OpenAICompat;
 
 /// <summary>
 ///     Default <see cref="ICapacityService" />. The single admission gate: cloud bypass, local-same-as-running queue,
@@ -95,6 +97,23 @@ public sealed class CapacityService : ICapacityService
         var isOllama = string.Equals(providerName, OllamaLocalModelProvider.OllamaProviderName, StringComparison.OrdinalIgnoreCase);
         var isLlamaServer = string.Equals(providerName, LlamaServerProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase);
         if (isLlamaServer && _externalEndpoints.Resolve(modelName, role) is not null)
+        {
+            return new CapacityDecision(CapacityVerdict.Allow, ReasonAllowExternal, OllamaEvictionWarning: false);
+        }
+
+        // An operator-registered external OpenAI-compatible model runs entirely on someone else's hardware: the node
+        // starts no process, loads no weights, and consumes neither RAM nor VRAM for it. Admitting it without a probe is
+        // therefore correct, and NOT admitting it would be actively wrong — the footprint provider has no GGUF to size,
+        // so the byte-budget path below would reject every such send as "footprint could not be determined".
+        //
+        // Both conditions are checked on purpose. The provider name is the normal route (the save path writes a
+        // provider-map row per registered model). The id's ext: scheme is the backstop for the window where a row is
+        // missing — a crash between the encrypted-store commit and the map sync, or a row the reconciliation pass has
+        // not repaired yet — where the model would otherwise default-route to "llamacpp" and be rejected on a footprint
+        // it can never have. Neither branch grants anything: capacity admission is about local resources only, and the
+        // trust/egress decision for an external model is made elsewhere, from its operator-declared locality.
+        if (string.Equals(providerName, ExternalProviderConstants.ProviderName, StringComparison.OrdinalIgnoreCase)
+            || ExternalModelId.HasExternalScheme(modelName))
         {
             return new CapacityDecision(CapacityVerdict.Allow, ReasonAllowExternal, OllamaEvictionWarning: false);
         }
