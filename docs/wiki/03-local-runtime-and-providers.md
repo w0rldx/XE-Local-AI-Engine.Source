@@ -342,6 +342,21 @@ Three properties are load-bearing:
 
 The one **cloud** chat provider. `CodexOAuthChatClientFactory` (`ICodexOAuthChatClientFactory`) builds an `IChatClient` against the ChatGPT/Codex API authenticated by OAuth, with a shared handler chain (`SocketsHttpHandler → CodexAuthHandler`). The `Auth/*` folder holds the OAuth machinery: `CodexAuthService`, `CodexLoginCoordinator`, `CodexTokenStore` (`ICodexTokenStore`), `CodexHeaders`, `CodexTokens`. Codex-specific quirks are encoded here: `CodexResponseStoreDisabling` / `CodexStoreDisabledChatClient` force `store=false` (replaying encrypted reasoning), `CodexModelCatalog` + `CodexProviderCapabilities` declare the model/effort surface. OAuth tokens are a LOCAL secret — never returned to the browser, never logged (see [12-security-and-privacy.md](12-security-and-privacy.md)). Reasoning-effort selection and cloud↔local clamping are covered in [05-chat.md](05-chat.md).
 
+### The model catalog's five sources
+
+`LocalModelCatalogService` gathers the chat picker's whole catalog from five sources that each degrade on their own — Ollama, the installed GGUF registry, a Codex session, a stored Azure Foundry connection, and the operator's external OpenAI-compatible connections (`IExternalProviderRegistry`). No source failure ever fails the catalog: an unreadable encrypted external store yields no external entries, exactly as an unreadable GGUF registry yields no GGUF entries.
+
+`ListLocalModelsEndpoint` maps them through `LocalModelsMapper` in one fixed order — Ollama, GGUF, cloud, external — and each entry carries four nullable identity fields beyond its `provider` tag:
+
+| Field | Populated for | Why the tag alone is not enough |
+|---|---|---|
+| `displayLabel` | external models, Azure deployments | The operator's friendly name. Azure stored one all along and the list DTO had nowhere to put it, so it was dropped before the picker. |
+| `externalConnectionId` | external models | Every external model shares one `provider: "external"` tag (the provider is a multiplexer), so this is what sections the picker per connection. |
+| `externalConnectionName` | external models | The section heading and the "Sent to {connection}" egress cue. |
+| `declaredLocality` | external models | `local` \| `cloud`, the operator's DECLARATION — never inferred from the base URL. It decides whether the entry is badged and grouped as local or as cloud. |
+
+`GetLocalModelDetailsEndpoint` repeats the same four on its external branch, because a details view reached by deep link has no list entry to read them from. External models never appear in the running/loaded-models view: "running" means resident in this node's memory, and the node owns no process for them.
+
 > **Not a runtime provider:** voice/text-to-speech. The backend exposes only the `VoiceFeatureEnabled` node setting; the React client speaks through the browser/operating-system Web Speech implementation. The repository ships no voice model, download path, worker, cache, model port, or node inference process. Voice availability and local-versus-network behavior belong to the platform speech service and are outside repository control. See [10-react-client.md](10-react-client.md) for the client runtime.
 
 ---

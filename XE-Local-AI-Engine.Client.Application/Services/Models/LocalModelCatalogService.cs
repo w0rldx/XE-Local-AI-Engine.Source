@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
@@ -26,6 +27,7 @@ public sealed class LocalModelCatalogService(
     ICodexTokenStore codexTokenStore,
     IOptions<CodexOptions> codexOptions,
     ICloudModelResolver cloudModelResolver,
+    IExternalProviderRegistry externalProviderRegistry,
     TimeProvider timeProvider,
     ILogger<LocalModelCatalogService> logger) : ILocalModelCatalogService
 {
@@ -36,6 +38,7 @@ public sealed class LocalModelCatalogService(
     private readonly ICloudModelResolver _cloudModelResolver = cloudModelResolver ?? throw new ArgumentNullException(nameof(cloudModelResolver));
     private readonly CodexOptions _codexOptions = (codexOptions ?? throw new ArgumentNullException(nameof(codexOptions))).Value;
     private readonly ICodexTokenStore _codexTokenStore = codexTokenStore ?? throw new ArgumentNullException(nameof(codexTokenStore));
+    private readonly IExternalProviderRegistry _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
     private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
     private readonly IOptions<LocalChatAgentOptions> _localChatOptions = localChatOptions ?? throw new ArgumentNullException(nameof(localChatOptions));
     private readonly ILogger<LocalModelCatalogService> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -55,6 +58,7 @@ public sealed class LocalModelCatalogService(
         var hasCodexSession = await HasUsableCodexSessionAsync(cancellationToken).ConfigureAwait(false);
         var azureConnection = await _cloudModelResolver.ResolveAzureFoundryConnectionAsync(cancellationToken).ConfigureAwait(false);
         var ggufModels = await ResolveInstalledGgufModelsAsync(cancellationToken).ConfigureAwait(false);
+        var externalModels = await ResolveExternalModelsAsync(cancellationToken).ConfigureAwait(false);
 
         var (ollamaModels, classifications) = await ResolveOllamaModelsAsync(cancellationToken).ConfigureAwait(false);
 
@@ -64,7 +68,30 @@ public sealed class LocalModelCatalogService(
             classifications,
             ggufModels,
             hasCodexSession,
-            azureConnection);
+            azureConnection,
+            externalModels);
+    }
+
+    /// <summary>
+    ///     Enumerates the models registered on the operator's external OpenAI-compatible connections. A best-effort
+    ///     read like every other source: an unreadable encrypted store yields no external entries rather than failing
+    ///     the whole catalog, so a corrupt external file can never take the local model picker down with it.
+    /// </summary>
+    private async Task<IReadOnlyList<ExternalProviderModelRegistration>> ResolveExternalModelsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _externalProviderRegistry.ListRegistrationsAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "External OpenAI-compatible model list could not be resolved.");
+            return [];
+        }
     }
 
     /// <summary>

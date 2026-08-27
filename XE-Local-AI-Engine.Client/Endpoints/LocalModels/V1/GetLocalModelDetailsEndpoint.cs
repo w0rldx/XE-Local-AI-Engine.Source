@@ -119,7 +119,17 @@ public sealed class GetLocalModelDetailsEndpoint(
         {
             ModelName = registration.ModelId,
             MaxContextTokens = registration.Model.ContextLength,
-            EffectiveContextTokens = registration.Model.ContextLength
+            EffectiveContextTokens = registration.Model.ContextLength,
+
+            // The same four connection facts the list entry carries. A details view reached directly — a deep link, a
+            // reload — has no list entry to read them from, and the egress cue must not depend on which route the
+            // client happened to arrive by.
+            DisplayLabel = registration.Model.DisplayName,
+            ExternalConnectionId = registration.Connection.Id,
+            ExternalConnectionName = registration.Connection.DisplayName,
+            DeclaredLocality = registration.Connection.Locality == ExternalProviderLocality.Local
+                ? LocalModelDeclaredLocalities.Local
+                : LocalModelDeclaredLocalities.Cloud
         }, ct).ConfigureAwait(false);
     }
 

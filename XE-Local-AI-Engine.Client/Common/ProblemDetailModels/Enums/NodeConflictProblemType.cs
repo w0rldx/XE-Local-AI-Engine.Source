@@ -63,6 +63,13 @@ public enum NodeConflictProblemType
     InstalledModelProviderMapSuperseded,
 
     /// <summary>
+    ///     A model-lifecycle operation was asked of a runtime provider that does not own it — deleting a model served
+    ///     by an operator-registered external endpoint, which is removed by unregistering it on its connection
+    ///     instead. Not retryable: the request names the wrong lifecycle, not a transient state.
+    /// </summary>
+    ModelOperationNotSupportedByProvider,
+
+    /// <summary>
     ///     A work-session lifecycle call the session's current status forbids — starting one that is already running,
     ///     deleting one mid-step, or repointing the objective of a live run. The operator cancels or pauses first.
     /// </summary>

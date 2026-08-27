@@ -38,3 +38,15 @@ public sealed class InstalledModelProviderConflictException()
 /// </summary>
 public sealed class InstalledModelProviderMapSupersededException()
     : InvalidOperationException("Another model change completed while this delete was running. Refresh the model list and try again.");
+
+/// <summary>
+///     Thrown when the model-management path is asked to perform an operation the model's runtime provider does not
+///     own — today, deleting or pulling a model that lives on an operator-registered external endpoint. Mapped to a 409
+///     with <c>conflictType = ModelOperationNotSupportedByProvider</c>.
+/// </summary>
+/// <remarks>
+///     It exists because the refusal originates in the PROVIDER assembly, which the host may not reference (the layer
+///     tests freeze that graph), and because 500 is the wrong answer for a request that was understood perfectly and
+///     simply names the wrong lifecycle: external models are removed by unregistering them on their connection.
+/// </remarks>
+public sealed class ModelOperationNotSupportedByProviderException(string message) : InvalidOperationException(message);

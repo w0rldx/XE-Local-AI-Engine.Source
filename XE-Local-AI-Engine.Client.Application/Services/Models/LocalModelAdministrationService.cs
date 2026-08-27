@@ -4,6 +4,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Validation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.OpenAICompat;
 
 internal sealed class LocalModelAdministrationService(
     ILocalModelDeletionCoordinator deletionCoordinator,
@@ -50,7 +51,18 @@ internal sealed class LocalModelAdministrationService(
             return new LocalModelDeletionResult(true, canonicalName, true);
         }
 
-        await providerResolver.ResolveProvider(providerName).DeleteModelAsync(canonicalName, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await providerResolver.ResolveProvider(providerName).DeleteModelAsync(canonicalName, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ExternalProviderOperationNotSupportedException exception)
+        {
+            // The external provider owns no weights on this node, so it refuses deletion rather than reporting a
+            // success the model table would then render as a completed removal. Translated here, in the layer that
+            // may reference the provider, so the host maps it to a 409 without taking a dependency of its own.
+            throw new ModelOperationNotSupportedByProviderException(exception.Message);
+        }
+
         providerResolver.InvalidateModelProviderMap();
         return new LocalModelDeletionResult(true, canonicalName, true);
     }
