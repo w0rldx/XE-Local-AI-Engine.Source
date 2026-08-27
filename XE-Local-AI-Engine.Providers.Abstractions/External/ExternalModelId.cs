@@ -149,9 +149,15 @@ public static class ExternalModelId
                && !wireId.EndsWith('/');
     }
 
+    /// <summary>
+    ///     Returns the canonical spelling of a connection slug — trimmed and lowered — WITHOUT asserting the grammar;
+    ///     pair it with <see cref="IsValidConnectionId" /> when the input is operator-supplied. Public so the store that
+    ///     MINTS slugs canonicalizes them with the same code that parses them back out of a model id: two independent
+    ///     lowering passes are how the case-insensitive provider map and the ordinal allow-list drift apart.
+    /// </summary>
     [SuppressMessage("Globalization", "CA1308:Normalize strings to uppercase",
         Justification = "The connection slug's canonical persisted form is lowercase ASCII by grammar; it is an identity segment we mint, not a security token compared after a round-trip.")]
-    private static string CanonicalizeConnectionId(string? connectionId)
+    public static string CanonicalizeConnectionId(string? connectionId)
     {
         return connectionId is null ? string.Empty : connectionId.Trim().ToLowerInvariant();
     }

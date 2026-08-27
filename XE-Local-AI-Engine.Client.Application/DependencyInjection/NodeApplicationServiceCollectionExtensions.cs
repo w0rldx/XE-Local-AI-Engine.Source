@@ -50,6 +50,11 @@ public static class NodeApplicationServiceCollectionExtensions
         // Development Mode container sandbox (ADR 0004). After AddNodeDevelopment so it reads as what it is: a
         // Development Mode concern, not an AgentHome one.
         builder.AddNodeContainerSandbox(configuration);
+
+        // BEFORE AddNodeModelRuntime, which registers the external multiplexer provider only when an
+        // IExternalProviderRegistry is already in the collection. That is a registration-time check, so a later
+        // registry would ship a node on which no ext: model can route.
+        builder.AddNodeExternalProviders();
         builder.AddNodeModelRuntime(configuration);
 
         // Runs after AddNodeModelRuntime: the image model store reuses the Hugging Face download client that

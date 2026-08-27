@@ -570,6 +570,11 @@ public sealed class GgufDownloadCoordinatorRoutingTests
 
     private sealed class ControlledMapStore(string modelName) : ICoordinatedModelProviderMapStore
     {
+        // Not a reconciliation fixture: only the external-provider pass enumerates the whole map, and this double
+        // exists to drive a single model's leased path.
+        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("This test double does not enumerate the provider map.");
+
         private readonly ProviderMapMutationReceipt _receipt = new(modelName,
             Prior: null,
             new ModelProviderMapRecord(modelName, LlamaServerProviderConstants.ProviderName, 1, "revision"),

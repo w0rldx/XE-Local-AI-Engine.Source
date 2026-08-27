@@ -13,6 +13,11 @@ public sealed class CoordinatedModelProviderMapStore : ICoordinatedModelProvider
         _persistence = persistence ?? throw new ArgumentNullException(nameof(persistence));
     }
 
+    public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        return _persistence.ListAsync(cancellationToken);
+    }
+
     public Task<ModelProviderMapRecord?> ReadWithRevisionAsync(IModelProviderMapReadLease lease,
         string modelName,
         CancellationToken cancellationToken = default)

@@ -81,6 +81,11 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.LlamaServer\XE-Local-AI-Engine.Providers.LlamaServer.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Ollama\XE-Local-AI-Engine.Providers.Ollama.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.OpenAICompat\XE-Local-AI-Engine.Providers.OpenAICompat.csproj"/>
+    <!-- Direct, not transitive-through-OpenAICompat: the external-provider store calls OpenAICompatibleBaseAddress as
+         the authority for what a stored base URL means. Normalizing at save with the SAME code the outbound guard pins
+         against is the entire reason the guard can trust the stored value, so it must not ride a transitive flow a
+         future ProjectReference prune would silently remove. -->
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.OpenAICompatible.Core\XE-Local-AI-Engine.Providers.OpenAICompatible.Core.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.StableDiffusionCpp\XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Training\XE-Local-AI-Engine.Providers.Training.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>
