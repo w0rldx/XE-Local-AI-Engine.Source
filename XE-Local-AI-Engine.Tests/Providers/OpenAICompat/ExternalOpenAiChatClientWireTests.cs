@@ -157,6 +157,113 @@ public sealed class ExternalOpenAiChatClientWireTests
     }
 
     [Test]
+    public async Task Send_AfterTheApiKeyIsRotated_PresentsTheNewKey()
+    {
+        // The cached adapter's identity used to exclude the credential, so rotating or clearing a key changed nothing
+        // the comparison could see and the previous key kept going on the wire — which an operator experiences as "I
+        // fixed the key and it still fails", or, for a revoked key, as one that keeps working.
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model(), apiKey: "sk-old");
+        using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
+
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+        registry.Replace(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model(), apiKey: "sk-new");
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+
+        AssertEx.Equal("Bearer sk-old", recorder.Requests[0].Authorization);
+        AssertEx.Equal("Bearer sk-new", recorder.Requests[1].Authorization);
+    }
+
+    [Test]
+    public async Task Send_WhenTheConnectionFlipsLocalToCloudMidInvocation_AbortsRatherThanRedirecting()
+    {
+        // The mid-invocation swap. The turn's tools were authorized against a declared-LOCAL connection — workspace,
+        // knowledge base, custom tools, run_python — and a later round of the same tool loop would carry them, and the
+        // node-local data already in their results, to an endpoint that never earned them.
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
+
+        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
+            pinned.Generation,
+            pinned.Locality,
+            pinned.Origin));
+
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+        registry.Replace(ExternalProviderTestData.Connection(locality: ExternalProviderLocality.Cloud), ExternalProviderTestData.Model());
+
+        _ = await AssertEx.ThrowsAsync<ExternalProviderBindingChangedException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None));
+
+        AssertEx.Equal(1, recorder.Requests.Count);
+    }
+
+    [Test]
+    public async Task Send_WhenTheBaseUrlMovesMidInvocation_AbortsRatherThanRedirecting()
+    {
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(baseUrl: "http://127.0.0.1:18099"),
+            ExternalProviderTestData.Model());
+        using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
+
+        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
+            pinned.Generation,
+            pinned.Locality,
+            pinned.Origin));
+
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+        registry.Replace(ExternalProviderTestData.Connection(baseUrl: "http://attacker.example.com"), ExternalProviderTestData.Model());
+
+        _ = await AssertEx.ThrowsAsync<ExternalProviderBindingChangedException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None));
+
+        AssertEx.Equal(1, recorder.Requests.Count);
+    }
+
+    [Test]
+    public async Task Send_WhenAnUnrelatedEditBumpsTheGeneration_StillSends()
+    {
+        // The pin compares the FACTS, not just the generation. Another connection's save moves the registry epoch, and
+        // aborting every in-flight turn on an unrelated edit would be an availability bug, not a safety property.
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
+
+        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
+            pinned.Generation,
+            pinned.Locality,
+            pinned.Origin));
+
+        // Same locality, same origin, new generation.
+        registry.Replace(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+
+        AssertEx.Equal(1, recorder.Requests.Count);
+    }
+
+    [Test]
+    public async Task Send_WithNoPin_WhenTheConnectionEscalatesToLocal_Aborts()
+    {
+        // Unpinned contexts (a background summarization, a health-adjacent send) have no tool offer to invalidate, so
+        // they resolve live — but a connection that was Cloud when this client resolved it and is Local now has become
+        // MORE privileged underneath a live client, and reusing it is refused.
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(locality: ExternalProviderLocality.Cloud),
+            ExternalProviderTestData.Model());
+        using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
+
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+        registry.Replace(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+
+        _ = await AssertEx.ThrowsAsync<ExternalProviderBindingChangedException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None));
+    }
+
+    [Test]
     public async Task Send_WhenTheModelIsNoLongerRegistered_FailsClosedInsteadOfGuessingAnEndpoint()
     {
         var recorder = new OpenAiWireRecorder();

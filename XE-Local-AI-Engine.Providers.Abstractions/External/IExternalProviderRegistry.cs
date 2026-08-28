@@ -13,7 +13,8 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.External;
 ///         Everything here is a read: the registry never mutates connections, and it never hands out the API key
 ///         alongside the descriptors. A consumer that only renders, gates or routes takes
 ///         <see cref="ListRegistrationsAsync" /> / <see cref="TryResolveAsync" />; only the transport calls
-///         <see cref="GetApiKeyAsync" />.
+///         <see cref="TryResolveTransportBindingAsync" />, which is the ONLY way a key leaves the registry — and it
+///         hands the key out bound to the endpoint it belongs to, never on its own.
 ///     </para>
 ///     <para>
 ///         Implementations must be safe to call from a singleton on the chat path and must reflect an operator's save
@@ -38,10 +39,21 @@ public interface IExternalProviderRegistry
     Task<ExternalProviderModelRegistration?> TryResolveAsync(string modelId, CancellationToken ct);
 
     /// <summary>
-    ///     The connection's decrypted API key, or <see langword="null" /> when the connection is keyless or unknown.
-    ///     Keyless is a first-class case, not a fallback: a local llama-server rejects nothing, and sending a bogus
-    ///     bearer token to an endpoint that does check would fail the request outright — so a <see langword="null" />
-    ///     here means "send NO Authorization header", not "send an empty one".
+    ///     The same resolution as <see cref="TryResolveAsync" />, carrying the generation it was read at so the caller
+    ///     can VERIFY later that the configuration has not moved underneath it. Key-free, for callers that pin or gate
+    ///     rather than authenticate.
     /// </summary>
-    Task<string?> GetApiKeyAsync(string connectionId, CancellationToken ct);
+    Task<ExternalProviderBinding?> TryResolveBindingAsync(string modelId, CancellationToken ct);
+
+    /// <summary>
+    ///     The transport's atomic view of one model: endpoint, declared trust, generation and credential, all read out
+    ///     of ONE registry generation, or <see langword="null" /> when the id does not resolve.
+    /// </summary>
+    /// <remarks>
+    ///     A keyless connection yields a <see langword="null" /> <see cref="ExternalProviderTransportBinding.ApiKey" />,
+    ///     which is a first-class case, not a fallback: a local llama-server rejects nothing, and sending a bogus bearer
+    ///     token to an endpoint that does check would fail the request outright — so it means "send NO Authorization
+    ///     header", never "send an empty one".
+    /// </remarks>
+    Task<ExternalProviderTransportBinding?> TryResolveTransportBindingAsync(string modelId, CancellationToken ct);
 }

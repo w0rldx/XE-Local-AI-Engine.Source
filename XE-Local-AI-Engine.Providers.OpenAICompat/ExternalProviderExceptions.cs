@@ -57,3 +57,32 @@ public sealed class ExternalProviderModelUnavailableException : InvalidOperation
     {
     }
 }
+
+/// <summary>
+///     Thrown when the connection behind an in-flight invocation changed underneath it: its declared locality, its
+///     endpoint origin, or the registry generation the invocation's tools were authorized against.
+/// </summary>
+/// <remarks>
+///     Aborting is the only correct answer, and it is deliberately not recoverable in the transport. The turn's tool
+///     offer was computed against the OLD declaration — a declared-Local connection earns workspace, knowledge-base,
+///     custom and <c>run_python</c> tools — and a later round of the same tool loop would carry those tools, and the
+///     node-local data already in their results, to whatever the connection now points at. Re-deciding here is not
+///     possible: the authorization lives in the caller's <c>ChatOptions</c>, which this seam cannot rebuild.
+/// </remarks>
+public sealed class ExternalProviderBindingChangedException : InvalidOperationException
+{
+    public ExternalProviderBindingChangedException()
+        : base("The external connection was reconfigured while this request was in flight; it was not sent. Start the request again.")
+    {
+    }
+
+    public ExternalProviderBindingChangedException(string message)
+        : base(message)
+    {
+    }
+
+    public ExternalProviderBindingChangedException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}

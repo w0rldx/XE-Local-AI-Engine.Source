@@ -89,24 +89,56 @@ public sealed class ExternalProviderRegistryTests
     }
 
     [Test]
-    public async Task GetApiKeyAsync_ReturnsTheStoredKeyAndNullWhenKeyless()
+    public async Task TryResolveTransportBindingAsync_ReturnsTheStoredKeyAndNullWhenKeyless()
     {
         var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(
             Connection("keyed", models: ["qwen3"], apiKey: "sk-secret"),
             Connection("keyless", models: ["qwen3"])));
 
-        AssertEx.Equal("sk-secret", await registry.GetApiKeyAsync("keyed", CancellationToken.None));
+        AssertEx.Equal("sk-secret", AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:keyed/qwen3", CancellationToken.None)).ApiKey);
         // Distinct from an empty key: null means send NO Authorization header at all.
-        AssertEx.Null(await registry.GetApiKeyAsync("keyless", CancellationToken.None));
-        AssertEx.Null(await registry.GetApiKeyAsync("never-existed", CancellationToken.None));
+        AssertEx.Null(AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:keyless/qwen3", CancellationToken.None)).ApiKey);
+        AssertEx.Null(await registry.TryResolveTransportBindingAsync("ext:never-existed/qwen3", CancellationToken.None));
     }
 
     [Test]
-    public async Task GetApiKeyAsync_CanonicalizesTheConnectionId()
+    public async Task TryResolveTransportBindingAsync_CanonicalizesTheConnectionId()
     {
         var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("keyed", models: ["qwen3"], apiKey: "sk-secret")));
 
-        AssertEx.Equal("sk-secret", await registry.GetApiKeyAsync("KEYED", CancellationToken.None));
+        AssertEx.Equal("sk-secret", AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:KEYED/qwen3", CancellationToken.None)).ApiKey);
+    }
+
+    [Test]
+    public async Task TryResolveTransportBindingAsync_BindsTheKeyToItsOwnEndpoint()
+    {
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(
+            Connection("box-a", models: ["qwen3"], apiKey: "sk-a", baseUrl: "http://127.0.0.1:18099/v1/"),
+            Connection("box-b", models: ["qwen3"], apiKey: "sk-b", baseUrl: "http://127.0.0.1:18100/v1/")));
+
+        // The endpoint and the credential come out of ONE snapshot. Read separately they can come from two
+        // generations, which is how a concurrent edit presents one connection's key at another's address.
+        var a = AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:box-a/qwen3", CancellationToken.None));
+        var b = AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:box-b/qwen3", CancellationToken.None));
+
+        AssertEx.Equal("sk-a", a.ApiKey);
+        AssertEx.Equal("http://127.0.0.1:18099", a.Binding.Origin);
+        AssertEx.Equal("sk-b", b.ApiKey);
+        AssertEx.Equal("http://127.0.0.1:18100", b.Binding.Origin);
+    }
+
+    [Test]
+    public async Task TryResolveBindingAsync_StampsANewGenerationAfterAnInvalidation()
+    {
+        var store = new FakeExternalProviderStore(Connection("box-a", models: ["qwen3"]));
+        var registry = new ExternalProviderRegistry(store);
+
+        var before = AssertEx.NotNull(await registry.TryResolveBindingAsync("ext:box-a/qwen3", CancellationToken.None));
+        registry.Invalidate();
+        var after = AssertEx.NotNull(await registry.TryResolveBindingAsync("ext:box-a/qwen3", CancellationToken.None));
+
+        // A moved generation is what a pinned invocation checks against; without it a mid-turn edit is invisible.
+        AssertEx.True(after.Generation > before.Generation);
     }
 
     [Test]
@@ -152,13 +184,14 @@ public sealed class ExternalProviderRegistryTests
         string? apiKey = null,
         ExternalProviderLocality locality = ExternalProviderLocality.Local,
         bool supportsTools = false,
-        int? contextLength = null)
+        int? contextLength = null,
+        string baseUrl = "http://127.0.0.1:18099/v1/")
     {
         return new StoredExternalProviderConnection
         {
             Id = id,
             DisplayName = id,
-            BaseUrl = "http://127.0.0.1:18099/v1/",
+            BaseUrl = baseUrl,
             ApiKey = apiKey,
             Locality = locality,
             Models = (models ?? []).Select(wireId => new StoredExternalProviderModel

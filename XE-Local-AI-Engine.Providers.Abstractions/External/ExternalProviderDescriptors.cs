@@ -2,9 +2,9 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
 ///     The non-secret read model of one external OpenAI-compatible API connection. Deliberately carries NO API key:
-///     the key is a secret whose only legitimate consumer is the transport, and it is fetched separately through
-///     <see cref="IExternalProviderRegistry.GetApiKeyAsync" /> so every catalog/UI/policy consumer of this descriptor
-///     is structurally incapable of leaking it.
+///     the key is a secret whose only legitimate consumer is the transport, and it reaches the transport bound to its
+///     own endpoint through <see cref="IExternalProviderRegistry.TryResolveTransportBindingAsync" />, so every
+///     catalog/UI/policy consumer of this descriptor is structurally incapable of leaking it.
 /// </summary>
 public sealed record ExternalProviderConnectionDescriptor
 {

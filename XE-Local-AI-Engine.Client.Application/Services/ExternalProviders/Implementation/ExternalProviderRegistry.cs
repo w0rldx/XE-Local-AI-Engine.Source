@@ -26,7 +26,12 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 /// </remarks>
 public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExternalProviderRegistryCache
 {
+    private readonly Lock _publishGate = new();
     private readonly IExternalProviderStore _store;
+
+    // The monotonic epoch every snapshot is stamped with. Bumped by Invalidate BEFORE the snapshot is dropped, so a
+    // load already in flight can tell that its result is stale by the time it tries to publish.
+    private long _epoch;
 
     // Written as a whole immutable value, never mutated in place, so a reader always sees one coherent generation.
     private volatile ExternalProviderSnapshot? _snapshot;
@@ -57,20 +62,42 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
     }
 
     /// <inheritdoc />
-    public async Task<string?> GetApiKeyAsync(string connectionId, CancellationToken ct)
+    public async Task<ExternalProviderBinding?> TryResolveBindingAsync(string modelId, CancellationToken ct)
     {
-        // Read through the STORE, not the snapshot: the snapshot holds the key-free read model on purpose, so a future
-        // consumer that reaches for a cached descriptor cannot find a key on it.
-        var config = await _store.LoadAsync(ct).ConfigureAwait(false);
-        var canonical = ExternalModelId.CanonicalizeConnectionId(connectionId);
-        var connection = config.Connections.FirstOrDefault(candidate => string.Equals(candidate.Id, canonical, StringComparison.Ordinal));
-        return string.IsNullOrWhiteSpace(connection?.ApiKey) ? null : connection.ApiKey;
+        return (await TryResolveTransportBindingAsync(modelId, ct).ConfigureAwait(false))?.Binding;
+    }
+
+    /// <inheritdoc />
+    public async Task<ExternalProviderTransportBinding?> TryResolveTransportBindingAsync(string modelId, CancellationToken ct)
+    {
+        if (ExternalModelId.Canonicalize(modelId) is not { } canonical)
+        {
+            return null;
+        }
+
+        // ONE snapshot read serves the endpoint, the trust declaration, the generation AND the key. Reading the key
+        // through a second call — the shape this replaced — is what let a concurrent edit bind a new key to an old
+        // base URL: two reads, two generations, one request.
+        var snapshot = await GetSnapshotAsync(ct).ConfigureAwait(false);
+        if (snapshot.ByModelId.GetValueOrDefault(canonical) is not { } registration)
+        {
+            return null;
+        }
+
+        var apiKey = snapshot.KeysByConnectionId.GetValueOrDefault(registration.Connection.Id);
+        return new ExternalProviderTransportBinding(new ExternalProviderBinding(snapshot.Generation, registration), apiKey);
     }
 
     /// <inheritdoc />
     public void Invalidate()
     {
-        _snapshot = null;
+        lock (_publishGate)
+        {
+            // Bump FIRST, drop second. A load that started before this call carries the pre-bump epoch and is refused
+            // publication below, so it can never resurrect a configuration the operator has already replaced.
+            _epoch++;
+            _snapshot = null;
+        }
     }
 
     /// <inheritdoc />
@@ -102,11 +129,17 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
     ///     Returns the cached generation, rebuilding it when there is none.
     /// </summary>
     /// <remarks>
-    ///     Deliberately UNsynchronized. A concurrent burst right after an invalidation can rebuild the snapshot more
-    ///     than once, and that is the cheaper failure: the work is one read of a small local file plus a decrypt, each
-    ///     rebuild produces an equivalent value, and the last writer wins on a field written as one immutable
-    ///     reference. Coordinating it would mean either a disposable lock on a service the container never disposes, or
-    ///     a cached <see cref="Lazy{T}" /> task that would memoize a transient IO failure for the process lifetime.
+    ///     <para>
+    ///         The LOAD is deliberately unsynchronized. A concurrent burst right after an invalidation can read the
+    ///         file more than once, and that is the cheaper failure: the work is one read of a small local file plus a
+    ///         decrypt, and holding a lock across it would serialize every cold chat client behind disk I/O.
+    ///     </para>
+    ///     <para>
+    ///         The PUBLICATION is not. Each load stamps the epoch it observed BEFORE reading, and publishes only if the
+    ///         epoch has not moved since — so a load that overlapped an <see cref="Invalidate" /> is discarded instead
+    ///         of overwriting the newer configuration with the one the operator just replaced. That race is not
+    ///         theoretical on this path: a save invalidates while in-flight sends are resolving.
+    ///     </para>
     /// </remarks>
     private async Task<ExternalProviderSnapshot> GetSnapshotAsync(CancellationToken cancellationToken)
     {
@@ -115,18 +148,49 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
             return cached;
         }
 
-        var snapshot = ExternalProviderSnapshot.Build(await _store.LoadAsync(cancellationToken).ConfigureAwait(false));
-        _snapshot = snapshot;
-        return snapshot;
+        long observedEpoch;
+        lock (_publishGate)
+        {
+            observedEpoch = _epoch;
+        }
+
+        var loaded = ExternalProviderSnapshot.Build(observedEpoch, await _store.LoadAsync(cancellationToken).ConfigureAwait(false));
+
+        lock (_publishGate)
+        {
+            if (_epoch != observedEpoch)
+            {
+                // Superseded while we were reading. Return the value we built — the caller asked a question and this is
+                // an honest answer to it, stamped with the generation it came from — but do NOT cache it.
+                return loaded;
+            }
+
+            // Another loader may have published an equivalent snapshot at this same epoch; keeping theirs avoids
+            // handing two callers two different (equal) instances for no reason.
+            _snapshot ??= loaded;
+            return _snapshot;
+        }
     }
 
-    /// <summary>One coherent generation of the registry: the ordered registrations plus their canonical-id index.</summary>
-    private sealed record ExternalProviderSnapshot(IReadOnlyList<ExternalProviderModelRegistration> Registrations,
-        FrozenDictionary<string, ExternalProviderModelRegistration> ByModelId)
+    /// <summary>
+    ///     One coherent generation of the registry: the ordered registrations, their canonical-id index, and the
+    ///     connection keys.
+    /// </summary>
+    /// <remarks>
+    ///     The keys live HERE, beside the descriptors built from the same load, rather than being re-read from the
+    ///     store on demand — that is what makes an endpoint and its credential structurally incapable of coming from
+    ///     two different generations. They are never projected onto a descriptor, so the key-free read model every
+    ///     catalog, UI and policy consumer sees is unchanged.
+    /// </remarks>
+    private sealed record ExternalProviderSnapshot(long Generation,
+        IReadOnlyList<ExternalProviderModelRegistration> Registrations,
+        FrozenDictionary<string, ExternalProviderModelRegistration> ByModelId,
+        FrozenDictionary<string, string> KeysByConnectionId)
     {
-        public static ExternalProviderSnapshot Build(StoredExternalProviderConfig config)
+        public static ExternalProviderSnapshot Build(long generation, StoredExternalProviderConfig config)
         {
             var registrations = new List<ExternalProviderModelRegistration>();
+            var keys = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var connection in config.Connections)
             {
                 ExternalProviderConnectionDescriptor descriptor;
@@ -142,6 +206,11 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
                     continue;
                 }
 
+                if (!string.IsNullOrWhiteSpace(connection.ApiKey))
+                {
+                    keys[descriptor.Id] = connection.ApiKey;
+                }
+
                 registrations.AddRange(connection.Models.Select(model =>
                     new ExternalProviderModelRegistration(descriptor, ExternalProviderStore.ToDescriptor(model))));
             }
@@ -154,7 +223,10 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
                 index[registration.ModelId] = registration;
             }
 
-            return new ExternalProviderSnapshot(registrations, index.ToFrozenDictionary(StringComparer.Ordinal));
+            return new ExternalProviderSnapshot(generation,
+                registrations,
+                index.ToFrozenDictionary(StringComparer.Ordinal),
+                keys.ToFrozenDictionary(StringComparer.Ordinal));
         }
     }
 }

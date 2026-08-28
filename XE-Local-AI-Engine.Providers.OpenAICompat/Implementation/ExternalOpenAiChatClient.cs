@@ -17,10 +17,17 @@ using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 ///         first-token delay; blocking the sync factory on it is not.
 ///     </para>
 ///     <para>
-///         The registration is re-read on EVERY send and the built adapter is rebuilt whenever the endpoint identity
-///         changes, so an operator who edits a connection's base URL or timeout does not keep talking to the old
-///         address. The API key is read only when the adapter is (re)built — a key edit is covered by the save path's
-///         chat-client cache invalidation, which drops this instance outright.
+///         The binding is re-read on EVERY send and the built adapter is rebuilt whenever the endpoint identity
+///         changes, so an operator who edits a connection's base URL, key or timeout does not keep talking to the old
+///         one. It is read as ONE atomic value — endpoint, declared trust, generation and credential together — because
+///         reading the address and the key separately lets a concurrent edit present a new key at an old address.
+///     </para>
+///     <para>
+///         When the send belongs to a PINNED invocation (the normal chat/agent turn), the freshly read binding is
+///         checked against the pin the turn's tools were authorized against, and a send whose locality, origin or
+///         generation no longer matches is refused. Tool authorization happens once per turn while a tool loop sends
+///         many times; without this check an operator edit landing mid-loop would redirect the later sends — carrying
+///         the already-authorized local tools and their results — to an endpoint that never earned them.
 ///     </para>
 ///     <para>
 ///         An unresolvable id is TERMINAL, never a fallback: without a resolved registration there is no operator
@@ -41,10 +48,16 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
     /// </summary>
     internal static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
 
+    /// <summary>Sentinel for "this client has not resolved a binding yet", distinct from every real locality value.</summary>
+    private const int LocalityUnseen = -1;
+
     private readonly SemaphoreSlim _initGate = new(initialCount: 1, maxCount: 1);
     private readonly Func<HttpMessageHandler>? _transportHandlerFactory;
     private readonly string _modelId;
     private readonly IExternalProviderRegistry _registry;
+
+    // The locality this client FIRST resolved, as an int so it can be published with one interlocked write.
+    private int _firstSeenLocality = LocalityUnseen;
 
     private ResolvedEndpoint? _resolved;
 
@@ -104,10 +117,14 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
 
     private async Task<(IChatClient Client, ExternalProviderModelDescriptor Model)> EnsureInnerAsync(CancellationToken ct)
     {
-        var registration = await _registry.TryResolveAsync(_modelId, ct).ConfigureAwait(false)
-                           ?? throw new ExternalProviderModelUnavailableException();
+        var transportBinding = await _registry.TryResolveTransportBindingAsync(_modelId, ct).ConfigureAwait(false)
+                               ?? throw new ExternalProviderModelUnavailableException();
 
-        var identity = EndpointIdentity.From(registration);
+        var binding = transportBinding.Binding;
+        VerifyStillAuthorized(binding);
+
+        var registration = binding.Registration;
+        var identity = EndpointIdentity.From(registration, transportBinding.ApiKey);
         var current = Volatile.Read(ref _resolved);
         if (current is not null && current.Identity == identity)
         {
@@ -123,11 +140,10 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
                 return (current.Client, registration.Model);
             }
 
-            var apiKey = await _registry.GetApiKeyAsync(registration.Connection.Id, ct).ConfigureAwait(false);
             // The built stack is transferred into _resolved, which owns it until it is replaced (the previous one is
             // disposed just below) or this client is disposed. CA2000 cannot follow that ownership transfer.
 #pragma warning disable CA2000
-            var built = Build(registration, apiKey, identity);
+            var built = Build(registration, transportBinding.ApiKey, identity);
 #pragma warning restore CA2000
             Volatile.Write(ref _resolved, built);
             current?.Dispose();
@@ -136,6 +152,43 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
         finally
         {
             _ = _initGate.Release();
+        }
+    }
+
+    /// <summary>
+    ///     Refuses a send whose binding no longer matches what its invocation was authorized against.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         PINNED sends (a chat or agent turn) compare against the pin the tool offer was computed from: locality,
+    ///         origin and registry generation. That is the mid-invocation swap this closes — editing the connection
+    ///         Local→Cloud, or moving it to another host, between two rounds of one tool loop.
+    ///     </para>
+    ///     <para>
+    ///         UNPINNED sends (a background summarization, a health-adjacent probe — contexts with no tool offer to
+    ///         invalidate) resolve live, but may never become MORE privileged than the declaration this client was
+    ///         first built against: a connection that was Cloud when this instance resolved it and is Local now has
+    ///         escalated underneath a live client, and re-using it is refused rather than silently honoured.
+    ///     </para>
+    /// </remarks>
+    private void VerifyStillAuthorized(ExternalProviderBinding binding)
+    {
+        if (ExternalProviderBindingPinScope.Find(_modelId) is { } pin)
+        {
+            if (!pin.Matches(binding))
+            {
+                throw new ExternalProviderBindingChangedException();
+            }
+
+            return;
+        }
+
+        var firstSeen = Interlocked.CompareExchange(ref _firstSeenLocality, (int)binding.Locality, LocalityUnseen);
+        if (firstSeen != LocalityUnseen
+            && firstSeen != (int)ExternalProviderLocality.Local
+            && binding.Locality == ExternalProviderLocality.Local)
+        {
+            throw new ExternalProviderBindingChangedException();
         }
     }
 
@@ -177,13 +230,20 @@ internal sealed class ExternalOpenAiChatClient : IChatClient
     ///     The endpoint facts a built adapter is bound to. When any of them changes the adapter must be rebuilt, so the
     ///     comparison is what makes an operator's connection edit take effect on the next send.
     /// </summary>
-    private readonly record struct EndpointIdentity(string BaseUrl, string WireId, TimeSpan Timeout)
+    /// <remarks>
+    ///     The CREDENTIAL is part of the identity. It was not, and that was a hole: rotating or clearing a key changes
+    ///     neither the address nor the timeout, so the cached adapter kept presenting the previous key until something
+    ///     else happened to evict it — which is the failure an operator experiences as "I fixed the key and it still
+    ///     fails", or worse, as a revoked key that keeps working.
+    /// </remarks>
+    private readonly record struct EndpointIdentity(string BaseUrl, string WireId, TimeSpan Timeout, string? ApiKey)
     {
-        public static EndpointIdentity From(ExternalProviderModelRegistration registration)
+        public static EndpointIdentity From(ExternalProviderModelRegistration registration, string? apiKey)
         {
             return new EndpointIdentity(registration.Connection.BaseUrl.AbsoluteUri,
                 registration.Model.WireId,
-                registration.Connection.Timeout ?? DefaultNetworkTimeout);
+                registration.Connection.Timeout ?? DefaultNetworkTimeout,
+                apiKey);
         }
     }
 

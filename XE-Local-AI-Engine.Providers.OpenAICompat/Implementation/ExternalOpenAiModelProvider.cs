@@ -61,14 +61,14 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
     /// </remarks>
     public async Task<ModelProviderHealth> CheckHealthAsync(CancellationToken ct)
     {
-        var connections = await ListConnectionsAsync(ct).ConfigureAwait(false);
-        if (connections.Count == 0)
+        var connectionModelIds = await ListConnectionModelIdsAsync(ct).ConfigureAwait(false);
+        if (connectionModelIds.Count == 0)
         {
             return BuildHealth(isHealthy: true, ["No external connections are configured."]);
         }
 
-        var probes = await Task.WhenAll(connections.Select(connection => ProbeConnectionAsync(connection, ct))).ConfigureAwait(false);
-        return BuildHealth(probes.All(probe => probe.IsReachable), [.. probes.Select(probe => probe.Diagnostic)]);
+        var probes = await Task.WhenAll(connectionModelIds.Select(modelId => ProbeConnectionAsync(modelId, ct))).ConfigureAwait(false);
+        return BuildHealth(probes.All(probe => probe.IsReachable), [.. probes.Select(probe => probe.Diagnostic).OfType<string>()]);
     }
 
     /// <inheritdoc />
@@ -195,17 +195,33 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
         };
     }
 
-    private async Task<IReadOnlyList<ExternalProviderConnectionDescriptor>> ListConnectionsAsync(CancellationToken ct)
+    /// <summary>
+    ///     One representative registered model id per configured connection — the handle the health probe resolves its
+    ///     endpoint AND key through in one atomic read, rather than pairing a cached descriptor with a separate key
+    ///     lookup that a concurrent edit can desynchronize.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> ListConnectionModelIdsAsync(CancellationToken ct)
     {
         var registrations = await _registry.ListRegistrationsAsync(ct).ConfigureAwait(false);
         return
         [
-            .. registrations.Select(registration => registration.Connection)
-                            .DistinctBy(connection => connection.Id, StringComparer.Ordinal)
+            .. registrations.DistinctBy(registration => registration.Connection.Id, StringComparer.Ordinal)
+                            .Select(registration => registration.ModelId)
         ];
     }
 
-    private async Task<ConnectionProbe> ProbeConnectionAsync(ExternalProviderConnectionDescriptor connection, CancellationToken ct)
+    private async Task<ConnectionProbe> ProbeConnectionAsync(string modelId, CancellationToken ct)
+    {
+        if (await _registry.TryResolveTransportBindingAsync(modelId, ct).ConfigureAwait(false) is not { } transportBinding)
+        {
+            // Unregistered between the listing and here — an operator delete mid-probe. Nothing to report on.
+            return new ConnectionProbe(IsReachable: true, Diagnostic: null);
+        }
+
+        return await ProbeConnectionAsync(transportBinding.Binding.Registration.Connection, transportBinding.ApiKey, ct).ConfigureAwait(false);
+    }
+
+    private async Task<ConnectionProbe> ProbeConnectionAsync(ExternalProviderConnectionDescriptor connection, string? apiKey, CancellationToken ct)
     {
         // Diagnostics are surfaced to the operator, so they name the connection's DISPLAY name and never its base URL,
         // key, or the raw exception text (which can embed both).
@@ -229,7 +245,6 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
 #pragma warning restore CA2000
 
             using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(baseAddress, "models"));
-            var apiKey = await _registry.GetApiKeyAsync(connection.Id, ct).ConfigureAwait(false);
             if (!string.IsNullOrWhiteSpace(apiKey))
             {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
@@ -263,5 +278,5 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
         };
     }
 
-    private readonly record struct ConnectionProbe(bool IsReachable, string Diagnostic);
+    private readonly record struct ConnectionProbe(bool IsReachable, string? Diagnostic);
 }

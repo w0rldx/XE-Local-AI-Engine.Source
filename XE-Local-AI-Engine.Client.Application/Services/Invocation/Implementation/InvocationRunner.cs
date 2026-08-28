@@ -23,11 +23,13 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.DeadLetter;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Invocation.Context;
 using XE_Local_AI_Engine.Client.Services.Invocation.Envelope;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
 using XE_Local_AI_Engine.Client.Services.Invocation.Resilience;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
@@ -48,6 +50,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         "Conversation exceeds the model's context window even after truncation — Compact the conversation to summarize older messages, start a new chat, or switch to a larger-context model.";
 
     private readonly ICapabilityReporter _capabilityReporter;
+
+    // Read once per turn to pin the external binding this invocation is authorized against. See
+    // ExternalProviderInvocationPin for what the pin protects and why it is seeded here.
+    private readonly IExternalProviderRegistry _externalProviderRegistry;
     private readonly IConversationContextBudgeter _contextBudgeter;
     private readonly ConversationContextBudgetOptions _contextBudgetOptions;
     private readonly IDeadLetterStore _deadLetterStore;
@@ -102,6 +108,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ToolApprovalCoordinator toolApprovalCoordinator,
         ApiToolCallBridge apiToolCallBridge,
         InvocationLifecycleTracker lifecycleTracker,
+        IExternalProviderRegistry externalProviderRegistry,
         ILogger<InvocationRunner> logger)
     {
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
@@ -133,6 +140,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         ArgumentNullException.ThrowIfNull(spawnOptions);
         _spawnOptions = spawnOptions.Value;
+        _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         // The migrated default model + the response-size / pending-tool-call caps are read once at singleton
@@ -245,7 +253,15 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // agent calls it) enforces the fan-out and cloud-spawn caps against ONE shared root. The context flows as an
             // AsyncLocal into the function-invocation pipeline that runs the tool body; disposal restores the prior
             // ambient value. A turn that never spawns pays only a struct allocation.
-            using var spawnRoot = SpawnContext.BeginRoot(_spawnOptions.MaxConcurrentSpawns, _spawnOptions.MaxCloudSpawns);
+            using var spawnRoot = SpawnContext.BeginRoot(_spawnOptions.MaxConcurrentSpawns, _spawnOptions.MaxCloudSpawns, resolvedModel);
+
+            // Pin the external binding this turn is authorized against, in the SAME scope as the spawn context and for
+            // the same reason: the decision is made once, up front, and the provider re-reads configuration on every
+            // send. Without the pin an operator edit landing between two rounds of a tool loop silently redirects the
+            // later sends. A node-local or cloud model seeds nothing.
+            using var externalBindingPin = await ExternalProviderInvocationPin
+                                                .BeginAsync(_externalProviderRegistry, resolvedModel, invocationToken)
+                                                .ConfigureAwait(false);
 
             // Seed the active conversation id into the same root tool-loop scope so the AgentHome tool gateway can stage
             // this conversation's uploaded attachments into the sandbox. Like the spawn context it flows as an

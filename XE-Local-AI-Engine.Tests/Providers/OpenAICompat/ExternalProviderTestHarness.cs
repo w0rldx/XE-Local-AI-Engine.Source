@@ -58,6 +58,12 @@ internal sealed class FakeExternalProviderRegistry : IExternalProviderRegistry
 
     public int ResolveCallCount { get; private set; }
 
+    /// <summary>
+    ///     The generation every binding is stamped with. <see cref="Replace" /> bumps it, mirroring the real registry's
+    ///     epoch, so a test can reconfigure a connection mid-invocation and the pin check sees a moved generation.
+    /// </summary>
+    public long Generation { get; private set; }
+
     public FakeExternalProviderRegistry Add(ExternalProviderConnectionDescriptor connection,
         ExternalProviderModelDescriptor model,
         string? apiKey = null)
@@ -71,6 +77,7 @@ internal sealed class FakeExternalProviderRegistry : IExternalProviderRegistry
     {
         _registrations.Clear();
         _apiKeys.Clear();
+        Generation++;
         _ = Add(connection, model, apiKey);
     }
 
@@ -87,9 +94,22 @@ internal sealed class FakeExternalProviderRegistry : IExternalProviderRegistry
             string.Equals(registration.ModelId, canonical, StringComparison.Ordinal)));
     }
 
-    public Task<string?> GetApiKeyAsync(string connectionId, CancellationToken ct)
+    public async Task<ExternalProviderBinding?> TryResolveBindingAsync(string modelId, CancellationToken ct)
     {
-        return Task.FromResult(_apiKeys.GetValueOrDefault(connectionId));
+        return (await TryResolveTransportBindingAsync(modelId, ct))?.Binding;
+    }
+
+    public async Task<ExternalProviderTransportBinding?> TryResolveTransportBindingAsync(string modelId, CancellationToken ct)
+    {
+        // Resolved through the same path a caller takes, so the endpoint and the key are always from one generation —
+        // the property the production registry guarantees and these tests must not accidentally relax.
+        if (await TryResolveAsync(modelId, ct) is not { } registration)
+        {
+            return null;
+        }
+
+        return new ExternalProviderTransportBinding(new ExternalProviderBinding(Generation, registration),
+            _apiKeys.GetValueOrDefault(registration.Connection.Id));
     }
 }
 
