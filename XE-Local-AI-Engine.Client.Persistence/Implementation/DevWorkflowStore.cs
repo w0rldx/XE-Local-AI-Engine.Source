@@ -62,10 +62,12 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
         {
             await RollbackAsync(transaction).ConfigureAwait(false);
 
-            // The loser of an operation-id race must get the winner's result, not an exception — that is the whole
-            // point of an idempotency key, and unlike a single-supervisor session, a run is written by the dispatcher
-            // AND by human HTTP actions that can genuinely collide. Only a real version mismatch, or a different
-            // operation, still throws.
+            // Belt to the in-transaction check's braces. On SQLite that check already wins every real race — EF opens
+            // transactions as BEGIN IMMEDIATE, so a second writer blocks on the writer lock and sees the recorded
+            // operation before writing anything, and this branch is measurably never entered. It stays because it is
+            // the honest answer to the question the catch asks: if the write that beat us used the SAME operation id,
+            // the caller wants that result, not an exception. Only a real version mismatch, or a different operation,
+            // still throws.
             if (operationId is { } contested && await FindOperationAsync(runId, contested, cancellationToken).ConfigureAwait(false) is { } settled)
             {
                 return settled;

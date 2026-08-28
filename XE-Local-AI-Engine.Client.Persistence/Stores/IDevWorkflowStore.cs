@@ -407,9 +407,9 @@ public static class DevWorkflowEventTypes
 ///         Every mutation runs in one transaction that loads the run row, checks <c>ExpectedVersion</c> (unless it is
 ///         <see cref="DevWorkflowVersions.Any" />), allocates sequence values from the run's counter, appends one event,
 ///         and bumps the version. A non-null operation id resolves query-first: an operation already recorded returns
-///         without writing, so a replayed step cannot double-append — and a writer that loses the insert race to the
-///         <em>same</em> operation id gets that recorded result back rather than an exception, which is the whole point
-///         of an idempotency key.
+///         without writing, so a replayed step cannot double-append. The check runs both before and inside the
+///         transaction, and the inner one is what makes a genuine race safe: a second writer blocks on SQLite's writer
+///         lock, then sees the recorded operation and returns that result rather than an exception.
 ///     </para>
 ///     <para>
 ///         Legal state transitions are the runtime's to enforce, not this store's; this store provides
