@@ -141,6 +141,39 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
+    ///     A gate answered in a way none of its branches accepts ends the run, and ends it through the drain.
+    ///     <para>
+    ///         Completing (every downstream skipped) and failing (nothing failed) would each be a lie about a refused
+    ///         approval, and writing the terminal directly would strand whatever else the run still had live. Both are
+    ///         asserted, because the second is invisible from the end state alone.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AGateAnswerNoBranchAcceptsCancelsTheRunThroughTheDrain()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.ApprovalBranches).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        // Neither out-edge takes 'Reject': one wants Approve, the other RequestChanges.
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Reject).ConfigureAwait(false);
+
+        AssertEx.True(await harness.AdvanceAsync(runId).ConfigureAwait(false) > 0);
+        var draining = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelling, draining.Status, "the terminal is reached through the drain, never written over live rows.");
+        AssertEx.Equal("GateRejected", draining.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(draining.TerminalReason), "'approve'", message: "the reason names the gate, or nobody can tell which one refused.");
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Cancelled, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
+            (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status,
+            "the gate did its job; it is the run that has nowhere left to go.");
+    }
+
+    /// <summary>
     ///     A skip has to reach all the way down, or a run stalls on a node whose upstream will never arrive. Three
     ///     levels, because two would not distinguish propagation from a single hop.
     /// </summary>

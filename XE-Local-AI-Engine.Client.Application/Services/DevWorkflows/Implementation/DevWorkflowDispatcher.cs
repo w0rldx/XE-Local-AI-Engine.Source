@@ -158,7 +158,24 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         // Settle what has landed. A recorded decision is the durable half of a human act; turning it into a transition
         // is this step's job, and doing it here rather than at admission is what lets a decision taken during a pause
         // apply on the first tick after the resume.
-        written += await SettleDecisionsAsync(store, run, nodeRuns, cancellationToken).ConfigureAwait(false);
+        var (settledCount, gateRejection) = await SettleDecisionsAsync(store, run, graph, nodeRuns, cancellationToken).ConfigureAwait(false);
+        written += settledCount;
+
+        if (gateRejection is { } rejection && run.Status is not (DevWorkflowRunStatus.Pausing or DevWorkflowRunStatus.Cancelling))
+        {
+            // A gate answered in a way no out-edge accepts ends the run — reading it as Completed (every downstream
+            // skipped) or as Failed (nothing failed) would both lie. It goes through the drain like every other
+            // terminal, so live siblings settle and release what they hold instead of being orphaned.
+            DevWorkflowStateMachine.EnsureLegal(run.Status, DevWorkflowRunStatus.Cancelling);
+            _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(run.Id,
+                                DevWorkflowVersions.Any,
+                                DevWorkflowRunStatus.Cancelling,
+                                FailureClass: DevWorkflowFailureClasses.GateRejected,
+                                SanitizedReason: rejection),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+            return written + 1;
+        }
 
         if (run.Status is DevWorkflowRunStatus.Pausing or DevWorkflowRunStatus.Cancelling)
         {
@@ -172,12 +189,19 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     }
 
     /// <summary>
-    ///     Validates the pinned snapshot, materializes the entry node runs and moves the run to <c>Running</c>.
+    ///     Materializes the run's node runs from its pinned graph and moves it to <c>Running</c>.
+    ///     <para>
+    ///         Every node gets a row up front, not just the entry ones. Creating them as their branches settle reads
+    ///         well until terminalization: a run whose remaining rows do not exist yet has "nothing live" and completes
+    ///         before it has run anything. A row that does not exist is still the right answer for a decomposition's
+    ///         children — which is why an absent source reads as a pending edge — but for a graph known at run start
+    ///         there is nothing to wait for.
+    ///     </para>
     ///     <para>
     ///         The run is created <c>Pending</c> and only becomes <c>Running</c> once this has succeeded, because all of
-    ///         it can fail — an unparseable graph, an entry set that is empty. Creating the run <c>Running</c> and
-    ///         failing afterwards is the "a run reading Running with nothing driving it" bug the work-session service
-    ///         documents one level down.
+    ///         it can fail — an unparseable graph, a node count over the run's budget. Creating the run <c>Running</c>
+    ///         and failing afterwards is the "a run reading Running with nothing driving it" bug the work-session
+    ///         service documents one level down.
     ///     </para>
     /// </summary>
     private static async Task<int> StartRunAsync(IDevWorkflowStore store,
@@ -233,11 +257,16 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     }
 
     /// <summary>
-    ///     Turns recorded decisions into transitions. A gate's approval succeeds it and lets the edges route; the
+    ///     Turns recorded decisions into transitions. A gate's answer succeeds it and lets the edges route; the
     ///     retries-exhausted interventions re-attempt, route around, or give up.
+    ///     <para>
+    ///         Answers with the reason the run should end, when a gate was answered in a way none of its out-edges
+    ///         accepts. Deliberately not written here: it is the RUN's transition, and this method only moves node runs.
+    ///     </para>
     /// </summary>
-    private static async Task<int> SettleDecisionsAsync(IDevWorkflowStore store,
+    private static async Task<(int Written, string? GateRejection)> SettleDecisionsAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
+        DevWorkflowGraph graph,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
         CancellationToken cancellationToken)
     {
@@ -245,11 +274,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                               .ToList();
         if (waiting.Count == 0)
         {
-            return 0;
+            return (0, null);
         }
 
         var decisions = await store.ListDecisionsAsync(run.Id, cancellationToken).ConfigureAwait(false);
         var written = 0;
+        string? rejection = null;
         foreach (var nodeRun in waiting)
         {
             // One decision per node-run ATTEMPT, so the attempt is what makes this the decision for the current try
@@ -260,12 +290,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             }
 
             var (target, outcome, incrementAttempt) = Resolve(settled.Decision);
+            var outputJson = target == DevWorkflowNodeRunStatus.Succeeded ? Output(settled.Decision) : null;
             DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
                                 nodeRun.Id,
                                 DevWorkflowVersions.Any,
                                 target,
-                                OutputJson: target == DevWorkflowNodeRunStatus.Succeeded ? Output(settled.Decision) : null,
+                                OutputJson: outputJson,
                                 FailureClass: target == DevWorkflowNodeRunStatus.Failed ? DevWorkflowFailureClasses.GateRejected : null,
                                 TerminalReason: target == DevWorkflowNodeRunStatus.Failed ? "A human abandoned this node run." : null,
                                 IncrementAttempt: incrementAttempt,
@@ -273,9 +304,26 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                             cancellationToken)
                         .ConfigureAwait(false);
             written++;
+
+            // Only a human gate can strand a run this way. Every other node's dead out-edges skip their targets, which
+            // is a route rather than a dead end; a gate answer nothing accepts leaves the run with nowhere to go, and
+            // saying so is more honest than completing a run whose approval was refused.
+            if (outputJson is not null
+                && nodeRun.NodeType == DevWorkflowNodeType.HumanGate
+                && graph.OutboundEdges(nodeRun.NodeKey) is { Count: > 0 } outEdges
+                && !outEdges.Any(edge => Matches(edge, outputJson)))
+            {
+                rejection ??= $"The gate '{nodeRun.NodeKey}' was answered {settled.Decision}, which none of its branches accepts.";
+            }
         }
 
-        return written;
+        return (written, rejection);
+
+        static bool Matches(DevWorkflowGraphEdge edge, string outputJson)
+        {
+            using var document = JsonDocument.Parse(outputJson);
+            return DevWorkflowCondition.Evaluate(edge.Condition, document.RootElement);
+        }
 
         static (DevWorkflowNodeRunStatus Target, string? Outcome, bool IncrementAttempt) Resolve(DevWorkflowDecisionKind decision) =>
             decision switch
