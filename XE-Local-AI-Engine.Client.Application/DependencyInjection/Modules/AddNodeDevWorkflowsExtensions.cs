@@ -40,6 +40,11 @@ internal static class AddNodeDevWorkflowsExtensions
         // resolves them inside the per-tick scope it already opens.
         builder.Services.AddScoped<DevWorkflowArtifactPromotion>();
         builder.Services.AddScoped<DevWorkflowAgentExecutor>();
+        builder.Services.AddScoped<IDevWorkflowRunService, DevWorkflowRunService>();
+
+        // Before both, and independent of both: a template has to exist before anyone can start a run from it, and
+        // seeding one neither reconciles anything nor needs a loop.
+        builder.Services.AddHostedService<DevWorkflowDefinitionSeeder>();
 
         // BEFORE the dispatcher, and this module is added after work sessions: a node run that resumes must not find
         // its session still holding a half-written turn, and the dispatcher must not admit rows this has not judged.

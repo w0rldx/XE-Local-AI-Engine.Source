@@ -61,6 +61,43 @@ public sealed class DevWorkflowNodeRunTests
         AssertEx.True(events.Any(item => item.EventType == DevWorkflowEventTypes.NodeFailed && item.Outcome == "failed"));
     }
 
+    /// <summary>
+    ///     Releasing the session is what makes a re-attempt a fresh one. Without it a node run back at <c>Pending</c>
+    ///     still points at the session that just ended, and nothing downstream can tell "this attempt is still holding
+    ///     its session" from "this attempt is over" — the two need opposite answers.
+    /// </summary>
+    [Test]
+    public async Task ClearingTheWorkSession_ReleasesItAndTheResumeBudgetWithIt()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion).ConfigureAwait(false);
+        var attached = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand(seed.RunId, nodeRunId, version, Guid.NewGuid())).ConfigureAwait(false);
+        var resumed = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand(seed.RunId,
+                                      nodeRunId,
+                                      attached.Version,
+                                      (await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false)).WorkSessionId!.Value,
+                                      CountsAsResume: true))
+                                 .ConfigureAwait(false);
+
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                            nodeRunId,
+                            resumed.Version,
+                            DevWorkflowNodeRunStatus.Pending,
+                            IncrementAttempt: true,
+                            ClearWorkSession: true))
+                       .ConfigureAwait(false);
+
+        var nodeRun = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
+        AssertEx.Null(nodeRun.WorkSessionId);
+        AssertEx.Equal(expected: 0, nodeRun.SessionResumes, "The budget bounds ONE attempt's session; carrying a spent one forward would block the next before it started.");
+        AssertEx.Equal(expected: 2, nodeRun.Attempt);
+    }
+
     /// <summary>T-15: one decision per attempt, several over a node-run's life, and a replayed operation reads its own body back.</summary>
     [Test]
     public async Task Decisions_AreOnePerAttemptAndReplayReturnsTheRecordedBody()

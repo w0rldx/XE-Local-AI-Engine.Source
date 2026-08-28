@@ -332,30 +332,10 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         var existing = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
         if (existing.Count == 0)
         {
+            // Only for a run created outside the run service — which is the one that holds the caller's inputs and so
+            // seeds the entry rows with them. Reaching here means there were none to seed.
             var workItem = await store.GetWorkItemAsync(run.WorkItemId, cancellationToken).ConfigureAwait(false);
-            var templateKeys = graph.Nodes.Values.Where(static node => node.Materialization is not null)
-                                    .Select(static node => node.Materialization!.TemplateNodeKey)
-                                    .ToHashSet(StringComparer.Ordinal);
-            var entryKeys = graph.EntryNodeKeys.Where(key => !templateKeys.Contains(key)).ToHashSet(StringComparer.Ordinal);
-
-            // The operator's request has to reach the first agent, and there is no run-level input column: every ENTRY
-            // node run is seeded with it, and the objective composer renders it at the top.
-            var inputJson = JsonSerializer.Serialize(new EntryInput(workItem.Request), JsonOptions);
-            var seeds = graph.Nodes.Values.Where(node => !templateKeys.Contains(node.NodeKey))
-                             .OrderBy(static node => node.NodeKey, StringComparer.Ordinal)
-                             .Select(node => new DevWorkflowNodeRunSeed(Guid.NewGuid(),
-                                 node.NodeKey,
-                                 node.NodeType,
-                                 node.MaxAttempts,
-                                 node.AgentDefinitionId,
-                                 workItem.DevelopmentProjectId,
-                                 entryKeys.Contains(node.NodeKey) ? inputJson : null))
-                             .ToList();
-
-            if (seeds.Count > maxNodeRunsPerRun)
-            {
-                throw new DevWorkflowValidationException($"This definition has {seeds.Count} nodes, more than the {maxNodeRunsPerRun} node runs a run may carry.");
-            }
+            var seeds = DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson: null, maxNodeRunsPerRun);
 
             _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(run.Id,
                                 DevWorkflowVersions.Any,
@@ -448,6 +428,11 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                                 FailureClass: target == DevWorkflowNodeRunStatus.Failed ? DevWorkflowFailureClasses.GateRejected : null,
                                 TerminalReason: target == DevWorkflowNodeRunStatus.Failed ? "A human abandoned this node run." : null,
                                 IncrementAttempt: incrementAttempt,
+
+                                // A retry gets a NEW session: resuming the one that just failed resumes the context
+                                // that failed with it. Releasing it here is also what stops the fresh attempt being
+                                // settled straight back off the old session's answer.
+                                ClearWorkSession: incrementAttempt,
                                 Outcome: outcome,
 
                                 // An answered node run may be the last thing the work item was blocked on, and the run
@@ -485,19 +470,16 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         }
 
         static (DevWorkflowNodeRunStatus Target, string? Outcome, bool IncrementAttempt) Resolve(DevWorkflowDecisionKind decision) =>
-            decision switch
-            {
-                // A gate answer always succeeds the gate: the ANSWER is the node's output, and routing on it is the
-                // edges' job. Reject reaches the run through an out-edge that matches nothing, not through a node failure.
-                DevWorkflowDecisionKind.Approve => (DevWorkflowNodeRunStatus.Succeeded, DevWorkflowOutcomes.Succeeded, false),
-                DevWorkflowDecisionKind.Reject => (DevWorkflowNodeRunStatus.Succeeded, DevWorkflowOutcomes.Rejected, false),
-                DevWorkflowDecisionKind.RequestChanges => (DevWorkflowNodeRunStatus.Succeeded, DevWorkflowOutcomes.ChangesRequested, false),
-
-                // Forced: a human retry ignores MaxAttempts, and only the run-wide attempt budget still bounds it.
-                DevWorkflowDecisionKind.Retry => (DevWorkflowNodeRunStatus.Pending, null, true),
-                DevWorkflowDecisionKind.Skip => (DevWorkflowNodeRunStatus.Skipped, null, false),
-                _ => (DevWorkflowNodeRunStatus.Failed, DevWorkflowOutcomes.Failed, false)
-            };
+            (DevWorkflowStateMachine.TargetFor(decision),
+                decision switch
+                {
+                    DevWorkflowDecisionKind.Reject => DevWorkflowOutcomes.Rejected,
+                    DevWorkflowDecisionKind.RequestChanges => DevWorkflowOutcomes.ChangesRequested,
+                    DevWorkflowDecisionKind.Approve => DevWorkflowOutcomes.Succeeded,
+                    DevWorkflowDecisionKind.Abandon => DevWorkflowOutcomes.Failed,
+                    _ => null
+                },
+                decision == DevWorkflowDecisionKind.Retry);
 
         static string Output(DevWorkflowDecisionKind decision) =>
             JsonSerializer.Serialize(new GateOutput(DevWorkflowNodeOutputStatuses.Succeeded, decision.ToString()), JsonOptions);
@@ -645,7 +627,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             {
                 // Already judged eligible when it was queued; only the slot was missing. Re-judging its edges would be
                 // asking a question whose answer cannot have changed — nothing un-succeeds.
-                written += await DispatchAsync(store, agent, run, graph, node, nodeRun, byKey, cancellationToken).ConfigureAwait(false);
+                written += await DispatchAsync(store, agent, run, graph, node, nodeRun, nodeRuns, byKey, cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
@@ -667,7 +649,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 continue;
             }
 
-            written += await DispatchAsync(store, agent, run, graph, node, nodeRun, byKey, cancellationToken).ConfigureAwait(false);
+            written += await DispatchAsync(store, agent, run, graph, node, nodeRun, nodeRuns, byKey, cancellationToken).ConfigureAwait(false);
         }
 
         return written;
@@ -692,12 +674,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         DevWorkflowGraph graph,
         DevWorkflowGraphNode node,
         DevWorkflowNodeRunSnapshot nodeRun,
+        IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
         IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey,
         CancellationToken cancellationToken)
     {
         if (node.NodeType == DevWorkflowNodeType.Agent)
         {
-            return await agent.DispatchAsync(store, graph, run, node, nodeRun, cancellationToken).ConfigureAwait(false);
+            return await agent.DispatchAsync(store, graph, run, node, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false);
         }
 
         if (node.NodeType is DevWorkflowNodeType.Tool or DevWorkflowNodeType.DevTask)
@@ -986,8 +969,6 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             _logger.LogError(exception, "Development workflow run {RunId} could not be advanced.", runId);
         }
     }
-
-    private sealed record EntryInput(string WorkItemRequest);
 
     private sealed record ReasonDetail(string Reason);
 

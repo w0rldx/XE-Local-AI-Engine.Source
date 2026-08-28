@@ -195,6 +195,31 @@ internal static class DevWorkflowStateMachine
     }
 
     /// <summary>
+    ///     Where a human's answer leaves the node run it answers.
+    ///     <para>
+    ///         A gate answer always SUCCEEDS the gate, whichever of the three it is: the answer is the node's output,
+    ///         and routing on it is the edges' job. A rejection reaches the run through an out-edge that matches
+    ///         nothing, not through a node failure — which is why <c>Reject</c> and <c>Approve</c> land in the same
+    ///         place here and part company in the graph.
+    ///     </para>
+    ///     <para>
+    ///         Shared by the decision endpoint and the dispatcher so the two cannot disagree about which answers a row
+    ///         in a given status can take: the endpoint refuses the rest with a conflict, and the dispatcher keeps its
+    ///         own guard for a decision recorded around it.
+    ///     </para>
+    /// </summary>
+    public static DevWorkflowNodeRunStatus TargetFor(DevWorkflowDecisionKind decision) =>
+        decision switch
+        {
+            DevWorkflowDecisionKind.Approve or DevWorkflowDecisionKind.Reject or DevWorkflowDecisionKind.RequestChanges => DevWorkflowNodeRunStatus.Succeeded,
+
+            // Forced: a human retry ignores MaxAttempts, and only the run-wide attempt budget still bounds it.
+            DevWorkflowDecisionKind.Retry => DevWorkflowNodeRunStatus.Pending,
+            DevWorkflowDecisionKind.Skip => DevWorkflowNodeRunStatus.Skipped,
+            _ => DevWorkflowNodeRunStatus.Failed
+        };
+
+    /// <summary>
     ///     Where a node-run transition about to be written leaves the work item, so the move can carry it in its own
     ///     transaction.
     ///     <para>

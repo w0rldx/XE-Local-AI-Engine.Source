@@ -64,11 +64,28 @@ internal sealed class DevWorkflowAgentExecutor
         DevWorkflowRunSnapshot run,
         DevWorkflowGraphNode node,
         DevWorkflowNodeRunSnapshot nodeRun,
+        IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(nodeRun);
+
+        if (await TryReadAttachedAsync(nodeRun, cancellationToken).ConfigureAwait(false) is
+            { Status: AgentWorkSessionStatus.Completed or AgentWorkSessionStatus.Failed or AgentWorkSessionStatus.Cancelled })
+        {
+            // The session landed and the host died before the poll wrote what it said. Nothing needs re-running — the
+            // row is settled off the session's own answer, which is exactly what that tick would have written. A retry
+            // does not come through here: it releases its session first, precisely so it cannot.
+            DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
+            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
+                                nodeRun.Id,
+                                DevWorkflowVersions.Any,
+                                DevWorkflowNodeRunStatus.Running),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+            return 1 + await PollAsync(store, run, nodeRun with { Status = DevWorkflowNodeRunStatus.Running }, nodeRuns, cancellationToken).ConfigureAwait(false);
+        }
 
         var written = 0;
         if (nodeRun.Status == DevWorkflowNodeRunStatus.Pending)
@@ -246,9 +263,7 @@ internal sealed class DevWorkflowAgentExecutor
         DevWorkflowNodeRunSnapshot nodeRun,
         CancellationToken cancellationToken)
     {
-        if (nodeRun.WorkSessionId is { } attached
-            && await TryReadAsync(attached, cancellationToken).ConfigureAwait(false) is { } existing
-            && existing.Status is not (AgentWorkSessionStatus.Completed or AgentWorkSessionStatus.Failed or AgentWorkSessionStatus.Cancelled))
+        if (await TryReadAttachedAsync(nodeRun, cancellationToken).ConfigureAwait(false) is { } existing)
         {
             return existing;
         }
@@ -449,6 +464,10 @@ internal sealed class DevWorkflowAgentExecutor
                     .ConfigureAwait(false);
         return 1;
     }
+
+    /// <summary>The session the row is still carrying, if it has one and it still exists.</summary>
+    private async Task<WorkSessionDetail?> TryReadAttachedAsync(DevWorkflowNodeRunSnapshot nodeRun, CancellationToken cancellationToken) =>
+        nodeRun.WorkSessionId is { } attached ? await TryReadAsync(attached, cancellationToken).ConfigureAwait(false) : null;
 
     private async Task<WorkSessionDetail?> TryReadAsync(Guid sessionId, CancellationToken cancellationToken)
     {

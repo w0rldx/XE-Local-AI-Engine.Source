@@ -121,6 +121,62 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
+    ///     Row #3's other half — the session landed in the window between finishing and the poll writing what it said.
+    ///     Nothing needs re-running: the row settles off the session's own answer, which is what that tick would have
+    ///     written had it got there.
+    /// </summary>
+    [Test]
+    public async Task AnAgentWhoseSessionLandedBeforeTheCrash_SettlesOnItRatherThanStartingOver()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+
+        // Completed, but the node run is still Running: nothing polled it before the host died.
+        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        await harness.RestartAsync().ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, harness.Agent.Created.Count, "a finished session must not be replaced by a second one doing the same work again.");
+        var settled = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, settled.Status);
+        AssertEx.Equal(sessionId, settled.WorkSessionId);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     A human retry is the opposite case, and the two are told apart by whether the row still holds its session: a
+    ///     retry releases it, so the fresh attempt gets a fresh session rather than being settled straight back off the
+    ///     answer that made it stop.
+    /// </summary>
+    [Test]
+    public async Task AHumanRetryOfAFailedAgent_ReleasesItsSessionAndGetsANewOne()
+    {
+        // No resumes allowed, so the first park blocks the node run for a human WITH its session still attached — which
+        // is the state the two rules have to be told apart in.
+        await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxSessionResumesPerNodeRun", "0"));
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var spentSessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Paused).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status);
+
+        await harness.DecideAsync(runId, "research", DevWorkflowDecisionKind.Retry).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var retried = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, retried.Attempt);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, retried.Status);
+        AssertEx.True(retried.WorkSessionId is { } fresh && fresh != spentSessionId,
+            "resuming the session that ran out of budget would resume the context that ran out with it.");
+        AssertEx.Equal(expected: 0, retried.SessionResumes, "the fresh attempt gets a fresh resume budget, or it is blocked before it takes a step.");
+        AssertEx.Equal(expected: 2, harness.Agent.Created.Count);
+    }
+
+    /// <summary>
     ///     The one case a restart cannot repair: the session is gone, so there is no transcript to resume and a second
     ///     one would be work nobody asked for. It goes to a human with the reason on the row.
     /// </summary>

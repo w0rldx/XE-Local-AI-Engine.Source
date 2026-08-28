@@ -282,6 +282,12 @@ public sealed record MaterializeDevWorkflowNodesCommand(
 ///     A node-run status move. <see cref="IncrementAttempt" /> is the retry-in-place path; the row is never duplicated.
 ///     <see cref="Outcome" /> overrides the outcome token derived from <see cref="TargetStatus" />, for the cases the
 ///     status alone cannot express (<c>timeout</c>, <c>interrupted</c>, <c>rejected</c>, <c>changes-requested</c>).
+///     <para>
+///         <see cref="ClearWorkSession" /> releases the session the row was driving, and belongs with a re-attempt: a
+///         retry gets a NEW session, because resuming the one that just failed resumes its poisoned context. It is also
+///         what tells a still-attached session apart from a finished one — a node run back at <c>Pending</c> with a
+///         session still on it is one the host died under, and its session's answer still counts.
+///     </para>
 /// </summary>
 public sealed record TransitionDevWorkflowNodeRunCommand(
     Guid RunId,
@@ -296,6 +302,7 @@ public sealed record TransitionDevWorkflowNodeRunCommand(
     string? TerminalReason = null,
     Guid? DevelopmentTaskId = null,
     bool IncrementAttempt = false,
+    bool ClearWorkSession = false,
     string? Outcome = null,
     DevWorkflowWorkItemStatus? WorkItemStatus = null);
 

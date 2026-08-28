@@ -128,6 +128,49 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         return run.Id;
     }
 
+    /// <summary>A work item and a definition, without a run: what the run service is handed.</summary>
+    public async Task<(Guid WorkItemId, Guid DefinitionId)> SeedDefinitionAsync(string graphJson,
+        string request = "Explain how the inference path works.",
+        Guid? developmentProjectId = null)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
+        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Seeded work item", request, developmentProjectId))
+                                  .ConfigureAwait(false);
+        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Seeded definition", graphJson, NodeCount: 1))
+                                    .ConfigureAwait(false);
+        return (workItem.Id, definition.Id);
+    }
+
+    public async Task ArchiveDefinitionAsync(Guid definitionId)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ArchiveDefinitionAsync(definitionId).ConfigureAwait(false);
+    }
+
+    /// <summary>Runs one call against the scoped run service, which is how every endpoint will reach it.</summary>
+    public async Task<T> WithRunServiceAsync<T>(Func<IDevWorkflowRunService, Task<T>> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        await using var scope = Services.CreateAsyncScope();
+        return await action(scope.ServiceProvider.GetRequiredService<IDevWorkflowRunService>()).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Whether the dispatcher was told to look at this run. Draining rather than peeking, because the assertion is
+    ///     "the command signalled" and a later one must not read this one's signal.
+    /// </summary>
+    public bool WasSignalled(Guid runId)
+    {
+        var found = false;
+        while (Dispatcher.PendingSignals.TryRead(out var signalled))
+        {
+            found |= signalled == runId;
+        }
+
+        return found;
+    }
+
     public Task<int> AdvanceAsync(Guid runId) =>
         Dispatcher.AdvanceOnceAsync(runId, CancellationToken.None);
 

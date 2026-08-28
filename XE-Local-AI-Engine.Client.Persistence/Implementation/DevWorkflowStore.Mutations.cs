@@ -143,6 +143,14 @@ internal sealed partial class DevWorkflowStore
                     nodeRun.Attempt++;
                 }
 
+                if (command.ClearWorkSession)
+                {
+                    // The resume budget goes with it: it bounds ONE attempt's session, and carrying a spent one into a
+                    // fresh attempt would block the new session before it had taken a step.
+                    nodeRun.WorkSessionId = null;
+                    nodeRun.SessionResumes = 0;
+                }
+
                 nodeRun.Status = command.TargetStatus;
                 nodeRun.QueueReason = command.TargetStatus == DevWorkflowNodeRunStatus.Queued ? command.QueueReason : null;
                 nodeRun.PendingDecisionKind = command.PendingDecisionKind;
