@@ -325,7 +325,10 @@ public sealed class DevWorkflowStateMachineTests
                      (DevWorkflowNodeRunStatus.Succeeded, DevWorkflowNodeRunStatus.Pending),
                      (DevWorkflowNodeRunStatus.Failed, DevWorkflowNodeRunStatus.Pending),
                      (DevWorkflowNodeRunStatus.Skipped, DevWorkflowNodeRunStatus.Queued),
-                     (DevWorkflowNodeRunStatus.Cancelled, DevWorkflowNodeRunStatus.Pending)
+                     (DevWorkflowNodeRunStatus.Cancelled, DevWorkflowNodeRunStatus.Pending),
+
+                     // X3: Skip is an intervention on a Blocked row, never a way past an open gate.
+                     (DevWorkflowNodeRunStatus.WaitingForApproval, DevWorkflowNodeRunStatus.Skipped)
                  })
         {
             AssertEx.False(DevWorkflowStateMachine.IsLegal(from, to), $"{from} → {to}");

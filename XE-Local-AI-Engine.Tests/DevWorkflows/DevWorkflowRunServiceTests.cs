@@ -282,6 +282,40 @@ public sealed class DevWorkflowRunServiceTests
                           .ConfigureAwait(false);
     }
 
+    /// <summary>
+    ///     X3: a gate takes its three answers, and the interventions belong to a blocked node run. Skipping an OPEN
+    ///     gate would be an operator walking past an approval instead of giving one — the one thing a gate exists to
+    ///     make impossible, and the property every later slice that puts an apply behind one depends on.
+    /// </summary>
+    [Test]
+    public async Task SkippingAnOpenGate_IsRefused()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, nodeRun.Status, "the gate has to be open for this to be the case under test.");
+
+        var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
+                                        harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                                            nodeRun.Id,
+                                            Guid.NewGuid(),
+                                            DevWorkflowDecisionKind.Skip,
+                                            comment: null,
+                                            payloadJson: null,
+                                            "operator@localhost.test")))
+                                    .ConfigureAwait(false);
+
+        AssertEx.Contains(refusal.Message, "cannot move to Skipped");
+        AssertEx.Equal(expected: 0,
+            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "gate.decided"),
+            "a refused answer is not recorded — there is no decision row for the runtime to settle later.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval,
+            (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status,
+            "and the gate is left exactly where it was.");
+    }
+
     /// <summary>An intervention answers a blocked node run, and the run finishes around it.</summary>
     [Test]
     public async Task SkippingABlockedNodeRun_LetsTheRunFinish()

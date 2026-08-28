@@ -323,10 +323,10 @@ public sealed class DevWorkflowRunEndpointTests
         AssertEx.Equal(ArtifactId, root.GetProperty("primaryArtifactId").GetGuid(), "the headline output is the newest version the node produced.");
         AssertEx.Equal(ArtifactId, root.GetProperty("producedArtifactIds")[0].GetGuid());
 
-        var allowed = root.GetProperty("allowedDecisions").EnumerateArray().Select(static value => value.GetString()).ToList();
-        AssertEx.Contains(string.Join(",", allowed), "Approve", StringComparison.Ordinal);
-        AssertEx.Contains(string.Join(",", allowed), "RequestChanges", StringComparison.Ordinal);
-        AssertEx.False(allowed.Contains("Retry"), "a gate awaiting its answer has no attempt to retry.");
+        var allowed = root.GetProperty("allowedDecisions").EnumerateArray().Select(static value => value.GetString());
+        AssertEx.Equal("Approve,Reject,RequestChanges",
+            string.Join(",", allowed),
+            "a gate offers its three answers and nothing else: no Retry, which has no attempt to repeat, and no Skip, which would walk past the approval.");
 
         // The seeded gate is terminal: no out-edge accepts a rejection, so rejecting it ENDS the run — and the confirm
         // dialog can only say so because the server answered this before the click.

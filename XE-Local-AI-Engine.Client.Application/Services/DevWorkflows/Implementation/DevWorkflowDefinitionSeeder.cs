@@ -40,14 +40,14 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
               "nodeType": "Agent",
               "label": "Research",
               "agentSeedSlug": "{{AgentDefaults.WorkSessionResearchAgentSeedSlug}}",
-              "instructions": "Research what the request asks about and record what you find. Ground every claim in something you actually read, and save a report artifact summarising it."
+              "instructions": "Research what the request asks about and record what you find. Ground every claim in something you actually read. Before you complete this session you MUST call save_artifact exactly once, with name \"research.md\", mediaType \"text/markdown\", kind \"Report\", and the whole write-up as text. record_finding is for notes along the way and does NOT satisfy this step: the next node reads your artifact, not your findings."
             },
             {
               "nodeKey": "plan",
               "nodeType": "Agent",
               "label": "Plan",
               "agentSeedSlug": "{{AgentDefaults.WorkSessionGeneralAgentSeedSlug}}",
-              "instructions": "Turn the research into a plan a person can approve: what to do, in what order, and what would show it worked. Save it as a report artifact."
+              "instructions": "Turn the research into a plan a person can approve: what to do, in what order, and what would show it worked. Before you complete this session you MUST call save_artifact exactly once, with name \"plan.md\", mediaType \"text/markdown\", kind \"Report\", and the whole plan as text. The approval gate shows the operator that artifact, so a plan left in findings is a plan nobody can approve."
             },
             {
               "nodeKey": "approve",

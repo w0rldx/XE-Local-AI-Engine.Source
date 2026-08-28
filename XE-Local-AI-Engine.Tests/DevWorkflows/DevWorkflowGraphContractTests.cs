@@ -40,7 +40,10 @@ public sealed class DevWorkflowGraphContractTests
     ///     would be five buttons that each answer "conflict".
     /// </summary>
     [Test]
-    [Arguments(DevWorkflowNodeRunStatus.WaitingForApproval, "Approve,Reject,RequestChanges,Skip")]
+
+    // A gate takes its three answers and nothing else. Skip belongs to the interventions: offering it here would be a
+    // button for walking past an approval instead of giving one.
+    [Arguments(DevWorkflowNodeRunStatus.WaitingForApproval, "Approve,Reject,RequestChanges")]
     [Arguments(DevWorkflowNodeRunStatus.Blocked, "Retry,Skip,Abandon")]
     [Arguments(DevWorkflowNodeRunStatus.Pending, "")]
     [Arguments(DevWorkflowNodeRunStatus.Queued, "")]
