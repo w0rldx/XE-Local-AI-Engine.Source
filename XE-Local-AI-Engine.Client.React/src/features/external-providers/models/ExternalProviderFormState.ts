@@ -3,6 +3,7 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import type {
 	XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse,
 	XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse,
+	XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse,
 	XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderConnectionRequest,
 } from "@/core/api/generated";
 import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
@@ -17,6 +18,7 @@ import {
 // are unreadable at every use site.
 export type ExternalProviderConnectionDto = XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse;
 export type ExternalProviderConnectionsDto = XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse;
+export type ExternalProviderProbeDto = XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse;
 type SaveConnectionBody = XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderConnectionRequest;
 
 export function errorMessage(error: unknown): string {
@@ -78,19 +80,38 @@ function numberToField(value: number | null | undefined): string {
 	return value === null || value === undefined ? "" : String(value);
 }
 
+/**
+ * Drops effort declarations a model cannot hold.
+ *
+ * A model that does not reason has no effort vocabulary to support, and one that does not support graded effort has no
+ * default effort to carry — the backend rejects (or canonicalizes away) both contradictions, so unticking a box clears
+ * what it made meaningless here too. Doing it in form state rather than only in the save mapper is what makes the
+ * DISABLED select stop showing a stale level the operator can no longer reach.
+ */
+function withCoherentReasoning(model: ExternalProviderModelDraft): ExternalProviderModelDraft {
+	if (!model.supportsReasoning) {
+		return { ...model, supportsReasoningEffort: false, defaultReasoningEffort: "" };
+	}
+	return model.supportsReasoningEffort ? model : { ...model, defaultReasoningEffort: "" };
+}
+
 // Loads a stored connection into the editor. The API key is never returned by the backend, so it always loads blank
 // and `clearApiKey` always loads false — the operator has to ask for removal again on every fresh edit.
 export function connectionToFormValues(connection: ExternalProviderConnectionDto): ExternalProviderFormValues {
-	const models = (connection.models ?? []).map((model) => ({
-		wireId: model.wireId,
-		displayName: model.displayName ?? "",
-		contextLength: numberToField(model.contextLength),
-		supportsTools: model.supportsTools,
-		supportsVision: model.supportsVision,
-		supportsReasoning: model.supportsReasoning,
-		supportsReasoningEffort: model.supportsReasoningEffort,
-		defaultReasoningEffort: (model.defaultReasoningEffort ?? "") as ReasoningEffort | "",
-	}));
+	const models = (connection.models ?? []).map((model) =>
+		// Canonicalized on the way in as well as on every edit, so a record written before the backend enforced the
+		// rule cannot re-present a contradiction the operator never chose.
+		withCoherentReasoning({
+			wireId: model.wireId,
+			displayName: model.displayName ?? "",
+			contextLength: numberToField(model.contextLength),
+			supportsTools: model.supportsTools,
+			supportsVision: model.supportsVision,
+			supportsReasoning: model.supportsReasoning,
+			supportsReasoningEffort: model.supportsReasoningEffort,
+			defaultReasoningEffort: (model.defaultReasoningEffort ?? "") as ReasoningEffort | "",
+		}),
+	);
 
 	return {
 		connectionId: connection.id,
@@ -160,6 +181,28 @@ export function createModelRowIds(values: ExternalProviderFormValues): string[] 
 	return Array.from({ length: values.models.length }, () => nextExternalRowId("external-model"));
 }
 
+/**
+ * Identity of the configuration a probe result is evidence ABOUT: the connection whose unseen stored key the backend
+ * may fall back to, the exact draft address that was probed, and what the key field said at the time.
+ *
+ * Everything the probe request can carry is in here, which is what lets a stale result be recognized as stale: the
+ * moment any of it changes, the models on screen were discovered at some other endpoint and must not be offered as
+ * rows to add to this one.
+ */
+export function probeInputFingerprint(values: ExternalProviderFormValues): string {
+	const typedKey = values.apiKey.trim();
+	const keyState = values.clearApiKey ? "cleared" : typedKey.length > 0 ? `typed:${typedKey}` : "stored";
+	return [values.connectionId.trim(), values.baseUrl.trim(), keyState].join("\n");
+}
+
+// The outcome of the last probe, together with the fingerprint of the inputs it was run against. Held in form state
+// rather than in the panel so the reducer — not the panel's own discipline — is what discards it.
+export interface ExternalProviderProbeState {
+	readonly fingerprint: string;
+	readonly result: ExternalProviderProbeDto | null;
+	readonly failure: string | null;
+}
+
 // Values, the per-field "touched" map, the submit flag and the row keys always reset together (a connection is
 // loaded, or a save commits), so one dispatch replaces all of them — the same grouping the cloud-settings reducer uses
 // and for the same reason.
@@ -168,6 +211,7 @@ export interface ExternalProviderFormState {
 	touched: Partial<Record<keyof ExternalProviderFormValues, true>>;
 	submitted: boolean;
 	modelRowIds: string[];
+	probe: ExternalProviderProbeState | null;
 }
 
 // The boolean capability flags a model row carries, named as one type so the toggle action cannot address a
@@ -186,6 +230,10 @@ export type ExternalProviderFormAction =
 	| { type: "toggleModelFlag"; index: number; flag: ExternalProviderModelFlag }
 	| { type: "setModelEffort"; index: number; value: ReasoningEffort | "" }
 	| { type: "addProbedModel"; wireId: string; contextLength: number | null | undefined; rowId: string }
+	// The fingerprint is the one taken when the request was SENT, not when it answered: a probe that lands after the
+	// operator has edited the address describes an endpoint that is no longer on screen.
+	| { type: "probeSucceeded"; fingerprint: string; result: ExternalProviderProbeDto }
+	| { type: "probeFailed"; fingerprint: string; failure: string }
 	| { type: "touchField"; field: keyof ExternalProviderFormValues }
 	| { type: "submit" };
 
@@ -194,6 +242,7 @@ export const initialFormState: ExternalProviderFormState = {
 	touched: {},
 	submitted: false,
 	modelRowIds: createModelRowIds(emptyFormValues),
+	probe: null,
 };
 
 function mapModel(
@@ -205,10 +254,10 @@ function mapModel(
 	return { ...state, values: { ...state.values, models } };
 }
 
-export function formReducer(state: ExternalProviderFormState, action: ExternalProviderFormAction): ExternalProviderFormState {
+function reduceForm(state: ExternalProviderFormState, action: ExternalProviderFormAction): ExternalProviderFormState {
 	switch (action.type) {
 		case "reset":
-			return { values: action.values, touched: {}, submitted: false, modelRowIds: action.rowIds };
+			return { values: action.values, touched: {}, submitted: false, modelRowIds: action.rowIds, probe: null };
 		case "setField":
 			return { ...state, values: { ...state.values, [action.field]: action.value } };
 		case "setLocality":
@@ -238,14 +287,15 @@ export function formReducer(state: ExternalProviderFormState, action: ExternalPr
 		case "setModelField":
 			return mapModel(state, action.index, (model) => ({ ...model, [action.field]: action.value }));
 		case "toggleModelFlag":
-			return mapModel(state, action.index, (model) => ({ ...model, [action.flag]: !model[action.flag] }));
+			return mapModel(state, action.index, (model) => withCoherentReasoning({ ...model, [action.flag]: !model[action.flag] }));
 		case "setModelEffort":
 			return mapModel(state, action.index, (model) => ({ ...model, defaultReasoningEffort: action.value }));
 		case "addProbedModel": {
 			const wireId = action.wireId.trim();
 			// The probe list stays clickable after a pick, so adding the same id twice has to be a no-op rather than a
-			// duplicate row the save would then reject.
-			if (state.values.models.some((model) => model.wireId.trim().toLowerCase() === wireId.toLowerCase())) {
+			// duplicate row the save would then reject. Compared EXACTLY: the store's own check is Ordinal, so "Foo" and
+			// "foo" are two registrable ids and folding their case would make one of them unaddable.
+			if (state.values.models.some((model) => model.wireId.trim() === wireId)) {
 				return state;
 			}
 			const added: ExternalProviderModelDraft = {
@@ -265,6 +315,10 @@ export function formReducer(state: ExternalProviderFormState, action: ExternalPr
 				modelRowIds: [...state.modelRowIds, action.rowId],
 			};
 		}
+		case "probeSucceeded":
+			return { ...state, probe: { fingerprint: action.fingerprint, result: action.result, failure: null } };
+		case "probeFailed":
+			return { ...state, probe: { fingerprint: action.fingerprint, result: null, failure: action.failure } };
 		case "touchField":
 			return { ...state, touched: { ...state.touched, [action.field]: true } };
 		case "submit":
@@ -272,4 +326,23 @@ export function formReducer(state: ExternalProviderFormState, action: ExternalPr
 		default:
 			return state;
 	}
+}
+
+/**
+ * Drops a probe result the form has edited out from under.
+ *
+ * Applied to EVERY action rather than to the handful that obviously matter, so there is no way to change the address,
+ * the key or the selected connection and still be looking at the previous endpoint's discovered models — which is the
+ * only thing standing between connection A's model list and a pick-to-add into connection B. It also covers a reply
+ * that arrives after the operator has moved on: the fingerprint the request was sent with no longer matches.
+ */
+function withFreshProbe(state: ExternalProviderFormState): ExternalProviderFormState {
+	if (state.probe === null) {
+		return state;
+	}
+	return state.probe.fingerprint === probeInputFingerprint(state.values) ? state : { ...state, probe: null };
+}
+
+export function formReducer(state: ExternalProviderFormState, action: ExternalProviderFormAction): ExternalProviderFormState {
+	return withFreshProbe(reduceForm(state, action));
 }

@@ -2092,7 +2092,7 @@
 				"removeApiKey": "Schlüssel entfernen",
 				"keepApiKey": "Gespeicherten Schlüssel behalten",
 				"timeoutLabel": "Zeitlimit (Sekunden)",
-				"timeoutHint": "Leer nutzt den Standard des Knotens.",
+				"timeoutHint": "Leer nutzt den Standard des Knotens. Zwischen 5 und 3600 Sekunden.",
 				"save": "Verbindung speichern",
 				"delete": "Verbindung löschen",
 				"cancel": "Abbrechen"
@@ -2394,7 +2394,8 @@
 					"runs": "Läufe",
 					"totalTokens": "Gesamt-Tokens",
 					"estimatedCost": "Gesch. Kosten"
-				}
+				},
+				"external": "Extern"
 			},
 			"models": {
 				"title": "Nutzung nach Modell",

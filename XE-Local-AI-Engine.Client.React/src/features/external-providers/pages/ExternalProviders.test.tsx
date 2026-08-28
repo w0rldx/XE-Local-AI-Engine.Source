@@ -254,14 +254,30 @@ describe("ExternalProviders page", () => {
 		expect(screen.getByText("Reachable")).toBeTruthy();
 	});
 
-	it("probes a stored connection by id so an unseen stored key is used", async () => {
+	// The connection id rides ALONGSIDE the draft address, never instead of it: the backend applies the stored key only
+	// when the draft address is on the stored connection's own origin, and sending the id alone would probe the
+	// endpoint the operator has just edited away from.
+	it("probes the draft address, naming the stored connection so an unseen stored key can still apply", async () => {
 		await openStoredEditor();
 
 		fireEvent.click(screen.getByTestId("external-provider-probe"));
 
 		await waitFor(() => expect(generatedMock.probeFn).toHaveBeenCalledTimes(1));
 		const [call] = generatedMock.probeFn.mock.calls[0] as [{ body: Record<string, unknown> }];
-		expect(call.body).toEqual({ connectionId: "unsloth-box" });
+		expect(call.body).toEqual({ connectionId: "unsloth-box", baseUrl: "http://127.0.0.1:8080/v1" });
+	});
+
+	it("probes the EDITED address rather than the stored one", async () => {
+		await openStoredEditor();
+
+		fireEvent.change(screen.getByTestId("external-provider-base-url"), {
+			target: { value: "https://elsewhere.example.com/v1" },
+		});
+		fireEvent.click(screen.getByTestId("external-provider-probe"));
+
+		await waitFor(() => expect(generatedMock.probeFn).toHaveBeenCalledTimes(1));
+		const [call] = generatedMock.probeFn.mock.calls[0] as [{ body: Record<string, unknown> }];
+		expect(call.body["baseUrl"]).toBe("https://elsewhere.example.com/v1");
 	});
 
 	it("probes the draft address once a key is typed, so the test matches what is on screen", async () => {
@@ -272,7 +288,79 @@ describe("ExternalProviders page", () => {
 
 		await waitFor(() => expect(generatedMock.probeFn).toHaveBeenCalledTimes(1));
 		const [call] = generatedMock.probeFn.mock.calls[0] as [{ body: Record<string, unknown> }];
-		expect(call.body).toEqual({ baseUrl: "http://127.0.0.1:8080/v1", apiKey: "sk-new" });
+		expect(call.body).toEqual({ connectionId: "unsloth-box", baseUrl: "http://127.0.0.1:8080/v1", apiKey: "sk-new" });
+	});
+
+	it("drops a pending key removal from the probe, so the test is keyless like the save will be", async () => {
+		await openStoredEditor();
+
+		fireEvent.click(screen.getByTestId("external-provider-remove-key"));
+		fireEvent.click(screen.getByTestId("external-provider-probe"));
+
+		await waitFor(() => expect(generatedMock.probeFn).toHaveBeenCalledTimes(1));
+		const [call] = generatedMock.probeFn.mock.calls[0] as [{ body: Record<string, unknown> }];
+		expect(call.body).toEqual({ baseUrl: "http://127.0.0.1:8080/v1" });
+	});
+
+	it("clears the probe result when the address changes, so one endpoint's models cannot be added to another", async () => {
+		generatedMock.probeFn.mockResolvedValue({ reachable: true, models: [{ id: "llama-3.1-8b", contextLength: 8192 }] });
+		await openStoredEditor();
+
+		fireEvent.click(screen.getByTestId("external-provider-probe"));
+		await waitFor(() => expect(screen.getByTestId("external-provider-probe-add-llama-3.1-8b")).toBeTruthy());
+
+		fireEvent.change(screen.getByTestId("external-provider-base-url"), {
+			target: { value: "https://elsewhere.example.com/v1" },
+		});
+
+		expect(screen.queryByTestId("external-provider-probe-result")).toBeNull();
+		expect(screen.queryByTestId("external-provider-probe-add-llama-3.1-8b")).toBeNull();
+	});
+
+	it("blocks a save that moves a key-bearing connection to another origin, and says so on the key field", async () => {
+		await openStoredEditor();
+
+		fireEvent.change(screen.getByTestId("external-provider-base-url"), {
+			target: { value: "https://elsewhere.example.com/v1" },
+		});
+
+		expect(screen.getByText(/stored key was issued for a different address/i)).toBeTruthy();
+		expect((screen.getByTestId("external-provider-save") as HTMLButtonElement).disabled).toBe(true);
+
+		// Typing the key for the new endpoint answers the question and re-enables the save.
+		fireEvent.change(screen.getByTestId("external-provider-api-key"), { target: { value: "sk-new" } });
+
+		expect((screen.getByTestId("external-provider-save") as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	it("keeps saving a path-only change without re-entering the key — the endpoint is unchanged", async () => {
+		await openStoredEditor();
+
+		fireEvent.change(screen.getByTestId("external-provider-base-url"), {
+			target: { value: "http://127.0.0.1:8080/openai/v1" },
+		});
+
+		expect((screen.getByTestId("external-provider-save") as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	it("switches to editing the stored connection when a create conflicts on an id that already exists", async () => {
+		const conflictBody = { revision: "rev-9", connections: [connection({ id: "gateway", displayName: "Taken already" })] };
+		generatedMock.saveFn.mockRejectedValue(new ApiError(409, conflictBody as unknown as ProblemDetails));
+
+		renderPage();
+		await waitFor(() => expect(screen.getByTestId("external-provider-add-connection")).toBeTruthy());
+		fireEvent.click(screen.getByTestId("external-provider-add-connection"));
+		fireEvent.change(screen.getByTestId("external-provider-id"), { target: { value: "gateway" } });
+		fireEvent.change(screen.getByTestId("external-provider-display-name"), { target: { value: "Gateway" } });
+		fireEvent.change(screen.getByTestId("external-provider-base-url"), { target: { value: "https://gw.example.com/v1" } });
+		fireEvent.click(screen.getByTestId("external-provider-save"));
+
+		await waitFor(() => expect(screen.getByTestId("external-provider-conflict")).toBeTruthy());
+		// The editor now points at the resource that exists: its id is fixed, Delete is available, and the fields show
+		// what is stored rather than the draft that lost.
+		expect((screen.getByTestId("external-provider-id") as HTMLInputElement).disabled).toBe(true);
+		expect(screen.getByTestId("external-provider-delete")).toBeTruthy();
+		expect((screen.getByTestId("external-provider-display-name") as HTMLInputElement).value).toBe("Taken already");
 	});
 
 	it("holds a blank new connection back from saving until it is valid", async () => {

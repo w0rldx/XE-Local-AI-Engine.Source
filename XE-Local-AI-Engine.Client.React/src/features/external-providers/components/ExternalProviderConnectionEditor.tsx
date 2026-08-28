@@ -6,7 +6,10 @@ import { useTranslation } from "react-i18next";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { ExternalProviderModelFields } from "@/features/external-providers/components/ExternalProviderModelFields";
 import { ExternalProviderProbePanel } from "@/features/external-providers/components/ExternalProviderProbePanel";
-import type { ExternalProviderFormAction } from "@/features/external-providers/models/ExternalProviderFormState";
+import type {
+	ExternalProviderFormAction,
+	ExternalProviderProbeState,
+} from "@/features/external-providers/models/ExternalProviderFormState";
 import type {
 	ExternalProviderFormErrors,
 	ExternalProviderFormValues,
@@ -17,6 +20,7 @@ interface ExternalProviderConnectionEditorProps {
 	readonly values: ExternalProviderFormValues;
 	readonly visibleErrors: ExternalProviderFormErrors;
 	readonly modelRowIds: readonly string[];
+	readonly probe: ExternalProviderProbeState | null;
 	readonly dispatch: Dispatch<ExternalProviderFormAction>;
 	readonly connection: {
 		readonly isNew: boolean;
@@ -37,7 +41,7 @@ const segmentedControlStyles = { label: { whiteSpace: "normal" as const } };
 
 export function ExternalProviderConnectionEditor(props: ExternalProviderConnectionEditorProps) {
 	const { t } = useTranslation();
-	const { values, visibleErrors, modelRowIds, dispatch, connection, status } = props;
+	const { values, visibleErrors, modelRowIds, probe, dispatch, connection, status } = props;
 	const isActionPending = status.isSaving || status.isDeleting;
 
 	return (
@@ -164,6 +168,9 @@ export function ExternalProviderConnectionEditor(props: ExternalProviderConnecti
 							const value = event.currentTarget.value;
 							dispatch({ type: "setField", field: "apiKey", value });
 						}}
+						// The only error this field carries is the key-rebinding one, and its cause is an edit to the base
+						// URL — so it is shown as soon as it applies rather than waiting for a visit to this field.
+						error={visibleErrors.apiKey}
 					/>
 					{connection.hasApiKey ? (
 						<Button
@@ -198,6 +205,7 @@ export function ExternalProviderConnectionEditor(props: ExternalProviderConnecti
 				values={values}
 				isStored={!connection.isNew}
 				hasStoredApiKey={connection.hasApiKey}
+				probe={probe}
 				dispatch={dispatch}
 			/>
 

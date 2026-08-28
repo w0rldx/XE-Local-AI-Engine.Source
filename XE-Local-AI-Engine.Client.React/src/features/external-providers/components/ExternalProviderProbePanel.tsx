@@ -2,63 +2,71 @@ import { Alert, Badge, Button, Group, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle, IconCheck, IconPlugConnected, IconPlus } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import type { Dispatch } from "react";
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse } from "@/core/api/generated";
 import { probeExternalProviderMutation } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import {
 	errorMessage,
 	type ExternalProviderFormAction,
+	type ExternalProviderProbeState,
 	nextExternalRowId,
+	probeInputFingerprint,
 } from "@/features/external-providers/models/ExternalProviderFormState";
 import type { ExternalProviderFormValues } from "@/features/external-providers/models/ExternalProviderModel";
 
-type ProbeResponse = XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse;
-
 interface ExternalProviderProbePanelProps {
 	readonly values: ExternalProviderFormValues;
-	// False while creating: there is nothing stored to probe by id yet, so the draft address must carry the request.
+	// False while creating: there is no stored connection whose unseen key the backend could fall back to.
 	readonly isStored: boolean;
 	readonly hasStoredApiKey: boolean;
+	// The last probe outcome, already fingerprint-checked by the reducer — non-null only while it still describes the
+	// configuration on screen.
+	readonly probe: ExternalProviderProbeState | null;
 	readonly dispatch: Dispatch<ExternalProviderFormAction>;
 }
 
-export function ExternalProviderProbePanel({ values, isStored, hasStoredApiKey, dispatch }: ExternalProviderProbePanelProps) {
+export function ExternalProviderProbePanel({
+	values,
+	isStored,
+	hasStoredApiKey,
+	probe,
+	dispatch,
+}: ExternalProviderProbePanelProps) {
 	const { t } = useTranslation();
-	const [result, setResult] = useState<ProbeResponse | null>(null);
-	const [failure, setFailure] = useState<string | null>(null);
-
-	const probeMutation = useMutation({
-		...withResponseValidation(probeExternalProviderMutation()),
-		onSuccess: (response: ProbeResponse) => {
-			setFailure(null);
-			setResult(response);
-		},
-		onError: (error) => {
-			setResult(null);
-			setFailure(errorMessage(error));
-		},
-	});
+	const probeMutation = useMutation(withResponseValidation(probeExternalProviderMutation()));
 
 	const typedKey = values.apiKey.trim();
 	const baseUrl = values.baseUrl.trim();
-	// The probe has to reach the endpoint the operator is LOOKING at, so the draft address and a freshly typed key
-	// always win. Naming the stored connection is the only way to probe with a key the editor cannot see — so it is
-	// the fallback, used exactly when the connection is stored and the key field was left untouched.
-	const probeByStoredConnection = isStored && typedKey.length === 0 && hasStoredApiKey && !values.clearApiKey;
 
 	const runProbe = (): void => {
-		probeMutation.mutate({
-			body: probeByStoredConnection
-				? { connectionId: values.connectionId }
-				: { baseUrl, ...(typedKey.length > 0 ? { apiKey: values.apiKey } : {}) },
-		});
+		// The fingerprint of what is being probed, taken BEFORE the request goes out, so a reply that lands after the
+		// operator has edited the form is recognized as describing a different endpoint.
+		const fingerprint = probeInputFingerprint(values);
+		probeMutation.mutate(
+			{
+				body: {
+					// The connection id rides ALONGSIDE the draft address, never instead of it: the backend falls back to
+					// the stored key only when the draft address is on the stored connection's own origin, which is
+					// exactly the case where the key the editor cannot see is the right credential. Sending only the id
+					// would probe the OLD endpoint and hide an edited address. A pending key removal drops the id — that
+					// draft is deliberately keyless.
+					...(isStored && hasStoredApiKey && !values.clearApiKey ? { connectionId: values.connectionId.trim() } : {}),
+					baseUrl,
+					...(typedKey.length > 0 ? { apiKey: values.apiKey } : {}),
+				},
+			},
+			{
+				onSuccess: (result) => dispatch({ type: "probeSucceeded", fingerprint, result }),
+				onError: (error) => dispatch({ type: "probeFailed", fingerprint, failure: errorMessage(error) }),
+			},
+		);
 	};
 
+	const result = probe?.result ?? null;
+	const failure = probe?.failure ?? null;
 	const probedModels = result?.models ?? [];
-	const canProbe = probeByStoredConnection || baseUrl.length > 0;
+	const canProbe = baseUrl.length > 0;
 
 	return (
 		<Stack gap={6}>
@@ -112,9 +120,8 @@ export function ExternalProviderProbePanel({ values, isStored, hasStoredApiKey, 
 							</Text>
 							<Group gap="xs" wrap="wrap">
 								{probedModels.map((model) => {
-									const alreadyAdded = values.models.some(
-										(row) => row.wireId.trim().toLowerCase() === model.id.trim().toLowerCase(),
-									);
+									// Exact, matching the store's Ordinal identity: "Foo" and "foo" are two registrable ids.
+									const alreadyAdded = values.models.some((row) => row.wireId.trim() === model.id.trim());
 									return (
 										<Button
 											key={model.id}

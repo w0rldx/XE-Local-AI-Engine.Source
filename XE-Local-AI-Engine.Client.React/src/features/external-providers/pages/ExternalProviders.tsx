@@ -51,7 +51,7 @@ export function ExternalProviders() {
 	} = useQuery(withResponseValidation(listExternalProviderConnectionsOptions()));
 
 	const [formState, dispatch] = useReducer(formReducer, initialFormState);
-	const { values, touched, submitted, modelRowIds } = formState;
+	const { values, touched, submitted, modelRowIds, probe } = formState;
 	const [editorTarget, setEditorTarget] = useState<EditorTarget | null>(null);
 	// Set when a write loses the revision race. The 409 carries the whole configuration, so the page renders that
 	// instead of refetching — and this notice explains why the editor's contents just changed under the operator.
@@ -65,18 +65,29 @@ export function ExternalProviders() {
 	);
 
 	const errors = useMemo(
-		() => (editorTarget ? validateExternalProviderForm(values, editorTarget.isNew) : {}),
-		[editorTarget, values],
+		() =>
+			editorTarget
+				? validateExternalProviderForm(
+						values,
+						editorTarget.isNew,
+						storedConnection ? { baseUrl: storedConnection.baseUrl, hasApiKey: storedConnection.hasApiKey } : undefined,
+					)
+				: {},
+		[editorTarget, storedConnection, values],
 	);
 	const hasErrors = Object.keys(errors).length > 0;
 	// Only show a field's error once the operator has been in it, or after a save attempt — the same restraint the
 	// cloud-settings editor uses so a fresh form is not pre-reddened.
+	//
+	// `apiKey` is the exception: its only error is raised by an edit to the BASE URL, and Save is disabled while it
+	// stands, so gating it on having visited the key field (or on a submit that can never fire) would hide the one
+	// message that explains why saving is blocked.
 	const visibleErrors = useMemo<ExternalProviderFormErrors>(
 		() =>
 			submitted
 				? errors
 				: (Object.fromEntries(
-						Object.entries(errors).filter(([key]) => touched[key as keyof ExternalProviderFormValues]),
+						Object.entries(errors).filter(([key]) => key === "apiKey" || touched[key as keyof ExternalProviderFormValues]),
 					) as ExternalProviderFormErrors),
 		[errors, submitted, touched],
 	);
@@ -94,24 +105,34 @@ export function ExternalProviders() {
 
 	// Renders what the server says is stored right now. When the connection under edit survived the other writer's
 	// change, the editor reloads it; when it did not, the editor closes rather than pointing at an id that is gone.
+	//
+	// A CREATE that conflicts is the same shape with a different meaning: the id the operator typed is already taken,
+	// so what comes back is somebody else's stored connection under that id. The editor switches to EDITING it —
+	// otherwise the id stays typeable and Delete stays hidden while the fields show a resource that does exist.
 	const applyConflict = useCallback(
 		(conflict: ExternalProviderConnectionsDto, notice: string) => {
 			queryClient.setQueryData(listExternalProviderConnectionsQueryKey(), conflict);
 			setConflictNotice(notice);
-			const current = editorTarget
-				? (conflict.connections ?? []).find((entry) => entry.id === editorTarget.connectionId)
-				: undefined;
+			if (!editorTarget) {
+				return;
+			}
+			// While creating, the target's id is still blank — the id under edit is the one in the form.
+			const editedId = editorTarget.isNew ? values.connectionId.trim() : editorTarget.connectionId;
+			const current = (conflict.connections ?? []).find((entry) => entry.id === editedId);
 			if (current) {
+				if (editorTarget.isNew) {
+					setEditorTarget({ connectionId: current.id, isNew: false });
+				}
 				const formValues = connectionToFormValues(current);
 				dispatch({ type: "reset", values: formValues, rowIds: createModelRowIds(formValues) });
 				return;
 			}
-			if (editorTarget && !editorTarget.isNew) {
+			if (!editorTarget.isNew) {
 				setEditorTarget(null);
 				dispatch({ type: "reset", values: emptyFormValues, rowIds: createModelRowIds(emptyFormValues) });
 			}
 		},
-		[editorTarget, queryClient],
+		[editorTarget, queryClient, values.connectionId],
 	);
 
 	const onWriteSuccess = useCallback(
@@ -231,6 +252,7 @@ export function ExternalProviders() {
 					values={values}
 					visibleErrors={visibleErrors}
 					modelRowIds={modelRowIds}
+					probe={probe}
 					dispatch={dispatch}
 					connection={{ isNew: editorTarget.isNew, hasApiKey: storedConnection?.hasApiKey ?? false }}
 					status={{

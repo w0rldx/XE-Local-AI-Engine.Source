@@ -12,6 +12,7 @@ import {
 	formReducer,
 	initialFormState,
 	parseConnectionsConflict,
+	probeInputFingerprint,
 	toSaveRequestBody,
 } from "@/features/external-providers/models/ExternalProviderFormState";
 import type { ExternalProviderModelDraft } from "@/features/external-providers/models/ExternalProviderModel";
@@ -227,11 +228,18 @@ describe("formReducer", () => {
 		expect(second.modelRowIds).toHaveLength(2);
 	});
 
-	it("ignores a probed model that is already registered, case-insensitively", () => {
+	it("ignores a probed model that is already registered", () => {
 		const first = formReducer(initialFormState, { type: "addProbedModel", wireId: "a", contextLength: null, rowId: "row-1" });
-		const again = formReducer(first, { type: "addProbedModel", wireId: "A", contextLength: null, rowId: "row-2" });
+		const again = formReducer(first, { type: "addProbedModel", wireId: " a ", contextLength: null, rowId: "row-2" });
 
 		expect(again).toBe(first);
+	});
+
+	it("adds a probed model differing only in case — the store's wire-id identity is Ordinal, so both are real ids", () => {
+		const first = formReducer(initialFormState, { type: "addProbedModel", wireId: "Foo", contextLength: null, rowId: "row-1" });
+		const both = formReducer(first, { type: "addProbedModel", wireId: "foo", contextLength: null, rowId: "row-2" });
+
+		expect(both.values.models.map((model) => model.wireId)).toEqual(["Foo", "foo"]);
 	});
 
 	it("leaves the context length blank when the probe reported none", () => {
@@ -262,5 +270,126 @@ describe("formReducer", () => {
 
 		expect(reset.submitted).toBe(false);
 		expect(reset.touched).toEqual({});
+	});
+});
+
+describe("formReducer — contradictory reasoning declarations", () => {
+	function reasoningModel(): ExternalProviderFormState {
+		return stateWith(connectionToFormValues(storedConnection()));
+	}
+
+	it("clears the effort support flag and the default effort when reasoning is unchecked", () => {
+		const off = formReducer(reasoningModel(), { type: "toggleModelFlag", index: 0, flag: "supportsReasoning" });
+
+		expect(off.values.models[0]).toMatchObject({
+			supportsReasoning: false,
+			supportsReasoningEffort: false,
+			defaultReasoningEffort: "",
+		});
+	});
+
+	it("clears only the default effort when effort support alone is unchecked", () => {
+		const off = formReducer(reasoningModel(), { type: "toggleModelFlag", index: 0, flag: "supportsReasoningEffort" });
+
+		expect(off.values.models[0]).toMatchObject({
+			supportsReasoning: true,
+			supportsReasoningEffort: false,
+			defaultReasoningEffort: "",
+		});
+	});
+
+	it("does not restore a cleared effort when reasoning is switched back on", () => {
+		const off = formReducer(reasoningModel(), { type: "toggleModelFlag", index: 0, flag: "supportsReasoning" });
+		const on = formReducer(off, { type: "toggleModelFlag", index: 0, flag: "supportsReasoning" });
+
+		expect(on.values.models[0]).toMatchObject({ supportsReasoningEffort: false, defaultReasoningEffort: "" });
+	});
+
+	it("canonicalizes a stored record that already carries the contradiction", () => {
+		const contradictory = connectionToFormValues(
+			storedConnection({
+				models: [
+					{
+						wireId: "qwen3-27b",
+						modelId: "ext:unsloth-box/qwen3-27b",
+						displayName: null,
+						contextLength: null,
+						supportsTools: false,
+						supportsVision: false,
+						supportsReasoning: false,
+						supportsReasoningEffort: true,
+						defaultReasoningEffort: "high",
+					},
+				],
+			}),
+		);
+
+		expect(contradictory.models[0]).toMatchObject({ supportsReasoningEffort: false, defaultReasoningEffort: "" });
+	});
+
+	it("never lets an effort field reach the save payload with reasoning off", () => {
+		const off = formReducer(reasoningModel(), { type: "toggleModelFlag", index: 0, flag: "supportsReasoning" });
+		const [model] = toSaveRequestBody(off.values, "rev-1").models;
+
+		expect(model?.supportsReasoning).toBe(false);
+		expect(model?.supportsReasoningEffort).toBe(false);
+		expect(model?.defaultReasoningEffort).toBeUndefined();
+	});
+});
+
+describe("formReducer — probe results are bound to the configuration they describe", () => {
+	const reachable = { reachable: true, models: [{ id: "llama-3.1-8b", contextLength: 8192 }] };
+
+	function probed(state: ExternalProviderFormState): ExternalProviderFormState {
+		return formReducer(state, {
+			type: "probeSucceeded",
+			fingerprint: probeInputFingerprint(state.values),
+			result: reachable,
+		});
+	}
+
+	function stored(): ExternalProviderFormState {
+		return stateWith(connectionToFormValues(storedConnection()));
+	}
+
+	it("keeps a result whose inputs are still on screen", () => {
+		expect(probed(stored()).probe?.result).toEqual(reachable);
+	});
+
+	it("drops the result when the base URL changes — those models were discovered somewhere else", () => {
+		const moved = formReducer(probed(stored()), { type: "setField", field: "baseUrl", value: "https://other.example.com/v1" });
+
+		expect(moved.probe).toBeNull();
+	});
+
+	it("drops the result when the API-key field changes, and when a removal is requested", () => {
+		expect(formReducer(probed(stored()), { type: "setField", field: "apiKey", value: "sk-new" }).probe).toBeNull();
+		expect(formReducer(probed(stored()), { type: "removeApiKey" }).probe).toBeNull();
+	});
+
+	it("drops the result when another connection is loaded into the editor", () => {
+		const other = connectionToFormValues(storedConnection({ id: "gateway", baseUrl: "https://gw.example.com/v1" }));
+		const switched = formReducer(probed(stored()), { type: "reset", values: other, rowIds: createModelRowIds(other) });
+
+		expect(switched.probe).toBeNull();
+	});
+
+	it("discards a reply that lands after the operator has already edited the address", () => {
+		const before = probeInputFingerprint(stored().values);
+		const edited = formReducer(stored(), { type: "setField", field: "baseUrl", value: "https://other.example.com/v1" });
+		const late = formReducer(edited, { type: "probeSucceeded", fingerprint: before, result: reachable });
+
+		expect(late.probe).toBeNull();
+	});
+
+	it("clears a failure on the same terms as a result", () => {
+		const failed = formReducer(stored(), {
+			type: "probeFailed",
+			fingerprint: probeInputFingerprint(stored().values),
+			failure: "Connection refused",
+		});
+
+		expect(failed.probe?.failure).toBe("Connection refused");
+		expect(formReducer(failed, { type: "setField", field: "baseUrl", value: "http://127.0.0.1:9090/v1" }).probe).toBeNull();
 	});
 });

@@ -2092,7 +2092,7 @@
 				"removeApiKey": "Remove key",
 				"keepApiKey": "Keep stored key",
 				"timeoutLabel": "Timeout (seconds)",
-				"timeoutHint": "Blank uses the node default.",
+				"timeoutHint": "Blank uses the node default. Between 5 and 3600 seconds.",
 				"save": "Save connection",
 				"delete": "Delete connection",
 				"cancel": "Cancel"
@@ -2394,7 +2394,8 @@
 					"runs": "Runs",
 					"totalTokens": "Total tokens",
 					"estimatedCost": "Est. cost"
-				}
+				},
+				"external": "External"
 			},
 			"models": {
 				"title": "Usage by model",
