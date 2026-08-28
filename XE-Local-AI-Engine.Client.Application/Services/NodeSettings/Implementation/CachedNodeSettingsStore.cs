@@ -59,4 +59,18 @@ public sealed class CachedNodeSettingsStore : INodeSettingsStore
         var persisted = await _inner.LoadAsync(cancellationToken).ConfigureAwait(false);
         _cache.Set(CacheKey, persisted);
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    ///     Delegated WHOLE to the inner store rather than composed here out of a cached load plus a save: the point of
+    ///     the operation is that the read and the write happen under one lock, and reading from this cache would put the
+    ///     mutation outside it — reintroducing exactly the lost-update window it exists to close. The inner store
+    ///     returns what it persisted, so the cache is re-primed from that without a second read.
+    /// </remarks>
+    public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
+    {
+        var persisted = await _inner.UpdateAsync(mutate, cancellationToken).ConfigureAwait(false);
+        _cache.Set(CacheKey, persisted);
+        return persisted;
+    }
 }

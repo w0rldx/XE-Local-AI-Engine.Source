@@ -629,6 +629,11 @@ public sealed class CapabilityReporterTests
         {
             return Task.CompletedTask;
         }
+
+        public Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(mutate(_settings));
+        }
     }
 
     private sealed class FakeTimeProvider : TimeProvider

@@ -268,5 +268,11 @@ public sealed class LocalModelExternalEndpointTests
             LastSavedDefaultModelName = settings.DefaultModelName;
             return Task.CompletedTask;
         }
+
+        public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
+        {
+            await SaveAsync(mutate(_settings), cancellationToken);
+            return _settings;
+        }
     }
 }

@@ -159,7 +159,42 @@ public sealed class ExternalProviderReconcilerTests
         var report = await fixture.Reconciler.ReconcileAsync();
 
         AssertEx.False(report.DefaultModelCleared);
-        await fixture.SettingsStore.DidNotReceive().SaveAsync(Arg.Any<StoredNodeSettings>(), Arg.Any<CancellationToken>());
+        AssertEx.Equal(0, fixture.SettingsStore.WriteCount);
+    }
+
+    [Test]
+    public async Task ReconcileAsync_WhenTheStoreCannotBeRead_ChangesNothing()
+    {
+        // The pass DELETES anything the configuration does not list. Run against a store that merely looks empty
+        // because the file is locked, it would erase the operator's whole external setup and report success.
+        var fixture = new Fixture(existingAllowList: ["ext:unsloth-box/qwen3"],
+            defaultModelName: "ext:unsloth-box/qwen3",
+            store: new UnreadableExternalProviderStore());
+        fixture.MapStore.Seed("ext:unsloth-box/qwen3", "external");
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        AssertEx.False(report.Changed);
+        AssertEx.Equal(0, fixture.SettingsStore.WriteCount);
+        AssertEx.Equal(1, fixture.MapStore.Mappings.Count);
+    }
+
+    [Test]
+    public async Task ReconcileAsync_KeepsBothCaseVariantsOfOneWireId()
+    {
+        var fixture = new Fixture();
+        var connection = ExternalProviderTestData.Connection();
+        _ = fixture.Registry.Add(connection, ExternalProviderTestData.Model() with { WireId = "Foo" });
+        _ = fixture.Registry.Add(connection, ExternalProviderTestData.Model() with { WireId = "foo" });
+        fixture.MapStore.Seed("ext:unsloth-box/Foo", "external");
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        // The map key is NOCASE, so one row serves both spellings. Detecting orphans ordinally while checking coverage
+        // case-insensitively is what let the row be skipped as covered and then deleted as `foo`'s orphan — taking both
+        // models' routing with it.
+        AssertEx.Equal(0, report.MapRowsRemoved);
+        AssertEx.Equal(1, fixture.MapStore.Mappings.Count);
     }
 
     [Test]
@@ -178,16 +213,18 @@ public sealed class ExternalProviderReconcilerTests
 
     private sealed class Fixture
     {
-        public Fixture(IReadOnlyList<string>? existingAllowList = null, string? defaultModelName = null)
+        public Fixture(IReadOnlyList<string>? existingAllowList = null,
+            string? defaultModelName = null,
+            IExternalProviderStore? store = null)
         {
-            var stored = new StoredNodeSettings
+            SettingsStore = new RecordingNodeSettingsStore(new StoredNodeSettings
             {
                 ToolCapableModels = existingAllowList,
                 DefaultModelName = defaultModelName
-            };
-            _ = SettingsStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult(stored));
+            });
 
             Reconciler = new ExternalProviderReconciler(Registry,
+                store ?? new FakeExternalProviderStore(),
                 MapStore,
                 new ModelProviderMapLeaseCoordinator(new KeyedCompositeLockDomain()),
                 ProviderResolver,
@@ -200,14 +237,74 @@ public sealed class ExternalProviderReconcilerTests
         public InMemoryCoordinatedModelProviderMapStore MapStore { get; } = new();
         public ILocalModelProviderResolver ProviderResolver { get; } = Substitute.For<ILocalModelProviderResolver>();
         public ILocalChatClientCacheInvalidator ChatClientCache { get; } = Substitute.For<ILocalChatClientCacheInvalidator>();
-        public INodeSettingsStore SettingsStore { get; } = Substitute.For<INodeSettingsStore>();
+        public RecordingNodeSettingsStore SettingsStore { get; }
         public ExternalProviderReconciler Reconciler { get; }
 
         public StoredNodeSettings CapturedSettings()
         {
-            return (StoredNodeSettings)SettingsStore.ReceivedCalls()
-                                                    .Single(call => string.Equals(call.GetMethodInfo().Name, nameof(INodeSettingsStore.SaveAsync), StringComparison.Ordinal))
-                                                    .GetArguments()[0]!;
+            return SettingsStore.LastWritten ?? throw new InvalidOperationException("The reconciliation pass wrote no settings.");
+        }
+    }
+
+    /// <summary>A store whose file cannot be read this run — the state a writer must refuse to act on.</summary>
+    private sealed class UnreadableExternalProviderStore : IExternalProviderStore
+    {
+        public Task<StoredExternalProviderConfig> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new StoredExternalProviderConfig());
+        }
+
+        public Task<ExternalProviderLoadResult> ReadForWriteAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<ExternalProviderLoadResult>(new ExternalProviderLoadResult.Unreadable("locked"));
+        }
+
+        public Task<ExternalProviderWriteResult> SaveConnectionAsync(ExternalProviderConnectionSaveRequest request, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ExternalProviderWriteResult> DeleteConnectionAsync(string connectionId, string? expectedRevision, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    /// <summary>
+    ///     A real in-memory node-settings store rather than a substitute, because the pass now writes through the
+    ///     COORDINATED update — a substitute would return a default from the mutation and never apply it, and the
+    ///     lost-update behaviour this replaced is exactly what the assertions here have to be able to see.
+    /// </summary>
+    private sealed class RecordingNodeSettingsStore(StoredNodeSettings initial) : INodeSettingsStore
+    {
+        private StoredNodeSettings _current = initial;
+
+        public StoredNodeSettings? LastWritten { get; private set; }
+
+        public int WriteCount { get; private set; }
+
+        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_current);
+        }
+
+        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
+        {
+            return _current;
+        }
+
+        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
+        {
+            _current = settings;
+            LastWritten = settings;
+            WriteCount++;
+            return Task.CompletedTask;
+        }
+
+        public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
+        {
+            await SaveAsync(mutate(_current), cancellationToken);
+            return _current;
         }
     }
 }

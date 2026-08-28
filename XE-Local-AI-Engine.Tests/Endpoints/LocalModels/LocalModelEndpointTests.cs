@@ -712,6 +712,12 @@ public sealed class LocalModelEndpointTests
             Settings = settings;
             return Task.CompletedTask;
         }
+
+        public Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
+        {
+            Settings = mutate(Settings);
+            return Task.FromResult(Settings);
+        }
     }
 
     private sealed class LocalModelEndpointTestContext : IAsyncDisposable

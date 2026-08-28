@@ -50,5 +50,11 @@ public sealed class MachineKeyProviderTests
             SaveCount++;
             return Task.CompletedTask;
         }
+
+        public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
+        {
+            await SaveAsync(mutate(Current), cancellationToken);
+            return Current;
+        }
     }
 }

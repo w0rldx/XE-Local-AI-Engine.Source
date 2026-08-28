@@ -36,27 +36,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (!File.Exists(_settingsPath))
-            {
-                return new StoredNodeSettings();
-            }
-
-            try
-            {
-                await using var fileStream = File.OpenRead(_settingsPath);
-                var settings = await JsonSerializer.DeserializeAsync<StoredNodeSettings>(fileStream, SerializerOptions, cancellationToken).ConfigureAwait(false);
-                return Normalize(settings ?? new StoredNodeSettings());
-            }
-            catch (JsonException exception)
-            {
-                _logger.LogWarning(exception, "Node settings could not be deserialized. Falling back to defaults.");
-                return new StoredNodeSettings();
-            }
-            catch (IOException exception)
-            {
-                _logger.LogWarning(exception, "Node settings could not be read. Falling back to defaults.");
-                return new StoredNodeSettings();
-            }
+            return await LoadUnlockedAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {
@@ -110,17 +90,67 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // Create with 0600 up front on non-Windows so the file is never briefly world-readable between create and
-            // chmod. Windows relies on the per-user data-directory ACL (UnixCreateMode is unsupported there).
-            await using (var fileStream = CreateOwnerOnly(_settingsPath))
-            {
-                await JsonSerializer.SerializeAsync(fileStream, normalizedSettings, SerializerOptions, cancellationToken).ConfigureAwait(false);
-            }
+            await SaveUnlockedAsync(normalizedSettings, cancellationToken).ConfigureAwait(false);
         }
         finally
         {
             _lock.Release();
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(mutate);
+
+        // ONE lock acquisition around load-mutate-save. Load and Save each take the lock on their own, so a caller
+        // composing them holds it for neither of the gaps between — and this file is written whole, so a concurrent
+        // writer's fields are lost in that gap rather than merged.
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var current = await LoadUnlockedAsync(cancellationToken).ConfigureAwait(false);
+            var mutated = Normalize(mutate(current) ?? throw new InvalidOperationException("The node-settings mutation returned null."));
+            await SaveUnlockedAsync(mutated, cancellationToken).ConfigureAwait(false);
+            return mutated;
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    private async Task<StoredNodeSettings> LoadUnlockedAsync(CancellationToken cancellationToken)
+    {
+        if (!File.Exists(_settingsPath))
+        {
+            return new StoredNodeSettings();
+        }
+
+        try
+        {
+            await using var fileStream = File.OpenRead(_settingsPath);
+            var settings = await JsonSerializer.DeserializeAsync<StoredNodeSettings>(fileStream, SerializerOptions, cancellationToken).ConfigureAwait(false);
+            return Normalize(settings ?? new StoredNodeSettings());
+        }
+        catch (JsonException exception)
+        {
+            _logger.LogWarning(exception, "Node settings could not be deserialized. Falling back to defaults.");
+            return new StoredNodeSettings();
+        }
+        catch (IOException exception)
+        {
+            _logger.LogWarning(exception, "Node settings could not be read. Falling back to defaults.");
+            return new StoredNodeSettings();
+        }
+    }
+
+    private async Task SaveUnlockedAsync(StoredNodeSettings normalizedSettings, CancellationToken cancellationToken)
+    {
+        // Create with 0600 up front on non-Windows so the file is never briefly world-readable between create and
+        // chmod. Windows relies on the per-user data-directory ACL (UnixCreateMode is unsupported there).
+        await using var fileStream = CreateOwnerOnly(_settingsPath);
+        await JsonSerializer.SerializeAsync(fileStream, normalizedSettings, SerializerOptions, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
