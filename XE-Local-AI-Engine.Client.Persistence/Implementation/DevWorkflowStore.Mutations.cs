@@ -375,6 +375,8 @@ internal sealed partial class DevWorkflowStore
                                       .ToListAsync(cancellationToken)
                                       .ConfigureAwait(false);
 
+                // The value the event about to be appended will take. Stamping the mark with it means "stale as of the
+                // same watermark that records why", so a client replaying from a cursor sees both or neither.
                 var sequence = run.LastSequence + 1;
                 foreach (var dependent in dependents)
                 {

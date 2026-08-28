@@ -195,6 +195,10 @@ public sealed class DevWorkflowStoreTests
         var item = listed.Single();
 
         AssertEx.Equal("Ship the thing", item.Title);
+
+        // The list projects the entity rather than its columns, so this also pins that the materialization interceptor
+        // still runs inside a projection — otherwise the request would come back as ciphertext, silently.
+        AssertEx.Equal("Seeded request", item.Request);
         AssertEx.Equal(seed.RunId, item.LatestRunId);
         AssertEx.Equal("Seeded definition", item.LatestRunDefinitionName);
         AssertEx.Equal(DevWorkflowWorkItemStatus.Active, item.Status, "Starting a run makes the work item active, and the runtime is what writes that.");

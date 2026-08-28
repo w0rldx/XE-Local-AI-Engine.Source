@@ -145,4 +145,51 @@ public sealed class DevWorkflowPurgeCoverageTests
         AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("dev_workflow_definitions").ConfigureAwait(false),
             "A definition is not work-item-scoped and survives by design.");
     }
+
+    /// <summary>Deleting one run takes its subtree and leaves its work item — the per-run half of the same ordered delete.</summary>
+    [Test]
+    public async Task DeleteRun_TakesItsSubtreeAndLeavesTheWorkItemStanding()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion).ConfigureAwait(false);
+        _ = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(seed.RunId,
+                            Guid.NewGuid(),
+                            nodeRunId,
+                            version,
+                            Guid.NewGuid(),
+                            DevWorkflowArtifactKind.Research,
+                            "brief",
+                            "text/markdown",
+                            "hash-1",
+                            SizeBytes: 10,
+                            "reference-1"))
+                       .ConfigureAwait(false);
+
+        await using (var transaction = await context.Database.BeginTransactionAsync().ConfigureAwait(false))
+        {
+            await DevWorkflowPurge.DeleteRunAsync(context, seed.RunId, CancellationToken.None).ConfigureAwait(false);
+            await transaction.CommitAsync().ConfigureAwait(false);
+        }
+
+        context.ChangeTracker.Clear();
+
+        foreach (var table in new[]
+                 {
+                     "dev_workflow_runs",
+                     "dev_workflow_node_runs",
+                     "dev_workflow_run_events",
+                     "dev_workflow_artifacts"
+                 })
+        {
+            AssertEx.Equal(expected: 0L, await fixture.RawTableCountAsync(table).ConfigureAwait(false), $"{table} must be empty after the run is deleted.");
+        }
+
+        AssertEx.Equal(expected: 1L, await fixture.RawTableCountAsync("dev_workflow_work_items").ConfigureAwait(false),
+            "A work item outlives its runs; only deleting the work item takes it.");
+    }
 }
