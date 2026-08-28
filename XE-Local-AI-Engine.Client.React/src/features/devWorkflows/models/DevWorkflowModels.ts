@@ -84,6 +84,14 @@ export const devWorkflowArtifactKinds = [
 ] as const;
 export type DevWorkflowArtifactKind = (typeof devWorkflowArtifactKinds)[number];
 
+/**
+ * The detail page's side-tab selection, carried in `?tab=`. `nodes` is the default and means "no right-pane
+ * preference"; it is what a mobile viewport shows in the centre. `graph` is deliberately absent — that view does not
+ * exist until Slice A1, so a URL cannot deep-link to something that would render nothing.
+ */
+export const devWorkflowDetailTabs = ["nodes", "artifacts", "events"] as const;
+export type DevWorkflowDetailTab = (typeof devWorkflowDetailTabs)[number];
+
 /** Y4: written by the runtime, never by the client. A `Failed` run maps here to `Blocked` — it needs attention. */
 export const devWorkflowWorkItemStatuses = ["Draft", "Active", "Blocked", "Completed", "Cancelled"] as const;
 export type DevWorkflowWorkItemStatus = (typeof devWorkflowWorkItemStatuses)[number];

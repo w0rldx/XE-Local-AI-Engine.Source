@@ -27,6 +27,7 @@ import {
 	startDevWorkflowRunMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { isActiveDevWorkflowRunStatus, toDevWorkflowRunStatus } from "@/features/devWorkflows/models/DevWorkflowModels";
 
 /** Generated operationIds, which are also the generated SDK fn names and the `_id` of every generated query key. */
 export const devWorkflowQueryIds = {
@@ -60,7 +61,7 @@ export const devWorkflowEventsPageSize = 200;
 /** The server clamps `limit` at 500 (`DevWorkflowRequestLimits.MaxEventPageSize`); past it "load more" would lie. */
 export const devWorkflowEventsMaxLimit = 500;
 /** Work-item list cadence while any listed run is still live (X16 Q7). A run-scoped hub cannot feed a list. */
-export const devWorkflowListPollIntervalMs = 5_000;
+const devWorkflowListPollIntervalMs = 5_000;
 
 interface FeedOptions {
 	/** Polling cadence while the hub is unavailable. `undefined` (the live case) means no polling at all. */
@@ -75,10 +76,20 @@ function feedQuerySettings(id: string | undefined, options: FeedOptions) {
 	} as const;
 }
 
-export function useDevWorkflowWorkItems(options: FeedOptions = {}) {
+/**
+ * The work-item list. A run-scoped hub cannot feed a list, so this polls at 5s (X16 Q7) — but only while a listed run
+ * is actually live. `latestRunStatus` is null for a work item that has never run, which is exactly a row that cannot
+ * change on its own; polling it would be a timer burning for nothing.
+ */
+export function useDevWorkflowWorkItems() {
 	return useQuery({
 		...withResponseValidation(listDevWorkflowWorkItemsOptions()),
-		refetchInterval: options.pollIntervalMs ?? false,
+		refetchInterval: (query) => {
+			const anyRunLive = (query.state.data?.items ?? []).some(
+				(item) => Boolean(item.latestRunStatus) && isActiveDevWorkflowRunStatus(toDevWorkflowRunStatus(item.latestRunStatus)),
+			);
+			return anyRunLive ? devWorkflowListPollIntervalMs : false;
+		},
 	});
 }
 
@@ -161,13 +172,20 @@ export function useDeleteDevWorkflowWorkItem() {
 	});
 }
 
-/** Starting a run answers 202: the dispatcher picks the work up out of band, so the work item is re-read, not primed. */
-export function useStartDevWorkflowRun(workItemId: string) {
+/**
+ * Starting a run answers 202: the dispatcher picks the work up out of band, so the work item is re-read rather than
+ * primed from the response. The work item is read off the call's own variables because the create dialog starts a run
+ * on an item that did not exist when the hook was constructed.
+ */
+export function useStartDevWorkflowRun() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		...withResponseValidation(startDevWorkflowRunMutation()),
-		onSuccess: async () => {
-			await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItem, { workItemId }) });
+		onSuccess: async (_data, variables) => {
+			const workItemId = variables.path?.workItemId;
+			if (workItemId) {
+				await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItem, { workItemId }) });
+			}
 			await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItems) });
 		},
 	});

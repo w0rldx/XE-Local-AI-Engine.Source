@@ -59,12 +59,17 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.workSessions).toBe(true);
 	});
 
+	it("enables the Development Workflows surface by default", () => {
+		expect(nodeCapabilities.devWorkflows).toBe(true);
+	});
+
 	it("defines the route paths targeted by the node shell", () => {
 		expect(nodeRoutePaths).toEqual({
 			home: "/",
 			chat: "/chat",
 			development: "/development",
 			workSessions: "/work-sessions",
+			devWorkflows: "/development-workflows",
 			knowledgeBase: "/knowledge-base",
 			dashboard: "/dashboard",
 			binding: "/node-binding",
