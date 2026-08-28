@@ -9,15 +9,19 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 /// <remarks>
 ///     <para>
 ///         The ORDER is the design. The encrypted file is the source of truth, so it commits first and everything else
-///         is repairable from it; the registry cache is dropped immediately after, so the reconciliation pass — and any
-///         concurrent turn — reads the new configuration rather than re-caching the old one; the reconciliation pass
-///         then writes the provider map and the allow-list; and the chat-client cache is cleared last.
+///         is repairable from it; then BOTH caches are dropped, before anything fallible runs; and only then does the
+///         reconciliation pass write the provider map and the allow-list.
 ///     </para>
 ///     <para>
-///         The chat-client cache is cleared on EVERY committed change, not only when reconciliation repaired
-///         something. An API-key or base-URL edit changes neither the map nor the allow-list, so reconciliation
-///         correctly reports no drift — and yet the router is still holding a client built against the previous key.
-///         Clearing unconditionally is what makes "I fixed the key and it still fails" impossible.
+///         Both caches are dropped BEFORE reconciliation rather than after it. Reconciliation is fallible and can be
+///         slow, and the previous ordering left the router holding chat clients built against the OLD key on exactly
+///         those paths. A revoked or rotated credential that keeps working because a repair step failed or stalled is
+///         the worst outcome available here, so cache invalidation does not depend on the repair at all.
+///     </para>
+///     <para>
+///         Cleared on EVERY committed change, not only when reconciliation repaired something. An API-key or base-URL
+///         edit changes neither the map nor the allow-list, so reconciliation correctly reports no drift — and yet the
+///         router is still holding a client built against the previous key.
 ///     </para>
 /// </remarks>
 public sealed class ExternalProviderAdministrationService : IExternalProviderAdministrationService
@@ -83,11 +87,16 @@ public sealed class ExternalProviderAdministrationService : IExternalProviderAdm
         // node just read, and the alternative — reasoning about which no-ops are truly no-ops — is how a stale
         // generation survives an edit.
         _registryCache.Invalidate();
-        _ = await _reconciler.ReconcileAsync(cancellationToken).ConfigureAwait(false);
 
+        // BEFORE reconciliation, not after it. Reconciliation is fallible and can be slow — a lease timeout, a locked
+        // settings file, a cancelled request — and every moment it runs is a moment the router would otherwise keep
+        // serving chat clients built against the previous key. Ordering it first is strictly stronger than clearing in
+        // a finally: it survives a failure AND a hang.
         if (changed)
         {
             _chatClientCacheInvalidator.ClearClientCache();
         }
+
+        _ = await _reconciler.ReconcileAsync(cancellationToken).ConfigureAwait(false);
     }
 }
