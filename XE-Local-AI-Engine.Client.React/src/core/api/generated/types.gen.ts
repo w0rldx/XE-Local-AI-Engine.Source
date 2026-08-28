@@ -59,6 +59,7 @@ export type XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails
 	maxConcurrentRuns?: number | null;
 	distinctModelCount?: number | null;
 	maxLoadedProcesses?: number | null;
+	standingDecision?: string | null;
 	[key: string]: unknown;
 };
 
@@ -3200,6 +3201,369 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvide
 	supportsReasoning?: boolean;
 	supportsReasoningEffort?: boolean;
 	defaultReasoningEffort?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResultResponse = {
+	decision?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse;
+	runStatus?: string;
+	nodeRunStatus?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse = {
+	id?: string;
+	nodeRunId?: string;
+	attempt?: number;
+	decision?: string;
+	comment?: string | null;
+	decidedBySubject?: string | null;
+	decidedAtUtc?: number;
+	operationId?: string;
+	sequence?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionRequest = {
+	operationId: string;
+	decision?: string;
+	comment?: string | null;
+	payloadJson?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionSummaryResponse = {
+	id?: string;
+	name?: string;
+	source?: string;
+	seedSlug?: string | null;
+	archived?: boolean;
+	version?: number;
+	nodeCount?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse = {
+	id?: string;
+	name?: string;
+	graph?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph;
+	graphHash?: string;
+	source?: string;
+	seedSlug?: string | null;
+	archived?: boolean;
+	version?: number;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph = {
+	schemaVersion?: number;
+	nodes?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode>;
+	edges?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphEdge>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode = {
+	nodeKey?: string;
+	nodeType?: string;
+	label?: string;
+	agentDefinitionId?: string | null;
+	agentSeedSlug?: string | null;
+	instructions?: string | null;
+	modelProfile?: string | null;
+	reasoningEffort?: string | null;
+	validationCommandIds?: Array<string> | null;
+	joinPolicy?: string | null;
+	maxAttempts?: number | null;
+	retryDelaySeconds?: number | null;
+	nodeTimeoutSeconds?: number | null;
+	retryTarget?: string | null;
+	materialization?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowMaterialization | null;
+	requiredCapabilities?: {
+		[key: string]: string;
+	} | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowMaterialization = {
+	templateNodeKey?: string;
+	artifactKind?: string;
+	joinNodeKey?: string;
+	maxChildren?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphEdge = {
+	from?: string;
+	to?: string;
+	condition?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowEdgeCondition | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowEdgeCondition = {
+	path?: string;
+	op?: string;
+	value?: unknown;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowDefinitionRequest = {
+	name: string;
+	graph: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowDefinitionRequest = {
+	version?: number;
+	name: string;
+	graph?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse = {
+	id?: string;
+	runId?: string;
+	nodeKey?: string;
+	nodeType?: string;
+	label?: string;
+	status?: string;
+	attempt?: number;
+	maxAttempts?: number;
+	sessionResumes?: number;
+	queueReason?: string | null;
+	queuedAtUtc?: number | null;
+	agentDefinitionId?: string | null;
+	agentDisplayName?: string | null;
+	modelLabel?: string | null;
+	workSessionId?: string | null;
+	conversationId?: string | null;
+	workSessionAvailable?: boolean;
+	developmentProjectId?: string | null;
+	developmentTaskId?: string | null;
+	primaryArtifactId?: string | null;
+	instructions?: string | null;
+	inputJson?: string | null;
+	outputJson?: string | null;
+	producedArtifactIds?: Array<string>;
+	consumedArtifactIds?: Array<string>;
+	appliedRuleSets?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse>;
+	pendingDecisionKind?: string | null;
+	allowedDecisions?: Array<string>;
+	hasRejectBranch?: boolean;
+	failureClass?: string | null;
+	terminalReason?: string | null;
+	decisions?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse>;
+	startedAtUtc?: number | null;
+	completedAtUtc?: number | null;
+	sequence?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse = {
+	id?: string;
+	name?: string;
+	contentSha256?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowArtifactsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse>;
+	lastSequence?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse = {
+	id?: string;
+	lineageId?: string;
+	version?: number;
+	sequence?: number;
+	kind?: string;
+	name?: string;
+	mediaType?: string;
+	contentSha256?: string;
+	sizeBytes?: number;
+	producedByNodeRunId?: string;
+	producingNodeKey?: string;
+	isValid?: boolean;
+	isStale?: boolean;
+	staleBecauseArtifactId?: string | null;
+	staleReason?: string | null;
+	isLatest?: boolean;
+	createdAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactFeedRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactContentResponse = {
+	artifact?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse;
+	content?: string;
+	isBase64?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse = {
+	id?: string;
+	workItemId?: string;
+	definitionId?: string;
+	definitionName?: string | null;
+	status?: string;
+	queuedNodeCount?: number;
+	runningNodeCount?: number;
+	completedNodeCount?: number;
+	totalNodeCount?: number;
+	pendingDecisionCount?: number;
+	blockingGateNodeRunId?: string | null;
+	startedAtUtc?: number | null;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse = {
+	id?: string;
+	workItemId?: string;
+	definitionId?: string;
+	definitionVersion?: number;
+	definitionName?: string | null;
+	graphRevision?: number;
+	graph?: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph;
+	status?: string;
+	nodes?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse>;
+	queuedNodeCount?: number;
+	runningNodeCount?: number;
+	pendingDecisionCount?: number;
+	blockingGateNodeRunId?: string | null;
+	failureClass?: string | null;
+	terminalReason?: string | null;
+	startedAtUtc?: number | null;
+	completedAtUtc?: number | null;
+	version?: number;
+	lastSequence?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse = {
+	id?: string;
+	nodeKey?: string;
+	nodeType?: string;
+	label?: string;
+	status?: string;
+	attempt?: number;
+	maxAttempts?: number;
+	queueReason?: string | null;
+	queuedAtUtc?: number | null;
+	waitingOnNodeKeys?: Array<string> | null;
+	pendingDecisionKind?: string | null;
+	isMaterialized?: boolean;
+	materializedFromNodeKey?: string | null;
+	materializationIndex?: number | null;
+	developmentProjectId?: string | null;
+	developmentTaskId?: string | null;
+	agentDefinitionId?: string | null;
+	agentDisplayName?: string | null;
+	modelLabel?: string | null;
+	hasStaleInputs?: boolean;
+	startedAtUtc?: number | null;
+	completedAtUtc?: number | null;
+	sequence?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1StartDevWorkflowRunRequest = {
+	operationId: string;
+	definitionId: string;
+	inputsJson?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunActionRequest = {
+	operationId: string;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunEventsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse>;
+	lastSequence?: number;
+	hasMore?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse = {
+	id?: string;
+	sequence?: number;
+	eventType?: string;
+	nodeRunId?: string | null;
+	outcome?: string | null;
+	detailJson?: string | null;
+	operationId?: string | null;
+	occurredAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventFeedRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemSummaryResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemSummaryResponse = {
+	id?: string;
+	title?: string;
+	developmentProjectId?: string | null;
+	status?: string;
+	latestRunId?: string | null;
+	latestRunStatus?: string | null;
+	definitionName?: string | null;
+	queuedNodeCount?: number;
+	runningNodeCount?: number;
+	completedNodeCount?: number;
+	totalNodeCount?: number;
+	updatedAtUtc?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse = {
+	id?: string;
+	title?: string;
+	request?: string;
+	developmentProjectId?: string | null;
+	status?: string;
+	latestRunId?: string | null;
+	runs?: Array<XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse>;
+	createdAtUtc?: number;
+	updatedAtUtc?: number;
+	version?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowWorkItemRequest = {
+	title: string;
+	request: string;
+	developmentProjectId?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowWorkItemRequest = {
+	title: string;
+	request: string;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = {
@@ -12264,6 +12628,780 @@ export type ProbeExternalProviderResponses = {
 };
 
 export type ProbeExternalProviderResponse = ProbeExternalProviderResponses[keyof ProbeExternalProviderResponses];
+
+export type DecideDevWorkflowNodeRunData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionRequest;
+	path: {
+		runId: string;
+		nodeRunId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/runs/{runId}/nodes/{nodeRunId}/decision";
+};
+
+export type DecideDevWorkflowNodeRunErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type DecideDevWorkflowNodeRunError = DecideDevWorkflowNodeRunErrors[keyof DecideDevWorkflowNodeRunErrors];
+
+export type DecideDevWorkflowNodeRunResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResultResponse;
+};
+
+export type DecideDevWorkflowNodeRunResponse = DecideDevWorkflowNodeRunResponses[keyof DecideDevWorkflowNodeRunResponses];
+
+export type ListDevWorkflowDefinitionsData = {
+	body?: never;
+	path?: never;
+	query: {
+		includeArchived: boolean;
+	};
+	url: "/api/local/v1/development-workflows/definitions";
+};
+
+export type ListDevWorkflowDefinitionsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListDevWorkflowDefinitionsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsResponse;
+};
+
+export type ListDevWorkflowDefinitionsResponse = ListDevWorkflowDefinitionsResponses[keyof ListDevWorkflowDefinitionsResponses];
+
+export type CreateDevWorkflowDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowDefinitionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development-workflows/definitions";
+};
+
+export type CreateDevWorkflowDefinitionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateDevWorkflowDefinitionError = CreateDevWorkflowDefinitionErrors[keyof CreateDevWorkflowDefinitionErrors];
+
+export type CreateDevWorkflowDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse;
+};
+
+export type CreateDevWorkflowDefinitionResponse =
+	CreateDevWorkflowDefinitionResponses[keyof CreateDevWorkflowDefinitionResponses];
+
+export type ArchiveDevWorkflowDefinitionData = {
+	body?: never;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/definitions/{definitionId}";
+};
+
+export type ArchiveDevWorkflowDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type ArchiveDevWorkflowDefinitionResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type ArchiveDevWorkflowDefinitionResponse =
+	ArchiveDevWorkflowDefinitionResponses[keyof ArchiveDevWorkflowDefinitionResponses];
+
+export type GetDevWorkflowDefinitionData = {
+	body?: never;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/definitions/{definitionId}";
+};
+
+export type GetDevWorkflowDefinitionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetDevWorkflowDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse;
+};
+
+export type GetDevWorkflowDefinitionResponse = GetDevWorkflowDefinitionResponses[keyof GetDevWorkflowDefinitionResponses];
+
+export type UpdateDevWorkflowDefinitionData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowDefinitionRequest;
+	path: {
+		definitionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/definitions/{definitionId}";
+};
+
+export type UpdateDevWorkflowDefinitionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type UpdateDevWorkflowDefinitionError = UpdateDevWorkflowDefinitionErrors[keyof UpdateDevWorkflowDefinitionErrors];
+
+export type UpdateDevWorkflowDefinitionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse;
+};
+
+export type UpdateDevWorkflowDefinitionResponse =
+	UpdateDevWorkflowDefinitionResponses[keyof UpdateDevWorkflowDefinitionResponses];
+
+export type GetDevWorkflowNodeRunData = {
+	body?: never;
+	path: {
+		runId: string;
+		nodeRunId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/runs/{runId}/nodes/{nodeRunId}";
+};
+
+export type GetDevWorkflowNodeRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetDevWorkflowNodeRunResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse;
+};
+
+export type GetDevWorkflowNodeRunResponse = GetDevWorkflowNodeRunResponses[keyof GetDevWorkflowNodeRunResponses];
+
+export type ListDevWorkflowArtifactsData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query: {
+		sinceSeq: number;
+	};
+	url: "/api/local/v1/development-workflows/runs/{runId}/artifacts";
+};
+
+export type ListDevWorkflowArtifactsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type ListDevWorkflowArtifactsError = ListDevWorkflowArtifactsErrors[keyof ListDevWorkflowArtifactsErrors];
+
+export type ListDevWorkflowArtifactsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowArtifactsResponse;
+};
+
+export type ListDevWorkflowArtifactsResponse = ListDevWorkflowArtifactsResponses[keyof ListDevWorkflowArtifactsResponses];
+
+export type GetDevWorkflowArtifactContentData = {
+	body?: never;
+	path: {
+		runId: string;
+		artifactId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/runs/{runId}/artifacts/{artifactId}/content";
+};
+
+export type GetDevWorkflowArtifactContentErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	413: MicrosoftAspNetCoreMvcProblemDetails;
+};
+
+export type GetDevWorkflowArtifactContentError = GetDevWorkflowArtifactContentErrors[keyof GetDevWorkflowArtifactContentErrors];
+
+export type GetDevWorkflowArtifactContentResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactContentResponse;
+};
+
+export type GetDevWorkflowArtifactContentResponse =
+	GetDevWorkflowArtifactContentResponses[keyof GetDevWorkflowArtifactContentResponses];
+
+export type ListDevWorkflowRunsData = {
+	body?: never;
+	path?: never;
+	query: {
+		workItemId?: string | null;
+		status?: string | null;
+		limit: number;
+	};
+	url: "/api/local/v1/development-workflows/runs";
+};
+
+export type ListDevWorkflowRunsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListDevWorkflowRunsError = ListDevWorkflowRunsErrors[keyof ListDevWorkflowRunsErrors];
+
+export type ListDevWorkflowRunsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsResponse;
+};
+
+export type ListDevWorkflowRunsResponse = ListDevWorkflowRunsResponses[keyof ListDevWorkflowRunsResponses];
+
+export type StartDevWorkflowRunData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1StartDevWorkflowRunRequest;
+	path: {
+		workItemId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/work-items/{workItemId}/runs";
+};
+
+export type StartDevWorkflowRunErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type StartDevWorkflowRunError = StartDevWorkflowRunErrors[keyof StartDevWorkflowRunErrors];
+
+export type StartDevWorkflowRunResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse;
+};
+
+export type StartDevWorkflowRunResponse = StartDevWorkflowRunResponses[keyof StartDevWorkflowRunResponses];
+
+export type GetDevWorkflowRunData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/runs/{runId}";
+};
+
+export type GetDevWorkflowRunErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetDevWorkflowRunResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse;
+};
+
+export type GetDevWorkflowRunResponse = GetDevWorkflowRunResponses[keyof GetDevWorkflowRunResponses];
+
+export type PauseDevWorkflowRunData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunActionRequest;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/runs/{runId}/pause";
+};
+
+export type PauseDevWorkflowRunErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type PauseDevWorkflowRunError = PauseDevWorkflowRunErrors[keyof PauseDevWorkflowRunErrors];
+
+export type PauseDevWorkflowRunResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse;
+};
+
+export type PauseDevWorkflowRunResponse = PauseDevWorkflowRunResponses[keyof PauseDevWorkflowRunResponses];
+
+export type ResumeDevWorkflowRunData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunActionRequest;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/runs/{runId}/resume";
+};
+
+export type ResumeDevWorkflowRunErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type ResumeDevWorkflowRunError = ResumeDevWorkflowRunErrors[keyof ResumeDevWorkflowRunErrors];
+
+export type ResumeDevWorkflowRunResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse;
+};
+
+export type ResumeDevWorkflowRunResponse = ResumeDevWorkflowRunResponses[keyof ResumeDevWorkflowRunResponses];
+
+export type CancelDevWorkflowRunData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunActionRequest;
+	path: {
+		runId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/runs/{runId}/cancel";
+};
+
+export type CancelDevWorkflowRunErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type CancelDevWorkflowRunError = CancelDevWorkflowRunErrors[keyof CancelDevWorkflowRunErrors];
+
+export type CancelDevWorkflowRunResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse;
+};
+
+export type CancelDevWorkflowRunResponse = CancelDevWorkflowRunResponses[keyof CancelDevWorkflowRunResponses];
+
+export type ListDevWorkflowRunEventsData = {
+	body?: never;
+	path: {
+		runId: string;
+	};
+	query: {
+		sinceSeq: number;
+		limit: number;
+	};
+	url: "/api/local/v1/development-workflows/runs/{runId}/events";
+};
+
+export type ListDevWorkflowRunEventsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type ListDevWorkflowRunEventsError = ListDevWorkflowRunEventsErrors[keyof ListDevWorkflowRunEventsErrors];
+
+export type ListDevWorkflowRunEventsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunEventsResponse;
+};
+
+export type ListDevWorkflowRunEventsResponse = ListDevWorkflowRunEventsResponses[keyof ListDevWorkflowRunEventsResponses];
+
+export type ListDevWorkflowWorkItemsData = {
+	body?: never;
+	path?: never;
+	query?: {
+		status?: string | null;
+	};
+	url: "/api/local/v1/development-workflows/work-items";
+};
+
+export type ListDevWorkflowWorkItemsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListDevWorkflowWorkItemsError = ListDevWorkflowWorkItemsErrors[keyof ListDevWorkflowWorkItemsErrors];
+
+export type ListDevWorkflowWorkItemsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsResponse;
+};
+
+export type ListDevWorkflowWorkItemsResponse = ListDevWorkflowWorkItemsResponses[keyof ListDevWorkflowWorkItemsResponses];
+
+export type CreateDevWorkflowWorkItemData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowWorkItemRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/development-workflows/work-items";
+};
+
+export type CreateDevWorkflowWorkItemErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateDevWorkflowWorkItemError = CreateDevWorkflowWorkItemErrors[keyof CreateDevWorkflowWorkItemErrors];
+
+export type CreateDevWorkflowWorkItemResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse;
+};
+
+export type CreateDevWorkflowWorkItemResponse = CreateDevWorkflowWorkItemResponses[keyof CreateDevWorkflowWorkItemResponses];
+
+export type DeleteDevWorkflowWorkItemData = {
+	body?: never;
+	path: {
+		workItemId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/work-items/{workItemId}";
+};
+
+export type DeleteDevWorkflowWorkItemErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type DeleteDevWorkflowWorkItemError = DeleteDevWorkflowWorkItemErrors[keyof DeleteDevWorkflowWorkItemErrors];
+
+export type DeleteDevWorkflowWorkItemResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteDevWorkflowWorkItemResponse = DeleteDevWorkflowWorkItemResponses[keyof DeleteDevWorkflowWorkItemResponses];
+
+export type GetDevWorkflowWorkItemData = {
+	body?: never;
+	path: {
+		workItemId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/work-items/{workItemId}";
+};
+
+export type GetDevWorkflowWorkItemErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetDevWorkflowWorkItemResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse;
+};
+
+export type GetDevWorkflowWorkItemResponse = GetDevWorkflowWorkItemResponses[keyof GetDevWorkflowWorkItemResponses];
+
+export type UpdateDevWorkflowWorkItemData = {
+	body: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowWorkItemRequest;
+	path: {
+		workItemId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/development-workflows/work-items/{workItemId}";
+};
+
+export type UpdateDevWorkflowWorkItemErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type UpdateDevWorkflowWorkItemError = UpdateDevWorkflowWorkItemErrors[keyof UpdateDevWorkflowWorkItemErrors];
+
+export type UpdateDevWorkflowWorkItemResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse;
+};
+
+export type UpdateDevWorkflowWorkItemResponse = UpdateDevWorkflowWorkItemResponses[keyof UpdateDevWorkflowWorkItemResponses];
 
 export type GetDevelopmentCapabilityData = {
 	body?: never;

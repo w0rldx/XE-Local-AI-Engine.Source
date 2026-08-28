@@ -12041,6 +12041,1355 @@
         ]
       }
     },
+    "/api/local/v1/development-workflows/runs/{runId}/nodes/{nodeRunId}/decision": {
+      "post": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "decideDevWorkflowNodeRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "nodeRunId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DevWorkflowDecisionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResultResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/definitions": {
+      "get": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "listDevWorkflowDefinitions",
+        "parameters": [
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "createDevWorkflowDefinition",
+        "requestBody": {
+          "x-name": "CreateDevWorkflowDefinitionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowDefinitionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/definitions/{definitionId}": {
+      "get": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "getDevWorkflowDefinition",
+        "parameters": [
+          {
+            "name": "definitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "updateDevWorkflowDefinition",
+        "parameters": [
+          {
+            "name": "definitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateDevWorkflowDefinitionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowDefinitionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "archiveDevWorkflowDefinition",
+        "parameters": [
+          {
+            "name": "definitionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/runs/{runId}/nodes/{nodeRunId}": {
+      "get": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "getDevWorkflowNodeRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "nodeRunId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/runs/{runId}/artifacts": {
+      "get": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "listDevWorkflowArtifacts",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "sinceSeq",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowArtifactsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/runs/{runId}/artifacts/{artifactId}/content": {
+      "get": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "getDevWorkflowArtifactContent",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "artifactId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactContentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "413": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MicrosoftAspNetCoreMvcProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/runs": {
+      "get": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "listDevWorkflowRuns",
+        "parameters": [
+          {
+            "name": "workItemId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "guid",
+              "nullable": true
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/work-items/{workItemId}/runs": {
+      "post": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "startDevWorkflowRun",
+        "parameters": [
+          {
+            "name": "workItemId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "StartDevWorkflowRunRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1StartDevWorkflowRunRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/runs/{runId}": {
+      "get": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "getDevWorkflowRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/runs/{runId}/pause": {
+      "post": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "pauseDevWorkflowRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DevWorkflowRunActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/runs/{runId}/resume": {
+      "post": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "resumeDevWorkflowRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DevWorkflowRunActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/runs/{runId}/cancel": {
+      "post": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "cancelDevWorkflowRun",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "DevWorkflowRunActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/runs/{runId}/events": {
+      "get": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "listDevWorkflowRunEvents",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "sinceSeq",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunEventsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/work-items": {
+      "get": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "listDevWorkflowWorkItems",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "createDevWorkflowWorkItem",
+        "requestBody": {
+          "x-name": "CreateDevWorkflowWorkItemRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowWorkItemRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/development-workflows/work-items/{workItemId}": {
+      "get": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "getDevWorkflowWorkItem",
+        "parameters": [
+          {
+            "name": "workItemId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "updateDevWorkflowWorkItem",
+        "parameters": [
+          {
+            "name": "workItemId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateDevWorkflowWorkItemRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowWorkItemRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Development-Workflows"
+        ],
+        "operationId": "deleteDevWorkflowWorkItem",
+        "parameters": [
+          {
+            "name": "workItemId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/development/capability": {
       "get": {
         "tags": [
@@ -18843,6 +20192,10 @@
               "maxLoadedProcesses": {
                 "type": "integer",
                 "format": "int32",
+                "nullable": true
+              },
+              "standingDecision": {
+                "type": "string",
                 "nullable": true
               }
             }
@@ -29754,6 +31107,1192 @@
           "defaultReasoningEffort": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResultResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse"
+          },
+          "runStatus": {
+            "type": "string"
+          },
+          "nodeRunStatus": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "nodeRunId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "attempt": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "decision": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "decidedBySubject": {
+            "type": "string",
+            "nullable": true
+          },
+          "decidedAtUtc": {
+            "type": "integer"
+          },
+          "operationId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "sequence": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operationId"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          },
+          "decision": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 0,
+            "nullable": true
+          },
+          "payloadJson": {
+            "type": "string",
+            "maxLength": 262144,
+            "minLength": 0,
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionSummaryResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "seedSlug": {
+            "type": "string",
+            "nullable": true
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "graph": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph"
+          },
+          "graphHash": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "seedSlug": {
+            "type": "string",
+            "nullable": true
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode"
+            }
+          },
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphEdge"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "nodeKey": {
+            "type": "string"
+          },
+          "nodeType": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "agentSeedSlug": {
+            "type": "string",
+            "nullable": true
+          },
+          "instructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelProfile": {
+            "type": "string",
+            "nullable": true
+          },
+          "reasoningEffort": {
+            "type": "string",
+            "nullable": true
+          },
+          "validationCommandIds": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "joinPolicy": {
+            "type": "string",
+            "nullable": true
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "retryDelaySeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "nodeTimeoutSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "retryTarget": {
+            "type": "string",
+            "nullable": true
+          },
+          "materialization": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowMaterialization"
+              }
+            ]
+          },
+          "requiredCapabilities": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowMaterialization": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "templateNodeKey": {
+            "type": "string"
+          },
+          "artifactKind": {
+            "type": "string"
+          },
+          "joinNodeKey": {
+            "type": "string"
+          },
+          "maxChildren": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphEdge": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "condition": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowEdgeCondition"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowEdgeCondition": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "op": {
+            "type": "string"
+          },
+          "value": {
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "graph"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 0,
+            "nullable": false
+          },
+          "graph": {
+            "nullable": false,
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowDefinitionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "exclusiveMinimum": true
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 0,
+            "nullable": false
+          },
+          "graph": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "runId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "nodeKey": {
+            "type": "string"
+          },
+          "nodeType": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sessionResumes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "queueReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "queuedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "agentDisplayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "workSessionId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "workSessionAvailable": {
+            "type": "boolean"
+          },
+          "developmentProjectId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "developmentTaskId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "primaryArtifactId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "instructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "inputJson": {
+            "type": "string",
+            "nullable": true
+          },
+          "outputJson": {
+            "type": "string",
+            "nullable": true
+          },
+          "producedArtifactIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          "consumedArtifactIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          "appliedRuleSets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse"
+            }
+          },
+          "pendingDecisionKind": {
+            "type": "string",
+            "nullable": true
+          },
+          "allowedDecisions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "hasRejectBranch": {
+            "type": "boolean"
+          },
+          "failureClass": {
+            "type": "string",
+            "nullable": true
+          },
+          "terminalReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "decisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse"
+            }
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "completedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "sequence": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "contentSha256": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowArtifactsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse"
+            }
+          },
+          "lastSequence": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "lineageId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sequence": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "contentSha256": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "producedByNodeRunId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "producingNodeKey": {
+            "type": "string"
+          },
+          "isValid": {
+            "type": "boolean"
+          },
+          "isStale": {
+            "type": "boolean"
+          },
+          "staleBecauseArtifactId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "staleReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "isLatest": {
+            "type": "boolean"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactFeedRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactContentResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "artifact": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse"
+          },
+          "content": {
+            "type": "string"
+          },
+          "isBase64": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "workItemId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "definitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "definitionName": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "queuedNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "runningNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "completedNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pendingDecisionCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "blockingGateNodeRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "workItemId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "definitionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "definitionVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "definitionName": {
+            "type": "string",
+            "nullable": true
+          },
+          "graphRevision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "graph": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph"
+          },
+          "status": {
+            "type": "string"
+          },
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse"
+            }
+          },
+          "queuedNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "runningNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pendingDecisionCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "blockingGateNodeRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "failureClass": {
+            "type": "string",
+            "nullable": true
+          },
+          "terminalReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "completedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer"
+          },
+          "lastSequence": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "nodeKey": {
+            "type": "string"
+          },
+          "nodeType": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "attempt": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxAttempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "queueReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "queuedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "waitingOnNodeKeys": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "pendingDecisionKind": {
+            "type": "string",
+            "nullable": true
+          },
+          "isMaterialized": {
+            "type": "boolean"
+          },
+          "materializedFromNodeKey": {
+            "type": "string",
+            "nullable": true
+          },
+          "materializationIndex": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "developmentProjectId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "developmentTaskId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "agentDefinitionId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "agentDisplayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelLabel": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasStaleInputs": {
+            "type": "boolean"
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "completedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "sequence": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1StartDevWorkflowRunRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operationId",
+          "definitionId"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          },
+          "definitionId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          },
+          "inputsJson": {
+            "type": "string",
+            "maxLength": 32768,
+            "minLength": 0,
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "operationId"
+        ],
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "guid",
+            "minLength": 1,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunEventsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse"
+            }
+          },
+          "lastSequence": {
+            "type": "integer"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "sequence": {
+            "type": "integer"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "nodeRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "outcome": {
+            "type": "string",
+            "nullable": true
+          },
+          "detailJson": {
+            "type": "string",
+            "nullable": true
+          },
+          "operationId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "occurredAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventFeedRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemSummaryResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "developmentProjectId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "latestRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "latestRunStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "definitionName": {
+            "type": "string",
+            "nullable": true
+          },
+          "queuedNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "runningNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "completedNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "totalNodeCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "request": {
+            "type": "string"
+          },
+          "developmentProjectId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "latestRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse"
+            }
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowWorkItemRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "request"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 0,
+            "nullable": false
+          },
+          "request": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 0,
+            "nullable": false
+          },
+          "developmentProjectId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowWorkItemRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "request"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 0,
+            "nullable": false
+          },
+          "request": {
+            "type": "string",
+            "maxLength": 8000,
+            "minLength": 0,
+            "nullable": false
           }
         }
       },
