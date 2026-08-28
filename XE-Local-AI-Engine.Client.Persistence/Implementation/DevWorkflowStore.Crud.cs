@@ -141,15 +141,18 @@ internal sealed partial class DevWorkflowStore
 
             // Inside the transaction, so a run that starts between a caller's check and this one still loses: deleting
             // the rows under a live run would leave its executor holding a slot for work nothing will ever settle.
+            // The offending run is LOADED rather than merely counted, because this refusal is the operator's only
+            // instruction — "cancel that run first" needs to say which run, and it costs the same query.
             if (await _dbContext.DevWorkflowRuns.AsNoTracking()
-                                .AnyAsync(entity => entity.WorkItemId == workItemId
-                                                    && entity.Status != DevWorkflowRunStatus.Completed
-                                                    && entity.Status != DevWorkflowRunStatus.Failed
-                                                    && entity.Status != DevWorkflowRunStatus.Cancelled,
-                                    cancellationToken)
-                                .ConfigureAwait(false))
+                                .Where(entity => entity.WorkItemId == workItemId
+                                                 && entity.Status != DevWorkflowRunStatus.Completed
+                                                 && entity.Status != DevWorkflowRunStatus.Failed
+                                                 && entity.Status != DevWorkflowRunStatus.Cancelled)
+                                .Select(entity => new { entity.Id, entity.Status })
+                                .FirstOrDefaultAsync(cancellationToken)
+                                .ConfigureAwait(false) is { } live)
             {
-                throw new DevWorkflowRunInFlightException($"Development workflow work item '{workItemId}' still has a run in flight.");
+                throw new DevWorkflowRunInFlightException($"Run '{live.Id}' is {live.Status}, so work item '{workItemId}' cannot be deleted yet. Cancel the run first.");
             }
 
             var removed = await CountRowsAsync(runIds, workItemId, cancellationToken).ConfigureAwait(false);
