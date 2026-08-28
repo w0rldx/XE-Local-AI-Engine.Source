@@ -56,6 +56,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     private readonly DevWorkflowOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
+    private int _disposed;
     private Task? _loop;
 
     public DevWorkflowDispatcher(IServiceScopeFactory scopeFactory,
@@ -101,8 +102,17 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         }
     }
 
+    /// <summary>
+    ///     Idempotent, because this one instance is registered under three service types and the container tracks each
+    ///     factory registration's result for disposal separately — so it is disposed once per role, not once per object.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposed, value: 1) == 1)
+        {
+            return;
+        }
+
         await StopAsync(CancellationToken.None).ConfigureAwait(false);
         _stopping.Dispose();
         _advanceGate.Dispose();
@@ -145,14 +155,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             return 0;
         }
 
-        var graph = _graphs.Resolve(run);
-        var written = 0;
-
         if (run.Status == DevWorkflowRunStatus.Pending)
         {
-            return await StartRunAsync(store, run, graph, _options.MaxNodeRunsPerRun, cancellationToken).ConfigureAwait(false);
+            return await StartPendingRunAsync(store, run, cancellationToken).ConfigureAwait(false);
         }
 
+        var graph = _graphs.Resolve(run);
+        var written = 0;
         var nodeRuns = await store.ListNodeRunsAsync(runId, cancellationToken).ConfigureAwait(false);
 
         // Settle what has landed. A recorded decision is the durable half of a human act; turning it into a transition
@@ -189,6 +198,35 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     }
 
     /// <summary>
+    ///     Starts a <c>Pending</c> run, or fails it for good if its pinned graph cannot be routed.
+    ///     <para>
+    ///         The graph is validated again here rather than trusted from the definition's save, because an agent
+    ///         definition can be deleted in between. A run left <c>Pending</c> on a graph nothing can route would be
+    ///         swept forever, so the refusal is written down rather than retried.
+    ///     </para>
+    /// </summary>
+    private async Task<int> StartPendingRunAsync(IDevWorkflowStore store, DevWorkflowRunSnapshot run, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await StartRunAsync(store, _graphs.Resolve(run), run, _options.MaxNodeRunsPerRun, cancellationToken).ConfigureAwait(false);
+        }
+        catch (DevWorkflowValidationException exception)
+        {
+            _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(run.Id,
+                                DevWorkflowVersions.Any,
+                                DevWorkflowRunStatus.Failed,
+                                FailureClass: DevWorkflowFailureClasses.Configuration,
+                                SanitizedReason: exception.Message,
+                                WorkItemStatus: DevWorkflowWorkItemStatus.Blocked),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+            _graphs.Forget(run.Id);
+            return 1;
+        }
+    }
+
+    /// <summary>
     ///     Materializes the run's node runs from its pinned graph and moves it to <c>Running</c>.
     ///     <para>
     ///         Every node gets a row up front, not just the entry ones. Creating them as their branches settle reads
@@ -205,8 +243,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///     </para>
     /// </summary>
     private static async Task<int> StartRunAsync(IDevWorkflowStore store,
-        DevWorkflowRunSnapshot run,
         DevWorkflowGraph graph,
+        DevWorkflowRunSnapshot run,
         int maxNodeRunsPerRun,
         CancellationToken cancellationToken)
     {
@@ -358,38 +396,25 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
         var written = 0;
 
-        // Inline nodes hold nothing outside the tick, so cancelling them is the row write and nothing else. The lane
-        // executors that DO hold something — an agent's work session, a sandbox command — cancel their own in-flight
-        // work here once they exist.
-        foreach (var nodeRun in nodeRuns.Where(static nodeRun => DevWorkflowStateMachine.IsLive(nodeRun.Status)))
+        // Cancelling settles every live node run; pausing settles none. The asymmetry is the point: a pause is meant to
+        // be resumed, so it leaves the durable human waits and the not-yet-admitted rows exactly where they are, while
+        // a cancel abandons them. Inline nodes hold nothing outside the tick, so for them the row write is the whole of
+        // it — the lane executors that DO hold something across a tick pause or kill their own work here once they exist.
+        if (run.Status == DevWorkflowRunStatus.Cancelling)
         {
-            if (run.Status == DevWorkflowRunStatus.Pausing && nodeRun.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked)
+            foreach (var nodeRun in nodeRuns.Where(static nodeRun => DevWorkflowStateMachine.IsLive(nodeRun.Status)))
             {
-                // A pause is meant to be resumed, and a human wait survives one untouched.
-                continue;
+                DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Cancelled, nodeRun.NodeKey);
+                _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
+                                    nodeRun.Id,
+                                    DevWorkflowVersions.Any,
+                                    DevWorkflowNodeRunStatus.Cancelled,
+                                    FailureClass: DevWorkflowFailureClasses.Cancelled,
+                                    TerminalReason: "The run was cancelled."),
+                                cancellationToken)
+                            .ConfigureAwait(false);
+                written++;
             }
-
-            if (run.Status == DevWorkflowRunStatus.Pausing && nodeRun.Status == DevWorkflowNodeRunStatus.Pending)
-            {
-                continue;
-            }
-
-            var target = run.Status == DevWorkflowRunStatus.Pausing ? DevWorkflowNodeRunStatus.Pending : DevWorkflowNodeRunStatus.Cancelled;
-            if (nodeRun.Status == target)
-            {
-                continue;
-            }
-
-            DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, target, nodeRun.NodeKey);
-            _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
-                                nodeRun.Id,
-                                DevWorkflowVersions.Any,
-                                target,
-                                FailureClass: target == DevWorkflowNodeRunStatus.Cancelled ? DevWorkflowFailureClasses.Cancelled : null,
-                                TerminalReason: target == DevWorkflowNodeRunStatus.Cancelled ? "The run was cancelled." : null),
-                            cancellationToken)
-                        .ConfigureAwait(false);
-            written++;
         }
 
         if (nodeRuns.Any(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.Queued or DevWorkflowNodeRunStatus.Running))
@@ -412,8 +437,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     }
 
     /// <summary>
-    ///     Brings the next layer of the graph into existence, then judges every <c>Pending</c> node run against its
-    ///     inbound edges and runs the ones the inline lane owns.
+    ///     Judges every <c>Pending</c> node run against its inbound edges and runs the ones the inline lane owns.
     /// </summary>
     private static async Task<int> AdmitAsync(IDevWorkflowStore store, DevWorkflowRunSnapshot run, DevWorkflowGraph graph, CancellationToken cancellationToken)
     {

@@ -316,6 +316,36 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
+    ///     A run whose pinned graph cannot be routed fails at its first tick.
+    ///     <para>
+    ///         The graph is validated again at run start rather than trusted from the save, because an agent definition
+    ///         can be deleted in between. Left Pending the run would be swept forever; moved to Running it would claim
+    ///         work nothing can do.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ARunWhosePinnedGraphCannotBeRoutedFailsAtItsFirstTick()
+    {
+        await using var harness = new DevWorkflowHarness();
+
+        // Two entry nodes: routable JSON, unroutable graph. Nothing validates a definition on the way in yet, so this
+        // is exactly the shape a stale or hand-written definition would present at run start.
+        var runId = await harness.StartRunAsync("""{"schemaVersion":1,"nodes":[{"nodeKey":"a","nodeType":"Gate"},{"nodeKey":"b","nodeType":"Gate"}],"edges":[]}""")
+                                 .ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Failed, run.Status);
+        AssertEx.Equal("Configuration", run.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(run.TerminalReason), "exactly one entry node");
+        AssertEx.Empty(await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false), "nothing was materialized, so nothing has to be cleaned up.");
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked,
+            (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status,
+            "a failed run needs attention rather than being done.");
+    }
+
+    /// <summary>
     ///     The parsed graph is cached per run and invalidated by the run's revision, so a run that ticks many times
     ///     decrypts and parses its graph exactly once.
     /// </summary>
