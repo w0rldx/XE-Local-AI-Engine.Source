@@ -451,11 +451,14 @@ internal sealed partial class DevWorkflowStore
                 // admitted or actually mid-execution. Where it lands is always Pending.
                 reconciled.Add(new DevWorkflowReconciledNodeRun(nodeRun.Id, nodeRun.NodeKey, nodeRun.NodeType, nodeRun.Status, nodeRun.WorkSessionId));
 
+                // Re-dispatchable means clean: a row sitting at Pending must not carry a terminal reason, or the UI
+                // reads "the engine restarted" as this attempt's outcome. The reason is on the node.interrupted event.
                 nodeRun.Status = DevWorkflowNodeRunStatus.Pending;
                 nodeRun.QueueReason = null;
                 nodeRun.QueuedAtUtc = null;
                 nodeRun.StartedAtUtc = null;
-                nodeRun.TerminalReason = sanitizedReason;
+                nodeRun.FailureClass = null;
+                nodeRun.TerminalReason = null;
 
                 if (runs.TryGetValue(nodeRun.RunId, out var run))
                 {

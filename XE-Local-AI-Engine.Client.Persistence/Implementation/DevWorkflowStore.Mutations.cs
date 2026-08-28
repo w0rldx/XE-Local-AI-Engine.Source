@@ -153,10 +153,14 @@ internal sealed partial class DevWorkflowStore
                 }
                 else if (command.TargetStatus == DevWorkflowNodeRunStatus.Pending)
                 {
-                    // A re-attempt starts from a clean slate, or the UI would show it queued since its first try.
+                    // A re-attempt starts from a clean slate. The timestamps, or the UI shows it queued since its first
+                    // try; the failure fields too, or a node-run reports the previous attempt's failure while it runs
+                    // again. What that attempt failed with is already on its node.failed event.
                     nodeRun.QueuedAtUtc = null;
                     nodeRun.StartedAtUtc = null;
                     nodeRun.EndedAtUtc = null;
+                    nodeRun.FailureClass = null;
+                    nodeRun.TerminalReason = null;
                 }
 
                 if (IsTerminal(command.TargetStatus))
@@ -360,6 +364,15 @@ internal sealed partial class DevWorkflowStore
             command.OperationId,
             async run =>
             {
+                // Checked rather than left to return MarkedCount: 0, which is what a genuinely unconsumed artifact also
+                // reports — a caller passing an id from the wrong run should see the mistake, not a plausible zero.
+                if (!await _dbContext.DevWorkflowArtifacts
+                                     .AnyAsync(entity => entity.Id == command.SupersededArtifactId && entity.RunId == run.Id, cancellationToken)
+                                     .ConfigureAwait(false))
+                {
+                    throw new DevWorkflowNotFoundException($"Development workflow artifact '{command.SupersededArtifactId}' does not belong to run '{run.Id}'.");
+                }
+
                 // Pure DB work over the recorded uses: this marks, it never regenerates. Everything a node-run produced
                 // is flagged when that node-run consumed the version a newer one just superseded.
                 var consumers = await _dbContext.DevWorkflowArtifactUses.AsNoTracking()
@@ -368,10 +381,16 @@ internal sealed partial class DevWorkflowStore
                                                 .ToListAsync(cancellationToken)
                                                 .ConfigureAwait(false);
 
+                // The superseding artifact is excluded explicitly: a re-attempt of a node that consumed its own prior
+                // version is a consumer of the thing it just replaced, so without this the new version marks itself
+                // stale the moment it lands.
                 var dependents = consumers.Count == 0
                     ? []
                     : await _dbContext.DevWorkflowArtifacts
-                                      .Where(entity => entity.RunId == run.Id && consumers.Contains(entity.ProducedByNodeRunId) && !entity.IsStale)
+                                      .Where(entity => entity.RunId == run.Id
+                                                       && consumers.Contains(entity.ProducedByNodeRunId)
+                                                       && entity.Id != command.SupersedingArtifactId
+                                                       && !entity.IsStale)
                                       .ToListAsync(cancellationToken)
                                       .ConfigureAwait(false);
 

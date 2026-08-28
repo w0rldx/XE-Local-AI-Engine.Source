@@ -73,8 +73,15 @@ public sealed class DevWorkflowReconcileTests
         var run = await store.GetRunAsync(seed.RunId).ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowRunStatus.Running, run.Status, "Runs auto-resume, so reconciliation never moves a run's status.");
 
+        AssertEx.Null(nodeRuns[runningId].TerminalReason, "A row sitting at Pending must not carry a terminal reason, or the UI reads the restart as this attempt's outcome.");
+        AssertEx.Null(nodeRuns[runningId].FailureClass);
+
         var events = await store.ListEventsAsync(seed.RunId).ConfigureAwait(false);
         AssertEx.Equal(expected: 2, events.Count(item => item.EventType == DevWorkflowEventTypes.NodeInterrupted), "One interrupted event per collapsed node run.");
+        AssertEx.True(events.Any(item => item.EventType == DevWorkflowEventTypes.NodeInterrupted
+                                         && item.DetailJson is not null
+                                         && item.DetailJson.Contains("restarted", StringComparison.Ordinal)),
+            "The reason moved to the event, so it must actually be readable there.");
 
         var second = await store.ReconcileNonTerminalNodeRunsAsync("Second pass.").ConfigureAwait(false);
         AssertEx.Empty(second, "Reconciliation is idempotent by construction: a second pass finds none of those states.");

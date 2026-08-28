@@ -50,6 +50,8 @@ public sealed class DevWorkflowNodeRunTests
         AssertEx.Equal(expected: 1, nodeRun.SessionResumes);
         AssertEx.Equal(secondSessionId, nodeRun.WorkSessionId);
         AssertEx.Null(nodeRun.StartedAtUtc, "A re-attempt starts clean, or the UI shows it running since its first try.");
+        AssertEx.Null(nodeRun.FailureClass, "A node run trying again must not still report the previous attempt's failure class.");
+        AssertEx.Null(nodeRun.TerminalReason, "Nor its previous reason — that belongs to the node.failed event, not to a row that is about to run again.");
 
         var events = await store.ListEventsAsync(seed.RunId).ConfigureAwait(false);
         AssertEx.Equal(expected: 1, events.Count(item => item.EventType == DevWorkflowEventTypes.NodeRetryScheduled), "The retry itself must be in the log.");
