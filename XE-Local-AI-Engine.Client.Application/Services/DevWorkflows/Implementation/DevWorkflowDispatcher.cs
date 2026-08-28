@@ -337,7 +337,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         DevWorkflowStateMachine.EnsureLegal(run.Status, DevWorkflowRunStatus.Running);
         _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(run.Id,
-                            DevWorkflowVersions.Any,
+                            await CurrentVersionAsync(store, run.Id, cancellationToken).ConfigureAwait(false),
                             DevWorkflowRunStatus.Running,
                             WorkItemStatus: DevWorkflowWorkItemStatus.Active),
                         cancellationToken)
@@ -424,11 +424,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             // saying so is more honest than completing a run whose approval was refused.
             //
             // A gate with NO out-edges counts, and that case is the seeded "Research → Plan → Approval" shape rather
-            // than a corner: rejecting its terminal approval must not read as the run having succeeded. Approve on the
-            // same gate completes normally — it is the answer the workflow was waiting for.
+            // than a corner: rejecting its terminal approval must not read as the run having succeeded. Approve is
+            // exempt ONLY there — at a gate that HAS branches, an Approve none of them accepts is as stranded as any
+            // other answer, and completing it through skipped downstream would be the same lie in the other direction.
             if (outputJson is not null
                 && nodeRun.NodeType == DevWorkflowNodeType.HumanGate
-                && settled.Decision != DevWorkflowDecisionKind.Approve
+                && (settled.Decision != DevWorkflowDecisionKind.Approve || graph.OutboundEdges(nodeRun.NodeKey).Count > 0)
                 && !graph.OutboundEdges(nodeRun.NodeKey).Any(edge => Matches(edge, outputJson)))
             {
                 rejection ??= $"The gate '{nodeRun.NodeKey}' was answered {settled.Decision}, which none of its branches accepts.";
@@ -836,10 +837,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         }
     }
 
-    internal Task SweepForTestAsync(CancellationToken cancellationToken) =>
-        SweepAsync(cancellationToken);
-
-    private async Task SweepAsync(CancellationToken cancellationToken)
+    internal async Task SweepAsync(CancellationToken cancellationToken)
     {
         var runIds = new HashSet<Guid>();
         try

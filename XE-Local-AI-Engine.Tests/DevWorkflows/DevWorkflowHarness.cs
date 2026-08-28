@@ -51,10 +51,18 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     ///     A second dispatcher over the same database, standing in for the one a restart would build. It gets a fresh
     ///     graph cache because that is exactly what a restart loses — and losing it must cost nothing but a re-parse.
     /// </summary>
-    public DevWorkflowDispatcher CreateReplacementDispatcher() =>
+    /// <para>
+    ///     Also the only way to run the real signal and sweep pumps: the test host strips every hosted service, so a
+    ///     dispatcher the container built is never started.
+    /// </para>
+    public DevWorkflowDispatcher CreateReplacementDispatcher(bool enabled = true) =>
         new(Services.GetRequiredService<IServiceScopeFactory>(),
             new DevWorkflowGraphCache(),
-            Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+            Options.Create(new DevWorkflowOptions
+            {
+                Enabled = enabled,
+                SweepSeconds = Services.GetRequiredService<IOptions<DevWorkflowOptions>>().Value.SweepSeconds
+            }),
             Services.GetRequiredService<TimeProvider>(),
             Services.GetRequiredService<ILogger<DevWorkflowDispatcher>>());
 
@@ -156,7 +164,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     public async Task<int> SweepAsync()
     {
         var before = await Task.WhenAll((await ListRunIdsAsync().ConfigureAwait(false)).Select(ReadRunAsync)).ConfigureAwait(false);
-        await Dispatcher.SweepForTestAsync(CancellationToken.None).ConfigureAwait(false);
+        await Dispatcher.SweepAsync(CancellationToken.None).ConfigureAwait(false);
         var after = await Task.WhenAll(before.Select(run => ReadRunAsync(run.Id))).ConfigureAwait(false);
         return before.Zip(after).Count(pair => pair.First.Version != pair.Second.Version);
     }

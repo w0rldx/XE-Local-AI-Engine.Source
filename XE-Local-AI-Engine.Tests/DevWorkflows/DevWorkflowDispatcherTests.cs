@@ -234,6 +234,64 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
+    ///     The same rejection-survives-a-pause rule at a gate that HAS branches — so the fix is tested independently of
+    ///     the zero-out-edge case, which reaches the cancel by a different arm of the same condition.
+    /// </summary>
+    [Test]
+    public async Task ARejectionTakenWhilePausingSurvivesTheResumeAtABranchingGate()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.ApprovalBranches).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing).ConfigureAwait(false);
+
+        // Neither branch takes Reject: one wants Approve, the other RequestChanges.
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Reject).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, run.Status, "the rejection outranks the pause here too.");
+        AssertEx.Equal("GateRejected", run.FailureClass);
+    }
+
+    /// <summary>
+    ///     An Approve no branch accepts strands the run exactly as any other answer does. The zero-out-edge exemption is
+    ///     for a gate with nowhere to go by construction — not for an approval that missed every branch it had.
+    /// </summary>
+    [Test]
+    public async Task AnApproveNoBranchAcceptsCancelsTheRunToo()
+    {
+        await using var harness = new DevWorkflowHarness();
+
+        // Both branches test for something other than Approve, so approving matches neither.
+        const string NoApproveBranch = """
+                                       {
+                                         "schemaVersion": 1,
+                                         "nodes": [
+                                           { "nodeKey": "approve", "nodeType": "HumanGate" },
+                                           { "nodeKey": "revise", "nodeType": "Gate" },
+                                           { "nodeKey": "abandon", "nodeType": "Gate" }
+                                         ],
+                                         "edges": [
+                                           { "from": "approve", "to": "revise", "condition": { "path": "decision", "op": "eq", "value": "RequestChanges" } },
+                                           { "from": "approve", "to": "abandon", "condition": { "path": "decision", "op": "eq", "value": "Reject" } }
+                                         ]
+                                       }
+                                       """;
+
+        var runId = await harness.StartRunAsync(NoApproveBranch).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, run.Status, "completing via skipped downstream would be the same lie in the other direction.");
+        AssertEx.Contains(AssertEx.NotNull(run.TerminalReason), "Approve");
+    }
+
+    /// <summary>
     ///     A decision the node run's status forbids is a durable row re-read on every tick. It must cost that node run
     ///     and nothing else — left to throw, it would wedge the whole run and every healthy sibling with it, forever,
     ///     because the row that throws is still there on the next tick.
@@ -320,31 +378,41 @@ public sealed class DevWorkflowDispatcherTests
     /// <summary>
     ///     A productive tick re-signals, so a run advances at graph speed instead of one node per sweep interval.
     ///     <para>
-    ///         Asserted at the pump's own boundary rather than end to end: the test host removes every hosted service,
-    ///         so no harness test can observe the loop, and without this a five-node run would take five sweep
-    ///         intervals — correct, and unusably slow.
+    ///         Driven through a dispatcher the test starts itself, because the test host strips every hosted service —
+    ///         so this is the only place the real signal pump runs at all. One signal has to carry the run through
+    ///         several ticks; without the re-signal each hop would wait for a sweep, and the interval here is set past
+    ///         the test's lifetime so a sweep cannot rescue it.
     ///     </para>
     /// </summary>
     [Test]
-    public async Task AProductiveTickReSignalsAndAQuiescentOneDoesNot()
+    public async Task OneSignalCarriesARunThroughEveryTickItStillHasWorkFor()
     {
         await using var harness = new DevWorkflowHarness();
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.ResearchPlanApproval).ConfigureAwait(false);
-        var dispatcher = harness.Dispatcher;
 
-        await dispatcher.AdvanceSafelyAsync(runId, CancellationToken.None).ConfigureAwait(false);
+        await using var dispatcher = harness.CreateReplacementDispatcher();
+        await dispatcher.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        dispatcher.Signal(runId);
 
-        AssertEx.True(dispatcher.PendingSignals.TryRead(out var signalled), "starting the run wrote transitions, so there is more to do at once.");
-        AssertEx.Equal(runId, signalled);
+        _ = await harness.WaitForRunStatusAsync(runId, DevWorkflowRunStatus.WaitingForApproval).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked,
+            (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Status,
+            "one signal reached a node run several ticks past where it was sent.");
+    }
 
-        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
-        while (dispatcher.PendingSignals.TryRead(out _))
-        {
-            // Drain what the ticks above queued; what matters is the tick after them.
-        }
+    /// <summary>A disabled node registers the dispatcher and starts nothing, so a signal moves no run.</summary>
+    [Test]
+    public async Task ADisabledNodeStartsNoPump()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.TerminalGate).ConfigureAwait(false);
 
-        await dispatcher.AdvanceSafelyAsync(runId, CancellationToken.None).ConfigureAwait(false);
-        AssertEx.False(dispatcher.PendingSignals.TryRead(out _), "a run waiting on a human has nothing to re-advance for.");
+        await using var dispatcher = harness.CreateReplacementDispatcher(enabled: false);
+        await dispatcher.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        dispatcher.Signal(runId);
+
+        await Task.Delay(200).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Pending, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
     }
 
     /// <summary>
