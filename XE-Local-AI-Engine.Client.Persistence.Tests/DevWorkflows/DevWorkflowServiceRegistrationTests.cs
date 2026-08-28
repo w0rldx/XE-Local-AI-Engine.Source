@@ -68,11 +68,15 @@ public sealed class DevWorkflowServiceRegistrationTests
             "Implementation",
             "WorkSessionService.cs"));
 
+        // Scoped to the condition's own text, not to the whole file: a comment, a log line or a display switch may
+        // legitimately name Workflow one day, and none of those change what the guard admits.
         AssertEx.True(source.Contains("model.Kind == AgentWorkSessionKind.Development", StringComparison.Ordinal),
             "The service must still refuse the reserved Development kind.");
-        AssertEx.False(source.Contains("AgentWorkSessionKind.Workflow", StringComparison.Ordinal),
-            "Workflow passes this guard by not being named in it. A mention here would mean the deny-list had turned "
-            + "into an allow-list, and every workflow agent node would start failing at session creation.");
+        AssertEx.False(source.Contains("model.Kind == AgentWorkSessionKind.Workflow", StringComparison.Ordinal),
+            "Refusing Workflow here would fail every workflow agent node at session creation.");
+        AssertEx.False(source.Contains("model.Kind != AgentWorkSessionKind.", StringComparison.Ordinal),
+            "An inequality would make this an allow-list, which admits only what it names — and Workflow passes today "
+            + "precisely by not being named.");
     }
 
     private static string RepositoryRoot()
