@@ -10,10 +10,11 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 internal static class AddNodeDevWorkflowsExtensions
 {
     /// <summary>
-    ///     Registers the development-workflow persistence substrate.
+    ///     Registers the development-workflow persistence substrate and its runtime.
     ///     <para>
     ///         As with work sessions, <c>Enabled=false</c> does <em>not</em> skip registration: a disabled node has to
-    ///         answer legibly rather than 500 out of an empty container. The switch is enforced in the runtime.
+    ///         answer legibly rather than 500 out of an empty container. The switch is enforced in the runtime — the
+    ///         dispatcher registers either way and simply never starts its loop.
     ///     </para>
     /// </summary>
     public static IHostApplicationBuilder AddNodeDevWorkflows(this IHostApplicationBuilder builder, IConfiguration configuration)
@@ -31,6 +32,15 @@ internal static class AddNodeDevWorkflowsExtensions
 
         builder.Services.AddScoped<IDevWorkflowStore, DevWorkflowStore>();
         builder.Services.AddSingleton<IDevWorkflowArtifactBlobStore, ManagedDevWorkflowArtifactBlobStore>();
+
+        // One entry per live run, replaced when the run's graph revision moves. A singleton because the dispatcher is.
+        builder.Services.AddSingleton<DevWorkflowGraphCache>();
+
+        // One instance serving three roles, the same pairing the work-session supervisor uses: a second instance would
+        // hold its own signal channel, so half the signals would reach a loop that is not the one advancing runs.
+        builder.Services.AddSingleton<DevWorkflowDispatcher>();
+        builder.Services.AddSingleton<IDevWorkflowDispatcherSignal>(services => services.GetRequiredService<DevWorkflowDispatcher>());
+        builder.Services.AddSingleton<IHostedService>(services => services.GetRequiredService<DevWorkflowDispatcher>());
         return builder;
     }
 }

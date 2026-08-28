@@ -142,13 +142,18 @@ internal static class DevWorkflowStateMachine
 
         if (nodeRuns.Any(nodeRun => IsLive(nodeRun.Status)))
         {
-            // Blocked and WaitingForApproval both mean "a human has to act"; Pending and Queued both mean the dispatcher
-            // will act by itself, and so read as Running.
-            return nodeRuns.Any(nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.Pending
-                                    or DevWorkflowNodeRunStatus.Queued
-                                    or DevWorkflowNodeRunStatus.Running)
-                ? DevWorkflowRunStatus.Running
-                : DevWorkflowRunStatus.WaitingForApproval;
+            if (nodeRuns.Any(nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.Queued or DevWorkflowNodeRunStatus.Running))
+            {
+                return DevWorkflowRunStatus.Running;
+            }
+
+            // Blocked and WaitingForApproval both mean "a human has to act", and they outrank Pending deliberately:
+            // every node run of a graph exists from the moment the run starts, so there are almost always Pending rows
+            // waiting on a branch that has not settled. Reading those as Running would report a run blocked on an
+            // unanswered gate as busy, which is the one thing the two statuses exist to tell apart.
+            return nodeRuns.Any(nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked)
+                ? DevWorkflowRunStatus.WaitingForApproval
+                : DevWorkflowRunStatus.Running;
         }
 
         // A run with no node runs at all has not been materialized yet; it is still Pending, not complete.
