@@ -9,102 +9,146 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     The notification seam. It wraps the store rather than living at each call site in the runtime because a missed
-///     call site is a pane that silently stops updating, and no test would notice — so these assert that the wrapper
-///     announces every mutation, with the kind the client reacts to.
+///     call site is a pane that silently stops updating and no test would notice — which is why the coverage assertion
+///     below is the point of the design rather than decoration: a mutation added to the store interface fails this
+///     file until it is announced.
 /// </summary>
 public sealed class PublishingDevWorkflowStoreTests
 {
+    private const long Sequence = 12;
+
     private static readonly Guid RunId = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid NodeRunId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
-    [Test]
-    public async Task ARunTransition_AnnouncesTheRunWithTheWatermarkItsCommitAllocated()
-    {
-        var (store, inner, publisher) = Create();
-        inner.TransitionRunAsync(Arg.Any<TransitionDevWorkflowRunCommand>(), Arg.Any<CancellationToken>()).Returns(Result(sequence: 12));
-
-        _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(RunId, DevWorkflowVersions.Any, DevWorkflowRunStatus.Running))
-                       .ConfigureAwait(false);
-
-        await publisher.Received(1).PublishAsync(RunId, 12, DevWorkflowChangeKind.Run, Arg.Any<CancellationToken>());
-    }
-
     /// <summary>
-    ///     A node run entering a human wait is the one status move a client does more than repaint for, so it is the
-    ///     one that carries the gate kind.
+    ///     The claim the decorator exists to make: nothing can commit without announcing it. Asserted against the
+    ///     INTERFACE rather than a hand-picked few, so a mutation added later cannot quietly ship unannounced.
     /// </summary>
     [Test]
-    [Arguments(DevWorkflowNodeRunStatus.WaitingForApproval, DevWorkflowChangeKind.Gate)]
-    [Arguments(DevWorkflowNodeRunStatus.Blocked, DevWorkflowChangeKind.Gate)]
-    [Arguments(DevWorkflowNodeRunStatus.Running, DevWorkflowChangeKind.Node)]
-    [Arguments(DevWorkflowNodeRunStatus.Succeeded, DevWorkflowChangeKind.Node)]
-    public async Task ANodeRunTransition_AnnouncesTheKindTheClientReactsTo(DevWorkflowNodeRunStatus target, DevWorkflowChangeKind expected)
+    public void TheProbes_CoverEveryMutationTheStoreDeclares()
     {
-        var (store, inner, publisher) = Create();
-        inner.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).Returns(Result(sequence: 7));
+        var declared = typeof(IDevWorkflowStore).GetMethods()
+                                                .Where(static method => method.ReturnType == typeof(Task<DevWorkflowMutationResult>))
+                                                .Select(static method => method.Name)
+                                                .Distinct(StringComparer.Ordinal)
+                                                .OrderBy(static name => name, StringComparer.Ordinal);
+        var probed = Probes().Select(static probe => probe.Method).Distinct(StringComparer.Ordinal).OrderBy(static name => name, StringComparer.Ordinal);
 
-        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(RunId, NodeRunId, DevWorkflowVersions.Any, target)).ConfigureAwait(false);
-
-        await publisher.Received(1).PublishAsync(RunId, 7, expected, Arg.Any<CancellationToken>());
+        AssertEx.Equal(string.Join(Environment.NewLine, declared),
+            string.Join(Environment.NewLine, probed),
+            "Every store mutation must be exercised below: an unannounced one is a view that silently stops updating.");
     }
 
     [Test]
-    public async Task AnArtifactAppend_AnnouncesTheArtifactFeed()
+    public async Task EveryMutation_AnnouncesItsCommitWithTheKindTheClientReactsTo()
     {
-        var (store, inner, publisher) = Create();
-        inner.AppendArtifactAsync(Arg.Any<AppendDevWorkflowArtifactCommand>(), Arg.Any<CancellationToken>()).Returns(Result(sequence: 3));
+        foreach (var probe in Probes())
+        {
+            var (store, publisher) = Create();
 
-        _ = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(RunId,
-                            Guid.NewGuid(),
-                            NodeRunId,
-                            DevWorkflowVersions.Any,
-                            Guid.NewGuid(),
-                            DevWorkflowArtifactKind.Plan,
-                            "plan.md",
-                            "text/markdown",
-                            "sha",
-                            SizeBytes: 4,
-                            "reference"))
-                       .ConfigureAwait(false);
+            await probe.Invoke(store).ConfigureAwait(false);
 
-        await publisher.Received(1).PublishAsync(RunId, 3, DevWorkflowChangeKind.Artifact, Arg.Any<CancellationToken>());
-    }
-
-    [Test]
-    public async Task ARecordedDecision_AnnouncesTheGate()
-    {
-        var (store, inner, publisher) = Create();
-        inner.RecordDecisionAsync(Arg.Any<RecordDevWorkflowDecisionCommand>(), Arg.Any<CancellationToken>()).Returns(Result(sequence: 21));
-
-        _ = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(RunId,
-                            Guid.NewGuid(),
-                            NodeRunId,
-                            DevWorkflowVersions.Any,
-                            Guid.NewGuid(),
-                            DevWorkflowDecisionKind.Approve))
-                       .ConfigureAwait(false);
-
-        await publisher.Received(1).PublishAsync(RunId, 21, DevWorkflowChangeKind.Gate, Arg.Any<CancellationToken>());
+            await publisher.Received(1).PublishAsync(RunId, Sequence, probe.Kind, Arg.Any<CancellationToken>());
+            AssertEx.Equal(expected: 1,
+                publisher.ReceivedCalls().Count(),
+                $"{probe.Method} → {probe.Kind} must announce its commit exactly once, with the watermark that commit allocated.");
+        }
     }
 
     [Test]
     public async Task AReadAnnouncesNothing()
     {
-        var (store, inner, publisher) = Create();
-        inner.ListNodeRunsAsync(RunId, Arg.Any<CancellationToken>()).Returns([]);
+        var (store, publisher) = Create();
 
         _ = await store.ListNodeRunsAsync(RunId).ConfigureAwait(false);
 
         AssertEx.Empty(publisher.ReceivedCalls());
     }
 
-    private static (IDevWorkflowStore Store, IDevWorkflowStore Inner, IDevWorkflowEventPublisher Publisher) Create()
+    /// <summary>
+    ///     Every mutation the store can commit, and the kind the client reacts to. A node run entering a human wait is
+    ///     the one status move a client does more than repaint for, so that method carries three rows.
+    /// </summary>
+    private static IReadOnlyList<Probe> Probes() =>
+    [
+        new(nameof(IDevWorkflowStore.TransitionRunAsync),
+            DevWorkflowChangeKind.Run,
+            store => store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(RunId, DevWorkflowVersions.Any, DevWorkflowRunStatus.Running))),
+        new(nameof(IDevWorkflowStore.AppendEventAsync),
+            DevWorkflowChangeKind.Run,
+            store => store.AppendEventAsync(new AppendDevWorkflowEventCommand(RunId, DevWorkflowVersions.Any, DevWorkflowEventTypes.NodeInterrupted))),
+        new(nameof(IDevWorkflowStore.MaterializeNodeRunsAsync),
+            DevWorkflowChangeKind.Node,
+            store => store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(RunId,
+                DevWorkflowVersions.Any,
+                Guid.NewGuid(),
+                [new DevWorkflowNodeRunSeed(NodeRunId, "research", DevWorkflowNodeType.Agent)]))),
+        new(nameof(IDevWorkflowStore.TransitionNodeRunAsync),
+            DevWorkflowChangeKind.Node,
+            store => store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Running))),
+        new(nameof(IDevWorkflowStore.TransitionNodeRunAsync),
+            DevWorkflowChangeKind.Gate,
+            store => store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.WaitingForApproval))),
+        new(nameof(IDevWorkflowStore.TransitionNodeRunAsync),
+            DevWorkflowChangeKind.Gate,
+            store => store.TransitionNodeRunAsync(NodeRunTransition(DevWorkflowNodeRunStatus.Blocked))),
+        new(nameof(IDevWorkflowStore.AttachWorkSessionAsync),
+            DevWorkflowChangeKind.Node,
+            store => store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand(RunId, NodeRunId, DevWorkflowVersions.Any, Guid.NewGuid()))),
+        new(nameof(IDevWorkflowStore.AppendArtifactAsync),
+            DevWorkflowChangeKind.Artifact,
+            store => store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(RunId,
+                Guid.NewGuid(),
+                NodeRunId,
+                DevWorkflowVersions.Any,
+                Guid.NewGuid(),
+                DevWorkflowArtifactKind.Plan,
+                "plan.md",
+                "text/markdown",
+                "sha",
+                SizeBytes: 4,
+                "reference"))),
+        new(nameof(IDevWorkflowStore.RecordArtifactUsesAsync),
+            DevWorkflowChangeKind.Artifact,
+            store => store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand(RunId,
+                NodeRunId,
+                DevWorkflowVersions.Any,
+                Guid.NewGuid(),
+                [Guid.NewGuid()]))),
+        new(nameof(IDevWorkflowStore.MarkDependentsStaleAsync),
+            DevWorkflowChangeKind.Artifact,
+            store => store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand(RunId, Guid.NewGuid(), Guid.NewGuid(), DevWorkflowVersions.Any))),
+        new(nameof(IDevWorkflowStore.RecordDecisionAsync),
+            DevWorkflowChangeKind.Gate,
+            store => store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(RunId,
+                Guid.NewGuid(),
+                NodeRunId,
+                DevWorkflowVersions.Any,
+                Guid.NewGuid(),
+                DevWorkflowDecisionKind.Approve)))
+    ];
+
+    private static TransitionDevWorkflowNodeRunCommand NodeRunTransition(DevWorkflowNodeRunStatus target) =>
+        new(RunId, NodeRunId, DevWorkflowVersions.Any, target);
+
+    private static (IDevWorkflowStore Store, IDevWorkflowEventPublisher Publisher) Create()
     {
         var inner = Substitute.For<IDevWorkflowStore>();
+        var result = new DevWorkflowMutationResult(RunId, Sequence, Version: 2, DevWorkflowRunStatus.Running, GraphRevision: 0);
+        inner.TransitionRunAsync(Arg.Any<TransitionDevWorkflowRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.AppendEventAsync(Arg.Any<AppendDevWorkflowEventCommand>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.MaterializeNodeRunsAsync(Arg.Any<MaterializeDevWorkflowNodesCommand>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.TransitionNodeRunAsync(Arg.Any<TransitionDevWorkflowNodeRunCommand>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.AttachWorkSessionAsync(Arg.Any<AttachDevWorkflowWorkSessionCommand>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.AppendArtifactAsync(Arg.Any<AppendDevWorkflowArtifactCommand>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.RecordArtifactUsesAsync(Arg.Any<RecordDevWorkflowArtifactUsesCommand>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.MarkDependentsStaleAsync(Arg.Any<MarkDevWorkflowStaleCommand>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.RecordDecisionAsync(Arg.Any<RecordDevWorkflowDecisionCommand>(), Arg.Any<CancellationToken>()).Returns(result);
+        inner.ListNodeRunsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns([]);
+
         var publisher = Substitute.For<IDevWorkflowEventPublisher>();
-        return (new PublishingDevWorkflowStore(inner, publisher), inner, publisher);
+        return (new PublishingDevWorkflowStore(inner, publisher), publisher);
     }
 
-    private static DevWorkflowMutationResult Result(long sequence) =>
-        new(RunId, sequence, Version: 2, DevWorkflowRunStatus.Running, GraphRevision: 0);
+    private sealed record Probe(string Method, DevWorkflowChangeKind Kind, Func<IDevWorkflowStore, Task> Invoke);
 }

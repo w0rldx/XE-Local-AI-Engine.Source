@@ -13389,7 +13389,6 @@ export type UpdateDevWorkflowWorkItemErrors = {
 	 * Not Found
 	 */
 	404: unknown;
-	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
 };
 
 export type UpdateDevWorkflowWorkItemError = UpdateDevWorkflowWorkItemErrors[keyof UpdateDevWorkflowWorkItemErrors];

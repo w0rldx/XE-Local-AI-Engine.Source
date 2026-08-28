@@ -159,15 +159,24 @@ internal sealed record DevWorkflowCondition(string Path, DevWorkflowConditionOpe
             throw new DevWorkflowValidationException($"The condition on edge {edgeDescription} uses '{op}' and so needs a 'value'.");
         }
 
-        // A composite value is refused at authoring time rather than at run time, because Evaluate fails CLOSED: an
-        // incomparable pair reads as "no", so the edge silently never fires and the run hangs with nothing in the log
-        // to explain it. Scalars — including null, which compares equal to an explicit null — are left to Evaluate,
-        // whose refusals for them are deliberate and tested. This one is not a refusal but an absence: there is no
-        // comparison against an object or an array for it to make.
+        // Two authoring-time refusals, both for the same reason: Evaluate fails CLOSED, so a comparison it can never
+        // make is not an error anyone sees — it is an edge that silently never fires and a run that hangs with nothing
+        // in the log to explain it. A comparison it CAN make and answers "no" is left alone; that is routing.
+        //
+        // There is no comparison against an object or an array to make at all.
         if (value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
         {
             throw new DevWorkflowValidationException($"The condition on edge {edgeDescription} compares against a {value.ValueKind}. "
                                                      + "A condition value must be a scalar — a string, a number, a boolean or null.");
+        }
+
+        // And booleans have no ordering: 'gt' against a boolean literal is dead for every possible output, not just
+        // for the one this run produced. Equality still answers.
+        if (value.ValueKind is JsonValueKind.True or JsonValueKind.False
+            && op is not (DevWorkflowConditionOperator.Eq or DevWorkflowConditionOperator.Ne))
+        {
+            throw new DevWorkflowValidationException($"The condition on edge {edgeDescription} asks whether a boolean is '{op}'. "
+                                                     + "Booleans compare for equality only, so this edge could never fire.");
         }
 
         return new DevWorkflowCondition(path, op, value);

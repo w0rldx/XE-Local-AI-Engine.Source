@@ -113,12 +113,18 @@ public sealed class DevWorkflowConditionTests
         AssertEx.False(Evaluate("passed", op, "\"true\"", Output), "nor a boolean against a string.");
     }
 
+    /// <summary>
+    ///     Booleans compare for equality and nothing else. Ordering against a boolean LITERAL is refused when the
+    ///     condition is parsed (see the rejection table below); this is the runtime half — a boolean output against a
+    ///     number is a comparison the evaluator can be asked for and answers "no" to.
+    /// </summary>
     [Test]
-    public void Evaluate_ComparingBooleans_AnswersEqualityAndRefusesOrdering()
+    public void Evaluate_ComparingBooleans_AnswersEquality()
     {
         AssertEx.True(Evaluate("passed", "eq", "true", Output));
-        AssertEx.False(Evaluate("passed", "gt", "false", Output), "asking whether true is greater than false has no answer worth inventing.");
-        AssertEx.False(Evaluate("passed", "lte", "true", Output));
+        AssertEx.False(Evaluate("passed", "eq", "false", Output));
+        AssertEx.True(Evaluate("passed", "ne", "false", Output));
+        AssertEx.False(Evaluate("passed", "gt", "0", Output), "a boolean has no ordering against a number either.");
     }
 
     [Test]
@@ -135,9 +141,12 @@ public sealed class DevWorkflowConditionTests
     [Arguments("\"a string\"", "must be an object")]
 
     // A composite value is not a comparison Evaluate can refuse — it is one it can never make. Left to run time it
-    // would read as a dead edge, which is a hang with nothing in the log rather than an error anyone can act on.
+    // would read as a dead edge, which is a hang with nothing in the log rather than an error anyone can act on. An
+    // ordering against a boolean literal is dead the same way, for every output the node could ever produce.
     [Arguments("""{"path":"a","op":"eq","value":{"nested":1}}""", "must be a scalar")]
     [Arguments("""{"path":"a","op":"eq","value":[1,2]}""", "must be a scalar")]
+    [Arguments("""{"path":"a","op":"gt","value":true}""", "compare for equality only")]
+    [Arguments("""{"path":"a","op":"lte","value":false}""", "compare for equality only")]
     public void Parse_RejectsAConditionNobodyCouldPredictTheRoutingOf(string json, string expectedMessage)
     {
         using var document = JsonDocument.Parse(json);

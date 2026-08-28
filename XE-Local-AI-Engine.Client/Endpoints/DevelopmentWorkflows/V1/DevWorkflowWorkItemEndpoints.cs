@@ -96,9 +96,11 @@ public sealed class UpdateDevWorkflowWorkItemEndpoint(IDevWorkflowStore store) :
     {
         Patch(LocalApiRoutes.DevelopmentWorkflows.WorkItemById);
         Policies(NodeAuthorizationPolicies.Operator);
-        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest)
-                                      .Produces(StatusCodes.Status404NotFound)
-                                      .ProducesConflictProblemDetails());
+
+        // No 409 declared: this PATCH writes against the Any version sentinel, so it has no version race to lose —
+        // the only other writer to a work item is the runtime writing its STATUS, which this never touches. Declaring
+        // one would put a response in the generated client that the endpoint cannot send.
+        Description(builder => builder.ProducesProblemDetails(StatusCodes.Status400BadRequest).Produces(StatusCodes.Status404NotFound));
     }
 
     public override async Task HandleAsync(UpdateDevWorkflowWorkItemRequest req, CancellationToken ct)

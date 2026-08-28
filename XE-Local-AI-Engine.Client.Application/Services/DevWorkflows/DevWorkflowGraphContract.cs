@@ -28,17 +28,25 @@ public static class DevWorkflowGraphContract
         DevWorkflowGraph.Parse(graphJson).Nodes.Count;
 
     /// <summary>
-    ///     Which decisions a node run in <paramref name="status" /> can take, derived from the transition table rather
-    ///     than listed: a gate's three answers and <c>Skip</c> from <c>WaitingForApproval</c>, the three interventions
-    ///     from <c>Blocked</c>, and nothing at all from anywhere else. Listing them separately here is how the panel
-    ///     and the endpoint would eventually disagree about what the runtime accepts.
+    ///     Which decisions a node run in <paramref name="status" /> can take: a gate's three answers and <c>Skip</c>
+    ///     from <c>WaitingForApproval</c>, the three interventions from <c>Blocked</c>, and nothing at all from
+    ///     anywhere else.
+    ///     <para>
+    ///         Two gates, and both are load-bearing. The decidable-status check is the one the decision endpoint
+    ///         enforces, so without it a <c>Running</c> node run would advertise five answers that every one of which
+    ///         answers 409. The transition table then says which of the six that status can actually take, rather than
+    ///         a second list here that would drift from what the runtime accepts.
+    ///     </para>
     /// </summary>
     public static IReadOnlyList<string> AllowedDecisions(DevWorkflowNodeRunStatus status) =>
-    [
-        .. Enum.GetValues<DevWorkflowDecisionKind>()
-               .Where(decision => DevWorkflowStateMachine.IsLegal(status, DevWorkflowStateMachine.TargetFor(decision)))
-               .Select(static decision => decision.ToString())
-    ];
+        status is not (DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked)
+            ? []
+            :
+            [
+                .. Enum.GetValues<DevWorkflowDecisionKind>()
+                       .Where(decision => DevWorkflowStateMachine.IsLegal(status, DevWorkflowStateMachine.TargetFor(decision)))
+                       .Select(static decision => decision.ToString())
+            ];
 
     /// <summary>
     ///     Whether a <c>Reject</c> at <paramref name="nodeKey" /> has somewhere to go. False means X10: the rejection
