@@ -39,7 +39,7 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner, IDevWo
     public Task<DevWorkflowWorkItemSnapshot> GetWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default) =>
         _inner.GetWorkItemAsync(workItemId, cancellationToken);
 
-    public Task<int> DeleteWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default) =>
+    public Task<DevWorkflowWorkItemDeletion> DeleteWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default) =>
         _inner.DeleteWorkItemAsync(workItemId, cancellationToken);
 
     public Task<DevWorkflowDefinitionSnapshot> CreateDefinitionAsync(CreateDevWorkflowDefinitionCommand command, CancellationToken cancellationToken = default) =>
@@ -136,6 +136,10 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner, IDevWo
 
     public Task<DevWorkflowDecisionSnapshot?> FindDecisionByOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
         _inner.FindDecisionByOperationAsync(runId, operationId, cancellationToken);
+
+    /// <summary>A read: nothing committed, so there is nothing to announce.</summary>
+    public Task<bool> HasOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
+        _inner.HasOperationAsync(runId, operationId, cancellationToken);
 
     public Task<DevWorkflowMutationResult> AppendEventAsync(AppendDevWorkflowEventCommand command, CancellationToken cancellationToken = default) =>
         PublishAsync(_inner.AppendEventAsync(command, cancellationToken), DevWorkflowChangeKind.Run, cancellationToken);

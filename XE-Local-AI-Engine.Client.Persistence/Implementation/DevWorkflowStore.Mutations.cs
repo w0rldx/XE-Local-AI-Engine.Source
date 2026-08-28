@@ -56,21 +56,9 @@ internal sealed partial class DevWorkflowStore
             throw new ArgumentException("A materialization must create at least one node run.", nameof(command));
         }
 
-        foreach (var seed in command.NodeRuns)
-        {
-            EnsureNotBlank(seed.NodeKey, nameof(seed.NodeKey));
-            if (seed.MaxAttempts <= 0)
-            {
-                throw new ArgumentOutOfRangeException(nameof(command), "A node run must allow at least one attempt.");
-            }
-        }
+        EnsureSeedsValid(command.NodeRuns, nameof(command));
 
         var keys = command.NodeRuns.Select(seed => seed.NodeKey).ToList();
-        if (keys.Distinct(StringComparer.Ordinal).Count() != keys.Count)
-        {
-            throw new ArgumentException("A materialization cannot create two node runs under the same node key.", nameof(command));
-        }
-
         return ExecuteMutationAsync(command.RunId,
             command.ExpectedVersion,
             command.OperationId,
@@ -83,29 +71,7 @@ internal sealed partial class DevWorkflowStore
                     throw new DevWorkflowInvalidTransitionException($"Run '{run.Id}' already carries a node run for one of the requested node keys.");
                 }
 
-                var now = Now();
-                foreach (var seed in command.NodeRuns)
-                {
-                    _dbContext.DevWorkflowNodeRuns.Add(new DevWorkflowNodeRun
-                    {
-                        Id = seed.NodeRunId,
-                        RunId = run.Id,
-                        NodeKey = seed.NodeKey,
-                        NodeType = seed.NodeType,
-                        Attempt = 1,
-                        MaxAttempts = seed.MaxAttempts,
-                        SessionResumes = 0,
-                        Status = DevWorkflowNodeRunStatus.Pending,
-                        Sequence = NextSequence(run),
-                        AgentDefinitionId = seed.AgentDefinitionId,
-                        DevelopmentProjectId = seed.DevelopmentProjectId,
-                        InputJson = Utf8OrNull(seed.InputJson),
-                        PolicyResolutionJson = Utf8OrNull(seed.PolicyResolutionJson),
-                        MaterializedFromNodeRunId = seed.MaterializedFromNodeRunId,
-                        MaterializationIndex = seed.MaterializationIndex,
-                        CreatedAtUtc = now
-                    });
-                }
+                AddNodeRuns(run, command.NodeRuns, Now());
 
                 // A rewritten graph is the dynamic-expansion path: the run's pinned copy is the single source of
                 // routing truth, so it changes here — in the same transaction as the rows it explains — and the

@@ -131,7 +131,10 @@ public sealed class DevWorkflowPurgeCoverageTests
                            .ConfigureAwait(false);
 
             var removed = await store.DeleteWorkItemAsync(workItemId).ConfigureAwait(false);
-            AssertEx.True(removed > 0, "The delete must report the rows it removed.");
+            AssertEx.True(removed.RemovedRows > 0, "The delete must report the rows it removed.");
+            AssertEx.Equal(seed.RunId,
+                removed.RunIds.Single(),
+                "and the runs whose artifact bytes the caller still has to sweep — a run left out of this answer is bytes nothing points at any more.");
         }
 
         foreach (var table in new[]

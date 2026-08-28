@@ -11,13 +11,8 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 /// </summary>
 internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 {
-    /// <summary>
-    ///     How many of a work item's runs a delete gathers. One live run per work item and a hand-driven re-run cadence
-    ///     put the real number in single digits; this is the page that keeps an unbounded read out of a delete.
-    /// </summary>
-    private const int DeletePageSize = 1000;
-
     private readonly IDevWorkflowArtifactBlobStore _blobs;
+    private readonly ILogger<DevWorkflowRunService> _logger;
     private readonly DevWorkflowOptions _options;
     private readonly IWorkflowOwnedWorkSessionLifecycle _sessions;
     private readonly IDevWorkflowDispatcherSignal _signal;
@@ -27,9 +22,11 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         IDevWorkflowDispatcherSignal signal,
         IWorkflowOwnedWorkSessionLifecycle sessions,
         IDevWorkflowArtifactBlobStore blobs,
-        IOptions<DevWorkflowOptions> options)
+        IOptions<DevWorkflowOptions> options,
+        ILogger<DevWorkflowRunService> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _signal = signal ?? throw new ArgumentNullException(nameof(signal));
         _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
@@ -56,8 +53,8 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
                 throw new DevWorkflowInvalidTransitionException($"Operation '{operationId}' already started a different run.");
             }
 
-            // Signalled, not merely composed: the crash window is between this method's two store calls, and a run left
-            // there needs a tick to finish starting rather than a wait for the next sweep.
+            // Signalled, not merely composed: a replay is what a caller sends when it never saw the first answer, and
+            // the run it is asking about may still be waiting for its first tick.
             return await SignalAndComposeAsync(replayed.Id, cancellationToken).ConfigureAwait(false);
         }
 
@@ -73,23 +70,17 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         var graph = DevWorkflowGraph.Parse(definition.GraphJson);
         EnsureRepositoryBound(graph, workItem);
 
+        // ONE call. The seeds carry the caller's inputs, which have no other home, so a run row that committed without
+        // them would be a durable workflow quietly running a different request from the one that was asked.
         var run = await _store.StartRunAsync(new StartDevWorkflowRunCommand(operationId,
                                   workItemId,
                                   definitionId,
                                   definition.Version,
                                   definition.GraphHash,
-                                  definition.GraphJson),
+                                  definition.GraphJson,
+                                  DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson, _options.MaxNodeRunsPerRun)),
                               cancellationToken)
                               .ConfigureAwait(false);
-
-        // Two calls, and the second is this method's rather than the dispatcher's: the caller's inputs live nowhere but
-        // the entry node runs, so whoever holds them has to be the one that seeds them.
-        _ = await _store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(run.Id,
-                            DevWorkflowVersions.Any,
-                            DevWorkflowOperationId.For(run.Id, string.Empty, attempt: 0, "materialize-graph"),
-                            DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson, _options.MaxNodeRunsPerRun)),
-                        cancellationToken)
-                    .ConfigureAwait(false);
 
         return await SignalAndComposeAsync(run.Id, cancellationToken).ConfigureAwait(false);
     }
@@ -102,6 +93,14 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 
     public async Task<DevWorkflowRunDetail> ResumeAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default)
     {
+        // Ahead of the status check below for the same reason it runs ahead of the transition table in CommandAsync: a
+        // resume that committed and was then retried is a replay, and by then the run it resumed is legitimately
+        // Running — the one status this method refuses.
+        if (await TryReplayAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is { } replayed)
+        {
+            return replayed;
+        }
+
         // Checked here rather than left to the transition table, which lets a run go back to Running from a human wait
         // BECAUSE the dispatcher's recomputation does exactly that. Only a paused run is one an operator can resume,
         // and answering "resumed" to a run that never stopped would be a lie about what the command did.
@@ -119,38 +118,30 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         // Reads the item first so an unknown id answers "not found" rather than "deleted nothing".
         _ = await _store.GetWorkItemAsync(workItemId, cancellationToken).ConfigureAwait(false);
 
-        var runs = await _store.ListRunSummariesAsync(workItemId, status: null, DeletePageSize, cancellationToken).ConfigureAwait(false);
-        if (runs.FirstOrDefault(run => !DevWorkflowStateMachine.IsTerminal(run.Status)) is { } live)
+        // Rows first, and everything external after. The live-run guard lives inside this transaction, so a delete
+        // refused because a run started mid-flight cannot have destroyed that run's transcripts on the way to the
+        // refusal — and the ids come back from the commit, so there is no page for a caller to walk or forget.
+        var deleted = await _store.DeleteWorkItemAsync(workItemId, cancellationToken).ConfigureAwait(false);
+
+        // Best-effort and idempotent, because the rows that named these are already gone: a session that refuses to be
+        // deleted is an orphan a later sweep can still find by kind, while throwing here would report a failure for a
+        // delete that succeeded. A crash inside this loop leaves the same orphans — recoverable, and never a dangling
+        // reference, since nothing points at them any more.
+        foreach (var sessionId in deleted.WorkSessionIds)
         {
-            // Checked here as well as by the store's own guard, and BEFORE anything is released: the store's check is
-            // the atomic backstop against a run starting mid-delete, but reaching it after the sessions were deleted
-            // would mean a refused delete had already destroyed the transcripts of a run that is still going.
-            throw new DevWorkflowRunInFlightException($"Run '{live.Id}' is {live.Status}, so this work item cannot be deleted yet. Cancel the run first.");
+            try
+            {
+                await _sessions.DeleteAsync(sessionId, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is WorkSessionInvalidTransitionException or WorkSessionNotFoundException)
+            {
+                _logger.LogWarning(exception, "Work session {SessionId} outlived the work item that owned it and has to be removed by hand.", sessionId);
+            }
         }
 
-        // ponytail: one node-run read per run of this work item. Bounded by the runs a human started by hand, and it
-        // buys the session ids the delete has to release — a grouped store query if that ever stops being cheap.
-        var sessionIds = new List<Guid>();
-        foreach (var run in runs)
+        foreach (var runId in deleted.RunIds)
         {
-            var nodeRuns = await _store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
-            sessionIds.AddRange(nodeRuns.Where(static nodeRun => nodeRun.WorkSessionId is not null).Select(static nodeRun => nodeRun.WorkSessionId!.Value));
-        }
-
-        // Sessions before rows: a session that refuses to go leaves the work item intact and the operator with a
-        // conflict, where the other order would leave rows deleted and sessions orphaned with nothing pointing at them.
-        foreach (var sessionId in sessionIds.Distinct())
-        {
-            await _sessions.DeleteAsync(sessionId, cancellationToken).ConfigureAwait(false);
-        }
-
-        _ = await _store.DeleteWorkItemAsync(workItemId, cancellationToken).ConfigureAwait(false);
-
-        // Bytes last, and best-effort by contract: the rows that named them are already gone, so a blob left behind is
-        // garbage rather than a dangling reference.
-        foreach (var run in runs)
-        {
-            _blobs.DeleteRun(run.Id);
+            _blobs.DeleteRun(runId);
         }
     }
 
@@ -170,7 +161,16 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         if (await _store.FindDecisionByOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is { } recorded)
         {
             // A repeated POST answers with the decision it already recorded, not with a conflict about the node run
-            // having since moved on because of it.
+            // having since moved on because of it — but only if it IS the same act. A reused operation id naming a
+            // different node run, a different answer or a different person would otherwise read as a success for a
+            // decision nobody took, which is the one thing this audit trail exists to make impossible.
+            if (recorded.NodeRunId != nodeRunId || recorded.Decision != decision || !string.Equals(recorded.DecidedBySubject, decidedBySubject, StringComparison.Ordinal))
+            {
+                throw new DevWorkflowInvalidTransitionException($"Operation '{operationId}' already recorded a different decision on this run.");
+            }
+
+            // Comment and payload are deliberately NOT compared: they are the free text around the act rather than the
+            // act itself, and a client re-sending its request with a trimmed comment has still taken one decision.
             return new DevWorkflowDecisionResult(await ComposeAsync(run, cancellationToken).ConfigureAwait(false), recorded);
         }
 
@@ -195,6 +195,20 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         // The same table the dispatcher settles against, so the endpoint cannot accept an answer the runtime would then
         // have to refuse — a Retry on an unanswered gate, say, which has no re-attempt to schedule.
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowStateMachine.TargetFor(decision), nodeRun.NodeKey);
+
+        if (decision == DevWorkflowDecisionKind.Retry)
+        {
+            // A human Retry ignores the NODE's attempt cap on purpose — that is what makes it an override — but the
+            // run-wide budget still bounds it, or a definition nobody can fix becomes a person clicking Retry for ever.
+            // Checked here because this is where a re-attempt is authorised; the startup reconciler checks the same
+            // budget for the attempts a restart spends.
+            var spent = (await _store.ListNodeRunsAsync(runId, cancellationToken).ConfigureAwait(false)).Sum(static row => row.Attempt - 1);
+            if (spent >= _options.MaxTotalAttempts)
+            {
+                throw new DevWorkflowInvalidTransitionException($"This run has already spent {spent} re-attempts, which is as many as this node allows, "
+                                                                + "so it cannot be retried again.");
+            }
+        }
 
         _ = await _store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(runId,
                             Guid.NewGuid(),
@@ -225,6 +239,11 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
     /// </summary>
     private async Task<DevWorkflowRunDetail> CommandAsync(Guid runId, Guid operationId, DevWorkflowRunStatus target, CancellationToken cancellationToken)
     {
+        if (await TryReplayAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is { } replayed)
+        {
+            return replayed;
+        }
+
         var run = await _store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
         DevWorkflowStateMachine.EnsureLegal(run.Status, target);
 
@@ -232,6 +251,22 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
                         .ConfigureAwait(false);
         return await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    ///     The run as it stands, when this operation id has already committed its command — and <see langword="null" />
+    ///     when it has not.
+    ///     <para>
+    ///         Resolved BEFORE legality by every lifecycle verb. A command that committed and whose answer the client
+    ///         never saw is retried against a run the dispatcher has meanwhile advanced — a cancel that has since
+    ///         drained to <c>Cancelled</c>, a resume whose run is now <c>Running</c> — and judging that retry against
+    ///         the status its own first attempt produced would answer a conflict to a caller that did exactly the right
+    ///         thing. The store keeps the same promise one level down; this is that promise made visible to the verbs.
+    ///     </para>
+    /// </summary>
+    private async Task<DevWorkflowRunDetail?> TryReplayAsync(Guid runId, Guid operationId, CancellationToken cancellationToken) =>
+        await _store.HasOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false)
+            ? await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false)
+            : null;
 
     /// <summary>
     ///     Signals AFTER the commit, which is the whole of the runtime's obligation to the dispatcher: without it a

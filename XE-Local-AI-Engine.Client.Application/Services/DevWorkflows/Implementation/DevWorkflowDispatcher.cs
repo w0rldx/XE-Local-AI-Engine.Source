@@ -36,6 +36,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         DevWorkflowRunStatus.Cancelling
     ];
 
+    /// <summary>The statuses that mean the dispatcher has work in hand for a run, and so count against the run cap.</summary>
+    private static readonly DevWorkflowRunStatus[] ActiveRunStatuses =
+    [
+        DevWorkflowRunStatus.Running,
+        DevWorkflowRunStatus.Pausing,
+        DevWorkflowRunStatus.Cancelling
+    ];
+
     /// <summary>
     ///     How many runs of one status a sweep pages in. Generous rather than tuned: a node that somehow held more live
     ///     runs than this has a bigger problem than sweep latency, and every real deployment is far below it.
@@ -262,7 +270,10 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     {
         try
         {
-            return await StartRunAsync(store, _graphs.Resolve(run), run, _options.MaxNodeRunsPerRun, cancellationToken).ConfigureAwait(false);
+            // The graph is still resolved first: a run whose pinned blob cannot be routed has to fail rather than
+            // queue behind runs that can.
+            _ = _graphs.Resolve(run);
+            return await StartRunAsync(store, run, _options.MaxConcurrentRuns, cancellationToken).ConfigureAwait(false);
         }
         catch (DevWorkflowValidationException exception)
         {
@@ -308,41 +319,24 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     }
 
     /// <summary>
-    ///     Materializes the run's node runs from its pinned graph and moves it to <c>Running</c>.
+    ///     Moves a validated <c>Pending</c> run to <c>Running</c>, if the node has room to drive another one.
     ///     <para>
-    ///         Every node gets a row up front, not just the entry ones. Creating them as their branches settle reads
-    ///         well until terminalization: a run whose remaining rows do not exist yet has "nothing live" and completes
-    ///         before it has run anything. A row that does not exist is still the right answer for a decomposition's
-    ///         children — which is why an absent source reads as a pending edge — but for a graph known at run start
-    ///         there is nothing to wait for.
-    ///     </para>
-    ///     <para>
-    ///         The run is created <c>Pending</c> and only becomes <c>Running</c> once this has succeeded, because all of
-    ///         it can fail — an unparseable graph, a node count over the run's budget. Creating the run <c>Running</c>
-    ///         and failing afterwards is the "a run reading Running with nothing driving it" bug the work-session
-    ///         service documents one level down.
+    ///         The run's node runs already exist: they are written in the same transaction as the run row, so a run can
+    ///         no longer be found without them. Materializing here as well would re-derive seeds whose per-run inputs
+    ///         only the starting caller ever held. (A run with no node runs is therefore unreachable from any runtime
+    ///         path; the recomputation's no-rows guard stays as the belt that keeps such a row from reading Completed.)
     ///     </para>
     /// </summary>
     private static async Task<int> StartRunAsync(IDevWorkflowStore store,
-        DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
-        int maxNodeRunsPerRun,
+        int maxConcurrentRuns,
         CancellationToken cancellationToken)
     {
-        var existing = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
-        if (existing.Count == 0)
+        if (await CountActiveRunsAsync(store, maxConcurrentRuns, cancellationToken).ConfigureAwait(false) >= maxConcurrentRuns)
         {
-            // Only for a run created outside the run service — which is the one that holds the caller's inputs and so
-            // seeds the entry rows with them. Reaching here means there were none to seed.
-            var workItem = await store.GetWorkItemAsync(run.WorkItemId, cancellationToken).ConfigureAwait(false);
-            var seeds = DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson: null, maxNodeRunsPerRun);
-
-            _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(run.Id,
-                                DevWorkflowVersions.Any,
-                                DevWorkflowOperationId.For(run.Id, string.Empty, attempt: 0, "materialize-graph"),
-                                seeds),
-                            cancellationToken)
-                        .ConfigureAwait(false);
+            // Not refused — waiting. The run keeps its rows and its place, and the next sweep offers it again; refusing
+            // it would push a queue the node is perfectly able to work through back onto the person who started it.
+            return 0;
         }
 
         DevWorkflowStateMachine.EnsureLegal(run.Status, DevWorkflowRunStatus.Running);
@@ -353,6 +347,30 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                         cancellationToken)
                     .ConfigureAwait(false);
         return 1;
+    }
+
+    /// <summary>
+    ///     How many runs this node is actually driving.
+    ///     <para>
+    ///         <c>Running</c> and the two drains, and deliberately nothing else. A <c>Paused</c> run is not being
+    ///         advanced and a <c>WaitingForApproval</c> one is waiting on a person who may take days — counting either
+    ///         would let one unanswered gate stop every other run on the node, which is the cap protecting nothing at
+    ///         the cost of the throughput it exists to manage.
+    ///     </para>
+    ///     <para>
+    ///         Read as summaries, not snapshots: a count must not decrypt a graph blob per live run. Each status is
+    ///         asked for one row more than the cap, which is all the answer needs.
+    ///     </para>
+    /// </summary>
+    private static async Task<int> CountActiveRunsAsync(IDevWorkflowStore store, int maxConcurrentRuns, CancellationToken cancellationToken)
+    {
+        var active = 0;
+        foreach (var status in ActiveRunStatuses)
+        {
+            active += (await store.ListRunSummariesAsync(workItemId: null, status, maxConcurrentRuns + 1, cancellationToken).ConfigureAwait(false)).Count;
+        }
+
+        return active;
     }
 
     /// <summary>

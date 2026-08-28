@@ -83,6 +83,61 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
     }
 
     /// <summary>
+    ///     What a node-run seed has to satisfy before any of them is written. Shared by the run start and by dynamic
+    ///     expansion, and checked outside the transaction: these are caller mistakes, and letting one reach the unique
+    ///     index would surface as a lost race rather than as the argument error it is.
+    /// </summary>
+    private static void EnsureSeedsValid(IReadOnlyList<DevWorkflowNodeRunSeed> seeds, string parameterName)
+    {
+        foreach (var seed in seeds)
+        {
+            EnsureNotBlank(seed.NodeKey, parameterName);
+            if (seed.MaxAttempts <= 0)
+            {
+                throw new ArgumentOutOfRangeException(parameterName, "A node run must allow at least one attempt.");
+            }
+        }
+
+        if (seeds.Select(seed => seed.NodeKey).Distinct(StringComparer.Ordinal).Count() != seeds.Count)
+        {
+            throw new ArgumentException("A materialization cannot create two node runs under the same node key.", parameterName);
+        }
+    }
+
+    /// <summary>
+    ///     Inserts one node run per seed, allocating each row's sequence from the run's own counter. Shared by the run
+    ///     start and by dynamic expansion so the two cannot drift on what a fresh node run looks like.
+    /// </summary>
+    private void AddNodeRuns(DevWorkflowRun run, IReadOnlyList<DevWorkflowNodeRunSeed> seeds, long now)
+    {
+        foreach (var seed in seeds)
+        {
+            _dbContext.DevWorkflowNodeRuns.Add(new DevWorkflowNodeRun
+            {
+                Id = seed.NodeRunId,
+                RunId = run.Id,
+                NodeKey = seed.NodeKey,
+                NodeType = seed.NodeType,
+                Attempt = 1,
+                MaxAttempts = seed.MaxAttempts,
+                SessionResumes = 0,
+                Status = DevWorkflowNodeRunStatus.Pending,
+                Sequence = NextSequence(run),
+                AgentDefinitionId = seed.AgentDefinitionId,
+                DevelopmentProjectId = seed.DevelopmentProjectId,
+                InputJson = Utf8OrNull(seed.InputJson),
+                PolicyResolutionJson = Utf8OrNull(seed.PolicyResolutionJson),
+                MaterializedFromNodeRunId = seed.MaterializedFromNodeRunId,
+                MaterializationIndex = seed.MaterializationIndex,
+                CreatedAtUtc = now
+            });
+        }
+    }
+
+    public async Task<bool> HasOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
+        await FindOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is not null;
+
+    /// <summary>
     ///     The event already recorded for this operation, rebuilt against the run row as it stands now — a replayed step
     ///     wants the version it should continue from, not the one the first attempt saw.
     /// </summary>

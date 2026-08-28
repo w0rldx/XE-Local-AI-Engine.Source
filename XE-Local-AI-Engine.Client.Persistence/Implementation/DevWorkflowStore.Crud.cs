@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -125,7 +126,7 @@ internal sealed partial class DevWorkflowStore
         return await ComposeWorkItemAsync(workItem, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<int> DeleteWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default)
+    public async Task<DevWorkflowWorkItemDeletion> DeleteWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default)
     {
         // Explicit ordered deletes through DevWorkflowPurge: the node connection runs without PRAGMA foreign_keys, so
         // the declared cascades are documentation only and an EF-graph delete would leave every child table populated.
@@ -153,10 +154,19 @@ internal sealed partial class DevWorkflowStore
 
             var removed = await CountRowsAsync(runIds, workItemId, cancellationToken).ConfigureAwait(false);
 
+            // Read here, not by the caller beforehand: one query over every run of the item rather than a page the
+            // caller has to remember to walk, and gathered only on the path where the guard above has already passed.
+            var sessionIds = await _dbContext.DevWorkflowNodeRuns.AsNoTracking()
+                                             .Where(entity => runIds.Contains(entity.RunId) && entity.WorkSessionId != null)
+                                             .Select(entity => entity.WorkSessionId!.Value)
+                                             .Distinct()
+                                             .ToListAsync(cancellationToken)
+                                             .ConfigureAwait(false);
+
             await DevWorkflowPurge.DeleteWorkItemAsync(_dbContext, workItemId, cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             _dbContext.ChangeTracker.Clear();
-            return removed;
+            return new DevWorkflowWorkItemDeletion(removed, runIds, sessionIds);
         }
         catch (DbUpdateException exception)
         {
@@ -308,6 +318,12 @@ internal sealed partial class DevWorkflowStore
         ArgumentNullException.ThrowIfNull(command);
         EnsureNotBlank(command.DefinitionGraphHash, nameof(command.DefinitionGraphHash));
         EnsureNotBlank(command.GraphJson, nameof(command.GraphJson));
+        if (command.NodeRuns is { } seeded)
+        {
+            // The same check materialization makes, for the same reason: without it a duplicate node key would reach
+            // the unique index and come back as "a live run already exists", which is a different problem entirely.
+            EnsureSeedsValid(seeded, nameof(command));
+        }
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -333,6 +349,19 @@ internal sealed partial class DevWorkflowStore
             };
             _dbContext.DevWorkflowRuns.Add(run);
             AddEvent(run, DevWorkflowEventTypes.RunCreated, nodeRunId: null, run.Status.ToString(), operationId: null, detailJson: null);
+
+            // In the same transaction as the run row, so a crash cannot leave a run whose node runs — and with them the
+            // caller's per-run inputs, which have no other home — were never written.
+            if (command.NodeRuns is { Count: > 0 } seeds)
+            {
+                AddNodeRuns(run, seeds, now);
+                AddEvent(run,
+                    DevWorkflowEventTypes.NodeMaterialized,
+                    nodeRunId: null,
+                    $"{seeds.Count} node run(s)",
+                    operationId: null,
+                    Utf8(JsonSerializer.Serialize(new MaterializationDetail(seeds.Count, run.GraphRevision))));
+            }
 
             workItem.Status = DevWorkflowWorkItemStatus.Active;
             workItem.Version++;

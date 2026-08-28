@@ -118,14 +118,41 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Seeded work item", request)).ConfigureAwait(false);
         var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Seeded definition", graphJson, NodeCount: 1))
                                     .ConfigureAwait(false);
+        // The seeds travel with the start, exactly as the run service composes them: a run and its node runs are one
+        // commit, so there is no half-started run for a test to accidentally depend on.
         var run = await store.StartRunAsync(new StartDevWorkflowRunCommand(Guid.NewGuid(),
                                  workItem.Id,
                                  definition.Id,
                                  definition.Version,
                                  definition.GraphHash,
-                                 graphJson))
+                                 graphJson,
+                                 Seeds(graphJson, workItem)))
                              .ConfigureAwait(false);
         return run.Id;
+    }
+
+    /// <summary>
+    ///     The node runs a start seeds, or none when the graph cannot be read.
+    ///     <para>
+    ///         A test that deliberately pins an unroutable graph has no seeds to give — you cannot compose rows from a
+    ///         graph you cannot parse — and that is the case under test rather than a hole: the run service refuses such
+    ///         a definition long before this point, so the row can only be one created around it, which the dispatcher
+    ///         still has to fail cleanly at its first tick.
+    ///     </para>
+    /// </summary>
+    private IReadOnlyList<DevWorkflowNodeRunSeed>? Seeds(string graphJson, DevWorkflowWorkItemSnapshot workItem)
+    {
+        try
+        {
+            return DevWorkflowRunSeeds.Compose(DevWorkflowGraph.Parse(graphJson),
+                workItem,
+                inputsJson: null,
+                Services.GetRequiredService<IOptions<DevWorkflowOptions>>().Value.MaxNodeRunsPerRun);
+        }
+        catch (DevWorkflowValidationException)
+        {
+            return null;
+        }
     }
 
     /// <summary>A work item and a definition, without a run: what the run service is handed.</summary>

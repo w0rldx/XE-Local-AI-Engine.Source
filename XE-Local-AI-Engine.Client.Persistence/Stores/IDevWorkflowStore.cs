@@ -205,6 +205,18 @@ public sealed record DevWorkflowMutationResult(
     int GraphRevision,
     Guid? SupersededArtifactId = null);
 
+/// <summary>
+///     What a work-item delete removed, and what it could not: the work sessions its agent node runs owned and the runs
+///     whose artifact bytes are still on disk.
+///     <para>
+///         Answered by the delete rather than gathered before it, and that ordering is the point: the authoritative
+///         live-run guard runs inside the same transaction, so a caller cannot destroy a transcript for a delete that is
+///         then refused. It also makes the set complete by construction — a caller paging its own read would orphan
+///         everything past the page.
+///     </para>
+/// </summary>
+public sealed record DevWorkflowWorkItemDeletion(int RemovedRows, IReadOnlyList<Guid> RunIds, IReadOnlyList<Guid> WorkSessionIds);
+
 public sealed record CreateDevWorkflowWorkItemCommand(
     Guid WorkItemId,
     string Title,
@@ -233,13 +245,23 @@ public sealed record UpdateDevWorkflowDefinitionCommand(
     string? GraphJson = null,
     int? NodeCount = null);
 
+/// <summary>
+///     Starts a run. <see cref="NodeRuns" /> is the run's whole initial node set, created in the SAME transaction as the
+///     run row: a run that committed without them could only be repaired by re-deriving the seeds, and the caller's
+///     per-run inputs — which live nowhere but the entry rows — would be gone by then.
+///     <para>
+///         Empty is legal and means "rows only", which is what a store-level test wants; no runtime path uses it, and a
+///         run with no node runs is one nothing will ever advance.
+///     </para>
+/// </summary>
 public sealed record StartDevWorkflowRunCommand(
     Guid RunId,
     Guid WorkItemId,
     Guid DefinitionId,
     int DefinitionVersion,
     string DefinitionGraphHash,
-    string GraphJson);
+    string GraphJson,
+    IReadOnlyList<DevWorkflowNodeRunSeed>? NodeRuns = null);
 
 /// <summary>
 ///     A run status move. <see cref="WorkItemStatus" /> lets the runtime write the work item's status inside the same
@@ -445,16 +467,18 @@ public interface IDevWorkflowStore
     Task<DevWorkflowWorkItemSnapshot> GetWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Removes the work item and every row below it in explicit dependency order, and answers how many rows went.
-    ///     The node connection runs without <c>PRAGMA foreign_keys</c>, so the declared cascades never fire and the order
-    ///     is the only thing that keeps the delete complete. Artifact bytes on disk and the work sessions the agent
-    ///     node-runs owned are the caller's to remove.
+    ///     Removes the work item and every row below it in explicit dependency order, and answers what went — including
+    ///     the work sessions and runs whose EXTERNAL state the caller must now release. The node connection runs without
+    ///     <c>PRAGMA foreign_keys</c>, so the declared cascades never fire and the order is the only thing that keeps
+    ///     the delete complete.
     ///     <para>
     ///         Refuses with <see cref="DevWorkflowRunInFlightException" /> while any of the item's runs is non-terminal,
-    ///         checked inside the transaction so a run that starts mid-delete still wins.
+    ///         checked inside the transaction so a run that starts mid-delete still wins. The caller learns what to
+    ///         release only from a delete that COMMITTED, so a refusal can never arrive after the transcripts it was
+    ///         protecting have already been destroyed.
     ///     </para>
     /// </summary>
-    Task<int> DeleteWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default);
+    Task<DevWorkflowWorkItemDeletion> DeleteWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default);
 
     Task<DevWorkflowDefinitionSnapshot> CreateDefinitionAsync(CreateDevWorkflowDefinitionCommand command, CancellationToken cancellationToken = default);
 
@@ -548,6 +572,22 @@ public interface IDevWorkflowStore
     ///     same run state, and the mutation result carries no decision id, subject or decided-at.
     /// </summary>
     Task<DevWorkflowDecisionSnapshot?> FindDecisionByOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Whether this operation has already committed against this run.
+    ///     <para>
+    ///         Every mutation resolves the same fact internally, so a replayed command is safe wherever it lands. It is
+    ///         exposed because a caller has to ask BEFORE judging legality: a command that committed and was then
+    ///         retried is a replay, and re-checking the status it has already changed would answer a conflict to a
+    ///         caller who did nothing wrong.
+    ///     </para>
+    ///     <para>
+    ///         Deliberately a bool rather than the recorded <see cref="DevWorkflowMutationResult" />. The caller answers
+    ///         from the run as it stands NOW, and a read returning a mutation's result would be indistinguishable — to a
+    ///         reader, and to the reflection that holds the publishing decorator to every mutation — from one.
+    ///     </para>
+    /// </summary>
+    Task<bool> HasOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default);
 
     Task<DevWorkflowMutationResult> AppendEventAsync(AppendDevWorkflowEventCommand command, CancellationToken cancellationToken = default);
 

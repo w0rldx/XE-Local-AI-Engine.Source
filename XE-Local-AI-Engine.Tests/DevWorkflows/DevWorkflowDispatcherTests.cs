@@ -356,9 +356,11 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task ASweepReachesEveryLiveRunAndNotOnlyTheNewest()
     {
-        await using var harness = new DevWorkflowHarness();
+        // The cap is raised past the run count deliberately: what is under test is the sweep's PAGE reaching the oldest
+        // run, and at the default cap of four the last two would stay Pending for admission reasons instead — a pass
+        // for the wrong reason if it went the other way, and a failure that says nothing about paging if it did not.
+        await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxConcurrentRuns", "8"));
 
-        // More than the concurrent-run cap of four, which is what the page size used to be.
         var runIds = new List<Guid>();
         for (var index = 0; index < 6; index++)
         {
