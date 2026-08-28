@@ -283,10 +283,12 @@ public sealed record MaterializeDevWorkflowNodesCommand(
 ///     <see cref="Outcome" /> overrides the outcome token derived from <see cref="TargetStatus" />, for the cases the
 ///     status alone cannot express (<c>timeout</c>, <c>interrupted</c>, <c>rejected</c>, <c>changes-requested</c>).
 ///     <para>
-///         <see cref="ClearWorkSession" /> releases the session the row was driving, and belongs with a re-attempt: a
-///         retry gets a NEW session, because resuming the one that just failed resumes its poisoned context. It is also
-///         what tells a still-attached session apart from a finished one — a node run back at <c>Pending</c> with a
-///         session still on it is one the host died under, and its session's answer still counts.
+///         <see cref="ClearWorkSession" /> releases the session the row was driving, and pairs ONLY with a
+///         <see cref="TargetStatus" /> of <c>Pending</c> — it belongs to a re-attempt, and a retry gets a NEW session
+///         because resuming the one that just failed resumes its poisoned context. It is also what tells a
+///         still-attached session apart from a finished one: a node run back at <c>Pending</c> with a session still on
+///         it is one the host died under, and that session's answer still counts. Releasing it on any other target
+///         would throw away the only pointer to the transcript the row's own result came from.
 ///     </para>
 /// </summary>
 public sealed record TransitionDevWorkflowNodeRunCommand(

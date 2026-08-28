@@ -504,7 +504,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             // ASK, do not settle. A node run that is Running belongs to an executor, and only the executor knows what
             // stopping it costs — so the drain requests the stop and the next tick's poll writes the terminal off what
             // actually happened. Rows no lane owns are settled here, because for them there is nothing to ask.
-            written += await StopAsync(store, agent, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false);
+            written += await StopAsync(store, agent, run, nodeRun, cancellationToken).ConfigureAwait(false);
         }
 
         // Re-read: the stops above may have settled every row already, and judging "is anything still live" off the
@@ -543,7 +543,6 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         DevWorkflowAgentExecutor agent,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
-        IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
         CancellationToken cancellationToken)
     {
         var owned = nodeRun is { Status: DevWorkflowNodeRunStatus.Running, NodeType: DevWorkflowNodeType.Agent, WorkSessionId: { } };
@@ -572,12 +571,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         if (owned)
         {
-            // Asked, not settled: only the session knows whether it landed Cancelled or finished inside the window, so
-            // the poll writes whichever it was. Polled again right here rather than left to the next tick — the stop
-            // waits for the session to land, so by now the answer usually exists, and a drain that asked and wrote
-            // nothing would report no work and then sit out a whole sweep interval waiting for itself.
+            // Asked, not settled: only the session knows whether it landed Cancelled or finished inside the window, and
+            // the top of the NEXT tick polls it. Counted as work so that tick comes immediately — the drain re-signals
+            // on a productive tick — rather than settling it here, which would hold the advance gate, and with it every
+            // other run, for as long as the stop's grace period.
             await agent.StopAsync(nodeRun.WorkSessionId!.Value, cancel: true, cancellationToken).ConfigureAwait(false);
-            return await agent.PollAsync(store, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false);
+            return 1;
         }
 
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Cancelled, nodeRun.NodeKey);

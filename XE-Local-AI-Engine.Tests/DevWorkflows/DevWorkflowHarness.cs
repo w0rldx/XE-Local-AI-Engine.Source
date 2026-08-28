@@ -156,6 +156,14 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         return await action(scope.ServiceProvider.GetRequiredService<IDevWorkflowRunService>()).ConfigureAwait(false);
     }
 
+    /// <summary>The work-item LIST row, whose node counters the store computes its own way from the same rows.</summary>
+    public async Task<DevWorkflowWorkItemSnapshot> ReadWorkItemRowAsync(Guid workItemId)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var items = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListWorkItemsAsync().ConfigureAwait(false);
+        return items.Single(item => item.Id == workItemId);
+    }
+
     /// <summary>
     ///     Whether the dispatcher was told to look at this run. Draining rather than peeking, because the assertion is
     ///     "the command signalled" and a later one must not read this one's signal.

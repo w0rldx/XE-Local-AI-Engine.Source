@@ -138,6 +138,55 @@ public sealed class DevWorkflowAgentExecutorTests
             "a blocked node run blocks its work item in the same transaction, even though the run status never moved.");
     }
 
+    /// <summary>
+    ///     The case the work-item write exists for: one branch blocks while a sibling carries on, so the RUN stays
+    ///     Running and the end-of-tick recomputation writes nothing. The item still has to say a human is needed —
+    ///     surfacing exactly that is the list page's whole job — so the release travels with the node run's own move.
+    /// </summary>
+    [Test]
+    public async Task ANodeBlockingWhileASiblingWorksOn_LeavesTheRunRunningAndTheWorkItemBlocked()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync("""
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [
+                                                    { "nodeKey": "fan", "nodeType": "Parallel" },
+                                                    { "nodeKey": "unbound", "nodeType": "Agent" },
+                                                    { "nodeKey": "bound", "nodeType": "Agent",
+                                                      "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                    { "nodeKey": "join", "nodeType": "Join" }
+                                                  ],
+                                                  "edges": [
+                                                    { "from": "fan", "to": "unbound" },
+                                                    { "from": "fan", "to": "bound" },
+                                                    { "from": "unbound", "to": "join" },
+                                                    { "from": "bound", "to": "join" }
+                                                  ]
+                                                }
+                                                """)
+                                 .ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, (await harness.ReadNodeRunAsync(runId, "unbound").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "bound").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Running,
+            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            "the run is genuinely still working: a sibling is mid-flight.");
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked,
+            (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status,
+            "and it still needs a human, which no later run-status move was going to say.");
+
+        // The release travels the same way: answering the blocked node with the run status still unchanged puts the
+        // item back to Active without waiting for a run transition that may never come.
+        await harness.DecideAsync(runId, "unbound", DevWorkflowDecisionKind.Skip).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Running, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Active, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
+    }
+
     /// <summary>A node run whose agent binds nothing at all cannot be guessed at either.</summary>
     [Test]
     public async Task AnAgentNode_BindingNoAgentAtAll_BlocksForAHuman()

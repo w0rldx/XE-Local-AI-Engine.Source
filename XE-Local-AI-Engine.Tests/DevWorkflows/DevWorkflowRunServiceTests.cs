@@ -269,6 +269,50 @@ public sealed class DevWorkflowRunServiceTests
         AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
     }
 
+    /// <summary>
+    ///     A reused operation id naming a different request is a caller bug, not a replay: answering it with the run it
+    ///     did create would hand out a run nobody asked for.
+    /// </summary>
+    [Test]
+    public async Task ReplayingAStartWithADifferentWorkItem_IsRefused()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
+        var (otherWorkItemId, _) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
+        var operationId = Guid.NewGuid();
+        _ = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, operationId)).ConfigureAwait(false);
+
+        var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
+                                        harness.WithRunServiceAsync(service => service.StartAsync(otherWorkItemId, definitionId, inputsJson: null, operationId)))
+                                    .ConfigureAwait(false);
+
+        AssertEx.Contains(refusal.Message, "already started a different run");
+    }
+
+    /// <summary>
+    ///     The list page and the detail page must not disagree about the same run. Both answer "who is a human holding
+    ///     up" from the same rule — a gate awaiting its answer OR a node awaiting intervention, since Blocked folds in.
+    /// </summary>
+    [Test]
+    public async Task TheDetailAndTheListRow_NameTheSameBlockingNodeRun()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        // Blocked, not WaitingForApproval: the narrower reading of "blocking" answered null here while the list row
+        // named the row, which is the disagreement this pins shut.
+        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked).ConfigureAwait(false);
+
+        var detail = await harness.WithRunServiceAsync(service => service.GetAsync(runId)).ConfigureAwait(false);
+        var row = await harness.ReadWorkItemRowAsync(workItemId).ConfigureAwait(false);
+
+        AssertEx.Equal(row.LatestRunNodes.PendingDecisionCount, detail.PendingDecisionCount);
+        AssertEx.Equal(row.LatestRunNodes.BlockingGateNodeRunId, detail.BlockingGateNodeRunId);
+        AssertEx.Equal((await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id, detail.BlockingGateNodeRunId);
+    }
+
     /// <summary>The composed detail answers "what is this run waiting on" without a caller re-deriving it.</summary>
     [Test]
     public async Task TheComposedDetail_NamesWhatTheRunIsWaitingOn()

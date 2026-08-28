@@ -33,7 +33,17 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         // answers with it, while a genuinely second start of the same work item is refused by the live-run rule below.
         if (await TryReadAsync(operationId, cancellationToken).ConfigureAwait(false) is { } replayed)
         {
-            return await ComposeAsync(replayed, cancellationToken).ConfigureAwait(false);
+            // A replay has to be a replay of THIS request. A reused operation id naming a different work item or
+            // definition is a caller bug, and answering it with another run's detail would hand out a run they never
+            // asked for — so it reads as the conflict it is.
+            if (replayed.WorkItemId != workItemId || replayed.DefinitionId != definitionId)
+            {
+                throw new DevWorkflowInvalidTransitionException($"Operation '{operationId}' already started a different run.");
+            }
+
+            // Signalled, not merely composed: the crash window is between this method's two store calls, and a run left
+            // there needs a tick to finish starting rather than a wait for the next sweep.
+            return await SignalAndComposeAsync(replayed.Id, cancellationToken).ConfigureAwait(false);
         }
 
         var workItem = await _store.GetWorkItemAsync(workItemId, cancellationToken).ConfigureAwait(false);
@@ -177,7 +187,11 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         return new DevWorkflowRunDetail(run,
             nodeRuns,
             nodeRuns.Count(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked),
-            nodeRuns.Where(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.WaitingForApproval)
+
+            // The same rule the store's list counters use: the first node run, in sequence order, that a human has to
+            // act on — a gate awaiting its answer or a node awaiting intervention, since Blocked folds in. A narrower
+            // reading here would make the list page and the detail page disagree about the same run.
+            nodeRuns.Where(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked)
                     .OrderBy(static nodeRun => nodeRun.Sequence)
                     .Select(static nodeRun => (Guid?)nodeRun.Id)
                     .FirstOrDefault());
