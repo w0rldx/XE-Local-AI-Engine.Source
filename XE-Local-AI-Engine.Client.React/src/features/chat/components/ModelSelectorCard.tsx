@@ -416,19 +416,21 @@ export function ModelSelectorCard({
 			width={320}
 		>
 			<Popover.Target>
-				{/* The tooltip sits INSIDE Popover.Target so the popover's props still reach the paper underneath (the
-				    same nesting the composer's action icons use). Hover and focus only: a tap must open the picker. */}
-				<ModelNameTooltip display={selectedDisplay}>
-					<Paper
-						radius="md"
-						data-testid="chat-model-selector-selected"
-						className={cx(
-							classes["trigger-paper"],
-							classes["compact-trigger"],
-							isCompactViewport && classes["compact-trigger-narrow"],
-							classes["compact-paper"],
-						)}
-					>
+				{/* The Paper must be Popover.Target's DIRECT child: the target clones its child to attach the popover's
+				    anchor ref, and a Tooltip in between swallows that ref — the dropdown then positions against the
+				    viewport's top-left corner instead of this trigger. The tooltip therefore wraps the BUTTON inside.
+				    Hover and focus only: a tap must open the picker. */}
+				<Paper
+					radius="md"
+					data-testid="chat-model-selector-selected"
+					className={cx(
+						classes["trigger-paper"],
+						classes["compact-trigger"],
+						isCompactViewport && classes["compact-trigger-narrow"],
+						classes["compact-paper"],
+					)}
+				>
+					<ModelNameTooltip display={selectedDisplay}>
 						<UnstyledButton
 							type="button"
 							data-testid="chat-model-selector-trigger"
@@ -469,8 +471,8 @@ export function ModelSelectorCard({
 								)}
 							</Group>
 						</UnstyledButton>
-					</Paper>
-				</ModelNameTooltip>
+					</ModelNameTooltip>
+				</Paper>
 			</Popover.Target>
 			<Popover.Dropdown p={6}>
 				{hasOptions ? (

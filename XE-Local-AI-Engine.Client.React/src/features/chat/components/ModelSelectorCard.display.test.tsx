@@ -56,7 +56,10 @@ describe("ModelSelectorCard trigger", () => {
 	it("offers the untruncated identity as a tooltip on the trigger", async () => {
 		renderPicker("unsloth/Qwen3-8B-Instruct-GGUF:Q4_K_M");
 
-		fireEvent.mouseEnter(screen.getByTestId("chat-model-selector-selected"));
+		// The BUTTON, not the paper around it: the tooltip wraps the button so the paper can stay Popover.Target's
+		// direct child (the target clones its child to attach the popover anchor ref, and a tooltip in between
+		// swallowed it — the dropdown then rendered against the viewport's top-left corner).
+		fireEvent.mouseEnter(screen.getByTestId("chat-model-selector-trigger"));
 
 		expect(await screen.findByText("unsloth/Qwen3-8B-Instruct-GGUF:Q4_K_M")).toBeTruthy();
 	});
