@@ -19,6 +19,16 @@ public sealed class DevWorkflowRunServiceTests
                                     }
                                     """;
 
+    /// <summary>One agent node, for the delete path: a gate owns no work session, and releasing those is half the job.</summary>
+    private const string SingleAgent = """
+                                       {
+                                         "schemaVersion": 1,
+                                         "nodes": [{ "nodeKey": "research", "nodeType": "Agent", "label": "Research",
+                                                     "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" }],
+                                         "edges": []
+                                       }
+                                       """;
+
     /// <summary>
     ///     A start pins the graph, gives every node a row, seeds the entry rows with what was asked, and tells the
     ///     dispatcher — the last of which is what keeps a fresh run from sitting visibly Pending until the next sweep.
@@ -359,6 +369,220 @@ public sealed class DevWorkflowRunServiceTests
                                     .ConfigureAwait(false);
 
         AssertEx.Contains(refusal.Message, "already started a different run");
+    }
+
+    /// <summary>
+    ///     Nothing outside the database is destroyed until the delete has COMMITTED. The rows carry the authoritative
+    ///     live-run guard, so a session released ahead of them could be a transcript destroyed for a delete that is
+    ///     then refused — the one ordering this method is not allowed to get wrong.
+    /// </summary>
+    [Test]
+    public async Task DeletingAWorkItem_ReleasesItsSessionsOnlyAfterTheRowsAreGone()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var workItemId = (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Id;
+
+        bool? rowsGoneWhenReleased = null;
+        harness.Agent.OnDeleting = async _ => rowsGoneWhenReleased = !await harness.WorkItemExistsAsync(workItemId).ConfigureAwait(false);
+
+        await harness.WithRunServiceAsync(service => service.DeleteWorkItemAsync(workItemId)).ConfigureAwait(false);
+
+        AssertEx.True(rowsGoneWhenReleased is true,
+            "the session was released while the work item still existed, so a delete refused a moment later would already have destroyed it.");
+        AssertEx.True(harness.Agent.Calls.Any(call => call.Verb == "delete" && call.SessionId == sessionId),
+            "and the session the run owned was released, rather than left behind with nothing pointing at it.");
+    }
+
+    /// <summary>A refused delete destroys nothing: the run is still live, so its transcript and its rows both stay.</summary>
+    [Test]
+    public async Task DeletingAWorkItemWithALiveRun_IsRefusedAndReleasesNothing()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+        var workItemId = (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Id;
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() => harness.WithRunServiceAsync(service => service.DeleteWorkItemAsync(workItemId)))
+                          .ConfigureAwait(false);
+
+        AssertEx.False(harness.Agent.Calls.Any(static call => call.Verb == "delete"), "a refusal must not have released the live run's work session.");
+        AssertEx.True(await harness.WorkItemExistsAsync(workItemId).ConfigureAwait(false));
+        AssertEx.Equal(sessionId, await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false), "and the node run still owns it.");
+    }
+
+    /// <summary>
+    ///     A human Retry overrides the NODE's attempt cap — that is what makes it an override — but not the run-wide
+    ///     budget. Exhausted, it is refused BEFORE anything is recorded, and that ordering is what leaves the operator
+    ///     the other answers: one decision per attempt means a Retry written down and refused afterwards would be the
+    ///     last thing that node run could ever be told.
+    /// </summary>
+    [Test]
+    public async Task RetryingPastTheRunWideAttemptBudget_IsRefusedAndLeavesTheOtherAnswersOpen()
+    {
+        await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxTotalAttempts", "1"));
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        // The first Retry spends the run's one re-attempt, which is what the second is then judged against.
+        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked).ConfigureAwait(false);
+        var blocked = (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id;
+        _ = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                             blocked,
+                             Guid.NewGuid(),
+                             DevWorkflowDecisionKind.Retry,
+                             comment: null,
+                             payloadJson: null,
+                             "operator@localhost.test"))
+                         .ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2,
+            (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Attempt,
+            "the re-attempt landed, so the run's budget of one is now spent.");
+
+        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Blocked).ConfigureAwait(false);
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id;
+
+        var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
+                                        harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                                            nodeRunId,
+                                            Guid.NewGuid(),
+                                            DevWorkflowDecisionKind.Retry,
+                                            comment: null,
+                                            payloadJson: null,
+                                            "operator@localhost.test")))
+                                    .ConfigureAwait(false);
+
+        AssertEx.Contains(refusal.Message, "re-attempts", message: "the refusal names the budget rather than only that something was illegal.");
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked,
+            (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status,
+            "the node run is left exactly where it was.");
+
+        // And the other interventions still work, which is the whole reason the refusal comes before the record.
+        _ = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                             nodeRunId,
+                             Guid.NewGuid(),
+                             DevWorkflowDecisionKind.Skip,
+                             comment: null,
+                             payloadJson: null,
+                             "operator@localhost.test"))
+                         .ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     A cancel whose answer the caller never saw is retried against a run the dispatcher has since drained. It is
+    ///     a replay of a command that already did exactly what was asked, so it answers with the run — judging it
+    ///     against the terminal status its own first attempt produced would refuse a caller for doing the right thing.
+    /// </summary>
+    [Test]
+    public async Task ReplayingACancelAfterTheRunHasDrained_AnswersWithTheRunRatherThanAConflict()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var operationId = Guid.NewGuid();
+
+        _ = await harness.WithRunServiceAsync(service => service.CancelAsync(runId, operationId)).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled,
+            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            "the drain has finished by the time the retry arrives, which is what used to make it a conflict.");
+
+        // Counted rather than named: the ASK and the settled terminal both record run.cancelled, so what a replay must
+        // not do is add to the trail at all.
+        var before = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count;
+
+        var replay = await harness.WithRunServiceAsync(service => service.CancelAsync(runId, operationId)).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, replay.Run.Status);
+        AssertEx.Equal(before, (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count, "and the replay wrote nothing.");
+    }
+
+    /// <summary>
+    ///     The same for a resume, which carries a status check of its own — so the replay has to be resolved ahead of
+    ///     that check too, not only ahead of the transition table.
+    /// </summary>
+    [Test]
+    public async Task ReplayingAResumeAfterTheRunIsRunningAgain_AnswersWithTheRunRatherThanAConflict()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        _ = await harness.WithRunServiceAsync(service => service.PauseAsync(runId, Guid.NewGuid())).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var operationId = Guid.NewGuid();
+        _ = await harness.WithRunServiceAsync(service => service.ResumeAsync(runId, operationId)).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var replay = await harness.WithRunServiceAsync(service => service.ResumeAsync(runId, operationId)).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1,
+            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "run.resumed"),
+            "the replay resumed nothing a second time.");
+        AssertEx.True(replay.Run.Status is DevWorkflowRunStatus.Running or DevWorkflowRunStatus.WaitingForApproval,
+            "and it answered with where the run actually stands.");
+    }
+
+    /// <summary>
+    ///     A replay has to be a replay of the SAME act. A reused operation id asking for something else is a caller
+    ///     bug, and answering it with the recorded decision would report success for a decision nobody took — in the
+    ///     one table that exists to say who decided what.
+    /// </summary>
+    [Test]
+    public async Task ReusingADecisionOperationIdForADifferentAct_IsRefused()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id;
+        var operationId = Guid.NewGuid();
+
+        _ = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                             nodeRunId,
+                             operationId,
+                             DevWorkflowDecisionKind.Approve,
+                             comment: null,
+                             payloadJson: null,
+                             "operator@localhost.test"))
+                         .ConfigureAwait(false);
+
+        var differentAnswer = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
+                                                harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                                                    nodeRunId,
+                                                    operationId,
+                                                    DevWorkflowDecisionKind.Reject,
+                                                    comment: null,
+                                                    payloadJson: null,
+                                                    "operator@localhost.test")))
+                                            .ConfigureAwait(false);
+        AssertEx.Contains(differentAnswer.Message, "already recorded a different decision");
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
+                              harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                                  nodeRunId,
+                                  operationId,
+                                  DevWorkflowDecisionKind.Approve,
+                                  comment: null,
+                                  payloadJson: null,
+                                  "someone-else@localhost.test")),
+                              "and the same answer attributed to a different person is a different act too.")
+                          .ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1,
+            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "gate.decided"),
+            "neither refusal recorded anything.");
     }
 
     /// <summary>

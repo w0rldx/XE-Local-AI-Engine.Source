@@ -88,9 +88,21 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
     public Task<WorkSessionDetail> CancelAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         MoveAsync("cancel", sessionId, AgentWorkSessionStatus.Cancelled, cancellationToken);
 
+    /// <summary>
+    ///     Runs at the top of every delete, before the session row goes. It exists so a test can look at the REST of
+    ///     the system at the one moment that matters — a work item's rows must already be gone by the time anything
+    ///     starts destroying what they pointed at.
+    /// </summary>
+    public Func<Guid, Task>? OnDeleting { get; set; }
+
     public async Task DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
         Calls.Add(("delete", sessionId));
+        if (OnDeleting is { } observe)
+        {
+            await observe(sessionId).ConfigureAwait(false);
+        }
+
         await using var scope = _scopes.CreateAsyncScope();
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().DeleteAsync(sessionId, cancellationToken).ConfigureAwait(false);
     }

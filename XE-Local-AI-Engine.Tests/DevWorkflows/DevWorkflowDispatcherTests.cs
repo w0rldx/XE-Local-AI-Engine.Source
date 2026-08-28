@@ -24,6 +24,68 @@ public sealed class DevWorkflowDispatcherTests
                                     }
                                     """;
 
+    /// <summary>One agent node, so the run stays busy while a test looks at what else the node will admit.</summary>
+    private const string SingleAgent = """
+                                       {
+                                         "schemaVersion": 1,
+                                         "nodes": [{ "nodeKey": "research", "nodeType": "Agent", "label": "Research",
+                                                     "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" }],
+                                         "edges": []
+                                       }
+                                       """;
+
+    /// <summary>
+    ///     A run's node runs are written with the run row, so the dispatcher never composes any of its own.
+    ///     <para>
+    ///         It used to, for a run it found without them — and it had nothing to seed the entry rows WITH, because
+    ///         the caller's inputs live nowhere but those rows. A run interrupted between the two commits therefore
+    ///         came back as the same graph quietly running a different request. Now the two commits are one, and this
+    ///         is the proof of what the dispatcher does with the only shape that could still ask it to guess.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ARunFoundWithoutNodeRuns_IsNotMaterializedByTheDispatcher()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunWithoutNodeRunsAsync(GateOnly).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Empty(await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false),
+            "the dispatcher cannot know what this run was asked to do, so it must not invent rows that claim it can.");
+        AssertEx.Equal(expected: 0,
+            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "node.materialized"),
+            "and it announced no materialization either.");
+    }
+
+    /// <summary>
+    ///     The concurrent-run cap is enforced where a Pending run is admitted: over the cap, a run waits rather than
+    ///     being refused, and the next tick that finds room starts it.
+    /// </summary>
+    [Test]
+    public async Task ARunOverTheConcurrencyCap_WaitsUntilAnotherFinishes()
+    {
+        await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxConcurrentRuns", "1"));
+        var first = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(first).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Running, (await harness.ReadRunAsync(first).ConfigureAwait(false)).Status, "the first run holds the node's one slot.");
+
+        var second = await harness.StartRunAsync(SingleAgent, "A second request").ConfigureAwait(false);
+        AssertEx.Equal(expected: 0, await harness.AdvanceAsync(second).ConfigureAwait(false), "a tick that admits nothing writes nothing.");
+        AssertEx.Equal(DevWorkflowRunStatus.Pending,
+            (await harness.ReadRunAsync(second).ConfigureAwait(false)).Status,
+            "over the cap the run WAITS — refusing it would push a queue the node can work through back onto the person who started it.");
+
+        await harness.SettleAgentAsync(first, "research").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(first).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(first).ConfigureAwait(false)).Status);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(second).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Running,
+            (await harness.ReadRunAsync(second).ConfigureAwait(false)).Status,
+            "and the slot the finished run gave back is what lets the waiting one start.");
+    }
+
     /// <summary>
     ///     The Phase A2 gate. A human-gate-only definition runs to completion: the run materializes its entry node,
     ///     stops on the human, and finishes on the answer — with the work item tracking it the whole way.

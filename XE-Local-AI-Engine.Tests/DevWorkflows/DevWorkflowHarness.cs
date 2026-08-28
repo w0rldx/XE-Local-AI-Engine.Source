@@ -183,6 +183,50 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         return await action(scope.ServiceProvider.GetRequiredService<IDevWorkflowRunService>()).ConfigureAwait(false);
     }
 
+    /// <summary>The same, for the one command that answers nothing.</summary>
+    public async Task WithRunServiceAsync(Func<IDevWorkflowRunService, Task> action)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        await using var scope = Services.CreateAsyncScope();
+        await action(scope.ServiceProvider.GetRequiredService<IDevWorkflowRunService>()).ConfigureAwait(false);
+    }
+
+    /// <summary>Whether the work item's row is still there — what a delete has to have removed before it releases anything else.</summary>
+    public async Task<bool> WorkItemExistsAsync(Guid workItemId)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        try
+        {
+            _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().GetWorkItemAsync(workItemId).ConfigureAwait(false);
+            return true;
+        }
+        catch (DevWorkflowNotFoundException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    ///     A run row with no node runs — the shape nothing in the runtime produces any more, kept so a test can prove
+    ///     the dispatcher does not invent the rows (and with them a request nobody made) for one that turns up anyway.
+    /// </summary>
+    public async Task<Guid> StartRunWithoutNodeRunsAsync(string graphJson)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
+        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Seeded work item", "Seeded request")).ConfigureAwait(false);
+        var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Seeded definition", graphJson, NodeCount: 1))
+                                    .ConfigureAwait(false);
+        var run = await store.StartRunAsync(new StartDevWorkflowRunCommand(Guid.NewGuid(),
+                                 workItem.Id,
+                                 definition.Id,
+                                 definition.Version,
+                                 definition.GraphHash,
+                                 graphJson))
+                             .ConfigureAwait(false);
+        return run.Id;
+    }
+
     /// <summary>The work-item LIST row, whose node counters the store computes its own way from the same rows.</summary>
     public async Task<DevWorkflowWorkItemSnapshot> ReadWorkItemRowAsync(Guid workItemId)
     {
