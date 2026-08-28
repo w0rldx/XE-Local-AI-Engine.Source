@@ -64,6 +64,11 @@ export interface NodeCapabilityConfig {
 	// supervisor). Gates both the nav entry and the two /work-sessions routes. The node ALSO has its own
 	// `WorkSessions:Enabled` switch, which 404s the API — this flag only decides whether the surface is offered.
 	readonly workSessions: boolean;
+	// Development Workflows: durable, graph-based work items whose runs dispatch agent / tool / gate node-runs and
+	// survive an engine restart. Gates the nav child and the two /development-workflows routes. The node ALSO has its
+	// own `DevWorkflows:Enabled` switch, which 404s the API — this flag only decides whether the surface is offered.
+	// It is an EXPERIMENTAL surface, so its nav entry is a child of the Preview group rather than a top-level link.
+	readonly devWorkflows: boolean;
 }
 
 export const nodeCapabilities: NodeCapabilityConfig = {
@@ -148,6 +153,7 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// operator kill switch still fails closed without requiring a separate frontend build.
 	development: true,
 	workSessions: true,
+	devWorkflows: true,
 };
 
 export const nodeRoutePaths = {
@@ -197,6 +203,9 @@ export const nodeRoutePaths = {
 	development: "/development",
 	// Agent work sessions list — gated on nodeCapabilities.workSessions. The detail route is /work-sessions/{id}.
 	workSessions: "/work-sessions",
+	// Development Workflows work-item list — gated on nodeCapabilities.devWorkflows. Detail is
+	// /development-workflows/{workItemId}; the run, node and tab selections live in its search params.
+	devWorkflows: "/development-workflows",
 	// Local-only diagnostics panel (frontend error snapshots) — always available.
 	diagnostics: "/diagnostics",
 } as const;

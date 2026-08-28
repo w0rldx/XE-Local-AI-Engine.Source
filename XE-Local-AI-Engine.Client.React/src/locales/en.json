@@ -133,7 +133,8 @@
 		"training": "Training",
 		"trainingDatasets": "Datasets",
 		"trainingComparisons": "Comparisons",
-		"workSessions": "Work Sessions"
+		"workSessions": "Work Sessions",
+		"devWorkflows": "Workflow Runs"
 	},
 	"chat": {
 		"thoughts": "Thoughts",
