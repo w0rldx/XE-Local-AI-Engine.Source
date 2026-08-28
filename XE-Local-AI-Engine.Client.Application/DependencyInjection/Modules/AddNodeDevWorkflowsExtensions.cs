@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
@@ -23,6 +25,9 @@ internal static class AddNodeDevWorkflowsExtensions
                .Bind(configuration.GetSection(DevWorkflowOptions.Section))
                .ValidateDataAnnotations()
                .ValidateOnStart();
+
+        // Cross-section: an agent node is a work session, and neither section's data annotations can see the other.
+        builder.Services.AddSingleton<IValidateOptions<DevWorkflowOptions>, DevWorkflowOptionsValidator>();
 
         builder.Services.AddScoped<IDevWorkflowStore, DevWorkflowStore>();
         builder.Services.AddSingleton<IDevWorkflowArtifactBlobStore, ManagedDevWorkflowArtifactBlobStore>();

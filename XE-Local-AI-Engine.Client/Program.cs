@@ -66,6 +66,7 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Hubs;
     using XE_Local_AI_Engine.Client.Services.Auth;
     using XE_Local_AI_Engine.Client.Services.Development;
+    using XE_Local_AI_Engine.Client.Services.DevWorkflows;
     using XE_Local_AI_Engine.Client.Services.Proxy;
     using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
@@ -318,6 +319,7 @@ namespace XE_Local_AI_Engine.Client
             // Add services to the container.
             var isDevelopmentModeEnabled = builder.Configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);
             var areWorkSessionsEnabled = builder.Configuration.GetValue($"{WorkSessionOptions.Section}:Enabled", defaultValue: false);
+            var areDevWorkflowsEnabled = builder.Configuration.GetValue($"{DevWorkflowOptions.Section}:Enabled", defaultValue: false);
             builder.AddServices(builder.Configuration);
 
             // App self-update (Velopack + anonymous public GitHub releases). Desktop-mode only: off the flag this registers nothing and the
@@ -539,6 +541,25 @@ namespace XE_Local_AI_Engine.Client
                 app.Use(async (context, next) =>
                 {
                     if (context.Request.Path.StartsWithSegments(workSessionPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status404NotFound;
+                        return;
+                    }
+
+                    await next(context).ConfigureAwait(false);
+                });
+            }
+
+            if (!areDevWorkflowsEnabled)
+            {
+                // Same posture as work sessions, and for the same reason: the endpoints and the hub stay discovered so
+                // the OpenAPI document — and therefore the generated client — is the same on every node, and behaviour
+                // is gated here instead. Ahead of local API security and authentication, so the switch cannot be probed
+                // by status code.
+                var devWorkflowPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.DevelopmentWorkflows.Root}");
+                app.Use(async (context, next) =>
+                {
+                    if (context.Request.Path.StartsWithSegments(devWorkflowPath, StringComparison.OrdinalIgnoreCase))
                     {
                         context.Response.StatusCode = StatusCodes.Status404NotFound;
                         return;

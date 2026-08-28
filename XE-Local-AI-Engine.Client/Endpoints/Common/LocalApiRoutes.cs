@@ -881,6 +881,22 @@ public static class LocalApiRoutes
         public const string Hub = "/api/local/v1/work-sessions/hub";
     }
 
+    /// <summary>
+    ///     Development workflows: work items, definitions, runs and their node runs.
+    ///     <para>
+    ///         Only the prefix and the hub path exist so far. The whole surface is gated on
+    ///         <c>DevWorkflows:Enabled</c> by request-path middleware in <c>Program</c> that answers 404 for anything
+    ///         under <see cref="Root" />, which is why the prefix is a constant rather than spelled at each route.
+    ///     </para>
+    /// </summary>
+    public static class DevelopmentWorkflows
+    {
+        public const string Root = "development-workflows";
+
+        /// <summary>SignalR notification hub. Full path (mapped via MapHub, not the FastEndpoints prefix).</summary>
+        public const string Hub = "/api/local/v1/development-workflows/hub";
+    }
+
     public static class Automation
     {
         public const string Commands = "automation/commands";
