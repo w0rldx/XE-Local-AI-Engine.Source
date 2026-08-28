@@ -485,10 +485,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             written += await StopAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false);
         }
 
+        // Re-read: the stops above may have settled every row already, and judging "is anything still live" off the
+        // snapshot taken before them would cost a whole extra tick for a drain that is in fact finished.
+        nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
         if (nodeRuns.Any(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.Queued or DevWorkflowNodeRunStatus.Running))
         {
-            // Still settling. The command already committed its intent, so the UI can say "cancelling" honestly rather
-            // than claiming a cancellation that has not landed.
+            // Still settling — an executor was asked to stop and has not answered yet. The command already committed
+            // its intent, so the UI can say "cancelling" honestly rather than claiming one that has not landed.
             return written;
         }
 

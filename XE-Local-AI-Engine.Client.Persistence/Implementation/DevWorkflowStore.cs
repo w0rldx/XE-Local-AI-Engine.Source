@@ -214,9 +214,9 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
             DevWorkflowRunStatus.Cancelling or DevWorkflowRunStatus.Cancelled => DevWorkflowEventTypes.RunCancelled,
             DevWorkflowRunStatus.Completed => DevWorkflowEventTypes.RunCompleted,
             DevWorkflowRunStatus.Failed => DevWorkflowEventTypes.RunFailed,
+            DevWorkflowRunStatus.WaitingForApproval => DevWorkflowEventTypes.RunWaiting,
 
-            // Pending and WaitingForApproval are the run answering its own node runs rather than life events of their
-            // own; the node-run event that caused the move is the one that explains it.
+            // Pending: a run is created Pending and never transitions back to it, so nothing reaches here today.
             _ => DevWorkflowEventTypes.RunResumed
         };
 

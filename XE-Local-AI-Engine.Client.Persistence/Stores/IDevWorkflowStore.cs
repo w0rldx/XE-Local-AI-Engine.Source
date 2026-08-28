@@ -373,6 +373,9 @@ public static class DevWorkflowEventTypes
     public const string RunStarted = "run.started";
     public const string RunPaused = "run.paused";
     public const string RunResumed = "run.resumed";
+
+    /// <summary>The run stopped to ask a human. Distinct from <see cref="RunResumed" />, which says the opposite.</summary>
+    public const string RunWaiting = "run.waiting";
     public const string RunCompleted = "run.completed";
     public const string RunFailed = "run.failed";
     public const string RunCancelled = "run.cancelled";

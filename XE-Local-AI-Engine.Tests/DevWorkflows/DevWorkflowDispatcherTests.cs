@@ -57,9 +57,7 @@ public sealed class DevWorkflowDispatcherTests
         AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
         AssertEx.Equal(DevWorkflowWorkItemStatus.Completed, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
 
-        // 'run.resumed' is the run entering WaitingForApproval: the store reads the three in-flight intents and the
-        // approval wait as a resumption of the run's own narrative rather than as life events of their own.
-        AssertEx.Equal("run.created, node.materialized, run.started, node.started, gate.requested, run.resumed, gate.decided, node.completed, run.completed",
+        AssertEx.Equal("run.created, node.materialized, run.started, node.started, gate.requested, run.waiting, gate.decided, node.completed, run.completed",
             await harness.ReadEventTrailAsync(runId).ConfigureAwait(false),
             "the whole run has to be replayable from the log, in order.");
     }
