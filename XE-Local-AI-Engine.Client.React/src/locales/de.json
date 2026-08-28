@@ -5087,6 +5087,40 @@
 				"Cancelled": "Abgebrochen",
 				"GateRejected": "An einer Freigabe abgelehnt",
 				"unknown": "Der Knoten ist fehlgeschlagen"
+			},
+			"gate": {
+				"title": "Wartet auf Ihre Entscheidung",
+				"interventionTitle": "Dieser Knoten braucht Sie",
+				"commentLabel": "Kommentar",
+				"commentHint": "Erforderlich, wenn Sie ablehnen oder Änderungen anfordern.",
+				"history": "Entscheidungen",
+				"decidedMeta": "Versuch {{attempt}} · {{subject}} · {{when}}",
+				"unknownSubject": "unbekannt",
+				"rejectConfirmTitle": "Ablehnen und diesen Lauf abbrechen?",
+				"rejectConfirmBody": "Diese Freigabe hat keinen Zweig für eine Ablehnung. Eine Ablehnung bricht daher den gesamten Lauf ab, sobald die laufenden Knoten beendet sind.",
+				"abandonConfirmTitle": "Diesen Knoten aufgeben?",
+				"abandonConfirmBody": "Der Knoten wird als fehlgeschlagen verbucht, und es folgt kein weiterer Versuch. Wenn ohne ihn nichts anderes laufen kann, endet auch der Lauf.",
+				"alreadyDecided": "Dies wurde bereits mit „{{decision}}“ beantwortet.",
+				"noLongerPending": "Dieser Knoten ist weitergelaufen — er wartet nicht mehr auf eine Entscheidung.",
+				"noDecisions": "Dieser Knoten bietet keine Entscheidung an, die dieser Client treffen kann.",
+				"failed": "Diese Entscheidung konnte nicht gespeichert werden."
+			},
+			"node": {
+				"back": "Zurück zu Artefakten und Ereignissen",
+				"loadFailed": "Dieser Knoten konnte nicht geladen werden.",
+				"resumes": "{{count}}× fortgesetzt",
+				"producedArtifacts_one": "{{count}} Artefakt erzeugt",
+				"producedArtifacts_other": "{{count}} Artefakte erzeugt",
+				"agent": "Agent",
+				"agentUnbound": "An diesen Knoten ist kein Agent gebunden.",
+				"openSession": "Arbeitssitzung des Agenten öffnen",
+				"sessionPurged": "Das Transkript des Agenten ist nicht mehr verfügbar. Die Ereignisse und Artefakte dieses Knotens sind davon nicht betroffen.",
+				"tool": "Prüfung",
+				"openReport": "Prüfbericht öffnen",
+				"noReport": "Noch kein Prüfbericht.",
+				"devTask": "Entwicklungsaufgabe",
+				"openDevelopment": "Development Mode öffnen",
+				"objective": "Zielvorgabe"
 			}
 		}
 	},

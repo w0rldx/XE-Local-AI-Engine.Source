@@ -5087,6 +5087,40 @@
 				"Cancelled": "Cancelled",
 				"GateRejected": "Rejected at a gate",
 				"unknown": "The node failed"
+			},
+			"gate": {
+				"title": "Awaiting your decision",
+				"interventionTitle": "This node needs you",
+				"commentLabel": "Comment",
+				"commentHint": "Required when you reject or ask for changes.",
+				"history": "Decisions",
+				"decidedMeta": "attempt {{attempt}} · {{subject}} · {{when}}",
+				"unknownSubject": "unknown",
+				"rejectConfirmTitle": "Reject and cancel this run?",
+				"rejectConfirmBody": "This gate has no branch for a rejection, so rejecting cancels the whole run once its live nodes have wound down.",
+				"abandonConfirmTitle": "Abandon this node?",
+				"abandonConfirmBody": "The node is recorded as failed and no further attempt is made. If nothing else can run without it, the run ends too.",
+				"alreadyDecided": "This was already answered with “{{decision}}”.",
+				"noLongerPending": "This node has moved on — it is no longer waiting for a decision.",
+				"noDecisions": "This node offers no decision this client can take.",
+				"failed": "That decision could not be recorded."
+			},
+			"node": {
+				"back": "Back to artifacts and events",
+				"loadFailed": "This node could not be loaded.",
+				"resumes": "resumed {{count}}×",
+				"producedArtifacts_one": "produced {{count}} artifact",
+				"producedArtifacts_other": "produced {{count}} artifacts",
+				"agent": "Agent",
+				"agentUnbound": "No agent is bound to this node.",
+				"openSession": "Open the agent's work session",
+				"sessionPurged": "The agent's transcript is no longer available. This node's events and artifacts are unaffected.",
+				"tool": "Validation",
+				"openReport": "Open the validation report",
+				"noReport": "No validation report yet.",
+				"devTask": "Development task",
+				"openDevelopment": "Open Development Mode",
+				"objective": "Objective"
 			}
 		}
 	},

@@ -6,15 +6,15 @@
 // test can spread overrides in without fighting a stricter local type than the server actually promises.
 
 import type {
-	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse as ArtifactResponse,
-	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse as NodeRunDetailResponse,
-	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse as NodeRunSummaryResponse,
-	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse as RunEventResponse,
-	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse as RunResponse,
-	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse as RunSummaryResponse,
-	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse as WorkItemResponse,
-	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemSummaryResponse as WorkItemSummaryResponse,
-} from "@/core/api/generated/types.gen";
+	DevWorkflowArtifactResponse as ArtifactResponse,
+	DevWorkflowNodeRunDetailResponse as NodeRunDetailResponse,
+	DevWorkflowNodeRunSummaryResponse as NodeRunSummaryResponse,
+	DevWorkflowRunEventResponse as RunEventResponse,
+	DevWorkflowRunResponse as RunResponse,
+	DevWorkflowRunSummaryResponse as RunSummaryResponse,
+	DevWorkflowWorkItemResponse as WorkItemResponse,
+	DevWorkflowWorkItemSummaryResponse as WorkItemSummaryResponse,
+} from "@/features/devWorkflows/models/DevWorkflowModels";
 
 export const devWorkflowTestIds = {
 	workItem: "11111111-1111-4111-8111-111111111111",
@@ -42,7 +42,8 @@ export function devWorkflowWorkItemSummary(overrides: Partial<WorkItemSummaryRes
 	};
 }
 
-export function devWorkflowRunSummary(overrides: Partial<RunSummaryResponse> = {}): RunSummaryResponse {
+/** Only ever reached through `devWorkflowWorkItem`'s embedded `runs[]`, which is where the detail page reads it. */
+function devWorkflowRunSummary(overrides: Partial<RunSummaryResponse> = {}): RunSummaryResponse {
 	return {
 		id: devWorkflowTestIds.run,
 		workItemId: devWorkflowTestIds.workItem,

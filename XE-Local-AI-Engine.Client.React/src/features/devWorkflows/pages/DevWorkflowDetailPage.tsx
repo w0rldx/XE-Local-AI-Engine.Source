@@ -18,6 +18,7 @@ import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPa
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { DevWorkflowArtifactsTab } from "@/features/devWorkflows/components/DevWorkflowArtifactsTab";
 import { DevWorkflowEventsTab } from "@/features/devWorkflows/components/DevWorkflowEventsTab";
+import { DevWorkflowNodePanel } from "@/features/devWorkflows/components/DevWorkflowNodePanel";
 import { DevWorkflowNodeRunTable } from "@/features/devWorkflows/components/DevWorkflowNodeRunTable";
 import { DevWorkflowRunSummaryPanel } from "@/features/devWorkflows/components/DevWorkflowRunSummaryPanel";
 import { DevWorkflowRunToolbar } from "@/features/devWorkflows/components/DevWorkflowRunToolbar";
@@ -32,10 +33,12 @@ import {
 import {
 	devWorkflowEventsMaxLimit,
 	devWorkflowEventsPageSize,
+	useDecideDevWorkflowNodeRun,
 	useDeleteDevWorkflowWorkItem,
 	useDevWorkflowArtifacts,
 	useDevWorkflowDefinitions,
 	useDevWorkflowRun,
+	useDevWorkflowNodeRun,
 	useDevWorkflowRunEvents,
 	useDevWorkflowRunLifecycle,
 	useDevWorkflowWorkItem,
@@ -77,10 +80,12 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	const poll = { pollIntervalMs: feedsEnabled ? live.pollIntervalMs : undefined, enabled: feedsEnabled };
 
 	const runQuery = useDevWorkflowRun(runId, poll);
+	const nodeRunQuery = useDevWorkflowNodeRun(runId, selection.node, poll);
 	const eventsQuery = useDevWorkflowRunEvents(runId, eventsLimit, poll);
 	const artifactsQuery = useDevWorkflowArtifacts(runId, poll);
 	const definitionsQuery = useDevWorkflowDefinitions();
 	const lifecycle = useDevWorkflowRunLifecycle(runId, workItemId);
+	const decide = useDecideDevWorkflowNodeRun(runId, workItemId);
 	const startRun = useStartDevWorkflowRun();
 	const deleteWorkItem = useDeleteDevWorkflowWorkItem();
 
@@ -171,7 +176,28 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 		/>
 	);
 
-	const sidePanel = (
+	// `?node=` is the drill-down URL, so the pane replaces the tabs rather than opening beside them. Clearing the
+	// selection is what brings the tabs back — no route push, no second layout.
+	const sidePanel = selection.node ? (
+		<DevWorkflowNodePanel
+			nodeRun={nodeRunQuery.data}
+			isPending={nodeRunQuery.isPending}
+			loadError={nodeRunQuery.isError ? nodeRunQuery.error : undefined}
+			isDeciding={decide.isPending}
+			decideError={decide.isError ? decide.error : undefined}
+			onClose={() => select({ node: undefined })}
+			onShowArtifacts={() => select({ node: undefined, tab: "artifacts" })}
+			onDecide={(submission) => {
+				if (!runId || !selection.node) {
+					return;
+				}
+				decide.mutate({
+					path: { runId, nodeRunId: selection.node },
+					body: { operationId: submission.operationId, decision: submission.decision, comment: submission.comment ?? null },
+				});
+			}}
+		/>
+	) : (
 		<Tabs
 			value={selection.tab === "events" ? "events" : "artifacts"}
 			onChange={(value) => select({ tab: value === "events" ? "events" : "artifacts" })}
