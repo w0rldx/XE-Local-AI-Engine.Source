@@ -154,6 +154,11 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 
 	const workItem = workItemQuery.data;
 	const labelByNodeRunId = new Map(nodes.map((node) => [node.id ?? "", node.label ?? node.nodeKey ?? ""]));
+	// The gate's evidence list has artifact IDS on the node detail and NAMES on the run's artifact feed; this is the
+	// only place both are in hand, so the join happens here rather than in a second request from the panel.
+	const artifactNameById = new Map(
+		(artifactsQuery.data?.items ?? []).map((artifact) => [artifact.id ?? "", artifact.name ?? ""]),
+	);
 
 	const summaryPanel = (
 		<DevWorkflowRunSummaryPanel
@@ -185,6 +190,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 			loadError={nodeRunQuery.isError ? nodeRunQuery.error : undefined}
 			isDeciding={decide.isPending}
 			decideError={decide.isError ? decide.error : undefined}
+			artifactNameById={artifactNameById}
 			onClose={() => select({ node: undefined })}
 			onShowArtifacts={() => select({ node: undefined, tab: "artifacts" })}
 			onDecide={(submission) => {

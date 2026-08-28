@@ -10,7 +10,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { devWorkflowRunEvent, devWorkflowTestIds } from "@/features/devWorkflows/models/DevWorkflowTestFixtures";
+import { devWorkflowRunEvent, devWorkflowTestIds } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { devWorkflowInvalidationKey, devWorkflowQueryIds } from "@/features/devWorkflows/queries/useDevWorkflows";
 
 const hubMock = vi.hoisted(() => {

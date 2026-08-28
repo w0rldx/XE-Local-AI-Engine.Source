@@ -8,7 +8,7 @@ import {
 	devWorkflowTestIds,
 	devWorkflowWorkItem,
 	devWorkflowWorkItemSummary,
-} from "@/features/devWorkflows/models/DevWorkflowTestFixtures";
+} from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { DevWorkflowsPage } from "@/features/devWorkflows/pages/DevWorkflowsPage";
 import { jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";

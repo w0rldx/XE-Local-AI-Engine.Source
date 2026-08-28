@@ -10,7 +10,7 @@ import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DevWorkflowNodeRunTable } from "@/features/devWorkflows/components/DevWorkflowNodeRunTable";
-import { devWorkflowNodeRunSummary, devWorkflowTestIds } from "@/features/devWorkflows/models/DevWorkflowTestFixtures";
+import { devWorkflowNodeRunSummary, devWorkflowTestIds } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const reducedMotion = vi.hoisted(() => ({ value: false }));
@@ -160,6 +160,19 @@ describe("DevWorkflowNodeRunTable", () => {
 
 		fireEvent.click(screen.getByTestId(`dev-workflow-node-row-${devWorkflowTestIds.nodeRun}`));
 
+		expect(onSelect).toHaveBeenCalledWith(devWorkflowTestIds.nodeRun);
+	});
+
+	it("puts a real focusable control in the row, because a bare row click is unreachable by keyboard", () => {
+		const onSelect = vi.fn();
+		renderWithProviders(<DevWorkflowNodeRunTable nodes={[devWorkflowNodeRunSummary({ label: "Research" })]} onSelect={onSelect} />);
+
+		// This table is A0's ONLY execution view, so every node has to be reachable without a pointer.
+		const control = screen.getByRole("button", { name: "Research" });
+		control.focus();
+		expect(document.activeElement).toBe(control);
+
+		fireEvent.click(control);
 		expect(onSelect).toHaveBeenCalledWith(devWorkflowTestIds.nodeRun);
 	});
 

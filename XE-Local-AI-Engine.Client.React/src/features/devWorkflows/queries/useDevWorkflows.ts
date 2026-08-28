@@ -27,6 +27,7 @@ import {
 	startDevWorkflowRunMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { readDevWorkflowConflict } from "@/features/devWorkflows/api/DevWorkflowConflict";
 import { isActiveDevWorkflowRunStatus, toDevWorkflowRunStatus } from "@/features/devWorkflows/models/DevWorkflowModels";
 
 /** Generated operationIds, which are also the generated SDK fn names and the `_id` of every generated query key. */
@@ -221,22 +222,28 @@ export function useDevWorkflowRunLifecycle(runId: string | undefined, workItemId
  */
 export function useDecideDevWorkflowNodeRun(runId: string | undefined, workItemId: string | undefined) {
 	const queryClient = useQueryClient();
-	return useMutation({
-		...withResponseValidation(decideDevWorkflowNodeRunMutation()),
-		onSuccess: async (_data, variables) => {
-			if (runId) {
-				await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.run, { runId }) });
-				await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.events, { runId }) });
-			}
-			const nodeRunId = variables.path?.nodeRunId;
-			if (runId && nodeRunId) {
+
+	const refresh = async (nodeRunId: string | undefined): Promise<void> => {
+		if (runId) {
+			await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.run, { runId }) });
+			await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.events, { runId }) });
+			if (nodeRunId) {
 				await queryClient.invalidateQueries({
 					queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.node, { runId, nodeRunId }),
 				});
 			}
-			if (workItemId) {
-				await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItem, { workItemId }) });
-			}
-		},
+		}
+		if (workItemId) {
+			await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItem, { workItemId }) });
+		}
+	};
+
+	return useMutation({
+		...withResponseValidation(decideDevWorkflowNodeRunMutation()),
+		onSuccess: (_data, variables) => refresh(variables.path?.nodeRunId),
+		// A 409 means the server disagrees with what this panel is showing — the gate was already answered, or the node
+		// has moved on. Re-reading is what takes the live buttons away; without it the panel keeps offering a decision
+		// on a settled gate, and every further click earns another 409.
+		onError: (error, variables) => (readDevWorkflowConflict(error) ? refresh(variables.path?.nodeRunId) : undefined),
 	});
 }

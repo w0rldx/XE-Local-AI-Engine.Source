@@ -5,7 +5,7 @@ import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { DevWorkflowArtifactsTab } from "@/features/devWorkflows/components/DevWorkflowArtifactsTab";
-import { devWorkflowArtifact, devWorkflowTestIds } from "@/features/devWorkflows/models/DevWorkflowTestFixtures";
+import { devWorkflowArtifact, devWorkflowTestIds } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";

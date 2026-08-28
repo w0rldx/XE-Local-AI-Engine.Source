@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
+import { toast } from "@/core/ui/notifications/Toast";
 import { type CreateWorkItemValues, CreateWorkItemDialog } from "@/features/devWorkflows/components/CreateWorkItemDialog";
 import { DevWorkflowRunStatusBadge, DevWorkflowWorkItemStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
 import { toDevWorkflowRunStatus, toDevWorkflowWorkItemStatus } from "@/features/devWorkflows/models/DevWorkflowModels";
@@ -53,8 +54,10 @@ export function DevWorkflowsPage() {
 				path: { workItemId },
 				body: { operationId: crypto.randomUUID(), definitionId: values.definitionId },
 			});
-		} catch {
-			// Swallowed on purpose: the detail page is the honest place to report a run that did not start.
+		} catch (error) {
+			// Toasted rather than swallowed: the detail page shows a work item with no run, which is honest but silent
+			// about WHY, and "this graph needs a development project" is exactly the sentence the operator needs to see.
+			toast.error(apiErrorMessage(error, t("pages.devWorkflows.detail.startFailed", "Could not start a run.")));
 		}
 		setDialogOpened(false);
 		navigate({ to: "/development-workflows/$workItemId", params: { workItemId } });

@@ -11,7 +11,7 @@ import {
 	devWorkflowRun,
 	devWorkflowTestIds,
 	devWorkflowWorkItem,
-} from "@/features/devWorkflows/models/DevWorkflowTestFixtures";
+} from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { DevWorkflowDetailPage } from "@/features/devWorkflows/pages/DevWorkflowDetailPage";
 import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
@@ -47,7 +47,7 @@ function baseRoutes(overrides: { run?: unknown; nodeRun?: unknown } = {}) {
 	];
 }
 
-function renderPage(selection: { run?: string; node?: string; tab?: "nodes" | "artifacts" | "events" } = {}) {
+function renderPage(selection: { run?: string; node?: string; tab?: "artifacts" | "events" } = {}) {
 	const onSelectionChange = vi.fn();
 	renderWithProviders(
 		<ConfirmProvider>
@@ -154,6 +154,47 @@ describe("DevWorkflowDetailPage", () => {
 		expect(body.decision).toBe("Approve");
 		expect(body.kind).toBeUndefined();
 		expect(body.operationId).toMatch(/^[0-9a-f-]{36}$/i);
+	});
+
+	it("re-reads the node after a 409, so a settled gate cannot keep its live buttons", async () => {
+		let nodeReads = 0;
+		const gateNode = devWorkflowNodeRunDetail({
+			nodeType: "HumanGate",
+			status: "WaitingForApproval",
+			pendingDecisionKind: "Approve",
+			allowedDecisions: ["Approve"],
+		});
+		server.use(
+			// Registered BEFORE baseRoutes so this counting handler wins the match for the node-run route.
+			http.get(localApiPath(`development-workflows/runs/${runId}/nodes/${nodeRunId}`), () => {
+				nodeReads += 1;
+				return HttpResponse.json(gateNode);
+			}),
+			...baseRoutes(),
+			http.post(localApiPath(`development-workflows/runs/${runId}/nodes/${nodeRunId}/decision`), () =>
+				HttpResponse.json(
+					{
+						type: "about:blank",
+						title: "Conflict",
+						status: 409,
+						detail: "already answered",
+						conflictType: "DevWorkflowGateAlreadyDecided",
+						standingDecision: "Approve",
+					},
+					{ status: 409, headers: { "content-type": "application/problem+json" } },
+				),
+			),
+		);
+		renderPage({ node: nodeRunId });
+
+		fireEvent.click(await screen.findByTestId("dev-workflow-gate-Approve"));
+
+		// The refusal names the standing decision, AND the node is re-read: without the refetch the panel would keep
+		// offering a decision on a gate the server has already settled, and every further click would 409 again.
+		expect(await screen.findByTestId("dev-workflow-gate-already-decided")).toBeDefined();
+		const readsAfterFailure = nodeReads;
+		await waitFor(() => expect(nodeReads).toBeGreaterThan(1));
+		expect(readsAfterFailure).toBeGreaterThan(0);
 	});
 
 	it("offers a run to start, and no run to cancel, for a work item that has never run", async () => {

@@ -1,4 +1,4 @@
-import { Badge, Group, Stack, Table, Text } from "@mantine/core";
+import { Anchor, Badge, Group, Stack, Table, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
@@ -135,10 +135,21 @@ export function DevWorkflowNodeRunTable({ nodes, selectedNodeRunId, onSelect }: 
 								data-testid={`dev-workflow-node-row-${node.id}`}
 							>
 								<Table.Td>
-									<Stack gap={2}>
-										<Text size="sm" fw={500} lineClamp={1}>
-											{node.label}
-										</Text>
+									<Stack gap={2} align="flex-start">
+										{/* The row's onClick is the pointer affordance; THIS is the control a keyboard and a
+										    screen reader can reach, and this table is A0's only execution view. A click here
+										    also bubbles to the row and selects the same id, so the second call is a no-op. */}
+										<Anchor
+											component="button"
+											type="button"
+											ta="left"
+											onClick={() => onSelect(node.id ?? "")}
+											data-testid={`dev-workflow-node-select-${node.id}`}
+										>
+											<Text size="sm" fw={500} lineClamp={1}>
+												{node.label}
+											</Text>
+										</Anchor>
 										<Group gap={4} wrap="wrap">
 											<Badge size="xs" variant="light" color="gray">
 												{t(`pages.devWorkflows.nodeType.${nodeType}`, nodeType)}

@@ -16,7 +16,7 @@ import {
 	DevWorkflowHumanGatePanel,
 } from "@/features/devWorkflows/components/DevWorkflowHumanGatePanel";
 import type { DevWorkflowNodeRunDetailResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
-import { devWorkflowNodeRunDetail } from "@/features/devWorkflows/models/DevWorkflowTestFixtures";
+import { devWorkflowNodeRunDetail } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 function gateNode(overrides: Partial<DevWorkflowNodeRunDetailResponse> = {}): DevWorkflowNodeRunDetailResponse {
@@ -44,8 +44,18 @@ interface PanelState {
  * re-mount it — a re-mount would mint a fresh id and quietly prove nothing. Testing Library's `rerender` replaces the
  * whole tree (dropping the providers), so the update goes through a stateful harness instead.
  */
-function renderPanel(nodeRun: DevWorkflowNodeRunDetailResponse, options: { onDecide?: (s: DevWorkflowDecisionSubmission) => void; isSubmitting?: boolean; error?: unknown } = {}) {
+function renderPanel(
+	nodeRun: DevWorkflowNodeRunDetailResponse,
+	options: {
+		onDecide?: (s: DevWorkflowDecisionSubmission) => void;
+		onShowArtifacts?: () => void;
+		isSubmitting?: boolean;
+		error?: unknown;
+		artifactNameById?: ReadonlyMap<string, string>;
+	} = {},
+) {
 	const onDecide = options.onDecide ?? vi.fn();
+	const onShowArtifacts = options.onShowArtifacts ?? vi.fn();
 	let update: (next: PanelState) => void = () => undefined;
 
 	function Harness() {
@@ -57,14 +67,16 @@ function renderPanel(nodeRun: DevWorkflowNodeRunDetailResponse, options: { onDec
 					nodeRun={state.nodeRun}
 					isSubmitting={state.isSubmitting ?? false}
 					error={state.error}
+					artifactNameById={options.artifactNameById}
 					onDecide={onDecide}
+					onShowArtifacts={onShowArtifacts}
 				/>
 			</ConfirmProvider>
 		);
 	}
 
 	const result = renderWithProviders(<Harness />);
-	return { ...result, onDecide, update: (next: PanelState) => act(() => update(next)) };
+	return { ...result, onDecide, onShowArtifacts, update: (next: PanelState) => act(() => update(next)) };
 }
 
 function conflict(conflictType: string, standingDecision?: string): ApiError {
@@ -224,6 +236,50 @@ describe("DevWorkflowHumanGatePanel", () => {
 		await waitFor(() => expect(onDecide).toHaveBeenCalledTimes(1));
 		const submission = onDecide.mock.calls[0]?.[0] as DevWorkflowDecisionSubmission | undefined;
 		expect(submission?.comment).toBe("wrong approach");
+	});
+
+	it("shows what the gate is about, by name, and jumps to it — evidence first, decision second", () => {
+		const { onShowArtifacts } = renderPanel(gateNode({ consumedArtifactIds: ["artifact-1"] }), {
+			artifactNameById: new Map([["artifact-1", "implementation-plan.md"]]),
+		});
+
+		const evidence = screen.getByTestId("dev-workflow-gate-evidence-artifact-1");
+		expect(evidence.textContent).toBe("implementation-plan.md");
+		fireEvent.click(evidence);
+		expect(onShowArtifacts).toHaveBeenCalledTimes(1);
+	});
+
+	it("falls back to the artifact id when the run's artifact feed has not landed yet", () => {
+		renderPanel(gateNode({ consumedArtifactIds: ["artifact-1"] }));
+
+		expect(screen.getByTestId("dev-workflow-gate-evidence-artifact-1").textContent).toBe("artifact-1");
+	});
+
+	it("warns that Abandon records the node as FAILED, which is what the wire actually does", async () => {
+		const onDecide = vi.fn();
+		renderPanel(gateNode({ status: "Blocked", pendingDecisionKind: "Retry", allowedDecisions: ["Retry", "Abandon"] }), {
+			onDecide,
+		});
+
+		fireEvent.click(screen.getByTestId("dev-workflow-gate-Abandon"));
+
+		// The runtime lands an abandoned node run at Failed, not Cancelled, so the copy must not promise "cancelled".
+		const body = await screen.findByText(/recorded as failed/i);
+		expect(body).toBeDefined();
+		fireEvent.click(screen.getByTestId("confirm-cancel"));
+		await waitFor(() => expect(onDecide).not.toHaveBeenCalled());
+	});
+
+	it("disables every decision while a submit is in flight, and re-arms when the runtime asks again", () => {
+		const { update } = renderPanel(gateNode());
+
+		update({ nodeRun: gateNode(), isSubmitting: true });
+		expect((screen.getByTestId("dev-workflow-gate-Approve") as HTMLButtonElement).disabled).toBe(true);
+		expect((screen.getByTestId("dev-workflow-gate-Reject") as HTMLButtonElement).disabled).toBe(true);
+
+		// The gate came back on a later attempt: the controls must arm again rather than stay stuck disabled.
+		update({ nodeRun: gateNode({ attempt: 2 }), isSubmitting: false });
+		expect((screen.getByTestId("dev-workflow-gate-Approve") as HTMLButtonElement).disabled).toBe(false);
 	});
 
 	it("renders the standing decision when a second human act is refused", () => {

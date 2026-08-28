@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { DevWorkflowNodePanel } from "@/features/devWorkflows/components/DevWorkflowNodePanel";
 import type { DevWorkflowNodeRunDetailResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
-import { devWorkflowNodeRunDetail } from "@/features/devWorkflows/models/DevWorkflowTestFixtures";
+import { devWorkflowNodeRunDetail } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const navigate = vi.hoisted(() => vi.fn());

@@ -5091,6 +5091,7 @@
 			"gate": {
 				"title": "Awaiting your decision",
 				"interventionTitle": "This node needs you",
+				"evidence": "What you are deciding on",
 				"commentLabel": "Comment",
 				"commentHint": "Required when you reject or ask for changes.",
 				"history": "Decisions",

@@ -1,4 +1,4 @@
-// Per-DTO fixture builders for the Development Workflows tests. Per-DTO rather than per-route on purpose: the run
+// The feature's one fixture file (P4 §6). Per-DTO builders rather than per-route on purpose: the run
 // payload backs four test files from one builder, parameterised by node status, so the suite needs about seven
 // builders rather than one hand-rolled handler set per endpoint.
 //

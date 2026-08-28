@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Group, Stack, Text, Textarea } from "@mantine/core";
+import { Alert, Anchor, Badge, Button, Group, Stack, Text, Textarea } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -27,7 +27,10 @@ export interface DevWorkflowHumanGatePanelProps {
 	readonly nodeRun: DevWorkflowNodeRunDetailResponse;
 	readonly isSubmitting: boolean;
 	readonly error?: unknown;
+	/** Artifact id → name, so the evidence reads as "Implementation plan" rather than as a GUID. */
+	readonly artifactNameById?: ReadonlyMap<string, string>;
 	readonly onDecide: (submission: DevWorkflowDecisionSubmission) => void;
+	readonly onShowArtifacts: () => void;
 }
 
 /** A rejection or a change request with no reason is unactionable for the run and unauditable for the operator. */
@@ -53,7 +56,14 @@ const COMMENT_MAX = 8000;
  * buttons DO render is `allowedDecisions`, computed server-side from the pinned graph, so the panel never offers a
  * decision that would come back a 409.
  */
-export function DevWorkflowHumanGatePanel({ nodeRun, isSubmitting, error, onDecide }: DevWorkflowHumanGatePanelProps) {
+export function DevWorkflowHumanGatePanel({
+	nodeRun,
+	isSubmitting,
+	error,
+	artifactNameById,
+	onDecide,
+	onShowArtifacts,
+}: DevWorkflowHumanGatePanelProps) {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 	const [comment, setComment] = useState("");
@@ -152,6 +162,31 @@ export function DevWorkflowHumanGatePanel({ nodeRun, isSubmitting, error, onDeci
 		>
 			{/* Y24: the graph node's `instructions` IS the gate prompt — there is no separate prompt field. */}
 			{nodeRun.instructions ? <MarkdownView content={nodeRun.instructions} /> : null}
+
+			{/* Evidence first, decision second: these are the artifacts the gate is ABOUT, recorded as the node's
+			    artifact uses when it entered WaitingForApproval. An approval with the plan one click away is a
+			    different act from an approval with nothing on screen but a prompt. */}
+			{(nodeRun.consumedArtifactIds ?? []).length > 0 ? (
+				<Stack gap={2} data-testid="dev-workflow-gate-evidence">
+					<Text size="xs" fw={500}>
+						{t("pages.devWorkflows.gate.evidence", "What you are deciding on")}
+					</Text>
+					{(nodeRun.consumedArtifactIds ?? []).map((artifactId) => (
+						<Anchor
+							key={artifactId}
+							component="button"
+							type="button"
+							size="xs"
+							ta="left"
+							onClick={onShowArtifacts}
+							data-testid={`dev-workflow-gate-evidence-${artifactId}`}
+						>
+							{/* The name comes from the run's artifact feed; until that lands the id is at least a handle. */}
+							{artifactNameById?.get(artifactId) ?? artifactId}
+						</Anchor>
+					))}
+				</Stack>
+			) : null}
 
 			{isIntervention && nodeRun.failureClass ? (
 				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-gate-failure">

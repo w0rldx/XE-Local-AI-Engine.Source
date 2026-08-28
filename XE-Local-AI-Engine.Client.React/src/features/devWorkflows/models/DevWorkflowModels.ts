@@ -85,11 +85,12 @@ export const devWorkflowArtifactKinds = [
 export type DevWorkflowArtifactKind = (typeof devWorkflowArtifactKinds)[number];
 
 /**
- * The detail page's side-tab selection, carried in `?tab=`. `nodes` is the default and means "no right-pane
- * preference"; it is what a mobile viewport shows in the centre. `graph` is deliberately absent — that view does not
- * exist until Slice A1, so a URL cannot deep-link to something that would render nothing.
+ * The detail page's side-tab selection, carried in `?tab=`. Only the two values that select something: `artifacts` is
+ * the default, so its absence already means it. `nodes` and `graph` are deliberately absent — the node table is the
+ * centre pane rather than a tab, and the graph does not exist until Slice A1, so neither would render anything
+ * distinct, and a URL must not validate against a value that changes nothing.
  */
-export const devWorkflowDetailTabs = ["nodes", "artifacts", "events"] as const;
+export const devWorkflowDetailTabs = ["artifacts", "events"] as const;
 export type DevWorkflowDetailTab = (typeof devWorkflowDetailTabs)[number];
 
 /** Y4: written by the runtime, never by the client. A `Failed` run maps here to `Blocked` — it needs attention. */

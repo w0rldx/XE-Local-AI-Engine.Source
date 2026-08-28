@@ -24,6 +24,8 @@ export interface DevWorkflowNodePanelProps {
 	readonly loadError?: unknown;
 	readonly isDeciding: boolean;
 	readonly decideError?: unknown;
+	/** Artifact id → name, for the gate's evidence list. Empty until the run's artifact feed lands. */
+	readonly artifactNameById?: ReadonlyMap<string, string>;
 	readonly onDecide: (submission: DevWorkflowDecisionSubmission) => void;
 	readonly onShowArtifacts: () => void;
 	/** Clears `?node=`, which is what brings the artifacts/events tabs back into this zone. */
@@ -41,6 +43,7 @@ export function DevWorkflowNodePanel({
 	loadError,
 	isDeciding,
 	decideError,
+	artifactNameById,
 	onDecide,
 	onShowArtifacts,
 	onClose,
@@ -119,7 +122,14 @@ export function DevWorkflowNodePanel({
 					</Alert>
 				) : null}
 
-				<DevWorkflowHumanGatePanel nodeRun={nodeRun} isSubmitting={isDeciding} error={decideError} onDecide={onDecide} />
+				<DevWorkflowHumanGatePanel
+					nodeRun={nodeRun}
+					isSubmitting={isDeciding}
+					error={decideError}
+					artifactNameById={artifactNameById}
+					onDecide={onDecide}
+					onShowArtifacts={onShowArtifacts}
+				/>
 
 				{nodeType === "Agent" ? <AgentSection nodeRun={nodeRun} /> : null}
 				{nodeType === "Tool" ? <ToolSection nodeRun={nodeRun} onShowArtifacts={onShowArtifacts} /> : null}

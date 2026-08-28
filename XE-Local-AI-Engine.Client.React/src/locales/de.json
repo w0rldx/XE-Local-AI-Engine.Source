@@ -5091,6 +5091,7 @@
 			"gate": {
 				"title": "Wartet auf Ihre Entscheidung",
 				"interventionTitle": "Dieser Knoten braucht Sie",
+				"evidence": "Worüber Sie entscheiden",
 				"commentLabel": "Kommentar",
 				"commentHint": "Erforderlich, wenn Sie ablehnen oder Änderungen anfordern.",
 				"history": "Entscheidungen",
