@@ -65,6 +65,28 @@ public sealed class DevWorkflowGraphTests
         AssertEx.True(graph.Nodes.ContainsKey("implement"), "…and it parsed anyway.");
     }
 
+    /// <summary>
+    ///     A template with edges of its own is refused, because the alternative hangs rather than fails: the template is
+    ///     the one node deliberately never instantiated, so a successor it declared would get a node run at run start and
+    ///     then wait forever on an inbound edge whose source has no row and never will.
+    /// </summary>
+    [Test]
+    public void Parse_WithATemplateThatDeclaresItsOwnEdges_IsRejected()
+    {
+        const string TemplateSubtree = """
+                                       {
+                                         "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
+                                                     "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                                   { "nodeKey": "implement", "nodeType": "DevTask" },
+                                                   { "nodeKey": "verify", "nodeType": "Tool" },
+                                                   { "nodeKey": "join", "nodeType": "Join" }],
+                                         "edges": [{ "from": "decompose", "to": "join" }, { "from": "implement", "to": "verify" }]
+                                       }
+                                       """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(TemplateSubtree)).Message, "declares edges of its own");
+    }
+
     [Test]
     public void Descendants_FollowsOutEdgesAndExcludesTheNodeItself()
     {

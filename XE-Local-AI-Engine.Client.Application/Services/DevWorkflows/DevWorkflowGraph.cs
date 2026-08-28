@@ -273,6 +273,16 @@ internal sealed class DevWorkflowGraph
             {
                 EnsureDeclared(materialization.TemplateNodeKey, $"The materialization on node '{node.NodeKey}' names template node");
                 EnsureDeclared(materialization.JoinNodeKey, $"The materialization on node '{node.NodeKey}' names join node");
+
+                // A template is cloned once per task and every edge its children get is synthesised at materialization,
+                // so it carries none of its own. The rule exists because the alternative HANGS rather than fails: a
+                // template's declared successor would be given a node run at run start, and then wait forever on an
+                // inbound edge whose source is the one node deliberately never instantiated.
+                if (InboundEdges(materialization.TemplateNodeKey).Count > 0 || OutboundEdges(materialization.TemplateNodeKey).Count > 0)
+                {
+                    throw new DevWorkflowValidationException($"Template node '{materialization.TemplateNodeKey}' declares edges of its own. A materialization "
+                                                             + "template is cloned once per task and its children's edges are generated, so the template itself must have none.");
+                }
             }
 
             if (node.JoinPolicy == DevWorkflowJoinPolicy.Any && InboundEdges(node.NodeKey).Count < 2)
@@ -294,15 +304,12 @@ internal sealed class DevWorkflowGraph
 
         EnsureAcyclic();
 
+        // Templates are exempt, and by the edge rule above they are exempt alone: a template has no subtree to carry in.
         var reachable = new HashSet<string>(Descendants(entries[0]), StringComparer.Ordinal)
         {
             entries[0]
         };
-        foreach (var templateKey in templateKeys)
-        {
-            reachable.UnionWith(Descendants(templateKey));
-            _ = reachable.Add(templateKey);
-        }
+        reachable.UnionWith(templateKeys);
 
         if (Nodes.Keys.FirstOrDefault(key => !reachable.Contains(key)) is { } orphan)
         {
