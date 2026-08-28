@@ -52,7 +52,8 @@ public sealed record DevWorkflowRunSummary(
     string? FailureClass,
     long? StartedAtUtc,
     long? EndedAtUtc,
-    long CreatedAtUtc);
+    long CreatedAtUtc,
+    long UpdatedAtUtc);
 
 public sealed record DevWorkflowRunSnapshot(
     Guid Id,
@@ -472,7 +473,19 @@ public interface IDevWorkflowStore
         int limit = 50,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<DevWorkflowRunSummary>> ListRunSummariesAsync(Guid workItemId, CancellationToken cancellationToken = default);
+    /// <summary>
+    ///     The run list, newest first, with each run's definition name and node counters. Two queries whatever the row
+    ///     count — the page, then one grouped pass over the node-runs of the listed runs — never one per row.
+    ///     <para>
+    ///         Both filters are optional: the work-item detail passes an id to embed that item's runs, and the run list
+    ///         page passes a status. <see cref="ListRunsAsync" /> answers the same rows without the joins, for the
+    ///         dispatcher's sweep, which needs neither name nor counters.
+    ///     </para>
+    /// </summary>
+    Task<IReadOnlyList<DevWorkflowRunSummary>> ListRunSummariesAsync(Guid? workItemId = null,
+        DevWorkflowRunStatus? status = null,
+        int limit = 50,
+        CancellationToken cancellationToken = default);
 
     Task<DevWorkflowMutationResult> TransitionRunAsync(TransitionDevWorkflowRunCommand command, CancellationToken cancellationToken = default);
 
@@ -545,3 +558,22 @@ public sealed class DevWorkflowConcurrencyException(string message, Exception? i
 public sealed class DevWorkflowInvalidTransitionException(string message) : InvalidOperationException(message);
 
 public sealed class DevWorkflowNotFoundException(string message) : InvalidOperationException(message);
+
+/// <summary>
+///     A work item that already has a live run was asked for a second one, or asked to be deleted. Its own conflict
+///     type rather than an invalid transition, because the answer is different: wait for the run, or cancel it.
+/// </summary>
+public sealed class DevWorkflowRunInFlightException(string message, Exception? innerException = null) : InvalidOperationException(message, innerException);
+
+/// <summary>
+///     A second human act on a gate that is already answered — a NEW operation id arriving at a decided node-run,
+///     which is not the idempotent replay a repeated one is.
+///     <para>
+///         <see cref="StandingDecision" /> travels with it so the API can tell the operator WHAT was decided instead
+///         of only that their click failed.
+///     </para>
+/// </summary>
+public sealed class DevWorkflowGateAlreadyDecidedException(string message, DevWorkflowDecisionKind standingDecision) : InvalidOperationException(message)
+{
+    public DevWorkflowDecisionKind StandingDecision { get; } = standingDecision;
+}

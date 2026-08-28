@@ -6,6 +6,7 @@ using Microsoft.IdentityModel.JsonWebTokens;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Automation;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -42,7 +43,8 @@ public sealed class DomainValidationExceptionHandler(ILogger<DomainValidationExc
             or PlaybookActionValidationException
             or AgentDefinitionValidationException
             or AgentSkillValidationException
-            or WorkSessionValidationException))
+            or WorkSessionValidationException
+            or DevWorkflowValidationException))
         {
             return false;
         }

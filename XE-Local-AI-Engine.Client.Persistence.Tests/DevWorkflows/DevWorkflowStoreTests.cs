@@ -162,7 +162,7 @@ public sealed class DevWorkflowStoreTests
         StartDevWorkflowRunCommand Second() =>
             new(Guid.NewGuid(), seed.WorkItemId, definition.Id, definition.Version, definition.GraphHash, DevWorkflowTestFixture.SampleGraph);
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() => store.StartRunAsync(Second()),
+        _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() => store.StartRunAsync(Second()),
                                  "A second live run on one work item must be rejected by the database, not by a racy read-modify-write.")
                           .ConfigureAwait(false);
 

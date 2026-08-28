@@ -127,7 +127,14 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 
         if (nodeRun.Status is not (DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked))
         {
-            throw new DevWorkflowInvalidTransitionException($"Node run '{nodeRun.NodeKey}' is {nodeRun.Status}, so there is nothing to decide on it.");
+            // A node run that moved BECAUSE it was already answered is a different refusal from one that was never
+            // waiting: the second click on a settled gate gets told what stands, rather than only that it failed. The
+            // operation id cannot say this — a new one is a new human act, which is exactly the case being refused.
+            var standing = (await _store.ListDecisionsAsync(runId, cancellationToken).ConfigureAwait(false))
+                .LastOrDefault(decision => decision.NodeRunId == nodeRunId && decision.Attempt == nodeRun.Attempt);
+            throw standing is not null
+                ? new DevWorkflowGateAlreadyDecidedException($"Node run '{nodeRun.NodeKey}' was already decided {standing.Decision}.", standing.Decision)
+                : new DevWorkflowInvalidTransitionException($"Node run '{nodeRun.NodeKey}' is {nodeRun.Status}, so there is nothing to decide on it.");
         }
 
         // The same table the dispatcher settles against, so the endpoint cannot accept an answer the runtime would then

@@ -435,12 +435,14 @@ internal sealed partial class DevWorkflowStore
                 var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken).ConfigureAwait(false);
 
                 // One decision per node-run ATTEMPT: a node-run legitimately accumulates several over its life, but not
-                // two for the same try.
-                if (await _dbContext.DevWorkflowDecisions
-                                    .AnyAsync(entity => entity.NodeRunId == nodeRun.Id && entity.Attempt == nodeRun.Attempt, cancellationToken)
-                                    .ConfigureAwait(false))
+                // two for the same try. The standing one is loaded rather than merely counted, because the caller that
+                // gets this refusal has to be able to say WHAT was already decided.
+                if (await _dbContext.DevWorkflowDecisions.AsNoTracking()
+                                    .FirstOrDefaultAsync(entity => entity.NodeRunId == nodeRun.Id && entity.Attempt == nodeRun.Attempt, cancellationToken)
+                                    .ConfigureAwait(false) is { } standing)
                 {
-                    throw new DevWorkflowInvalidTransitionException($"Node run '{nodeRun.Id}' already carries a decision for attempt {nodeRun.Attempt}.");
+                    throw new DevWorkflowGateAlreadyDecidedException($"Node run '{nodeRun.Id}' already carries a decision for attempt {nodeRun.Attempt}.",
+                        standing.Decision);
                 }
 
                 _dbContext.DevWorkflowDecisions.Add(new DevWorkflowDecision

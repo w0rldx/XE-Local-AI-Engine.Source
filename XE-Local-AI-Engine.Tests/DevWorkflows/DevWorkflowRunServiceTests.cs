@@ -69,8 +69,9 @@ public sealed class DevWorkflowRunServiceTests
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         _ = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                              harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())))
+        _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() =>
+                              harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())),
+                              "Its own conflict type, because the operator's next move differs from any other invalid transition: wait for the live run, or cancel it.")
                           .ConfigureAwait(false);
     }
 

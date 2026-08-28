@@ -332,10 +332,11 @@ internal sealed partial class DevWorkflowStore
         {
             await RollbackAsync(transaction).ConfigureAwait(false);
 
-            // ux_dev_workflow_runs_live_per_work_item is what rejects a second live run, and it is a transition
-            // problem (the work item already has one in flight), not a lost update.
-            throw new DevWorkflowInvalidTransitionException(
-                $"A live development workflow run already exists for work item '{command.WorkItemId}', or run '{command.RunId}' already exists. ({exception.GetBaseException().Message})");
+            // ux_dev_workflow_runs_live_per_work_item is what rejects a second live run. Its own type rather than a
+            // generic invalid transition, because the answer differs: wait for the live run, or cancel it.
+            throw new DevWorkflowRunInFlightException(
+                $"A live development workflow run already exists for work item '{command.WorkItemId}', or run '{command.RunId}' already exists. ({exception.GetBaseException().Message})",
+                exception);
         }
         catch
         {
@@ -380,26 +381,45 @@ internal sealed partial class DevWorkflowStore
         return [.. runs.Select(RunSnapshot)];
     }
 
-    public async Task<IReadOnlyList<DevWorkflowRunSummary>> ListRunSummariesAsync(Guid workItemId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<DevWorkflowRunSummary>> ListRunSummariesAsync(Guid? workItemId = null,
+        DevWorkflowRunStatus? status = null,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
     {
+        if (limit <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(limit), "A run list limit must be positive.");
+        }
+
+        var query = _dbContext.DevWorkflowRuns.AsNoTracking();
+        if (workItemId is { } owner)
+        {
+            query = query.Where(entity => entity.WorkItemId == owner);
+        }
+
+        if (status is { } wanted)
+        {
+            query = query.Where(entity => entity.Status == wanted);
+        }
+
         // No graph blob in the projection, and the same two-query posture as the work-item list.
-        var runs = await _dbContext.DevWorkflowRuns.AsNoTracking()
-                                   .Where(entity => entity.WorkItemId == workItemId)
-                                   .OrderByDescending(entity => entity.CreatedAtUtc)
-                                   .ThenByDescending(entity => entity.Id)
-                                   .Select(entity => new RunSummaryProjection(entity.Id,
-                                       entity.WorkItemId,
-                                       entity.DefinitionId,
-                                       _dbContext.DevWorkflowDefinitions.Where(definition => definition.Id == entity.DefinitionId)
-                                                 .Select(definition => definition.Name)
-                                                 .FirstOrDefault(),
-                                       entity.Status,
-                                       entity.FailureClass,
-                                       entity.StartedAtUtc,
-                                       entity.EndedAtUtc,
-                                       entity.CreatedAtUtc))
-                                   .ToListAsync(cancellationToken)
-                                   .ConfigureAwait(false);
+        var runs = await query.OrderByDescending(entity => entity.CreatedAtUtc)
+                              .ThenByDescending(entity => entity.Id)
+                              .Take(limit)
+                              .Select(entity => new RunSummaryProjection(entity.Id,
+                                  entity.WorkItemId,
+                                  entity.DefinitionId,
+                                  _dbContext.DevWorkflowDefinitions.Where(definition => definition.Id == entity.DefinitionId)
+                                            .Select(definition => definition.Name)
+                                            .FirstOrDefault(),
+                                  entity.Status,
+                                  entity.FailureClass,
+                                  entity.StartedAtUtc,
+                                  entity.EndedAtUtc,
+                                  entity.CreatedAtUtc,
+                                  entity.UpdatedAtUtc))
+                              .ToListAsync(cancellationToken)
+                              .ConfigureAwait(false);
 
         var counters = await LoadNodeCountersAsync([.. runs.Select(run => run.Id)], cancellationToken).ConfigureAwait(false);
         return
@@ -413,7 +433,8 @@ internal sealed partial class DevWorkflowStore
                 run.FailureClass,
                 run.StartedAtUtc,
                 run.EndedAtUtc,
-                run.CreatedAtUtc))
+                run.CreatedAtUtc,
+                run.UpdatedAtUtc))
         ];
     }
 
@@ -616,7 +637,8 @@ internal sealed partial class DevWorkflowStore
         string? FailureClass,
         long? StartedAtUtc,
         long? EndedAtUtc,
-        long CreatedAtUtc);
+        long CreatedAtUtc,
+        long UpdatedAtUtc);
 
     private sealed record NodeCounterRow(Guid RunId, Guid NodeRunId, DevWorkflowNodeRunStatus Status);
 }

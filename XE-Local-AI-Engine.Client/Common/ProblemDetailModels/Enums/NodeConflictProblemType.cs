@@ -80,5 +80,30 @@ public enum NodeConflictProblemType
     ///     supervisor moves the status while the state tools write tasks and findings), so this is ordinary rather than
     ///     exceptional: refresh and retry.
     /// </summary>
-    WorkSessionVersionConflict
+    WorkSessionVersionConflict,
+
+    /// <summary>
+    ///     A development-workflow command the run's or node-run's current status forbids — resuming one that is not
+    ///     paused, or deciding a node-run that is neither waiting for approval nor blocked. Re-read the run.
+    /// </summary>
+    DevWorkflowInvalidTransition,
+
+    /// <summary>
+    ///     A development-workflow write lost a race with a concurrent one. The dispatcher moves statuses while a human
+    ///     action writes a decision on the same run, so this is ordinary rather than exceptional: refresh and retry.
+    /// </summary>
+    DevWorkflowVersionConflict,
+
+    /// <summary>
+    ///     A second human act on a node-run that is already answered — a NEW operation id, which is not the idempotent
+    ///     replay a repeated one is. The body carries <c>standingDecision</c>, so the UI can say what was decided
+    ///     instead of only that the click failed.
+    /// </summary>
+    DevWorkflowGateAlreadyDecided,
+
+    /// <summary>
+    ///     The work item already has a run in flight, and v1 allows one at a time. Starting another, or deleting the
+    ///     work item, waits for that run to finish or cancels it first.
+    /// </summary>
+    DevWorkflowRunInFlight
 }

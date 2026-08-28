@@ -133,6 +133,11 @@ public sealed class DevWorkflowConditionTests
     [Arguments("""{"path":"a"}""", "needs an 'op'")]
     [Arguments("""{"path":"a","op":"eq"}""", "needs a 'value'")]
     [Arguments("\"a string\"", "must be an object")]
+
+    // A composite value is not a comparison Evaluate can refuse — it is one it can never make. Left to run time it
+    // would read as a dead edge, which is a hang with nothing in the log rather than an error anyone can act on.
+    [Arguments("""{"path":"a","op":"eq","value":{"nested":1}}""", "must be a scalar")]
+    [Arguments("""{"path":"a","op":"eq","value":[1,2]}""", "must be a scalar")]
     public void Parse_RejectsAConditionNobodyCouldPredictTheRoutingOf(string json, string expectedMessage)
     {
         using var document = JsonDocument.Parse(json);

@@ -122,7 +122,7 @@ public sealed class DevWorkflowNodeRunTests
                                             DecidedBySubject: "operator-subject"))
                                        .ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(
+        var alreadyDecided = await AssertEx.ThrowsAsync<DevWorkflowGateAlreadyDecidedException>(
                 () => store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(seed.RunId,
                     Guid.NewGuid(),
                     nodeRunId,
@@ -131,6 +131,9 @@ public sealed class DevWorkflowNodeRunTests
                     DevWorkflowDecisionKind.Approve)),
                 "A second decision on the SAME attempt must be rejected.")
             .ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowDecisionKind.Retry,
+            alreadyDecided.StandingDecision,
+            "The refusal carries the decision that already stands, so the API can say what happened rather than only that the click failed.");
 
         var retried = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
                                       nodeRunId,

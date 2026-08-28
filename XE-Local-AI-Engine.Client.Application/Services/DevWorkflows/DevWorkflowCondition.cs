@@ -149,9 +149,25 @@ internal sealed record DevWorkflowCondition(string Path, DevWorkflowConditionOpe
 
         // Cloned: the JsonDocument the graph was parsed from is disposed before the first tick evaluates anything.
         var value = element.TryGetProperty("value", out var valueElement) ? valueElement.Clone() : default;
-        if (op is not (DevWorkflowConditionOperator.Exists or DevWorkflowConditionOperator.NotExists) && value.ValueKind == JsonValueKind.Undefined)
+        if (op is DevWorkflowConditionOperator.Exists or DevWorkflowConditionOperator.NotExists)
+        {
+            return new DevWorkflowCondition(path, op, value);
+        }
+
+        if (value.ValueKind == JsonValueKind.Undefined)
         {
             throw new DevWorkflowValidationException($"The condition on edge {edgeDescription} uses '{op}' and so needs a 'value'.");
+        }
+
+        // A composite value is refused at authoring time rather than at run time, because Evaluate fails CLOSED: an
+        // incomparable pair reads as "no", so the edge silently never fires and the run hangs with nothing in the log
+        // to explain it. Scalars — including null, which compares equal to an explicit null — are left to Evaluate,
+        // whose refusals for them are deliberate and tested. This one is not a refusal but an absence: there is no
+        // comparison against an object or an array for it to make.
+        if (value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
+        {
+            throw new DevWorkflowValidationException($"The condition on edge {edgeDescription} compares against a {value.ValueKind}. "
+                                                     + "A condition value must be a scalar — a string, a number, a boolean or null.");
         }
 
         return new DevWorkflowCondition(path, op, value);

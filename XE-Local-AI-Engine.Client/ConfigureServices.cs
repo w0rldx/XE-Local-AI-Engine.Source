@@ -224,6 +224,7 @@ public static class ConfigureServices
                .AddExceptionHandler<TrainingExceptionHandler>()
                .AddExceptionHandler<BenchmarkExceptionHandler>()
                .AddExceptionHandler<WorkSessionNotFoundExceptionHandler>()
+               .AddExceptionHandler<DevWorkflowNotFoundExceptionHandler>()
                .AddExceptionHandler<DefaultExceptionHandler>();
         builder.Services.AddProblemDetails();
 

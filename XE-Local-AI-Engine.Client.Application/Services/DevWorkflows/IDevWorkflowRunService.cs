@@ -38,11 +38,14 @@ public sealed record DevWorkflowDecisionResult(DevWorkflowRunDetail Detail, DevW
 ///         a caller actually issues.
 ///     </para>
 ///     <para>
-///         Three exception types cross this boundary and nothing else, mirroring the work-session surface:
-///         <see cref="DevWorkflowNotFoundException" />, <see cref="DevWorkflowInvalidTransitionException" /> for a
-///         command the current status forbids (including a second live run on one work item), and
-///         <see cref="DevWorkflowValidationException" /> for bad input (including a repo-bound graph on a work item
-///         with no project).
+///         Three KINDS of failure cross this boundary and nothing else, mirroring the work-session surface:
+///         <see cref="DevWorkflowNotFoundException" /> (404), <see cref="DevWorkflowValidationException" /> for bad
+///         input including a repo-bound graph on a work item with no project (400), and three conflict types (409) —
+///         <see cref="DevWorkflowInvalidTransitionException" /> for a command the current status forbids,
+///         <see cref="DevWorkflowRunInFlightException" /> for a second live run on one work item, and
+///         <see cref="DevWorkflowGateAlreadyDecidedException" /> for a second human act on a decided node run. The
+///         three conflicts are separate types because the operator's next move differs for each; the API maps all
+///         three to 409 with distinct discriminators.
 ///     </para>
 /// </summary>
 public interface IDevWorkflowRunService

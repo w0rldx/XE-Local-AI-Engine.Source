@@ -40,6 +40,19 @@ internal enum DevWorkflowNodeAdmission
 /// </summary>
 internal static class DevWorkflowStateMachine
 {
+    /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
+    /// <summary>
+    ///     The output document a human gate produces for one answer — the document its out-edge conditions are then
+    ///     evaluated against. Written in ONE place because two callers ask questions of it: the dispatcher, when it
+    ///     routes an answer that has landed, and the API, when it tells the operator in advance whether a rejection has
+    ///     anywhere to go. A second spelling of this shape would make those two disagree in exactly the case that
+    ///     matters.
+    /// </summary>
+    public static string GateOutputJson(DevWorkflowDecisionKind decision) =>
+        JsonSerializer.Serialize(new GateOutput(DevWorkflowNodeOutputStatuses.Succeeded, decision.ToString()), JsonOptions);
+
     /// <summary>A node run nothing further will happen to on its own.</summary>
     public static bool IsTerminal(DevWorkflowNodeRunStatus status) =>
         status is DevWorkflowNodeRunStatus.Succeeded
@@ -344,4 +357,6 @@ internal static class DevWorkflowStateMachine
             return null;
         }
     }
+
+    private sealed record GateOutput(string Status, string Decision);
 }

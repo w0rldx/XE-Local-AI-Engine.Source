@@ -481,8 +481,10 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 },
                 decision == DevWorkflowDecisionKind.Retry);
 
+        // The gate's output shape lives with the state machine, because the API answers "does a rejection route
+        // anywhere" by evaluating these same edges against this same document before the operator clicks.
         static string Output(DevWorkflowDecisionKind decision) =>
-            JsonSerializer.Serialize(new GateOutput(DevWorkflowNodeOutputStatuses.Succeeded, decision.ToString()), JsonOptions);
+            DevWorkflowStateMachine.GateOutputJson(decision);
     }
 
     /// <summary>
@@ -970,8 +972,6 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     }
 
     private sealed record ReasonDetail(string Reason);
-
-    private sealed record GateOutput(string Status, string Decision);
 
     private sealed record InlineOutput(string Status, int Attempt, string? Branch);
 }
