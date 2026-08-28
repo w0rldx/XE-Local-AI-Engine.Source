@@ -2286,6 +2286,7 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse
 	externalConnectionId?: string | null;
 	externalConnectionName?: string | null;
 	declaredLocality?: string | null;
+	isReasoningEffortCapable?: boolean | null;
 	origin?: XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin | null;
 	modelContentFingerprint?: string | null;
 	template?: string | null;
@@ -2341,6 +2342,7 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
 	capabilities: Array<string>;
 	isReasoningCapable: boolean;
 	isNativeReasoningCapable?: boolean;
+	isReasoningEffortCapable?: boolean | null;
 	reasoningBudgetEnforceable?: boolean;
 	isToolCapable: boolean;
 	isMultimodalCapable?: boolean;

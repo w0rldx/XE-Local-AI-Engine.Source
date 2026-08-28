@@ -26551,6 +26551,10 @@
             "type": "string",
             "nullable": true
           },
+          "isReasoningEffortCapable": {
+            "type": "boolean",
+            "nullable": true
+          },
           "origin": {
             "nullable": true,
             "oneOf": [
@@ -26765,6 +26769,10 @@
           },
           "isNativeReasoningCapable": {
             "type": "boolean"
+          },
+          "isReasoningEffortCapable": {
+            "type": "boolean",
+            "nullable": true
           },
           "reasoningBudgetEnforceable": {
             "type": "boolean"
