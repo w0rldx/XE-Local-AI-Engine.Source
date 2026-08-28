@@ -26,6 +26,9 @@ export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): Mod
 		// Coalesce the optional generated booleans to false so a model that omits them is treated as not capable.
 		isReasoningModel: model.isReasoningCapable ?? false,
 		isNativeReasoningModel: model.isNativeReasoningCapable ?? false,
+		// Left UNDEFINED when the backend reports null, which is every provider but the external one: null means "not
+		// declared", and coalescing it to false would silently demote every graded local model to the binary control.
+		isReasoningEffortCapable: model.isReasoningEffortCapable ?? undefined,
 		isToolCapable: model.isToolCapable ?? false,
 		// Vision projector (mmproj) capability — drives whether the composer offers image attachments for this model.
 		isMultimodal: model.isMultimodalCapable ?? false,

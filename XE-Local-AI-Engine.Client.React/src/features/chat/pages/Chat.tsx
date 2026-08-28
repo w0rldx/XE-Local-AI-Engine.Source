@@ -62,18 +62,13 @@ import {
 	resolveLocalDefaultModelName,
 	toChatModelOptions,
 } from "@/features/chat/pages/ChatModelOptions";
+import { resolveAvailableReasoningEfforts } from "@/features/chat/pages/ChatReasoningEfforts";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
 import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
 import { useExternalModelOptions } from "@/features/chat/queries/useExternalModelOptions";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
-import {
-	binaryReasoningEfforts,
-	clampReasoningEffort,
-	codexReasoningEfforts,
-	reasoningEfforts,
-	useNodeChatPreferencesStore,
-} from "@/features/chat/stores/NodeChatPreferencesStore";
+import { clampReasoningEffort, useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 import { useCommands } from "@/features/commands/queries/useCommands";
 import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import { useVoicePlayback } from "@/features/voice/useVoicePlayback";
@@ -291,36 +286,16 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 			cloudModelOptions.find((option) => option.value === selectedModel),
 		[cloudModelOptions, modelOptions, selectedModel],
 	);
-	// Per-model capability gating: only offer the reasoning-effort menu when the active model
-	// advertises the Ollama `thinking` capability — otherwise collapse to ["none"] so the composer disables the
-	// menu (it disables at length <= 1) and a non-reasoning model can never send a stale effort. Tool controls
-	// gate on the model's `tools` capability (combined with the node-wide gate inside ChatInputArea).
-	const activeModelReasoningCapable = selectedModelOption?.isReasoningModel ?? false;
+	// Per-model capability gating: the tool controls gate on the model's `tools` capability (combined with the
+	// node-wide gate inside ChatInputArea), image attachment on its vision projector.
 	const activeModelToolCapable = selectedModelOption?.isToolCapable ?? false;
 	const activeModelMultimodal = selectedModelOption?.isMultimodal ?? false;
-	// Pick the right reasoning-effort set based on the active model's provider:
-	// - Cloud (Codex) models get the full OpenAI Responses vocabulary: none/minimal/low/medium/high/xhigh.
-	//   "minimal" and "xhigh" are Codex-only and must NEVER be offered for Ollama models.
-	// - Ollama models that advertise the `thinking` capability get the graded Ollama set: none/low/medium/high.
-	// - Every other model (native-reasoning, non-thinking Ollama, local default) gets binary On/Off: on/none.
-	//   On omits think so a model that reasons by default runs its built-in reasoning; Off sends think:false.
-	//
-	// NATIVE-reasoning models (harmony/gpt-oss, `isNativeReasoningModel`) belong in the BINARY bucket on purpose and
-	// are deliberately absent from the condition below. They reason on a template-baked channel with no graded switch,
-	// so offering none/low/medium/high would be a menu whose levels do nothing — and routing them through the graded
-	// path would send an `enable_thinking=false` their template has no kwarg for, breaking reasoning-off outright.
-	// Their capability is surfaced by the picker BADGE instead, which is what fixes the "gpt-oss cannot reason"
-	// misreport without touching this vocabulary.
 	const selectedModelIsCloud = selectedModelOption?.isCloud === true;
-	const availableReasoningEfforts = useMemo<ReasoningEffort[]>(() => {
-		if (selectedModelIsCloud) {
-			return [...codexReasoningEfforts];
-		}
-		if (activeModelReasoningCapable) {
-			return [...reasoningEfforts];
-		}
-		return [...binaryReasoningEfforts];
-	}, [activeModelReasoningCapable, selectedModelIsCloud]);
+	// Which effort vocabulary this model's provider actually honours — see ChatReasoningEfforts for the rule.
+	const availableReasoningEfforts = useMemo<ReasoningEffort[]>(
+		() => resolveAvailableReasoningEfforts(selectedModelOption),
+		[selectedModelOption],
+	);
 
 	// Build the live agent option list (sorted, excluding the Default Assistant by shared constant).
 	// Single derivation site — AgentSelectorCard receives this as a prop (no internal query call).
@@ -559,7 +534,9 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 			return deriveModelDisplay(selectedModelOption, selectedConcreteModelName).primary;
 		}
 
-		return selectedConcreteModelName.length > 0 ? deriveModelIdDisplay(selectedConcreteModelName).primary : "Local runtime default";
+		return selectedConcreteModelName.length > 0
+			? deriveModelIdDisplay(selectedConcreteModelName).primary
+			: "Local runtime default";
 	}, [selectedConcreteModelName, selectedModelOption]);
 	const isLoadingInitialConversations = conversationsIsLoading && displayConversations.length === 0;
 	const isCreatingConversation = createConversationMutation.isPending;

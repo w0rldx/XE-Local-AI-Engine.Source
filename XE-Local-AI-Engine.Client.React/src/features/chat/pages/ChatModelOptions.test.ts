@@ -100,7 +100,12 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 			model({ modelName: "qwen3:8b", isSelected: true, isReasoningCapable: true, isToolCapable: true }),
 		]);
 
-		expect(capabilities).toEqual({ isReasoningModel: true, isNativeReasoningModel: false, isToolCapable: true, isMultimodal: false });
+		expect(capabilities).toEqual({
+			isReasoningModel: true,
+			isNativeReasoningModel: false,
+			isToolCapable: true,
+			isMultimodal: false,
+		});
 	});
 
 	it("falls back to name-ascending order when no model is the node default and mod-times tie", () => {
@@ -110,7 +115,12 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 			model({ modelName: "gemma:12b", isReasoningCapable: false, isToolCapable: true }),
 		]);
 
-		expect(capabilities).toEqual({ isReasoningModel: false, isNativeReasoningModel: false, isToolCapable: true, isMultimodal: false });
+		expect(capabilities).toEqual({
+			isReasoningModel: false,
+			isNativeReasoningModel: false,
+			isToolCapable: true,
+			isMultimodal: false,
+		});
 	});
 
 	it("falls back to the most-recently-modified chat model, overriding name order", () => {
@@ -120,7 +130,12 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 			model({ modelName: "zeta", modifiedAtUtc: 2000, isReasoningCapable: true, isToolCapable: true }),
 		]);
 
-		expect(capabilities).toEqual({ isReasoningModel: true, isNativeReasoningModel: false, isToolCapable: true, isMultimodal: false });
+		expect(capabilities).toEqual({
+			isReasoningModel: true,
+			isNativeReasoningModel: false,
+			isToolCapable: true,
+			isMultimodal: false,
+		});
 	});
 
 	it("ignores non-chat models when resolving the default", () => {
@@ -129,7 +144,12 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 			model({ modelName: "qwen3:8b", isReasoningCapable: true, isToolCapable: false }),
 		]);
 
-		expect(capabilities).toEqual({ isReasoningModel: true, isNativeReasoningModel: false, isToolCapable: false, isMultimodal: false });
+		expect(capabilities).toEqual({
+			isReasoningModel: true,
+			isNativeReasoningModel: false,
+			isToolCapable: false,
+			isMultimodal: false,
+		});
 	});
 
 	it("excludes CodexOAuth provider entries from the resolved default", () => {
@@ -138,13 +158,23 @@ describe("resolveLocalDefaultModelCapabilities", () => {
 			model({ modelName: "gemma:12b", isReasoningCapable: false, isToolCapable: false }),
 		]);
 
-		expect(capabilities).toEqual({ isReasoningModel: false, isNativeReasoningModel: false, isToolCapable: false, isMultimodal: false });
+		expect(capabilities).toEqual({
+			isReasoningModel: false,
+			isNativeReasoningModel: false,
+			isToolCapable: false,
+			isMultimodal: false,
+		});
 	});
 
 	it("returns false capabilities when there are no chat models", () => {
 		const capabilities = resolveLocalDefaultModelCapabilities([]);
 
-		expect(capabilities).toEqual({ isReasoningModel: false, isNativeReasoningModel: false, isToolCapable: false, isMultimodal: false });
+		expect(capabilities).toEqual({
+			isReasoningModel: false,
+			isNativeReasoningModel: false,
+			isToolCapable: false,
+			isMultimodal: false,
+		});
 	});
 });
 
@@ -222,6 +252,21 @@ describe("external-provider containment (D10)", () => {
 		expect(option?.externalConnectionName).toBe("Unsloth box");
 		expect(option?.declaredLocality).toBe("local");
 		expect(option?.displayName).toBe("Qwen3 27B");
+	});
+
+	it("carries a declared graded-effort capability, and leaves it undeclared for every other provider", () => {
+		const [graded] = toExternalModelOptions([externalModel({ isReasoningCapable: true, isReasoningEffortCapable: true })], true);
+		const [binaryOnly] = toExternalModelOptions(
+			[externalModel({ isReasoningCapable: true, isReasoningEffortCapable: false })],
+			true,
+		);
+
+		expect(graded?.isReasoningEffortCapable).toBe(true);
+		expect(binaryOnly?.isReasoningEffortCapable).toBe(false);
+
+		// Undefined, not false: the backend reports null for a local model, and reading that as "no graded effort"
+		// would demote every thinking model to the binary control.
+		expect(toModelOption(model({ isReasoningCapable: true }), true).isReasoningEffortCapable).toBeUndefined();
 	});
 
 	it("leaves isCloud unset on external options so they never get the Codex effort vocabulary", () => {
