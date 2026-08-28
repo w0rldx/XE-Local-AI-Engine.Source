@@ -1371,7 +1371,8 @@
 			"loading": "Checking installed models",
 			"status": {
 				"ready": "{{installed}} local model(s) installed on this node.",
-				"empty": "No local models are installed yet, so this node cannot answer anything. Install one to get started."
+				"empty": "No local models are installed yet, so this node cannot answer anything. Install one to get started.",
+				"externalOnly": "No local models are installed, but this node can chat through a registered external provider."
 			},
 			"goToModels": "Install a model",
 			"goToChat": "Start chatting"

@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
+import { toExternalModelOptions } from "@/features/chat/pages/ChatModelOptions";
 import { isInstalledLocalModel } from "@/features/models/models/LocalModelMappers";
 
 /**
@@ -14,17 +15,23 @@ import { isInstalledLocalModel } from "@/features/models/models/LocalModelMapper
  *
  * It used to be a single centred word. That is the first screen a tester sees after declining the onboarding tour, on
  * a node that at that moment has no models installed and therefore cannot do anything yet — so the one thing the page
- * has to carry is the next action. Which next action depends on whether there are any local models, so the page asks.
+ * has to carry is the next action. Which next action depends on what this node can actually send to, so the page asks.
  * A failed or in-flight query is not a reason to show nothing: the model-acquisition route is offered either way,
  * because it is never the wrong place to go from here.
  */
 export function Home() {
 	const { t } = useTranslation();
 	const { data, isLoading } = useQuery(withResponseValidation(listLocalModelsOptions()));
+	const items = data?.items ?? [];
 	// External-provider registrations ride the same list but are not installed on this node, and the /models route this
-	// card points at does not list them — counting them here would promise models that page cannot show.
-	const installedCount = (data?.items ?? []).filter(isInstalledLocalModel).length;
+	// card points at does not list them — counting them as installed would promise models that page cannot show.
+	const installedCount = items.filter(isInstalledLocalModel).length;
 	const hasModels = installedCount > 0;
+	// They ARE a usable send path, though, and an external-only node is a supported shape. Counted with the chat
+	// page's own helper (chat-kind external registrations) so the two screens can never disagree about whether this
+	// node can answer anything; the second argument is the same `true` the picker passes — an external endpoint is
+	// reachable independently of the local runtime's availability flag.
+	const canChat = hasModels || toExternalModelOptions(items, true).length > 0;
 
 	return (
 		// The only centred, non-scrolling page in the app, but still a routed page: it goes through the shared
@@ -47,10 +54,15 @@ export function Home() {
 										t("pages.home.status.ready", "{{installed}} local model(s) installed on this node.", {
 											installed: installedCount,
 										})
-									: t(
-											"pages.home.status.empty",
-											"No local models are installed yet, so this node cannot answer anything. Install one to get started.",
-										)}
+									: canChat
+										? t(
+												"pages.home.status.externalOnly",
+												"No local models are installed, but this node can chat through a registered external provider.",
+											)
+										: t(
+												"pages.home.status.empty",
+												"No local models are installed yet, so this node cannot answer anything. Install one to get started.",
+											)}
 							</Text>
 						)}
 
@@ -58,13 +70,13 @@ export function Home() {
 							<Button
 								component={Link}
 								to="/models"
-								variant={hasModels ? "light" : "filled"}
+								variant={canChat ? "light" : "filled"}
 								leftSection={<IconDownload size={16} />}
 								data-testid="home-go-to-models"
 							>
 								{t("pages.home.goToModels", "Install a model")}
 							</Button>
-							{hasModels ? (
+							{canChat ? (
 								<Button component={Link} to="/chat" leftSection={<IconMessageCircle size={16} />} data-testid="home-go-to-chat">
 									{t("pages.home.goToChat", "Start chatting")}
 								</Button>

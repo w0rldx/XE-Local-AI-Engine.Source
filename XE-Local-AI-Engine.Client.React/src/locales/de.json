@@ -1371,7 +1371,8 @@
 			"loading": "Installierte Modelle werden geprüft",
 			"status": {
 				"ready": "{{installed}} lokale(s) Modell(e) auf diesem Knoten installiert.",
-				"empty": "Es ist noch kein lokales Modell installiert, daher kann dieser Knoten nichts beantworten. Installieren Sie eines, um zu starten."
+				"empty": "Es ist noch kein lokales Modell installiert, daher kann dieser Knoten nichts beantworten. Installieren Sie eines, um zu starten.",
+				"externalOnly": "Es ist kein lokales Modell installiert, dieser Knoten kann aber über einen registrierten externen Anbieter chatten."
 			},
 			"goToModels": "Modell installieren",
 			"goToChat": "Chat starten"
