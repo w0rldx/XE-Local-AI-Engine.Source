@@ -459,7 +459,9 @@ public sealed class DevWorkflowRunServiceTests
                                             "operator@localhost.test")))
                                     .ConfigureAwait(false);
 
-        AssertEx.Contains(refusal.Message, "re-attempts", message: "the refusal names the budget rather than only that something was illegal.");
+        AssertEx.Contains(refusal.Message,
+            "as many re-attempts as this run allows",
+            message: "this copy ships verbatim to the intervention panel, so it has to name the RUN's budget — the node's own cap is what a human Retry overrides.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked,
             (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status,
             "the node run is left exactly where it was.");

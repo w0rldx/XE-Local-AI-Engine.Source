@@ -205,8 +205,8 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
             var spent = (await _store.ListNodeRunsAsync(runId, cancellationToken).ConfigureAwait(false)).Sum(static row => row.Attempt - 1);
             if (spent >= _options.MaxTotalAttempts)
             {
-                throw new DevWorkflowInvalidTransitionException($"This run has already spent {spent} re-attempts, which is as many as this node allows, "
-                                                                + "so it cannot be retried again.");
+                throw new DevWorkflowInvalidTransitionException($"This run has already spent {spent} re-attempts, which is as many re-attempts as this run "
+                                                                + "allows, so it cannot be retried again.");
             }
         }
 

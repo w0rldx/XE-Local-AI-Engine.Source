@@ -162,7 +162,7 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
                 await BlockAsync(store,
                         nodeRun,
                         DevWorkflowFailureClasses.BudgetExhausted,
-                        $"This run has already spent {spent} re-attempts, which is as many as this node allows.",
+                        $"This run has already spent {spent} re-attempts, which is as many re-attempts as this run allows.",
                         cancellationToken)
                     .ConfigureAwait(false);
             }
