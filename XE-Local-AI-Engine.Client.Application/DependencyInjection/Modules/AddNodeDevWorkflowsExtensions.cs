@@ -41,6 +41,10 @@ internal static class AddNodeDevWorkflowsExtensions
         builder.Services.AddScoped<DevWorkflowArtifactPromotion>();
         builder.Services.AddScoped<DevWorkflowAgentExecutor>();
 
+        // BEFORE the dispatcher, and this module is added after work sessions: a node run that resumes must not find
+        // its session still holding a half-written turn, and the dispatcher must not admit rows this has not judged.
+        builder.Services.AddHostedService<DevWorkflowStartupReconciler>();
+
         // One instance serving three roles, the same pairing the work-session supervisor uses: a second instance would
         // hold its own signal channel, so half the signals would reach a loop that is not the one advancing runs.
         builder.Services.AddSingleton<DevWorkflowDispatcher>();

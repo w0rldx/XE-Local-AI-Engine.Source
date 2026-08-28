@@ -6,6 +6,7 @@ using XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
 public sealed class DevWorkflowServiceRegistrationTests
 {
@@ -50,6 +51,24 @@ public sealed class DevWorkflowServiceRegistrationTests
         AssertEx.True(developmentIndex >= 0, "The composition root must still call AddNodeDevelopment.");
         AssertEx.True(devWorkflowIndex > workSessionIndex, "AddNodeDevWorkflows must be invoked after AddNodeWorkSessions.");
         AssertEx.True(devWorkflowIndex > developmentIndex, "AddNodeDevWorkflows must be invoked after AddNodeDevelopment.");
+    }
+
+    /// <summary>
+    ///     Hosted services start in registration order, and this one is a hard ordering constraint rather than a
+    ///     preference: the reconciler makes stranded node runs dispatchable again, so a dispatcher that started first
+    ///     would sweep rows it has not judged yet. The other half — work sessions before workflows — is the module call
+    ///     order asserted above.
+    /// </summary>
+    [Test]
+    public void AddNodeDevWorkflows_RegistersTheReconcilerBeforeTheDispatcher()
+    {
+        var builder = Host.CreateApplicationBuilder();
+        _ = builder.AddNodeDevWorkflows(new ConfigurationBuilder().Build());
+
+        var hosted = builder.Services.Where(descriptor => descriptor.ServiceType == typeof(IHostedService)).ToList();
+        var reconciler = hosted.FindIndex(descriptor => descriptor.ImplementationType == typeof(DevWorkflowStartupReconciler));
+        AssertEx.True(reconciler >= 0, "The module must register the startup reconciler as a hosted service.");
+        AssertEx.Equal(expected: 1, hosted.Count - reconciler - 1, "The dispatcher is the only hosted service registered after the reconciler.");
     }
 
     /// <summary>

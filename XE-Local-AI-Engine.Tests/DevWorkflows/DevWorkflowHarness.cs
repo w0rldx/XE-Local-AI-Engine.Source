@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
+using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -34,6 +35,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     ///     <c>AdvanceSafelyAsync</c> rather than by this harness.
     /// </summary>
     private readonly TestServerWebAppFactory _factory;
+    private DevWorkflowDispatcher? _replacement;
 
     public DevWorkflowHarness(params (string Key, string Value)[] configuration)
     {
@@ -71,8 +73,11 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     /// </summary>
     public FakeDevWorkflowAgentSession Agent => (FakeDevWorkflowAgentSession)Services.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>();
 
-    /// <summary>The dispatcher under test. Resolved from the real container, so its wiring is under test too.</summary>
-    public DevWorkflowDispatcher Dispatcher => Services.GetRequiredService<DevWorkflowDispatcher>();
+    /// <summary>
+    ///     The dispatcher under test: the container's, or the one a simulated restart replaced it with. Resolved from
+    ///     the real container, so its wiring is under test too.
+    /// </summary>
+    public DevWorkflowDispatcher Dispatcher => _replacement ?? Services.GetRequiredService<DevWorkflowDispatcher>();
 
     public DevWorkflowGraphCache Graphs => Services.GetRequiredService<DevWorkflowGraphCache>();
 
@@ -95,8 +100,15 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
             Services.GetRequiredService<TimeProvider>(),
             Services.GetRequiredService<ILogger<DevWorkflowDispatcher>>());
 
-    public ValueTask DisposeAsync() =>
-        _factory.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        if (_replacement is { } replacement)
+        {
+            await replacement.DisposeAsync().ConfigureAwait(false);
+        }
+
+        await _factory.DisposeAsync().ConfigureAwait(false);
+    }
 
     /// <summary>Creates a work item, a definition on <paramref name="graphJson" />, and a run pinned to it.</summary>
     public async Task<Guid> StartRunAsync(string graphJson, string request = "Explain how the inference path works.")
@@ -281,6 +293,35 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         var nodeRun = await ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false);
         await using var scope = Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListConsumedArtifactIdsAsync(nodeRun.Id).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     A host restart, in the order the composition root registers it: the work-session reconciler terminalizes what
+    ///     it was driving, then the workflow one makes its node runs dispatchable again, then a fresh dispatcher takes
+    ///     over. Both reconcilers are constructed by hand because the test host strips every hosted service — which is
+    ///     why the ORDER is pinned by a registration test rather than observed here.
+    ///     <para>
+    ///         Everything the harness drives afterwards goes through the replacement, so a test reads like the restart
+    ///         it simulates: the same database, and a dispatcher that remembers nothing.
+    ///     </para>
+    /// </summary>
+    public async Task RestartAsync()
+    {
+        await Dispatcher.DisposeAsync().ConfigureAwait(false);
+
+        var scopes = Services.GetRequiredService<IServiceScopeFactory>();
+        await new WorkSessionStartupReconciler(scopes,
+                Services.GetRequiredService<IOptions<WorkSessionOptions>>(),
+                Services.GetRequiredService<ILogger<WorkSessionStartupReconciler>>())
+            .StartAsync(CancellationToken.None)
+            .ConfigureAwait(false);
+        await new DevWorkflowStartupReconciler(scopes,
+                Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+                Services.GetRequiredService<ILogger<DevWorkflowStartupReconciler>>())
+            .StartAsync(CancellationToken.None)
+            .ConfigureAwait(false);
+
+        _replacement = CreateReplacementDispatcher();
     }
 
     /// <summary>Moves the run itself, the way the run service's fire-and-forget commands will.</summary>
