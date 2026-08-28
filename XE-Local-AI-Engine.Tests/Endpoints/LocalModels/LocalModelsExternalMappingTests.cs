@@ -64,6 +64,22 @@ public sealed class LocalModelsExternalMappingTests
     }
 
     [Test]
+    public void ToExternalProviderModelResponses_SeparatesGradedEffortFromPlainReasoning()
+    {
+        var graded = LocalModelsMapper.ToExternalProviderModelResponses(
+            [Registration(ExternalProviderLocality.Local, supportsReasoning: true, supportsReasoningEffort: true)],
+            selectedModelName: null);
+        var binaryOnly = LocalModelsMapper.ToExternalProviderModelResponses(
+            [Registration(ExternalProviderLocality.Local, supportsReasoning: true)],
+            selectedModelName: null);
+
+        // Both models reason; only one honours reasoning_effort. Without this pair the composer offers a graded menu
+        // of levels to an endpoint that ignores every one of them.
+        AssertEx.Equal(expected: true, graded.Single().IsReasoningEffortCapable);
+        AssertEx.Equal(expected: false, binaryOnly.Single().IsReasoningEffortCapable);
+    }
+
+    [Test]
     public void ToExternalProviderModelResponses_ReportsADeclaredCloudConnectionAsCloud()
     {
         var responses = LocalModelsMapper.ToExternalProviderModelResponses([Registration(ExternalProviderLocality.Cloud)], selectedModelName: null);
@@ -107,6 +123,10 @@ public sealed class LocalModelsExternalMappingTests
             external);
 
         AssertEx.Equal("qwen3:8b", response.Items[0].ModelName);
+
+        // Undeclared, not false: a local model's graded control follows its Ollama `thinking` capability, and this
+        // field must never be read as an answer for a provider that never declared one.
+        AssertEx.Null(response.Items[0].IsReasoningEffortCapable);
         AssertEx.Equal(LocalModelProviders.External, response.Items[^1].Provider);
         AssertEx.Equal(expected: 1, response.Items.Count(static item => item.Provider == LocalModelProviders.External));
     }
@@ -168,7 +188,8 @@ public sealed class LocalModelsExternalMappingTests
     private static ExternalProviderModelRegistration Registration(ExternalProviderLocality locality,
         bool supportsTools = false,
         bool supportsVision = false,
-        bool supportsReasoning = false)
+        bool supportsReasoning = false,
+        bool supportsReasoningEffort = false)
     {
         return new ExternalProviderModelRegistration(new ExternalProviderConnectionDescriptor
             {
@@ -184,7 +205,8 @@ public sealed class LocalModelsExternalMappingTests
                 ContextLength = 32768,
                 SupportsTools = supportsTools,
                 SupportsVision = supportsVision,
-                SupportsReasoning = supportsReasoning
+                SupportsReasoning = supportsReasoning,
+                SupportsReasoningEffort = supportsReasoningEffort
             });
     }
 }

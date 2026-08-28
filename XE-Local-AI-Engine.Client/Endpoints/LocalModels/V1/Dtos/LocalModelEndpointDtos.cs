@@ -150,6 +150,20 @@ public sealed class LocalModelResponse
     public bool IsNativeReasoningCapable { get; init; }
 
     /// <summary>
+    ///     Whether a model that reasons also accepts a GRADED effort level, or only reasons or does not. Distinguishes
+    ///     the two shapes <see cref="IsReasoningCapable" /> alone conflates for an externally served model: an endpoint
+    ///     that honours <c>reasoning_effort</c> gets the graded selector, one that merely reasons gets the binary
+    ///     on/off control — offering levels it ignores is a menu whose entries do nothing.
+    ///     <para>
+    ///         <see langword="null" /> means "not declared", which is every non-external entry: a local model's graded
+    ///         control follows its Ollama <c>thinking</c> capability and a cloud provider's follows its own vocabulary,
+    ///         neither of which this field is allowed to change. Meaningful only together with
+    ///         <see cref="IsReasoningCapable" />.
+    ///     </para>
+    /// </summary>
+    public bool? IsReasoningEffortCapable { get; init; }
+
+    /// <summary>
     ///     True when llama.cpp can ENFORCE a per-request thinking budget for this model — its chat template renders a
     ///     literal reasoning end marker (<c>&lt;/think&gt;</c>, gemma-4's <c>&lt;channel|&gt;</c>, …), which is what
     ///     llama-server turns into the non-empty think-end-tag set its <c>reasoning_budget_tokens</c> gate requires.
@@ -267,6 +281,13 @@ public sealed class LocalModelDetailsResponse
 
     /// <summary>The declared trust locality (<see cref="LocalModelDeclaredLocalities" />), or null for a non-external entry.</summary>
     public string? DeclaredLocality { get; init; }
+
+    /// <summary>
+    ///     Whether a reasoning model also accepts a graded effort level; null when undeclared. Mirrors
+    ///     <see cref="LocalModelResponse.IsReasoningEffortCapable" /> for the same reason the four fields above are
+    ///     mirrored: a details view reached directly has no list entry to read it from.
+    /// </summary>
+    public bool? IsReasoningEffortCapable { get; init; }
 
     /// <summary>Typed acquisition provenance for an installed GGUF; null for legacy and non-GGUF models.</summary>
     public LocalModelOrigin? Origin { get; init; }

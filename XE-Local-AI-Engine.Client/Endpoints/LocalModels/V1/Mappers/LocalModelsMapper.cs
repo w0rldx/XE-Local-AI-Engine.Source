@@ -198,6 +198,10 @@ internal static class LocalModelsMapper
                 DetectedKind = ModelKind.Chat.ToString(),
                 Capabilities = [],
                 IsReasoningCapable = registration.Model.SupportsReasoning,
+
+                // The one capability pair only an external declaration can express: an endpoint that reasons but
+                // ignores `reasoning_effort` must get the binary control, not a graded menu of inert levels.
+                IsReasoningEffortCapable = registration.Model.SupportsReasoningEffort,
                 IsNativeReasoningCapable = false,
                 ReasoningBudgetEnforceable = true,
                 IsToolCapable = registration.Model.SupportsTools,

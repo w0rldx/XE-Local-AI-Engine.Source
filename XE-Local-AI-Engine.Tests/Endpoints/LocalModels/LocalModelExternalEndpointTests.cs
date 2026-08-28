@@ -88,6 +88,28 @@ public sealed class LocalModelExternalEndpointTests
         AssertEx.Equal("unsloth-box", details.ExternalConnectionId);
         AssertEx.Equal("Unsloth box", details.ExternalConnectionName);
         AssertEx.Equal(LocalModelDeclaredLocalities.Local, details.DeclaredLocality);
+
+        // Declared, and false: this endpoint reasons on its own terms and ignores reasoning_effort.
+        AssertEx.Equal(expected: false, details.IsReasoningEffortCapable);
+    }
+
+    [Test]
+    public async Task GetModelDetails_CarriesADeclaredGradedEffortCapability()
+    {
+        var trustResolver = Substitute.For<IModelTrustResolver>();
+        trustResolver.TryResolveExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                     .Returns(Registration(supportsReasoning: true, supportsReasoningEffort: true));
+        await using var factory = CreateFactory(trustResolver: trustResolver);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, $"/api/local/v1/models/{Uri.EscapeDataString(ModelId)}/details");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var details = await ReadJsonAsync<LocalModelDetailsResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // A details view reached directly has no list entry to read the capability from, so it has to carry its own.
+        AssertEx.Equal(expected: true, details.IsReasoningEffortCapable);
     }
 
     [Test]
@@ -156,7 +178,7 @@ public sealed class LocalModelExternalEndpointTests
             "the 409 envelope must carry the conflictType the SPA discriminates on");
     }
 
-    private static ExternalProviderModelRegistration Registration()
+    private static ExternalProviderModelRegistration Registration(bool supportsReasoning = false, bool supportsReasoningEffort = false)
     {
         return new ExternalProviderModelRegistration(new ExternalProviderConnectionDescriptor
             {
@@ -169,7 +191,9 @@ public sealed class LocalModelExternalEndpointTests
             {
                 WireId = "qwen3-27b",
                 DisplayName = "Qwen3 27B",
-                ContextLength = 32768
+                ContextLength = 32768,
+                SupportsReasoning = supportsReasoning,
+                SupportsReasoningEffort = supportsReasoningEffort
             });
     }
 

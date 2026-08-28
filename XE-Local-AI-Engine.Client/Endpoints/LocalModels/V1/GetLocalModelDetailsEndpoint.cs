@@ -129,7 +129,8 @@ public sealed class GetLocalModelDetailsEndpoint(
             ExternalConnectionName = registration.Connection.DisplayName,
             DeclaredLocality = registration.Connection.Locality == ExternalProviderLocality.Local
                 ? LocalModelDeclaredLocalities.Local
-                : LocalModelDeclaredLocalities.Cloud
+                : LocalModelDeclaredLocalities.Cloud,
+            IsReasoningEffortCapable = registration.Model.SupportsReasoningEffort
         }, ct).ConfigureAwait(false);
     }
 
