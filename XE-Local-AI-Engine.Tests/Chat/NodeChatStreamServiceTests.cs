@@ -3624,6 +3624,7 @@ public sealed class NodeChatStreamServiceTests
             providerResolver ?? CreateLocalModelProviderResolver(),
             gguf ?? CreateGgufModelCapabilityResolver(),
             Substitute.For<IActiveCloudChatClientFactory>(),
+            new FakeModelTrustResolver(),
             NullLogger<ModelCapabilityResolver>.Instance);
     }
 

@@ -31,6 +31,7 @@ type NavigationCapabilityKey =
 	| "images"
 	| "development"
 	| "cloudSettings"
+	| "externalProviders"
 	| "dashboard"
 	| "binding"
 	| "benchmarks"
@@ -101,9 +102,10 @@ const allNavigationLinks: INavigationLink[] = [
 			{ translationKey: "navigation.loadedModels", to: nodeRoutePaths.loadedModels, capability: "loadedModels" },
 		],
 	},
-	// Settings group: node settings (always) + cloud settings (gated on cloudSettings capability, which is on by
-	// default because Cloud Settings hosts the local cloud-provider credentials — Codex OAuth + Azure Foundry —
-	// and needs no Central Platform pairing). The group always renders (Node Settings + Diagnostics are ungated).
+	// Settings group: node settings (always) + cloud settings + external providers (each gated on its own capability,
+	// both on by default — Cloud Settings hosts the local cloud-provider credentials (Codex OAuth + Azure Foundry) and
+	// External Providers the operator's own OpenAI-compatible endpoints; neither needs a Central Platform pairing).
+	// The group always renders (Node Settings + Diagnostics are ungated).
 	{
 		id: "settings",
 		icon: IconSettings,
@@ -111,6 +113,7 @@ const allNavigationLinks: INavigationLink[] = [
 		links: [
 			{ translationKey: "navigation.nodeSettings", to: nodeRoutePaths.nodeSettings },
 			{ translationKey: "navigation.cloudSettings", to: nodeRoutePaths.cloudSettings, capability: "cloudSettings" },
+			{ translationKey: "navigation.externalProviders", to: nodeRoutePaths.externalProviders, capability: "externalProviders" },
 			{ translationKey: "navigation.diagnostics", to: nodeRoutePaths.diagnostics },
 		],
 	},

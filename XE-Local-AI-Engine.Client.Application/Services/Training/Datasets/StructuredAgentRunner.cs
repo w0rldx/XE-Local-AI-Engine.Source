@@ -80,6 +80,8 @@ public sealed class StructuredAgentRunner(
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
 
+        TrainingModelEligibility.EnsureNotExternal(request.ModelName, "dataset generation teachers");
+
         var (supportsThinking, _, isCloud) = await _capabilityResolver.ResolveAsync(request.ModelName, cancellationToken).ConfigureAwait(false);
         if (isCloud)
         {

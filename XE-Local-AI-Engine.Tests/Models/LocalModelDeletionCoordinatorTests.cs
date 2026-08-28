@@ -227,6 +227,11 @@ public sealed class LocalModelDeletionCoordinatorTests
 
     private sealed class TestProviderMapStore : ICoordinatedModelProviderMapStore
     {
+        // Not a reconciliation fixture: only the external-provider pass enumerates the whole map, and this double
+        // exists to drive a single model's leased path.
+        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("This test double does not enumerate the provider map.");
+
         private readonly Dictionary<string, ModelProviderMapRecord> _rows = new(StringComparer.OrdinalIgnoreCase);
 
         public void Seed(string modelName) =>

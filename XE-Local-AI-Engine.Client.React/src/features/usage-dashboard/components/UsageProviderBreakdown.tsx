@@ -10,7 +10,14 @@ import { providerColor, providerLabel } from "@/features/usage-dashboard/models/
 // Per-provider breakdown: a token-share donut beside a compact per-provider table (runs + total tokens). Providers
 // with zero tokens are dropped from the donut (a zero slice renders nothing) but kept in the table so their run
 // count is still visible.
-export function UsageProviderBreakdown({ byProvider }: { readonly byProvider: readonly ProviderTotalsDto[] }) {
+export function UsageProviderBreakdown({
+	byProvider,
+	externalConnectionNames,
+}: {
+	readonly byProvider: readonly ProviderTotalsDto[];
+	// External connection id → display name, resolved by the page. Absent ids render as the bare "External".
+	readonly externalConnectionNames?: ReadonlyMap<string, string>;
+}) {
 	const { t } = useTranslation();
 
 	const donutData = useMemo(
@@ -18,11 +25,11 @@ export function UsageProviderBreakdown({ byProvider }: { readonly byProvider: re
 			byProvider
 				.filter((entry) => entry.totalTokens > 0)
 				.map((entry) => ({
-					name: providerLabel(entry.provider, t),
+					name: providerLabel(entry.provider, t, externalConnectionNames),
 					value: entry.totalTokens,
 					color: providerColor(entry.provider),
 				})),
-		[byProvider, t],
+		[byProvider, externalConnectionNames, t],
 	);
 
 	const rows = useMemo(
@@ -65,7 +72,7 @@ export function UsageProviderBreakdown({ byProvider }: { readonly byProvider: re
 							<Table.Tbody>
 								{rows.map((entry) => (
 									<Table.Tr key={entry.provider} data-testid={`usage-provider-row-${entry.provider}`}>
-										<Table.Td>{providerLabel(entry.provider, t)}</Table.Td>
+										<Table.Td>{providerLabel(entry.provider, t, externalConnectionNames)}</Table.Td>
 										<Table.Td>{formatCount(entry.runCount)}</Table.Td>
 										<Table.Td>
 											<Text aria-label={formatCount(entry.totalTokens)}>{formatTokensCompact(entry.totalTokens)}</Text>

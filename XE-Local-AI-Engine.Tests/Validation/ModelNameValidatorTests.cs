@@ -104,6 +104,44 @@ public sealed class ModelNameValidatorTests
     }
 
     [Test]
+    [Arguments("ext:unsloth-box/qwen3")]
+    // A wire id may carry the slash and colon real remote ids use — the exact shapes the general allow-pattern rejects.
+    [Arguments("ext:box/unsloth/Qwen3.8-27B-GGUF")]
+    [Arguments("ext:box/llama3:8b")]
+    [Arguments("ext:b/org/model:Q4_K_M")]
+    public void IsValid_WhenNameIsAnExternalModelId_ReturnsTrue(string modelName)
+    {
+        AssertEx.True(_validator.IsValid(modelName));
+    }
+
+    [Test]
+    [Arguments("ext:")]
+    [Arguments("ext:box")]
+    [Arguments("ext:box/")]
+    [Arguments("ext:BAD_SLUG/model")]
+    [Arguments("ext:box/../etc/passwd")]
+    [Arguments("ext:box/has space")]
+    [Arguments("ext:box/back\\slash")]
+    [Arguments("ext:box/http://evil.example/model")]
+    public void IsValid_WhenExternalIdViolatesTheNamespacedGrammar_ReturnsFalse(string modelName)
+    {
+        AssertEx.False(_validator.IsValid(modelName));
+    }
+
+    [Test]
+    public void IsValid_ExternalIdLengthBound_IsRaisedForExtIdsOnly()
+    {
+        // The 165-char ceiling exists because ext: ids are structurally longer than any other provider's; it must NOT
+        // leak into the general bound, or the raised limit would be a hole rather than a scoped widening.
+        var external = "ext:" + new string(c: 'a', count: 32) + "/" + new string(c: 'b', count: 128);
+        AssertEx.Equal(165, external.Length);
+
+        AssertEx.True(_validator.IsValid(external));
+        AssertEx.False(_validator.IsValid(external + "b"));
+        AssertEx.False(_validator.IsValid(new string(c: 'a', count: 151)));
+    }
+
+    [Test]
     public void GetValidationError_WhenNameIsValid_ReturnsNull()
     {
         AssertEx.Null(_validator.GetValidationError("qwen3.5:0.8b"));

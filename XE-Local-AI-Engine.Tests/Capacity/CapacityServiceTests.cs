@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
+using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -75,6 +76,49 @@ public sealed class CapacityServiceTests
         AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
         AssertEx.False(harness.LaunchAdmissions.Snapshot(Model, ModelRole.Chat).HasRequestedKey);
         await harness.RuntimeAudit.DidNotReceive().GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await harness.FootprintProvider.DidNotReceive()
+                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<int?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Capacity_WhenExternalProviderModel_ReturnsAllow_WithoutProbeOrReservation()
+    {
+        // An external OpenAI-compatible model runs on someone else's hardware: no process, no weights, no RAM/VRAM. It
+        // must be admitted without a probe — and it MUST be admitted, because the footprint provider has no GGUF to
+        // size, so the byte-budget path would otherwise reject every such send as "footprint could not be determined".
+        var harness = new Harness
+        {
+            ProviderName = ExternalProviderConstants.ProviderName
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync("ext:unsloth-box/unsloth/Qwen3.8-27B-GGUF", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.False(decision.OllamaEvictionWarning);
+        AssertEx.Null(decision.Reservation);
+        AssertEx.Equal(ResourceFootprint.Zero, harness.Ledger.Reserved);
+        await harness.RuntimeAudit.DidNotReceive().GetAuditAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await harness.FootprintProvider.DidNotReceive()
+                     .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<int?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Capacity_WhenExternalIdHasNoProviderMapRowYet_StillAllows()
+    {
+        // The backstop branch: between the encrypted-store commit and the provider-map sync (or before reconciliation
+        // repairs a lost row) an ext: id default-routes to "llamacpp" and would be rejected on a footprint it can never
+        // have. The id's scheme alone is enough to know no local capacity is consumed.
+        var harness = new Harness
+        {
+            ProviderName = Llamacpp
+        };
+        var service = harness.Build();
+
+        var decision = await service.DecideAsync("ext:unsloth-box/qwen3", ModelRole.Chat, CancellationToken.None);
+
+        AssertEx.Equal(CapacityVerdict.Allow, decision.Verdict);
+        AssertEx.Null(decision.Reservation);
         await harness.FootprintProvider.DidNotReceive()
                      .ResolveFootprintAsync(Arg.Any<string>(), Arg.Any<ModelRole>(), Arg.Any<HardwareProfile>(), Arg.Any<int?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
     }

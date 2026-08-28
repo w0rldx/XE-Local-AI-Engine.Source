@@ -4,9 +4,10 @@ using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
-///     The model picker's whole catalog, gathered from four independent sources that each degrade on their own.
+///     The model picker's whole catalog, gathered from five independent sources that each degrade on their own.
 ///     Everything here is raw material for the list mapper — no source failure ever fails the catalog.
 /// </summary>
 /// <param name="OllamaModels">
@@ -25,6 +26,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 ///     The stored Azure Foundry connection, if any. Unlike Codex this does not gate on a live session: a saved
 ///     connection's deployments are always offered (routing stays selected-model-driven).
 /// </param>
+/// <param name="ExternalModels">
+///     Every model registered on an operator-configured external OpenAI-compatible connection, key-free. Like the
+///     Azure deployments these are offered on the strength of the registration alone: reachability is the health
+///     surface's job, and a picker that hid a model whenever its endpoint was briefly down would be unusable.
+/// </param>
 public sealed record LocalModelCatalog(
     string? SelectedModelName,
     string? ConfiguredDefaultModelName,
@@ -32,11 +38,13 @@ public sealed record LocalModelCatalog(
     IReadOnlyDictionary<string, ModelClassificationResult> Classifications,
     IReadOnlyList<LocalModelDescriptor> InstalledGgufModels,
     bool HasUsableCodexSession,
-    StoredAzureFoundryConnection? AzureFoundryConnection);
+    StoredAzureFoundryConnection? AzureFoundryConnection,
+    IReadOnlyList<ExternalProviderModelRegistration> ExternalModels);
 
 /// <summary>
-///     Aggregates the model picker's four independent sources (Ollama, installed GGUF, Codex, Azure Foundry) and owns
-///     the per-source degradation policy, so the list endpoint stays a single call plus a mapping.
+///     Aggregates the model picker's five independent sources (Ollama, installed GGUF, Codex, Azure Foundry, external
+///     OpenAI-compatible connections) and owns the per-source degradation policy, so the list endpoint stays a single
+///     call plus a mapping.
 /// </summary>
 public interface ILocalModelCatalogService
 {

@@ -40,6 +40,15 @@ internal sealed class UsageProviderResolver : IUsageProviderResolver
             return AgentUsageProviders.Unknown;
         }
 
+        // An external model is attributed to its own connection, checked FIRST: an ext: id falls through cloud
+        // selection by design, and the local lookup below would then label the turn "unknown" — losing the one piece of
+        // attribution an operator running several endpoints actually needs. Pure string parsing, so it costs nothing
+        // and cannot throw out of terminalization.
+        if (UsageProviderClassifier.ClassifyExternal(modelName) is { } externalProvider)
+        {
+            return externalProvider;
+        }
+
         // Cloud takes precedence: a turn that reached a selected cloud provider is attributed there. Snapshot-cached and
         // synchronous, but guarded anyway — attribution must never throw out of terminalization.
         string? cloudProviderName;

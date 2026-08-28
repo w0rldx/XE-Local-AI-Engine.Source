@@ -6,9 +6,7 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Tokenization;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
-// Aliased (not a blanket `using OpenAI.Chat`) so OpenAI.Chat.ChatMessage never collides with the MEAI ChatMessage this
-// client's IChatClient signatures use — a blanket import makes ChatMessage ambiguous and breaks the interface impl.
-using ChatCompletionOptions = OpenAI.Chat.ChatCompletionOptions;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 
 /// <summary>
 ///     An <see cref="IChatClient" /> that defers process start to first use: the supervisor's
@@ -53,8 +51,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     internal const string ReasoningBudgetMarkerKey = "xe.llama.reasoning_budget_tokens";
 
     // The raw utf8 JSON object written at $.chat_template_kwargs. The OpenAI chat body has no typed field for it, so it
-    // rides the wire via ChatCompletionOptions.Patch — MEAI's OpenAI adapter uses the ChatCompletionOptions returned by
-    // ChatOptions.RawRepresentationFactory as its serialization base, Patch included (verified against MEAI 10.7).
+    // rides the wire through OpenAICompatibleRequestBody — MEAI's OpenAI adapter uses the request body returned by
+    // ChatOptions.RawRepresentationFactory as its serialization base, patch included (verified against MEAI 10.7).
     private static ReadOnlySpan<byte> DisableThinkingKwargs => "{\"enable_thinking\":false}"u8;
 
     private readonly SemaphoreSlim _initGate = new(initialCount: 1, maxCount: 1);
@@ -241,11 +239,11 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
 
     /// <summary>
     ///     When the turn carries the <see cref="DisableThinkingMarkerKey" /> marker (reasoning OFF on a thinking-capable
-    ///     model), returns a clone of <paramref name="options" /> whose <see cref="ChatOptions.RawRepresentationFactory" />
-    ///     yields a <see cref="ChatCompletionOptions" /> with <c>chat_template_kwargs.enable_thinking=false</c> patched in,
-    ///     so the switch reaches llama-server on the wire. Without the marker the options are returned
-    ///     unchanged, so every other request is byte-identical. A pre-existing <see cref="ChatOptions.RawRepresentationFactory" />
-    ///     (none is set on the llama.cpp path today) is composed rather than dropped.
+    ///     model), returns a clone of <paramref name="options" /> whose request body carries
+    ///     <c>chat_template_kwargs.enable_thinking=false</c>, so the switch reaches llama-server on the wire. Without the
+    ///     marker the options are returned unchanged, so every other request is byte-identical. A pre-existing
+    ///     <see cref="ChatOptions.RawRepresentationFactory" /> (none is set on the llama.cpp path today) is composed
+    ///     rather than dropped — see <see cref="OpenAICompatibleRequestBody.Chain" />.
     /// </summary>
     internal static ChatOptions? ApplyThinkingSwitch(ChatOptions? options)
     {
@@ -263,32 +261,17 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             return options;
         }
 
-        var priorFactory = options.RawRepresentationFactory;
-        var patched = options.Clone();
-        patched.RawRepresentationFactory = client =>
-        {
-            var baseOptions = priorFactory?.Invoke(client) as ChatCompletionOptions ?? new ChatCompletionOptions();
-            // SCME0001: ChatCompletionOptions.Patch (System.ClientModel JsonPatch) is [Experimental] in the pinned OpenAI
-            // 2.11 SDK. It is the ONLY seam that serializes an arbitrary top-level body field (the OpenAI chat schema has
-            // no typed chat_template_kwargs), and MEAI's OpenAI adapter serializes the ChatCompletionOptions this factory
-            // returns, Patch included — so the switch reaches llama-server. Suppress is scoped to this one call, mirroring
-            // the MAAI001 pattern (docs/agent-knowledge.md §4).
-#pragma warning disable SCME0001
-            baseOptions.Patch.Set("$.chat_template_kwargs"u8, DisableThinkingKwargs);
-#pragma warning restore SCME0001
-            return baseOptions;
-        };
-        return patched;
+        return OpenAICompatibleRequestBody.Chain(options,
+            static body => OpenAICompatibleRequestBody.SetRawField(body, "$.chat_template_kwargs", DisableThinkingKwargs));
     }
 
     /// <summary>
     ///     When the turn carries the <see cref="ReasoningBudgetMarkerKey" /> marker (an explicit graded reasoning effort
-    ///     on a thinking-capable model), returns a clone of <paramref name="options" /> whose
-    ///     <see cref="ChatOptions.RawRepresentationFactory" /> yields a <see cref="ChatCompletionOptions" /> with
-    ///     <c>reasoning_budget_tokens</c> patched in, so llama-server caps the reasoning phase instead of letting it run
-    ///     until the context window is exhausted. Without the marker the options are returned unchanged, so every other
-    ///     request is byte-identical. A pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> (the thinking
-    ///     switch above sets one) is composed rather than dropped.
+    ///     on a thinking-capable model), returns a clone of <paramref name="options" /> whose request body carries
+    ///     <c>reasoning_budget_tokens</c>, so llama-server caps the reasoning phase instead of letting it run until the
+    ///     context window is exhausted. Without the marker the options are returned unchanged, so every other request is
+    ///     byte-identical. A pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> (the thinking switch above
+    ///     sets one) is composed rather than dropped.
     ///     <para>
     ///         Semantics at the pinned build b10201 (<c>tools/server/server-common.cpp</c>
     ///         <c>oaicompat_chat_params_parse</c>): the per-request value overrides the launch-time
@@ -306,19 +289,8 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
         }
 
         var budgetTokens = ClampToGenerationRoom(markerTokens, options!);
-        var priorFactory = options!.RawRepresentationFactory;
-        var patched = options.Clone();
-        patched.RawRepresentationFactory = client =>
-        {
-            var baseOptions = priorFactory?.Invoke(client) as ChatCompletionOptions ?? new ChatCompletionOptions();
-            // SCME0001: same scoped suppression as ApplyThinkingSwitch above — ChatCompletionOptions.Patch is the only
-            // seam that serializes a body field the typed OpenAI chat schema does not model.
-#pragma warning disable SCME0001
-            baseOptions.Patch.Set("$.reasoning_budget_tokens"u8, budgetTokens);
-#pragma warning restore SCME0001
-            return baseOptions;
-        };
-        return patched;
+        return OpenAICompatibleRequestBody.Chain(options!,
+            body => OpenAICompatibleRequestBody.SetField(body, "$.reasoning_budget_tokens", budgetTokens));
     }
 
     /// <summary>
@@ -371,8 +343,7 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     ///     When the turn sets any sampling knob the MEAI OpenAI adapter does not map — <see cref="ChatOptions.TopK" />,
     ///     or <see cref="SamplingOptionKeys.MinP" /> / <see cref="SamplingOptionKeys.RepeatPenalty" /> /
     ///     <see cref="SamplingOptionKeys.RepeatLastN" /> on <see cref="ChatOptions.AdditionalProperties" /> — returns a
-    ///     clone of <paramref name="options" /> whose <see cref="ChatOptions.RawRepresentationFactory" /> yields a
-    ///     <see cref="ChatCompletionOptions" /> with those knobs patched in as top-level body fields, so they reach
+    ///     clone of <paramref name="options" /> whose request body carries those knobs as top-level fields, so they reach
     ///     llama-server on the wire. With none of them set the options are returned unchanged, so every other request is
     ///     byte-identical. A pre-existing <see cref="ChatOptions.RawRepresentationFactory" /> (the thinking switch above
     ///     sets one) is composed rather than dropped.
@@ -411,37 +382,29 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             return options;
         }
 
-        var priorFactory = options.RawRepresentationFactory;
-        var patched = options.Clone();
-        patched.RawRepresentationFactory = client =>
-        {
-            var baseOptions = priorFactory?.Invoke(client) as ChatCompletionOptions ?? new ChatCompletionOptions();
-            // SCME0001: same scoped suppression as ApplyThinkingSwitch above — ChatCompletionOptions.Patch is the only
-            // seam that serializes a body field the typed OpenAI chat schema does not model.
-#pragma warning disable SCME0001
-            if (topK is { } resolvedTopK)
+        return OpenAICompatibleRequestBody.Chain(options,
+            body =>
             {
-                baseOptions.Patch.Set("$.top_k"u8, resolvedTopK);
-            }
+                if (topK is { } resolvedTopK)
+                {
+                    OpenAICompatibleRequestBody.SetField(body, "$.top_k", resolvedTopK);
+                }
 
-            if (minP is { } resolvedMinP)
-            {
-                baseOptions.Patch.Set("$.min_p"u8, resolvedMinP);
-            }
+                if (minP is { } resolvedMinP)
+                {
+                    OpenAICompatibleRequestBody.SetField(body, "$.min_p", resolvedMinP);
+                }
 
-            if (repeatPenalty is { } resolvedRepeatPenalty)
-            {
-                baseOptions.Patch.Set("$.repeat_penalty"u8, resolvedRepeatPenalty);
-            }
+                if (repeatPenalty is { } resolvedRepeatPenalty)
+                {
+                    OpenAICompatibleRequestBody.SetField(body, "$.repeat_penalty", resolvedRepeatPenalty);
+                }
 
-            if (repeatLastN is { } resolvedRepeatLastN)
-            {
-                baseOptions.Patch.Set("$.repeat_last_n"u8, resolvedRepeatLastN);
-            }
-#pragma warning restore SCME0001
-            return baseOptions;
-        };
-        return patched;
+                if (repeatLastN is { } resolvedRepeatLastN)
+                {
+                    OpenAICompatibleRequestBody.SetField(body, "$.repeat_last_n", resolvedRepeatLastN);
+                }
+            });
     }
 
     private static float? TryReadSingle(AdditionalPropertiesDictionary? properties, string key)

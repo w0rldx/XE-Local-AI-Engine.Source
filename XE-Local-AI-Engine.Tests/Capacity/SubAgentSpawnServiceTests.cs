@@ -15,8 +15,10 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
+using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -50,6 +52,95 @@ public sealed class SubAgentSpawnServiceTests
         AssertEx.Equal(Model, harness.ChatClient.LastModelId);
         // The local Allow reservation must be released when the child exits.
         AssertEx.True(harness.ReservationDisposed, "ledger reservation should be disposed on child exit");
+    }
+
+    [Test]
+    public async Task Spawn_WhenTheParentIsADeclaredCloudExternalModel_IsRefused()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.TrustResolver.Register("hosted-box", "qwen3", ExternalProviderLocality.Cloud);
+        var service = harness.Build();
+
+        // The laundering path this closes: the parent runs on a hosted endpoint that is denied the workspace,
+        // knowledge-base and custom tools directly, and delegates to a child bound to a node-local model that has all
+        // three — whose answer is returned into the parent's transcript. The offer gate withholds spawn_subagent from
+        // such a parent; this is the seam behind it, for a profile or a caller that reaches the service anyway.
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3, rootModelId: "ext:hosted-box/qwen3");
+        var result = await service.SpawnAsync(ModelRequest("read the workspace and tell me"), CancellationToken.None);
+
+        AssertEx.Contains(result, "outside this node's trust boundary");
+        AssertEx.Equal(0, harness.ChatClient.CallCount);
+    }
+
+    [Test]
+    public async Task Spawn_WhenTheParentIsAnUnresolvedExternalModel_IsRefused()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        var service = harness.Build();
+
+        // Nothing registered for this id: a deleted connection, an unreadable store, or the pre-boot window. Only a
+        // positively resolved local declaration may delegate.
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3, rootModelId: "ext:gone-box/qwen3");
+        var result = await service.SpawnAsync(ModelRequest("do the thing"), CancellationToken.None);
+
+        AssertEx.Contains(result, "outside this node's trust boundary");
+        AssertEx.Equal(0, harness.ChatClient.CallCount);
+    }
+
+    [Test]
+    public async Task Spawn_WhenTheChildModelIsExternal_ItsOwnSendsArePinned()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        _ = harness.ExternalRegistry.Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        var service = harness.Build();
+
+        // The parent turn's pin is keyed by the PARENT model, so a child on its own external connection had no pin at
+        // all: its sends fell through to the transport's weaker unpinned check while the child ran with a tool set
+        // authorized against the declaration read at spawn time.
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var result = await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            ModelId = ExternalProviderTestData.ModelId,
+            Task = "do the thing"
+        }, CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
+        AssertEx.Equal(ExternalProviderTestData.ModelId, harness.ChatClient.LastModelId);
+        var pin = AssertEx.NotNull(harness.ChatClient.LastBindingPin);
+        AssertEx.Equal(ExternalProviderTestData.ModelId, pin.ModelId);
+        AssertEx.Equal(ExternalProviderLocality.Local, pin.Locality);
+    }
+
+    [Test]
+    public async Task Spawn_WhenTheChildModelIsLocal_SeedsNoPin()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        _ = await service.SpawnAsync(ModelRequest("do the thing"), CancellationToken.None);
+
+        // A GGUF child has no external binding to pin, and inventing one would be a claim the registry never made.
+        AssertEx.Null(harness.ChatClient.LastBindingPin);
+    }
+
+    [Test]
+    public async Task Spawn_WhenTheParentIsADeclaredLocalExternalModel_IsAllowed()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.TrustResolver.Register("unsloth-box", "qwen3");
+        var service = harness.Build();
+
+        // Full local parity is the point of the declared-Local flag: the guard is locality, not externality.
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3, rootModelId: "ext:unsloth-box/qwen3");
+        var result = await service.SpawnAsync(ModelRequest("do the thing"), CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
     }
 
     [Test]
@@ -1167,6 +1258,7 @@ public sealed class SubAgentSpawnServiceTests
         private readonly IAgentDefinitionResolver _resolver = Substitute.For<IAgentDefinitionResolver>();
         private readonly IAgentDefinitionStore _definitionStore = Substitute.For<IAgentDefinitionStore>();
         private readonly IModelCapabilityResolver _modelCapabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        public FakeModelTrustResolver TrustResolver { get; } = new();
         private readonly FakeAgentInstructionProvider _instructionProvider = new();
         private readonly IAgentToolRegistry _toolRegistry;
         private readonly IMcpExecutionBindingResolver _mcpExecutionBindingResolver = Substitute.For<IMcpExecutionBindingResolver>();
@@ -1207,6 +1299,9 @@ public sealed class SubAgentSpawnServiceTests
         }
 
         public GateableChatClient ChatClient => _chatClient;
+
+        /// <summary>The registry the child's own binding pin is read from — seed it to make a child model external.</summary>
+        public FakeExternalProviderRegistry ExternalRegistry { get; } = new();
 
         public ICapacityService Capacity => _capacity;
 
@@ -1437,10 +1532,12 @@ public sealed class SubAgentSpawnServiceTests
                 }),
                 _instructionProvider,
                 _modelCapabilityResolver,
+                TrustResolver,
                 _mcpExecutionBindingResolver,
                 _mcpAgenticToolAdapter,
                 _mcpWorkspaceSessionFactory,
                 _nodeSettingsStore,
+                ExternalRegistry,
                 NullLoggerFactory.Instance,
                 _logger);
         }

@@ -2282,6 +2282,11 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsResponse
 	modelName: string;
 	maxContextTokens?: number | null;
 	effectiveContextTokens?: number | null;
+	displayLabel?: string | null;
+	externalConnectionId?: string | null;
+	externalConnectionName?: string | null;
+	declaredLocality?: string | null;
+	isReasoningEffortCapable?: boolean | null;
 	origin?: XeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin | null;
 	modelContentFingerprint?: string | null;
 	template?: string | null;
@@ -2320,6 +2325,10 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1ListLocalModelsResponse =
 export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
 	modelName: string;
 	provider?: string;
+	displayLabel?: string | null;
+	externalConnectionId?: string | null;
+	externalConnectionName?: string | null;
+	declaredLocality?: string | null;
 	sizeBytes?: number | null;
 	modifiedAtUtc?: number | null;
 	family?: string | null;
@@ -2333,6 +2342,7 @@ export type XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = {
 	capabilities: Array<string>;
 	isReasoningCapable: boolean;
 	isNativeReasoningCapable?: boolean;
+	isReasoningEffortCapable?: boolean | null;
 	reasoningBudgetEnforceable?: boolean;
 	isToolCapable: boolean;
 	isMultimodalCapable?: boolean;
@@ -3116,6 +3126,80 @@ export type XeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceB
 	repository?: string | null;
 	commit?: string | null;
 	acknowledgeCustomSourceRisk: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse = {
+	revision: string;
+	connections?: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse = {
+	id: string;
+	displayName: string;
+	baseUrl: string;
+	locality: string;
+	hasApiKey: boolean;
+	timeoutSeconds?: number | null;
+	models?: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderModelResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderModelResponse = {
+	wireId: string;
+	modelId: string;
+	displayName?: string | null;
+	contextLength?: number | null;
+	supportsTools: boolean;
+	supportsVision: boolean;
+	supportsReasoning: boolean;
+	supportsReasoningEffort: boolean;
+	defaultReasoningEffort?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1DeleteExternalProviderConnectionRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1GetExternalProviderConnectionRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse = {
+	reachable: boolean;
+	error?: string | null;
+	models?: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeModelResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeModelResponse = {
+	id: string;
+	contextLength?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeRequest = {
+	connectionId?: string | null;
+	baseUrl?: string | null;
+	apiKey?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderConnectionRequest = {
+	displayName: string;
+	baseUrl: string;
+	locality?: string | null;
+	apiKey?: string | null;
+	clearApiKey?: boolean;
+	timeoutSeconds?: number | null;
+	models: Array<XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderModelRequest>;
+	expectedRevision?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderModelRequest = {
+	wireId?: string | null;
+	displayName?: string | null;
+	contextLength?: number | null;
+	supportsTools?: boolean;
+	supportsVision?: boolean;
+	supportsReasoning?: boolean;
+	supportsReasoningEffort?: boolean;
+	defaultReasoningEffort?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentCapabilityResponse = {
@@ -12001,6 +12085,185 @@ export type StartStableDiffusionCppSourceBuildResponses = {
 
 export type StartStableDiffusionCppSourceBuildResponse =
 	StartStableDiffusionCppSourceBuildResponses[keyof StartStableDiffusionCppSourceBuildResponses];
+
+export type DeleteExternalProviderConnectionData = {
+	body?: never;
+	path: {
+		connectionId: string;
+	};
+	query?: {
+		expectedRevision?: string | null;
+	};
+	url: "/api/local/v1/external-providers/connections/{connectionId}";
+};
+
+export type DeleteExternalProviderConnectionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse;
+};
+
+export type DeleteExternalProviderConnectionError =
+	DeleteExternalProviderConnectionErrors[keyof DeleteExternalProviderConnectionErrors];
+
+export type DeleteExternalProviderConnectionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse;
+};
+
+export type DeleteExternalProviderConnectionResponse =
+	DeleteExternalProviderConnectionResponses[keyof DeleteExternalProviderConnectionResponses];
+
+export type GetExternalProviderConnectionData = {
+	body?: never;
+	path: {
+		connectionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/external-providers/connections/{connectionId}";
+};
+
+export type GetExternalProviderConnectionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsErrorResponse;
+};
+
+export type GetExternalProviderConnectionError = GetExternalProviderConnectionErrors[keyof GetExternalProviderConnectionErrors];
+
+export type GetExternalProviderConnectionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse;
+};
+
+export type GetExternalProviderConnectionResponse =
+	GetExternalProviderConnectionResponses[keyof GetExternalProviderConnectionResponses];
+
+export type SaveExternalProviderConnectionData = {
+	body: XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderConnectionRequest;
+	path: {
+		connectionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/external-providers/connections/{connectionId}";
+};
+
+export type SaveExternalProviderConnectionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse;
+};
+
+export type SaveExternalProviderConnectionError =
+	SaveExternalProviderConnectionErrors[keyof SaveExternalProviderConnectionErrors];
+
+export type SaveExternalProviderConnectionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse;
+};
+
+export type SaveExternalProviderConnectionResponse =
+	SaveExternalProviderConnectionResponses[keyof SaveExternalProviderConnectionResponses];
+
+export type ListExternalProviderConnectionsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/external-providers/connections";
+};
+
+export type ListExternalProviderConnectionsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListExternalProviderConnectionsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse;
+};
+
+export type ListExternalProviderConnectionsResponse =
+	ListExternalProviderConnectionsResponses[keyof ListExternalProviderConnectionsResponses];
+
+export type ProbeExternalProviderData = {
+	body: XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/external-providers/probe";
+};
+
+export type ProbeExternalProviderErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: FastEndpointsErrorResponse;
+};
+
+export type ProbeExternalProviderError = ProbeExternalProviderErrors[keyof ProbeExternalProviderErrors];
+
+export type ProbeExternalProviderResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse;
+};
+
+export type ProbeExternalProviderResponse = ProbeExternalProviderResponses[keyof ProbeExternalProviderResponses];
 
 export type GetDevelopmentCapabilityData = {
 	body?: never;

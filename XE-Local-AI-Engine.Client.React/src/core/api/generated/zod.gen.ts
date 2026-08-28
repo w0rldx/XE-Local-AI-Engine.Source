@@ -2766,6 +2766,11 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelDetailsRespon
 		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 		.nullish(),
+	displayLabel: z.string().nullish(),
+	externalConnectionId: z.string().nullish(),
+	externalConnectionName: z.string().nullish(),
+	declaredLocality: z.string().nullish(),
+	isReasoningEffortCapable: z.boolean().nullish(),
 	origin: zXeLocalAiEngineProvidersAbstractionsContractsLocalModelOrigin.nullish(),
 	modelContentFingerprint: z.string().nullish(),
 	template: z.string().nullish(),
@@ -2792,6 +2797,10 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1RunningLocalModelsRespo
 export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.object({
 	modelName: z.string(),
 	provider: z.string().optional(),
+	displayLabel: z.string().nullish(),
+	externalConnectionId: z.string().nullish(),
+	externalConnectionName: z.string().nullish(),
+	declaredLocality: z.string().nullish(),
 	sizeBytes: z.int().nullish(),
 	modifiedAtUtc: z.int().nullish(),
 	family: z.string().nullish(),
@@ -2805,6 +2814,7 @@ export const zXeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse = z.
 	capabilities: z.array(z.string()),
 	isReasoningCapable: z.boolean(),
 	isNativeReasoningCapable: z.boolean().optional(),
+	isReasoningEffortCapable: z.boolean().nullish(),
 	reasoningBudgetEnforceable: z.boolean().optional(),
 	isToolCapable: z.boolean(),
 	isMultimodalCapable: z.boolean().optional(),
@@ -3731,6 +3741,102 @@ export const zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourc
 	repository: z.string().nullish(),
 	commit: z.string().nullish(),
 	acknowledgeCustomSourceRisk: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderModelResponse = z.object({
+	wireId: z.string(),
+	modelId: z.string(),
+	displayName: z.string().nullish(),
+	contextLength: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	supportsTools: z.boolean(),
+	supportsVision: z.boolean(),
+	supportsReasoning: z.boolean(),
+	supportsReasoningEffort: z.boolean(),
+	defaultReasoningEffort: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse = z.object({
+	id: z.string(),
+	displayName: z.string(),
+	baseUrl: z.string(),
+	locality: z.string(),
+	hasApiKey: z.boolean(),
+	timeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	models: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderModelResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse = z.object({
+	revision: z.string(),
+	connections: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1DeleteExternalProviderConnectionRequest = z.record(
+	z.string(),
+	z.never(),
+);
+
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1GetExternalProviderConnectionRequest = z.record(
+	z.string(),
+	z.never(),
+);
+
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeModelResponse = z.object({
+	id: z.string(),
+	contextLength: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse = z.object({
+	reachable: z.boolean(),
+	error: z.string().nullish(),
+	models: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeModelResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeRequest = z.object({
+	connectionId: z.string().nullish(),
+	baseUrl: z.string().nullish(),
+	apiKey: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderModelRequest = z.object({
+	wireId: z.string().nullish(),
+	displayName: z.string().nullish(),
+	contextLength: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	supportsTools: z.boolean().optional(),
+	supportsVision: z.boolean().optional(),
+	supportsReasoning: z.boolean().optional(),
+	supportsReasoningEffort: z.boolean().optional(),
+	defaultReasoningEffort: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderConnectionRequest = z.object({
+	displayName: z.string().min(1),
+	baseUrl: z.string().min(1),
+	locality: z.string().nullish(),
+	apiKey: z.string().nullish(),
+	clearApiKey: z.boolean().optional(),
+	timeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	models: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderModelRequest),
+	expectedRevision: z.string().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse = z.object({
@@ -7996,6 +8102,56 @@ export const zStartStableDiffusionCppSourceBuildBody =
  */
 export const zStartStableDiffusionCppSourceBuildResponse =
 	zXeLocalAiEngineClientEndpointsImagesV1StartStableDiffusionCppSourceBuildResponse;
+
+export const zDeleteExternalProviderConnectionPath = z.object({
+	connectionId: z.string(),
+});
+
+export const zDeleteExternalProviderConnectionQuery = z.object({
+	expectedRevision: z.string().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zDeleteExternalProviderConnectionResponse =
+	zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse;
+
+export const zGetExternalProviderConnectionPath = z.object({
+	connectionId: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetExternalProviderConnectionResponse =
+	zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionResponse;
+
+export const zSaveExternalProviderConnectionBody =
+	zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderConnectionRequest;
+
+export const zSaveExternalProviderConnectionPath = z.object({
+	connectionId: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zSaveExternalProviderConnectionResponse =
+	zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse;
+
+/**
+ * Success
+ */
+export const zListExternalProviderConnectionsResponse =
+	zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderConnectionsResponse;
+
+export const zProbeExternalProviderBody = zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeRequest;
+
+/**
+ * Success
+ */
+export const zProbeExternalProviderResponse = zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse;
 
 /**
  * Success

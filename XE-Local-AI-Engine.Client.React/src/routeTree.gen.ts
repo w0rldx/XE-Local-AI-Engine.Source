@@ -22,6 +22,7 @@ import { Route as LayoutCustomToolsRouteImport } from './routes/_layout/custom-t
 import { Route as LayoutDashboardRouteImport } from './routes/_layout/dashboard'
 import { Route as LayoutDevelopmentRouteImport } from './routes/_layout/development'
 import { Route as LayoutDiagnosticsRouteImport } from './routes/_layout/diagnostics'
+import { Route as LayoutExternalProvidersRouteImport } from './routes/_layout/external-providers'
 import { Route as LayoutImagesRouteImport } from './routes/_layout/images'
 import { Route as LayoutInvocationsRouteImport } from './routes/_layout/invocations'
 import { Route as LayoutKnowledgeBaseRouteImport } from './routes/_layout/knowledge-base'
@@ -104,6 +105,11 @@ const LayoutDevelopmentRoute = LayoutDevelopmentRouteImport.update({
 const LayoutDiagnosticsRoute = LayoutDiagnosticsRouteImport.update({
   id: '/diagnostics',
   path: '/diagnostics',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutExternalProvidersRoute = LayoutExternalProvidersRouteImport.update({
+  id: '/external-providers',
+  path: '/external-providers',
   getParentRoute: () => LayoutRoute,
 } as any)
 const LayoutImagesRoute = LayoutImagesRouteImport.update({
@@ -218,6 +224,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof LayoutDashboardRoute
   '/development': typeof LayoutDevelopmentRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
+  '/external-providers': typeof LayoutExternalProvidersRoute
   '/images': typeof LayoutImagesRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/knowledge-base': typeof LayoutKnowledgeBaseRoute
@@ -250,6 +257,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof LayoutDashboardRoute
   '/development': typeof LayoutDevelopmentRoute
   '/diagnostics': typeof LayoutDiagnosticsRoute
+  '/external-providers': typeof LayoutExternalProvidersRoute
   '/images': typeof LayoutImagesRoute
   '/invocations': typeof LayoutInvocationsRoute
   '/knowledge-base': typeof LayoutKnowledgeBaseRoute
@@ -285,6 +293,7 @@ export interface FileRoutesById {
   '/_layout/dashboard': typeof LayoutDashboardRoute
   '/_layout/development': typeof LayoutDevelopmentRoute
   '/_layout/diagnostics': typeof LayoutDiagnosticsRoute
+  '/_layout/external-providers': typeof LayoutExternalProvidersRoute
   '/_layout/images': typeof LayoutImagesRoute
   '/_layout/invocations': typeof LayoutInvocationsRoute
   '/_layout/knowledge-base': typeof LayoutKnowledgeBaseRoute
@@ -321,6 +330,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/development'
     | '/diagnostics'
+    | '/external-providers'
     | '/images'
     | '/invocations'
     | '/knowledge-base'
@@ -353,6 +363,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/development'
     | '/diagnostics'
+    | '/external-providers'
     | '/images'
     | '/invocations'
     | '/knowledge-base'
@@ -387,6 +398,7 @@ export interface FileRouteTypes {
     | '/_layout/dashboard'
     | '/_layout/development'
     | '/_layout/diagnostics'
+    | '/_layout/external-providers'
     | '/_layout/images'
     | '/_layout/invocations'
     | '/_layout/knowledge-base'
@@ -506,6 +518,13 @@ declare module '@tanstack/react-router' {
       path: '/diagnostics'
       fullPath: '/diagnostics'
       preLoaderRoute: typeof LayoutDiagnosticsRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/external-providers': {
+      id: '/_layout/external-providers'
+      path: '/external-providers'
+      fullPath: '/external-providers'
+      preLoaderRoute: typeof LayoutExternalProvidersRouteImport
       parentRoute: typeof LayoutRoute
     }
     '/_layout/images': {
@@ -654,6 +673,7 @@ interface LayoutRouteChildren {
   LayoutDashboardRoute: typeof LayoutDashboardRoute
   LayoutDevelopmentRoute: typeof LayoutDevelopmentRoute
   LayoutDiagnosticsRoute: typeof LayoutDiagnosticsRoute
+  LayoutExternalProvidersRoute: typeof LayoutExternalProvidersRoute
   LayoutImagesRoute: typeof LayoutImagesRoute
   LayoutInvocationsRoute: typeof LayoutInvocationsRoute
   LayoutKnowledgeBaseRoute: typeof LayoutKnowledgeBaseRoute
@@ -686,6 +706,7 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutDashboardRoute: LayoutDashboardRoute,
   LayoutDevelopmentRoute: LayoutDevelopmentRoute,
   LayoutDiagnosticsRoute: LayoutDiagnosticsRoute,
+  LayoutExternalProvidersRoute: LayoutExternalProvidersRoute,
   LayoutImagesRoute: LayoutImagesRoute,
   LayoutInvocationsRoute: LayoutInvocationsRoute,
   LayoutKnowledgeBaseRoute: LayoutKnowledgeBaseRoute,

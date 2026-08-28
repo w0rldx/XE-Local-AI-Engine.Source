@@ -42,6 +42,7 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             InstalledModelDependentAdaptersException => NodeConflictProblemType.InstalledModelHasDependentAdapters,
             InstalledModelProviderConflictException => NodeConflictProblemType.InstalledModelProviderConflict,
             InstalledModelProviderMapSupersededException => NodeConflictProblemType.InstalledModelProviderMapSuperseded,
+            ModelOperationNotSupportedByProviderException => NodeConflictProblemType.ModelOperationNotSupportedByProvider,
             WorkSessionInvalidTransitionException => NodeConflictProblemType.WorkSessionInvalidTransition,
             WorkSessionConcurrencyException => NodeConflictProblemType.WorkSessionVersionConflict,
             _ => (NodeConflictProblemType?)null

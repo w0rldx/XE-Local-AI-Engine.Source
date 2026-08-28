@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.Connection;
 using XE_Local_AI_Engine.Client.Services.Connection.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.HuggingFace;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
@@ -27,6 +28,7 @@ using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
@@ -34,6 +36,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Providers.Ollama;
+using XE_Local_AI_Engine.Providers.OpenAICompat;
 
 internal static class AddNodeModelRuntimeExtensions
 {
@@ -221,7 +224,10 @@ internal static class AddNodeModelRuntimeExtensions
             var activeCloudFactory = sp.GetRequiredService<IActiveCloudChatClientFactory>();
             return new RuntimeChatClient(activeCloudFactory,
                 sp.GetRequiredService<ModelRoutingLocalChatClient>,
-                sp.GetRequiredService<ICloudEgressAuthorizer>());
+                sp.GetRequiredService<ICloudEgressAuthorizer>(),
+                // The local branch can now egress: an ext: id routes there by design, so the Development authorization
+                // that previously lived only on the cloud branch needs a backstop on this one too.
+                sp.GetRequiredService<IModelTrustResolver>());
         });
 
         builder.Services.AddLocalAiAgentRuntime(builder.Configuration);
@@ -250,7 +256,37 @@ internal static class AddNodeModelRuntimeExtensions
                .Configure<INodeRuntimeSettings>((options, runtimeSettings) =>
                    options.IdleTimeoutSeconds = runtimeSettings.GetOrchestrationIdleTimeoutSeconds());
 
+        AddExternalOpenAiRuntime(builder);
+
         return builder;
+    }
+
+    /// <summary>
+    ///     Registers the external OpenAI-compatible multiplexer provider, but ONLY when a real
+    ///     <see cref="IExternalProviderRegistry" /> is already in the container.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The guard exists because the provider has no meaningful behavior without the registry that holds the
+    ///         operator's connections, and registering an empty stand-in in production would be worse than not
+    ///         registering at all: the resolver would happily route an <c>ext:</c> id to a provider that reports zero
+    ///         models, which is indistinguishable from "my connections were silently dropped".
+    ///     </para>
+    ///     <para>
+    ///         Because this is a registration-TIME decision it reads the service collection as built so far, so it runs
+    ///         last in this module — any composition root adding the encrypted external-provider store must do so before
+    ///         <c>AddNodeModelRuntime</c> returns. The provider resolver is unaffected by ordering: it enumerates
+    ///         <see cref="ILocalModelProvider" /> at resolution time, not registration time.
+    ///     </para>
+    /// </remarks>
+    private static void AddExternalOpenAiRuntime(IHostApplicationBuilder builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        if (builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IExternalProviderRegistry)))
+        {
+            _ = builder.Services.AddExternalOpenAiModelProvider();
+        }
     }
 
     /// <summary>

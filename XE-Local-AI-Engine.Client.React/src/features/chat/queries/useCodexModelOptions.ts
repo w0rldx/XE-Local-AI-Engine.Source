@@ -27,6 +27,9 @@ export const AZURE_FOUNDRY_PROVIDER = "AzureFoundry";
 interface CloudModelCapabilities {
 	readonly isReasoningCapable?: boolean;
 	readonly isToolCapable?: boolean;
+	// The operator's friendly label for the deployment, set in Cloud Settings. It only reached the picker once the
+	// models-list DTO started carrying it; before that the picker had no choice but to show the raw deployment name.
+	readonly displayLabel?: string | null;
 }
 
 export function toCloudModelOption(modelName: string, capabilities?: CloudModelCapabilities): ModelOption {
@@ -51,7 +54,8 @@ export function toAzureFoundryModelOption(deploymentName: string, capabilities?:
 	return {
 		value: deploymentName,
 		label: deploymentName,
-		displayName: deploymentName,
+		// Prefer the operator's label; fall back to the deployment name when none is configured.
+		displayName: capabilities?.displayLabel ?? deploymentName,
 		// The backend reports IsReasoningCapable = false for Azure deployments today. Default to false so the picker
 		// cannot advertise a reasoning control the pipeline never reads.
 		isReasoningModel: capabilities?.isReasoningCapable ?? false,

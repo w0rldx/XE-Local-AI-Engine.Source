@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 
 /// <summary>
 ///     The node's registered <see cref="IChatClient" />: a stable wrapper that re-selects cloud-vs-local on
@@ -31,17 +32,21 @@ public sealed class RuntimeChatClient : IChatClient
     private readonly IActiveCloudChatClientFactory _activeCloudFactory;
     private readonly ICloudEgressAuthorizer _cloudEgressAuthorizer;
     private readonly Lazy<IChatClient> _localClient;
+    private readonly IModelTrustResolver _modelTrustResolver;
 
     public RuntimeChatClient(IActiveCloudChatClientFactory activeCloudFactory,
         Func<IChatClient> localClientFactory,
-        ICloudEgressAuthorizer cloudEgressAuthorizer)
+        ICloudEgressAuthorizer cloudEgressAuthorizer,
+        IModelTrustResolver modelTrustResolver)
     {
         ArgumentNullException.ThrowIfNull(activeCloudFactory);
         ArgumentNullException.ThrowIfNull(localClientFactory);
         ArgumentNullException.ThrowIfNull(cloudEgressAuthorizer);
+        ArgumentNullException.ThrowIfNull(modelTrustResolver);
 
         _activeCloudFactory = activeCloudFactory;
         _cloudEgressAuthorizer = cloudEgressAuthorizer;
+        _modelTrustResolver = modelTrustResolver;
         _localClient = new Lazy<IChatClient>(localClientFactory, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
@@ -92,11 +97,44 @@ public sealed class RuntimeChatClient : IChatClient
         var requestedModelId = options?.ModelId;
         if (!_activeCloudFactory.TryCreateActiveCloudChatClient(requestedModelId, out var cloudClient) || cloudClient is null)
         {
+            AuthorizeDevelopmentLocalRequest(options, requestedModelId);
             return _localClient.Value;
         }
 
         AuthorizeDevelopmentCloudRequest(options, requestedModelId);
         return cloudClient;
+    }
+
+    /// <summary>
+    ///     The fail-closed backstop on the LOCAL branch: a Development-marked request must never leave the trust
+    ///     boundary through an external endpoint.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Every existing per-send egress authorization lives on the cloud branch, because before external
+    ///         providers the local branch could not egress. An <c>ext:</c> id breaks that assumption while staying on
+    ///         the local branch by design (the orphan guard routes it there), so without this check a Development
+    ///         attempt could reach a hosted endpoint with no authorization step having run at all.
+    ///     </para>
+    ///     <para>
+    ///         This is a backstop, not the gate — <c>DevelopmentManagementService</c> and the coder/reviewer models
+    ///         refuse the same models earlier and with better messages. It exists because this is the last point before
+    ///         bytes go on the wire, and the classification it uses (the registry's cached generation) reports
+    ///         UNRESOLVED rather than "fine" when it cannot answer.
+    ///     </para>
+    /// </remarks>
+    private void AuthorizeDevelopmentLocalRequest(ChatOptions? options, string? requestedModelId)
+    {
+        if (!DevelopmentCloudAuthorizationMetadata.IsDevelopmentMarked(options))
+        {
+            return;
+        }
+
+        if (_modelTrustResolver.ClassifyExternalCached(requestedModelId) is { } trust && trust != ModelTrustLocality.Local)
+        {
+            throw new CloudEgressAuthorizationException(
+                "A Development request cannot be sent to an external model that is not declared local to this node's trust boundary.");
+        }
     }
 
     private void AuthorizeDevelopmentCloudRequest(ChatOptions? options, string? requestedModelId)

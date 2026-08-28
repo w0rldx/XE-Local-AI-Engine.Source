@@ -2121,6 +2121,7 @@ public sealed class NodeChatRegenerationServiceTests : IDisposable
             providerResolver ?? CreateLocalModelProviderResolver(),
             gguf ?? CreateGgufModelCapabilityResolver(),
             Substitute.For<IActiveCloudChatClientFactory>(),
+            new FakeModelTrustResolver(),
             NullLogger<ModelCapabilityResolver>.Instance);
     }
 

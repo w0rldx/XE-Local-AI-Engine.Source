@@ -1,0 +1,379 @@
+namespace XE_Local_AI_Engine.Tests.ExternalProviders;
+
+using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders.Implementation;
+using XE_Local_AI_Engine.Client.Services.Models;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
+using XE_Local_AI_Engine.Tests.Testing;
+
+/// <summary>
+///     The reconciliation pass that keeps the provider map, the tool-capable allow-list and the node default in step
+///     with the encrypted store — the self-healing that makes a save's three unsynchronized writes survivable.
+/// </summary>
+/// <remarks>
+///     The defining property under test is CONTAINMENT: the pass runs unconditionally on every boot, so every
+///     assertion here also asks what it left alone. A GGUF's map row, an Ollama backfill row and a hand-curated
+///     allow-list entry for a local model must all come through it untouched.
+/// </remarks>
+public sealed class ExternalProviderReconcilerTests
+{
+    [Test]
+    public async Task ReconcileAsync_WritesAMapRowPerRegisteredModel()
+    {
+        var fixture = new Fixture();
+        fixture.Register(Registered());
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        AssertEx.Equal(1, report.MapRowsWritten);
+        AssertEx.Equal("external", fixture.MapStore.Mappings[ExternalProviderTestData.ModelId].ProviderName);
+    }
+
+    [Test]
+    public async Task ReconcileAsync_WhenTheMapIsAlreadyCorrect_ChangesNothing()
+    {
+        var fixture = new Fixture();
+        fixture.Register(Registered());
+        fixture.MapStore.Seed(ExternalProviderTestData.ModelId, "external");
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        AssertEx.False(report.Changed);
+        fixture.ProviderResolver.DidNotReceive().InvalidateModelProviderMap();
+    }
+
+    [Test]
+    public async Task ReconcileAsync_RemovesAnOrphanedExternalRow()
+    {
+        var fixture = new Fixture();
+        fixture.MapStore.Seed("ext:deleted-box/qwen3", "external");
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        AssertEx.Equal(1, report.MapRowsRemoved);
+        AssertEx.Empty(fixture.MapStore.Mappings);
+    }
+
+    [Test]
+    public async Task ReconcileAsync_LeavesNonExternalRowsAlone()
+    {
+        var fixture = new Fixture();
+        fixture.MapStore.Seed("qwen3-27b.gguf", LlamaServerProviderConstants.ProviderName);
+        fixture.MapStore.Seed("qwen3:8b", "ollama");
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        // The pass runs on every boot; a GGUF row or an Ollama backfill row it touched would be a data-loss bug.
+        AssertEx.False(report.Changed);
+        AssertEx.Equal(2, fixture.MapStore.Mappings.Count);
+    }
+
+    [Test]
+    public async Task ReconcileAsync_KeepsARowSpelledWithADifferentCase()
+    {
+        var fixture = new Fixture();
+        fixture.Register(Registered());
+        fixture.MapStore.Seed(ExternalProviderTestData.ModelId.Replace("unsloth-box", "UNSLOTH-BOX", StringComparison.Ordinal), "external");
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        // The map key is NOCASE, so a hand-edited row IS this model's row: recognizing it is what stops the pass from
+        // deleting a live route and inserting a duplicate.
+        AssertEx.False(report.Changed);
+    }
+
+    [Test]
+    public async Task ReconcileAsync_AddsToolCapableModelsToTheAllowList()
+    {
+        var fixture = new Fixture(existingAllowList: ["qwen3:8b"]);
+        fixture.Register(Registered(supportsTools: true));
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        AssertEx.Equal(1, report.AllowListAdded);
+        var saved = fixture.CapturedSettings();
+        AssertEx.Contains(saved.ToolCapableModels!, ExternalProviderTestData.ModelId);
+        // Additive for everything that is not an ext: id — the list is operator-curated.
+        AssertEx.Contains(saved.ToolCapableModels!, "qwen3:8b");
+    }
+
+    [Test]
+    public async Task ReconcileAsync_DoesNotAddAModelThatDeclaresNoTools()
+    {
+        var fixture = new Fixture();
+        fixture.Register(Registered());
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        AssertEx.Equal(0, report.AllowListAdded);
+    }
+
+    [Test]
+    public async Task ReconcileAsync_RemovesOnlyExternalAllowListEntriesOnUnregister()
+    {
+        var fixture = new Fixture(existingAllowList: ["qwen3:8b", "ext:deleted-box/qwen3", "some/Local-GGUF:Q4_K_M"]);
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        AssertEx.Equal(1, report.AllowListRemoved);
+        var saved = fixture.CapturedSettings();
+        AssertEx.Equal(2, saved.ToolCapableModels!.Count);
+        AssertEx.Contains(saved.ToolCapableModels, "qwen3:8b");
+        AssertEx.Contains(saved.ToolCapableModels, "some/Local-GGUF:Q4_K_M");
+    }
+
+    [Test]
+    public async Task ReconcileAsync_ClearsADanglingExternalDefaultModel()
+    {
+        var fixture = new Fixture(defaultModelName: "ext:deleted-box/qwen3");
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        // A crash between "connection deleted" and "default cleared" leaves a selection that routes nowhere; this is
+        // what makes it self-heal on the next boot.
+        AssertEx.True(report.DefaultModelCleared);
+        AssertEx.Null(fixture.CapturedSettings().DefaultModelName);
+    }
+
+    [Test]
+    public async Task ReconcileAsync_KeepsAStillRegisteredExternalDefaultModel()
+    {
+        var fixture = new Fixture(defaultModelName: ExternalProviderTestData.ModelId);
+        fixture.Register(Registered());
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        AssertEx.False(report.DefaultModelCleared);
+    }
+
+    [Test]
+    public async Task ReconcileAsync_KeepsALocalDefaultModel()
+    {
+        var fixture = new Fixture(defaultModelName: "qwen3-27b.gguf");
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        AssertEx.False(report.DefaultModelCleared);
+        AssertEx.Equal(0, fixture.SettingsStore.WriteCount);
+    }
+
+    [Test]
+    public async Task ReconcileAsync_WhenTheStoreCannotBeRead_ChangesNothing()
+    {
+        // The pass DELETES anything the configuration does not list. Run against a store that merely looks empty
+        // because the file is locked, it would erase the operator's whole external setup and report success.
+        var fixture = new Fixture(existingAllowList: ["ext:unsloth-box/qwen3"],
+            defaultModelName: "ext:unsloth-box/qwen3",
+            store: new UnreadableExternalProviderStore());
+        fixture.MapStore.Seed("ext:unsloth-box/qwen3", "external");
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        AssertEx.False(report.Changed);
+        AssertEx.Equal(0, fixture.SettingsStore.WriteCount);
+        AssertEx.Equal(1, fixture.MapStore.Mappings.Count);
+    }
+
+    [Test]
+    public async Task ReconcileAsync_KeepsBothCaseVariantsOfOneWireId()
+    {
+        var fixture = new Fixture();
+        fixture.Register(Registered(supportsTools: false, "Foo", "foo"));
+        fixture.MapStore.Seed("ext:unsloth-box/Foo", "external");
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        // The map key is NOCASE, so one row serves both spellings. Detecting orphans ordinally while checking coverage
+        // case-insensitively is what let the row be skipped as covered and then deleted as `foo`'s orphan — taking both
+        // models' routing with it.
+        AssertEx.Equal(0, report.MapRowsRemoved);
+        AssertEx.Equal(1, fixture.MapStore.Mappings.Count);
+    }
+
+    [Test]
+    public async Task ReconcileAsync_WhenItRepairsDrift_DropsBothRoutingCaches()
+    {
+        var fixture = new Fixture();
+        fixture.Register(Registered());
+
+        _ = await fixture.Reconciler.ReconcileAsync();
+
+        // The resolver memoizes model-to-provider for seconds and the router caches a chat client per provider and
+        // model, so a repaired row neither of them sees is a repair that has not taken effect.
+        fixture.ProviderResolver.Received(1).InvalidateModelProviderMap();
+        fixture.ChatClientCache.Received(1).ClearClientCache();
+    }
+
+    [Test]
+    public async Task ReconcileAsync_WhenThePlainReadTurnsUnreadableAfterTheAuthoritativeOne_DeletesNothing()
+    {
+        var fixture = new Fixture(existingAllowList: [ExternalProviderTestData.ModelId],
+            defaultModelName: ExternalProviderTestData.ModelId,
+            store: new AuthoritativeThenEmptyExternalProviderStore(Registered(supportsTools: true)));
+        fixture.MapStore.Seed(ExternalProviderTestData.ModelId, "external");
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        // BOTH halves of every diff come from the one authoritative load. Deriving the delete set from a SECOND read
+        // — the registry's, which goes through LoadAsync and collapses an unreadable file to an empty configuration —
+        // turned "the file is locked" into "nothing is registered", which this pass reads as a mandate to erase the
+        // operator's whole external setup, and then reported success.
+        AssertEx.False(report.Changed);
+        AssertEx.Equal(0, fixture.SettingsStore.WriteCount);
+        AssertEx.Equal(1, fixture.MapStore.Mappings.Count);
+    }
+
+    /// <summary>
+    ///     The registered connection the pass must see, spelled as it is STORED. Defaults to the single model
+    ///     <see cref="ExternalProviderTestData.ModelId" /> names.
+    /// </summary>
+    private static StoredExternalProviderConnection Registered(bool supportsTools = false, params string[] wireIds)
+    {
+        return ExternalProviderRegistryTests.Connection(ExternalProviderTestData.ConnectionId,
+            models: wireIds.Length == 0 ? [ExternalProviderTestData.WireId] : wireIds,
+            supportsTools: supportsTools);
+    }
+
+    private sealed class Fixture
+    {
+        public Fixture(IReadOnlyList<string>? existingAllowList = null,
+            string? defaultModelName = null,
+            IExternalProviderStore? store = null)
+        {
+            SettingsStore = new RecordingNodeSettingsStore(new StoredNodeSettings
+            {
+                ToolCapableModels = existingAllowList,
+                DefaultModelName = defaultModelName
+            });
+
+            Store = store ?? new FakeExternalProviderStore();
+            Reconciler = new ExternalProviderReconciler(Store,
+                MapStore,
+                new ModelProviderMapLeaseCoordinator(new KeyedCompositeLockDomain()),
+                ProviderResolver,
+                ChatClientCache,
+                SettingsStore,
+                NullLogger<ExternalProviderReconciler>.Instance);
+        }
+
+        public IExternalProviderStore Store { get; }
+        public InMemoryCoordinatedModelProviderMapStore MapStore { get; } = new();
+        public ILocalModelProviderResolver ProviderResolver { get; } = Substitute.For<ILocalModelProviderResolver>();
+        public ILocalChatClientCacheInvalidator ChatClientCache { get; } = Substitute.For<ILocalChatClientCacheInvalidator>();
+        public RecordingNodeSettingsStore SettingsStore { get; }
+        public ExternalProviderReconciler Reconciler { get; }
+
+        /// <summary>
+        ///     Seeds what the operator has configured, in the STORE: the pass derives BOTH halves of every diff from
+        ///     the one authoritative load it takes itself, so the store is now its only source of registrations.
+        /// </summary>
+        public void Register(params StoredExternalProviderConnection[] connections)
+        {
+            ((FakeExternalProviderStore)Store).Replace(connections);
+        }
+
+        public StoredNodeSettings CapturedSettings()
+        {
+            return SettingsStore.LastWritten ?? throw new InvalidOperationException("The reconciliation pass wrote no settings.");
+        }
+    }
+
+    /// <summary>
+    ///     A store whose AUTHORITATIVE read succeeds and whose plain <see cref="IExternalProviderStore.LoadAsync" />
+    ///     collapses to empty — the shape a file that turns unreadable (or carries a newer schema) takes on the read
+    ///     path the registry goes through.
+    /// </summary>
+    private sealed class AuthoritativeThenEmptyExternalProviderStore(StoredExternalProviderConnection connection) : IExternalProviderStore
+    {
+        public Task<StoredExternalProviderConfig> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new StoredExternalProviderConfig());
+        }
+
+        public Task<ExternalProviderLoadResult> ReadForWriteAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<ExternalProviderLoadResult>(new ExternalProviderLoadResult.Loaded(new StoredExternalProviderConfig
+            {
+                Revision = "r0",
+                Connections = [connection]
+            }));
+        }
+
+        public Task<ExternalProviderWriteResult> SaveConnectionAsync(ExternalProviderConnectionSaveRequest request, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ExternalProviderWriteResult> DeleteConnectionAsync(string connectionId, string? expectedRevision, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    /// <summary>A store whose file cannot be read this run — the state a writer must refuse to act on.</summary>
+    private sealed class UnreadableExternalProviderStore : IExternalProviderStore
+    {
+        public Task<StoredExternalProviderConfig> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new StoredExternalProviderConfig());
+        }
+
+        public Task<ExternalProviderLoadResult> ReadForWriteAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<ExternalProviderLoadResult>(new ExternalProviderLoadResult.Unreadable("locked"));
+        }
+
+        public Task<ExternalProviderWriteResult> SaveConnectionAsync(ExternalProviderConnectionSaveRequest request, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ExternalProviderWriteResult> DeleteConnectionAsync(string connectionId, string? expectedRevision, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    /// <summary>
+    ///     A real in-memory node-settings store rather than a substitute, because the pass now writes through the
+    ///     COORDINATED update — a substitute would return a default from the mutation and never apply it, and the
+    ///     lost-update behaviour this replaced is exactly what the assertions here have to be able to see.
+    /// </summary>
+    private sealed class RecordingNodeSettingsStore(StoredNodeSettings initial) : INodeSettingsStore
+    {
+        private StoredNodeSettings _current = initial;
+
+        public StoredNodeSettings? LastWritten { get; private set; }
+
+        public int WriteCount { get; private set; }
+
+        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_current);
+        }
+
+        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
+        {
+            return _current;
+        }
+
+        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
+        {
+            _current = settings;
+            LastWritten = settings;
+            WriteCount++;
+            return Task.CompletedTask;
+        }
+
+        public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
+        {
+            await SaveAsync(mutate(_current), cancellationToken);
+            return _current;
+        }
+    }
+}

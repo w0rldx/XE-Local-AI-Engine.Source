@@ -259,6 +259,12 @@ export interface ModelOption {
 	// NOT the effort vocabulary — a native model keeps the binary On/Off set, where "on" means "omit the think field
 	// and let the template's built-in reasoning run".
 	isNativeReasoningModel?: boolean;
+	// Whether a model that reasons also honours a GRADED effort level. Splits the two shapes `isReasoningModel` alone
+	// conflates for an externally served model: an endpoint that reads `reasoning_effort` gets the graded menu, one
+	// that reasons on its own terms gets the binary On/Off set, because offering it levels it ignores is a menu whose
+	// entries do nothing. Undefined means "not declared" — every non-external provider, whose effort vocabulary is
+	// decided by `isCloud` and `isReasoningModel` exactly as before.
+	isReasoningEffortCapable?: boolean;
 	// Whether the model advertises the Ollama `tools` capability. Drives whether the composer offers the
 	// local-tool controls (gated together with the node-wide capability). Undefined on the local-default
 	// option (the runtime picks a concrete model later), so callers treat undefined as "not tool-capable".
@@ -277,6 +283,14 @@ export interface ModelOption {
 	// Used to gate which selections poll the model-details endpoint. Undefined on the local-default sentinel option
 	// (the runtime resolves a concrete model later) and on cloud options (gated by isCloud instead).
 	provider?: string;
+	// External-provider connection this model belongs to (`provider === "external"` only). The picker groups external
+	// models one section per connection, which `provider` alone cannot express — every connection shares that one tag.
+	externalConnectionId?: string;
+	externalConnectionName?: string;
+	// The connection's OPERATOR-DECLARED trust ("local" | "cloud"), straight from the list entry. Deliberately distinct
+	// from `isCloud`, which selects the Codex reasoning-effort vocabulary (minimal/xhigh) that external models must
+	// never be offered: this only decides which section an external model lands in and which egress cue it carries.
+	declaredLocality?: string;
 }
 
 export interface ContextUsageModel {

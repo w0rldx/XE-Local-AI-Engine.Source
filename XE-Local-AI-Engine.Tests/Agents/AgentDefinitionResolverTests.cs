@@ -1354,6 +1354,7 @@ public sealed class AgentDefinitionResolverTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(CloudPinnedModel).Build(),
             NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess);
         return new AgentDefinitionResolver(store,
             playbookStore,

@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.Mcp.Implementation;
@@ -45,6 +46,10 @@ internal static class AddNodeModelCapabilitiesAndMcpExtensions
                 sp.GetRequiredService<INodeRuntimeSettings>(),
                 // Singleton provider → the scoped, DbContext-backed custom-tool catalog is resolved per offer from a fresh scope.
                 sp.GetRequiredService<IServiceScopeFactory>(),
+                // Answers the three locality gates for an ext: id, which the threaded per-turn cloud flag cannot see:
+                // an external id falls THROUGH cloud selection by design, so without this a declared-cloud endpoint
+                // would be offered the workspace, the knowledge base, custom tools and run_python.
+                sp.GetRequiredService<IModelTrustResolver>(),
                 knowledgeOptions.AllowCloudModelAccess);
         });
         // MCP tool extensibility. The connection manager owns the MCP client lifecycle and republishes the dynamic

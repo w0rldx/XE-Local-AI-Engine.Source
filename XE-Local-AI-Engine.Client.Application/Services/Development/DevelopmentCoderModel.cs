@@ -5,6 +5,8 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 internal sealed record DevelopmentCoderSubmission(
     string Summary,
@@ -32,11 +34,13 @@ internal interface IDevelopmentCoderModel
 internal sealed class DevelopmentCoderModel(
     IChatClient chatClient,
     IActiveCloudChatClientFactory cloudFactory,
-    ILocalModelProviderResolver localProviderResolver) : IDevelopmentCoderModel
+    ILocalModelProviderResolver localProviderResolver,
+    IModelTrustResolver modelTrustResolver) : IDevelopmentCoderModel
 {
     private readonly IChatClient _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
     private readonly IActiveCloudChatClientFactory _cloudFactory = cloudFactory ?? throw new ArgumentNullException(nameof(cloudFactory));
     private readonly ILocalModelProviderResolver _localProviderResolver = localProviderResolver ?? throw new ArgumentNullException(nameof(localProviderResolver));
+    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
 
     public async Task<DevelopmentCoderModelResult> RunAsync(string modelId,
         string prompt,
@@ -50,6 +54,7 @@ internal sealed class DevelopmentCoderModel(
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
         ArgumentException.ThrowIfNullOrWhiteSpace(prompt);
         ArgumentNullException.ThrowIfNull(tools);
+        await RejectExternalModelAsync(modelId, cancellationToken).ConfigureAwait(false);
         var isCloud = _cloudFactory.IsCloudProviderSelected(modelId);
         if (isCloud && cloudRoute is null)
         {
@@ -173,6 +178,37 @@ internal sealed class DevelopmentCoderModel(
                                                    + "Any workspace changes it made are preserved; re-run the task, or use a model that reliably closes with a tool call."),
             inputTokens,
             outputTokens);
+    }
+
+    /// <summary>
+    ///     Refuses a Development coder attempt on an external OpenAI-compatible model that is not positively declared
+    ///     node-local.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Dev Mode hands the model a workspace: real files, real patches, real command evidence. The plan's
+    ///         non-goal is explicit — no dev-mode support at all for declared-cloud external models, under EITHER egress
+    ///         policy — and UNRESOLVED is refused with them, because a connection deleted mid-attempt or a store that
+    ///         will not decrypt tells us nothing about where the prompt would have gone.
+    ///     </para>
+    ///     <para>
+    ///         Refused here rather than folded into <c>isCloud</c>: a declared-cloud external model has no CloudScoped
+    ///         route either, so treating it as cloud would send it down the route-verification branch and fail with a
+    ///         message about a mismatched authorized route rather than the real reason.
+    ///     </para>
+    /// </remarks>
+    private async Task RejectExternalModelAsync(string modelId, CancellationToken cancellationToken)
+    {
+        if (!ExternalModelId.HasExternalScheme(modelId))
+        {
+            return;
+        }
+
+        if (await _modelTrustResolver.ResolveAsync(modelId, cancellationToken).ConfigureAwait(false) != ModelTrustLocality.Local)
+        {
+            throw new DevelopmentWorkspaceSecurityException(
+                "Development attempts cannot use an external model that is not declared local to this node's trust boundary.");
+        }
     }
 
     private sealed class ToolGateway(

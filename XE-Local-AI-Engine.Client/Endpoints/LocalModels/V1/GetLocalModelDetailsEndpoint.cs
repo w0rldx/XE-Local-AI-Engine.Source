@@ -6,7 +6,9 @@ using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Validation;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
@@ -15,10 +17,12 @@ public sealed class GetLocalModelDetailsEndpoint(
     ILocalModelProviderResolver providerResolver,
     IGgufModelStore ggufModelStore,
     ICloudModelResolver cloudModelResolver,
+    IModelTrustResolver modelTrustResolver,
     ModelNameValidator modelNameValidator) : Endpoint<GetLocalModelDetailsRequest, LocalModelDetailsResponse>
 {
     private readonly ICloudModelResolver _cloudModelResolver = cloudModelResolver ?? throw new ArgumentNullException(nameof(cloudModelResolver));
     private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
+    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
     private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
     private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
@@ -48,6 +52,16 @@ public sealed class GetLocalModelDetailsEndpoint(
         if (CodexModelCatalog.IsCodexModel(modelName))
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
+        // An external OpenAI-compatible model has no local runtime to probe either, but unlike the cloud ids above it
+        // does have ONE detail the chat context meter needs: the context window its operator declared. Everything else
+        // (template, system prompt, license) is an Ollama Modelfile concept the remote endpoint has no equivalent of,
+        // so those stay null. An id whose registration is gone is a clean 404, exactly like a stale GGUF map row.
+        if (ExternalModelId.HasExternalScheme(modelName))
+        {
+            await SendExternalModelDetailsAsync(modelName, ct).ConfigureAwait(false);
             return;
         }
 
@@ -85,6 +99,39 @@ public sealed class GetLocalModelDetailsEndpoint(
             Logger.LogDebug(exception, "Model details unavailable for '{ModelName}': the local Ollama runtime is unreachable.", modelName);
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
+    }
+
+    // Details for an external model come entirely from the operator's declarations — there is no probe, because only
+    // POST /v1/chat/completions is universal across OpenAI-compatible servers and none of them reports a window in a
+    // shape that can be trusted across all of them. The declared window is reported as BOTH the advertised ceiling and
+    // the effective window: for an endpoint the node does not launch, those are the same number, and the context meter
+    // reads the effective one.
+    private async Task SendExternalModelDetailsAsync(string modelName, CancellationToken ct)
+    {
+        var registration = await _modelTrustResolver.TryResolveExternalAsync(modelName, ct).ConfigureAwait(false);
+        if (registration is null)
+        {
+            await Send.NotFoundAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
+        await Send.OkAsync(new LocalModelDetailsResponse
+        {
+            ModelName = registration.ModelId,
+            MaxContextTokens = registration.Model.ContextLength,
+            EffectiveContextTokens = registration.Model.ContextLength,
+
+            // The same four connection facts the list entry carries. A details view reached directly — a deep link, a
+            // reload — has no list entry to read them from, and the egress cue must not depend on which route the
+            // client happened to arrive by.
+            DisplayLabel = registration.Model.DisplayName,
+            ExternalConnectionId = registration.Connection.Id,
+            ExternalConnectionName = registration.Connection.DisplayName,
+            DeclaredLocality = registration.Connection.Locality == ExternalProviderLocality.Local
+                ? LocalModelDeclaredLocalities.Local
+                : LocalModelDeclaredLocalities.Cloud,
+            IsReasoningEffortCapable = registration.Model.SupportsReasoningEffort
+        }, ct).ConfigureAwait(false);
     }
 
     // Builds the details response for a llama.cpp-served GGUF from the installed-model registry — no Ollama probe.

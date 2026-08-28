@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>XE_Local_AI_Engine.Providers.OpenAICompatible.Core</RootNamespace>
+  </PropertyGroup>
+
+  <!-- The shared OpenAI-compatible transport is a LEAF: it speaks only MEAI + the OpenAI SDK and deliberately takes no
+       project reference (not even Providers.Abstractions), so nothing about the node's model contracts can leak into
+       the wire layer that both Providers.LlamaServer and Providers.OpenAICompat build on. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions"/>
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
+  </ItemGroup>
+
+</Project>

@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity.Tools;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -81,6 +82,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
             NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
 
         var beforeEdit = provider.GetOfferedTools("unsloth/gemma-4-12b-it-GGUF:Q5_K_M");
@@ -117,6 +119,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             runtimeSettings,
             NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
 
         AssertEx.False(provider.GetOfferedToolsForProfile("some-model").Any(tool => tool.Name == SpawnSubAgentToolDefinition.ToolName),
@@ -240,32 +243,95 @@ public sealed class LocalToolOfferProviderTests
     }
 
     [Test]
-    public void GetOfferedToolsForProfile_WhenModelIsCloudHosted_WithholdsRunPython()
+    public void GetOfferedToolsForProfile_WhenModelIsCloudHosted_WithholdsRunPythonAndSpawn()
     {
-        // The gate here is NOT the knowledge/coder tools' content-leak rationale: what is withheld is a REMOTE model's
-        // ability to direct code execution on the operator's machine. It is therefore unconditional, not behind the
-        // AllowCloudModelAccess opt-in — and spawn_subagent, which does not execute node code, is deliberately still
-        // offered, so this asserts the two are gated differently rather than together.
+        // The run_python gate is NOT the knowledge/coder tools' content-leak rationale: what is withheld is a REMOTE
+        // model's ability to direct code execution on the operator's machine. It is therefore unconditional, not behind
+        // the AllowCloudModelAccess opt-in.
+        //
+        // spawn_subagent is withheld by the same gate, which this test previously asserted the OPPOSITE of. Delegation
+        // reaches every tool the direct gates withhold: the child resolves its own model and its own tool set, so a
+        // cloud parent could bind a child to a node-local model, have it read the workspace or the knowledge base, and
+        // receive the result into its own transcript. An ungated spawn offer is a bypass of all three direct gates
+        // rather than a capability of its own.
         var provider = CreateProvider("qwen3:8b");
 
         var pool = provider.GetOfferedToolsForProfile("qwen3:8b", isCloudModel: true);
 
         AssertEx.False(pool.Any(tool => tool.Name == ComputeToolDefinition.ToolName),
             "run_python must never be offered to a cloud-hosted model");
-        AssertEx.Contains(pool, tool => tool.Name == "spawn_subagent");
+        AssertEx.False(pool.Any(tool => tool.Name == "spawn_subagent"),
+            "spawn_subagent must never be offered to a cloud-hosted model");
     }
 
     [Test]
-    public async Task GetOfferedToolsForProfileAsync_WhenModelIsCloudHosted_WithholdsRunPython()
+    public async Task GetOfferedToolsForProfileAsync_WhenModelIsCloudHosted_WithholdsRunPythonAndSpawn()
     {
-        // The async pool is a separate code path (it folds in custom tools), so the cloud gate is pinned on both or one
-        // of them can drift open.
+        // The async pool is a separate code path (it folds in custom tools), so both gates are pinned on both paths or
+        // one of them can drift open.
         var provider = CreateProvider("qwen3:8b");
 
         var pool = await provider.GetOfferedToolsForProfileAsync("qwen3:8b", isCloudModel: true);
 
         AssertEx.False(pool.Any(tool => tool.Name == ComputeToolDefinition.ToolName),
             "run_python must never be offered to a cloud-hosted model on the async pool either");
+        AssertEx.False(pool.Any(tool => tool.Name == "spawn_subagent"),
+            "spawn_subagent must never be offered to a cloud-hosted model on the async pool either");
+    }
+
+    [Test]
+    public void GetOfferedToolsForProfile_WhenTheModelIsADeclaredCloudExternalEndpoint_WithholdsSpawn()
+    {
+        const string modelId = "ext:hosted-box/qwen3";
+        var trustResolver = new FakeModelTrustResolver().Register("hosted-box", "qwen3", ExternalProviderLocality.Cloud);
+        var provider = CreateProvider(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            allowCloudKnowledgeAccess: false,
+            trustResolver,
+            modelId);
+
+        // The turn's own flag says local — this is an agent PINNED to an external id — so the declared locality is the
+        // only thing that can catch it, exactly as it is for run_python.
+        var pool = provider.GetOfferedToolsForProfile(modelId, isCloudModel: false);
+
+        AssertEx.False(pool.Any(tool => tool.Name == "spawn_subagent"),
+            "a declared-cloud external model must not be offered spawn_subagent");
+    }
+
+    [Test]
+    public void GetOfferedToolsForProfile_WhenTheExternalRegistrationCannotBeResolved_WithholdsSpawn()
+    {
+        const string modelId = "ext:hosted-box/qwen3";
+        var trustResolver = new FakeModelTrustResolver
+        {
+            CacheIsCold = true
+        };
+        var provider = CreateProvider(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            allowCloudKnowledgeAccess: false,
+            trustResolver,
+            modelId);
+
+        // Unresolved is not "probably fine": a deleted connection, an unreadable store, or the pre-boot window all land
+        // here, and only a positively resolved local declaration may earn delegation.
+        var pool = provider.GetOfferedToolsForProfile(modelId, isCloudModel: false);
+
+        AssertEx.False(pool.Any(tool => tool.Name == "spawn_subagent"),
+            "an unresolved external model must not be offered spawn_subagent");
+    }
+
+    [Test]
+    public void GetOfferedToolsForProfile_WhenTheModelIsADeclaredLocalExternalEndpoint_StillOffersSpawn()
+    {
+        const string modelId = "ext:unsloth-box/qwen3";
+        var trustResolver = new FakeModelTrustResolver().Register("unsloth-box", "qwen3");
+        var provider = CreateProvider(new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
+            allowCloudKnowledgeAccess: false,
+            trustResolver,
+            modelId);
+
+        // The gate is locality, not externality: full local parity is the whole point of the declared-Local flag.
+        var pool = provider.GetOfferedToolsForProfile(modelId, isCloudModel: false);
+
+        AssertEx.Contains(pool, tool => tool.Name == "spawn_subagent");
     }
 
     [Test]
@@ -484,6 +550,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
             NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
 
         var offered = provider.GetOfferedTools("some-other-model");
@@ -540,6 +607,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
             NullCustomToolScopeFactory.Instance,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
 
         var offered = provider.GetOfferedToolsForProfile("qwen3:8b");
@@ -621,6 +689,7 @@ public sealed class LocalToolOfferProviderTests
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").WithCustomToolsEnabled(customToolsEnabled).Build(),
             scopeFactory,
+            new FakeModelTrustResolver(),
             allowCloudKnowledgeAccess: false);
     }
 
@@ -649,6 +718,14 @@ public sealed class LocalToolOfferProviderTests
 
     private static LocalToolOfferProvider CreateProvider(IMcpToolRegistry mcpToolRegistry, bool allowCloudKnowledgeAccess, params string[] toolCapableModels)
     {
+        return CreateProvider(mcpToolRegistry, allowCloudKnowledgeAccess, new FakeModelTrustResolver(), toolCapableModels);
+    }
+
+    private static LocalToolOfferProvider CreateProvider(IMcpToolRegistry mcpToolRegistry,
+        bool allowCloudKnowledgeAccess,
+        FakeModelTrustResolver trustResolver,
+        params string[] toolCapableModels)
+    {
         var registry = new FakeAgentToolRegistry([
             new LocalChatToolDescriptor(AgentHomeToolDefinition.ToolName, "Runs an agent task.", "{\"type\":\"object\"}", RequiresApproval: true),
             new LocalChatToolDescriptor("open_url", "Opens a URL.", "{\"type\":\"object\"}", RequiresApproval: false)
@@ -658,6 +735,7 @@ public sealed class LocalToolOfferProviderTests
             mcpToolRegistry,
             StubNodeRuntimeSettings.Create().WithToolCapableModels(toolCapableModels).Build(),
             NullCustomToolScopeFactory.Instance,
+            trustResolver,
             allowCloudKnowledgeAccess);
     }
 

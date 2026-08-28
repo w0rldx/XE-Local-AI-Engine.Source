@@ -102,6 +102,6 @@ public sealed class CloudModelResolverTests
 
     private static CloudModelResolver CreateResolver(ICloudCredentialStore store)
     {
-        return new CloudModelResolver(store, NullLogger<CloudModelResolver>.Instance);
+        return new CloudModelResolver(store, new FakeModelTrustResolver(), NullLogger<CloudModelResolver>.Instance);
     }
 }

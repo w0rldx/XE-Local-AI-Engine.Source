@@ -34,6 +34,20 @@ describe("shouldFetchLocalModelDetails", () => {
 		expect(shouldFetchLocalModelDetails("llama3:8b", undefined, false, true)).toBe(true);
 	});
 
+	it("fetches for an external selection, which is never in the installed list but does have declared details", () => {
+		// The declared context window is the one detail the endpoint answers for an `ext:` id, and the context-usage
+		// meter is its only consumer — gating it on the installed list metered every external turn against "—".
+		expect(
+			shouldFetchLocalModelDetails("ext:workstation/qwen3-27b", option({ provider: "external", isAvailable: true }), false, false),
+		).toBe(true);
+	});
+
+	it("still refuses an external selection the picker marked unavailable", () => {
+		expect(
+			shouldFetchLocalModelDetails("ext:workstation/qwen3-27b", option({ provider: "external", isAvailable: false }), false, false),
+		).toBe(false);
+	});
+
 	it("does not fetch a configured-but-not-installed starter model (resolved name absent from the installed list)", () => {
 		// The local-default sentinel resolves to configuredDefaultModelName whose GGUF was never downloaded — GET
 		// details would 404 forever. Terminal domain state, not a retry loop.

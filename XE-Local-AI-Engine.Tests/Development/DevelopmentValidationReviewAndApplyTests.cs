@@ -301,7 +301,8 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                 ModifiedAt = null,
                 MaxContextTokens = 4096,
                 IsToolCapable = true
-            }));
+            }),
+            new FakeModelTrustResolver());
 
         var result = await model.RunAsync("reviewer-local",
             "review exact subject",
@@ -531,7 +532,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         using var exactChat = new CapturingReviewerChatClient(inputTokens: 40_000, outputTokens: 64);
         var exact = new DevelopmentReviewerModel(exactChat,
             cloud,
-            resolver);
+            resolver, new FakeModelTrustResolver());
 
         var result = await exact.RunAsync("reviewer-local",
             "review exact subject",
@@ -544,7 +545,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
 
         // More than one call's budget across the loop is normal, and must be accepted.
         using var multiRoundChat = new CapturingReviewerChatClient(inputTokens: 40_000, outputTokens: 65);
-        var multiRound = new DevelopmentReviewerModel(multiRoundChat, cloud, resolver);
+        var multiRound = new DevelopmentReviewerModel(multiRoundChat, cloud, resolver, new FakeModelTrustResolver());
         var accepted = await multiRound.RunAsync("reviewer-local",
                                            "review exact subject",
                                            new NullWorkspaceTools(),
@@ -556,7 +557,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
         // maxToolCalls 8 => at most 9 provider calls => a whole-attempt ceiling of 9 x 64.
         const int Ceiling = 9 * 64;
         using var overChat = new CapturingReviewerChatClient(inputTokens: 40_000, outputTokens: Ceiling + 1);
-        var over = new DevelopmentReviewerModel(overChat, cloud, resolver);
+        var over = new DevelopmentReviewerModel(overChat, cloud, resolver, new FakeModelTrustResolver());
         var failure = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() => over.RunAsync("reviewer-local",
                                         "review exact subject",
                                         new NullWorkspaceTools(),

@@ -72,6 +72,11 @@ public sealed class LocalModelProviderResolverCacheTests
 
     private sealed class CountingMapStore : ICoordinatedModelProviderMapStore
     {
+        // Not a reconciliation fixture: only the external-provider pass enumerates the whole map, and this double
+        // exists to drive a single model's leased path.
+        public Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException("This test double does not enumerate the provider map.");
+
         private int _readCount;
 
         public int ReadCount => Volatile.Read(ref _readCount);

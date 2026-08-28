@@ -16,6 +16,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+    <!-- The shared OpenAI-compatible wire layer (client construction + the request-body patch/chaining discipline).
+         A deliberate, reviewed second edge for a provider project: it is a leaf transport library with no project
+         references of its own, not a sibling provider, so the "providers never reach across to each other" rule the
+         layer-dependency tests freeze is unaffected. -->
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.OpenAICompatible.Core\XE-Local-AI-Engine.Providers.OpenAICompatible.Core.csproj"/>
   </ItemGroup>
 
   <ItemGroup>

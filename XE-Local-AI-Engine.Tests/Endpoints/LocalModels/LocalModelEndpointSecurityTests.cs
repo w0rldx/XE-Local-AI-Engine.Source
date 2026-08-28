@@ -79,5 +79,10 @@ public sealed class LocalModelEndpointSecurityTests
         {
             return Task.CompletedTask;
         }
+
+        public Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(mutate(new StoredNodeSettings()));
+        }
     }
 }

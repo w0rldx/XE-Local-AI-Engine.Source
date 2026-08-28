@@ -244,6 +244,56 @@ describe("ModelManagement", () => {
 		expect(await within(dialog).findByText("Context length: 8,192")).toBeTruthy();
 	});
 
+	// D10: the list endpoint appends external-provider registrations so the chat picker can offer them, but this page is
+	// the model STORE. An external model has no file to delete, no kind override to reset and no store default to hold,
+	// so it must never reach the installed table — where every row carries exactly those actions.
+	it("keeps external-provider models out of the installed table and its actions", async () => {
+		queryFns.listLocalModels.mockResolvedValue({
+			isAvailable: true,
+			selectedModelName: "llama3:8b",
+			configuredDefaultModelName: "llama3:8b",
+			error: null,
+			items: [
+				{
+					modelName: "llama3:8b",
+					sizeBytes: 1_073_741_824,
+					modifiedAtUtc: Date.UTC(2026, 4, 24),
+					family: "llama",
+					parameterSize: "8B",
+					quantizationLevel: "Q4_0",
+					isSelected: true,
+					kind: "Chat",
+					detectedKind: "Chat",
+					capabilities: ["completion", "tools"],
+					isOverridden: false,
+				},
+				{
+					modelName: "ext:unsloth-box/qwen3-27b",
+					provider: "external",
+					isSelected: false,
+					kind: "Chat",
+					detectedKind: "Chat",
+					capabilities: ["completion"],
+					isOverridden: false,
+					externalConnectionId: "unsloth-box",
+					externalConnectionName: "Unsloth box",
+					declaredLocality: "local",
+				},
+			],
+		});
+
+		renderWithProviders(<ModelManagement />);
+
+		// Wait for the row the list DOES carry, so the absence assertions below are about a rendered table.
+		await screen.findByTestId("model-details-button-llama3:8b");
+
+		const table = screen.getByTestId("installed-models-table");
+		expect(within(table).queryByText("ext:unsloth-box/qwen3-27b")).toBeNull();
+		expect(screen.queryByTestId("model-details-button-ext:unsloth-box/qwen3-27b")).toBeNull();
+		expect(screen.queryByLabelText("Delete ext:unsloth-box/qwen3-27b")).toBeNull();
+		expect(screen.queryByLabelText("Set ext:unsloth-box/qwen3-27b as default")).toBeNull();
+	});
+
 	it("selects and deletes models through the generated mutations", async () => {
 		renderWithProviders(<ModelManagement />);
 		await screen.findByLabelText("Set llama3:8b as default");

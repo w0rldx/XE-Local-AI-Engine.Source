@@ -144,6 +144,15 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
             {
                 additionalProperties[ReasoningOptionsResolver.CodexReasoningEffortKey] = codexEffort;
             }
+
+            // External-provider side channel, added only for an ext: model with a recognized effort. Its ABSENCE is
+            // meaningful — that is what lets the model's REGISTERED default effort apply — so an unspecified effort
+            // adds nothing and every other model's dictionary stays byte-identical.
+            var externalEffort = ReasoningOptionsResolver.ResolveExternalReasoningEffort(definition.ModelId, definition.ReasoningEffort);
+            if (externalEffort is not null)
+            {
+                additionalProperties[ReasoningOptionsResolver.ExternalReasoningEffortMarkerKey] = externalEffort;
+            }
         }
         else if (ReasoningOptionsResolver.IsReasoningRequested(definition.ReasoningEffort))
         {

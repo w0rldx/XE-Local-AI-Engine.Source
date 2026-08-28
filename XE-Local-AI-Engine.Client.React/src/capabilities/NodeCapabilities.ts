@@ -32,6 +32,10 @@ export interface NodeCapabilityConfig {
 	// Cloud Settings is a LOCAL cloud-provider surface (Codex OAuth + Azure Foundry credentials, stored
 	// encrypted on this node) — it does NOT require a Central Platform pairing, so it is on by default.
 	readonly cloudSettings: boolean;
+	// When false the External Providers nav entry is hidden and the /external-providers route is inaccessible.
+	// Like Cloud Settings this is a LOCAL surface — operator-declared OpenAI-compatible endpoints and their models,
+	// stored encrypted on this node — so it needs no Central Platform pairing and is on by default.
+	readonly externalProviders: boolean;
 	readonly modelManagement: boolean;
 	readonly invocationMonitor: boolean;
 	readonly benchmarks: boolean;
@@ -104,6 +108,9 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// Cloud Settings is a LOCAL cloud-provider surface (Codex OAuth sign-in + Azure Foundry connection/models,
 	// stored encrypted on this node). It needs no Central Platform pairing, so it is on by default.
 	cloudSettings: true,
+	// External Providers hosts the node-local OpenAI-compatible connections (base URL, optional key, declared
+	// Local/Cloud trust, and the operator-registered models). Node-local encrypted storage, no pairing — on by default.
+	externalProviders: true,
 	modelManagement: true,
 	invocationMonitor: true,
 	benchmarks: true,
@@ -150,6 +157,8 @@ export const nodeRoutePaths = {
 	binding: "/node-binding",
 	nodeSettings: "/node-settings",
 	cloudSettings: "/cloud-settings",
+	// External OpenAI-compatible provider connections page — gated on nodeCapabilities.externalProviders
+	externalProviders: "/external-providers",
 	models: "/models",
 	invocations: "/invocations",
 	benchmarks: "/benchmarks",

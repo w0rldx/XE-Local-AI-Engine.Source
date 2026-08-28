@@ -561,5 +561,11 @@ public sealed class FirstRunModelProvisioningServiceTests
             Saved = settings;
             return Task.CompletedTask;
         }
+
+        public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate, CancellationToken cancellationToken = default)
+        {
+            await SaveAsync(mutate(_current), cancellationToken);
+            return _current;
+        }
     }
 }

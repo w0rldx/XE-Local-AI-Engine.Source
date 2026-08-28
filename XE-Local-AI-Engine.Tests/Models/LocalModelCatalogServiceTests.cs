@@ -11,13 +11,14 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The catalog's four sources fail independently, and that policy — not the list endpoint's mapping — is what
+///     The catalog's five sources fail independently, and that policy — not the list endpoint's mapping — is what
 ///     keeps a node with no Ollama, no cloud session and an unreadable GGUF registry able to answer a picker query.
 ///     Each test kills exactly one source and asserts the others survive it.
 /// </summary>
@@ -33,6 +34,7 @@ public sealed class LocalModelCatalogServiceTests
         harness.WithInstalledGguf("local/gguf:Q4_K_M");
         harness.WithCodexSession(Now.AddHours(1));
         harness.WithAzureDeployment("gpt-5");
+        harness.WithExternalModel();
 
         var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None).ConfigureAwait(false);
 
@@ -40,8 +42,25 @@ public sealed class LocalModelCatalogServiceTests
         AssertEx.Equal(expected: 1, catalog.InstalledGgufModels.Count);
         AssertEx.True(catalog.HasUsableCodexSession);
         AssertEx.NotNull(catalog.AzureFoundryConnection);
+        AssertEx.Equal(expected: 1, catalog.ExternalModels.Count);
         AssertEx.Equal("selected:model", catalog.SelectedModelName);
         AssertEx.Equal(harness.ConfiguredDefaultModel, catalog.ConfiguredDefaultModelName);
+    }
+
+    [Test]
+    public async Task GetCatalog_WhenTheExternalRegistryThrows_DegradesToNoExternalEntriesOnly()
+    {
+        // An unreadable encrypted external store must not take the local picker down with it: the four other sources
+        // have nothing to do with it, and a node whose external file is corrupt still has its GGUFs.
+        var harness = new Harness();
+        harness.WithOllamaModels("orca-mini:latest");
+        harness.ExternalProviderRegistry.ListRegistrationsAsync(Arg.Any<CancellationToken>())
+               .Returns<Task<IReadOnlyList<ExternalProviderModelRegistration>>>(_ => throw new IOException("external store unreadable"));
+
+        var catalog = await harness.CreateService().GetCatalogAsync(CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Empty(catalog.ExternalModels);
+        AssertEx.Equal(expected: 1, AssertEx.NotNull(catalog.OllamaModels).Count);
     }
 
     [Test]
@@ -114,6 +133,8 @@ public sealed class LocalModelCatalogServiceTests
 
         public ICodexTokenStore CodexTokenStore { get; } = Substitute.For<ICodexTokenStore>();
 
+        public IExternalProviderRegistry ExternalProviderRegistry { get; } = Substitute.For<IExternalProviderRegistry>();
+
         private IModelClassificationService ClassificationService { get; } = Substitute.For<IModelClassificationService>();
 
         private ICloudModelResolver CloudModelResolver { get; } = Substitute.For<ICloudModelResolver>();
@@ -127,6 +148,8 @@ public sealed class LocalModelCatalogServiceTests
             GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(Array.Empty<LocalModelDescriptor>());
             CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
             CloudModelResolver.ResolveAzureFoundryConnectionAsync(Arg.Any<CancellationToken>()).Returns((StoredAzureFoundryConnection?)null);
+            ExternalProviderRegistry.ListRegistrationsAsync(Arg.Any<CancellationToken>())
+                                    .Returns<IReadOnlyList<ExternalProviderModelRegistration>>([]);
             ClassificationService.ClassifyAsync(Arg.Any<IEnumerable<ModelIdentity>>(), Arg.Any<CancellationToken>())
                                  .Returns(call => call.Arg<IEnumerable<ModelIdentity>>()
                                                       .ToDictionary(entry => entry.ModelName,
@@ -178,6 +201,22 @@ public sealed class LocalModelCatalogServiceTests
                                   ]
                               });
 
+        public void WithExternalModel() =>
+            ExternalProviderRegistry.ListRegistrationsAsync(Arg.Any<CancellationToken>())
+                                    .Returns<IReadOnlyList<ExternalProviderModelRegistration>>([
+                                        new ExternalProviderModelRegistration(new ExternalProviderConnectionDescriptor
+                                            {
+                                                Id = "unsloth-box",
+                                                DisplayName = "Unsloth box",
+                                                BaseUrl = new Uri("http://127.0.0.1:18099/v1/"),
+                                                Locality = ExternalProviderLocality.Local
+                                            },
+                                            new ExternalProviderModelDescriptor
+                                            {
+                                                WireId = "qwen3-27b"
+                                            })
+                                    ]);
+
         public LocalModelCatalogService CreateService() =>
             new(ModelService,
                 ClassificationService,
@@ -187,6 +226,7 @@ public sealed class LocalModelCatalogServiceTests
                 CodexTokenStore,
                 Options.Create(new CodexOptions()),
                 CloudModelResolver,
+                ExternalProviderRegistry,
                 new ManualTimeProvider(Now),
                 NullLogger<LocalModelCatalogService>.Instance);
     }

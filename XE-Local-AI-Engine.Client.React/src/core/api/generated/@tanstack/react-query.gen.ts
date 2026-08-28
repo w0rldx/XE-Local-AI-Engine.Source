@@ -87,6 +87,7 @@ import {
 	deleteConversationFile,
 	deleteCustomTool,
 	deleteEvaluation,
+	deleteExternalProviderConnection,
 	deleteGoldenConversation,
 	deleteImageModel,
 	deleteKnowledgeDocument,
@@ -157,6 +158,7 @@ import {
 	getDevelopmentProject,
 	getDevelopmentTask,
 	getEvaluation,
+	getExternalProviderConnection,
 	getGgufDownloadOperationStatus,
 	getGgufDownloads,
 	getGgufDownloadStatus,
@@ -236,6 +238,7 @@ import {
 	listEligibleBenchmarkAgents,
 	listEligibleBenchmarkModels,
 	listEvaluations,
+	listExternalProviderConnections,
 	listGoldenConversations,
 	listImageJobs,
 	listImageModelDownloads,
@@ -285,6 +288,7 @@ import {
 	previewDevelopmentPatch,
 	previewGgufImport,
 	previewSkillImport,
+	probeExternalProvider,
 	promoteSuggestedPlaybookAction,
 	promoteTrainingArtifact,
 	putModelKind,
@@ -317,6 +321,7 @@ import {
 	runPlaybookActionEval,
 	runTrainingArtifactSmoke,
 	saveCloudSettings,
+	saveExternalProviderConnection,
 	saveNodeSettings,
 	saveTutorialState,
 	scoreBenchmarkRun,
@@ -558,6 +563,9 @@ import type {
 	DeleteEvaluationData,
 	DeleteEvaluationError,
 	DeleteEvaluationResponse,
+	DeleteExternalProviderConnectionData,
+	DeleteExternalProviderConnectionError,
+	DeleteExternalProviderConnectionResponse,
 	DeleteGoldenConversationData,
 	DeleteGoldenConversationResponse,
 	DeleteImageModelData,
@@ -721,6 +729,9 @@ import type {
 	GetDevelopmentTaskResponse,
 	GetEvaluationData,
 	GetEvaluationResponse,
+	GetExternalProviderConnectionData,
+	GetExternalProviderConnectionError,
+	GetExternalProviderConnectionResponse,
 	GetGgufDownloadOperationStatusData,
 	GetGgufDownloadOperationStatusResponse,
 	GetGgufDownloadsData,
@@ -893,6 +904,8 @@ import type {
 	ListEligibleBenchmarkModelsResponse,
 	ListEvaluationsData,
 	ListEvaluationsResponse,
+	ListExternalProviderConnectionsData,
+	ListExternalProviderConnectionsResponse,
 	ListGoldenConversationsData,
 	ListGoldenConversationsResponse,
 	ListImageJobsData,
@@ -1003,6 +1016,9 @@ import type {
 	PreviewGgufImportResponse,
 	PreviewSkillImportData,
 	PreviewSkillImportResponse,
+	ProbeExternalProviderData,
+	ProbeExternalProviderError,
+	ProbeExternalProviderResponse,
 	PromoteSuggestedPlaybookActionData,
 	PromoteSuggestedPlaybookActionResponse,
 	PromoteTrainingArtifactData,
@@ -1083,6 +1099,9 @@ import type {
 	SaveCloudSettingsData,
 	SaveCloudSettingsError,
 	SaveCloudSettingsResponse,
+	SaveExternalProviderConnectionData,
+	SaveExternalProviderConnectionError,
+	SaveExternalProviderConnectionResponse,
 	SaveNodeSettingsData,
 	SaveNodeSettingsError,
 	SaveNodeSettingsResponse,
@@ -6165,6 +6184,122 @@ export const startStableDiffusionCppSourceBuildMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startStableDiffusionCppSourceBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteExternalProviderConnectionMutation = (
+	options?: Partial<Options<DeleteExternalProviderConnectionData>>,
+): UseMutationOptions<
+	DeleteExternalProviderConnectionResponse,
+	AxiosError<DeleteExternalProviderConnectionError>,
+	Options<DeleteExternalProviderConnectionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteExternalProviderConnectionResponse,
+		AxiosError<DeleteExternalProviderConnectionError>,
+		Options<DeleteExternalProviderConnectionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteExternalProviderConnection({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getExternalProviderConnectionQueryKey = (options: Options<GetExternalProviderConnectionData>) =>
+	createQueryKey("getExternalProviderConnection", options);
+
+export const getExternalProviderConnectionOptions = (options: Options<GetExternalProviderConnectionData>) =>
+	queryOptions<
+		GetExternalProviderConnectionResponse,
+		AxiosError<GetExternalProviderConnectionError>,
+		GetExternalProviderConnectionResponse,
+		ReturnType<typeof getExternalProviderConnectionQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getExternalProviderConnection({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getExternalProviderConnectionQueryKey(options),
+	});
+
+export const saveExternalProviderConnectionMutation = (
+	options?: Partial<Options<SaveExternalProviderConnectionData>>,
+): UseMutationOptions<
+	SaveExternalProviderConnectionResponse,
+	AxiosError<SaveExternalProviderConnectionError>,
+	Options<SaveExternalProviderConnectionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		SaveExternalProviderConnectionResponse,
+		AxiosError<SaveExternalProviderConnectionError>,
+		Options<SaveExternalProviderConnectionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await saveExternalProviderConnection({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listExternalProviderConnectionsQueryKey = (options?: Options<ListExternalProviderConnectionsData>) =>
+	createQueryKey("listExternalProviderConnections", options);
+
+export const listExternalProviderConnectionsOptions = (options?: Options<ListExternalProviderConnectionsData>) =>
+	queryOptions<
+		ListExternalProviderConnectionsResponse,
+		AxiosError<DefaultError>,
+		ListExternalProviderConnectionsResponse,
+		ReturnType<typeof listExternalProviderConnectionsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listExternalProviderConnections({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listExternalProviderConnectionsQueryKey(options),
+	});
+
+export const probeExternalProviderMutation = (
+	options?: Partial<Options<ProbeExternalProviderData>>,
+): UseMutationOptions<
+	ProbeExternalProviderResponse,
+	AxiosError<ProbeExternalProviderError>,
+	Options<ProbeExternalProviderData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		ProbeExternalProviderResponse,
+		AxiosError<ProbeExternalProviderError>,
+		Options<ProbeExternalProviderData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await probeExternalProvider({
 				...options,
 				...fnOptions,
 				throwOnError: true,

@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
@@ -8,18 +10,27 @@ using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 /// <summary>
 ///     Default <see cref="IModelCapabilityResolver" />. Routes the capability lookup by the model's provider so an id is
 ///     never classified against a runtime that has never seen it: Codex and Azure Foundry ids use their declared
-///     capability matrices, a llama.cpp GGUF reads its offline chat-template capabilities (no Ollama probe, no network),
-///     and only an Ollama-routed model hits <c>/api/show</c> (cache-first). This is the one provider-routing decision in
-///     the codebase: the orchestration resolver resolves each participant's capabilities from its OWN effective model
-///     through it, and <see cref="ChatTurnResolver" /> resolves the chat turn's active model through it too.
+///     capability matrices, an external OpenAI-compatible model uses the operator's own declarations, a llama.cpp GGUF
+///     reads its offline chat-template capabilities (no Ollama probe, no network), and only an Ollama-routed model hits
+///     <c>/api/show</c> (cache-first). This is the one provider-routing decision in the codebase: the orchestration
+///     resolver resolves each participant's capabilities from its OWN effective model through it, and
+///     <see cref="ChatTurnResolver" /> resolves the chat turn's active model through it too.
 /// </summary>
 public sealed class ModelCapabilityResolver(
     IModelClassificationService modelClassificationService,
     ILocalModelProviderResolver localModelProviderResolver,
     IGgufModelCapabilityResolver ggufModelCapabilityResolver,
     IActiveCloudChatClientFactory activeCloudChatClientFactory,
+    IModelTrustResolver modelTrustResolver,
     ILogger<ModelCapabilityResolver> logger) : IModelCapabilityResolver
 {
+    // What an ext: id resolves to when its registration is gone: not capable, and cloud, so the private-data gates
+    // withhold. Reached for a deleted connection, a corrupt store, or a hand-edited id in a saved agent.
+    private static readonly ModelCapabilitySnapshot UnresolvedExternal = new(SupportsThinking: false, SupportsTools: false, IsCloud: true)
+    {
+        ReasoningBudgetEnforceable = true
+    };
+
     // The safe default: not thinking-capable, not tool-capable, and node-local.
     private static readonly ModelCapabilitySnapshot NotCapableLocal = new(SupportsThinking: false, SupportsTools: false, IsCloud: false);
 
@@ -41,6 +52,30 @@ public sealed class ModelCapabilityResolver(
             {
                 // The reasoning-budget marker is consumed only by the llama.cpp chat client, so it never reaches the
                 // Codex wire; report the budget enforceable so the cloud path stays byte-identical.
+                ReasoningBudgetEnforceable = true
+            };
+        }
+
+        // An external OpenAI-compatible model is classified from the OPERATOR'S declarations, never a probe: only
+        // POST /v1/chat/completions is universal across llama.cpp, vLLM, LM Studio and hosted APIs, and none of them
+        // advertises tool, vision or reasoning support in a way that can be trusted across all four. Placed before the
+        // cloud-routing check because an ext: id deliberately falls THROUGH cloud selection (the orphan guard) — so
+        // that check would report it node-local and hand a hosted endpoint the private-data gates.
+        if (ExternalModelId.HasExternalScheme(model))
+        {
+            if (await modelTrustResolver.TryResolveExternalAsync(model, cancellationToken).ConfigureAwait(false) is not { } registration)
+            {
+                return UnresolvedExternal;
+            }
+
+            return new ModelCapabilitySnapshot(registration.Model.SupportsReasoning,
+                registration.Model.SupportsTools,
+                registration.Connection.Locality == ExternalProviderLocality.Cloud)
+            {
+                SupportsVision = registration.Model.SupportsVision,
+                // Vacuously enforceable: this provider emits no llama-server reasoning-budget field at all, so there is
+                // no cap that could be silently accepted and ignored. Reporting false would suppress a marker nothing
+                // on this wire reads.
                 ReasoningBudgetEnforceable = true
             };
         }

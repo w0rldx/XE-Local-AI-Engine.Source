@@ -104,18 +104,30 @@ export function useGenerateDataset() {
 	});
 }
 
+// External-provider model ids are namespaced `ext:{connection}/{wireId}`. Matching the prefix is how both layers
+// recognize them, so the two agree without the frontend having to resolve a connection.
+const EXTERNAL_MODEL_ID_PREFIX = "ext:";
+
 /**
  * The models a definition may name as its teacher or critic: node-local only (invariant #5), narrowed to the
  * tool-capable ones because a tool-calling dataset is what the teacher has to produce. An empty capability list means
  * the node has not populated that capability yet — then every local model is offered rather than none, the same
  * "do not enforce" posture the agent form takes.
+ *
+ * External-provider models are excluded outright, whatever their declared trust: training generation and evaluation
+ * are a GGUF-leased pipeline and the backend refuses `external` teachers and critics with a typed validation error.
+ * A declared-LOCAL external model would otherwise slip past that intent here — the tool-capable allow-list carries
+ * `ext:` ids (models declared tool-capable join it node-wide), so narrowing by capability alone would not drop them.
+ * The same list feeds both the teacher and the critic picker (DefinitionEditorDialog), so one filter covers both.
  */
 export function useTeacherModelNames(): string[] {
 	const localModels = useQuery(withResponseValidation(listLocalModelsOptions()));
 	const toolCapable = useQuery(withResponseValidation(getToolCapableModelsOptions()));
 
-	const localNames = (localModels.data?.items ?? []).map((model) => model.modelName ?? "").filter((name) => name.length > 0);
-	const capableNames = new Set(toolCapable.data?.models ?? []);
+	const localNames = (localModels.data?.items ?? [])
+		.map((model) => model.modelName ?? "")
+		.filter((name) => name.length > 0 && !name.startsWith(EXTERNAL_MODEL_ID_PREFIX));
+	const capableNames = new Set((toolCapable.data?.models ?? []).filter((name) => !name.startsWith(EXTERNAL_MODEL_ID_PREFIX)));
 	if (capableNames.size === 0) {
 		return localNames;
 	}

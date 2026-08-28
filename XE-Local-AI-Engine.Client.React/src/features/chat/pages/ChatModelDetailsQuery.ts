@@ -1,4 +1,5 @@
 import type { ModelOption } from "@/features/chat/models/ChatModels";
+import { EXTERNAL_PROVIDER } from "@/core/models/LocalModelProviders";
 
 // Decides whether the chat page should poll GET models/{name}/details for the current selection.
 //
@@ -35,6 +36,14 @@ export function shouldFetchLocalModelDetails(
 	// A matched option that is explicitly unavailable can't serve details — don't poll it.
 	if (selectedOption !== undefined && selectedOption.isAvailable === false) {
 		return false;
+	}
+
+	// An external model is served by a remote endpoint, so it is never in the node's installed list — but the details
+	// route DOES answer for its `ext:` id, from the operator's own declarations, with the context window the usage
+	// meter needs. The installed-list gate below exists for a local default whose GGUF was never downloaded; applying
+	// it here is what left every external selection metered against an unknown capacity ("N of —").
+	if (selectedOption?.provider === EXTERNAL_PROVIDER) {
+		return true;
 	}
 
 	// A concrete name that is not in the installed list can only 404 — treat it as a terminal state, not a retry loop.

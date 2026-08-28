@@ -119,6 +119,28 @@ public sealed class StructuredAgentRunnerTests
         return new StructuredAgentRunner(capabilities, NullLoggerFactory.Instance, new EmptyServiceProvider());
     }
 
+    [Test]
+    [Arguments("ext:local-box/qwen3")]
+    [Arguments("ext:cloud-box/qwen3")]
+    public async Task ExternalTeacher_IsRejected_WhateverItsDeclaredLocality(string teacherModel)
+    {
+        // The cloud refusal above does NOT cover a declared-LOCAL external model: the capability resolver reports it
+        // node-local, which is right for the tool gates and wrong here. Training needs a runtime the node OWNS — an
+        // endpoint it neither launched nor versioned can change model or sampling mid-run, leaving a dataset whose
+        // provenance claims a determinism it never had.
+        var capabilities = Substitute.For<IModelCapabilityResolver>();
+        _ = capabilities.ResolveAsync(teacherModel, Arg.Any<CancellationToken>())
+                        .Returns(new ModelCapabilitySnapshot(false, true, false));
+        var runner = new StructuredAgentRunner(capabilities, NullLoggerFactory.Instance, new EmptyServiceProvider());
+        using var client = new RecordingChatClient(SampleJson);
+
+        var exception = await AssertEx.ThrowsAsync<TrainingValidationException>(() =>
+            runner.RunAsync(client, Request(TeacherOutputMode.ValidateAfter) with { ModelName = teacherModel }));
+
+        AssertEx.Contains(exception.Message, "external model");
+        AssertEx.False(client.WasCalled, "A refused teacher must never reach the transport.");
+    }
+
     private static StructuredAgentRequest Request(TeacherOutputMode mode) =>
         new("teacher.gguf", "system", "produce one example", mode, Schema, Temperature: 0.2f, Seed: null);
 

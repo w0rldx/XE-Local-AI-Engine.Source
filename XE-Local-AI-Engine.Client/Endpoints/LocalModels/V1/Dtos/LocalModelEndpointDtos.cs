@@ -16,6 +16,28 @@ public static class LocalModelProviders
 
     /// <summary>An Azure Foundry / Azure OpenAI deployment (egress to the configured Azure endpoint).</summary>
     public const string AzureFoundry = "AzureFoundry";
+
+    /// <summary>
+    ///     A model on an operator-registered external OpenAI-compatible connection. ONE tag for every connection — the
+    ///     provider is a multiplexer and the connection is carried by the id itself — so egress and grouping are read
+    ///     from <see cref="LocalModelResponse.DeclaredLocality" /> and
+    ///     <see cref="LocalModelResponse.ExternalConnectionId" />, never from this tag alone.
+    /// </summary>
+    public const string External = "external";
+}
+
+/// <summary>
+///     The operator-DECLARED trust locality of an external connection, as it appears on
+///     <see cref="LocalModelResponse.DeclaredLocality" />. Lowercase wire values so the client can compare them
+///     without case handling.
+/// </summary>
+public static class LocalModelDeclaredLocalities
+{
+    /// <summary>Self-hosted on the node or its trusted network: full local-parity tool/knowledge privileges.</summary>
+    public const string Local = "local";
+
+    /// <summary>A hosted endpoint outside the trust boundary: gated exactly like the built-in cloud providers.</summary>
+    public const string Cloud = "cloud";
 }
 
 public sealed class ListLocalModelsResponse
@@ -56,6 +78,30 @@ public sealed class LocalModelResponse
     ///     an egress hint for cloud models. Defaults to <c>"Ollama"</c> so existing local entries are unchanged.
     /// </summary>
     public string Provider { get; init; } = LocalModelProviders.Ollama;
+
+    /// <summary>
+    ///     A friendly label the operator gave this model, or <see langword="null" /> when they gave none (the client
+    ///     then falls back to <see cref="ModelName" />). Populated for external models and for Azure Foundry
+    ///     deployments; null for every locally-installed model, whose name IS its identity.
+    /// </summary>
+    public string? DisplayLabel { get; init; }
+
+    /// <summary>
+    ///     The external connection serving this model, or <see langword="null" /> for every non-external entry. What
+    ///     makes per-connection picker sections possible: <c>provider: "external"</c> alone cannot say which of the
+    ///     operator's endpoints a model belongs to.
+    /// </summary>
+    public string? ExternalConnectionId { get; init; }
+
+    /// <summary>The serving connection's operator-chosen label, for the section heading and the "Sent to …" egress cue.</summary>
+    public string? ExternalConnectionName { get; init; }
+
+    /// <summary>
+    ///     The operator-declared trust locality of the serving connection (<see cref="LocalModelDeclaredLocalities" />),
+    ///     or <see langword="null" /> for every non-external entry. This is a DECLARATION, never an inference from the
+    ///     base URL, and it is what decides whether the model is grouped and badged as local or as cloud.
+    /// </summary>
+    public string? DeclaredLocality { get; init; }
 
     public long? SizeBytes { get; init; }
 
@@ -102,6 +148,20 @@ public sealed class LocalModelResponse
     ///     the field behaves exactly as before.
     /// </summary>
     public bool IsNativeReasoningCapable { get; init; }
+
+    /// <summary>
+    ///     Whether a model that reasons also accepts a GRADED effort level, or only reasons or does not. Distinguishes
+    ///     the two shapes <see cref="IsReasoningCapable" /> alone conflates for an externally served model: an endpoint
+    ///     that honours <c>reasoning_effort</c> gets the graded selector, one that merely reasons gets the binary
+    ///     on/off control — offering levels it ignores is a menu whose entries do nothing.
+    ///     <para>
+    ///         <see langword="null" /> means "not declared", which is every non-external entry: a local model's graded
+    ///         control follows its Ollama <c>thinking</c> capability and a cloud provider's follows its own vocabulary,
+    ///         neither of which this field is allowed to change. Meaningful only together with
+    ///         <see cref="IsReasoningCapable" />.
+    ///     </para>
+    /// </summary>
+    public bool? IsReasoningEffortCapable { get; init; }
 
     /// <summary>
     ///     True when llama.cpp can ENFORCE a per-request thinking budget for this model — its chat template renders a
@@ -204,6 +264,30 @@ public sealed class LocalModelDetailsResponse
     ///     advertised train ceiling): the chat context-usage meter should size against this real window when present.
     /// </summary>
     public int? EffectiveContextTokens { get; init; }
+
+    /// <summary>The operator's friendly label for this model, or null when they gave none. Populated for external models.</summary>
+    /// <remarks>
+    ///     The four fields below mirror their namesakes on <see cref="LocalModelResponse" /> deliberately: a details
+    ///     view reached directly (a deep link, a reload) has no list entry to read the connection identity from, and
+    ///     two different spellings of the same four facts is how the picker and the details pane come to disagree.
+    /// </remarks>
+    public string? DisplayLabel { get; init; }
+
+    /// <summary>The external connection serving this model, or null for every non-external entry.</summary>
+    public string? ExternalConnectionId { get; init; }
+
+    /// <summary>The serving connection's operator-chosen label.</summary>
+    public string? ExternalConnectionName { get; init; }
+
+    /// <summary>The declared trust locality (<see cref="LocalModelDeclaredLocalities" />), or null for a non-external entry.</summary>
+    public string? DeclaredLocality { get; init; }
+
+    /// <summary>
+    ///     Whether a reasoning model also accepts a graded effort level; null when undeclared. Mirrors
+    ///     <see cref="LocalModelResponse.IsReasoningEffortCapable" /> for the same reason the four fields above are
+    ///     mirrored: a details view reached directly has no list entry to read it from.
+    /// </summary>
+    public bool? IsReasoningEffortCapable { get; init; }
 
     /// <summary>Typed acquisition provenance for an installed GGUF; null for legacy and non-GGUF models.</summary>
     public LocalModelOrigin? Origin { get; init; }

@@ -1,9 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
-using System.ClientModel;
-using System.ClientModel.Primitives;
 using Microsoft.Extensions.AI;
 using OpenAI;
+using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 
 /// <summary>
 ///     Builds the MEAI OpenAI <see cref="IChatClient" /> / <see cref="IEmbeddingGenerator{TInput,TEmbedding}" />
@@ -11,27 +10,20 @@ using OpenAI;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         llama-server exposes the OpenAI <em>chat-completions</em> surface (<c>/v1/chat/completions</c> +
-///         <c>/v1/embeddings</c>), so the adapters are built off
-///         <c>OpenAIClient.GetChatClient(modelId).AsIChatClient()</c> and
-///         <c>GetEmbeddingClient(modelId).AsIEmbeddingGenerator()</c> — NOT the Responses adapter the Codex provider
-///         uses. Verified against the pinned <c>Microsoft.Extensions.AI.OpenAI</c> 10.6.0 / <c>OpenAI</c> 2.9.1
-///         surface (2026-06-18): the v10.6 extension method names are <c>AsIChatClient</c> / <c>AsIEmbeddingGenerator</c>.
+///         The construction itself — chat-completions surface, pinned network timeout, no-retry policy — is the shared
+///         <see cref="OpenAICompatibleClientFactory" />, which serves every OpenAI-compatible endpoint the node talks
+///         to. What stays HERE is the one thing that is llama-server-specific: the credential.
 ///     </para>
 ///     <para>
-///         The API key is irrelevant — a local llama-server ignores it, so a fixed sentinel satisfies the SDK ctor and
-///         never reaches a real provider (the endpoint is localhost-bound). The
-///         <see cref="OpenAIClientOptions.Endpoint" /> is the <c>…/v1</c> base address; the SDK appends the operation
-///         path (e.g. <c>/chat/completions</c>) to it.
+///         The API key is irrelevant for llama-server — a local instance ignores it, so a fixed sentinel satisfies the
+///         SDK ctor and never reaches a real provider (the endpoint is localhost-bound). That sentinel is deliberately
+///         NOT the shared factory's default: an operator-registered external endpoint may genuinely validate the
+///         <c>Authorization</c> header it is sent, so the shared factory sends NO header when it has no key, and only
+///         this llama-server path opts into the sentinel.
 ///     </para>
 ///     <para>
-///         The built client's transport policy is pinned EXPLICITLY rather than left to the System.ClientModel
-///         defaults. <c>NetworkTimeout</c> is set from <paramref name="networkTimeout" /> (a generous outer floor — see
-///         <see cref="XE_Local_AI_Engine.Providers.LlamaServer.Options.LlamaServerSupervisorOptions.HttpNetworkTimeout" />)
-///         so a single call never inherits the SDK's 100 s default and abort a legitimately long local generation, and the
-///         <c>RetryPolicy</c> is pinned to <c>ClientRetryPolicy(0)</c> so the SDK NEVER re-issues a request: a local chat
-///         completion is non-idempotent and a transient-looking failure must surface, not silently replay a second
-///         generation. This mirrors the Codex factory's explicit <c>RetryPolicy = new ClientRetryPolicy(0)</c>.
+///         The <see cref="OpenAIClientOptions.Endpoint" /> is the <c>…/v1</c> base address the supervisor resolved; the
+///         SDK appends the operation path (e.g. <c>/chat/completions</c>) to it.
 ///     </para>
 /// </remarks>
 internal static class LlamaServerOpenAIAdapterFactory
@@ -41,46 +33,21 @@ internal static class LlamaServerOpenAIAdapterFactory
 
     internal static IChatClient CreateChatClient(Uri baseAddress, string modelId, TimeSpan networkTimeout)
     {
-        ArgumentNullException.ThrowIfNull(baseAddress);
-        ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
-
-        var openAiClient = BuildOpenAIClient(baseAddress, networkTimeout);
-        return openAiClient.GetChatClient(modelId).AsIChatClient();
+        return OpenAICompatibleClientFactory.CreateChatClient(baseAddress, modelId, IgnoredApiKey, networkTimeout);
     }
 
     internal static IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(Uri baseAddress, string modelId, TimeSpan networkTimeout)
     {
-        ArgumentNullException.ThrowIfNull(baseAddress);
-        ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
-
-        var openAiClient = BuildOpenAIClient(baseAddress, networkTimeout);
-        return openAiClient.GetEmbeddingClient(modelId).AsIEmbeddingGenerator();
-    }
-
-    private static OpenAIClient BuildOpenAIClient(Uri baseAddress, TimeSpan networkTimeout)
-    {
-        return new OpenAIClient(new ApiKeyCredential(IgnoredApiKey), BuildClientOptions(baseAddress, networkTimeout));
+        return OpenAICompatibleClientFactory.CreateEmbeddingGenerator(baseAddress, modelId, IgnoredApiKey, networkTimeout);
     }
 
     /// <summary>
-    ///     Builds the transport-policy-pinned <see cref="OpenAIClientOptions" />: explicit
-    ///     <see cref="OpenAIClientOptions.NetworkTimeout" /> (never the SDK's 100 s default) and a
-    ///     <c>ClientRetryPolicy(0)</c> so the SDK cannot re-issue a non-idempotent completion. Exposed internally so a test
-    ///     can assert the pinned policy directly (per the pipeline-behavior lesson in agent-knowledge §4).
+    ///     The transport-policy-pinned <see cref="OpenAIClientOptions" /> the adapters above are built with. Exposed
+    ///     internally so a test can assert the pinned policy directly (per the pipeline-behavior lesson in
+    ///     agent-knowledge §4).
     /// </summary>
     internal static OpenAIClientOptions BuildClientOptions(Uri baseAddress, TimeSpan networkTimeout)
     {
-        ArgumentNullException.ThrowIfNull(baseAddress);
-
-        return new OpenAIClientOptions
-        {
-            Endpoint = baseAddress,
-            // A non-positive value would be rejected by the SDK; the options validator guarantees a positive one, but the
-            // guard keeps a direct/test caller from tripping it and makes the "always positive" contract explicit here.
-            NetworkTimeout = networkTimeout > TimeSpan.Zero ? networkTimeout : Timeout.InfiniteTimeSpan,
-            // Non-idempotent completion: never let the SDK re-issue a request on a transient failure (would duplicate a
-            // generation). The stream-idle watchdog / invocation timeout own the real deadlines.
-            RetryPolicy = new ClientRetryPolicy(maxRetries: 0)
-        };
+        return OpenAICompatibleClientFactory.BuildClientOptions(baseAddress, networkTimeout);
     }
 }

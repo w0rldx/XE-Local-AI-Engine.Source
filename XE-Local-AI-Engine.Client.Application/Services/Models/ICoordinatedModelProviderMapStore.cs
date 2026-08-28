@@ -4,6 +4,19 @@ using XE_Local_AI_Engine.Client.Persistence;
 
 public interface ICoordinatedModelProviderMapStore
 {
+    /// <summary>
+    ///     Every stored mapping, ordered by model name. Takes NO lease: a lease is keyed per model, so there is no such
+    ///     thing as a lease over "the whole map", and holding one over every row would serialize the map against every
+    ///     concurrent claim on the node.
+    /// </summary>
+    /// <remarks>
+    ///     This is therefore a point-in-time SNAPSHOT, valid only for discovering candidates. Its one caller — the
+    ///     external-provider reconciliation pass, which has to find <c>ext:</c> rows whose registration is gone — takes
+    ///     a per-model mutation lease and re-reads the row under it before touching anything, so a row that moved
+    ///     between the listing and the repair is acted on at its current revision rather than the snapshot's.
+    /// </remarks>
+    Task<IReadOnlyList<ModelProviderMapRecord>> ListAsync(CancellationToken cancellationToken = default);
+
     Task<ModelProviderMapRecord?> ReadWithRevisionAsync(IModelProviderMapReadLease lease,
         string modelName,
         CancellationToken cancellationToken = default);
