@@ -26,7 +26,11 @@ public sealed class DeleteExternalProviderConnectionEndpoint(IExternalProviderAd
         Policies(NodeAuthorizationPolicies.Operator);
         Description(builder => builder
                                .Produces<ExternalProviderConnectionsResponse>(StatusCodes.Status200OK)
-                               .Produces<ExternalProviderConnectionsResponse>(StatusCodes.Status409Conflict));
+                               .Produces<ExternalProviderConnectionsResponse>(StatusCodes.Status409Conflict)
+                               // Declared because it is reachable: a malformed connection id, and a store this build
+                               // must not write (unreadable, or written by a newer version), both refuse with a 400.
+                               // An undeclared status is one the generated client cannot model.
+                               .ProducesProblemDetails(StatusCodes.Status400BadRequest));
     }
 
     public override async Task HandleAsync(DeleteExternalProviderConnectionRequest req, CancellationToken ct)

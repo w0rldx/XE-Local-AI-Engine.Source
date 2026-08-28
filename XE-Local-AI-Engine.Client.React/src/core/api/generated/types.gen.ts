@@ -12099,6 +12099,10 @@ export type DeleteExternalProviderConnectionData = {
 
 export type DeleteExternalProviderConnectionErrors = {
 	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
 	 * Unauthorized
 	 */
 	401: unknown;
