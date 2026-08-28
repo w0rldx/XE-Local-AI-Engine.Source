@@ -41,6 +41,10 @@ internal static class AddNodeWorkSessionsExtensions
         builder.Services.AddHostedService<WorkSessionStartupReconciler>();
 
         builder.Services.AddScoped<IWorkSessionService, WorkSessionService>();
+
+        // The same instance behind both surfaces: one class decides who may move a session's status, and a second
+        // instance would let the two disagree about what it already did.
+        builder.Services.AddScoped<IWorkflowOwnedWorkSessionLifecycle>(services => (WorkSessionService)services.GetRequiredService<IWorkSessionService>());
         builder.Services.AddScoped<WorkSessionCheckpointComposer>();
 
         // Scoped: it reads the conversation through the scoped chat persistence, from the supervisor's per-turn scope.

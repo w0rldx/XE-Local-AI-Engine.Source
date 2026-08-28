@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Knowledge;
 ///     The work-session surface the REST layer sits on. Owns the rules that need more than one store to decide: which
 ///     agent a session may run on, when its objective may change, and what a follow-up does to a paused run.
 /// </summary>
-internal sealed class WorkSessionService : IWorkSessionService
+internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWorkSessionLifecycle
 {
     private const int MaxEventPageSize = 500;
     private const int MaxTitleLength = 200;
@@ -157,9 +157,40 @@ internal sealed class WorkSessionService : IWorkSessionService
         return ToDetail(updated);
     }
 
-    public async Task DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    public Task DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        DeleteAsync(sessionId, workflowOwned: false, cancellationToken);
+
+    public Task<WorkSessionDetail> StartAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        BeginAsync(sessionId, [AgentWorkSessionStatus.Draft], workflowOwned: false, cancellationToken);
+
+    public Task<WorkSessionDetail> ResumeAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        BeginAsync(sessionId, [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted], workflowOwned: false, cancellationToken);
+
+    public Task<WorkSessionDetail> PauseAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        StopAsync(sessionId, WorkSessionStopReason.Pause, AgentWorkSessionStatus.Paused, "The operator paused the work session.", workflowOwned: false, cancellationToken);
+
+    public Task<WorkSessionDetail> CancelAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        StopAsync(sessionId, WorkSessionStopReason.Cancel, AgentWorkSessionStatus.Cancelled, "The operator cancelled the work session.", workflowOwned: false, cancellationToken);
+
+    Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.StartAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        BeginAsync(sessionId, [AgentWorkSessionStatus.Draft], workflowOwned: true, cancellationToken);
+
+    Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.ResumeAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        BeginAsync(sessionId, [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted], workflowOwned: true, cancellationToken);
+
+    Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.PauseAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        StopAsync(sessionId, WorkSessionStopReason.Pause, AgentWorkSessionStatus.Paused, "The workflow run paused the work session.", workflowOwned: true, cancellationToken);
+
+    Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.CancelAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        StopAsync(sessionId, WorkSessionStopReason.Cancel, AgentWorkSessionStatus.Cancelled, "The workflow run cancelled the work session.", workflowOwned: true, cancellationToken);
+
+    Task IWorkflowOwnedWorkSessionLifecycle.DeleteAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        DeleteAsync(sessionId, workflowOwned: true, cancellationToken);
+
+    private async Task DeleteAsync(Guid sessionId, bool workflowOwned, CancellationToken cancellationToken)
     {
         var session = await _store.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        EnsureCallerOwns(session, workflowOwned);
         if (session.Status is AgentWorkSessionStatus.Running or AgentWorkSessionStatus.WaitingForApproval or AgentWorkSessionStatus.WaitingForInput)
         {
             throw new WorkSessionInvalidTransitionException("Cancel the work session before deleting it; a step is still running.");
@@ -172,18 +203,6 @@ internal sealed class WorkSessionService : IWorkSessionService
         _blobStore.DeleteSession(sessionId);
         await DeleteConversationAsync(session.ConversationId).ConfigureAwait(false);
     }
-
-    public Task<WorkSessionDetail> StartAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
-        BeginAsync(sessionId, [AgentWorkSessionStatus.Draft], cancellationToken);
-
-    public Task<WorkSessionDetail> ResumeAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
-        BeginAsync(sessionId, [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted], cancellationToken);
-
-    public Task<WorkSessionDetail> PauseAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
-        StopAsync(sessionId, WorkSessionStopReason.Pause, AgentWorkSessionStatus.Paused, "The operator paused the work session.", cancellationToken);
-
-    public Task<WorkSessionDetail> CancelAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
-        StopAsync(sessionId, WorkSessionStopReason.Cancel, AgentWorkSessionStatus.Cancelled, "The operator cancelled the work session.", cancellationToken);
 
     public async Task<Guid> PostFollowUpAsync(Guid sessionId, string text, CancellationToken cancellationToken = default)
     {
@@ -217,12 +236,17 @@ internal sealed class WorkSessionService : IWorkSessionService
 
         // A paused or interrupted session picks the follow-up up by resuming: it rides the next step's history like any
         // other user turn. A parked one does not — its live step already holds the node's invocation slot, and its
-        // prompt is answered through the chat card, not here.
+        // prompt is answered through the chat card, not here. A workflow-owned one does not either: the refusal below
+        // lands in the same catch, and the run resumes the session on its next poll with the message already in place.
         if (session.Status is AgentWorkSessionStatus.Paused or AgentWorkSessionStatus.Interrupted && _supervisor.HasCapacity)
         {
             try
             {
-                _ = await BeginAsync(sessionId, [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted], cancellationToken).ConfigureAwait(false);
+                _ = await BeginAsync(sessionId,
+                                  [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted],
+                                  workflowOwned: false,
+                                  cancellationToken)
+                              .ConfigureAwait(false);
             }
             catch (WorkSessionInvalidTransitionException exception)
             {
@@ -345,11 +369,15 @@ internal sealed class WorkSessionService : IWorkSessionService
         return artifact;
     }
 
-    private async Task<WorkSessionDetail> BeginAsync(Guid sessionId, AgentWorkSessionStatus[] allowedFrom, CancellationToken cancellationToken)
+    private async Task<WorkSessionDetail> BeginAsync(Guid sessionId,
+        AgentWorkSessionStatus[] allowedFrom,
+        bool workflowOwned,
+        CancellationToken cancellationToken)
     {
         EnsureEnabled();
 
         var session = await _store.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        EnsureCallerOwns(session, workflowOwned);
         if (!allowedFrom.Contains(session.Status))
         {
             throw new WorkSessionInvalidTransitionException($"A work session in {session.Status} cannot be started from here.");
@@ -385,9 +413,11 @@ internal sealed class WorkSessionService : IWorkSessionService
         WorkSessionStopReason reason,
         AgentWorkSessionStatus target,
         string sanitizedReason,
+        bool workflowOwned,
         CancellationToken cancellationToken)
     {
         var session = await _store.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        EnsureCallerOwns(session, workflowOwned);
         if (await _supervisor.TryStopAsync(sessionId, reason, cancellationToken).ConfigureAwait(false))
         {
             // The loop owns the terminal write, including the checkpoint that has to precede it. Re-read rather than
@@ -484,6 +514,25 @@ internal sealed class WorkSessionService : IWorkSessionService
         {
             _logger.LogWarning(exception, "Could not delete the conversation {ConversationId} a work session owned.", conversationId);
         }
+    }
+
+    /// <summary>
+    ///     Keeps the two lifecycle surfaces from crossing. A workflow run owns its sessions outright, so a lifecycle call
+    ///     arriving through <see cref="IWorkSessionService" /> — the REST layer, the Work Sessions page, any headless
+    ///     caller — is refused, and the operator's control is pausing the run instead. The mirror case is refused for the
+    ///     same reason: <see cref="IWorkflowOwnedWorkSessionLifecycle" /> must not reach a session no run is driving.
+    /// </summary>
+    private static void EnsureCallerOwns(AgentWorkSessionSnapshot session, bool workflowOwned)
+    {
+        var sessionIsWorkflowOwned = session.Kind == AgentWorkSessionKind.Workflow;
+        if (sessionIsWorkflowOwned == workflowOwned)
+        {
+            return;
+        }
+
+        throw new WorkSessionInvalidTransitionException(sessionIsWorkflowOwned
+            ? "This work session belongs to a development workflow run; pause, resume or cancel the run instead."
+            : "This work session belongs to no development workflow run, so a run cannot drive its lifecycle.");
     }
 
     private void EnsureEnabled()

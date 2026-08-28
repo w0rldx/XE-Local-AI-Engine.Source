@@ -38,6 +38,9 @@ public interface IWorkSessionService
     /// </summary>
     Task DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
+    // The five lifecycle verbs, plus DeleteAsync above, all refuse a session a development workflow run owns: it drives
+    // its own sessions through IWorkflowOwnedWorkSessionLifecycle, and an outside pause would read to the run's poll
+    // exactly like the routine step-budget pause it auto-resumes from. Refusals are WorkSessionInvalidTransitionException.
     Task<WorkSessionDetail> StartAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
     Task<WorkSessionDetail> PauseAsync(Guid sessionId, CancellationToken cancellationToken = default);
