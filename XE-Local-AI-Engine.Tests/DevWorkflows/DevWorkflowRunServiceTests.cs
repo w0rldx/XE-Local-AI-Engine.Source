@@ -198,6 +198,43 @@ public sealed class DevWorkflowRunServiceTests
         AssertEx.Equal(expected: 1, (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "gate.decided"));
     }
 
+    /// <summary>
+    ///     A NEW operation id at an answered gate is not the idempotent replay a repeated one is: it is a second human
+    ///     act on a closed gate. The refusal carries what already stands, so the operator is told what happened rather
+    ///     than only that their click failed.
+    /// </summary>
+    [Test]
+    public async Task DecidingAnAlreadyAnsweredGateUnderANewOperationId_IsRefusedWithTheStandingDecision()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id;
+
+        _ = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                             nodeRunId,
+                             Guid.NewGuid(),
+                             DevWorkflowDecisionKind.RequestChanges,
+                             comment: null,
+                             payloadJson: null,
+                             "operator@localhost.test"))
+                         .ConfigureAwait(false);
+
+        var refusal = await AssertEx.ThrowsAsync<DevWorkflowGateAlreadyDecidedException>(() =>
+                                        harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                                            nodeRunId,
+                                            Guid.NewGuid(),
+                                            DevWorkflowDecisionKind.Approve,
+                                            comment: null,
+                                            payloadJson: null,
+                                            "operator@localhost.test")))
+                                    .ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowDecisionKind.RequestChanges, refusal.StandingDecision);
+        AssertEx.Equal(expected: 1, (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "gate.decided"));
+    }
+
     /// <summary>A node run nobody is waiting on has nothing to decide, and saying so is a conflict.</summary>
     [Test]
     public async Task DecidingANodeRunThatIsNotWaiting_IsRefused()

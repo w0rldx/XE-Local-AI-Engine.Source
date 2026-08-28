@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 
 /// <summary>
@@ -18,18 +19,6 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     private const int MaxEventPageSize = 500;
     private const int MaxTitleLength = 200;
     private const int MaxObjectiveLength = 8000;
-
-    private static readonly string[] TextMediaTypePrefixes = ["text/"];
-
-    private static readonly string[] TextMediaTypes =
-    [
-        "application/json",
-        "application/xml",
-        "application/x-ndjson",
-        "application/javascript",
-        "application/sql",
-        "application/x-yaml"
-    ];
 
     private readonly IWorkSessionArtifactBlobStore _blobStore;
     private readonly IModelCapabilityResolver _capabilityResolver;
@@ -357,7 +346,7 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             throw new WorkSessionNotFoundException($"Work session artifact '{artifactId}' could not be read.");
         }
 
-        var isBase64 = !IsTextMediaType(artifact.MediaType);
+        var isBase64 = !ArtifactMediaTypes.IsText(artifact.MediaType);
         var content = isBase64 ? Convert.ToBase64String(read.Content.Span) : Encoding.UTF8.GetString(read.Content.Span);
         return new WorkSessionArtifactContent(ToDto(artifact), content, isBase64);
     }
@@ -578,15 +567,6 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             artifact.SizeBytes,
             artifact.IsValid,
             artifact.CreatedStep);
-
-    private static bool IsTextMediaType(string mediaType)
-    {
-        var bare = mediaType.Split(';')[0].Trim();
-        return TextMediaTypePrefixes.Any(prefix => bare.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-               || TextMediaTypes.Contains(bare, StringComparer.OrdinalIgnoreCase)
-               || bare.EndsWith("+json", StringComparison.OrdinalIgnoreCase)
-               || bare.EndsWith("+xml", StringComparison.OrdinalIgnoreCase);
-    }
 
     private static string Require(string? value, string field, int maximumLength)
     {

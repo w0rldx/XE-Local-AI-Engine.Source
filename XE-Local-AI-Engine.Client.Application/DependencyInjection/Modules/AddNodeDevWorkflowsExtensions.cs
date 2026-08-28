@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -30,7 +31,12 @@ internal static class AddNodeDevWorkflowsExtensions
         // Cross-section: an agent node is a work session, and neither section's data annotations can see the other.
         builder.Services.AddSingleton<IValidateOptions<DevWorkflowOptions>, DevWorkflowOptionsValidator>();
 
-        builder.Services.AddScoped<IDevWorkflowStore, DevWorkflowStore>();
+        // The store is resolved through the publishing decorator, so no caller can commit a change without announcing
+        // it. Registering the concrete type separately is what lets the decorator take it as its inner store.
+        builder.Services.AddScoped<DevWorkflowStore>();
+        builder.Services.AddScoped<IDevWorkflowStore>(services => new PublishingDevWorkflowStore(services.GetRequiredService<DevWorkflowStore>(),
+            services.GetRequiredService<IDevWorkflowEventPublisher>()));
+        builder.Services.TryAddSingleton<IDevWorkflowEventPublisher, NoOpDevWorkflowEventPublisher>();
         builder.Services.AddSingleton<IDevWorkflowArtifactBlobStore, ManagedDevWorkflowArtifactBlobStore>();
 
         // One entry per live run, replaced when the run's graph revision moves. A singleton because the dispatcher is.
