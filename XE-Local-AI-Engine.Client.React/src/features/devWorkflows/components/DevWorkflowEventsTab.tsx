@@ -9,9 +9,9 @@ export interface DevWorkflowEventsTabProps {
 	readonly events: readonly DevWorkflowRunEventResponse[];
 	/** `nodeRunId` → node label. The event row carries no node key (P1 has no such column), so it is joined here. */
 	readonly labelByNodeRunId: ReadonlyMap<string, string>;
+	/** Whether the run has events past the pages already loaded. Every one of them is reachable — the feed is cursor-paged. */
 	readonly hasMore: boolean;
-	/** False once the page size has reached the server's clamp — asking for more would return the same page. */
-	readonly canLoadMore: boolean;
+	readonly isLoadingMore: boolean;
 	readonly onLoadMore: () => void;
 	readonly onSelectNode: (nodeRunId: string) => void;
 }
@@ -20,7 +20,7 @@ export function DevWorkflowEventsTab({
 	events,
 	labelByNodeRunId,
 	hasMore,
-	canLoadMore,
+	isLoadingMore,
 	onLoadMore,
 	onSelectNode,
 }: DevWorkflowEventsTabProps) {
@@ -103,15 +103,15 @@ export function DevWorkflowEventsTab({
 				);
 			})}
 			{hasMore ? (
-				canLoadMore ? (
-					<Button size="xs" variant="light" onClick={onLoadMore} data-testid="dev-workflow-events-load-more">
-						{t("pages.devWorkflows.events.loadMore", "Load more")}
-					</Button>
-				) : (
-					<Text size="xs" c="dimmed" data-testid="dev-workflow-events-truncated">
-						{t("pages.devWorkflows.events.truncated", "Only the first events are shown.")}
-					</Text>
-				)
+				<Button
+					size="xs"
+					variant="light"
+					loading={isLoadingMore}
+					onClick={onLoadMore}
+					data-testid="dev-workflow-events-load-more"
+				>
+					{t("pages.devWorkflows.events.loadMore", "Load more")}
+				</Button>
 			) : null}
 		</Stack>
 	);

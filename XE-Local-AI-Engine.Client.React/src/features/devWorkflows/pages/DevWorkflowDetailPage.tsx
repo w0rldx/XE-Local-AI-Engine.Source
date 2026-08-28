@@ -31,8 +31,6 @@ import {
 	toDevWorkflowWorkItemStatus,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
 import {
-	devWorkflowEventsMaxLimit,
-	devWorkflowEventsPageSize,
 	useDecideDevWorkflowNodeRun,
 	useDeleteDevWorkflowWorkItem,
 	useDevWorkflowArtifacts,
@@ -66,7 +64,6 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	const isMobile = width < TWO_PANE_BREAKPOINT;
 	const [summaryDrawerOpened, summaryDrawer] = useDisclosure(false);
 	const [sideDrawerOpened, sideDrawer] = useDisclosure(false);
-	const [eventsLimit, setEventsLimit] = useState(devWorkflowEventsPageSize);
 	const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
 
 	const workItemQuery = useDevWorkflowWorkItem(workItemId);
@@ -81,7 +78,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 
 	const runQuery = useDevWorkflowRun(runId, poll);
 	const nodeRunQuery = useDevWorkflowNodeRun(runId, selection.node, poll);
-	const eventsQuery = useDevWorkflowRunEvents(runId, eventsLimit, poll);
+	const eventsQuery = useDevWorkflowRunEvents(runId, poll);
 	const artifactsQuery = useDevWorkflowArtifacts(runId, poll);
 	const definitionsQuery = useDevWorkflowDefinitions();
 	const lifecycle = useDevWorkflowRunLifecycle(runId, workItemId);
@@ -153,6 +150,8 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	}
 
 	const workItem = workItemQuery.data;
+	// Every loaded event page, merged ascending by the hook. The tab decides its own display order.
+	const events = eventsQuery.data ?? [];
 	const labelByNodeRunId = new Map(nodes.map((node) => [node.id ?? "", node.label ?? node.nodeKey ?? ""]));
 	// The gate's evidence list has artifact IDS on the node detail and NAMES on the run's artifact feed; this is the
 	// only place both are in hand, so the join happens here rather than in a second request from the panel.
@@ -162,10 +161,10 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	// Restart evidence, derived rather than read: `sessionResumes` counts step-budget parking, not interruptions, so it
 	// answers a different question than "did this node survive an engine restart". The event log does carry the answer —
 	// one `node.interrupted` row per reconcile — and the page already holds the feed.
-	// ponytail: counted over the events PAGE the tab has loaded (200 by default); a node interrupted more times than fit
-	// in one page would under-report. A dedicated count belongs on the node DTO if that ever matters.
+	// ponytail: counted over the event pages the tab has LOADED (200 rows until the operator loads more); a node
+	// interrupted past that watermark would under-report. A dedicated count belongs on the node DTO if that ever matters.
 	const interruptedCount = selection.node
-		? (eventsQuery.data?.items ?? []).filter(
+		? events.filter(
 				(event) => event.eventType === "node.interrupted" && event.nodeRunId === selection.node,
 			).length
 		: 0;
@@ -235,11 +234,14 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 			</Tabs.Panel>
 			<Tabs.Panel value="events" pt="xs" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
 				<DevWorkflowEventsTab
-					events={eventsQuery.data?.items ?? []}
+					events={events}
 					labelByNodeRunId={labelByNodeRunId}
-					hasMore={eventsQuery.data?.hasMore === true}
-					canLoadMore={eventsLimit < devWorkflowEventsMaxLimit}
-					onLoadMore={() => setEventsLimit((current) => Math.min(current + devWorkflowEventsPageSize, devWorkflowEventsMaxLimit))}
+					hasMore={eventsQuery.hasNextPage}
+					isLoadingMore={eventsQuery.isFetchingNextPage}
+					// The promise is the caller's to ignore: a failed page read is already the query's error state.
+					onLoadMore={() => {
+						eventsQuery.fetchNextPage().catch(() => undefined);
+					}}
 					onSelectNode={(nodeRunId) => select({ node: nodeRunId })}
 				/>
 			</Tabs.Panel>

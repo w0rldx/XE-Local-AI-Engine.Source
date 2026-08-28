@@ -4998,8 +4998,7 @@
 				"meta": "#{{sequence}}",
 				"showDetail": "Show detail",
 				"hideDetail": "Hide detail",
-				"loadMore": "Load more",
-				"truncated": "Only the first events are shown."
+				"loadMore": "Load more"
 			},
 			"artifacts": {
 				"title": "Artifacts",
