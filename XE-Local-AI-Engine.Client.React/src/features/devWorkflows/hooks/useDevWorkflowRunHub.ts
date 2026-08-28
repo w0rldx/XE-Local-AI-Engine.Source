@@ -211,15 +211,31 @@ export function useDevWorkflowRunHub(runId: string | undefined, workItemId: stri
 			}
 		};
 
+		// Polling is switched on by whatever breaks the live feed, and off ONLY by a subscribe that succeeded. A transport
+		// that drops after a good subscribe used to be invisible here: the catch above never ran again, so the page kept
+		// its "connected" state and painted frozen data — no alert, no refetch — until somebody reloaded it.
+		const degrade = (connectionState: DevWorkflowRunLiveState["connectionState"]): void => {
+			if (!disposed) {
+				setState((current) => ({ ...current, connectionState, pollIntervalMs: DEV_WORKFLOW_POLL_INTERVAL_MS }));
+			}
+		};
+
 		connection.on(EVENT_NAME, onChanged);
+		const removeReconnecting = hub.onReconnecting(() => degrade("reconnecting"));
 		const removeReconnect = hub.onReconnected(() => {
+			// Re-subscribe with the CURRENT watermark, so everything the run did while the transport was down arrives as
+			// replay instead of being skipped. `subscribe` clears the poll interval once the snapshot lands.
 			subscribe(true).catch(() => undefined);
 		});
+		// The retry policy gave up. Nothing will re-announce this, so the poll stays on for the page's lifetime.
+		const removeClosed = hub.onClosed(() => degrade("unavailable"));
 		hub.whenStarted.then(() => subscribe(false)).catch(() => undefined);
 
 		return () => {
 			disposed = true;
 			connection.off(EVENT_NAME, onChanged);
+			removeReconnecting();
+			removeClosed();
 			removeReconnect();
 			if (connection.state === HubConnectionState.Connected) {
 				connection.invoke("UnsubscribeRun", runId).catch(() => undefined);

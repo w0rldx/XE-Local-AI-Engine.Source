@@ -42,6 +42,8 @@ vi.mock("@microsoft/signalr", () => {
 				onreconnected: (callback: () => void) => {
 					reconnectedCallback = callback;
 				},
+				onreconnecting: () => undefined,
+				onclose: () => undefined,
 				start: () => {
 					connectionState = "Connected";
 					return startSpy();

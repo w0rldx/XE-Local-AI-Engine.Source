@@ -5109,7 +5109,9 @@
 			"node": {
 				"back": "Back to artifacts and events",
 				"loadFailed": "This node could not be loaded.",
-				"resumes": "resumed {{count}}×",
+				"resumes": "paused for step budget {{count}}×",
+				"interrupted_one": "interrupted and re-dispatched {{count}}×",
+				"interrupted_other": "interrupted and re-dispatched {{count}}×",
 				"producedArtifacts_one": "produced {{count}} artifact",
 				"producedArtifacts_other": "produced {{count}} artifacts",
 				"agent": "Agent",

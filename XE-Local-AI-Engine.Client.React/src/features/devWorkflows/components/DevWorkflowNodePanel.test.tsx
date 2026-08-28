@@ -18,13 +18,15 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 
 const sessionId = "88888888-8888-4888-8888-888888888888";
 
-function renderPanel(nodeRun: DevWorkflowNodeRunDetailResponse, onShowArtifacts = vi.fn()) {
+function renderPanel(nodeRun: DevWorkflowNodeRunDetailResponse, options: { onShowArtifacts?: () => void; interruptedCount?: number } = {}) {
+	const onShowArtifacts = options.onShowArtifacts ?? vi.fn();
 	renderWithProviders(
 		<ConfirmProvider>
 			<DevWorkflowNodePanel
 				nodeRun={nodeRun}
 				isPending={false}
 				isDeciding={false}
+				interruptedCount={options.interruptedCount}
 				onDecide={vi.fn()}
 				onShowArtifacts={onShowArtifacts}
 				onClose={vi.fn()}
@@ -60,10 +62,19 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-node-session-link")).toBeNull();
 	});
 
-	it("reports how many times a node survived a restart, which is the module's whole claim", () => {
-		renderPanel(devWorkflowNodeRunDetail({ sessionResumes: 2 }));
+	it("reports restart survival from the event log, which is the module's whole claim", () => {
+		renderPanel(devWorkflowNodeRunDetail({ sessionResumes: 0 }), { interruptedCount: 1 });
 
-		expect(screen.getByTestId("dev-workflow-node-resumes").textContent).toBe("resumed 2×");
+		expect(screen.getByTestId("dev-workflow-node-interrupted").textContent).toBe("interrupted and re-dispatched 1×");
+	});
+
+	it("does not pass step-budget parking off as a restart — they are different facts, shown separately", () => {
+		// Live proof of the bug this replaces: a node that had NEVER been interrupted parked 4× and the pane claimed
+		// "resumed 4×", while the node that actually survived a restart showed nothing at all.
+		renderPanel(devWorkflowNodeRunDetail({ sessionResumes: 4 }), { interruptedCount: 0 });
+
+		expect(screen.getByTestId("dev-workflow-node-resumes").textContent).toBe("paused for step budget 4×");
+		expect(screen.queryByTestId("dev-workflow-node-interrupted")).toBeNull();
 	});
 
 	it("explains a failed node with its failure class and sanitized reason", () => {

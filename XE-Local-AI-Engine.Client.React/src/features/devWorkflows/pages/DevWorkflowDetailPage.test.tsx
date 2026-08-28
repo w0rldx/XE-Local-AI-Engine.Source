@@ -30,6 +30,8 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 		connection: { state: "Disconnected", on: vi.fn(), off: vi.fn(), invoke: vi.fn() },
 		whenStarted: Promise.resolve(),
 		onReconnected: () => vi.fn(),
+		onReconnecting: () => vi.fn(),
+		onClosed: () => vi.fn(),
 		release: vi.fn(),
 	}),
 }));

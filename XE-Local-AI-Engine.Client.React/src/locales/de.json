@@ -5109,7 +5109,9 @@
 			"node": {
 				"back": "Zurück zu Artefakten und Ereignissen",
 				"loadFailed": "Dieser Knoten konnte nicht geladen werden.",
-				"resumes": "{{count}}× fortgesetzt",
+				"resumes": "{{count}}× wegen Schrittbudget pausiert",
+				"interrupted_one": "{{count}}× unterbrochen und neu eingeplant",
+				"interrupted_other": "{{count}}× unterbrochen und neu eingeplant",
 				"producedArtifacts_one": "{{count}} Artefakt erzeugt",
 				"producedArtifacts_other": "{{count}} Artefakte erzeugt",
 				"agent": "Agent",

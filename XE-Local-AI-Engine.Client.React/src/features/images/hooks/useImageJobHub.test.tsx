@@ -37,6 +37,8 @@ vi.mock("@microsoft/signalr", () => {
 				on: (name: string, handler: (payload: unknown) => void) => registeredHandlers.set(name, handler),
 				off: (name: string) => registeredHandlers.delete(name),
 				onreconnected: () => undefined,
+				onreconnecting: () => undefined,
+				onclose: () => undefined,
 				start: () => {
 					connectionState = "Connected";
 					return startSpy();

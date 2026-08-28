@@ -159,6 +159,16 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	const artifactNameById = new Map(
 		(artifactsQuery.data?.items ?? []).map((artifact) => [artifact.id ?? "", artifact.name ?? ""]),
 	);
+	// Restart evidence, derived rather than read: `sessionResumes` counts step-budget parking, not interruptions, so it
+	// answers a different question than "did this node survive an engine restart". The event log does carry the answer —
+	// one `node.interrupted` row per reconcile — and the page already holds the feed.
+	// ponytail: counted over the events PAGE the tab has loaded (200 by default); a node interrupted more times than fit
+	// in one page would under-report. A dedicated count belongs on the node DTO if that ever matters.
+	const interruptedCount = selection.node
+		? (eventsQuery.data?.items ?? []).filter(
+				(event) => event.eventType === "node.interrupted" && event.nodeRunId === selection.node,
+			).length
+		: 0;
 
 	const summaryPanel = (
 		<DevWorkflowRunSummaryPanel
@@ -191,6 +201,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 			isDeciding={decide.isPending}
 			decideError={decide.isError ? decide.error : undefined}
 			artifactNameById={artifactNameById}
+			interruptedCount={interruptedCount}
 			onClose={() => select({ node: undefined })}
 			onShowArtifacts={() => select({ node: undefined, tab: "artifacts" })}
 			onDecide={(submission) => {

@@ -26,6 +26,8 @@ export interface DevWorkflowNodePanelProps {
 	readonly decideError?: unknown;
 	/** Artifact id → name, for the gate's evidence list. Empty until the run's artifact feed lands. */
 	readonly artifactNameById?: ReadonlyMap<string, string>;
+	/** `node.interrupted` events counted for this node — the restart evidence `sessionResumes` does NOT carry. */
+	readonly interruptedCount?: number;
 	readonly onDecide: (submission: DevWorkflowDecisionSubmission) => void;
 	readonly onShowArtifacts: () => void;
 	/** Clears `?node=`, which is what brings the artifacts/events tabs back into this zone. */
@@ -44,6 +46,7 @@ export function DevWorkflowNodePanel({
 	isDeciding,
 	decideError,
 	artifactNameById,
+	interruptedCount = 0,
 	onDecide,
 	onShowArtifacts,
 	onClose,
@@ -88,10 +91,21 @@ export function DevWorkflowNodePanel({
 								maxAttempts: nodeRun.maxAttempts ?? 1,
 							})}
 						</Text>
+						{/* Two different facts, deliberately side by side. A node that survived an engine restart is the whole
+						    point of this module, and `sessionResumes` is NOT that number — it counts the session being
+						    parked at its step budget, which happens to plenty of nodes that were never interrupted. */}
+						{interruptedCount > 0 ? (
+							<Text size="xs" c="dimmed" data-testid="dev-workflow-node-interrupted">
+								{t("pages.devWorkflows.node.interrupted", "interrupted and re-dispatched {{count}}×", {
+									count: interruptedCount,
+								})}
+							</Text>
+						) : null}
 						{(nodeRun.sessionResumes ?? 0) > 0 ? (
 							<Text size="xs" c="dimmed" data-testid="dev-workflow-node-resumes">
-								{/* A node that survived an engine restart is the whole point of this module; say so. */}
-								{t("pages.devWorkflows.node.resumes", "resumed {{count}}×", { count: nodeRun.sessionResumes ?? 0 })}
+								{t("pages.devWorkflows.node.resumes", "paused for step budget {{count}}×", {
+									count: nodeRun.sessionResumes ?? 0,
+								})}
 							</Text>
 						) : null}
 					</Group>

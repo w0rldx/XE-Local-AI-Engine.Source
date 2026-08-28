@@ -21,8 +21,23 @@ const hubMock = vi.hoisted(() => {
 		off: vi.fn((event: string) => handlers.delete(event)),
 		invoke: vi.fn(),
 	};
-	const handle = { connection, whenStarted: Promise.resolve(), onReconnected: vi.fn(), release: vi.fn() };
-	return { acquire: vi.fn(() => handle), connection, handle, handlers, reconnect: undefined as (() => void) | undefined };
+	const handle = {
+		connection,
+		whenStarted: Promise.resolve(),
+		onReconnected: vi.fn(),
+		onReconnecting: vi.fn(),
+		onClosed: vi.fn(),
+		release: vi.fn(),
+	};
+	return {
+		acquire: vi.fn(() => handle),
+		connection,
+		handle,
+		handlers,
+		reconnect: undefined as (() => void) | undefined,
+		reconnecting: undefined as (() => void) | undefined,
+		closed: undefined as (() => void) | undefined,
+	};
 });
 
 vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
@@ -83,9 +98,21 @@ describe("useDevWorkflowRunHub", () => {
 		hubMock.handle.release.mockClear();
 		hubMock.acquire.mockClear();
 		hubMock.reconnect = undefined;
+		hubMock.reconnecting = undefined;
+		hubMock.closed = undefined;
 		hubMock.handle.onReconnected.mockReset();
 		hubMock.handle.onReconnected.mockImplementation((callback: () => void) => {
 			hubMock.reconnect = callback;
+			return vi.fn();
+		});
+		hubMock.handle.onReconnecting.mockReset();
+		hubMock.handle.onReconnecting.mockImplementation((callback: () => void) => {
+			hubMock.reconnecting = callback;
+			return vi.fn();
+		});
+		hubMock.handle.onClosed.mockReset();
+		hubMock.handle.onClosed.mockImplementation((callback: () => void) => {
+			hubMock.closed = callback;
 			return vi.fn();
 		});
 	});
@@ -227,6 +254,51 @@ describe("useDevWorkflowRunHub", () => {
 		expect(keys).toContainEqual(devWorkflowInvalidationKey(devWorkflowQueryIds.run, { runId }));
 		expect(keys).toContainEqual(devWorkflowInvalidationKey(devWorkflowQueryIds.artifacts, { runId }));
 		expect(result.current.watermark).toBe(400);
+	});
+
+	it("starts polling when the transport drops AFTER a good subscribe — the live-run defect", async () => {
+		hubMock.connection.invoke.mockResolvedValue(snapshot());
+		const { wrapper } = harness();
+		const { result } = renderHook(() => useDevWorkflowRunHub(runId, workItemId), { wrapper });
+		await waitFor(() => expect(result.current.connectionState).toBe("connected"));
+		expect(result.current.pollIntervalMs).toBeUndefined();
+
+		act(() => hubMock.reconnecting?.());
+
+		// Observed live: the page kept saying "connected" and painted frozen data for 70s with no alert and no network
+		// activity, because only the subscribe's own catch could ever turn polling on.
+		expect(result.current.connectionState).toBe("reconnecting");
+		expect(result.current.pollIntervalMs).toBe(DEV_WORKFLOW_POLL_INTERVAL_MS);
+	});
+
+	it("re-subscribes with the watermark and stops polling once the transport comes back", async () => {
+		hubMock.connection.invoke.mockResolvedValue(snapshot({ lastSeq: 5 }));
+		const { wrapper } = harness();
+		const { result } = renderHook(() => useDevWorkflowRunHub(runId, workItemId), { wrapper });
+		await waitFor(() => expect(result.current.watermark).toBe(5));
+
+		act(() => hubMock.reconnecting?.());
+		expect(result.current.pollIntervalMs).toBe(DEV_WORKFLOW_POLL_INTERVAL_MS);
+
+		act(() => hubMock.reconnect?.());
+
+		await waitFor(() => expect(result.current.pollIntervalMs).toBeUndefined());
+		// Nothing the run did while the transport was down may be skipped, so the replay resumes from the watermark.
+		expect(hubMock.connection.invoke).toHaveBeenLastCalledWith("SubscribeRun", runId, 5);
+		expect(result.current.connectionState).toBe("connected");
+	});
+
+	it("keeps polling for good once the retry policy gives up", async () => {
+		hubMock.connection.invoke.mockResolvedValue(snapshot());
+		const { wrapper } = harness();
+		const { result } = renderHook(() => useDevWorkflowRunHub(runId, workItemId), { wrapper });
+		await waitFor(() => expect(result.current.connectionState).toBe("connected"));
+
+		act(() => hubMock.closed?.());
+
+		// Nothing re-announces a closed connection, so this state has to stick rather than decay back to "connected".
+		expect(result.current.connectionState).toBe("unavailable");
+		expect(result.current.pollIntervalMs).toBe(DEV_WORKFLOW_POLL_INTERVAL_MS);
 	});
 
 	it("falls back to polling when the subscribe fails, rather than throwing", async () => {
