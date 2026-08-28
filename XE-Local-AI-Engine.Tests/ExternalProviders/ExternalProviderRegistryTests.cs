@@ -122,9 +122,9 @@ public sealed class ExternalProviderRegistryTests
         var b = AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:box-b/qwen3", CancellationToken.None));
 
         AssertEx.Equal("sk-a", a.ApiKey);
-        AssertEx.Equal("http://127.0.0.1:18099", a.Binding.Origin);
+        AssertEx.Equal("http://127.0.0.1:18099/v1/", a.Binding.BaseAddress);
         AssertEx.Equal("sk-b", b.ApiKey);
-        AssertEx.Equal("http://127.0.0.1:18100", b.Binding.Origin);
+        AssertEx.Equal("http://127.0.0.1:18100/v1/", b.Binding.BaseAddress);
     }
 
     [Test]

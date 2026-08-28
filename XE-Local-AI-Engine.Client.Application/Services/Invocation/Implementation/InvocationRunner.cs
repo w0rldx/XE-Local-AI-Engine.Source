@@ -258,10 +258,11 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // Pin the external binding this turn is authorized against, in the SAME scope as the spawn context and for
             // the same reason: the decision is made once, up front, and the provider re-reads configuration on every
             // send. Without the pin an operator edit landing between two rounds of a tool loop silently redirects the
-            // later sends. A node-local or cloud model seeds nothing.
-            using var externalBindingPin = await ExternalProviderInvocationPin
-                                                .BeginAsync(_externalProviderRegistry, resolvedModel, invocationToken)
-                                                .ConfigureAwait(false);
+            // later sends. A node-local or cloud model resolves nothing and the scope is inert.
+            // The scope is opened HERE rather than inside the resolver: the ambient set is an AsyncLocal, and a write
+            // to one inside an async method never reaches that method's caller.
+            var turnPins = await ExternalProviderInvocationPin.ResolveAsync(_externalProviderRegistry, resolvedModel, invocationToken).ConfigureAwait(false);
+            using var externalBindingPin = ExternalProviderBindingPinScope.Begin(turnPins);
 
             // Seed the active conversation id into the same root tool-loop scope so the AgentHome tool gateway can stage
             // this conversation's uploaded attachments into the sandbox. Like the spawn context it flows as an
@@ -893,6 +894,18 @@ public sealed partial class InvocationRunner : IInvocationRunner
         CancellationToken invocationToken)
     {
         var definition = await BuildOrchestrationDefinitionAsync(package, spec, resolvedModel, effectiveContextTokens, transport, invocationToken).ConfigureAwait(false);
+
+        // A participant runs on its OWN model, which the turn-level pin (seeded for the resolved turn model) does not
+        // cover — so an external participant's sends would fall through to the transport's weaker unpinned check while
+        // the workflow carries node-local tool results between participants. Pin every participant model up front, in
+        // one scope: the workflow interleaves its participants inside this single async flow, so they cannot each own a
+        // nested scope, and the pins are looked up by model id anyway.
+        var resolvedParticipantPins = await ExternalProviderInvocationPin
+                                           .ResolveAsync(_externalProviderRegistry,
+                                               definition.Participants.Select(participant => participant.ModelId),
+                                               invocationToken)
+                                           .ConfigureAwait(false);
+        using var participantPins = ExternalProviderBindingPinScope.Begin(resolvedParticipantPins);
 
         // Unify with the single-agent path (see TurnPolicy): the workflow seed is budgeted the same way the
         // single-agent path budgets its initial assembly, so a long conversation cannot silently overrun the window

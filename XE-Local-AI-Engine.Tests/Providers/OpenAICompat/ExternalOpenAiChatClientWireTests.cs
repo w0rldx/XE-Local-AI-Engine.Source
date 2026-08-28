@@ -188,7 +188,7 @@ public sealed class ExternalOpenAiChatClientWireTests
         using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
             pinned.Generation,
             pinned.Locality,
-            pinned.Origin));
+            pinned.BaseAddress));
 
         _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
         registry.Replace(ExternalProviderTestData.Connection(locality: ExternalProviderLocality.Cloud), ExternalProviderTestData.Model());
@@ -211,7 +211,7 @@ public sealed class ExternalOpenAiChatClientWireTests
         using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
             pinned.Generation,
             pinned.Locality,
-            pinned.Origin));
+            pinned.BaseAddress));
 
         _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
         registry.Replace(ExternalProviderTestData.Connection(baseUrl: "http://attacker.example.com"), ExternalProviderTestData.Model());
@@ -235,12 +235,64 @@ public sealed class ExternalOpenAiChatClientWireTests
         using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
             pinned.Generation,
             pinned.Locality,
-            pinned.Origin));
+            pinned.BaseAddress));
 
-        // Same locality, same origin, new generation.
+        // Same locality, same base address, new generation.
         registry.Replace(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
 
         _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+
+        AssertEx.Equal(1, recorder.Requests.Count);
+    }
+
+    [Test]
+    public async Task Send_WhenOnlyTheBasePathMovesMidInvocation_AbortsRatherThanRedirecting()
+    {
+        // Same host, same port, different prefix — two OpenAI-compatible services routinely sit behind one origin.
+        // Pinning only the origin let this one through, so a pinned turn's later sends, carrying tools authorized
+        // against the FIRST service's declaration, went to the second.
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(baseUrl: "http://127.0.0.1:18099/v1"),
+            ExternalProviderTestData.Model());
+        using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
+
+        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
+            pinned.Generation,
+            pinned.Locality,
+            pinned.BaseAddress));
+
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+        registry.Replace(ExternalProviderTestData.Connection(baseUrl: "http://127.0.0.1:18099/proxy/v1"), ExternalProviderTestData.Model());
+
+        _ = await AssertEx.ThrowsAsync<ExternalProviderBindingChangedException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None));
+
+        AssertEx.Equal(1, recorder.Requests.Count);
+    }
+
+    [Test]
+    public async Task Send_WhenTheClientHoldsACaseVariantOfThePinnedId_IsStillPinned()
+    {
+        // The client's id comes from the provider map, whose key is NOCASE, while the pin carries the registry's
+        // canonical spelling. An ordinal lookup missed, the send read as "not part of a pinned invocation", and the
+        // mid-invocation trust flip below then went through under the weaker unpinned check.
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        var variantId = ExternalProviderTestData.ModelId.Replace(ExternalProviderTestData.ConnectionId, "UNSLOTH-BOX", StringComparison.Ordinal);
+        using var client = new ExternalOpenAiChatClient(registry, variantId, recorder.CreateHandler);
+
+        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
+            pinned.Generation,
+            pinned.Locality,
+            pinned.BaseAddress));
+
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+        registry.Replace(ExternalProviderTestData.Connection(locality: ExternalProviderLocality.Cloud), ExternalProviderTestData.Model());
+
+        _ = await AssertEx.ThrowsAsync<ExternalProviderBindingChangedException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None));
 
         AssertEx.Equal(1, recorder.Requests.Count);
     }

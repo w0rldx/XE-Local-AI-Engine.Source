@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
@@ -74,6 +75,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     private readonly IClientLocalToolRegistry _clientLocalToolRegistry;
     private readonly ICustomToolCatalog _customToolCatalog;
     private readonly IAgentDefinitionStore _definitionStore;
+    private readonly IExternalProviderRegistry _externalProviderRegistry;
     private readonly IAgentInstructionProvider _instructionProvider;
     private readonly ILogger<SubAgentSpawnService> _logger;
     private readonly ILoggerFactory _loggerFactory;
@@ -105,6 +107,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         IMcpAgenticToolAdapter mcpAgenticToolAdapter,
         IMcpWorkspaceExecutionSessionFactory mcpWorkspaceSessionFactory,
         INodeSettingsStore nodeSettingsStore,
+        IExternalProviderRegistry externalProviderRegistry,
         ILoggerFactory loggerFactory,
         ILogger<SubAgentSpawnService> logger)
     {
@@ -126,6 +129,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         _mcpAgenticToolAdapter = mcpAgenticToolAdapter ?? throw new ArgumentNullException(nameof(mcpAgenticToolAdapter));
         _mcpWorkspaceSessionFactory = mcpWorkspaceSessionFactory ?? throw new ArgumentNullException(nameof(mcpWorkspaceSessionFactory));
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
+        _externalProviderRegistry = externalProviderRegistry ?? throw new ArgumentNullException(nameof(externalProviderRegistry));
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -539,6 +543,14 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     // inner run (verified spike).
     private async Task<string> RunSubAgentAsync(ResolvedBinding binding, SpawnContext context, string task, CancellationToken ct)
     {
+        // Pin the child's OWN binding, exactly as InvocationRunner pins the parent turn's. The parent's pin is keyed by
+        // the parent model, so without this an external child's sends found no pin and fell through to the transport's
+        // weaker unpinned check — while the child is running with a tool set authorized against the declaration read
+        // here. Resolved first and scoped HERE: an AsyncLocal seeded inside the async helper would not survive its
+        // return. The child runs inside this frame's flow, so the scope reaches it; pins stack, so the parent's lives.
+        var childPins = await ExternalProviderInvocationPin.ResolveAsync(_externalProviderRegistry, binding.ModelName, ct).ConfigureAwait(false);
+        using var childBindingPin = ExternalProviderBindingPinScope.Begin(childPins);
+
         // The child MUST run on its bound model: RuntimeChatClient routes the shared IChatClient to a provider PER SEND
         // off ChatOptions.ModelId (mirrors InvocationAgentFactory). Without it the inner run falls back to the node
         // default provider/model — e.g. a llama.cpp GGUF sub-agent would be sent to Ollama and fail. Instructions + the
@@ -588,6 +600,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         {
             [InnerAgentInputKey] = task
         };
+
         using (context.BeginChildScope())
         {
             var result = await function.InvokeAsync(arguments, ct).ConfigureAwait(false);

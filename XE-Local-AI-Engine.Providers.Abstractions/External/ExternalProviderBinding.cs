@@ -21,11 +21,16 @@ namespace XE_Local_AI_Engine.Providers.Abstractions.External;
 public sealed record ExternalProviderBinding(long Generation, ExternalProviderModelRegistration Registration)
 {
     /// <summary>
-    ///     The connection's origin — scheme, host and port, without the path. The unit of credential trust: a key an
-    ///     operator entered for one origin must never be presented to another, so this is what the save path and the
-    ///     probe compare, and what a pinned invocation verifies has not moved underneath it.
+    ///     The connection's FULL normalized base address — scheme, host, port AND path — as a pinned invocation
+    ///     verifies it has not moved underneath the turn.
     /// </summary>
-    public string Origin => Registration.Connection.BaseUrl.GetLeftPart(UriPartial.Authority);
+    /// <remarks>
+    ///     The path is part of the address, not decoration: two OpenAI-compatible services routinely sit on one host
+    ///     behind different prefixes, so comparing only the origin let an operator move a pinned turn's later sends
+    ///     from <c>…/v1/</c> to <c>…/proxy/v1/</c> mid-tool-loop without the pin noticing. The value is the one the
+    ///     store normalized at save time, so this compares two canonical spellings, never two operator typings.
+    /// </remarks>
+    public string BaseAddress => Registration.Connection.BaseUrl.AbsoluteUri;
 
     /// <summary>The operator-declared trust locality of the connection serving this model.</summary>
     public ExternalProviderLocality Locality => Registration.Connection.Locality;

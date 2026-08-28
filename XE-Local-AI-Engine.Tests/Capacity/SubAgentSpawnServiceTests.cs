@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
+using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Mocks;
 
@@ -86,6 +87,45 @@ public sealed class SubAgentSpawnServiceTests
 
         AssertEx.Contains(result, "outside this node's trust boundary");
         AssertEx.Equal(0, harness.ChatClient.CallCount);
+    }
+
+    [Test]
+    public async Task Spawn_WhenTheChildModelIsExternal_ItsOwnSendsArePinned()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        _ = harness.ExternalRegistry.Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        var service = harness.Build();
+
+        // The parent turn's pin is keyed by the PARENT model, so a child on its own external connection had no pin at
+        // all: its sends fell through to the transport's weaker unpinned check while the child ran with a tool set
+        // authorized against the declaration read at spawn time.
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        var result = await service.SpawnAsync(new SubAgentSpawnRequest
+        {
+            ModelId = ExternalProviderTestData.ModelId,
+            Task = "do the thing"
+        }, CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
+        AssertEx.Equal(ExternalProviderTestData.ModelId, harness.ChatClient.LastModelId);
+        var pin = AssertEx.NotNull(harness.ChatClient.LastBindingPin);
+        AssertEx.Equal(ExternalProviderTestData.ModelId, pin.ModelId);
+        AssertEx.Equal(ExternalProviderLocality.Local, pin.Locality);
+    }
+
+    [Test]
+    public async Task Spawn_WhenTheChildModelIsLocal_SeedsNoPin()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        var service = harness.Build();
+
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3);
+        _ = await service.SpawnAsync(ModelRequest("do the thing"), CancellationToken.None);
+
+        // A GGUF child has no external binding to pin, and inventing one would be a claim the registry never made.
+        AssertEx.Null(harness.ChatClient.LastBindingPin);
     }
 
     [Test]
@@ -1260,6 +1300,9 @@ public sealed class SubAgentSpawnServiceTests
 
         public GateableChatClient ChatClient => _chatClient;
 
+        /// <summary>The registry the child's own binding pin is read from — seed it to make a child model external.</summary>
+        public FakeExternalProviderRegistry ExternalRegistry { get; } = new();
+
         public ICapacityService Capacity => _capacity;
 
         public IAgentDefinitionResolver Resolver => _resolver;
@@ -1494,6 +1537,7 @@ public sealed class SubAgentSpawnServiceTests
                 _mcpAgenticToolAdapter,
                 _mcpWorkspaceSessionFactory,
                 _nodeSettingsStore,
+                ExternalRegistry,
                 NullLoggerFactory.Instance,
                 _logger);
         }
