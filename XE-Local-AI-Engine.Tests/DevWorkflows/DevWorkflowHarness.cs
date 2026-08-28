@@ -1,12 +1,15 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -30,17 +33,43 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     ///     stays deterministic if that ever changes — but the pumps themselves are covered by unit-level assertions on
     ///     <c>AdvanceSafelyAsync</c> rather than by this harness.
     /// </summary>
-    private readonly TestServerWebAppFactory _factory = new()
+    private readonly TestServerWebAppFactory _factory;
+
+    public DevWorkflowHarness(params (string Key, string Value)[] configuration)
     {
-        AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
+        var settings = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
             ["DevWorkflows:Enabled"] = "true",
             ["WorkSessions:Enabled"] = "true",
             ["DevWorkflows:SweepSeconds"] = "3600"
+        };
+        foreach (var (key, value) in configuration)
+        {
+            settings[key] = value;
         }
-    };
+
+        _factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = settings,
+
+            // The agent lane's one seam, replaced wholesale: everything else — the store, the blob stores, the graph,
+            // the dispatcher — is the real thing, and only the part that would need a model is scripted.
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IWorkflowOwnedWorkSessionLifecycle>();
+                services.AddSingleton<IWorkflowOwnedWorkSessionLifecycle>(provider =>
+                    new FakeDevWorkflowAgentSession(provider.GetRequiredService<IServiceScopeFactory>()));
+            }
+        };
+    }
 
     public IServiceProvider Services => _factory.Services;
+
+    /// <summary>
+    ///     The scripted agent. Resolving the seam is what builds it, because a test scripts the agent BEFORE the first
+    ///     tick asks the container for one.
+    /// </summary>
+    public FakeDevWorkflowAgentSession Agent => (FakeDevWorkflowAgentSession)Services.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>();
 
     /// <summary>The dispatcher under test. Resolved from the real container, so its wiring is under test too.</summary>
     public DevWorkflowDispatcher Dispatcher => Services.GetRequiredService<DevWorkflowDispatcher>();
@@ -206,6 +235,52 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         } while (DateTimeOffset.UtcNow < deadline);
 
         throw new AssertionException($"Run {runId} was {run.Status}, not {expected}, before the timeout.");
+    }
+
+    /// <summary>The work session the node run's current attempt owns.</summary>
+    public async Task<Guid> ReadSessionIdAsync(Guid runId, string nodeKey) =>
+        (await ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false)).WorkSessionId
+        ?? throw new AssertionException($"Node run '{nodeKey}' of run {runId} owns no work session.");
+
+    /// <summary>Lands the node run's session on a terminal status, which is all "the agent finished" means here.</summary>
+    public async Task SettleAgentAsync(Guid runId, string nodeKey, AgentWorkSessionStatus status = AgentWorkSessionStatus.Completed) =>
+        _ = await Agent.SettleAsync(await ReadSessionIdAsync(runId, nodeKey).ConfigureAwait(false), status).ConfigureAwait(false);
+
+    /// <summary>Saves an artifact on the node run's session, the way its <c>save_artifact</c> tool would.</summary>
+    public async Task<Guid> SaveAgentArtifactAsync(Guid runId, string nodeKey, string name, string content)
+    {
+        var sessionId = await ReadSessionIdAsync(runId, nodeKey).ConfigureAwait(false);
+        var artifactId = Guid.NewGuid();
+        await using var scope = Services.CreateAsyncScope();
+        var written = await scope.ServiceProvider.GetRequiredService<IWorkSessionArtifactBlobStore>()
+                                 .WriteAsync(sessionId, artifactId, Encoding.UTF8.GetBytes(content))
+                                 .ConfigureAwait(false);
+        _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
+                       .AppendArtifactAsync(new AppendWorkSessionArtifactCommand(sessionId,
+                           artifactId,
+                           WorkSessionVersions.Any,
+                           Guid.NewGuid(),
+                           AgentWorkSessionArtifactKind.Report,
+                           name,
+                           "text/markdown",
+                           written.ContentHash,
+                           written.ByteCount,
+                           written.OpaqueReference))
+                       .ConfigureAwait(false);
+        return artifactId;
+    }
+
+    public async Task<IReadOnlyList<DevWorkflowArtifactSnapshot>> ReadArtifactsAsync(Guid runId)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListArtifactsAsync(runId).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<Guid>> ReadConsumedArtifactIdsAsync(Guid runId, string nodeKey)
+    {
+        var nodeRun = await ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false);
+        await using var scope = Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListConsumedArtifactIdsAsync(nodeRun.Id).ConfigureAwait(false);
     }
 
     /// <summary>Moves the run itself, the way the run service's fire-and-forget commands will.</summary>

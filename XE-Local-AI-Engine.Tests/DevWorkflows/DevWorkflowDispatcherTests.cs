@@ -130,12 +130,12 @@ public sealed class DevWorkflowDispatcherTests
             (await harness.ReadNodeRunAsync(runId, "ship").ConfigureAwait(false)).Status,
             "the branch whose condition did not match is dead, and its node run says so.");
 
-        // 'revise' is an Agent node, which this build has no executor for — the run is blocked on it, honestly, rather
-        // than left in a queue nothing drains.
+        // 'revise' is an Agent node, and the agent lane does run those — so the branch being taken is visible in the
+        // node run having been admitted at all. It stops on its own binding, which this fixture deliberately leaves empty.
         var revise = await harness.ReadNodeRunAsync(runId, "revise").ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, revise.Status);
-        AssertEx.Equal("Internal", revise.FailureClass, "a node type this build cannot run is this build's gap, not the operator's configuration.");
-        AssertEx.Contains(AssertEx.NotNull(revise.TerminalReason), "no executor on this node can run yet");
+        AssertEx.Equal("Configuration", revise.FailureClass, "an agent bound to nothing is the definition's gap, and no retry changes the answer.");
+        AssertEx.Contains(AssertEx.NotNull(revise.TerminalReason), "binds no agent definition");
     }
 
     /// <summary>

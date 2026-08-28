@@ -36,6 +36,11 @@ internal static class AddNodeDevWorkflowsExtensions
         // One entry per live run, replaced when the run's graph revision moves. A singleton because the dispatcher is.
         builder.Services.AddSingleton<DevWorkflowGraphCache>();
 
+        // Scoped: both reach the run store and the work-session family through scoped stores, and the dispatcher
+        // resolves them inside the per-tick scope it already opens.
+        builder.Services.AddScoped<DevWorkflowArtifactPromotion>();
+        builder.Services.AddScoped<DevWorkflowAgentExecutor>();
+
         // One instance serving three roles, the same pairing the work-session supervisor uses: a second instance would
         // hold its own signal channel, so half the signals would reach a loop that is not the one advancing runs.
         builder.Services.AddSingleton<DevWorkflowDispatcher>();

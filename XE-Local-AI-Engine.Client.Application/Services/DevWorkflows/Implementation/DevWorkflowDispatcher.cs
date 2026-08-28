@@ -140,7 +140,11 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
-            return await AdvanceCoreAsync(scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>(), runId, cancellationToken).ConfigureAwait(false);
+            return await AdvanceCoreAsync(scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>(),
+                    scope.ServiceProvider.GetRequiredService<DevWorkflowAgentExecutor>(),
+                    runId,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         finally
         {
@@ -148,7 +152,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         }
     }
 
-    private async Task<int> AdvanceCoreAsync(IDevWorkflowStore store, Guid runId, CancellationToken cancellationToken)
+    private async Task<int> AdvanceCoreAsync(IDevWorkflowStore store, DevWorkflowAgentExecutor agent, Guid runId, CancellationToken cancellationToken)
     {
         var run = await store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
         if (DevWorkflowStateMachine.IsTerminal(run.Status))
@@ -181,7 +185,10 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             return await FailUnroutableAsync(store, run, exception, cancellationToken).ConfigureAwait(false);
         }
 
-        var written = 0;
+        // Settle what the lanes have landed FIRST, before anything reads the node runs: a session that finished between
+        // ticks has to be seen as finished, or the run would judge its whole graph against a row that is only still
+        // Running because nothing asked.
+        var written = await PollAsync(store, agent, run, cancellationToken).ConfigureAwait(false);
         var nodeRuns = await store.ListNodeRunsAsync(runId, cancellationToken).ConfigureAwait(false);
 
         // Settle what has landed. A recorded decision is the durable half of a human act; turning it into a transition
@@ -211,12 +218,35 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         if (run.Status is DevWorkflowRunStatus.Pausing or DevWorkflowRunStatus.Cancelling)
         {
-            written += await DrainAsync(store, run, cancellationToken).ConfigureAwait(false);
+            written += await DrainAsync(store, agent, run, cancellationToken).ConfigureAwait(false);
             return written;
         }
 
-        written += await AdmitAsync(store, run, graph, cancellationToken).ConfigureAwait(false);
+        written += await AdmitAsync(store, agent, run, graph, cancellationToken).ConfigureAwait(false);
         written += await RecomputeRunStatusAsync(store, run, cancellationToken).ConfigureAwait(false);
+        return written;
+    }
+
+    /// <summary>
+    ///     Asks every lane-owned node run what became of the work it was driving, and settles the ones that landed.
+    ///     <para>
+    ///         Deliberately the executor's answer rather than this loop's memory: the dispatcher holds nothing about a
+    ///         run between ticks, so a restart loses nothing a poll cannot re-read. It runs in every non-terminal status
+    ///         including the two drains — a session asked to stop settles here, which is how the drain learns it may
+    ///         finish.
+    ///     </para>
+    /// </summary>
+    private static async Task<int> PollAsync(IDevWorkflowStore store, DevWorkflowAgentExecutor agent, DevWorkflowRunSnapshot run, CancellationToken cancellationToken)
+    {
+        var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+        var running = nodeRuns.Where(static nodeRun => nodeRun is { Status: DevWorkflowNodeRunStatus.Running, NodeType: DevWorkflowNodeType.Agent }).ToList();
+
+        var written = 0;
+        foreach (var nodeRun in running)
+        {
+            written += await agent.PollAsync(store, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false);
+        }
+
         return written;
     }
 
@@ -367,6 +397,10 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         }
 
         var decisions = await store.ListDecisionsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+
+        // Carried forward across the loop: two answered node runs in one tick each decide where the work item lands,
+        // and the second must judge that against the first's move rather than against the tick's opening picture.
+        var settledSoFar = nodeRuns.ToList();
         var written = 0;
         string? rejection = null;
         foreach (var nodeRun in waiting)
@@ -414,9 +448,15 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                                 FailureClass: target == DevWorkflowNodeRunStatus.Failed ? DevWorkflowFailureClasses.GateRejected : null,
                                 TerminalReason: target == DevWorkflowNodeRunStatus.Failed ? "A human abandoned this node run." : null,
                                 IncrementAttempt: incrementAttempt,
-                                Outcome: outcome),
+                                Outcome: outcome,
+
+                                // An answered node run may be the last thing the work item was blocked on, and the run
+                                // status often does not move when it settles — so the release travels with the answer,
+                                // for the same reason blocking it does.
+                                WorkItemStatus: DevWorkflowStateMachine.WorkItemStatusAfter(run.Status, settledSoFar, nodeRun.Id, target)),
                             cancellationToken)
                         .ConfigureAwait(false);
+            settledSoFar = [.. settledSoFar.Select(entry => entry.Id == nodeRun.Id ? entry with { Status = target } : entry)];
             written++;
 
             // Only a human gate can strand a run this way. Every other node's dead out-edges skip their targets, which
@@ -472,7 +512,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///         looks at again.
     ///     </para>
     /// </summary>
-    private async Task<int> DrainAsync(IDevWorkflowStore store, DevWorkflowRunSnapshot run, CancellationToken cancellationToken)
+    private async Task<int> DrainAsync(IDevWorkflowStore store, DevWorkflowAgentExecutor agent, DevWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
         var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
         var written = 0;
@@ -481,9 +521,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         {
             // ASK, do not settle. A node run that is Running belongs to an executor, and only the executor knows what
             // stopping it costs — so the drain requests the stop and the next tick's poll writes the terminal off what
-            // actually happened. Nothing registers an executor yet, so today every live row is inline and StopAsync
-            // settles it synchronously; the shape is what keeps that true when the agent and sandbox lanes arrive.
-            written += await StopAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false);
+            // actually happened. Rows no lane owns are settled here, because for them there is nothing to ask.
+            written += await StopAsync(store, agent, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false);
         }
 
         // Re-read: the stops above may have settled every row already, and judging "is anything still live" off the
@@ -519,13 +558,23 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///     </para>
     /// </summary>
     private static async Task<int> StopAsync(IDevWorkflowStore store,
+        DevWorkflowAgentExecutor agent,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
+        IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
         CancellationToken cancellationToken)
     {
+        var owned = nodeRun is { Status: DevWorkflowNodeRunStatus.Running, NodeType: DevWorkflowNodeType.Agent, WorkSessionId: { } };
         if (run.Status == DevWorkflowRunStatus.Pausing)
         {
-            if (nodeRun.Status != DevWorkflowNodeRunStatus.Queued)
+            if (owned)
+            {
+                // The session checkpoints and parks, and the row collapses to Pending rather than to a terminal: a pause
+                // is meant to be RESUMED, and a Pending row with its session still attached is exactly what the resume
+                // re-admits — it finds the paused session and continues it instead of starting the work over.
+                await agent.StopAsync(nodeRun.WorkSessionId!.Value, cancel: false, cancellationToken).ConfigureAwait(false);
+            }
+            else if (nodeRun.Status != DevWorkflowNodeRunStatus.Queued)
             {
                 return 0;
             }
@@ -537,6 +586,16 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                             cancellationToken)
                         .ConfigureAwait(false);
             return 1;
+        }
+
+        if (owned)
+        {
+            // Asked, not settled: only the session knows whether it landed Cancelled or finished inside the window, so
+            // the poll writes whichever it was. Polled again right here rather than left to the next tick — the stop
+            // waits for the session to land, so by now the answer usually exists, and a drain that asked and wrote
+            // nothing would report no work and then sit out a whole sweep interval waiting for itself.
+            await agent.StopAsync(nodeRun.WorkSessionId!.Value, cancel: true, cancellationToken).ConfigureAwait(false);
+            return await agent.PollAsync(store, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false);
         }
 
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Cancelled, nodeRun.NodeKey);
@@ -554,13 +613,20 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     /// <summary>
     ///     Judges every <c>Pending</c> node run against its inbound edges and runs the ones the inline lane owns.
     /// </summary>
-    private static async Task<int> AdmitAsync(IDevWorkflowStore store, DevWorkflowRunSnapshot run, DevWorkflowGraph graph, CancellationToken cancellationToken)
+    private static async Task<int> AdmitAsync(IDevWorkflowStore store,
+        DevWorkflowAgentExecutor agent,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowGraph graph,
+        CancellationToken cancellationToken)
     {
         var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
         var byKey = nodeRuns.ToDictionary(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal);
         var written = 0;
 
-        foreach (var nodeRun in nodeRuns.Where(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Pending))
+        // Queued rows are re-offered to their lane every tick, because a slot that was held when they were queued may
+        // be free now. This is what "the queue drains" means concretely: nothing hands out slots, the rows ask again.
+        var admissible = nodeRuns.Where(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.Pending or DevWorkflowNodeRunStatus.Queued).ToList();
+        foreach (var nodeRun in admissible)
         {
             if (!graph.Nodes.TryGetValue(nodeRun.NodeKey, out var node))
             {
@@ -572,6 +638,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                         DevWorkflowFailureClasses.Configuration,
                         cancellationToken)
                     .ConfigureAwait(false);
+                continue;
+            }
+
+            if (nodeRun.Status == DevWorkflowNodeRunStatus.Queued)
+            {
+                // Already judged eligible when it was queued; only the slot was missing. Re-judging its edges would be
+                // asking a question whose answer cannot have changed — nothing un-succeeds.
+                written += await DispatchAsync(store, agent, run, graph, node, nodeRun, byKey, cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
@@ -593,7 +667,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 continue;
             }
 
-            written += await DispatchAsync(store, run, graph, node, nodeRun, byKey, cancellationToken).ConfigureAwait(false);
+            written += await DispatchAsync(store, agent, run, graph, node, nodeRun, byKey, cancellationToken).ConfigureAwait(false);
         }
 
         return written;
@@ -607,12 +681,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///         all.
     ///     </para>
     ///     <para>
-    ///         <b>Seam:</b> the agent, tool and dev-task lanes attach here. Until they do, a node run of one of those
-    ///         types is blocked for a human rather than left queued forever — a queue nothing drains is the one answer
-    ///         that would look like progress.
+    ///         <b>Seam:</b> the tool and dev-task lanes attach here. Until they do, a node run of one of those types is
+    ///         blocked for a human rather than left queued forever — a queue nothing drains is the one answer that would
+    ///         look like progress.
     ///     </para>
     /// </summary>
     private static async Task<int> DispatchAsync(IDevWorkflowStore store,
+        DevWorkflowAgentExecutor agent,
         DevWorkflowRunSnapshot run,
         DevWorkflowGraph graph,
         DevWorkflowGraphNode node,
@@ -620,7 +695,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey,
         CancellationToken cancellationToken)
     {
-        if (node.NodeType is DevWorkflowNodeType.Agent or DevWorkflowNodeType.Tool or DevWorkflowNodeType.DevTask)
+        if (node.NodeType == DevWorkflowNodeType.Agent)
+        {
+            return await agent.DispatchAsync(store, graph, run, node, nodeRun, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (node.NodeType is DevWorkflowNodeType.Tool or DevWorkflowNodeType.DevTask)
         {
             return await BlockAsync(store,
                     run,
@@ -643,6 +723,11 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         if (node.NodeType == DevWorkflowNodeType.HumanGate)
         {
+            // The gate consumes what its predecessors produced, and recording that is what gives the approval panel its
+            // evidence list. Without it the panel renders a prompt and three buttons over nothing, and the operator
+            // approves a plan they cannot see — and the record is simply true, so it costs no new field.
+            _ = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken).ConfigureAwait(false);
+
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
                                 nodeRun.Id,
                                 DevWorkflowVersions.Any,
@@ -745,6 +830,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         }
     }
 
+    /// <summary>
+    ///     Stands a node run down for a human, and blocks its work item in the same transaction.
+    ///     <para>
+    ///         The work-item write has to travel HERE rather than wait for the end-of-tick recomputation: a node
+    ///         blocking while a sibling still works leaves the run <c>Running</c>, so the recomputation writes nothing
+    ///         and the item would keep reading <c>Active</c> with a node run nobody is coming to unblock.
+    ///     </para>
+    /// </summary>
     private static async Task<int> BlockAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
@@ -759,7 +852,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                             DevWorkflowNodeRunStatus.Blocked,
                             PendingDecisionKind: DevWorkflowDecisionKind.Abandon,
                             FailureClass: failureClass,
-                            TerminalReason: sanitizedReason),
+                            TerminalReason: sanitizedReason,
+                            WorkItemStatus: DevWorkflowWorkItemStatus.Blocked),
                         cancellationToken)
                     .ConfigureAwait(false);
         return 1;

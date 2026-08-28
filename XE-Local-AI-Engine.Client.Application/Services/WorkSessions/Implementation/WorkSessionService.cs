@@ -172,6 +172,14 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
     public Task<WorkSessionDetail> CancelAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
         StopAsync(sessionId, WorkSessionStopReason.Cancel, AgentWorkSessionStatus.Cancelled, "The operator cancelled the work session.", workflowOwned: false, cancellationToken);
 
+    bool IWorkflowOwnedWorkSessionLifecycle.HasCapacity => _supervisor.HasCapacity;
+
+    Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.CreateAsync(string title,
+        string objective,
+        Guid agentDefinitionId,
+        CancellationToken cancellationToken) =>
+        CreateAsync(new CreateWorkSessionRequestModel(title, objective, AgentWorkSessionKind.Workflow, agentDefinitionId), cancellationToken);
+
     Task<WorkSessionDetail> IWorkflowOwnedWorkSessionLifecycle.StartAsync(Guid sessionId, CancellationToken cancellationToken) =>
         BeginAsync(sessionId, [AgentWorkSessionStatus.Draft], workflowOwned: true, cancellationToken);
 

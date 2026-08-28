@@ -195,6 +195,27 @@ internal static class DevWorkflowStateMachine
     }
 
     /// <summary>
+    ///     Where a node-run transition about to be written leaves the work item, so the move can carry it in its own
+    ///     transaction.
+    ///     <para>
+    ///         Needed because the run status often does not change when a node run does — a node blocking while a
+    ///         sibling still works leaves the run <c>Running</c> — and the end-of-tick recomputation writes nothing when
+    ///         the run status is unchanged. Without this the work item would keep reading <c>Active</c> with a node run
+    ///         nobody is coming to unblock, which is the one thing the list page exists to surface.
+    ///     </para>
+    /// </summary>
+    public static DevWorkflowWorkItemStatus WorkItemStatusAfter(DevWorkflowRunStatus runStatus,
+        IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
+        Guid nodeRunId,
+        DevWorkflowNodeRunStatus target)
+    {
+        ArgumentNullException.ThrowIfNull(nodeRuns);
+
+        var projected = nodeRuns.Select(nodeRun => nodeRun.Id == nodeRunId ? nodeRun with { Status = target } : nodeRun).ToList();
+        return WorkItemStatusFor(Recompute(runStatus, projected), projected);
+    }
+
+    /// <summary>
     ///     The run transition table. Every terminal is reached through a drain (<c>Pausing</c>/<c>Cancelling</c>) or
     ///     through the "nothing is live any more" recomputation — there is deliberately no direct edge from a
     ///     non-terminal status to <c>Cancelled</c>, because writing one would strand the run's live node runs under a
