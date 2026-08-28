@@ -87,9 +87,13 @@ internal sealed class ExternalProviderProbeService : IExternalProviderProbeServi
             };
         }
 
-        // Blank means "use what is stored": the masked editor sends no key back, so requiring one here would make
-        // testing an existing connection impossible without re-typing the secret.
-        var apiKey = !string.IsNullOrWhiteSpace(query.ApiKey) ? query.ApiKey : stored?.ApiKey;
+        // Blank means "use what is stored" — but ONLY for the origin the stored key belongs to. The masked editor sends
+        // no key back, so requiring one outright would make testing an existing connection impossible without re-typing
+        // the secret; forwarding it to whatever address the caller typed would turn "Test connection" into a key
+        // exfiltration primitive for any operator-API caller who cannot read the key itself. Testing a moved endpoint
+        // therefore probes with only what the caller supplied, which is keyless unless they typed a key.
+        var carriedStoredKey = ExternalProviderStore.IsSameOrigin(stored?.BaseUrl, baseAddress.AbsoluteUri) ? stored?.ApiKey : null;
+        var apiKey = string.IsNullOrWhiteSpace(query.ApiKey) ? carriedStoredKey : query.ApiKey;
 
         return await SendProbeAsync(baseAddress, apiKey, cancellationToken).ConfigureAwait(false);
     }

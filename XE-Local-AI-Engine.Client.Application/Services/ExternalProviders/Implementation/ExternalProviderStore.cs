@@ -50,6 +50,14 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     /// <inheritdoc />
     public async Task<StoredExternalProviderConfig> LoadAsync(CancellationToken cancellationToken = default)
     {
+        return await ReadForWriteAsync(cancellationToken).ConfigureAwait(false) is ExternalProviderLoadResult.Loaded loaded
+            ? loaded.Config
+            : new StoredExternalProviderConfig();
+    }
+
+    /// <inheritdoc />
+    public async Task<ExternalProviderLoadResult> ReadForWriteAsync(CancellationToken cancellationToken = default)
+    {
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -74,7 +82,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var current = await LoadUnlockedAsync(cancellationToken).ConfigureAwait(false);
+            var current = await LoadForWriteUnlockedAsync(cancellationToken).ConfigureAwait(false);
             if (IsSuperseded(current, request.ExpectedRevision))
             {
                 return new ExternalProviderWriteResult.Superseded(current);
@@ -83,7 +91,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             var existing = FindConnection(current, candidate.Id);
             var merged = candidate with
             {
-                ApiKey = MergeApiKey(request, existing)
+                ApiKey = MergeApiKey(request, existing, candidate.BaseUrl)
             };
 
             if (existing is not null && IsUnchanged(existing, merged))
@@ -128,7 +136,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var current = await LoadUnlockedAsync(cancellationToken).ConfigureAwait(false);
+            var current = await LoadForWriteUnlockedAsync(cancellationToken).ConfigureAwait(false);
             if (IsSuperseded(current, expectedRevision))
             {
                 return new ExternalProviderWriteResult.Superseded(current);
@@ -190,21 +198,64 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     }
 
     /// <summary>
-    ///     Resolves the key to store: an explicit clear wins, then a supplied key, then whatever is already stored.
+    ///     Resolves the key to store: an explicit clear wins, then a supplied key, then whatever is already stored —
+    ///     the last of which is allowed ONLY while the connection stays on the same origin.
     /// </summary>
     /// <remarks>
-    ///     The middle case is the one that matters. The editor masks the key and sends nothing back, so treating a
-    ///     blank key as "clear it" would silently de-authenticate a working connection the first time an operator
-    ///     renamed it — which surfaces later, as a chat failure, with no visible cause.
+    ///     <para>
+    ///         The carry-forward case is why this method exists. The editor masks the key and sends nothing back, so
+    ///         treating a blank key as "clear it" would silently de-authenticate a working connection the first time an
+    ///         operator renamed it — a chat failure, later, with no visible cause.
+    ///     </para>
+    ///     <para>
+    ///         But a key is a credential for ONE origin, and carrying it forward across an origin change is how an
+    ///         operator-API caller who cannot read the encrypted key extracts it anyway: point the connection at a
+    ///         listener they control, save without a key, and the node presents the stored secret as a bearer token on
+    ///         the next request. So an origin change requires the key to be re-entered or explicitly cleared — an
+    ///         explicit decision by whoever is moving the endpoint, which is exactly the decision being stolen here.
+    ///         A path change on the same origin is not a re-authorization: the credential's audience has not moved.
+    ///     </para>
     /// </remarks>
-    private static string? MergeApiKey(ExternalProviderConnectionSaveRequest request, StoredExternalProviderConnection? existing)
+    private static string? MergeApiKey(ExternalProviderConnectionSaveRequest request,
+        StoredExternalProviderConnection? existing,
+        string normalizedBaseUrl)
     {
         if (request.ClearApiKey)
         {
             return null;
         }
 
-        return string.IsNullOrWhiteSpace(request.ApiKey) ? existing?.ApiKey : request.ApiKey.Trim();
+        if (!string.IsNullOrWhiteSpace(request.ApiKey))
+        {
+            return request.ApiKey.Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(existing?.ApiKey))
+        {
+            return null;
+        }
+
+        if (!IsSameOrigin(existing.BaseUrl, normalizedBaseUrl))
+        {
+            throw new ExternalProviderValidationException(
+                "This connection's endpoint moved to a different host, so its stored API key was not carried over. Enter the key again for the new endpoint, or clear it to connect without one.");
+        }
+
+        return existing.ApiKey;
+    }
+
+    /// <summary>
+    ///     Whether two NORMALIZED base URLs address the same origin — scheme, host and port. The unit of credential
+    ///     trust, and compared here rather than by string equality so a path-only edit (<c>/v1</c> to <c>/openai/v1</c>)
+    ///     does not force a needless key re-entry.
+    /// </summary>
+    internal static bool IsSameOrigin(string? left, string? right)
+    {
+        return Uri.TryCreate(left, UriKind.Absolute, out var leftUri)
+               && Uri.TryCreate(right, UriKind.Absolute, out var rightUri)
+               && string.Equals(leftUri.GetLeftPart(UriPartial.Authority),
+                   rightUri.GetLeftPart(UriPartial.Authority),
+                   StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsSameId(string left, string right)
@@ -318,6 +369,23 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
                 throw new ExternalProviderValidationException($"'{model.DefaultReasoningEffort}' is not a recognized reasoning effort.");
             }
 
+            // Refused, not silently canonicalized. Every capability here is an operator ASSERTION about a remote server
+            // no probe can interrogate, and "it does not reason, but here is its default reasoning effort" is not a
+            // claim with a defensible reading — accepting it would put reasoning_effort on the wire for a model the
+            // catalog simultaneously reports as non-reasoning, and quietly dropping it would hide a form the operator
+            // filled in wrong. The effort switch is only meaningful alongside a reasoning channel.
+            if (!model.SupportsReasoning && (model.SupportsReasoningEffort || !string.IsNullOrWhiteSpace(model.DefaultReasoningEffort)))
+            {
+                throw new ExternalProviderValidationException(
+                    $"The external model '{wireId}' declares a reasoning effort but not reasoning support. Enable reasoning, or remove the effort settings.");
+            }
+
+            if (!model.SupportsReasoningEffort && !string.IsNullOrWhiteSpace(model.DefaultReasoningEffort))
+            {
+                throw new ExternalProviderValidationException(
+                    $"The external model '{wireId}' declares a default reasoning effort but not graded effort support. Enable effort support, or remove the default.");
+            }
+
             var displayName = model.DisplayName?.Trim();
             if (displayName is { Length: > ExternalProviderStoreSchema.MaxDisplayNameLength })
             {
@@ -340,11 +408,11 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         return validated;
     }
 
-    private async Task<StoredExternalProviderConfig> LoadUnlockedAsync(CancellationToken cancellationToken)
+    private async Task<ExternalProviderLoadResult> LoadUnlockedAsync(CancellationToken cancellationToken)
     {
         if (!File.Exists(_storePath))
         {
-            return new StoredExternalProviderConfig();
+            return new ExternalProviderLoadResult.Missing();
         }
 
         byte[] payload;
@@ -357,17 +425,19 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         {
             // The key ring rotated out from under the file (a node re-key, a restored profile). The payload can never
             // be recovered, and leaving it in place would make every subsequent save fail its read-modify-write, so it
-            // is quarantined exactly as the cloud credential store quarantines its own.
+            // is quarantined exactly as the cloud credential store quarantines its own. Quarantined means GONE, which
+            // is why this reports Missing rather than Unreadable: after the delete there genuinely is no config.
             _logger.LogWarning(exception, "External provider store decryption failed. Clearing the stored external connections.");
             ClearStoreFileBestEffort();
-            return new StoredExternalProviderConfig();
+            return new ExternalProviderLoadResult.Missing();
         }
         catch (IOException exception)
         {
-            // Transient: report empty for this read, but do NOT delete — the file is probably fine and a concurrent
-            // reader/AV scanner is holding it.
+            // Transient, and NOT recoverable information: the file is probably fine and a concurrent reader or AV
+            // scanner is holding it. Reported as unreadable so a writer refuses rather than reconciling the operator's
+            // configuration away on the strength of a locked handle.
             _logger.LogWarning(exception, "External provider store could not be read from disk.");
-            return new StoredExternalProviderConfig();
+            return new ExternalProviderLoadResult.Unreadable("The external provider store could not be read from disk.");
         }
 
         try
@@ -378,20 +448,37 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             {
                 // Written by a NEWER build. Refuse to interpret it, and refuse to delete it: the operator downgraded,
                 // and silently discarding their connections (and keys) would be the worse of the two failures.
-                _logger.LogWarning("The external provider store was written at schema version {StoredVersion}, newer than this build's {CurrentVersion}; treating it as empty and leaving it untouched.",
+                _logger.LogWarning("The external provider store was written at schema version {StoredVersion}, newer than this build's {CurrentVersion}; leaving it untouched and refusing to write it.",
                     config.SchemaVersion,
                     ExternalProviderStoreSchema.CurrentVersion);
-                return new StoredExternalProviderConfig();
+                return new ExternalProviderLoadResult.UnsupportedSchema(config.SchemaVersion);
             }
 
-            return config;
+            return new ExternalProviderLoadResult.Loaded(config);
         }
         catch (JsonException exception)
         {
             _logger.LogWarning(exception, "External provider store could not be deserialized. Clearing the stored external connections.");
             ClearStoreFileBestEffort();
-            return new StoredExternalProviderConfig();
+            return new ExternalProviderLoadResult.Missing();
         }
+    }
+
+    /// <summary>
+    ///     The current configuration for a WRITE, or the typed refusal that says why one must not happen.
+    /// </summary>
+    private async Task<StoredExternalProviderConfig> LoadForWriteUnlockedAsync(CancellationToken cancellationToken)
+    {
+        return await LoadUnlockedAsync(cancellationToken).ConfigureAwait(false) switch
+        {
+            ExternalProviderLoadResult.Loaded loaded => loaded.Config,
+            ExternalProviderLoadResult.Missing => new StoredExternalProviderConfig(),
+            ExternalProviderLoadResult.Unreadable unreadable => throw new ExternalProviderValidationException(
+                $"{unreadable.Reason} Nothing was changed; retry once the file is accessible."),
+            ExternalProviderLoadResult.UnsupportedSchema unsupported => throw new ExternalProviderValidationException(
+                $"The external connection store was written by a newer version of this application (schema {unsupported.StoredVersion}). Nothing was changed. Upgrade, or remove the store file to start over."),
+            _ => throw new ExternalProviderValidationException("The external connection store is in an unrecognized state; nothing was changed.")
+        };
     }
 
     private async Task<StoredExternalProviderConfig> WriteAsync(IReadOnlyList<StoredExternalProviderConnection> connections,

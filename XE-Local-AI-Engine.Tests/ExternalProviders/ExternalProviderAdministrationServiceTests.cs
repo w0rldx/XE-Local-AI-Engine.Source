@@ -123,6 +123,9 @@ public sealed class ExternalProviderAdministrationServiceTests
         public Task<StoredExternalProviderConfig> LoadAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(_config);
 
+        public Task<ExternalProviderLoadResult> ReadForWriteAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<ExternalProviderLoadResult>(new ExternalProviderLoadResult.Loaded(_config));
+
         public Task<ExternalProviderWriteResult> SaveConnectionAsync(ExternalProviderConnectionSaveRequest request,
             CancellationToken cancellationToken = default) =>
             Failure is null ? Task.FromResult(NextResult(_config)) : Task.FromException<ExternalProviderWriteResult>(Failure);

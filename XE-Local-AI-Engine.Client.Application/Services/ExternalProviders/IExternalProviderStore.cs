@@ -21,11 +21,23 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 public interface IExternalProviderStore
 {
     /// <summary>
-    ///     The whole stored configuration. Returns an EMPTY config — never <see langword="null" /> — when no file
-    ///     exists, which is the shipped default; an unreadable or undecryptable file also reads as empty after the
-    ///     store has quarantined it, because a node whose external store is corrupt has no connections, not unknown ones.
+    ///     The whole stored configuration, for READERS. An empty config — never <see langword="null" /> — when no file
+    ///     exists, when it could not be read, or when it was written by a newer build.
     /// </summary>
+    /// <remarks>
+    ///     Correct for a reader (a node whose external store cannot be read has no usable connections) and NOT correct
+    ///     for a writer, which cannot tell "there is nothing" from "we cannot see what is there" and would delete the
+    ///     operator's connections on the strength of a transient IO failure. Writers take
+    ///     <see cref="ReadForWriteAsync" />.
+    /// </remarks>
     Task<StoredExternalProviderConfig> LoadAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     The stored configuration as a discriminated state, for callers whose next step MUTATES something derived
+    ///     from it — the reconciliation pass being the one that matters, since it removes provider-map rows,
+    ///     allow-list entries and the node default for anything the config does not list.
+    /// </summary>
+    Task<ExternalProviderLoadResult> ReadForWriteAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     ///     Inserts or replaces one connection by its canonical id, preserving the stored API key unless the request
@@ -39,6 +51,57 @@ public interface IExternalProviderStore
     ///     success with no change, so a retried delete after a partial failure is not an error.
     /// </summary>
     Task<ExternalProviderWriteResult> DeleteConnectionAsync(string connectionId, string? expectedRevision, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+///     What a read of the encrypted store actually found. Four states, not "a config, possibly empty", because the
+///     three empty-looking outcomes call for opposite behaviour: one is a fresh node, one is a node that cannot see its
+///     own configuration, and one is a node that has been downgraded past a payload it must not interpret.
+/// </summary>
+public abstract record ExternalProviderLoadResult
+{
+    private ExternalProviderLoadResult()
+    {
+    }
+
+    /// <summary>Whether writes and reconciliation may proceed from this result.</summary>
+    public abstract bool IsAuthoritative { get; }
+
+    /// <summary>No file exists. Authoritative: a fresh node genuinely has no connections.</summary>
+    public sealed record Missing : ExternalProviderLoadResult
+    {
+        /// <inheritdoc />
+        public override bool IsAuthoritative => true;
+    }
+
+    /// <summary>The file was read and understood. Authoritative.</summary>
+    public sealed record Loaded(StoredExternalProviderConfig Config) : ExternalProviderLoadResult
+    {
+        /// <inheritdoc />
+        public override bool IsAuthoritative => true;
+    }
+
+    /// <summary>
+    ///     The file exists but could not be read this time — a transient IO failure, an antivirus scanner holding it.
+    ///     NOT authoritative: treating it as "no connections" would let a reconciliation pass delete every route,
+    ///     allow-list entry and default the operator configured, on the strength of a locked file handle.
+    /// </summary>
+    public sealed record Unreadable(string Reason) : ExternalProviderLoadResult
+    {
+        /// <inheritdoc />
+        public override bool IsAuthoritative => false;
+    }
+
+    /// <summary>
+    ///     The file was written by a NEWER build than this one. NOT authoritative, and deliberately never rewritten:
+    ///     the operator downgraded, and silently discarding connections (and keys) this build cannot parse is the worse
+    ///     of the two failures.
+    /// </summary>
+    public sealed record UnsupportedSchema(int StoredVersion) : ExternalProviderLoadResult
+    {
+        /// <inheritdoc />
+        public override bool IsAuthoritative => false;
+    }
 }
 
 /// <summary>The outcome of a store write.</summary>

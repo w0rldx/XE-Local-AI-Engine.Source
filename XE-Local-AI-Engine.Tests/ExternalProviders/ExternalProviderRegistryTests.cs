@@ -199,6 +199,11 @@ internal sealed class FakeExternalProviderStore(params StoredExternalProviderCon
         return LoadFailure is null ? Task.FromResult(_config) : Task.FromException<StoredExternalProviderConfig>(LoadFailure);
     }
 
+    public async Task<ExternalProviderLoadResult> ReadForWriteAsync(CancellationToken cancellationToken = default)
+    {
+        return new ExternalProviderLoadResult.Loaded(await LoadAsync(cancellationToken));
+    }
+
     public Task<ExternalProviderWriteResult> SaveConnectionAsync(ExternalProviderConnectionSaveRequest request,
         CancellationToken cancellationToken = default) =>
         throw new NotSupportedException("The fake store is a read fixture.");

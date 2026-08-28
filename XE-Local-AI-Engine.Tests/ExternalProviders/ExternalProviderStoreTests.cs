@@ -146,6 +146,73 @@ public sealed class ExternalProviderStoreTests : IDisposable
     }
 
     [Test]
+    public async Task SaveConnectionAsync_WithABlankKeyAndAPathOnlyEdit_PreservesTheStoredKey()
+    {
+        using var store = CreateStore();
+        _ = await SaveAsync(store, Request(baseUrl: "http://127.0.0.1:18099/v1", apiKey: "sk-unsloth-original"));
+
+        // Same origin: the credential's audience did not move, so a path edit must not force the operator to re-type a
+        // secret the editor never showed them.
+        var moved = await SaveAsync(store, Request(baseUrl: "http://127.0.0.1:18099/openai/v1", apiKey: null));
+
+        AssertEx.Equal("sk-unsloth-original", moved.Config.Connections.Single().ApiKey);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_WhenTheOriginChangesWithNoNewKey_IsRefused()
+    {
+        using var store = CreateStore();
+        _ = await SaveAsync(store, Request(baseUrl: "http://127.0.0.1:18099/v1", apiKey: "sk-unsloth-original"));
+
+        // THE exfiltration path: an Operator API caller who cannot read the encrypted key repoints the connection at a
+        // listener they control and saves with no key, after which the node presents the stored secret as a bearer
+        // token on the next request. Moving the endpoint has to be an explicit decision about the credential too.
+        var exception = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () =>
+            await SaveAsync(store, Request(baseUrl: "http://attacker.example.com/v1", apiKey: null)));
+
+        AssertEx.Contains(exception.Message, "Enter the key again");
+
+        // And nothing was written: the stored connection still points where the operator left it.
+        var stored = await store.LoadAsync();
+        AssertEx.Equal("http://127.0.0.1:18099/v1/", stored.Connections.Single().BaseUrl);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_WhenTheOriginChangesWithANewKey_IsAccepted()
+    {
+        using var store = CreateStore();
+        _ = await SaveAsync(store, Request(baseUrl: "http://127.0.0.1:18099/v1", apiKey: "sk-unsloth-original"));
+
+        var moved = await SaveAsync(store, Request(baseUrl: "http://127.0.0.1:19000/v1", apiKey: "sk-new-endpoint"));
+
+        AssertEx.Equal("sk-new-endpoint", moved.Config.Connections.Single().ApiKey);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_WhenTheOriginChangesAndTheKeyIsCleared_IsAccepted()
+    {
+        using var store = CreateStore();
+        _ = await SaveAsync(store, Request(baseUrl: "http://127.0.0.1:18099/v1", apiKey: "sk-unsloth-original"));
+
+        var moved = await SaveAsync(store, Request(baseUrl: "http://127.0.0.1:19000/v1", apiKey: null) with { ClearApiKey = true });
+
+        AssertEx.Null(moved.Config.Connections.Single().ApiKey);
+        AssertEx.Equal("http://127.0.0.1:19000/v1/", moved.Config.Connections.Single().BaseUrl);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_WhenTheOriginChangesOnAKeylessConnection_IsAccepted()
+    {
+        using var store = CreateStore();
+        _ = await SaveAsync(store, Request(baseUrl: "http://127.0.0.1:18099/v1", apiKey: null));
+
+        // There is no credential to leak, so nothing to re-authorize.
+        var moved = await SaveAsync(store, Request(baseUrl: "http://127.0.0.1:19000/v1", apiKey: null));
+
+        AssertEx.Equal("http://127.0.0.1:19000/v1/", moved.Config.Connections.Single().BaseUrl);
+    }
+
+    [Test]
     public async Task SaveConnectionAsync_WithAnExplicitClear_RemovesTheStoredKey()
     {
         using var store = CreateStore();
@@ -291,6 +358,96 @@ public sealed class ExternalProviderStoreTests : IDisposable
         // be the worse of the two failures, because it takes their API keys with it.
         AssertEx.Empty(config.Connections);
         AssertEx.True(File.Exists(StorePath));
+    }
+
+    [Test]
+    public async Task ReadForWriteAsync_WithANewerSchema_ReportsUnsupportedRatherThanEmpty()
+    {
+        using var store = CreateStore();
+        await WriteRawAsync(new StoredExternalProviderConfig
+        {
+            SchemaVersion = ExternalProviderStoreSchema.CurrentVersion + 1,
+            Revision = "r",
+            Connections = []
+        });
+
+        var result = await store.ReadForWriteAsync();
+
+        // Empty is the right answer for a READER and the wrong one for a writer: reconciliation removes every route,
+        // allow-list entry and default the configuration does not list, so it must be able to tell "there is nothing"
+        // from "we cannot see what is there".
+        AssertEx.False(result.IsAuthoritative);
+        AssertEx.True(result is ExternalProviderLoadResult.UnsupportedSchema);
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_WithANewerSchemaOnDisk_RefusesRatherThanClobbering()
+    {
+        using var store = CreateStore();
+        await WriteRawAsync(new StoredExternalProviderConfig
+        {
+            SchemaVersion = ExternalProviderStoreSchema.CurrentVersion + 1,
+            Revision = "r",
+            Connections = []
+        });
+
+        _ = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () => await SaveAsync(store, Request()));
+
+        // The refusal is only worth anything if the payload survives it.
+        AssertEx.True(File.Exists(StorePath));
+    }
+
+    [Test]
+    public async Task DeleteConnectionAsync_WithANewerSchemaOnDisk_RefusesRatherThanClobbering()
+    {
+        using var store = CreateStore();
+        await WriteRawAsync(new StoredExternalProviderConfig
+        {
+            SchemaVersion = ExternalProviderStoreSchema.CurrentVersion + 1,
+            Revision = "r",
+            Connections = []
+        });
+
+        _ = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () => await store.DeleteConnectionAsync("unsloth-box", expectedRevision: null));
+
+        AssertEx.True(File.Exists(StorePath));
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_WithEffortOnANonReasoningModel_IsRefused()
+    {
+        using var store = CreateStore();
+
+        // Every capability here is an operator ASSERTION about a server no probe can interrogate, and "it does not
+        // reason, but here is its default reasoning effort" has no defensible reading: accepting it would put
+        // reasoning_effort on the wire for a model the catalog reports as non-reasoning.
+        _ = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () =>
+            await SaveAsync(store, Request(models: [
+                Model("qwen3") with { SupportsReasoning = false, SupportsReasoningEffort = true }
+            ])));
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_WithADefaultEffortButNoEffortSupport_IsRefused()
+    {
+        using var store = CreateStore();
+
+        _ = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () =>
+            await SaveAsync(store, Request(models: [
+                Model("qwen3") with { SupportsReasoning = true, SupportsReasoningEffort = false, DefaultReasoningEffort = "medium" }
+            ])));
+    }
+
+    [Test]
+    public async Task SaveConnectionAsync_WithCoherentReasoningDeclarations_IsAccepted()
+    {
+        using var store = CreateStore();
+
+        var committed = await SaveAsync(store, Request(models: [
+            Model("qwen3") with { SupportsReasoning = true, SupportsReasoningEffort = true, DefaultReasoningEffort = "medium" }
+        ]));
+
+        AssertEx.Equal("medium", committed.Config.Connections.Single().Models.Single().DefaultReasoningEffort);
     }
 
     [Test]
