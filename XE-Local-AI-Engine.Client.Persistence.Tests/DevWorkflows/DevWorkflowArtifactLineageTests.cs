@@ -132,6 +132,92 @@ public sealed class DevWorkflowArtifactLineageTests
         AssertEx.Equal(specificationV1, consumed[0], "The use points at the exact version consumed, which is what makes 'consumed v1, v2 exists' decidable.");
     }
 
+    /// <summary>
+    ///     A replayed append must answer with the SAME superseded id, not a thinner result. The caller that owns the
+    ///     blob store decides what to sweep from this field, so a replay reporting null would skip a sweep it still owes.
+    /// </summary>
+    [Test]
+    public async Task ReplayingAnAppend_ReturnsTheRecordedSupersededArtifactId()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "plan", seed.RunVersion).ConfigureAwait(false);
+
+        var firstId = Guid.NewGuid();
+        var first = await AppendAsync(store, seed.RunId, firstId, nodeRunId, version, "plan", "hash-1").ConfigureAwait(false);
+
+        var secondId = Guid.NewGuid();
+        var command = new AppendDevWorkflowArtifactCommand(seed.RunId,
+            secondId,
+            nodeRunId,
+            first.Version,
+            Guid.NewGuid(),
+            DevWorkflowArtifactKind.Plan,
+            "plan",
+            "text/markdown",
+            "hash-2",
+            SizeBytes: 16,
+            $"{seed.RunId:N}/{secondId:N}");
+
+        var written = await store.AppendArtifactAsync(command).ConfigureAwait(false);
+        AssertEx.Equal(firstId, written.SupersededArtifactId);
+
+        var replayed = await store.AppendArtifactAsync(command).ConfigureAwait(false);
+        AssertEx.Equal(written.Sequence, replayed.Sequence, "A replay must answer with the watermark the first attempt allocated.");
+        AssertEx.Equal(firstId, replayed.SupersededArtifactId, "A replay must return the recorded result, superseded id included.");
+        AssertEx.Equal(expected: 2, (await store.ListArtifactsAsync(seed.RunId).ConfigureAwait(false)).Count, "A replayed append must not insert a third row.");
+    }
+
+    /// <summary>
+    ///     A node that re-runs and consumes its own previous output is a consumer of the very thing it replaces, so the
+    ///     new version must not mark itself stale the moment it lands.
+    /// </summary>
+    [Test]
+    public async Task MarkDependentsStale_DoesNotMarkTheSupersedingArtifactViaItsOwnUse()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "plan", seed.RunVersion).ConfigureAwait(false);
+
+        var planV1 = Guid.NewGuid();
+        var first = await AppendAsync(store, seed.RunId, planV1, nodeRunId, version, "plan", "plan-1").ConfigureAwait(false);
+
+        // The re-attempt reads its own previous plan, then supersedes it.
+        var used = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand(seed.RunId, nodeRunId, first.Version, Guid.NewGuid(), [planV1]))
+                              .ConfigureAwait(false);
+        var planV2 = Guid.NewGuid();
+        var second = await AppendAsync(store, seed.RunId, planV2, nodeRunId, used.Version, "plan", "plan-2").ConfigureAwait(false);
+        AssertEx.Equal(planV1, second.SupersededArtifactId);
+
+        _ = await store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand(seed.RunId, planV1, planV2, second.Version)).ConfigureAwait(false);
+
+        var artifacts = await store.ListArtifactsAsync(seed.RunId).ConfigureAwait(false);
+        AssertEx.False(artifacts.Single(artifact => artifact.Id == planV2).IsStale, "The version that caused the supersession cannot be stale because of itself.");
+    }
+
+    /// <summary>An id from the wrong run must read as an error, not as the plausible zero an unconsumed artifact also reports.</summary>
+    [Test]
+    public async Task MarkDependentsStale_RejectsAnArtifactThatDoesNotBelongToTheRun()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(
+                () => store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand(seed.RunId, Guid.NewGuid(), Guid.NewGuid(), DevWorkflowVersions.Any)),
+                "A superseded id that does not belong to the run must be rejected.")
+            .ConfigureAwait(false);
+    }
+
     /// <summary>Recording the same use twice must not duplicate the edge — the unique index is what staleness counts on.</summary>
     [Test]
     public async Task RecordArtifactUses_IsIdempotentPerNodeRunAndArtifact()

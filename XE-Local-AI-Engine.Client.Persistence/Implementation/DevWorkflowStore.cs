@@ -97,7 +97,24 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
         }
 
         var run = await _dbContext.DevWorkflowRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == runId, cancellationToken).ConfigureAwait(false);
-        return run is null ? null : new DevWorkflowMutationResult(runId, recorded.Sequence, run.Version, run.Status, run.GraphRevision);
+        return run is null
+            ? null
+            : new DevWorkflowMutationResult(runId, recorded.Sequence, run.Version, run.Status, run.GraphRevision, RecordedSupersededArtifactId(recorded));
+    }
+
+    /// <summary>
+    ///     The superseded id a recorded artifact append reported, read back off its event. Without it a replayed append
+    ///     answers <see langword="null" /> where the first call answered an id, and the caller that owns the blob store
+    ///     would skip a sweep it still has to do — a replay has to return the recorded result, not a thinner one.
+    /// </summary>
+    private static Guid? RecordedSupersededArtifactId(DevWorkflowRunEvent recorded)
+    {
+        if (recorded.EventType != DevWorkflowEventTypes.ArtifactSuperseded || recorded.DetailJson is null)
+        {
+            return null;
+        }
+
+        return JsonSerializer.Deserialize<ArtifactSupersessionDetail>(recorded.DetailJson)?.SupersededArtifactId;
     }
 
     private long AddEvent(DevWorkflowRun run, string eventType, Guid? nodeRunId, string? outcome, Guid? operationId, byte[]? detailJson)
