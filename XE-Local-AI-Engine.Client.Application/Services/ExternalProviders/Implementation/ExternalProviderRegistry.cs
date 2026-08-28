@@ -189,31 +189,10 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
     {
         public static ExternalProviderSnapshot Build(long generation, StoredExternalProviderConfig config)
         {
-            var registrations = new List<ExternalProviderModelRegistration>();
-            var keys = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var connection in config.Connections)
-            {
-                ExternalProviderConnectionDescriptor descriptor;
-                try
-                {
-                    descriptor = ExternalProviderStore.ToDescriptor(connection);
-                }
-                catch (Exception exception) when (exception is UriFormatException or ArgumentException)
-                {
-                    // A stored row whose base URL no longer parses is dropped rather than allowed to fault every
-                    // lookup: one hand-edited connection must not take the operator's other connections offline with
-                    // it. Its models then resolve to null, which every consumer already treats as fail-closed.
-                    continue;
-                }
-
-                if (!string.IsNullOrWhiteSpace(connection.ApiKey))
-                {
-                    keys[descriptor.Id] = connection.ApiKey;
-                }
-
-                registrations.AddRange(connection.Models.Select(model =>
-                    new ExternalProviderModelRegistration(descriptor, ExternalProviderStore.ToDescriptor(model))));
-            }
+            // Shared with the reconciler (see ExternalProviderConfigProjection): the pass that DELETES drift derives
+            // its registration set from the configuration it authoritatively loaded, and it must be the same
+            // projection this cache is built from or the two would disagree about what is registered.
+            var (registrations, keys) = ExternalProviderConfigProjection.Project(config);
 
             // Last write wins on a duplicate id, which the store's per-connection validation already prevents; the
             // tolerant build is what keeps a hand-edited file from faulting the whole registry.

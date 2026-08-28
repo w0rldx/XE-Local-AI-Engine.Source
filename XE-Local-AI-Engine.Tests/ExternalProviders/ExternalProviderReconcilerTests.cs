@@ -26,7 +26,7 @@ public sealed class ExternalProviderReconcilerTests
     public async Task ReconcileAsync_WritesAMapRowPerRegisteredModel()
     {
         var fixture = new Fixture();
-        fixture.Registry.Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        fixture.Register(Registered());
 
         var report = await fixture.Reconciler.ReconcileAsync();
 
@@ -38,7 +38,7 @@ public sealed class ExternalProviderReconcilerTests
     public async Task ReconcileAsync_WhenTheMapIsAlreadyCorrect_ChangesNothing()
     {
         var fixture = new Fixture();
-        fixture.Registry.Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        fixture.Register(Registered());
         fixture.MapStore.Seed(ExternalProviderTestData.ModelId, "external");
 
         var report = await fixture.Reconciler.ReconcileAsync();
@@ -77,7 +77,7 @@ public sealed class ExternalProviderReconcilerTests
     public async Task ReconcileAsync_KeepsARowSpelledWithADifferentCase()
     {
         var fixture = new Fixture();
-        fixture.Registry.Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        fixture.Register(Registered());
         fixture.MapStore.Seed(ExternalProviderTestData.ModelId.Replace("unsloth-box", "UNSLOTH-BOX", StringComparison.Ordinal), "external");
 
         var report = await fixture.Reconciler.ReconcileAsync();
@@ -91,7 +91,7 @@ public sealed class ExternalProviderReconcilerTests
     public async Task ReconcileAsync_AddsToolCapableModelsToTheAllowList()
     {
         var fixture = new Fixture(existingAllowList: ["qwen3:8b"]);
-        fixture.Registry.Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model(supportsTools: true));
+        fixture.Register(Registered(supportsTools: true));
 
         var report = await fixture.Reconciler.ReconcileAsync();
 
@@ -106,7 +106,7 @@ public sealed class ExternalProviderReconcilerTests
     public async Task ReconcileAsync_DoesNotAddAModelThatDeclaresNoTools()
     {
         var fixture = new Fixture();
-        fixture.Registry.Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model(supportsTools: false));
+        fixture.Register(Registered());
 
         var report = await fixture.Reconciler.ReconcileAsync();
 
@@ -144,7 +144,7 @@ public sealed class ExternalProviderReconcilerTests
     public async Task ReconcileAsync_KeepsAStillRegisteredExternalDefaultModel()
     {
         var fixture = new Fixture(defaultModelName: ExternalProviderTestData.ModelId);
-        fixture.Registry.Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        fixture.Register(Registered());
 
         var report = await fixture.Reconciler.ReconcileAsync();
 
@@ -183,9 +183,7 @@ public sealed class ExternalProviderReconcilerTests
     public async Task ReconcileAsync_KeepsBothCaseVariantsOfOneWireId()
     {
         var fixture = new Fixture();
-        var connection = ExternalProviderTestData.Connection();
-        _ = fixture.Registry.Add(connection, ExternalProviderTestData.Model() with { WireId = "Foo" });
-        _ = fixture.Registry.Add(connection, ExternalProviderTestData.Model() with { WireId = "foo" });
+        fixture.Register(Registered(supportsTools: false, "Foo", "foo"));
         fixture.MapStore.Seed("ext:unsloth-box/Foo", "external");
 
         var report = await fixture.Reconciler.ReconcileAsync();
@@ -201,7 +199,7 @@ public sealed class ExternalProviderReconcilerTests
     public async Task ReconcileAsync_WhenItRepairsDrift_DropsBothRoutingCaches()
     {
         var fixture = new Fixture();
-        fixture.Registry.Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        fixture.Register(Registered());
 
         _ = await fixture.Reconciler.ReconcileAsync();
 
@@ -209,6 +207,36 @@ public sealed class ExternalProviderReconcilerTests
         // model, so a repaired row neither of them sees is a repair that has not taken effect.
         fixture.ProviderResolver.Received(1).InvalidateModelProviderMap();
         fixture.ChatClientCache.Received(1).ClearClientCache();
+    }
+
+    [Test]
+    public async Task ReconcileAsync_WhenThePlainReadTurnsUnreadableAfterTheAuthoritativeOne_DeletesNothing()
+    {
+        var fixture = new Fixture(existingAllowList: [ExternalProviderTestData.ModelId],
+            defaultModelName: ExternalProviderTestData.ModelId,
+            store: new AuthoritativeThenEmptyExternalProviderStore(Registered(supportsTools: true)));
+        fixture.MapStore.Seed(ExternalProviderTestData.ModelId, "external");
+
+        var report = await fixture.Reconciler.ReconcileAsync();
+
+        // BOTH halves of every diff come from the one authoritative load. Deriving the delete set from a SECOND read
+        // — the registry's, which goes through LoadAsync and collapses an unreadable file to an empty configuration —
+        // turned "the file is locked" into "nothing is registered", which this pass reads as a mandate to erase the
+        // operator's whole external setup, and then reported success.
+        AssertEx.False(report.Changed);
+        AssertEx.Equal(0, fixture.SettingsStore.WriteCount);
+        AssertEx.Equal(1, fixture.MapStore.Mappings.Count);
+    }
+
+    /// <summary>
+    ///     The registered connection the pass must see, spelled as it is STORED. Defaults to the single model
+    ///     <see cref="ExternalProviderTestData.ModelId" /> names.
+    /// </summary>
+    private static StoredExternalProviderConnection Registered(bool supportsTools = false, params string[] wireIds)
+    {
+        return ExternalProviderRegistryTests.Connection(ExternalProviderTestData.ConnectionId,
+            models: wireIds.Length == 0 ? [ExternalProviderTestData.WireId] : wireIds,
+            supportsTools: supportsTools);
     }
 
     private sealed class Fixture
@@ -223,8 +251,8 @@ public sealed class ExternalProviderReconcilerTests
                 DefaultModelName = defaultModelName
             });
 
-            Reconciler = new ExternalProviderReconciler(Registry,
-                store ?? new FakeExternalProviderStore(),
+            Store = store ?? new FakeExternalProviderStore();
+            Reconciler = new ExternalProviderReconciler(Store,
                 MapStore,
                 new ModelProviderMapLeaseCoordinator(new KeyedCompositeLockDomain()),
                 ProviderResolver,
@@ -233,16 +261,57 @@ public sealed class ExternalProviderReconcilerTests
                 NullLogger<ExternalProviderReconciler>.Instance);
         }
 
-        public FakeExternalProviderRegistry Registry { get; } = new();
+        public IExternalProviderStore Store { get; }
         public InMemoryCoordinatedModelProviderMapStore MapStore { get; } = new();
         public ILocalModelProviderResolver ProviderResolver { get; } = Substitute.For<ILocalModelProviderResolver>();
         public ILocalChatClientCacheInvalidator ChatClientCache { get; } = Substitute.For<ILocalChatClientCacheInvalidator>();
         public RecordingNodeSettingsStore SettingsStore { get; }
         public ExternalProviderReconciler Reconciler { get; }
 
+        /// <summary>
+        ///     Seeds what the operator has configured, in the STORE: the pass derives BOTH halves of every diff from
+        ///     the one authoritative load it takes itself, so the store is now its only source of registrations.
+        /// </summary>
+        public void Register(params StoredExternalProviderConnection[] connections)
+        {
+            ((FakeExternalProviderStore)Store).Replace(connections);
+        }
+
         public StoredNodeSettings CapturedSettings()
         {
             return SettingsStore.LastWritten ?? throw new InvalidOperationException("The reconciliation pass wrote no settings.");
+        }
+    }
+
+    /// <summary>
+    ///     A store whose AUTHORITATIVE read succeeds and whose plain <see cref="IExternalProviderStore.LoadAsync" />
+    ///     collapses to empty — the shape a file that turns unreadable (or carries a newer schema) takes on the read
+    ///     path the registry goes through.
+    /// </summary>
+    private sealed class AuthoritativeThenEmptyExternalProviderStore(StoredExternalProviderConnection connection) : IExternalProviderStore
+    {
+        public Task<StoredExternalProviderConfig> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(new StoredExternalProviderConfig());
+        }
+
+        public Task<ExternalProviderLoadResult> ReadForWriteAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<ExternalProviderLoadResult>(new ExternalProviderLoadResult.Loaded(new StoredExternalProviderConfig
+            {
+                Revision = "r0",
+                Connections = [connection]
+            }));
+        }
+
+        public Task<ExternalProviderWriteResult> SaveConnectionAsync(ExternalProviderConnectionSaveRequest request, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<ExternalProviderWriteResult> DeleteConnectionAsync(string connectionId, string? expectedRevision, CancellationToken cancellationToken = default)
+        {
+            throw new NotSupportedException();
         }
     }
 

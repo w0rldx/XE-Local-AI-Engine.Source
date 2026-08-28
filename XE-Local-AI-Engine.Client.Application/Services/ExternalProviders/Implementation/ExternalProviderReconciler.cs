@@ -34,12 +34,10 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
     private readonly ILogger<ExternalProviderReconciler> _logger;
     private readonly ICoordinatedModelProviderMapStore _mapStore;
     private readonly ILocalModelProviderResolver _providerResolver;
-    private readonly IExternalProviderRegistry _registry;
     private readonly INodeSettingsStore _settingsStore;
     private readonly IExternalProviderStore _store;
 
-    public ExternalProviderReconciler(IExternalProviderRegistry registry,
-        IExternalProviderStore store,
+    public ExternalProviderReconciler(IExternalProviderStore store,
         ICoordinatedModelProviderMapStore mapStore,
         IModelProviderMapLeaseCoordinator leaseCoordinator,
         ILocalModelProviderResolver providerResolver,
@@ -47,7 +45,6 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         INodeSettingsStore settingsStore,
         ILogger<ExternalProviderReconciler> logger)
     {
-        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _mapStore = mapStore ?? throw new ArgumentNullException(nameof(mapStore));
         _leaseCoordinator = leaseCoordinator ?? throw new ArgumentNullException(nameof(leaseCoordinator));
@@ -64,15 +61,19 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         // node default the configuration does not list is removed. Run against a config that merely looks empty because
         // the file could not be read — or because a newer build wrote it — it would erase the operator's whole external
         // setup and report success. So a non-authoritative read repairs nothing.
-        var loadResult = await _store.ReadForWriteAsync(cancellationToken).ConfigureAwait(false);
-        if (!loadResult.IsAuthoritative)
+        if (await _store.ReadForWriteAsync(cancellationToken).ConfigureAwait(false) is not ExternalProviderLoadResult.Loaded loaded)
         {
-            _logger.LogWarning("Skipping external provider reconciliation: the connection store is not readable ({State}). Nothing was changed.",
-                loadResult.GetType().Name);
+            _logger.LogWarning("Skipping external provider reconciliation: the connection store is not readable. Nothing was changed.");
             return new ExternalProviderReconciliationReport(0, 0, 0, 0, DefaultModelCleared: false);
         }
 
-        var registrations = await _registry.ListRegistrationsAsync(cancellationToken).ConfigureAwait(false);
+        // Project the configuration THIS pass loaded, rather than asking the registry again. Both halves of every diff
+        // below — what must exist AND what must be deleted — are derived from this one list, so the authoritative read
+        // above governs the deletions too. Reading the registry here instead was the hole: it re-reads the store
+        // through LoadAsync, which collapses an Unreadable or unsupported-schema file to an EMPTY configuration, and an
+        // empty registration set is a mandate to erase the operator's whole external setup. A store that turned
+        // unreadable between the two reads would have done exactly that, and reported success.
+        var registrations = ExternalProviderConfigProjection.Project(loaded.Config).Registrations;
 
         // Ordinal: these ids came out of the registry, which is keyed by the canonical spelling the store minted.
         var registered = registrations.Select(registration => registration.ModelId).ToArray();
