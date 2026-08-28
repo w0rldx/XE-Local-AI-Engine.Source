@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
 ///     The command surface over a development workflow run. Everything it does is validate, commit, signal, and answer
@@ -10,15 +11,29 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 {
+    /// <summary>
+    ///     How many of a work item's runs a delete gathers. One live run per work item and a hand-driven re-run cadence
+    ///     put the real number in single digits; this is the page that keeps an unbounded read out of a delete.
+    /// </summary>
+    private const int DeletePageSize = 1000;
+
+    private readonly IDevWorkflowArtifactBlobStore _blobs;
     private readonly DevWorkflowOptions _options;
+    private readonly IWorkflowOwnedWorkSessionLifecycle _sessions;
     private readonly IDevWorkflowDispatcherSignal _signal;
     private readonly IDevWorkflowStore _store;
 
-    public DevWorkflowRunService(IDevWorkflowStore store, IDevWorkflowDispatcherSignal signal, IOptions<DevWorkflowOptions> options)
+    public DevWorkflowRunService(IDevWorkflowStore store,
+        IDevWorkflowDispatcherSignal signal,
+        IWorkflowOwnedWorkSessionLifecycle sessions,
+        IDevWorkflowArtifactBlobStore blobs,
+        IOptions<DevWorkflowOptions> options)
     {
         ArgumentNullException.ThrowIfNull(options);
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _signal = signal ?? throw new ArgumentNullException(nameof(signal));
+        _sessions = sessions ?? throw new ArgumentNullException(nameof(sessions));
+        _blobs = blobs ?? throw new ArgumentNullException(nameof(blobs));
         _options = options.Value;
     }
 
@@ -97,6 +112,46 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         }
 
         return await CommandAsync(runId, operationId, DevWorkflowRunStatus.Running, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task DeleteWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default)
+    {
+        // Reads the item first so an unknown id answers "not found" rather than "deleted nothing".
+        _ = await _store.GetWorkItemAsync(workItemId, cancellationToken).ConfigureAwait(false);
+
+        var runs = await _store.ListRunSummariesAsync(workItemId, status: null, DeletePageSize, cancellationToken).ConfigureAwait(false);
+        if (runs.FirstOrDefault(run => !DevWorkflowStateMachine.IsTerminal(run.Status)) is { } live)
+        {
+            // Checked here as well as by the store's own guard, and BEFORE anything is released: the store's check is
+            // the atomic backstop against a run starting mid-delete, but reaching it after the sessions were deleted
+            // would mean a refused delete had already destroyed the transcripts of a run that is still going.
+            throw new DevWorkflowRunInFlightException($"Run '{live.Id}' is {live.Status}, so this work item cannot be deleted yet. Cancel the run first.");
+        }
+
+        // ponytail: one node-run read per run of this work item. Bounded by the runs a human started by hand, and it
+        // buys the session ids the delete has to release — a grouped store query if that ever stops being cheap.
+        var sessionIds = new List<Guid>();
+        foreach (var run in runs)
+        {
+            var nodeRuns = await _store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+            sessionIds.AddRange(nodeRuns.Where(static nodeRun => nodeRun.WorkSessionId is not null).Select(static nodeRun => nodeRun.WorkSessionId!.Value));
+        }
+
+        // Sessions before rows: a session that refuses to go leaves the work item intact and the operator with a
+        // conflict, where the other order would leave rows deleted and sessions orphaned with nothing pointing at them.
+        foreach (var sessionId in sessionIds.Distinct())
+        {
+            await _sessions.DeleteAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        }
+
+        _ = await _store.DeleteWorkItemAsync(workItemId, cancellationToken).ConfigureAwait(false);
+
+        // Bytes last, and best-effort by contract: the rows that named them are already gone, so a blob left behind is
+        // garbage rather than a dangling reference.
+        foreach (var run in runs)
+        {
+            _blobs.DeleteRun(run.Id);
+        }
     }
 
     public async Task<DevWorkflowRunDetail> GetAsync(Guid runId, CancellationToken cancellationToken = default) =>

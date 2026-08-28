@@ -196,11 +196,15 @@ public sealed record DevWorkflowMaterialization(string TemplateNodeKey, string A
 public sealed record DevWorkflowGraphEdge(string From, string To, DevWorkflowEdgeCondition? Condition);
 
 /// <summary>
-///     <see cref="Value" /> is a JSON scalar — string, number or boolean — and not a string member. A boolean that
-///     round-trips as <c>"true"</c> would compare against a real boolean as a type mismatch, and the evaluator fails
-///     closed, so the edge would silently never fire.
+///     <see cref="Value" /> is a JSON scalar — string, number, boolean or null — and not a string member. A boolean
+///     that round-trips as <c>"true"</c> would compare against a real boolean as a type mismatch, and the evaluator
+///     fails closed, so the edge would silently never fire.
+///     <para>
+///         Nullable so that the two operators which take no value (<c>exists</c>, <c>notExists</c>) round-trip as the
+///         absent member they are stored as, rather than as an unwritable undefined element.
+///     </para>
 /// </summary>
-public sealed record DevWorkflowEdgeCondition(string Path, string Op, JsonElement Value);
+public sealed record DevWorkflowEdgeCondition(string Path, string Op, JsonElement? Value);
 
 // Responses. Enums cross the wire as their NAMES and are typed string here; the client re-narrows them.
 

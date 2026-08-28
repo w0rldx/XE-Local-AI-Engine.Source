@@ -449,6 +449,10 @@ public interface IDevWorkflowStore
     ///     The node connection runs without <c>PRAGMA foreign_keys</c>, so the declared cascades never fire and the order
     ///     is the only thing that keeps the delete complete. Artifact bytes on disk and the work sessions the agent
     ///     node-runs owned are the caller's to remove.
+    ///     <para>
+    ///         Refuses with <see cref="DevWorkflowRunInFlightException" /> while any of the item's runs is non-terminal,
+    ///         checked inside the transaction so a run that starts mid-delete still wins.
+    ///     </para>
     /// </summary>
     Task<int> DeleteWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default);
 

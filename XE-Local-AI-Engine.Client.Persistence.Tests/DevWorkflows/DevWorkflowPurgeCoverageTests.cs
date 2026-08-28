@@ -124,6 +124,12 @@ public sealed class DevWorkflowPurgeCoverageTests
                                 DevWorkflowDecisionKind.Approve))
                            .ConfigureAwait(false);
 
+            _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() => store.DeleteWorkItemAsync(workItemId),
+                                     "A work item whose run is still live must not be deleted out from under the executor driving it.")
+                              .ConfigureAwait(false);
+            _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, DevWorkflowVersions.Any, DevWorkflowRunStatus.Cancelled))
+                           .ConfigureAwait(false);
+
             var removed = await store.DeleteWorkItemAsync(workItemId).ConfigureAwait(false);
             AssertEx.True(removed > 0, "The delete must report the rows it removed.");
         }

@@ -1,0 +1,516 @@
+namespace XE_Local_AI_Engine.Tests.Endpoints.DevelopmentWorkflows.V1;
+
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Tests.Testing;
+
+/// <summary>The work-item and definition halves of the surface. Runs, feeds and the decision live in their own file.</summary>
+public sealed class DevWorkflowEndpointTests
+{
+    private const string Root = "/api/local/v1/development-workflows";
+    private const string WorkItems = $"{Root}/work-items";
+    private const string WorkItem = $"{WorkItems}/11111111-1111-1111-1111-111111111111";
+    private const string Definitions = $"{Root}/definitions";
+    private const string Definition = $"{Definitions}/22222222-2222-2222-2222-222222222222";
+
+    private static readonly Guid WorkItemId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+    private static readonly Guid DefinitionId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+    private static readonly Guid RunId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+
+    /// <summary>The graph the seeded Slice-A template has: one agent into one terminal gate.</summary>
+    private const string SampleGraph = """
+        {"schemaVersion":1,
+         "nodes":[{"nodeKey":"research","nodeType":"Agent","label":"Research","agentSeedSlug":"researcher","maxAttempts":3},
+                  {"nodeKey":"approval","nodeType":"HumanGate","label":"Approve the plan","instructions":"Read the plan."}],
+         "edges":[{"from":"research","to":"approval"}]}
+        """;
+
+    [Test]
+    [Arguments("GET", WorkItems)]
+    [Arguments("POST", WorkItems)]
+    [Arguments("GET", WorkItem)]
+    [Arguments("PATCH", WorkItem)]
+    [Arguments("DELETE", WorkItem)]
+    [Arguments("GET", Definitions)]
+    [Arguments("POST", Definitions)]
+    [Arguments("GET", Definition)]
+    [Arguments("PUT", Definition)]
+    [Arguments("DELETE", Definition)]
+    public async Task DevWorkflowRoute_WhenTheOperatorTokenIsMissing_ReturnsUnauthorized(string method, string route)
+    {
+        await using var factory = EnabledFactory(Store(), Substitute.For<IDevWorkflowRunService>());
+        using var client = factory.CreateClient();
+        using var request = Request(method, route);
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode, $"{method} {route} must require the operator token.");
+    }
+
+    [Test]
+    [Arguments("GET", WorkItems)]
+    [Arguments("POST", WorkItems)]
+    [Arguments("GET", WorkItem)]
+    [Arguments("GET", Definitions)]
+    public async Task DevWorkflowRoute_WhenTheFeatureIsDisabled_ReturnsNotFoundWithoutReachingTheStore(string method, string route)
+    {
+        var store = Store();
+        await using var factory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["DevWorkflows:Enabled"] = "false"
+            },
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IDevWorkflowStore>();
+                services.AddSingleton(store);
+            }
+        };
+
+        using var response = await SendAsync(factory, method, route, method == "POST" ? "{}" : null).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, $"{method} {route} must answer 404 on a disabled node, never 500.");
+        AssertEx.Empty(store.ReceivedCalls());
+    }
+
+    [Test]
+    public async Task ListWorkItems_ProjectsTheLatestRunAndItsCounters()
+    {
+        var store = Store();
+        store.ListWorkItemsAsync(null, Arg.Any<CancellationToken>()).Returns([WorkItemSnapshot()]);
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "GET", WorkItems).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var item = document.RootElement.GetProperty("items")[0];
+        AssertEx.Equal("Active", item.GetProperty("status").GetString());
+        AssertEx.Equal("WaitingForApproval", item.GetProperty("latestRunStatus").GetString());
+        AssertEx.Equal("Research → Plan → Approval", item.GetProperty("definitionName").GetString());
+        AssertEx.Equal(2, item.GetProperty("totalNodeCount").GetInt32());
+        AssertEx.Equal(1, item.GetProperty("runningNodeCount").GetInt32());
+    }
+
+    [Test]
+    public async Task ListWorkItems_ForwardsTheStatusFilter()
+    {
+        var store = Store();
+        store.ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>()).Returns([]);
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "GET", $"{WorkItems}?status=Blocked").ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await store.Received(1).ListWorkItemsAsync(DevWorkflowWorkItemStatus.Blocked, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ListWorkItems_WithAStatusThatIsNotAMember_ReturnsBadRequestAndNeverReachesTheStore()
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "GET", $"{WorkItems}?status=Nonsense").ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await store.DidNotReceive().ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task CreateWorkItem_WhenValid_ReturnsCreatedWithLocationAndForwardsTheRequestText()
+    {
+        var store = Store();
+        store.CreateWorkItemAsync(Arg.Any<CreateDevWorkflowWorkItemCommand>(), Arg.Any<CancellationToken>()).Returns(WorkItemSnapshot());
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", WorkItems, """{"title":"Ship the thing","request":"Research and plan it."}""")
+            .ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        AssertEx.NotNull(response.Headers.Location);
+        await store.Received(1)
+                   .CreateWorkItemAsync(Arg.Is<CreateDevWorkflowWorkItemCommand>(command => command.Title == "Ship the thing"
+                                                                                            && command.Request == "Research and plan it."
+                                                                                            && command.DevelopmentProjectId == null),
+                       Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    [Arguments("""{"title":"","request":"r"}""")]
+    [Arguments("""{"title":"t","request":""}""")]
+    public async Task CreateWorkItem_WhenTheShapeIsWrong_ReturnsBadRequestAndNeverReachesTheStore(string body)
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", WorkItems, body).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await store.DidNotReceive().CreateWorkItemAsync(Arg.Any<CreateDevWorkflowWorkItemCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetWorkItem_EmbedsItsRunSummaries()
+    {
+        var store = Store();
+        store.GetWorkItemAsync(WorkItemId, Arg.Any<CancellationToken>()).Returns(WorkItemSnapshot());
+        store.ListRunSummariesAsync(WorkItemId, Arg.Any<DevWorkflowRunStatus?>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns([RunSummary()]);
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "GET", WorkItem).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var run = document.RootElement.GetProperty("runs")[0];
+        AssertEx.Equal(RunId, run.GetProperty("id").GetGuid());
+        AssertEx.Equal("WaitingForApproval", run.GetProperty("status").GetString());
+        AssertEx.Equal(1, run.GetProperty("pendingDecisionCount").GetInt32());
+    }
+
+    [Test]
+    public async Task UpdateWorkItem_WithOnlyATitle_ForwardsTheOtherMemberAsUnchanged()
+    {
+        var store = Store();
+        store.UpdateWorkItemAsync(Arg.Any<UpdateDevWorkflowWorkItemCommand>(), Arg.Any<CancellationToken>()).Returns(WorkItemSnapshot());
+        store.ListRunSummariesAsync(WorkItemId, Arg.Any<DevWorkflowRunStatus?>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns([]);
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "PATCH", WorkItem, """{"title":"renamed"}""").ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await store.Received(1)
+                   .UpdateWorkItemAsync(Arg.Is<UpdateDevWorkflowWorkItemCommand>(command => command.WorkItemId == WorkItemId
+                                                                                            && command.Title == "renamed"
+                                                                                            && command.Request == null),
+                       Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DeleteWorkItem_DelegatesToTheRuntimeSoTheOwnedSessionsAndBytesGoWithIt()
+    {
+        var runs = Substitute.For<IDevWorkflowRunService>();
+        await using var factory = EnabledFactory(Store(), runs);
+
+        using var response = await SendAsync(factory, "DELETE", WorkItem).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        await runs.Received(1).DeleteWorkItemAsync(WorkItemId, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task DeleteWorkItem_WhileARunIsLive_ReturnsTheRunInFlightConflict()
+    {
+        var runs = Substitute.For<IDevWorkflowRunService>();
+        runs.DeleteWorkItemAsync(WorkItemId, Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(new DevWorkflowRunInFlightException("still running"));
+        await using var factory = EnabledFactory(Store(), runs);
+
+        using var response = await SendAsync(factory, "DELETE", WorkItem).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        AssertEx.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal("DevWorkflowRunInFlight", document.RootElement.GetProperty("conflictType").GetString());
+    }
+
+    [Test]
+    [Arguments("GET", WorkItem, null)]
+    [Arguments("PATCH", WorkItem, """{"title":"renamed"}""")]
+    [Arguments("GET", Definition, null)]
+    [Arguments("PUT", Definition, """{"version":1,"name":"renamed"}""")]
+    [Arguments("DELETE", Definition, null)]
+    public async Task DevWorkflowRoute_WhenTheResourceIsUnknown_ReturnsBodylessNotFound(string method, string route, string? body)
+    {
+        var store = Store();
+        var missing = new DevWorkflowNotFoundException("gone");
+        store.GetWorkItemAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
+        store.UpdateWorkItemAsync(Arg.Any<UpdateDevWorkflowWorkItemCommand>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
+        store.GetDefinitionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
+        store.UpdateDefinitionAsync(Arg.Any<UpdateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
+        store.ArchiveDefinitionAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).ThrowsAsyncForAnyArgs(missing);
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, method, route, body).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode, $"{method} {route} must answer 404 for an unknown resource.");
+        AssertEx.Null(response.Content.Headers.ContentType, $"{method} {route} must not attach a content type to a bodyless 404.");
+        AssertEx.Equal(string.Empty, await response.Content.ReadAsStringAsync().ConfigureAwait(false), $"{method} {route} must answer a bodyless 404.");
+    }
+
+    [Test]
+    public async Task ListDefinitions_ForwardsIncludeArchived()
+    {
+        var store = Store();
+        store.ListDefinitionsAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([DefinitionSummary()]);
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "GET", $"{Definitions}?includeArchived=true").ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await store.Received(1).ListDefinitionsAsync(includeArchived: true, Arg.Any<CancellationToken>());
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal("Seeded", document.RootElement.GetProperty("items")[0].GetProperty("source").GetString());
+    }
+
+    /// <summary>
+    ///     The graph is a field-for-field mirror, so a definition read back carries every authored field — including
+    ///     the ones only the editor uses.
+    /// </summary>
+    [Test]
+    public async Task GetDefinition_RendersTheStoredGraphFieldForField()
+    {
+        var store = Store();
+        store.GetDefinitionAsync(DefinitionId, Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "GET", Definition).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        var graph = document.RootElement.GetProperty("graph");
+        AssertEx.Equal(1, graph.GetProperty("schemaVersion").GetInt32());
+        var research = graph.GetProperty("nodes")[0];
+        AssertEx.Equal("research", research.GetProperty("nodeKey").GetString());
+        AssertEx.Equal("Agent", research.GetProperty("nodeType").GetString());
+        AssertEx.Equal("researcher", research.GetProperty("agentSeedSlug").GetString());
+        AssertEx.Equal(3, research.GetProperty("maxAttempts").GetInt32());
+        AssertEx.Equal("approval", graph.GetProperty("edges")[0].GetProperty("to").GetString());
+    }
+
+    [Test]
+    public async Task CreateDefinition_ValidatesTheGraphWithTheRuntimesOwnParserAndStoresItsNodeCount()
+    {
+        var store = Store();
+        store.CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(SampleGraph)).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        await store.Received(1)
+                   .CreateDefinitionAsync(Arg.Is<CreateDevWorkflowDefinitionCommand>(command => command.Name == "Research → Plan → Approval"
+                                                                                                && command.NodeCount == 2),
+                       Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     Save-time validation is the run-start parser, so the rules cannot diverge: a graph the dispatcher could not
+    ///     route is refused here, with the parser's own message.
+    /// </summary>
+    [Test]
+    [Arguments("""{"schemaVersion":1,"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Agent"},{"nodeKey":"c","nodeType":"Agent"}],"edges":[{"from":"a","to":"b"},{"from":"b","to":"c"},{"from":"c","to":"b"}]}""",
+        "cycle")]
+    [Arguments("""{"schemaVersion":1,"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Agent"}],"edges":[]}""", "entry node")]
+    [Arguments("""{"schemaVersion":1,"nodes":[{"nodeKey":"a","nodeType":"Nonsense"}],"edges":[]}""", "'nodeType'")]
+    [Arguments("""{"schemaVersion":1,"nodes":[],"edges":[]}""", "at least one node")]
+    public async Task CreateDefinition_WithAGraphNothingCouldRoute_ReturnsBadRequestAndNeverReachesTheStore(string graph, string expectedMessage)
+    {
+        var store = Store();
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(graph)).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(body, "generalErrors", StringComparison.Ordinal);
+        AssertEx.Contains(body, expectedMessage, StringComparison.Ordinal);
+        await store.DidNotReceive().CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    ///     H2: a boolean condition value must survive the round trip as a boolean. Stringified, it would compare
+    ///     against a real boolean as a type mismatch, the evaluator would fail closed, and the edge would silently
+    ///     never fire — with nothing in the log to say why.
+    /// </summary>
+    [Test]
+    public async Task Definition_KeepsAConditionValuesJsonTypeThroughTheRoundTrip()
+    {
+        const string ConditionGraph = """
+            {"schemaVersion":1,
+             "nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Agent"}],
+             "edges":[{"from":"a","to":"b","condition":{"path":"passed","op":"eq","value":true}}]}
+            """;
+        var store = Store();
+        string? stored = null;
+        store.CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .Returns(call =>
+             {
+                 stored = call.Arg<CreateDevWorkflowDefinitionCommand>().GraphJson;
+                 return DefinitionSnapshot(stored);
+             });
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "POST", Definitions, CreateDefinitionBody(ConditionGraph)).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
+        AssertEx.NotNull(stored);
+        using var storedDocument = JsonDocument.Parse(stored!);
+        AssertEx.Equal(JsonValueKind.True,
+            storedDocument.RootElement.GetProperty("edges")[0].GetProperty("condition").GetProperty("value").ValueKind,
+            "the stored graph must keep the boolean, not a string spelling of one.");
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal(JsonValueKind.True, document.RootElement.GetProperty("graph").GetProperty("edges")[0].GetProperty("condition").GetProperty("value").ValueKind);
+    }
+
+    [Test]
+    public async Task UpdateDefinition_WithoutAGraph_LeavesTheStoredOneAlone()
+    {
+        var store = Store();
+        store.UpdateDefinitionAsync(Arg.Any<UpdateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "PUT", Definition, """{"version":4,"name":"renamed"}""").ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await store.Received(1)
+                   .UpdateDefinitionAsync(Arg.Is<UpdateDevWorkflowDefinitionCommand>(command => command.ExpectedVersion == 4
+                                                                                                && command.Name == "renamed"
+                                                                                                && command.GraphJson == null
+                                                                                                && command.NodeCount == null),
+                       Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task UpdateDefinition_WhenTheVersionIsStale_ReturnsTheVersionConflict()
+    {
+        var store = Store();
+        store.UpdateDefinitionAsync(Arg.Any<UpdateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())
+             .ThrowsAsyncForAnyArgs(new DevWorkflowConcurrencyException("The definition moved on."));
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "PUT", Definition, """{"version":1,"name":"renamed"}""").ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var document = JsonDocument.Parse(body);
+        AssertEx.Equal("DevWorkflowVersionConflict", document.RootElement.GetProperty("conflictType").GetString());
+    }
+
+    /// <summary>Delete archives, so a run that pinned the definition keeps rendering and the id never becomes undeletable.</summary>
+    [Test]
+    public async Task DeleteDefinition_ArchivesRatherThanRemoving()
+    {
+        var store = Store();
+        store.ArchiveDefinitionAsync(DefinitionId, Arg.Any<CancellationToken>()).Returns(DefinitionSnapshot());
+        await using var factory = EnabledFactory(store);
+
+        using var response = await SendAsync(factory, "DELETE", Definition).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        await store.Received(1).ArchiveDefinitionAsync(DefinitionId, Arg.Any<CancellationToken>());
+    }
+
+    private static string CreateDefinitionBody(string graph) =>
+        $$"""{"name":"Research → Plan → Approval","graph":{{graph}}}""";
+
+    private static IDevWorkflowStore Store()
+    {
+        var store = Substitute.For<IDevWorkflowStore>();
+        store.ListWorkItemsAsync(Arg.Any<DevWorkflowWorkItemStatus?>(), Arg.Any<CancellationToken>()).Returns([]);
+        store.ListDefinitionsAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns([]);
+        store.ListRunSummariesAsync(Arg.Any<Guid?>(), Arg.Any<DevWorkflowRunStatus?>(), Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns([]);
+        return store;
+    }
+
+    private static DevWorkflowWorkItemSnapshot WorkItemSnapshot() =>
+        new(WorkItemId,
+            "Ship the thing",
+            "Research and plan it.",
+            DevWorkflowWorkItemStatus.Active,
+            DevelopmentProjectId: null,
+            RunId,
+            DevWorkflowRunStatus.WaitingForApproval,
+            "Research → Plan → Approval",
+            new DevWorkflowNodeCounters(Queued: 0, Running: 1, Completed: 1, Total: 2, PendingDecisionCount: 1, RunId),
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 20,
+            Version: 3);
+
+    private static DevWorkflowRunSummary RunSummary() =>
+        new(RunId,
+            WorkItemId,
+            DefinitionId,
+            "Research → Plan → Approval",
+            DevWorkflowRunStatus.WaitingForApproval,
+            new DevWorkflowNodeCounters(Queued: 0, Running: 1, Completed: 1, Total: 2, PendingDecisionCount: 1, RunId),
+            FailureClass: null,
+            StartedAtUtc: 11,
+            EndedAtUtc: null,
+            CreatedAtUtc: 10,
+            UpdatedAtUtc: 20);
+
+    private static DevWorkflowDefinitionSnapshot DefinitionSnapshot(string? graphJson = null) =>
+        new(DefinitionId,
+            "Research → Plan → Approval",
+            graphJson ?? SampleGraph,
+            "graph-hash",
+            NodeCount: 2,
+            DevWorkflowDefinitionSource.Seeded,
+            "research-plan-approval",
+            Archived: false,
+            Version: 4,
+            CreatedAtUtc: 1,
+            UpdatedAtUtc: 2);
+
+    private static DevWorkflowDefinitionSummary DefinitionSummary() =>
+        new(DefinitionId,
+            "Research → Plan → Approval",
+            "graph-hash",
+            NodeCount: 2,
+            DevWorkflowDefinitionSource.Seeded,
+            "research-plan-approval",
+            Archived: false,
+            Version: 4,
+            CreatedAtUtc: 1,
+            UpdatedAtUtc: 2);
+
+    private static async Task<HttpResponseMessage> SendAsync(TestServerWebAppFactory factory, string method, string route, string? body = null)
+    {
+        using var client = factory.CreateClient();
+        using var request = Request(method, route, body);
+        factory.AddNodeBearerToken(request);
+        return await client.SendAsync(request).ConfigureAwait(false);
+    }
+
+    private static HttpRequestMessage Request(string method, string route, string? body = null)
+    {
+        var request = new HttpRequestMessage(new HttpMethod(method), route);
+        if (method is "POST" or "PATCH" or "PUT")
+        {
+            request.Content = new StringContent(body ?? "{}", Encoding.UTF8, "application/json");
+        }
+
+        return request;
+    }
+
+    private static TestServerWebAppFactory EnabledFactory(IDevWorkflowStore store, IDevWorkflowRunService? runs = null) =>
+        new()
+        {
+            AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["DevWorkflows:Enabled"] = "true"
+            },
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<IDevWorkflowStore>();
+                services.AddSingleton(store);
+                services.RemoveAll<IDevWorkflowRunService>();
+                services.AddSingleton(runs ?? Substitute.For<IDevWorkflowRunService>());
+            }
+        };
+}

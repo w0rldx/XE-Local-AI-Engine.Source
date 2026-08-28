@@ -70,6 +70,17 @@ public interface IDevWorkflowRunService
     Task<DevWorkflowRunDetail> GetAsync(Guid runId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Removes a work item and everything under it, refusing while one of its runs is still live.
+    ///     <para>
+    ///         It lives on the RUN service because the rows are the smaller half of the job: the delete also releases
+    ///         the work sessions the agent node runs own and the artifact bytes on disk, neither of which the store can
+    ///         reach. Ordered so that a refusal costs nothing — the live-run check first, then the sessions, then the
+    ///         rows, then the bytes.
+    ///     </para>
+    /// </summary>
+    Task DeleteWorkItemAsync(Guid workItemId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     The ONE decision surface: a gate's approval and a stuck node run's intervention are the same human act —
     ///     someone unblocking a node run — so they share a table, an endpoint and this method.
     ///     <para>

@@ -137,6 +137,20 @@ internal sealed partial class DevWorkflowStore
                                          .Select(entity => entity.Id)
                                          .ToListAsync(cancellationToken)
                                          .ConfigureAwait(false);
+
+            // Inside the transaction, so a run that starts between a caller's check and this one still loses: deleting
+            // the rows under a live run would leave its executor holding a slot for work nothing will ever settle.
+            if (await _dbContext.DevWorkflowRuns.AsNoTracking()
+                                .AnyAsync(entity => entity.WorkItemId == workItemId
+                                                    && entity.Status != DevWorkflowRunStatus.Completed
+                                                    && entity.Status != DevWorkflowRunStatus.Failed
+                                                    && entity.Status != DevWorkflowRunStatus.Cancelled,
+                                    cancellationToken)
+                                .ConfigureAwait(false))
+            {
+                throw new DevWorkflowRunInFlightException($"Development workflow work item '{workItemId}' still has a run in flight.");
+            }
+
             var removed = await CountRowsAsync(runIds, workItemId, cancellationToken).ConfigureAwait(false);
 
             await DevWorkflowPurge.DeleteWorkItemAsync(_dbContext, workItemId, cancellationToken).ConfigureAwait(false);
