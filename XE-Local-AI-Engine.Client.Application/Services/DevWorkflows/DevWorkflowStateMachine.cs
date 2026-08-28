@@ -170,19 +170,29 @@ internal static class DevWorkflowStateMachine
     }
 
     /// <summary>
-    ///     Where a run's status leaves its work item. Written inside the same transaction as the run transition, never
-    ///     derived on read and never client-writable, so the two can never disagree.
+    ///     Where a run's status and its node runs leave the work item. Written inside the same transaction as the run
+    ///     transition, never derived on read and never client-writable, so the two can never disagree.
+    ///     <para>
+    ///         ANY blocked node run blocks the work item, even while the run itself reads <c>Running</c> because a
+    ///         sibling is still working. Reading only the run status would leave a work item Active with a node run
+    ///         nobody is coming to unblock — the list page's whole job is to surface exactly that.
+    ///     </para>
     /// </summary>
-    public static DevWorkflowWorkItemStatus WorkItemStatusFor(DevWorkflowRunStatus runStatus) =>
-        runStatus switch
+    public static DevWorkflowWorkItemStatus WorkItemStatusFor(DevWorkflowRunStatus runStatus, IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns)
+    {
+        ArgumentNullException.ThrowIfNull(nodeRuns);
+
+        return runStatus switch
         {
             DevWorkflowRunStatus.Completed => DevWorkflowWorkItemStatus.Completed,
             DevWorkflowRunStatus.Cancelled => DevWorkflowWorkItemStatus.Cancelled,
 
             // A failed run needs attention; it is not done. Same for a run waiting on a human.
             DevWorkflowRunStatus.Failed or DevWorkflowRunStatus.WaitingForApproval => DevWorkflowWorkItemStatus.Blocked,
+            _ when nodeRuns.Any(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Blocked) => DevWorkflowWorkItemStatus.Blocked,
             _ => DevWorkflowWorkItemStatus.Active
         };
+    }
 
     /// <summary>
     ///     The run transition table. Every terminal is reached through a drain (<c>Pausing</c>/<c>Cancelling</c>) or
@@ -221,7 +231,10 @@ internal static class DevWorkflowStateMachine
     public static bool IsLegal(DevWorkflowNodeRunStatus from, DevWorkflowNodeRunStatus to) =>
         from switch
         {
+            // Straight to Running is the inline lane: a gate, a join or a fan-out waits for no slot, so routing it
+            // through Queued would write a queue reason there is no honest token for.
             DevWorkflowNodeRunStatus.Pending => to is DevWorkflowNodeRunStatus.Queued
+                or DevWorkflowNodeRunStatus.Running
                 or DevWorkflowNodeRunStatus.Skipped
                 or DevWorkflowNodeRunStatus.Blocked
                 or DevWorkflowNodeRunStatus.Cancelled,

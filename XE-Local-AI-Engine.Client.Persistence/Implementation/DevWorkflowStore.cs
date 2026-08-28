@@ -197,17 +197,42 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
             _ => DevWorkflowEventTypes.NodeCancelled
         };
 
-    private static string EventTypeFor(DevWorkflowRunStatus status) =>
+    /// <summary>
+    ///     The event a run status move records.
+    ///     <para>
+    ///         The two <c>-ing</c> statuses get the event of the thing they have BEGUN, not a generic one: a reader
+    ///         following the log has to see the pause or the cancel at the moment it was asked for, and the settled
+    ///         status that follows is the run row's business rather than a second event. <c>Running</c> is the one
+    ///         genuinely ambiguous move — a first start and a resume differ only by whether the run has started before.
+    ///     </para>
+    /// </summary>
+    private static string EventTypeFor(DevWorkflowRunStatus status, bool isFirstStart) =>
         status switch
         {
-            DevWorkflowRunStatus.Running => DevWorkflowEventTypes.RunStarted,
-            DevWorkflowRunStatus.Paused => DevWorkflowEventTypes.RunPaused,
+            DevWorkflowRunStatus.Running => isFirstStart ? DevWorkflowEventTypes.RunStarted : DevWorkflowEventTypes.RunResumed,
+            DevWorkflowRunStatus.Pausing or DevWorkflowRunStatus.Paused => DevWorkflowEventTypes.RunPaused,
+            DevWorkflowRunStatus.Cancelling or DevWorkflowRunStatus.Cancelled => DevWorkflowEventTypes.RunCancelled,
             DevWorkflowRunStatus.Completed => DevWorkflowEventTypes.RunCompleted,
             DevWorkflowRunStatus.Failed => DevWorkflowEventTypes.RunFailed,
-            DevWorkflowRunStatus.Cancelled => DevWorkflowEventTypes.RunCancelled,
-            // Pending, Pausing, Cancelling and WaitingForApproval are intents in flight, not outcomes: they read as a
-            // resumption of the run's own narrative rather than a distinct life event.
+
+            // Pending and WaitingForApproval are the run answering its own node runs rather than life events of their
+            // own; the node-run event that caused the move is the one that explains it.
             _ => DevWorkflowEventTypes.RunResumed
+        };
+
+    /// <summary>
+    ///     The outcome a run status move records, from the closed lowercase set the runtime owns — or null, which is
+    ///     the honest answer for a move whose event type already says everything: a run that is now Running has no
+    ///     "outcome" yet, and stamping one outside the closed set puts a token in the durable log that no consumer of
+    ///     that vocabulary can read.
+    /// </summary>
+    private static string? OutcomeFor(DevWorkflowRunStatus status) =>
+        status switch
+        {
+            DevWorkflowRunStatus.Completed => "succeeded",
+            DevWorkflowRunStatus.Failed => "failed",
+            DevWorkflowRunStatus.Cancelling or DevWorkflowRunStatus.Cancelled => "cancelled",
+            _ => null
         };
 
     private static string? OutcomeFor(DevWorkflowNodeRunStatus status) =>

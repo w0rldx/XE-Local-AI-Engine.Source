@@ -25,8 +25,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 internal sealed class DevWorkflowHarness : IAsyncDisposable
 {
     /// <summary>
-    ///     The sweep interval is set past any test's lifetime. The hosted loop still starts — its wiring is worth
-    ///     exercising — but every advance a test asserts on is one the test asked for.
+    ///     The test host removes every hosted service, so the dispatcher's signal and sweep pumps never run here and
+    ///     every advance is one a test asked for. The sweep interval is set past any test's lifetime anyway, so this
+    ///     stays deterministic if that ever changes — but the pumps themselves are covered by unit-level assertions on
+    ///     <c>AdvanceSafelyAsync</c> rather than by this harness.
     /// </summary>
     private readonly TestServerWebAppFactory _factory = new()
     {
@@ -148,6 +150,54 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
                            decision,
                            DecidedBySubject: subject))
                        .ConfigureAwait(false);
+    }
+
+    /// <summary>Runs one sweep of every live run, the way the sweep pump does, and answers which runs it advanced.</summary>
+    public async Task<int> SweepAsync()
+    {
+        var before = await Task.WhenAll((await ListRunIdsAsync().ConfigureAwait(false)).Select(ReadRunAsync)).ConfigureAwait(false);
+        await Dispatcher.SweepForTestAsync(CancellationToken.None).ConfigureAwait(false);
+        var after = await Task.WhenAll(before.Select(run => ReadRunAsync(run.Id))).ConfigureAwait(false);
+        return before.Zip(after).Count(pair => pair.First.Version != pair.Second.Version);
+    }
+
+    public async Task<IReadOnlyList<Guid>> ListRunIdsAsync()
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var runs = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListRunsAsync(limit: 500).ConfigureAwait(false);
+        return [.. runs.Select(static run => run.Id)];
+    }
+
+    /// <summary>Moves one node run directly, to stand it in a state only a lane this build lacks would produce.</summary>
+    public async Task TransitionNodeRunAsync(Guid runId, string nodeKey, DevWorkflowNodeRunStatus target)
+    {
+        var nodeRun = await ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false);
+        await using var scope = Services.CreateAsyncScope();
+        _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
+                       .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId, nodeRun.Id, DevWorkflowVersions.Any, target))
+                       .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Waits for the BACKGROUND pump to bring a run to a status. Only for the test that exercises the pump itself —
+    ///     everything else drives ticks explicitly, and a wait there would be hiding a race rather than asserting one.
+    /// </summary>
+    public async Task<DevWorkflowRunSnapshot> WaitForRunStatusAsync(Guid runId, DevWorkflowRunStatus expected, TimeSpan? timeout = null)
+    {
+        var deadline = DateTimeOffset.UtcNow + (timeout ?? TimeSpan.FromSeconds(30));
+        DevWorkflowRunSnapshot run;
+        do
+        {
+            run = await ReadRunAsync(runId).ConfigureAwait(false);
+            if (run.Status == expected)
+            {
+                return run;
+            }
+
+            await Task.Delay(25).ConfigureAwait(false);
+        } while (DateTimeOffset.UtcNow < deadline);
+
+        throw new AssertionException($"Run {runId} was {run.Status}, not {expected}, before the timeout.");
     }
 
     /// <summary>Moves the run itself, the way the run service's fire-and-forget commands will.</summary>

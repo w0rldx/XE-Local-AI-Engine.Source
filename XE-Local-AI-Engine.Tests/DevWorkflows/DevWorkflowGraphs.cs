@@ -19,6 +19,18 @@ internal static class DevWorkflowGraphs
                                                }
                                                """;
 
+    /// <summary>
+    ///     A terminal human gate — no out-edges at all. This is the seeded "Research → Plan → Approval" shape reduced to
+    ///     its last node, which is why a rejection here has to be handled rather than treated as a corner case.
+    /// </summary>
+    public const string TerminalGate = """
+                                       {
+                                         "schemaVersion": 1,
+                                         "nodes": [{ "nodeKey": "approve", "nodeType": "HumanGate", "label": "Approve" }],
+                                         "edges": []
+                                       }
+                                       """;
+
     /// <summary>A gate with two mutually exclusive out-edges reconverging on an <c>Any</c> join.</summary>
     public const string ApprovalBranches = """
                                            {
@@ -37,6 +49,25 @@ internal static class DevWorkflowGraphs
                                              ]
                                            }
                                            """;
+
+    /// <summary>A fan-out whose two branches both stall on the same thing, so one can be poisoned and the other watched.</summary>
+    public const string TwoStalledSiblings = """
+                                             {
+                                               "schemaVersion": 1,
+                                               "nodes": [
+                                                 { "nodeKey": "start", "nodeType": "Parallel" },
+                                                 { "nodeKey": "left", "nodeType": "Agent" },
+                                                 { "nodeKey": "right", "nodeType": "Agent" },
+                                                 { "nodeKey": "join", "nodeType": "Join" }
+                                               ],
+                                               "edges": [
+                                                 { "from": "start", "to": "left" },
+                                                 { "from": "start", "to": "right" },
+                                                 { "from": "left", "to": "join" },
+                                                 { "from": "right", "to": "join" }
+                                               ]
+                                             }
+                                             """;
 
     /// <summary>The fan-out the cross-node fix loop is specified against: one implementation, two checks, one join.</summary>
     public const string FanOut = """

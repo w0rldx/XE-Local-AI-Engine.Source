@@ -17,7 +17,11 @@ internal sealed partial class DevWorkflowStore
             async run =>
             {
                 var now = Now();
-                if (command.TargetStatus == DevWorkflowRunStatus.Running && run.StartedAtUtc is null)
+
+                // Captured before the stamp below overwrites it: a first start and a resume are the same status move,
+                // and this is the only thing that tells them apart.
+                var isFirstStart = run.StartedAtUtc is null;
+                if (command.TargetStatus == DevWorkflowRunStatus.Running && isFirstStart)
                 {
                     run.StartedAtUtc = now;
                 }
@@ -39,7 +43,7 @@ internal sealed partial class DevWorkflowStore
                 }
 
                 await ApplyWorkItemStatusAsync(run.WorkItemId, command.WorkItemStatus, cancellationToken).ConfigureAwait(false);
-                return new MutationOutcome(EventTypeFor(command.TargetStatus), command.TargetStatus.ToString(), ReasonDetail(command.SanitizedReason));
+                return new MutationOutcome(EventTypeFor(command.TargetStatus, isFirstStart), OutcomeFor(command.TargetStatus), ReasonDetail(command.SanitizedReason));
             },
             cancellationToken);
     }

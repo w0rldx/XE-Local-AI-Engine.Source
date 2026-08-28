@@ -221,7 +221,28 @@ public sealed class DevWorkflowStateMachineTests
     [Arguments(DevWorkflowRunStatus.Cancelled, DevWorkflowWorkItemStatus.Cancelled)]
     [Arguments(DevWorkflowRunStatus.Failed, DevWorkflowWorkItemStatus.Blocked)]
     public void WorkItemStatusFor_MapsAFailedRunToBlockedRatherThanDone(DevWorkflowRunStatus runStatus, DevWorkflowWorkItemStatus expected) =>
-        AssertEx.Equal(expected, DevWorkflowStateMachine.WorkItemStatusFor(runStatus));
+        AssertEx.Equal(expected, DevWorkflowStateMachine.WorkItemStatusFor(runStatus, [NodeRun("node", DevWorkflowNodeRunStatus.Running)]));
+
+    /// <summary>
+    ///     A blocked node run blocks the work item even while the run reads Running because a sibling is still working.
+    ///     Reading only the run status would leave the item Active with a node nobody is coming to unblock, which is
+    ///     precisely what the work-item list exists to surface.
+    /// </summary>
+    [Test]
+    public void WorkItemStatusFor_WithABlockedNodeRunUnderARunningRun_IsBlocked()
+    {
+        IReadOnlyList<DevWorkflowNodeRunSnapshot> mixed =
+        [
+            NodeRun("busy", DevWorkflowNodeRunStatus.Running),
+            NodeRun("stuck", DevWorkflowNodeRunStatus.Blocked)
+        ];
+
+        AssertEx.Equal(DevWorkflowRunStatus.Running, DevWorkflowStateMachine.Recompute(DevWorkflowRunStatus.Running, mixed), "the sibling is still the dispatcher's work.");
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked, DevWorkflowStateMachine.WorkItemStatusFor(DevWorkflowRunStatus.Running, mixed));
+
+        // And a terminal run still maps from its own status: a completed run is done whatever its rows once said.
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Completed, DevWorkflowStateMachine.WorkItemStatusFor(DevWorkflowRunStatus.Completed, mixed));
+    }
 
     /// <summary>
     ///     The one edge that must never exist. A terminal written without draining strands the run's live node runs
@@ -277,6 +298,9 @@ public sealed class DevWorkflowStateMachineTests
         foreach (var (from, to) in new[]
                  {
                      (DevWorkflowNodeRunStatus.Pending, DevWorkflowNodeRunStatus.Queued),
+
+                     // The inline lane, which waits for no slot and so must not write a queue reason it has no token for.
+                     (DevWorkflowNodeRunStatus.Pending, DevWorkflowNodeRunStatus.Running),
                      (DevWorkflowNodeRunStatus.Pending, DevWorkflowNodeRunStatus.Skipped),
                      (DevWorkflowNodeRunStatus.Queued, DevWorkflowNodeRunStatus.Running),
                      (DevWorkflowNodeRunStatus.Queued, DevWorkflowNodeRunStatus.Pending),
@@ -295,7 +319,6 @@ public sealed class DevWorkflowStateMachineTests
 
         foreach (var (from, to) in new[]
                  {
-                     (DevWorkflowNodeRunStatus.Pending, DevWorkflowNodeRunStatus.Running),
                      (DevWorkflowNodeRunStatus.Pending, DevWorkflowNodeRunStatus.Succeeded),
                      (DevWorkflowNodeRunStatus.Queued, DevWorkflowNodeRunStatus.Succeeded),
                      (DevWorkflowNodeRunStatus.Queued, DevWorkflowNodeRunStatus.WaitingForApproval),
@@ -319,7 +342,7 @@ public sealed class DevWorkflowStateMachineTests
 
         AssertEx.Contains(
             AssertEx.Throws<DevWorkflowInvalidTransitionException>(() =>
-                DevWorkflowStateMachine.EnsureLegal(DevWorkflowNodeRunStatus.Pending, DevWorkflowNodeRunStatus.Running, "plan")).Message,
+                DevWorkflowStateMachine.EnsureLegal(DevWorkflowNodeRunStatus.Pending, DevWorkflowNodeRunStatus.Succeeded, "plan")).Message,
             "Node run 'plan' is Pending");
     }
 

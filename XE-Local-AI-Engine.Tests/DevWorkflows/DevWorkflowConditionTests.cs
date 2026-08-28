@@ -33,6 +33,12 @@ public sealed class DevWorkflowConditionTests
     [Arguments("report.testsFailed", "lt", "3", false)]
     [Arguments("report.testsFailed", "lte", "3", true)]
     [Arguments("report.suite", "eq", "\"unit\"", true)]
+
+    // Strings order ordinally, so the relational operators work over them too — 'fix' sorts before 'zzz'.
+    [Arguments("branch", "lt", "\"zzz\"", true)]
+    [Arguments("branch", "gt", "\"aaa\"", true)]
+    [Arguments("branch", "gt", "\"zzz\"", false)]
+    [Arguments("branch", "lte", "\"fix\"", true)]
     [Arguments("passed", "exists", null, true)]
     [Arguments("passed", "notExists", null, false)]
     [Arguments("report.testsFailed", "exists", null, true)]
@@ -81,6 +87,30 @@ public sealed class DevWorkflowConditionTests
         AssertEx.False(Evaluate("branch", op, "1", Output), "a string against a number has no answer.");
         AssertEx.False(Evaluate("report.testsFailed", op, "\"3\"", Output), "and neither does a number against a string.");
         AssertEx.False(Evaluate("passed", op, "1", Output), "nor a boolean against a number.");
+    }
+
+    /// <summary>
+    ///     A JSON null is PRESENT, so it exists and it is not absent. Treating an explicit null as a missing path would
+    ///     make a node that reported "no report" indistinguishable from one that reported nothing at all.
+    /// </summary>
+    [Test]
+    public void Evaluate_OverAnExplicitJsonNull_TreatsItAsPresent()
+    {
+        const string WithNull = """{"report":null}""";
+
+        AssertEx.True(Evaluate("report", "exists", value: null, WithNull));
+        AssertEx.False(Evaluate("report", "notExists", value: null, WithNull));
+        AssertEx.True(Evaluate("report", "eq", "null", WithNull));
+        AssertEx.False(Evaluate("report", "gt", "0", WithNull), "null has no ordering against a number.");
+    }
+
+    [Test]
+    [Arguments("gte")]
+    [Arguments("lte")]
+    public void Evaluate_ForTheInclusiveOperatorsAcrossMismatchedTypes_IsFalse(string op)
+    {
+        AssertEx.False(Evaluate("branch", op, "1", Output), "a string against a number is not an ordering, inclusive or not.");
+        AssertEx.False(Evaluate("passed", op, "\"true\"", Output), "nor a boolean against a string.");
     }
 
     [Test]

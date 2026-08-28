@@ -82,3 +82,19 @@ internal static class DevWorkflowQueueReasons
     /// <summary>Admitted by its lane, but an inbound edge has not settled.</summary>
     public const string AwaitingDependency = "awaiting-dependency";
 }
+
+/// <summary>
+///     The <c>status</c> of a node run's output document — the two values a condition on an out-edge may compare it
+///     against.
+///     <para>
+///         Deliberately not <see cref="DevWorkflowOutcomes" />, which two of these strings happen to match: an event's
+///         outcome describes how one event ended, while this describes what the node produced, and a definition author
+///         writing <c>status eq "succeeded"</c> is reading THIS. Sharing the constants would make a later change to
+///         either vocabulary silently reach into the other.
+///     </para>
+/// </summary>
+internal static class DevWorkflowNodeOutputStatuses
+{
+    public const string Succeeded = "succeeded";
+    public const string Failed = "failed";
+}

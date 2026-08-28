@@ -59,7 +59,7 @@ public sealed class DevWorkflowDispatcherTests
 
         // 'run.resumed' is the run entering WaitingForApproval: the store reads the three in-flight intents and the
         // approval wait as a resumption of the run's own narrative rather than as life events of their own.
-        AssertEx.Equal("run.created, node.materialized, run.started, node.queued, node.started, gate.requested, run.resumed, gate.decided, node.completed, run.completed",
+        AssertEx.Equal("run.created, node.materialized, run.started, node.started, gate.requested, run.resumed, gate.decided, node.completed, run.completed",
             await harness.ReadEventTrailAsync(runId).ConfigureAwait(false),
             "the whole run has to be replayable from the log, in order.");
     }
@@ -85,7 +85,7 @@ public sealed class DevWorkflowDispatcherTests
 
         var sequences = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Select(static entry => entry.Sequence).ToList();
 
-        AssertEx.Equal(expected: 10, sequences.Count);
+        AssertEx.Equal(expected: 9, sequences.Count);
         AssertEx.Equal(string.Join(", ", sequences.Order()), string.Join(", ", sequences), "the feed arrives in sequence order.");
         AssertEx.Equal(sequences.Count, sequences.Distinct().Count(), "and no two rows ever share a watermark.");
         AssertEx.Equal(sequences[^1], (await harness.ReadRunAsync(runId).ConfigureAwait(false)).LastSequence, "the run's counter is the high-water mark.");
@@ -136,7 +136,7 @@ public sealed class DevWorkflowDispatcherTests
         // than left in a queue nothing drains.
         var revise = await harness.ReadNodeRunAsync(runId, "revise").ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, revise.Status);
-        AssertEx.Equal("Configuration", revise.FailureClass);
+        AssertEx.Equal("Internal", revise.FailureClass, "a node type this build cannot run is this build's gap, not the operator's configuration.");
         AssertEx.Contains(AssertEx.NotNull(revise.TerminalReason), "no executor on this node can run yet");
     }
 
@@ -171,6 +171,182 @@ public sealed class DevWorkflowDispatcherTests
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
             (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status,
             "the gate did its job; it is the run that has nowhere left to go.");
+    }
+
+    /// <summary>
+    ///     A rejection at a terminal gate ends the run, and this is the seeded template's own shape rather than a corner
+    ///     case: the last node of "Research → Plan → Approval" has no out-edges, so "no branch accepts the answer" is
+    ///     the ONLY way a refused approval can be told apart from an approved one.
+    /// </summary>
+    [Test]
+    [Arguments("Reject")]
+    [Arguments("RequestChanges")]
+    public async Task ANonApproveAnswerAtATerminalGateCancelsTheRun(string decision)
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.TerminalGate).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        await harness.DecideAsync(runId, "approve", Enum.Parse<DevWorkflowDecisionKind>(decision)).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, run.Status, "a refused approval must not read as the run having succeeded.");
+        AssertEx.Equal("GateRejected", run.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(run.TerminalReason), decision, message: "the reason names the decision, not just the gate.");
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Cancelled, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>The other half of the same gate: the answer it was waiting for completes it normally.</summary>
+    [Test]
+    public async Task AnApproveAtATerminalGateCompletesTheRun()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.TerminalGate).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     A rejection taken while the run is pausing must survive the pause.
+    ///     <para>
+    ///         By the time the pause settles the gate is already Succeeded, so nothing would ever re-detect the
+    ///         rejection: the run would resume, find nothing live, and COMPLETE — reporting a refused approval as a
+    ///         successful run. Only an in-flight cancel may supersede it.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ARejectionTakenWhilePausingSurvivesTheResume()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.TerminalGate).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Reject).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled,
+            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            "the rejection outranks the pause; resuming into Completed would report a refusal as a success.");
+    }
+
+    /// <summary>
+    ///     A decision the node run's status forbids is a durable row re-read on every tick. It must cost that node run
+    ///     and nothing else — left to throw, it would wedge the whole run and every healthy sibling with it, forever,
+    ///     because the row that throws is still there on the next tick.
+    /// </summary>
+    [Test]
+    public async Task APoisonedDecisionRowCostsItsOwnNodeRunAndNoOther()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.TwoStalledSiblings).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, (await harness.ReadNodeRunAsync(runId, "left").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, (await harness.ReadNodeRunAsync(runId, "right").ConfigureAwait(false)).Status);
+
+        // Approve resolves to Succeeded, which a Blocked node run cannot reach. The row is durable and will be re-read.
+        await harness.DecideAsync(runId, "left", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked,
+            (await harness.ReadNodeRunAsync(runId, "left").ConfigureAwait(false)).Status,
+            "the node run keeps the status the decision could not move it out of.");
+        AssertEx.Contains(await harness.ReadEventTrailAsync(runId).ConfigureAwait(false), "node.intervention.required");
+
+        // The sibling still answers, on the very ticks the poisoned row is being re-read.
+        await harness.DecideAsync(runId, "right", DevWorkflowDecisionKind.Skip).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Skipped,
+            (await harness.ReadNodeRunAsync(runId, "right").ConfigureAwait(false)).Status,
+            "one poisoned row must not stop the tick that serves every other node run.");
+    }
+
+    /// <summary>
+    ///     A pause must not be pinned by a node run queued for a slot nothing will hand out while the run drains, so a
+    ///     Queued row collapses back to Pending — the same collapse the startup reconciler performs, for the same reason.
+    /// </summary>
+    [Test]
+    public async Task PausingCollapsesAQueuedNodeRunSoItCannotPinTheDrain()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.TerminalGate).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        // Stand a node run in the state a saturated lane would leave it in. Nothing dispatches it, so without the
+        // collapse the drain below would wait on it forever.
+        await harness.TransitionNodeRunAsync(runId, "approve", DevWorkflowNodeRunStatus.Queued).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Pausing).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status, "the drain settled instead of being pinned.");
+    }
+
+    /// <summary>
+    ///     A sweep must reach EVERY live run, not the newest few.
+    ///     <para>
+    ///         The page size was the concurrent-run cap, over a list ordered newest-first — so past that cap the oldest
+    ///         live runs were never swept again. They are exactly the runs a sweep exists for: a signal is a latency
+    ///         hint that can be dropped, and the sweep is the only thing that ever comes back for what was missed.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ASweepReachesEveryLiveRunAndNotOnlyTheNewest()
+    {
+        await using var harness = new DevWorkflowHarness();
+
+        // More than the concurrent-run cap of four, which is what the page size used to be.
+        var runIds = new List<Guid>();
+        for (var index = 0; index < 6; index++)
+        {
+            runIds.Add(await harness.StartRunAsync(DevWorkflowGraphs.TerminalGate, $"Request {index}").ConfigureAwait(false));
+        }
+
+        await harness.SweepAsync().ConfigureAwait(false);
+
+        foreach (var runId in runIds)
+        {
+            AssertEx.Equal(DevWorkflowRunStatus.Running,
+                (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+                "every live run was swept, including the oldest — which the newest-first page used to cut off.");
+        }
+    }
+
+    /// <summary>
+    ///     A productive tick re-signals, so a run advances at graph speed instead of one node per sweep interval.
+    ///     <para>
+    ///         Asserted at the pump's own boundary rather than end to end: the test host removes every hosted service,
+    ///         so no harness test can observe the loop, and without this a five-node run would take five sweep
+    ///         intervals — correct, and unusably slow.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AProductiveTickReSignalsAndAQuiescentOneDoesNot()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.ResearchPlanApproval).ConfigureAwait(false);
+        var dispatcher = harness.Dispatcher;
+
+        await dispatcher.AdvanceSafelyAsync(runId, CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.True(dispatcher.PendingSignals.TryRead(out var signalled), "starting the run wrote transitions, so there is more to do at once.");
+        AssertEx.Equal(runId, signalled);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        while (dispatcher.PendingSignals.TryRead(out _))
+        {
+            // Drain what the ticks above queued; what matters is the tick after them.
+        }
+
+        await dispatcher.AdvanceSafelyAsync(runId, CancellationToken.None).ConfigureAwait(false);
+        AssertEx.False(dispatcher.PendingSignals.TryRead(out _), "a run waiting on a human has nothing to re-advance for.");
     }
 
     /// <summary>
@@ -364,8 +540,8 @@ public sealed class DevWorkflowDispatcherTests
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         AssertEx.Equal(expected: 1, cache.ParseCount - before, "and the graph never changed, so it never re-parsed.");
 
-        // Terminalizing drops the entry, so a later tick on the same id parses again rather than answering from a cache
-        // nothing would ever invalidate.
+        // Terminalizing dropped the entry, and a tick on a terminal run returns before it would need a graph — so the
+        // count stays where it was rather than growing on every sweep that visits a finished run.
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
         AssertEx.Equal(expected: 1, cache.ParseCount - before, "a terminal run is not parsed at all.");
     }

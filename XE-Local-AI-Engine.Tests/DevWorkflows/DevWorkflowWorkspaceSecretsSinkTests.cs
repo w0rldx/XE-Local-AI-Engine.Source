@@ -57,10 +57,9 @@ public sealed class DevWorkflowWorkspaceSecretsSinkTests : IDisposable
         await using var scope = factory.Services.CreateAsyncScope();
         var sink = new DevelopmentStoreWorkspaceSecretsSink(scope.ServiceProvider.GetRequiredService<IDevelopmentStore>());
 
-        var refused = await AssertEx.ThrowsAsync<InvalidOperationException>(() => sink.RecordAsync(Guid.NewGuid(), Guid.NewGuid(), [".env"]))
-                                    .ConfigureAwait(false);
-
-        AssertEx.Contains(refused.Message, "Sequence contains no elements", StringComparison.Ordinal);
+        // The TYPE is the contract; the message is the framework's and could be reworded by any runtime update.
+        _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => sink.RecordAsync(Guid.NewGuid(), Guid.NewGuid(), [".env"]))
+                          .ConfigureAwait(false);
     }
 
     /// <summary>Dev Mode's own behaviour, forwarded verbatim: the keys and the paths reach the store unchanged.</summary>
