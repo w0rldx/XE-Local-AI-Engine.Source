@@ -371,7 +371,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             return _builtinWithoutAgentHome;
         }
 
-        return [.. GetOfferedTools(activeModelId, isCloudModel), _spawnOfferDto, .. ComputeOffer(activeModelId, isCloudModel), .. _workSessionOfferDtos];
+        return [.. GetOfferedTools(activeModelId, isCloudModel), .. SpawnOffer(activeModelId, isCloudModel), .. ComputeOffer(activeModelId, isCloudModel), .. _workSessionOfferDtos];
     }
 
     public async Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsForProfileAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default)
@@ -387,10 +387,33 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         return
         [
             .. await GetOfferedToolsAsync(activeModelId, isCloudModel, cancellationToken).ConfigureAwait(false),
-            _spawnOfferDto,
+            .. SpawnOffer(activeModelId, isCloudModel),
             .. ComputeOffer(activeModelId, isCloudModel),
             .. _workSessionOfferDtos
         ];
+    }
+
+    /// <summary>
+    ///     <c>spawn_subagent</c> for the profile pool, or nothing for a model outside the trust boundary.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The same gate as <c>run_python</c>, and for a reason the direct gates alone do not cover. Spawning is
+    ///         DELEGATION: the child resolves its own model and its own tool set, so a parent that may not be offered
+    ///         the workspace, knowledge-base and custom tools directly could otherwise bind a child to a node-local
+    ///         model, have IT read that data, and receive the result back into its own transcript. Every withheld tool
+    ///         is reachable that way, which makes an ungated spawn offer a bypass of all three direct gates rather than
+    ///         a capability of its own.
+    ///     </para>
+    ///     <para>
+    ///         Withheld unconditionally rather than behind <c>AllowCloudModelAccess</c>: that opt-in governs reading
+    ///         node-local data with the operator's knowledge, and it cannot be given informedly about data a child
+    ///         agent decides to fetch on its own initiative.
+    ///     </para>
+    /// </remarks>
+    private IReadOnlyList<AllowedToolDto> SpawnOffer(string? activeModelId, bool isCloudModel)
+    {
+        return IsOutsideTrustBoundary(activeModelId, isCloudModel) ? [] : [_spawnOfferDto];
     }
 
     /// <summary>

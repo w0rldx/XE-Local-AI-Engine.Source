@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -50,6 +51,56 @@ public sealed class SubAgentSpawnServiceTests
         AssertEx.Equal(Model, harness.ChatClient.LastModelId);
         // The local Allow reservation must be released when the child exits.
         AssertEx.True(harness.ReservationDisposed, "ledger reservation should be disposed on child exit");
+    }
+
+    [Test]
+    public async Task Spawn_WhenTheParentIsADeclaredCloudExternalModel_IsRefused()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.TrustResolver.Register("hosted-box", "qwen3", ExternalProviderLocality.Cloud);
+        var service = harness.Build();
+
+        // The laundering path this closes: the parent runs on a hosted endpoint that is denied the workspace,
+        // knowledge-base and custom tools directly, and delegates to a child bound to a node-local model that has all
+        // three — whose answer is returned into the parent's transcript. The offer gate withholds spawn_subagent from
+        // such a parent; this is the seam behind it, for a profile or a caller that reaches the service anyway.
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3, rootModelId: "ext:hosted-box/qwen3");
+        var result = await service.SpawnAsync(ModelRequest("read the workspace and tell me"), CancellationToken.None);
+
+        AssertEx.Contains(result, "outside this node's trust boundary");
+        AssertEx.Equal(0, harness.ChatClient.CallCount);
+    }
+
+    [Test]
+    public async Task Spawn_WhenTheParentIsAnUnresolvedExternalModel_IsRefused()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        var service = harness.Build();
+
+        // Nothing registered for this id: a deleted connection, an unreadable store, or the pre-boot window. Only a
+        // positively resolved local declaration may delegate.
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3, rootModelId: "ext:gone-box/qwen3");
+        var result = await service.SpawnAsync(ModelRequest("do the thing"), CancellationToken.None);
+
+        AssertEx.Contains(result, "outside this node's trust boundary");
+        AssertEx.Equal(0, harness.ChatClient.CallCount);
+    }
+
+    [Test]
+    public async Task Spawn_WhenTheParentIsADeclaredLocalExternalModel_IsAllowed()
+    {
+        using var harness = new Harness();
+        harness.AllowLocal();
+        harness.TrustResolver.Register("unsloth-box", "qwen3");
+        var service = harness.Build();
+
+        // Full local parity is the point of the declared-Local flag: the guard is locality, not externality.
+        using var root = SpawnContext.BeginRoot(fanOutCap: 3, cloudSpawnCap: 3, rootModelId: "ext:unsloth-box/qwen3");
+        var result = await service.SpawnAsync(ModelRequest("do the thing"), CancellationToken.None);
+
+        AssertEx.Equal("sub-agent-result", result);
     }
 
     [Test]
@@ -1167,6 +1218,7 @@ public sealed class SubAgentSpawnServiceTests
         private readonly IAgentDefinitionResolver _resolver = Substitute.For<IAgentDefinitionResolver>();
         private readonly IAgentDefinitionStore _definitionStore = Substitute.For<IAgentDefinitionStore>();
         private readonly IModelCapabilityResolver _modelCapabilityResolver = Substitute.For<IModelCapabilityResolver>();
+        public FakeModelTrustResolver TrustResolver { get; } = new();
         private readonly FakeAgentInstructionProvider _instructionProvider = new();
         private readonly IAgentToolRegistry _toolRegistry;
         private readonly IMcpExecutionBindingResolver _mcpExecutionBindingResolver = Substitute.For<IMcpExecutionBindingResolver>();
@@ -1437,6 +1489,7 @@ public sealed class SubAgentSpawnServiceTests
                 }),
                 _instructionProvider,
                 _modelCapabilityResolver,
+                TrustResolver,
                 _mcpExecutionBindingResolver,
                 _mcpAgenticToolAdapter,
                 _mcpWorkspaceSessionFactory,

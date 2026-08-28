@@ -25,15 +25,28 @@ public sealed class SpawnContext
     private int _cloudSpawnsStarted;
     private int _liveFanOut;
 
-    private SpawnContext(int depth, int fanOutCap, int cloudSpawnCap)
+    private SpawnContext(int depth, int fanOutCap, int cloudSpawnCap, string? rootModelId)
     {
         Depth = depth;
         _fanOutCap = fanOutCap;
         _cloudSpawnCap = cloudSpawnCap;
+        RootModelId = rootModelId;
     }
 
     /// <summary>Spawn depth: <c>0</c> is the root tool loop; a spawned child runs at <c>1</c> (and is built tool-less).</summary>
     public int Depth { get; }
+
+    /// <summary>
+    ///     The model driving the root tool loop — the PARENT of anything spawned inside this turn — or
+    ///     <see langword="null" /> when the seeding caller had none to name.
+    /// </summary>
+    /// <remarks>
+    ///     Carried so the spawn service can refuse a parent that sits outside the node's trust boundary. Spawning is a
+    ///     data-egress question, not just a capacity one: a child bound to a node-local model can read the workspace and
+    ///     the knowledge base, and its result is returned into the parent's transcript — so a cloud or declared-cloud
+    ///     parent that may not be offered those tools directly must not obtain them through a child either.
+    /// </remarks>
+    public string? RootModelId { get; }
 
     /// <summary>The ambient context for the current async flow, or <see langword="null" /> when none was seeded (no spawn possible).</summary>
     public static SpawnContext? Current => AmbientContext.Value;
@@ -43,13 +56,16 @@ public sealed class SpawnContext
     ///     restores the prior ambient value. Called once when a root agent tool loop begins; re-entrant seeding is a
     ///     no-op-safe stack restore so a nested seed cannot leak a child's caps into an outer turn.
     /// </summary>
-    public static IDisposable BeginRoot(int fanOutCap, int cloudSpawnCap)
+    /// <param name="fanOutCap">Maximum concurrent live sub-agents for this turn.</param>
+    /// <param name="cloudSpawnCap">Maximum cloud sub-agents started across this turn.</param>
+    /// <param name="rootModelId">The model driving the root loop, recorded as <see cref="RootModelId" />.</param>
+    public static IDisposable BeginRoot(int fanOutCap, int cloudSpawnCap, string? rootModelId = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(fanOutCap);
         ArgumentOutOfRangeException.ThrowIfNegative(cloudSpawnCap);
 
         var previous = AmbientContext.Value;
-        AmbientContext.Value = new SpawnContext(depth: 0, fanOutCap, cloudSpawnCap);
+        AmbientContext.Value = new SpawnContext(depth: 0, fanOutCap, cloudSpawnCap, rootModelId);
         return new RootScope(previous);
     }
 
@@ -65,7 +81,7 @@ public sealed class SpawnContext
     public IDisposable BeginChildScope()
     {
         var previous = AmbientContext.Value;
-        AmbientContext.Value = new SpawnContext(Depth + 1, _fanOutCap, _cloudSpawnCap);
+        AmbientContext.Value = new SpawnContext(Depth + 1, _fanOutCap, _cloudSpawnCap, RootModelId);
         return new RootScope(previous);
     }
 

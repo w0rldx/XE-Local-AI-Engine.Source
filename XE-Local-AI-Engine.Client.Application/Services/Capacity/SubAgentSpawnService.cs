@@ -10,8 +10,10 @@ using XE_Local_AI_Engine.Client.Models;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -64,6 +66,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     private const string ReasonInvalidArguments = "Cannot spawn: provide a non-empty task and exactly one of subAgentKey or modelId.";
     private const string ReasonQueueBusy = "Cannot spawn right now: the target model is busy. Try again shortly.";
     private const string ReasonDepthExceeded = "Cannot spawn: a sub-agent may not spawn further sub-agents.";
+    private const string ReasonParentOutsideTrustBoundary = "Cannot spawn: a model outside this node's trust boundary may not delegate to a sub-agent.";
 
     private readonly IAgentDefinitionResolver _agentDefinitionResolver;
     private readonly ICapacityService _capacityService;
@@ -79,6 +82,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
     private readonly IMcpWorkspaceExecutionSessionFactory _mcpWorkspaceSessionFactory;
     private readonly IMcpToolRegistry _mcpToolRegistry;
     private readonly IModelCapabilityResolver _modelCapabilityResolver;
+    private readonly IModelTrustResolver _modelTrustResolver;
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly SpawnOptions _options;
     private readonly ISpawnSerializer _spawnSerializer;
@@ -96,6 +100,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         IOptions<SpawnOptions> options,
         IAgentInstructionProvider instructionProvider,
         IModelCapabilityResolver modelCapabilityResolver,
+        IModelTrustResolver modelTrustResolver,
         IMcpExecutionBindingResolver mcpExecutionBindingResolver,
         IMcpAgenticToolAdapter mcpAgenticToolAdapter,
         IMcpWorkspaceExecutionSessionFactory mcpWorkspaceSessionFactory,
@@ -116,6 +121,7 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         _options = options.Value;
         _instructionProvider = instructionProvider ?? throw new ArgumentNullException(nameof(instructionProvider));
         _modelCapabilityResolver = modelCapabilityResolver ?? throw new ArgumentNullException(nameof(modelCapabilityResolver));
+        _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
         _mcpExecutionBindingResolver = mcpExecutionBindingResolver ?? throw new ArgumentNullException(nameof(mcpExecutionBindingResolver));
         _mcpAgenticToolAdapter = mcpAgenticToolAdapter ?? throw new ArgumentNullException(nameof(mcpAgenticToolAdapter));
         _mcpWorkspaceSessionFactory = mcpWorkspaceSessionFactory ?? throw new ArgumentNullException(nameof(mcpWorkspaceSessionFactory));
@@ -141,6 +147,17 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
         if (context is { Depth: >= 1 })
         {
             return ReasonDepthExceeded;
+        }
+
+        // Trust guard at the SERVICE seam, behind the offer gate that already withholds spawn_subagent from a parent
+        // outside the trust boundary. Both exist because the two seams fail differently: an agent profile's
+        // AllowedToolNames, a saved definition pinned to another model, or a future caller reaching this service
+        // directly would all bypass the offer. Delegation is an egress decision — the child can be bound to a
+        // node-local model that reads the workspace and knowledge base, and its answer returns into the parent's
+        // transcript — so a parent that may not read that data itself may not obtain it through a child.
+        if (await IsOutsideTrustBoundaryAsync(context?.RootModelId, ct).ConfigureAwait(false))
+        {
+            return ReasonParentOutsideTrustBoundary;
         }
 
         // A sub-agent always runs a chat/tool loop, so it competes for a Chat-role process.
@@ -462,6 +479,26 @@ internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcp
 
     // Allow: a cloud spawn consumes a cloud-budget unit (DoS-of-wallet cap); a local Allow carries a ledger reservation
     // that must be released when the child exits. The reservation is null for a cloud Allow, so disposal is a no-op there.
+    /// <summary>
+    ///     Whether prompts for <paramref name="modelId" /> leave the node — the same formula
+    ///     <c>LocalToolOfferProvider.IsOutsideTrustBoundary</c> applies, spelled asynchronously because this seam has an
+    ///     async boundary and can therefore resolve the registry rather than settle for its cached generation.
+    /// </summary>
+    /// <remarks>
+    ///     A <see langword="null" /> id means the seeding caller named no model (an inbound MCP run resolves its own
+    ///     binding downstream), which is not a claim that the parent is remote — so it does not refuse.
+    /// </remarks>
+    private async Task<bool> IsOutsideTrustBoundaryAsync(string? modelId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(modelId))
+        {
+            return false;
+        }
+
+        return CodexModelCatalog.IsCodexModel(modelId)
+               || await _modelTrustResolver.ResolveAsync(modelId, ct).ConfigureAwait(false) != ModelTrustLocality.Local;
+    }
+
     private async Task<string> RunAllowAsync(ResolvedBinding binding,
         CapacityDecision decision,
         SpawnContext context,
