@@ -7,9 +7,10 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     <para>
 ///         It exists because that report was the ONE thing in <c>PrepareAsync</c> that is not a value bag: it wrote
 ///         through <c>IDevelopmentStore.RecordWorkspaceSecretsAsync</c>, which resolves the project from a
-///         <c>DevelopmentTask</c> row and asserts a matching <c>DevelopmentAttempt</c>, so a caller preparing a workspace
-///         for something that is not a Dev Mode task — a development-workflow node-run — failed there every time with a
-///         <see cref="KeyNotFoundException" />. Everything else in the method already works from a synthesized snapshot.
+///         <c>DevelopmentTask</c> row before it does anything else and then asserts a matching
+///         <c>DevelopmentAttempt</c>. A caller preparing a workspace for something that is not a Dev Mode task — a
+///         development-workflow node-run — names neither row and never gets past that resolve. Everything else in the
+///         method already works from a synthesized snapshot.
 ///     </para>
 ///     <para>
 ///         The keys are named for what they are rather than for the rows the default implementation happens to resolve:
