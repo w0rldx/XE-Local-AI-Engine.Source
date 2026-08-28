@@ -40,11 +40,16 @@ internal static class AddNodeWorkSessionsExtensions
         builder.Services.AddSingleton<IWorkSessionArtifactBlobStore, ManagedWorkSessionArtifactBlobStore>();
         builder.Services.AddHostedService<WorkSessionStartupReconciler>();
 
-        builder.Services.AddScoped<IWorkSessionService, WorkSessionService>();
-
         // The same instance behind both surfaces: one class decides who may move a session's status, and a second
         // instance would let the two disagree about what it already did.
-        builder.Services.AddScoped<IWorkflowOwnedWorkSessionLifecycle>(services => (WorkSessionService)services.GetRequiredService<IWorkSessionService>());
+        //
+        // Both roles resolve the CONCRETE registration rather than casting the interface. The cast read equivalently
+        // and was not: replacing IWorkSessionService — with a test double, or one day a decorator — made this second
+        // surface throw an InvalidCastException while the host was still being built, from a registration that had
+        // nothing to do with the replacement.
+        builder.Services.AddScoped<WorkSessionService>();
+        builder.Services.AddScoped<IWorkSessionService>(services => services.GetRequiredService<WorkSessionService>());
+        builder.Services.AddScoped<IWorkflowOwnedWorkSessionLifecycle>(services => services.GetRequiredService<WorkSessionService>());
         builder.Services.AddScoped<WorkSessionCheckpointComposer>();
 
         // Scoped: it reads the conversation through the scoped chat persistence, from the supervisor's per-turn scope.
