@@ -4913,6 +4913,181 @@
 				"confirm": "Löschen",
 				"failed": "Diese Arbeitssitzung konnte nicht gelöscht werden."
 			}
+		},
+		"devWorkflows": {
+			"title": "Workflow-Läufe",
+			"subtitle": "Dauerhafte Entwicklungs-Workflows: Jedes Arbeitspaket führt einen Graphen aus Agenten-, Tool- und Freigabeknoten aus, der einen Neustart übersteht.",
+			"empty": "Noch keine Arbeitspakete. Beschreiben Sie, was gebaut werden soll, und wählen Sie eine Workflow-Vorlage aus.",
+			"createFirst": "Erstes Arbeitspaket anlegen",
+			"loadFailed": "Die Arbeitspakete konnten nicht geladen werden.",
+			"retry": "Erneut versuchen",
+			"card": {
+				"counts": "{{running}} laufen · {{queued}} in Warteschlange · {{completed}}/{{total}} fertig",
+				"updated": "aktualisiert {{updated}}"
+			},
+			"create": {
+				"open": "Neues Arbeitspaket",
+				"title": "Neues Arbeitspaket",
+				"titleLabel": "Titel",
+				"requestLabel": "Auftrag",
+				"requestHint": "Was soll dieser Workflow liefern? Der erste Knoten erhält diesen Text als Zielvorgabe.",
+				"definitionLabel": "Workflow-Vorlage",
+				"definitionHint": "Der Lauf führt eine festgeschriebene Kopie dieser Vorlage aus.",
+				"definitionPlaceholder": "Vorlage wählen",
+				"projectLabel": "Entwicklungsprojekt (optional)",
+				"projectHint": "Nur nötig für Workflows, die Code bauen oder prüfen. Recherche- und Planungs-Workflows brauchen keines.",
+				"projectPlaceholder": "Kein Projekt",
+				"submit": "Anlegen und starten",
+				"failed": "Das Arbeitspaket konnte nicht angelegt werden."
+			},
+			"detail": {
+				"actions": "Aktionen für das Arbeitspaket",
+				"back": "Zurück zu den Workflow-Läufen",
+				"cancel": "Lauf abbrechen",
+				"commandFailed": "Dieser Befehl konnte nicht gesendet werden.",
+				"counts": "{{running}} laufen · {{queued}} in Warteschlange · {{done}}/{{total}} fertig",
+				"decisionsNeeded_one": "{{count}} Entscheidung nötig",
+				"decisionsNeeded_other": "{{count}} Entscheidungen nötig",
+				"details": "Details",
+				"liveUnavailable": "Live-Aktualisierungen sind nicht verfügbar — diese Seite fragt stattdessen regelmäßig ab.",
+				"noRunBody": "Für dieses Arbeitspaket ist noch nichts gelaufen. Wählen Sie eine Vorlage und starten Sie einen Lauf.",
+				"noRuns": "Dieses Arbeitspaket wurde noch nicht ausgeführt.",
+				"notFound": "Dieses Arbeitspaket konnte nicht geladen werden.",
+				"notStarted": "noch nicht gestartet",
+				"pause": "Pausieren",
+				"progress": "Fortschritt",
+				"request": "Auftrag",
+				"resume": "Fortsetzen",
+				"runs": "Läufe",
+				"showDetails": "Artefakte und Ereignisse anzeigen",
+				"showSummary": "Läufe und Fortschritt anzeigen",
+				"startFailed": "Der Lauf konnte nicht gestartet werden.",
+				"startRun": "Lauf starten",
+				"waitingOnYou_one": "{{count}} wartet auf Sie",
+				"waitingOnYou_other": "{{count}} warten auf Sie"
+			},
+			"delete": {
+				"open": "Löschen",
+				"title": "Dieses Arbeitspaket löschen?",
+				"description": "Seine Läufe, deren Knotenläufe, deren Arbeitssitzungen und alle erzeugten Artefakte werden entfernt. Das lässt sich nicht rückgängig machen.",
+				"confirm": "Löschen",
+				"failed": "Das Arbeitspaket konnte nicht gelöscht werden."
+			},
+			"nodes": {
+				"empty": "Dieser Lauf hat noch keine Knotenläufe.",
+				"columnNode": "Knoten",
+				"columnStatus": "Status",
+				"columnDetail": "Detail",
+				"notReached": "noch nicht erreicht",
+				"waitingOn": "wartet auf {{nodes}}",
+				"queuedFor": "{{reason}} · seit {{duration}} in der Warteschlange",
+				"runningFor": "läuft seit {{duration}}",
+				"running": "läuft",
+				"needsDecision": "braucht Ihre Entscheidung",
+				"needsIntervention": "braucht Ihr Eingreifen",
+				"took": "dauerte {{duration}}",
+				"finished": "abgeschlossen",
+				"attempt": "Versuch {{attempt}} von {{maxAttempts}}",
+				"materialized": "erzeugt",
+				"staleInputs": "Veraltete Eingaben",
+				"agentWithModel": "{{agent}} · {{model}}"
+			},
+			"events": {
+				"title": "Ereignisse",
+				"empty": "In diesem Lauf ist noch nichts passiert.",
+				"meta": "#{{sequence}}",
+				"showDetail": "Details anzeigen",
+				"hideDetail": "Details ausblenden",
+				"loadMore": "Mehr laden",
+				"truncated": "Es werden nur die ersten Ereignisse angezeigt."
+			},
+			"artifacts": {
+				"title": "Artefakte",
+				"empty": "Dieser Lauf hat noch keine Artefakte erzeugt.",
+				"meta": "v{{version}} · von {{node}} · {{bytes}} Bytes",
+				"stale": "Veraltet",
+				"invalid": "Nicht lesbar",
+				"invalidBody": "Der gespeicherte Inhalt dieses Artefakts konnte nicht gelesen werden und lässt sich nicht anzeigen.",
+				"binary": "Dieses Artefakt ist binär und hat keine Textvorschau.",
+				"loadFailed": "Dieses Artefakt konnte nicht geladen werden."
+			},
+			"nodeStatus": {
+				"Pending": "Ausstehend",
+				"Queued": "In Warteschlange",
+				"Running": "Läuft",
+				"WaitingForApproval": "Wartet auf Freigabe",
+				"Blocked": "Braucht Eingreifen",
+				"Succeeded": "Erfolgreich",
+				"Failed": "Fehlgeschlagen",
+				"Skipped": "Übersprungen",
+				"Cancelled": "Abgebrochen"
+			},
+			"runStatus": {
+				"Pending": "Nicht gestartet",
+				"Running": "Läuft",
+				"Pausing": "Pausiert gerade…",
+				"Paused": "Pausiert",
+				"WaitingForApproval": "Entscheidung nötig",
+				"Cancelling": "Bricht ab…",
+				"Completed": "Abgeschlossen",
+				"Failed": "Fehlgeschlagen",
+				"Cancelled": "Abgebrochen"
+			},
+			"workItemStatus": {
+				"Draft": "Entwurf",
+				"Active": "Aktiv",
+				"Blocked": "Braucht Aufmerksamkeit",
+				"Completed": "Abgeschlossen",
+				"Cancelled": "Abgebrochen"
+			},
+			"nodeType": {
+				"Agent": "Agent",
+				"Tool": "Tool",
+				"DevTask": "Entwicklungsaufgabe",
+				"HumanGate": "Freigabe",
+				"Gate": "Bedingung",
+				"Parallel": "Parallel",
+				"Join": "Zusammenführung"
+			},
+			"decision": {
+				"Approve": "Freigeben",
+				"Reject": "Ablehnen",
+				"RequestChanges": "Änderungen anfordern",
+				"Retry": "Erneut versuchen",
+				"Skip": "Überspringen",
+				"Abandon": "Aufgeben"
+			},
+			"artifactKind": {
+				"Research": "Recherche",
+				"Decision": "Entscheidung",
+				"Specification": "Spezifikation",
+				"Plan": "Plan",
+				"TaskPackage": "Aufgabenpaket",
+				"Patch": "Patch",
+				"Report": "Bericht",
+				"Finding": "Erkenntnis",
+				"ValidationReport": "Prüfbericht",
+				"ReviewReport": "Review-Bericht"
+			},
+			"queueReason": {
+				"awaiting-agent-slot": "wartet auf den Agentenplatz",
+				"awaiting-sandbox-slot": "wartet auf einen Sandbox-Platz",
+				"awaiting-dependency": "wartet auf einen vorgelagerten Knoten",
+				"unknown": "in Warteschlange"
+			},
+			"failureClass": {
+				"ProviderError": "Der Modellanbieter ist fehlgeschlagen",
+				"Timeout": "Zeitüberschreitung",
+				"Interrupted": "Durch einen Neustart unterbrochen",
+				"ToolCommandFailed": "Ein Befehl ist fehlgeschlagen",
+				"Internal": "Interner Fehler",
+				"Configuration": "Fehlerhaft konfiguriert",
+				"Policy": "Durch eine Richtlinie abgelehnt",
+				"BudgetExhausted": "Budget aufgebraucht",
+				"Cancelled": "Abgebrochen",
+				"GateRejected": "An einer Freigabe abgelehnt",
+				"unknown": "Der Knoten ist fehlgeschlagen"
+			}
 		}
 	},
 	"components": {
