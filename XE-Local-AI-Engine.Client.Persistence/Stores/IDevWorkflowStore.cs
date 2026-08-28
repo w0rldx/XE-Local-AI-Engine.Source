@@ -498,7 +498,12 @@ public interface IDevWorkflowStore
     /// <summary>Pure DB work over the recorded uses; it flags dependents and never regenerates anything.</summary>
     Task<DevWorkflowMutationResult> MarkDependentsStaleAsync(MarkDevWorkflowStaleCommand command, CancellationToken cancellationToken = default);
 
-    /// <summary>Artifacts do stay a <c>sinceSequence</c> feed: their rows are append-only, so their insert sequence is watermark-correct.</summary>
+    /// <summary>
+    ///     The artifact cursor is append-correct only: an artifact's sequence is allocated at insert and never
+    ///     re-stamped, so a <c>sinceSequence</c> page carries every artifact that has appeared since and no staleness
+    ///     flip that has happened since. Staleness mutations are announced on the event feed as
+    ///     <c>artifact.stale.marked</c> and observed by refetching the artifact, never by advancing this cursor.
+    /// </summary>
     Task<IReadOnlyList<DevWorkflowArtifactSnapshot>> ListArtifactsAsync(Guid runId, long sinceSequence = 0, CancellationToken cancellationToken = default);
 
     Task<DevWorkflowArtifactSnapshot> GetArtifactAsync(Guid artifactId, CancellationToken cancellationToken = default);

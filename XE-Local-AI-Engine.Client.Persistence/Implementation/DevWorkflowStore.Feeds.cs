@@ -35,8 +35,11 @@ internal sealed partial class DevWorkflowStore
     {
         await EnsureRunExistsAsync(runId, cancellationToken).ConfigureAwait(false);
 
-        // Artifacts DO stay a sinceSequence feed: their rows are append-only, so the insert sequence is the change
-        // watermark. IsLatest is derived from the whole lineage, which is why the filter cannot be pushed into SQL.
+        // The artifact cursor is append-correct only. The sequence is allocated at insert and never re-stamped, so a
+        // sinceSequence page returns every artifact that has APPEARED since — and no staleness flip that has happened
+        // since. Staleness mutations are announced on the event feed as artifact.stale.marked and read by refetching
+        // the artifact, never by advancing this cursor. IsLatest is derived from the whole lineage, which is why that
+        // filter cannot be pushed into SQL.
         var artifacts = await _dbContext.DevWorkflowArtifacts.AsNoTracking()
                                         .Where(entity => entity.RunId == runId)
                                         .OrderBy(entity => entity.Sequence)
