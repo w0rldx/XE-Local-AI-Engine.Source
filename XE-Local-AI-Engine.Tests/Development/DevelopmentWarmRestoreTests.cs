@@ -140,7 +140,7 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
         };
         var (repository, data, snapshot, baseCommit) = await SeedAsync(DotnetProfile).ConfigureAwait(false);
         sandbox.BaseCommit = baseCommit;
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, Substitute.For<IDevelopmentStore>());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink());
 
         // A failing warm records nothing, which is what leaves the workspace in the "cloned but never warmed" state a
         // crash between the clone and the first warm would also produce.
@@ -177,7 +177,7 @@ public sealed class DevelopmentWarmRestoreTests : IDisposable
     {
         var (repository, data, snapshot, baseCommit) = await SeedAsync(profile).ConfigureAwait(false);
         sandbox.BaseCommit = baseCommit;
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, Substitute.For<IDevelopmentStore>());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, Options.Create(OptionsValue()), TimeProvider.System, new RecordingWorkspaceSecretsSink());
         var binding = Binding(snapshot, repository);
         var session = await provider.PrepareAsync(snapshot, binding).ConfigureAwait(false);
         return (session, () => provider.PrepareAsync(snapshot, binding));

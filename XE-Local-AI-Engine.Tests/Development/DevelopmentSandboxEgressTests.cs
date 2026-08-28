@@ -372,7 +372,7 @@ public sealed class DevelopmentSandboxEgressTests : IDisposable
             sandbox,
             Options.Create(OptionsValue()),
             TimeProvider.System,
-            Substitute.For<IDevelopmentStore>(),
+            new RecordingWorkspaceSecretsSink(),
             exclusions: null,
             Options.Create(new DevelopmentSandboxOptions
             {

@@ -140,7 +140,7 @@ public sealed class DevelopmentMountBrokerTests : IDisposable
         var options = Options.Create(OptionsValue());
         var snapshot = Snapshot(DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository)));
 
-        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, Substitute.For<IDevelopmentStore>());
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
         var session = await provider.PrepareAsync(snapshot, Binding(snapshot, repository)).ConfigureAwait(false);
         if (sandbox is MappingSandboxRuntimeProvider mapping)
         {
