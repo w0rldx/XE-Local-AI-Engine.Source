@@ -50,11 +50,10 @@ internal sealed class DevWorkflowTestFixture : IDisposable
         var context = CreateContext();
         _ = await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
 
-        // WAL, as the node connection itself runs (NodeSqlitePragmas). The mode is persisted in the file, so every
-        // later connection inherits it. It matters here and not only for realism: under the rollback journal a reader
-        // inside a transaction blocks any writer, so a test that has to interleave a competing commit with an open
-        // read would spend its whole command timeout in SQLITE_BUSY instead of racing.
-        _ = await context.Database.ExecuteSqlRawAsync("PRAGMA journal_mode=WAL;").ConfigureAwait(false);
+        // Deliberately the rollback journal, as the work-session fixture leaves it. WAL would look more like the node's
+        // own connection, but it holds recent writes in a -wal sidecar until a checkpoint, and the encryption suite
+        // scans the main database file: its positive control — the plaintext title IS in the file — would then fail
+        // whenever no checkpoint had landed yet.
         return context;
     }
 
