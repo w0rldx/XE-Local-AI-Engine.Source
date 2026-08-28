@@ -107,9 +107,13 @@ internal sealed class DevWorkflowGraph
 
     /// <summary>
     ///     Parses the graph and enforces every structural rule. One method, because parsing IS the validation here: a
-    ///     graph that survives this is one the dispatcher can route without a second opinion, and it runs both when a
-    ///     definition is saved and again at run start against the pinned snapshot — an agent definition can be deleted
-    ///     in between.
+    ///     graph that survives this is one the dispatcher can route without a second opinion.
+    ///     <para>
+    ///         Today its only caller is the dispatcher's graph cache, so a bad graph is refused at RUN START. The
+    ///         definition endpoints call it at save time too once they exist, which is where the same rules become an
+    ///         author-time 400 rather than a failed run — and re-validating at run start stays necessary either way,
+    ///         because an agent definition can be deleted between the save and the start.
+    ///     </para>
     /// </summary>
     public static DevWorkflowGraph Parse(string graphJson)
     {
@@ -293,7 +297,8 @@ internal sealed class DevWorkflowGraph
         }
 
         // Deliberately exempt: a template node has no inbound edge on purpose, so that the editor can author it and this
-        // validator can check it while nothing ever instantiates it directly.
+        // validator can check it while nothing ever instantiates it directly. C2 widens this to a template SUBTREE —
+        // its root plus descendants, cloned whole per task — at which point the edge rule above widens with it.
         var entries = EntryNodeKeys.Where(key => !templateKeys.Contains(key)).ToList();
         if (entries.Count != 1)
         {
