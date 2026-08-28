@@ -272,6 +272,58 @@ public sealed class ExternalOpenAiChatClientWireTests
     }
 
     [Test]
+    public async Task Send_WhenOnlyTheBasePathCaseChangesMidInvocation_Aborts()
+    {
+        // Paths are case-sensitive routes on the servers this pins against ("/Tenant/v1" and "/tenant/v1" can be two
+        // services), and Uri normalization lower-cases only scheme and host — so the pin's ordinal comparison must
+        // treat a case-only path move as a change, not noise.
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(baseUrl: "http://127.0.0.1:18099/Tenant/v1"),
+            ExternalProviderTestData.Model());
+        using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
+
+        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(ExternalProviderTestData.ModelId,
+            pinned.Generation,
+            pinned.Locality,
+            pinned.BaseAddress));
+
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+        registry.Replace(ExternalProviderTestData.Connection(baseUrl: "http://127.0.0.1:18099/tenant/v1"), ExternalProviderTestData.Model());
+
+        _ = await AssertEx.ThrowsAsync<ExternalProviderBindingChangedException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None));
+
+        AssertEx.Equal(1, recorder.Requests.Count);
+    }
+
+    [Test]
+    public async Task Send_WhenThePinWasCreatedFromACaseVariantId_IsStillPinned()
+    {
+        // The complement of the lookup-canonicalization case below: here the PIN is minted from the non-canonical
+        // spelling (as a producer reading the NOCASE provider map would), and the client holds the canonical one. The
+        // pin record canonicalizes at creation, so the two must still meet.
+        var recorder = new OpenAiWireRecorder();
+        var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
+        var variantId = ExternalProviderTestData.ModelId.Replace(ExternalProviderTestData.ConnectionId, "UNSLOTH-BOX", StringComparison.Ordinal);
+        using var client = new ExternalOpenAiChatClient(registry, ExternalProviderTestData.ModelId, recorder.CreateHandler);
+
+        var pinned = AssertEx.NotNull(await registry.TryResolveBindingAsync(ExternalProviderTestData.ModelId, CancellationToken.None));
+        using var pin = ExternalProviderBindingPinScope.Begin(new ExternalProviderBindingPin(variantId,
+            pinned.Generation,
+            pinned.Locality,
+            pinned.BaseAddress));
+
+        _ = await client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None);
+        registry.Replace(ExternalProviderTestData.Connection(locality: ExternalProviderLocality.Cloud), ExternalProviderTestData.Model());
+
+        _ = await AssertEx.ThrowsAsync<ExternalProviderBindingChangedException>(() =>
+            client.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None));
+
+        AssertEx.Equal(1, recorder.Requests.Count);
+    }
+
+    [Test]
     public async Task Send_WhenTheClientHoldsACaseVariantOfThePinnedId_IsStillPinned()
     {
         // The client's id comes from the provider map, whose key is NOCASE, while the pin carries the registry's

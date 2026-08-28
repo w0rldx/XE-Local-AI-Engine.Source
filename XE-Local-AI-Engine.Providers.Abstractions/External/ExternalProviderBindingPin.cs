@@ -36,8 +36,11 @@ public sealed record ExternalProviderBindingPin(string ModelId, long Generation,
     {
         ArgumentNullException.ThrowIfNull(binding);
 
+        // Ordinal on purpose: both sides are a normalized Uri.AbsoluteUri, which already lower-cases the scheme and
+        // host, so case-insensitivity would forgive exactly one thing — a case-only PATH change ("/Tenant/v1/" →
+        // "/tenant/v1/") — and paths are case-sensitive routes on the servers this pins against.
         return binding.Generation == Generation
-               || (binding.Locality == Locality && string.Equals(binding.BaseAddress, BaseAddress, StringComparison.OrdinalIgnoreCase));
+               || (binding.Locality == Locality && string.Equals(binding.BaseAddress, BaseAddress, StringComparison.Ordinal));
     }
 }
 
