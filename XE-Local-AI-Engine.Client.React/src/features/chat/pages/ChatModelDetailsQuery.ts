@@ -1,5 +1,5 @@
 import type { ModelOption } from "@/features/chat/models/ChatModels";
-import { EXTERNAL_PROVIDER } from "@/features/chat/pages/ChatModelOptions";
+import { EXTERNAL_PROVIDER } from "@/core/models/LocalModelProviders";
 
 // Decides whether the chat page should poll GET models/{name}/details for the current selection.
 //

@@ -14,11 +14,16 @@ const { generatedMock } = vi.hoisted(() => ({
 	generatedMock: {
 		getAgentUsageSummaryOptions: vi.fn(),
 		summaryFn: vi.fn(),
+		// The page resolves `external:{connectionId}` usage rows to connection NAMES from the external-provider
+		// configuration, so the dashboard reads that list too.
+		listExternalProviderConnectionsOptions: vi.fn(),
+		connectionsFn: vi.fn(),
 	},
 }));
 
 vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 	getAgentUsageSummaryOptions: generatedMock.getAgentUsageSummaryOptions,
+	listExternalProviderConnectionsOptions: generatedMock.listExternalProviderConnectionsOptions,
 }));
 
 import { UsageDashboard } from "@/features/usage-dashboard/pages/UsageDashboard";
@@ -65,6 +70,12 @@ describe("UsageDashboard (generated hey-api data layer)", () => {
 			// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
 			queryKey: [{ _id: "getAgentUsageSummary" }],
 			queryFn: generatedMock.summaryFn,
+		}));
+		generatedMock.connectionsFn.mockResolvedValue({ revision: "rev-1", connections: [] });
+		generatedMock.listExternalProviderConnectionsOptions.mockImplementation(() => ({
+			// biome-ignore lint/style/useNamingConvention: `_id` is the generated hey-api query-key discriminator field.
+			queryKey: [{ _id: "listExternalProviderConnections" }],
+			queryFn: generatedMock.connectionsFn,
 		}));
 	});
 

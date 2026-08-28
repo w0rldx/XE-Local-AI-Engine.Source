@@ -98,4 +98,50 @@ describe("ModelSelectorCard — external-provider sections", () => {
 
 		expect(onModelChange).toHaveBeenCalledWith("ext:unsloth-box/qwen3-27b");
 	});
+
+	// Search visibility and the empty-state notice used to be computed from the LOCAL list alone, which left an
+	// external-only node without a search box while telling the operator it has no chat-capable models — with a dozen
+	// listed right underneath.
+	it("shows the search box once the whole dropdown is long enough, whatever section the options sit in", async () => {
+		renderWithProviders(
+			<ModelSelectorCard
+				modelOptions={[localDefaultOption()]}
+				cloudModelOptions={Array.from({ length: 6 }, (_unused, index) =>
+					externalOption(`ext:unsloth-box/model-${index}`, "unsloth-box", "Unsloth box", "local"),
+				)}
+				selectedModel={localDefaultModelValue}
+				onModelChange={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("chat-model-selector-trigger"));
+
+		expect(await screen.findByTestId("chat-model-selector-search")).toBeTruthy();
+	});
+
+	it("does not claim there are no chat-capable models while external ones are listed", async () => {
+		renderWithProviders(
+			<ModelSelectorCard
+				modelOptions={[localDefaultOption()]}
+				cloudModelOptions={[externalOption("ext:unsloth-box/qwen3-27b", "unsloth-box", "Unsloth box", "local")]}
+				selectedModel={localDefaultModelValue}
+				onModelChange={vi.fn()}
+			/>,
+		);
+
+		fireEvent.click(screen.getByTestId("chat-model-selector-trigger"));
+
+		expect(await screen.findByTestId("chat-model-selector-option-ext:unsloth-box/qwen3-27b")).toBeTruthy();
+		expect(screen.queryByTestId("chat-model-selector-no-chat-models")).toBeNull();
+	});
+
+	it("still says so when the node has no chat model of any kind", async () => {
+		renderWithProviders(
+			<ModelSelectorCard modelOptions={[localDefaultOption()]} selectedModel={localDefaultModelValue} onModelChange={vi.fn()} />,
+		);
+
+		fireEvent.click(screen.getByTestId("chat-model-selector-trigger"));
+
+		expect(await screen.findByTestId("chat-model-selector-no-chat-models")).toBeTruthy();
+	});
 });

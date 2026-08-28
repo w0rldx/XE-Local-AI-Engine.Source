@@ -28,11 +28,12 @@ import { useTranslation } from "react-i18next";
 
 import { COMPACT_CONTROLS_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
+import { EXTERNAL_PROVIDER } from "@/core/models/LocalModelProviders";
 import { cx } from "@/features/chat/components/ModelSelectorCard.helpers";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
 import type { ModelDisplay } from "@/features/chat/models/ModelDisplay";
 import { deriveModelDisplay } from "@/features/chat/models/ModelDisplay";
-import { EXTERNAL_PROVIDER, groupExternalModelOptions, hasNoLocalChatModels } from "@/features/chat/pages/ChatModelOptions";
+import { groupExternalModelOptions, hasNoLocalChatModels } from "@/features/chat/pages/ChatModelOptions";
 import { AZURE_FOUNDRY_PROVIDER } from "@/features/chat/queries/useCodexModelOptions";
 
 import classes from "./ModelSelectorCard.module.css";
@@ -317,12 +318,16 @@ export function ModelSelectorCard({
 	// left the operator with no way to tell which model a phone was about to send to.
 	const { width } = useWindowDimensions();
 	const isCompactViewport = width < COMPACT_CONTROLS_BREAKPOINT;
-	const hasOptions = modelOptions.length > 0;
+	const hasOptions = allOptions.length > 0;
 	const isDisabled = disabled || !hasOptions;
-	const showSearch = modelOptions.length > 5;
+	// Counted over EVERY option the dropdown renders, not just the node's own: a node whose models all come from cloud
+	// or external connections has just as long a list and just as much need of a search box.
+	const showSearch = allOptions.length > 5;
 	// The chat picker is strictly filtered to chat-capable models, so a node whose only installed
 	// models are embedding/unknown shows just the local-default option. Detect that to explain the otherwise-bare list.
-	const hasNoChatModels = hasNoLocalChatModels(modelOptions);
+	// Suppressed once cloud or external options exist: the list is not bare then, and this message's guidance is about
+	// installing a LOCAL model, which is not what an external-only install is missing.
+	const hasNoChatModels = hasNoLocalChatModels(modelOptions) && !hasCloudOptions;
 	const reasoningLabel = t("pages.chat.reasoningLabel", "Reasoning");
 	// Distinct from `reasoningLabel`: that badge means "a graded reasoning control is available", this one means
 	// "the model reasons by default, on/off only".

@@ -33,7 +33,7 @@ import { ImportProgressPanel } from "@/features/models/components/ImportProgress
 import { InstalledModelsTable } from "@/features/models/components/InstalledModelsTable";
 import { ModelDetailsDialog } from "@/features/models/components/ModelDetailsDialog";
 import { defaultGgufQuant, type GgufRepository, type GgufRepositoryFile } from "@/features/models/models/GgufModels";
-import { toLocalModelViewModel } from "@/features/models/models/LocalModelMappers";
+import { isInstalledLocalModel, toLocalModelViewModel } from "@/features/models/models/LocalModelMappers";
 import {
 	useActiveGgufAcquisitions,
 	useCancelGgufImport,
@@ -96,7 +96,11 @@ export function ModelManagement() {
 	// maps its optional-field items to the strict view-models in a memo. Invalidation uses the generated query-key
 	// factories so every cached variant of an endpoint refetches.
 	const { data: modelsResponse, isLoading: modelsIsLoading, error: modelsError, refetch: modelsRefetch, isFetching: modelsIsFetching } = useQuery(withResponseValidation(listLocalModelsOptions()));
-	const modelItems = useMemo(() => modelsResponse?.items ?? [], [modelsResponse]);
+	// External-provider registrations ride the same list so the chat picker can offer them, but this page is the model
+	// STORE: its table hands out Set default / Delete / Reset, none of which mean anything for a remote endpoint (the
+	// delete endpoint answers 409, and D10 puts their whole lifecycle on the External providers page). Filtered out
+	// before the view-models are built, so no action on this page can address one.
+	const modelItems = useMemo(() => (modelsResponse?.items ?? []).filter(isInstalledLocalModel), [modelsResponse]);
 	const modelViewModels = useMemo(() => modelItems.map(toLocalModelViewModel), [modelItems]);
 
 	// Details are fetched only while a model's dialog is open — there is no longer a persistent details card.

@@ -1,4 +1,5 @@
 import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } from "@/core/api/generated";
+import { EXTERNAL_PROVIDER } from "@/core/models/LocalModelProviders";
 import type { ModelOption } from "@/features/chat/models/ChatModels";
 import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
 
@@ -45,10 +46,6 @@ export function toModelOption(model: LocalModelDto, nodeAvailable: boolean): Mod
 // Cloud-provider tags carried on list entries that render in the separate cloud sections of the picker
 // (via useCloudModelOptions), not the local list. Excluded here so they appear once, in their cloud group.
 const CLOUD_PROVIDERS = new Set(["CodexOAuth", "AzureFoundry"]);
-
-// The single multiplexer provider serving every operator-registered external OpenAI-compatible endpoint. One tag
-// covers all connections, which is why the per-connection identity travels in `externalConnectionId` instead.
-export const EXTERNAL_PROVIDER = "external";
 
 function isExternalModel(model: LocalModelDto | undefined): boolean {
 	return model?.provider === EXTERNAL_PROVIDER;

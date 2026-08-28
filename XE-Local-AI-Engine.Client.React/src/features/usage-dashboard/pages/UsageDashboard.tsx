@@ -6,7 +6,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { getAgentUsageSummaryOptions } from "@/core/api/generated/@tanstack/react-query.gen";
+import {
+	getAgentUsageSummaryOptions,
+	listExternalProviderConnectionsOptions,
+} from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
@@ -114,6 +117,16 @@ export function UsageDashboard() {
 		setRange(clampDateRange(next, nowRef.current ?? Date.now(), retentionDays));
 	};
 
+	// Usage rows record external turns as `external:{connectionId}` — the id, never the name, because the ledger holds
+	// one string per run and the name can change. The operator-facing names are resolved here, from the configuration
+	// this page can already read, and handed to the presenters; a connection deleted since the run is simply absent and
+	// its rows read "External". Nothing on the usage endpoint changes for this.
+	const { data: externalConnections } = useQuery(withResponseValidation(listExternalProviderConnectionsOptions()));
+	const externalConnectionNames = useMemo(
+		() => new Map((externalConnections?.connections ?? []).map((connection) => [connection.id, connection.displayName])),
+		[externalConnections],
+	);
+
 	const daily = useMemo(() => aggregateByDay(summary?.items ?? []), [summary]);
 	const models = useMemo(() => aggregateByModel(summary?.items ?? []), [summary]);
 	const empty = isUsageEmpty(summary);
@@ -161,8 +174,8 @@ export function UsageDashboard() {
 							)}
 						</Text>
 						<UsageDailyChart daily={daily} />
-						<UsageProviderBreakdown byProvider={summary.byProvider} />
-						<UsageModelTable rows={models} />
+						<UsageProviderBreakdown byProvider={summary.byProvider} externalConnectionNames={externalConnectionNames} />
+						<UsageModelTable rows={models} externalConnectionNames={externalConnectionNames} />
 					</>
 				)
 			) : null}

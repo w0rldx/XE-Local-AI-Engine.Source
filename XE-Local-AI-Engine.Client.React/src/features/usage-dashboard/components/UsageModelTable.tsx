@@ -13,7 +13,14 @@ const USAGE_MODEL_PAGE_SIZE_STORAGE_KEY = "usage-model-table";
 
 // Per-model usage table: one row per model (aggregated across providers/days), sorted heaviest-first. The provider(s)
 // the model ran under render as colour-coded badges. Client-side pagination over the already-loaded list.
-export function UsageModelTable({ rows }: { readonly rows: readonly UsageModelRow[] }) {
+export function UsageModelTable({
+	rows,
+	externalConnectionNames,
+}: {
+	readonly rows: readonly UsageModelRow[];
+	// External connection id → display name, resolved by the page. Absent ids render as the bare "External".
+	readonly externalConnectionNames?: ReadonlyMap<string, string>;
+}) {
 	const { t } = useTranslation();
 	const pagination = useTablePagination(rows, { storageKey: USAGE_MODEL_PAGE_SIZE_STORAGE_KEY });
 
@@ -53,7 +60,7 @@ export function UsageModelTable({ rows }: { readonly rows: readonly UsageModelRo
 											<Group gap={4} wrap="wrap">
 												{row.providers.map((provider) => (
 													<Badge key={provider} color={providerColor(provider)} variant="light" size="sm">
-														{providerLabel(provider, t)}
+														{providerLabel(provider, t, externalConnectionNames)}
 													</Badge>
 												))}
 											</Group>

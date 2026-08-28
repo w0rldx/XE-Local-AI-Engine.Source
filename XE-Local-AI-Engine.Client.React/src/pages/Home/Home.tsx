@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
+import { isInstalledLocalModel } from "@/features/models/models/LocalModelMappers";
 
 /**
  * The post-setup landing page.
@@ -20,7 +21,9 @@ import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPa
 export function Home() {
 	const { t } = useTranslation();
 	const { data, isLoading } = useQuery(withResponseValidation(listLocalModelsOptions()));
-	const installedCount = data?.items?.length ?? 0;
+	// External-provider registrations ride the same list but are not installed on this node, and the /models route this
+	// card points at does not list them — counting them here would promise models that page cannot show.
+	const installedCount = (data?.items ?? []).filter(isInstalledLocalModel).length;
 	const hasModels = installedCount > 0;
 
 	return (
