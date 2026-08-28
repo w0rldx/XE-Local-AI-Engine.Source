@@ -17,6 +17,10 @@ public sealed class DevWorkflowEncryptionTests
         var graph = $$"""{"schemaVersion":1,"nodes":[{"nodeKey":"research","nodeType":"Agent","instructions":"INSTRUCTIONS-{{Guid.NewGuid():N}}"}],"edges":[]}""";
         var output = "OUTPUT-" + Guid.NewGuid().ToString("N");
         var comment = "COMMENT-" + Guid.NewGuid().ToString("N");
+        var input = "INPUT-" + Guid.NewGuid().ToString("N");
+        var policy = "POLICY-" + Guid.NewGuid().ToString("N");
+        var payload = "PAYLOAD-" + Guid.NewGuid().ToString("N");
+        var eventDetail = "EVENTDETAIL-" + Guid.NewGuid().ToString("N");
         var instructions = graph[(graph.IndexOf("INSTRUCTIONS-", StringComparison.Ordinal))..].Split('"')[0];
 
         await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
@@ -33,22 +37,40 @@ public sealed class DevWorkflowEncryptionTests
                                       graph))
                                  .ConfigureAwait(false);
 
+            // Every encrypted column gets a needle, node-run input and policy included: a column nobody scans is a
+            // column that can quietly stop being encrypted.
             var nodeRunId = Guid.NewGuid();
-            var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, run.Id, nodeRunId, "approval", run.Version, DevWorkflowNodeType.HumanGate).ConfigureAwait(false);
+            var materialized = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(run.Id,
+                                               run.Version,
+                                               Guid.NewGuid(),
+                                               [
+                                                   new DevWorkflowNodeRunSeed(nodeRunId,
+                                                       "approval",
+                                                       DevWorkflowNodeType.HumanGate,
+                                                       InputJson: $$"""{"workItemRequest":"{{input}}"}""",
+                                                       PolicyResolutionJson: $$"""[{"name":"{{policy}}"}]""")
+                                               ]))
+                                          .ConfigureAwait(false);
             var transitioned = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(run.Id,
                                                nodeRunId,
-                                               version,
+                                               materialized.Version,
                                                DevWorkflowNodeRunStatus.WaitingForApproval,
                                                OutputJson: output,
                                                PendingDecisionKind: DevWorkflowDecisionKind.Approve))
                                           .ConfigureAwait(false);
-            _ = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(run.Id,
-                                Guid.NewGuid(),
-                                nodeRunId,
-                                transitioned.Version,
-                                Guid.NewGuid(),
-                                DevWorkflowDecisionKind.Approve,
-                                comment))
+            var decided = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(run.Id,
+                                          Guid.NewGuid(),
+                                          nodeRunId,
+                                          transitioned.Version,
+                                          Guid.NewGuid(),
+                                          DevWorkflowDecisionKind.Approve,
+                                          comment,
+                                          $$"""{"chosenOption":"{{payload}}"}"""))
+                                     .ConfigureAwait(false);
+            _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand(run.Id,
+                                decided.Version,
+                                DevWorkflowEventTypes.PolicyResolved,
+                                DetailJson: $$"""{"note":"{{eventDetail}}"}"""))
                            .ConfigureAwait(false);
         }
 
@@ -58,7 +80,11 @@ public sealed class DevWorkflowEncryptionTests
                      request,
                      instructions,
                      output,
-                     comment
+                     comment,
+                     input,
+                     policy,
+                     payload,
+                     eventDetail
                  })
         {
             AssertEx.False(ContainsSubsequence(fileBytes, Encoding.UTF8.GetBytes(secret)), $"The database file must not carry '{secret[..12]}…' as plaintext.");

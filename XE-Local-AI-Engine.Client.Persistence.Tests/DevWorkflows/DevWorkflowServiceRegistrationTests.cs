@@ -52,7 +52,30 @@ public sealed class DevWorkflowServiceRegistrationTests
         AssertEx.True(devWorkflowIndex > developmentIndex, "AddNodeDevWorkflows must be invoked after AddNodeDevelopment.");
     }
 
-    private static string CompositionRootPath()
+    /// <summary>
+    ///     The service layer's kind guard is a deny-list on <c>Development</c>, which is the whole reason a workflow
+    ///     node can own a session without widening anything. Pinned by source rather than by constructing the service:
+    ///     it is an internal type with eleven dependencies, and the invariant is the shape of one condition, not the
+    ///     behaviour of the graph behind it. The store-layer half is exercised for real in DevWorkflowReconcileTests.
+    /// </summary>
+    [Test]
+    public void WorkSessionService_RejectsOnlyTheReservedDevelopmentKind()
+    {
+        var source = File.ReadAllText(Path.Combine(RepositoryRoot(),
+            "XE-Local-AI-Engine.Client.Application",
+            "Services",
+            "WorkSessions",
+            "Implementation",
+            "WorkSessionService.cs"));
+
+        AssertEx.True(source.Contains("model.Kind == AgentWorkSessionKind.Development", StringComparison.Ordinal),
+            "The service must still refuse the reserved Development kind.");
+        AssertEx.False(source.Contains("AgentWorkSessionKind.Workflow", StringComparison.Ordinal),
+            "Workflow passes this guard by not being named in it. A mention here would mean the deny-list had turned "
+            + "into an allow-list, and every workflow agent node would start failing at session creation.");
+    }
+
+    private static string RepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "XE-Local-AI-Engine.slnx")))
@@ -60,7 +83,9 @@ public sealed class DevWorkflowServiceRegistrationTests
             directory = directory.Parent;
         }
 
-        var root = AssertEx.NotNull(directory, "The repository root must be reachable from the test output directory.");
-        return Path.Combine(root.FullName, "XE-Local-AI-Engine.Client.Application", "DependencyInjection", "NodeApplicationServiceCollectionExtensions.cs");
+        return AssertEx.NotNull(directory, "The repository root must be reachable from the test output directory.").FullName;
     }
+
+    private static string CompositionRootPath() =>
+        Path.Combine(RepositoryRoot(), "XE-Local-AI-Engine.Client.Application", "DependencyInjection", "NodeApplicationServiceCollectionExtensions.cs");
 }
