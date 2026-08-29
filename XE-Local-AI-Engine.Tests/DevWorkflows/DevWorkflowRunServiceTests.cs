@@ -1,8 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
+using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -651,5 +656,117 @@ public sealed class DevWorkflowRunServiceTests
 
         AssertEx.Equal(expected: 1, detail.PendingDecisionCount);
         AssertEx.Equal((await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Id, detail.BlockingGateNodeRunId);
+    }
+
+    /// <summary>
+    ///     The cleanup after a delete runs on its own token, and each item on its own. By the time it starts the rows
+    ///     have committed, so a caller walking away cannot undo the delete — it can only abandon the sessions and
+    ///     artifact bytes that delete has orphaned, and nothing collects those afterwards: the startup sweep takes only
+    ///     never-driven sessions, and no row points at these bytes any more. Substituted rather than driven through the
+    ///     harness because the window being pinned is one instant wide — between the store's commit and the first
+    ///     release — and only a fake can cancel inside it.
+    /// </summary>
+    [Test]
+    public async Task DeletingAWorkItem_ReleasesEverythingEvenWhenTheRequestIsCancelledAtTheCommit()
+    {
+        using var request = new CancellationTokenSource();
+        var workItemId = Guid.NewGuid();
+        var sessionIds = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        var runIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
+
+        var store = Substitute.For<IDevWorkflowStore>();
+        _ = store.GetWorkItemAsync(workItemId, Arg.Any<CancellationToken>())
+                 .Returns(new DevWorkflowWorkItemSnapshot(workItemId,
+                     "Ship the thing",
+                     "Please ship it",
+                     DevWorkflowWorkItemStatus.Completed,
+                     DevelopmentProjectId: null,
+                     LatestRunId: null,
+                     LatestRunStatus: null,
+                     LatestRunDefinitionName: null,
+                     DevWorkflowNodeCounters.Empty,
+                     CreatedAtUtc: 1,
+                     UpdatedAtUtc: 2,
+                     Version: 1));
+
+        // The caller walks away in the one instant the finding is about: the rows are committed and nothing external
+        // has been released yet.
+        _ = store.DeleteWorkItemAsync(workItemId, Arg.Any<CancellationToken>())
+                 .Returns(_ =>
+                 {
+                     request.Cancel();
+                     return new DevWorkflowWorkItemDeletion(RemovedRows: 6, runIds, sessionIds);
+                 });
+
+        // The middle session is refused as well, because one item's failure must cost only itself.
+        var sessions = new RecordingWorkSessionLifecycle(sessionIds[1]);
+
+        var swept = new List<Guid>();
+        var blobs = Substitute.For<IDevWorkflowArtifactBlobStore>();
+        blobs.When(blob => blob.DeleteRun(Arg.Any<Guid>())).Do(call => swept.Add(call.Arg<Guid>()));
+
+        var service = new DevWorkflowRunService(store,
+            new NoOpDispatcherSignal(),
+            sessions,
+            blobs,
+            Options.Create(new DevWorkflowOptions()),
+            NullLogger<DevWorkflowRunService>.Instance);
+
+        await service.DeleteWorkItemAsync(workItemId, request.Token).ConfigureAwait(false);
+
+        AssertEx.Equal(string.Join(", ", new[] { sessionIds[0], sessionIds[2] }),
+            string.Join(", ", sessions.Deleted),
+            "Every session the delete orphaned has to be released, past the cancellation and past the one that was refused.");
+        AssertEx.Equal(string.Join(", ", runIds), string.Join(", ", swept), "And so does every run's artifact directory, which nothing else will ever collect.");
+    }
+
+    /// <summary>
+    ///     The owner surface, honouring the token it is handed and refusing one nominated session. Hand-written rather
+    ///     than substituted because the interface is internal to the Application assembly, which is not exposed to
+    ///     Castle's proxy generator.
+    /// </summary>
+    private sealed class RecordingWorkSessionLifecycle(Guid refused) : IWorkflowOwnedWorkSessionLifecycle
+    {
+        public List<Guid> Deleted { get; } = [];
+
+        public bool HasCapacity => true;
+
+        public Task DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (sessionId == refused)
+            {
+                throw new WorkSessionNotFoundException($"Work session '{sessionId}' was not found.");
+            }
+
+            Deleted.Add(sessionId);
+            return Task.CompletedTask;
+        }
+
+        public Task<WorkSessionDetail> CreateAsync(string title, string objective, Guid agentDefinitionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<WorkSessionDetail> GetAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<WorkSessionDetail> StartAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<WorkSessionDetail> PauseAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<WorkSessionDetail> ResumeAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public Task<WorkSessionDetail> CancelAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+    }
+
+    private sealed class NoOpDispatcherSignal : IDevWorkflowDispatcherSignal
+    {
+        public void Signal(Guid runId)
+        {
+            // The delete path signals nothing; this exists only to fill the constructor.
+        }
     }
 }

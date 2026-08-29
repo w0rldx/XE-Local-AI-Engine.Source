@@ -123,18 +123,22 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         // refusal — and the ids come back from the commit, so there is no page for a caller to walk or forget.
         var deleted = await _store.DeleteWorkItemAsync(workItemId, cancellationToken).ConfigureAwait(false);
 
-        // Best-effort, because the rows that named these are already gone: throwing here would report a failure for a
-        // delete that in fact succeeded. What a refusal — or a crash inside this loop — leaves behind is a session
-        // nothing points at any more: never a dangling reference, and recoverable by hand through the owner surface.
-        // The startup sweep does NOT collect these; it takes only never-driven sessions, so a transcript is never
-        // destroyed by a sweep that cannot tell which crash produced it.
+        // Past this line the request's token is DELIBERATELY dropped. The rows that named these sessions and these
+        // bytes have already committed, so a cancellation here undoes nothing — it only stops the cleanup partway, and
+        // what it abandons is abandoned for good: the startup sweep takes only never-driven sessions, so it will not
+        // collect a workflow session that ran, and nothing at all points at these bytes any more.
+        //
+        // Best-effort, and per item for the same reason: throwing would report a failure for a delete that in fact
+        // succeeded, and one session the work-session family refuses must not cost the sessions after it and every
+        // artifact directory behind them. What a failure leaves is a session or a directory nothing points at — never a
+        // dangling reference, and removable by hand through the owner surface.
         foreach (var sessionId in deleted.WorkSessionIds)
         {
             try
             {
-                await _sessions.DeleteAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                await _sessions.DeleteAsync(sessionId, CancellationToken.None).ConfigureAwait(false);
             }
-            catch (Exception exception) when (exception is WorkSessionInvalidTransitionException or WorkSessionNotFoundException)
+            catch (Exception exception)
             {
                 _logger.LogWarning(exception, "Work session {SessionId} outlived the work item that owned it and has to be removed by hand.", sessionId);
             }
@@ -142,7 +146,16 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
 
         foreach (var runId in deleted.RunIds)
         {
-            _blobs.DeleteRun(runId);
+            try
+            {
+                _blobs.DeleteRun(runId);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception,
+                    "The artifact bytes of development workflow run {RunId} outlived the work item that owned it and have to be removed by hand.",
+                    runId);
+            }
         }
     }
 
