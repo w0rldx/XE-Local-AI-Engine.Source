@@ -2573,6 +2573,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations
                         .HasColumnName("updated_at_utc");
 
                     b.Property<int>("Version")
+                        .IsConcurrencyToken()
                         .HasColumnType("INTEGER")
                         .HasColumnName("version");
 

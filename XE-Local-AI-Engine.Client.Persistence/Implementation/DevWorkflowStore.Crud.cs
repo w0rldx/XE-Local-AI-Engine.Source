@@ -264,7 +264,7 @@ internal sealed partial class DevWorkflowStore
 
         definition.Version++;
         definition.UpdatedAtUtc = Now();
-        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await SaveDefinitionAsync(cancellationToken).ConfigureAwait(false);
         return DefinitionSnapshot(definition);
     }
 
@@ -310,7 +310,7 @@ internal sealed partial class DevWorkflowStore
             definition.Archived = true;
             definition.Version++;
             definition.UpdatedAtUtc = Now();
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await SaveDefinitionAsync(cancellationToken).ConfigureAwait(false);
         }
 
         return DefinitionSnapshot(definition);
@@ -548,6 +548,31 @@ internal sealed partial class DevWorkflowStore
         {
             await RollbackAsync(transaction).ConfigureAwait(false);
             throw;
+        }
+    }
+
+    /// <summary>
+    ///     Writes a definition edit under the row's version token.
+    ///     <para>
+    ///         The version check above answers the common stale PUT with the numbers the caller sent. This is the other
+    ///         half: two edits that each read version N both pass that check, and only the token stops the later one
+    ///         from overwriting the earlier without either caller ever learning of the other. Both refusals are the
+    ///         same 409, because from the client's side they are one story — somebody edited this definition first.
+    ///     </para>
+    /// </summary>
+    private async Task SaveDefinitionAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            // Cleared, or the definition stays tracked as Modified and the next write in this scope re-submits an edit
+            // that has already been refused once.
+            _dbContext.ChangeTracker.Clear();
+            throw new DevWorkflowConcurrencyException("The definition was changed by another writer before this edit could be written, so its version is stale.",
+                exception);
         }
     }
 

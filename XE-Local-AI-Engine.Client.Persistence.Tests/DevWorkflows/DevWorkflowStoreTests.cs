@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.DevWorkflows;
 
+using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -271,5 +272,50 @@ public sealed class DevWorkflowStoreTests
         _ = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Manual two", DevWorkflowTestFixture.SampleGraph, NodeCount: 1))
                        .ConfigureAwait(false);
         AssertEx.Equal(expected: 3, (await store.ListDefinitionsAsync().ConfigureAwait(false)).Count);
+    }
+
+    /// <summary>
+    ///     Two PUTs that each read version 1, which is what two people saving the same definition produce. The store's
+    ///     read-then-check passes for both — neither read saw the other's write — so the row's concurrency token is the
+    ///     only thing standing between the later write and a silent overwrite of the earlier one.
+    /// </summary>
+    [Test]
+    public async Task UpdateDefinition_RefusesTheWriterThatReadTheVersionAnotherWriteHasSinceBumped()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        Guid definitionId;
+        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        {
+            var created = await DevWorkflowTestFixture.StoreFor(context)
+                                                      .CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(),
+                                                          "Original",
+                                                          DevWorkflowTestFixture.SampleGraph,
+                                                          NodeCount: 1))
+                                                      .ConfigureAwait(false);
+            definitionId = created.Id;
+        }
+
+        // Separate contexts: two writers on one would share a change tracker and never actually contend.
+        await using var loserContext = fixture.CreateContext();
+        await using var winnerContext = fixture.CreateContext();
+
+        // The loser holds the row as it stood before the race — the state a request that has already loaded the
+        // definition is in while the other request commits.
+        _ = await loserContext.DevWorkflowDefinitions.SingleAsync(entity => entity.Id == definitionId).ConfigureAwait(false);
+
+        _ = await DevWorkflowTestFixture.StoreFor(winnerContext)
+                                        .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(definitionId, ExpectedVersion: 1, "Winner"))
+                                        .ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(
+                                 () => DevWorkflowTestFixture.StoreFor(loserContext)
+                                                             .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(definitionId, ExpectedVersion: 1, "Loser")),
+                                 "The version check cannot see a write that landed after this writer read it, so the token has to.")
+                          .ConfigureAwait(false);
+
+        await using var readContext = fixture.CreateContext();
+        var settled = await DevWorkflowTestFixture.StoreFor(readContext).GetDefinitionAsync(definitionId).ConfigureAwait(false);
+        AssertEx.Equal("Winner", settled.Name, "The write that won has to survive: the silent overwrite IS the defect.");
+        AssertEx.Equal(expected: 2, settled.Version, "And exactly one of the two edits may have bumped the version.");
     }
 }
