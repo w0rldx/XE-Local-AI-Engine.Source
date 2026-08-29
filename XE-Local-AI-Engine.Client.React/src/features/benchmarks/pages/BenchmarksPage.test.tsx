@@ -7,6 +7,9 @@ import { BenchmarksPage } from "@/features/benchmarks/pages/BenchmarksPage";
 import { jsonRoute, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
 
 // Smoke coverage only — the page orchestrates seven query hooks, a dialog, a project selector and a live run pane,
 // and unit-testing that orchestration would mostly re-test TanStack Query. What is pinned here is that the page

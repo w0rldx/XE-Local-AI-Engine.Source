@@ -9,6 +9,9 @@ import { useStartSourceBuild } from "@/features/node-settings/queries/useLocalRu
 import { domainErrorRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
 
 // Serving the endpoint over MSW instead of mocking the generated mutation factory means the assertion is on the JSON
 // that actually leaves the browser — the shape the backend validates — rather than on the argument object handed to a

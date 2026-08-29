@@ -19,14 +19,26 @@ public sealed class SkillImportEndpointTests
     private const string PreviewRoute = "/api/local/v1/skills/import/preview";
     private const string ImportRoute = "/api/local/v1/skills/import";
 
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
+    /// <summary>
+    ///     A skill name only this test will ever use. The class shares one host and one library, so a fixed name would
+    ///     let a concurrent sibling's row turn this test's import into a Replaced (or a preview into a conflict).
+    /// </summary>
+    private static string SkillName()
+    {
+        return $"pdf-tools-{Guid.NewGuid():N}";
+    }
+
     [Test]
     public async Task Preview_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var source = new StringContent("Paste");
-        using var markdown = new StringContent(SkillImportFixtures.SkillMarkdown("pdf-tools"));
+        using var markdown = new StringContent(SkillImportFixtures.SkillMarkdown(SkillName()));
         using var content = new MultipartFormDataContent
         {
             {
@@ -48,7 +60,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Import_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ImportRoute)
@@ -58,7 +70,7 @@ public sealed class SkillImportEndpointTests
                 token = Guid.NewGuid(),
                 skillNames = new[]
                 {
-                    "pdf-tools"
+                    SkillName()
                 },
                 acknowledged = true
             })
@@ -71,7 +83,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task ListResources_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ListRoute}/{Guid.NewGuid()}/resources");
@@ -83,27 +95,28 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Preview_ReportsTheSkillAndWritesNothing()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
-        var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
+        var name = SkillName();
+        var preview = await PreviewArchiveAsync(factory, client, name).ConfigureAwait(false);
         var skill = preview.GetProperty("skills")[0];
 
-        AssertEx.Equal("pdf-tools", skill.GetProperty("name").GetString());
+        AssertEx.Equal(name, skill.GetProperty("name").GetString());
         AssertEx.True(skill.GetProperty("canImport").GetBoolean(), "A well-formed skill previews as importable.");
         AssertEx.Equal(expected: 1, skill.GetProperty("resources").GetArrayLength());
 
-        // The whole point of phase 1: the library is still empty.
-        AssertEx.Equal(expected: 0, (await ListSkillsAsync(factory, client).ConfigureAwait(false)).GetArrayLength());
+        // The whole point of phase 1: the library never saw this skill.
+        AssertEx.Equal(expected: 0, (await ListSkillsNamedAsync(factory, client, name).ConfigureAwait(false)).Count);
     }
 
     [Test]
     public async Task Preview_ReportsResourceNamesWithoutContent()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
-        var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
+        var preview = await PreviewArchiveAsync(factory, client, SkillName()).ConfigureAwait(false);
         var resource = preview.GetProperty("skills")[0].GetProperty("resources")[0];
 
         AssertEx.Equal("references/FAQ.md", resource.GetProperty("name").GetString());
@@ -113,32 +126,36 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Import_WithoutAcknowledgement_ReturnsBadRequestAndWritesNothing()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
-        var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
+        var name = SkillName();
+        var preview = await PreviewArchiveAsync(factory, client, name).ConfigureAwait(false);
 
         using var response = await CommitAsync(factory,
                 client,
                 preview.GetProperty("token").GetGuid(),
+                name,
                 acknowledged: false)
             .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        AssertEx.Equal(expected: 0, (await ListSkillsAsync(factory, client).ConfigureAwait(false)).GetArrayLength());
+        AssertEx.Equal(expected: 0, (await ListSkillsNamedAsync(factory, client, name).ConfigureAwait(false)).Count);
     }
 
     [Test]
     public async Task Import_WhenAcknowledged_LandsSkillDisabledWithImportedProvenance()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
-        var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
+        var name = SkillName();
+        var preview = await PreviewArchiveAsync(factory, client, name).ConfigureAwait(false);
 
         using var commitResponse = await CommitAsync(factory,
                 client,
                 preview.GetProperty("token").GetGuid(),
+                name,
                 acknowledged: true)
             .ConfigureAwait(false);
 
@@ -147,13 +164,13 @@ public sealed class SkillImportEndpointTests
         var commitPayload = await commitResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
         using var commitDocument = JsonDocument.Parse(commitPayload);
         var outcome = commitDocument.RootElement.GetProperty("outcomes")[0];
-        AssertEx.Equal("pdf-tools", outcome.GetProperty("name").GetString());
+        AssertEx.Equal(name, outcome.GetProperty("name").GetString());
         AssertEx.Equal("Imported", outcome.GetProperty("status").GetString());
 
-        var items = await ListSkillsAsync(factory, client).ConfigureAwait(false);
-        AssertEx.Equal(expected: 1, items.GetArrayLength());
+        var rows = await ListSkillsNamedAsync(factory, client, name).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, rows.Count);
 
-        var summary = items[0];
+        var summary = rows[0];
         AssertEx.False(summary.GetProperty("enabled").GetBoolean(),
             "An imported skill lands disabled — the resolver only resolves enabled skills.");
         AssertEx.Equal("Imported", summary.GetProperty("origin").GetString());
@@ -176,43 +193,46 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Import_WhenTokenUnknown_ReturnsBadRequest()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
-        using var response = await CommitAsync(factory, client, Guid.NewGuid(), acknowledged: true).ConfigureAwait(false);
+        var name = SkillName();
+        using var response = await CommitAsync(factory, client, Guid.NewGuid(), name, acknowledged: true).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        AssertEx.Equal(expected: 0, (await ListSkillsAsync(factory, client).ConfigureAwait(false)).GetArrayLength());
+        AssertEx.Equal(expected: 0, (await ListSkillsNamedAsync(factory, client, name).ConfigureAwait(false)).Count);
     }
 
     [Test]
     public async Task Import_WhenTokenReplayed_ReturnsBadRequest()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
-        var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
+        var name = SkillName();
+        var preview = await PreviewArchiveAsync(factory, client, name).ConfigureAwait(false);
         var token = preview.GetProperty("token").GetGuid();
 
-        using (var first = await CommitAsync(factory, client, token, acknowledged: true).ConfigureAwait(false))
+        using (var first = await CommitAsync(factory, client, token, name, acknowledged: true).ConfigureAwait(false))
         {
             AssertEx.Equal(HttpStatusCode.OK, first.StatusCode);
         }
 
-        using var replay = await CommitAsync(factory, client, token, acknowledged: true).ConfigureAwait(false);
+        using var replay = await CommitAsync(factory, client, token, name, acknowledged: true).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, replay.StatusCode);
         AssertEx.Equal(expected: 1,
-            (await ListSkillsAsync(factory, client).ConfigureAwait(false)).GetArrayLength());
+            (await ListSkillsNamedAsync(factory, client, name).ConfigureAwait(false)).Count);
     }
 
     [Test]
     public async Task Update_WhenFrontmatterIsEchoedBack_PreservesItAndKeepsImportedProvenance()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
-        var skillId = await ImportSkillAsync(factory, client).ConfigureAwait(false);
+        var name = SkillName();
+        var skillId = await ImportSkillAsync(factory, client, name).ConfigureAwait(false);
 
         // The store writes the frontmatter column from the input unconditionally, so an update that did not carry the
         // fields back would erase them. Provenance is promote-only, so the same edit must NOT launder the row to Local.
@@ -220,7 +240,7 @@ public sealed class SkillImportEndpointTests
         {
             Content = JsonContent.Create(new
             {
-                name = "pdf-tools",
+                name,
                 description = "Extract text from PDFs.",
                 body = "# PDF tools\n\nEdited body.",
                 enabled = true,
@@ -241,10 +261,10 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task ListResources_OmitsContent()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
-        var skillId = await ImportSkillAsync(factory, client).ConfigureAwait(false);
+        var skillId = await ImportSkillAsync(factory, client, SkillName()).ConfigureAwait(false);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ListRoute}/{skillId}/resources");
         factory.AddNodeBearerToken(request);
@@ -264,7 +284,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task ListResources_WhenSkillMissing_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ListRoute}/{Guid.NewGuid()}/resources");
@@ -277,10 +297,10 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task GetResource_WhenNameCarriesASlash_ReturnsContent()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
-        var skillId = await ImportSkillAsync(factory, client).ConfigureAwait(false);
+        var skillId = await ImportSkillAsync(factory, client, SkillName()).ConfigureAwait(false);
 
         // The client escapes the whole name into one segment; Kestrel leaves %2F encoded, so the endpoint decodes it.
         using var request = new HttpRequestMessage(HttpMethod.Get,
@@ -299,10 +319,10 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task GetResource_WhenNameIsInvalid_ReturnsBadRequest()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
-        var skillId = await ImportSkillAsync(factory, client).ConfigureAwait(false);
+        var skillId = await ImportSkillAsync(factory, client, SkillName()).ConfigureAwait(false);
 
         // Decodes to "../../etc/passwd": the charset guard runs AFTER the decode, so the traversal is what is rejected.
         using var request = new HttpRequestMessage(HttpMethod.Get,
@@ -316,10 +336,10 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task GetResource_WhenNameIsUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
-        var skillId = await ImportSkillAsync(factory, client).ConfigureAwait(false);
+        var skillId = await ImportSkillAsync(factory, client, SkillName()).ConfigureAwait(false);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ListRoute}/{skillId}/resources/absent.md");
         factory.AddNodeBearerToken(request);
@@ -331,7 +351,7 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Preview_WhenSourceIsPasteWithoutMarkdown_ReturnsBadRequest()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var source = new StringContent("Paste");
@@ -354,11 +374,13 @@ public sealed class SkillImportEndpointTests
     [Test]
     public async Task Preview_WhenPasted_ReportsAnInstructionsOnlySkill()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
+        var name = $"pasted-skill-{Guid.NewGuid():N}";
+
         using var source = new StringContent("Paste");
-        using var markdown = new StringContent(SkillImportFixtures.SkillMarkdown("pasted-skill"));
+        using var markdown = new StringContent(SkillImportFixtures.SkillMarkdown(name));
         using var content = new MultipartFormDataContent
         {
             {
@@ -380,25 +402,25 @@ public sealed class SkillImportEndpointTests
         var payload = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
         using var document = JsonDocument.Parse(payload);
         var skill = document.RootElement.GetProperty("skills")[0];
-        AssertEx.Equal("pasted-skill", skill.GetProperty("name").GetString());
+        AssertEx.Equal(name, skill.GetProperty("name").GetString());
         AssertEx.Equal(expected: 0, skill.GetProperty("resources").GetArrayLength());
     }
 
     /// <summary>An archive holding one skill with one bundled file, used by every write-path test here.</summary>
-    private static byte[] BuildArchive()
+    private static byte[] BuildArchive(string name)
     {
         return SkillImportFixtures.Zip(zip =>
         {
-            zip.AddText("pdf-tools/SKILL.md",
-                "---\nname: pdf-tools\ndescription: Extract text from PDFs.\nlicense: MIT\n---\n\n# PDF tools\n\nBody line.\n");
-            zip.AddText("pdf-tools/references/FAQ.md", "Frequently asked.");
+            zip.AddText($"{name}/SKILL.md",
+                $"---\nname: {name}\ndescription: Extract text from PDFs.\nlicense: MIT\n---\n\n# PDF tools\n\nBody line.\n");
+            zip.AddText($"{name}/references/FAQ.md", "Frequently asked.");
         });
     }
 
     /// <summary>Previews <see cref="BuildArchive" /> and returns the parsed report. The caller owns nothing to dispose.</summary>
-    private static async Task<JsonElement> PreviewArchiveAsync(TestServerWebAppFactory factory, HttpClient client)
+    private static async Task<JsonElement> PreviewArchiveAsync(TestServerWebAppFactory factory, HttpClient client, string name)
     {
-        using var file = new ByteArrayContent(BuildArchive());
+        using var file = new ByteArrayContent(BuildArchive(name));
         file.Headers.ContentType = new MediaTypeHeaderValue("application/zip");
 
         using var source = new StringContent("Upload");
@@ -427,6 +449,7 @@ public sealed class SkillImportEndpointTests
     private static async Task<HttpResponseMessage> CommitAsync(TestServerWebAppFactory factory,
         HttpClient client,
         Guid token,
+        string name,
         bool acknowledged)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, ImportRoute)
@@ -436,7 +459,7 @@ public sealed class SkillImportEndpointTests
                 token,
                 skillNames = new[]
                 {
-                    "pdf-tools"
+                    name
                 },
                 acknowledged
             })
@@ -446,16 +469,28 @@ public sealed class SkillImportEndpointTests
     }
 
     /// <summary>Runs both phases and returns the id of the skill that landed.</summary>
-    private static async Task<Guid> ImportSkillAsync(TestServerWebAppFactory factory, HttpClient client)
+    private static async Task<Guid> ImportSkillAsync(TestServerWebAppFactory factory, HttpClient client, string name)
     {
-        var preview = await PreviewArchiveAsync(factory, client).ConfigureAwait(false);
-        using var response = await CommitAsync(factory, client, preview.GetProperty("token").GetGuid(), acknowledged: true)
+        var preview = await PreviewArchiveAsync(factory, client, name).ConfigureAwait(false);
+        using var response = await CommitAsync(factory, client, preview.GetProperty("token").GetGuid(), name, acknowledged: true)
             .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
 
+        var rows = await ListSkillsNamedAsync(factory, client, name).ConfigureAwait(false);
+        return rows[0].GetProperty("id").GetGuid();
+    }
+
+    /// <summary>
+    ///     The library rows carrying <paramref name="name" />. The class shares one library with every sibling test, so
+    ///     the absolute list length is not something any test here may assert on.
+    /// </summary>
+    private static async Task<IReadOnlyList<JsonElement>> ListSkillsNamedAsync(TestServerWebAppFactory factory, HttpClient client, string name)
+    {
         var items = await ListSkillsAsync(factory, client).ConfigureAwait(false);
-        return items[0].GetProperty("id").GetGuid();
+        return items.EnumerateArray()
+                    .Where(item => string.Equals(item.GetProperty("name").GetString(), name, StringComparison.Ordinal))
+                    .ToList();
     }
 
     private static async Task<JsonElement> ListSkillsAsync(TestServerWebAppFactory factory, HttpClient client)

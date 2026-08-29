@@ -9,6 +9,9 @@ import { useCustomToolManagementStore } from "@/features/customTools/stores/Cust
 import { jsonRoute, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
 
 // Smoke coverage only — the page orchestrates a dialog, a confirm flow, an unsaved-changes guard and five query
 // hooks, and unit-testing that orchestration would mostly re-test the libraries. What is worth pinning is that the

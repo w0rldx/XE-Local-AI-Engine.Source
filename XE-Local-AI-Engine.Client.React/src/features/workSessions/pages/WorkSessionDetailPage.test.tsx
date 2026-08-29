@@ -12,6 +12,9 @@ import { WorkSessionDetailPage } from "@/features/workSessions/pages/WorkSession
 import { jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
 
 // The centre pane IS the real chat page; its own contract is pinned by Chat.scope.test.tsx. What this file needs is
 // the SCOPE the detail page hands it and a way to fire the two overrides.

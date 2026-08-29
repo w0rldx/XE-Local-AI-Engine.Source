@@ -21,6 +21,9 @@ import { noBenchmarkRunLiveOverlay } from "@/features/benchmarks/models/Benchmar
 import { domainErrorRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
 
 const runId = "bbbbbbbb-0000-4000-8000-000000000002";
 const projectId = "aaaaaaaa-0000-4000-8000-000000000001";

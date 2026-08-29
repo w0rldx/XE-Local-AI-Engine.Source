@@ -14,10 +14,13 @@ public sealed class TrainingRunEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1/training/runs";
 
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     [Test]
     public async Task EveryRunRoute_WithoutABearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var list = await client.GetAsync(ApiPrefix).ConfigureAwait(false);
@@ -40,7 +43,7 @@ public sealed class TrainingRunEndpointTests
     [Test]
     public async Task ListRuns_WithOperatorToken_ReturnsAnEmptyPageOnACleanDatabase()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, ApiPrefix);
@@ -57,7 +60,7 @@ public sealed class TrainingRunEndpointTests
     [Test]
     public async Task GetRun_WhenUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/{Guid.NewGuid()}");
@@ -70,7 +73,7 @@ public sealed class TrainingRunEndpointTests
     [Test]
     public async Task CancelRun_WhenUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/{Guid.NewGuid()}/cancel");
@@ -84,7 +87,7 @@ public sealed class TrainingRunEndpointTests
     [Test]
     public async Task RunCreate_WithoutLicenseConfirmation_Rejected()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, ApiPrefix)
@@ -111,7 +114,7 @@ public sealed class TrainingRunEndpointTests
     [Test]
     public async Task GetRunDefaults_ForAnUnknownCheckpoint_IsRejectedRatherThanFaulting()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/defaults?baseArtifactId={Guid.NewGuid()}");
@@ -124,7 +127,7 @@ public sealed class TrainingRunEndpointTests
     [Test]
     public async Task ListRuns_WithAnOutOfRangePageSize_IsRejected()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}?page=1&pageSize=5000");

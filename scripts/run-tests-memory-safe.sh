@@ -240,41 +240,60 @@ if [[ -n "${COVERAGE_DIR:-}" ]]; then
 fi
 
 # Longest-first (LPT) so the parallel schedule doesn't end on a 90s batch started last. Every
-# namespace that took >= 20s is listed, descending; the trailing comment is that measurement.
-# Weights measured 2026-08-22 on a 16-core host (JOBS=4 run); harmless if stale — unlisted namespaces
-# follow alphabetically. Re-generate from a run's `dur=` column when the tail stops shrinking —
-# and note only the PER-NAMESPACE shape yields a per-namespace `dur=`, so regenerate from a run
-# with TEST_GROUPS unset. These weights are also what the TEST_GROUPS packer bins on.
+# namespace that took >= 10s is listed, descending; the trailing comment is that measurement.
+# Weights measured 2026-08-29 on a 16-core host as max(run1, run2) of two default-JOBS runs;
+# harmless if stale — unlisted namespaces follow alphabetically. Re-generate from a run's `dur=`
+# column when the tail stops shrinking — and note only the PER-NAMESPACE shape yields a
+# per-namespace `dur=`, so regenerate from a run with TEST_GROUPS unset. These weights are also what
+# the TEST_GROUPS packer bins on.
+# The cut-off is 10s and not 20s because everything unlisted weighs 1 regardless of its real cost:
+# at a 15s cut-off the 71 remaining namespaces hid 248s of work from the packer and TEST_GROUPS=4
+# came out worse than the stale table it replaced (486s vs 479s of true load on the fullest bin).
+# Listing down to 10s brings that to 439s; going below 10s buys another ~13s for 11 more entries.
 HEAVY=(
-  XE_Local_AI_Engine.Tests.Endpoints.Training.V1        # 94s
-  XE_Local_AI_Engine.Tests.Endpoints.Benchmarks.V1      # 90s
-  XE_Local_AI_Engine.Tests.Mcp                          # 64s
-  XE_Local_AI_Engine.Tests.Endpoints.Development.V1     # 56s
-  XE_Local_AI_Engine.Tests.Endpoints.Skills             # 49s
-  XE_Local_AI_Engine.Tests.Endpoints.LocalModels        # 48s
-  XE_Local_AI_Engine.Tests.Endpoints.Agents             # 46s
+  XE_Local_AI_Engine.Tests.Endpoints.Benchmarks.V1      # 118s
+  XE_Local_AI_Engine.Tests.WorkSessions                 # 114s
+  XE_Local_AI_Engine.Tests.Endpoints.Training.V1        # 88s
+  XE_Local_AI_Engine.Tests.Development                  # 70s
+  XE_Local_AI_Engine.Tests.Endpoints.WorkSessions.V1    # 65s
+  XE_Local_AI_Engine.Tests.Mcp                          # 65s
+  XE_Local_AI_Engine.Tests.Endpoints.LocalModels        # 57s
+  XE_Local_AI_Engine.Tests.Hosting                      # 56s
+  XE_Local_AI_Engine.Tests.Endpoints.Images             # 52s
+  XE_Local_AI_Engine.Tests.Endpoints.Agents             # 50s
+  XE_Local_AI_Engine.Tests.Endpoints.Development.V1     # 50s
+  XE_Local_AI_Engine.Tests.Chat                         # 44s
+  XE_Local_AI_Engine.Tests.Endpoints.Knowledge          # 41s
   XE_Local_AI_Engine.Tests.Endpoints.ModelFit.V1        # 41s
-  XE_Local_AI_Engine.Tests.Chat                         # 40s
-  XE_Local_AI_Engine.Tests.Providers.LlamaServer        # 39s
-  XE_Local_AI_Engine.Tests.Endpoints.Drafting           # 38s
-  XE_Local_AI_Engine.Tests.Hosting                      # 37s
-  XE_Local_AI_Engine.Tests.Endpoints.Knowledge          # 37s
-  XE_Local_AI_Engine.Tests.Endpoints.Images             # 36s
-  XE_Local_AI_Engine.Tests.CloudSettings                # 36s
-  XE_Local_AI_Engine.Tests.Development                  # 34s
-  XE_Local_AI_Engine.Tests.Endpoints.Development        # 29s
-  XE_Local_AI_Engine.Tests.Auth                         # 29s
-  XE_Local_AI_Engine.Tests.Automation                   # 28s
-  XE_Local_AI_Engine.Tests.Endpoints.LocalChat          # 27s
-  XE_Local_AI_Engine.Tests.NodeSettings                 # 26s
-  XE_Local_AI_Engine.Tests.Endpoints.NodeBinding.V1     # 25s
-  XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp # 23s
-  XE_Local_AI_Engine.Tests.ApiFoundation                # 23s
-  XE_Local_AI_Engine.Tests.PreviewWorkflows             # 22s
-  XE_Local_AI_Engine.Tests.Endpoints.CustomTools.V1     # 22s
-  XE_Local_AI_Engine.Tests.Proxy                        # 21s
-  XE_Local_AI_Engine.Tests.Agents                       # 21s
+  XE_Local_AI_Engine.Tests.CloudSettings                # 38s
+  XE_Local_AI_Engine.Tests.Providers.LlamaServer        # 37s
+  XE_Local_AI_Engine.Tests.Endpoints.Drafting           # 35s
+  XE_Local_AI_Engine.Tests.Auth                         # 31s
+  XE_Local_AI_Engine.Tests.Endpoints.Development        # 31s
+  XE_Local_AI_Engine.Tests.Sandbox                      # 30s
+  XE_Local_AI_Engine.Tests.NodeSettings                 # 28s
+  XE_Local_AI_Engine.Tests.ApiFoundation                # 27s
+  XE_Local_AI_Engine.Tests.Automation                   # 27s
+  XE_Local_AI_Engine.Tests.PreviewWorkflows             # 26s
+  XE_Local_AI_Engine.Tests.Endpoints.LocalChat          # 25s
+  XE_Local_AI_Engine.Tests.Endpoints.ExternalProviders  # 24s
+  XE_Local_AI_Engine.Tests.Endpoints.NodeBinding.V1     # 24s
+  XE_Local_AI_Engine.Tests.Endpoints.Skills             # 24s
+  XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp # 24s
+  XE_Local_AI_Engine.Tests.Agents                       # 22s
+  XE_Local_AI_Engine.Tests.Endpoints.CustomTools.V1     # 20s
   XE_Local_AI_Engine.Tests.Endpoints.Workspaces         # 20s
+  XE_Local_AI_Engine.Tests.Proxy                        # 17s
+  XE_Local_AI_Engine.Tests.Connection                   # 16s
+  XE_Local_AI_Engine.Tests.Invocation                   # 16s
+  XE_Local_AI_Engine.Tests.ContainerSandbox             # 14s
+  XE_Local_AI_Engine.Tests.Endpoints.Cloud.Codex        # 13s
+  XE_Local_AI_Engine.Tests.Auth.Integration             # 12s
+  XE_Local_AI_Engine.Tests.Benchmarks                   # 11s
+  XE_Local_AI_Engine.Tests.Endpoints.TutorialState      # 11s
+  XE_Local_AI_Engine.Tests.BackgroundServices           # 10s
+  XE_Local_AI_Engine.Tests.Endpoints.Invocations        # 10s
+  XE_Local_AI_Engine.Tests.Memory                       # 10s
 )
 declare -A IS_HEAVY=()
 ORDERED=()

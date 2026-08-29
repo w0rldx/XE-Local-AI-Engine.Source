@@ -8,6 +8,9 @@ import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { probeLocalApi } from "@/features/api-foundation/api/ValidationProblemProbeApi";
 import { domainErrorRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
 
 // This suite deliberately does NOT mock the generated SDK. Mocking it leaves nothing under test but the argument
 // object the wrapper builds; going over the wire through MSW exercises what actually breaks in production — the
@@ -86,5 +89,17 @@ describe("probeLocalApi over the real client", () => {
 
 		expect(error).toBeInstanceOf(ApiError);
 		expect((error as ApiError).message).toBe("A source build is already running.");
+	});
+
+	// Negative control for the MSW half of the setup split (the other half is src/test/NoNetwork.test.ts): inside a
+	// file that opted into MSW, a route no test declared must still fail. The second assertion is what makes this a
+	// control rather than a tautology — the failure has to come from MSW's `onUnhandledRequest: "error"` and not from
+	// the global no-network guard, which is what proves `setupMswServer()` handed the REAL transports to MSW instead
+	// of leaving the guard's stubs in place for it to wrap.
+	it("still fails an undeclared route through MSW, not through the global no-network guard", async () => {
+		const error = await fetch(localApiPath("diagnostics/never-declared")).catch((thrown: unknown) => thrown);
+
+		expect(error).toBeInstanceOf(Error);
+		expect((error as Error).message).not.toMatch(/unexpected network call in test/);
 	});
 });

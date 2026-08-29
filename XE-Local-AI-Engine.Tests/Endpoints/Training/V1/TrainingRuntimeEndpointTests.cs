@@ -20,10 +20,13 @@ public sealed class TrainingRuntimeEndpointTests
 {
     private const string ApiPrefix = "/api/local/v1/training";
 
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     [Test]
     public async Task RuntimeStatus_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync($"{ApiPrefix}/runtime/status").ConfigureAwait(false);
@@ -34,7 +37,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task BaseArtifacts_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var response = await client.GetAsync($"{ApiPrefix}/base-artifacts").ConfigureAwait(false);
@@ -45,7 +48,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task RuntimeInstall_WhenNoBearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/runtime/install");
@@ -58,7 +61,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task RuntimeStatus_WithOperatorToken_ReportsAnIdleRuntimeOnACleanBox()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/runtime/status");
@@ -80,7 +83,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task RuntimePrerequisites_WithOperatorToken_ReportsEveryItem()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/runtime/prerequisites");
@@ -97,7 +100,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task ListBaseArtifacts_WithOperatorToken_ReturnsAnEmptyCollectionOnACleanDatabase()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/base-artifacts");
@@ -113,7 +116,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task GetBaseArtifact_WhenUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/base-artifacts/{Guid.NewGuid()}");
@@ -126,7 +129,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task DeleteBaseArtifact_WhenUnknown_ReturnsNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Delete, $"{ApiPrefix}/base-artifacts/{Guid.NewGuid()}");
@@ -140,7 +143,7 @@ public sealed class TrainingRuntimeEndpointTests
     [Test]
     public async Task CreateBaseArtifact_WhenTheRepoIdIsBlank_IsRejectedByValidation()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{ApiPrefix}/base-artifacts")
@@ -163,7 +166,8 @@ public sealed class TrainingRuntimeEndpointTests
         var runtime = Substitute.For<ITrainingRuntimeService>();
         runtime.InstallAsync(Arg.Any<CancellationToken>())
                .Returns<Task<TrainingRuntimeInstallResult>>(_ => throw new TrainingRuntimeException("The runtime package verification failed."));
-        await using var factory = Factory(runtime: runtime);
+        // Private host: it replaces ITrainingRuntimeService, which would poison every sibling on the shared fixture.
+        await using var factory = HostWithSubstitutes(runtime: runtime);
         using var client = factory.CreateClient();
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/runtime/install");
 
@@ -186,7 +190,8 @@ public sealed class TrainingRuntimeEndpointTests
         runtime.Cancel().Returns(false);
         runtime.RemoveAsync(Arg.Any<CancellationToken>())
                .Returns<Task<bool>>(_ => throw new TrainingRuntimeException("The runtime cleanup failed."));
-        await using var factory = Factory(runtime: runtime);
+        // Private host: it replaces ITrainingRuntimeService, which would poison every sibling on the shared fixture.
+        await using var factory = HostWithSubstitutes(runtime: runtime);
         using var client = factory.CreateClient();
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/runtime/remove");
 
@@ -208,7 +213,8 @@ public sealed class TrainingRuntimeEndpointTests
         var artifacts = Substitute.For<IBaseArtifactService>();
         artifacts.StartDownloadAsync("org/model", "revision", Arg.Any<CancellationToken>())
                  .Returns<Task<BaseArtifactView>>(_ => throw new BaseArtifactRejectedException("The selected checkpoint is not trainable."));
-        await using var factory = Factory(artifacts: artifacts);
+        // Private host: it replaces IBaseArtifactService, which would poison every sibling on the shared fixture.
+        await using var factory = HostWithSubstitutes(artifacts: artifacts);
         using var client = factory.CreateClient();
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/base-artifacts", new
         {
@@ -229,7 +235,8 @@ public sealed class TrainingRuntimeEndpointTests
             "A base-artifact rejection has its own reason/message contract, not the training-store error envelope.");
     }
 
-    private static TestServerWebAppFactory Factory(ITrainingRuntimeService? runtime = null, IBaseArtifactService? artifacts = null) =>
+    /// <summary>A host of this test's own, for the cases that swap a service out of the DI graph.</summary>
+    private static TestServerWebAppFactory HostWithSubstitutes(ITrainingRuntimeService? runtime = null, IBaseArtifactService? artifacts = null) =>
         new()
         {
             ConfigureAdditionalTestServices = services =>

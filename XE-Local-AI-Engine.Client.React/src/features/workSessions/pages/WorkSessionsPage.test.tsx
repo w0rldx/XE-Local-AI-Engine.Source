@@ -7,6 +7,9 @@ import { WorkSessionsPage } from "@/features/workSessions/pages/WorkSessionsPage
 import { jsonRoute, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
 
 const navigate = vi.hoisted(() => vi.fn());
 

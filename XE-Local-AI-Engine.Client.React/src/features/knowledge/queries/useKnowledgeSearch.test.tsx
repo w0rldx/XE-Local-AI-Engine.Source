@@ -8,6 +8,9 @@ import { useKnowledgeSearch } from "@/features/knowledge/queries/useKnowledgeSea
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
 
 // The generation/collection guard this suite pins is a race between an in-flight POST and a re-render, so the mock has
 // to be a request that is genuinely still open. MSW gives that without stubbing the generated mutation factory: the

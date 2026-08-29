@@ -8,6 +8,9 @@ import type { ChatMessagePart } from "@/features/chat/models/ChatModels";
 import { jsonRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
 
 // The rendering contract under test (docs/agent-knowledge.md §5 "Chat rendering contract"): an assistant turn is ONE
 // ordered `parts[]` array — reasoning ↔ tool ↔ reasoning → answer — not fixed sections. The renderer must emit the
