@@ -30,11 +30,28 @@ internal sealed class DevWorkflowAgentExecutor
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    ///     The objective's own ceiling in characters, deliberately inside the work-session limit of 8000
-    ///     (<c>WorkSessionService.MaxObjectiveLength</c>), which REFUSES an over-long objective rather than trimming it —
-    ///     and that refusal blocks the node run for a human. The gap covers the headers written around each artifact.
+    ///     The ceiling this composition holds itself to, in characters.
+    ///     <para>
+    ///         <b>Coupled to <c>WorkSessionService.MaxObjectiveLength</c> (8000), which is private to that class.</b> The
+    ///         work-session layer REFUSES an over-long objective rather than trimming it, and that refusal reaches here
+    ///         as a validation failure that blocks the node run for a human — so an objective this lane composes must
+    ///         never approach it. The margin absorbs a modest reduction there without this noticing;
+    ///         <c>TheObjectiveLimit_IsTheOneTheWorkSessionLayerActuallyEnforces</c> fails if the two ever cross.
+    ///     </para>
+    ///     <para>
+    ///         Only the ARTIFACT phase is bounded by it. Instructions and inputs are appended first and uncapped: a node
+    ///         whose own instructions exceed the work-session limit is the pre-existing refusal, and silently trimming
+    ///         what an author wrote would be a worse answer than the block.
+    ///     </para>
     /// </summary>
-    private const int MaxObjectiveCharacters = 7000;
+    internal const int MaxObjectiveCharacters = 7000;
+
+    /// <summary>
+    ///     Room set aside from an artifact's share for the truncation marker that may follow its body. Comfortably over
+    ///     the marker's own worst case; the append guard is what actually enforces the bound, so this only has to stop
+    ///     the common case from being dropped for the sake of forty characters.
+    /// </summary>
+    private const int TruncationMarkerReserve = 64;
 
     private readonly IAgentDefinitionStore _agents;
     private readonly IDevWorkflowArtifactBlobStore _blobs;
@@ -415,20 +432,35 @@ internal sealed class DevWorkflowAgentExecutor
         }
 
         var upstream = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken).ConfigureAwait(false);
-        if (upstream.Count > 0)
+        var section = $"{Environment.NewLine}## What the steps before you produced{Environment.NewLine}";
+        if (upstream.Count > 0 && objective.Length + section.Length <= MaxObjectiveCharacters)
         {
-            _ = objective.AppendLine().AppendLine("## What the steps before you produced");
+            _ = objective.Append(section);
             for (var index = 0; index < upstream.Count; index++)
             {
                 var artifact = upstream[index];
-                _ = objective.AppendLine()
-                             .AppendLine(CultureInfo.InvariantCulture, $"### {artifact.Kind} '{artifact.Name}' (version {artifact.Version}, id {artifact.Id})");
+                var header = string.Create(CultureInfo.InvariantCulture,
+                    $"{Environment.NewLine}### {artifact.Kind} '{artifact.Name}' (version {artifact.Version}, id {artifact.Id}){Environment.NewLine}");
 
-                // Each artifact still to be written gets an equal share of the room left, so a long first document
-                // cannot crowd out the ones after it and a short one hands its slack on. Recomputed inside the loop
-                // because the headers spend from the same budget the contents do.
+                // Everything still to be written shares the room left equally, so a long first document cannot crowd
+                // out the ones after it and a short one hands its slack on. The share has to cover this artifact's own
+                // header and marker as well as its body, which is why both come off it before the body is asked for.
                 var share = (MaxObjectiveCharacters - objective.Length) / (upstream.Count - index);
-                _ = objective.AppendLine(await RenderArtifactAsync(run.Id, artifact, share, cancellationToken).ConfigureAwait(false));
+                var body = await RenderArtifactAsync(run.Id, artifact, share - header.Length - TruncationMarkerReserve, cancellationToken).ConfigureAwait(false);
+
+                // The bound is enforced HERE, on the FINISHED block, with the header, the body, whichever marker was
+                // rendered and the newlines all counted. Nothing reaches the objective except through this check, so
+                // no reference-only line, marker or rounding can push it past the limit. A block that will not fit
+                // falls back to its header alone — the agent still learns the artifact exists, which is the half that
+                // matters most — and an artifact with no room even for that is dropped rather than allowed to overrun.
+                foreach (var candidate in new[] { header + body + Environment.NewLine, header })
+                {
+                    if (objective.Length + candidate.Length <= MaxObjectiveCharacters)
+                    {
+                        _ = objective.Append(candidate);
+                        break;
+                    }
+                }
             }
         }
 
@@ -467,9 +499,17 @@ internal sealed class DevWorkflowAgentExecutor
         }
 
         var content = Encoding.UTF8.GetString(read.Content.Span);
-        return content.Length <= budget
-            ? content
-            : $"{content[..budget]}{Environment.NewLine}(Truncated: the first {budget} of {content.Length} characters.)";
+        if (content.Length <= budget)
+        {
+            return content;
+        }
+
+        // Never cut BETWEEN a surrogate pair. The budget counts UTF-16 code units, and an astral character — an emoji,
+        // most CJK extensions — is two of them: keeping only the high half leaves an unpaired surrogate that becomes
+        // U+FFFD the moment the objective is persisted as UTF-8, so the agent would be handed a corrupted character
+        // rather than one fewer.
+        var cut = char.IsHighSurrogate(content[budget - 1]) ? budget - 1 : budget;
+        return $"{content[..cut]}{Environment.NewLine}(Truncated: the first {cut} of {content.Length} characters.)";
     }
 
     /// <summary>
