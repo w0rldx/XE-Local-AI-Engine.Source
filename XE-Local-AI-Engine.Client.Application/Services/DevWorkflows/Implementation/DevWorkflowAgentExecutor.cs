@@ -464,7 +464,11 @@ internal sealed class DevWorkflowAgentExecutor
                 // no reference-only line, marker or rounding can push it past the limit. A block that will not fit
                 // falls back to its header alone — the agent still learns the artifact exists, which is the half that
                 // matters most — and an artifact with no room even for that is dropped rather than allowed to overrun.
-                foreach (var candidate in new[] { header + body + Environment.NewLine, header })
+                foreach (var candidate in new[]
+                         {
+                             header + body + Environment.NewLine,
+                             header
+                         })
                 {
                     if (objective.Length + candidate.Length <= MaxObjectiveCharacters)
                     {

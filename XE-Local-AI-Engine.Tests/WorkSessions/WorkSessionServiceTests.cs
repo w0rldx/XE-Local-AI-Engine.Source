@@ -95,7 +95,7 @@ public sealed class WorkSessionServiceTests
         // Scoped to this test's own agent rather than asserting an empty list: the host — and so the session table — is
         // shared with every sibling in this class.
         AssertEx.False((await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ListAsync().ConfigureAwait(false))
-                       .Any(summary => summary.AgentDefinitionId == agentId),
+            .Any(summary => summary.AgentDefinitionId == agentId),
             "The refused create persisted no session.");
     }
 

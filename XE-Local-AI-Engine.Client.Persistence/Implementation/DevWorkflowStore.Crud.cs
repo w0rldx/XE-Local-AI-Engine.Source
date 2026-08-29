@@ -517,19 +517,19 @@ internal sealed partial class DevWorkflowStore
     }
 
     public async Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ListInterruptedNodeRunsAsync(CancellationToken cancellationToken = default) =>
-        [
-            .. await StrandedNodeRuns()
-                     .AsNoTracking()
-                     .Select(entity => new DevWorkflowReconciledNodeRun(entity.Id,
-                         entity.RunId,
-                         entity.NodeKey,
-                         entity.NodeType,
-                         entity.Status,
-                         entity.Attempt,
-                         entity.WorkSessionId))
-                     .ToListAsync(cancellationToken)
-                     .ConfigureAwait(false)
-        ];
+    [
+        .. await StrandedNodeRuns()
+                 .AsNoTracking()
+                 .Select(entity => new DevWorkflowReconciledNodeRun(entity.Id,
+                     entity.RunId,
+                     entity.NodeKey,
+                     entity.NodeType,
+                     entity.Status,
+                     entity.Attempt,
+                     entity.WorkSessionId))
+                 .ToListAsync(cancellationToken)
+                 .ConfigureAwait(false)
+    ];
 
     public async Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
         IReadOnlyList<DevWorkflowNodeRunVerdict> verdicts,

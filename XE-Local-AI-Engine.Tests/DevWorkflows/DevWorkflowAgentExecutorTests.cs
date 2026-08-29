@@ -113,7 +113,17 @@ public sealed class DevWorkflowAgentExecutorTests
         var artifactId = Guid.NewGuid();
         await using var scope = harness.Services.CreateAsyncScope();
         var written = await scope.ServiceProvider.GetRequiredService<IWorkSessionArtifactBlobStore>()
-                                 .WriteAsync(sessionId, artifactId, new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A })
+                                 .WriteAsync(sessionId, artifactId, new byte[]
+                                 {
+                                     0x89,
+                                     0x50,
+                                     0x4E,
+                                     0x47,
+                                     0x0D,
+                                     0x0A,
+                                     0x1A,
+                                     0x0A
+                                 })
                                  .ConfigureAwait(false);
         _ = await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>()
                        .AppendArtifactAsync(new AppendWorkSessionArtifactCommand(sessionId,
