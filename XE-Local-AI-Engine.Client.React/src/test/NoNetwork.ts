@@ -5,14 +5,15 @@
 // `onUnhandledRequest: "error"`: a request nobody stubbed must fail loudly instead of reaching the machine's
 // real network, where it passes for the wrong reason on a developer box and hangs in CI.
 //
-// The guard must be transport-COMPLETE, not fetch-only. MSW intercepted Fetch, XMLHttpRequest and Node's
-// ClientRequest; the generated SDK goes over axios, which selects its XHR adapter under jsdom, so a fetch-only
-// replacement would let every SDK call straight through. Hence stubs for all three — and no MSW import, since
-// the whole point is that a file which never touches the network pays nothing.
+// The guard must be transport-COMPLETE, not fetch-only. MSW intercepted Fetch, XMLHttpRequest, Node's
+// ClientRequest and WebSocket; the generated SDK goes over axios, which selects its XHR adapter under jsdom,
+// and SignalR opens a WebSocket, so a fetch-only replacement would let both straight through. Hence stubs for
+// all four — and no MSW import, since the whole point is that a file which never touches the network pays
+// nothing.
 //
 // `fetch` REJECTS rather than throwing synchronously, matching the shape MSW's unhandled-request error had:
-// a caller that catches its own request errors keeps behaving as it did. The other two throw where they are
-// called, which is what axios and node callers turn into a rejection anyway.
+// a caller that catches its own request errors keeps behaving as it did. The others throw where they are
+// called, which is what axios, SignalR and node callers turn into a rejection anyway.
 //
 // A file that calls `setupMswServer()` gets the real transports back for its duration; MSW installs its own
 // interceptors over them and keeps `onUnhandledRequest: "error"` there.
@@ -45,7 +46,7 @@ function realTransport<T>(current: T): T {
 	return ((current as Stubbed).xeReplacedTransport as T | undefined) ?? current;
 }
 
-function stubFor<T>(replaced: T, stub: (...args: never[]) => unknown): T {
+function stubFor<T>(replaced: T, stub: object): T {
 	return Object.assign(stub, { xeReplacedTransport: replaced }) as unknown as T;
 }
 
@@ -65,6 +66,7 @@ const real = {
 	fetch: realTransport(globalThis.fetch),
 	xhrOpen: xhrPrototype && realTransport(xhrPrototype.open),
 	xhrSend: xhrPrototype && realTransport(xhrPrototype.send),
+	webSocket: typeof WebSocket === "undefined" ? undefined : realTransport(globalThis.WebSocket),
 	httpRequest: realTransport(httpModule.request),
 	httpGet: realTransport(httpModule.get),
 	httpsRequest: realTransport(httpsModule.request),
@@ -77,6 +79,17 @@ export function installNetworkGuard(): void {
 		xhrPrototype.open = stubFor(real.xhrOpen, (_method: string, url: string | URL) => refuse("XMLHttpRequest.open", url));
 		xhrPrototype.send = stubFor(real.xhrSend, () => refuse("XMLHttpRequest.send"));
 	}
+	if (real.webSocket) {
+		// A class rather than an arrow, because callers reach this one through `new WebSocket(...)`.
+		globalThis.WebSocket = stubFor(
+			real.webSocket,
+			class {
+				constructor(url: string | URL) {
+					refuse("WebSocket", url);
+				}
+			},
+		);
+	}
 	httpModule.request = stubFor(real.httpRequest, () => refuse("http.request"));
 	httpModule.get = stubFor(real.httpGet, () => refuse("http.get"));
 	httpsModule.request = stubFor(real.httpsRequest, () => refuse("https.request"));
@@ -88,6 +101,9 @@ export function restoreRealTransports(): void {
 	if (xhrPrototype && real.xhrOpen && real.xhrSend) {
 		xhrPrototype.open = real.xhrOpen;
 		xhrPrototype.send = real.xhrSend;
+	}
+	if (real.webSocket) {
+		globalThis.WebSocket = real.webSocket;
 	}
 	httpModule.request = real.httpRequest;
 	httpModule.get = real.httpGet;
