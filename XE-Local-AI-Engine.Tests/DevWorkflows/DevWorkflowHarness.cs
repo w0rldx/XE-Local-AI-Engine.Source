@@ -530,10 +530,16 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.ReconcileNonTerminalNodeRunsAsync("The host restarted.",
                                   [
-                                      .. interrupted.Select(row => new TransitionDevWorkflowNodeRunCommand(row.RunId,
-                                          row.NodeRunId,
-                                          long.MaxValue,
-                                          DevWorkflowNodeRunStatus.Pending))
+                                      .. interrupted.Select(row => new DevWorkflowNodeRunVerdict(row.NodeRunId,
+                                          row.Status,
+                                          row.Attempt,
+                                          row.WorkSessionId,
+                                          [
+                                              new TransitionDevWorkflowNodeRunCommand(row.RunId,
+                                                  row.NodeRunId,
+                                                  long.MaxValue,
+                                                  DevWorkflowNodeRunStatus.Pending)
+                                          ]))
                                   ]))
                           .ConfigureAwait(false);
     }

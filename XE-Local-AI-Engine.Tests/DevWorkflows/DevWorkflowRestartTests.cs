@@ -325,7 +325,45 @@ public sealed class DevWorkflowRestartTests
         var blocked = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, blocked.FailureClass);
-        AssertEx.Equal(expected: 3, blocked.Attempt, "Two boots committed one re-attempt each; the one that died between them spent nothing.");
+        AssertEx.Equal(expected: 2,
+            blocked.Attempt,
+            "The first boot spent the run's one re-attempt; the boot that died spent nothing, and the last had nothing left to spend.");
+    }
+
+    /// <summary>
+    ///     The budget is a run-wide total, so a restart that finds several interrupted sandbox node runs cannot hand
+    ///     each of them an attempt: what is left is handed out in node-key order, and the rows it does not reach are
+    ///     blocked UNSPENT. Otherwise a run overspends its cap by the width of its fan-out on every boot — which is the
+    ///     restart loop the cap exists to stop.
+    /// </summary>
+    [Test]
+    public async Task ARestartWithFewerAttemptsLeftThanInterruptedToolNodes_SpendsOnlyWhatTheRunHasAndBlocksTheRest()
+    {
+        await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxTotalAttempts", "1"));
+        var runId = await harness.StartRunAsync("""
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [{ "nodeKey": "validate-a", "nodeType": "Tool" },
+                                                            { "nodeKey": "validate-b", "nodeType": "Tool" }],
+                                                  "edges": [{ "from": "validate-a", "to": "validate-b" }]
+                                                }
+                                                """)
+                                 .ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "validate-a", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "validate-b", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+
+        await harness.RestartAsync().ConfigureAwait(false);
+
+        var nodeRuns = await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1,
+            nodeRuns.Sum(static nodeRun => nodeRun.Attempt - 1),
+            "The run spent one re-attempt because one is all it had, however many of its node runs were interrupted.");
+
+        var unfunded = await harness.ReadNodeRunAsync(runId, "validate-b").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, unfunded.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, unfunded.FailureClass);
+        AssertEx.Equal(expected: 1, unfunded.Attempt, "A row nothing could pay for must not read as having tried again.");
     }
 
     /// <summary>Row #7 — the two human waits are durable states. A restart does not touch them at all.</summary>

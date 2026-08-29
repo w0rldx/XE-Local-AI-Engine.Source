@@ -188,7 +188,26 @@ public sealed record DevWorkflowReconciledNodeRun(
     string NodeKey,
     DevWorkflowNodeType NodeType,
     DevWorkflowNodeRunStatus Status,
+    int Attempt,
     Guid? WorkSessionId);
+
+/// <summary>
+///     One judged node-run: the row as the caller observed it, and what to do with it once the collapse has confirmed
+///     it is still that row.
+///     <para>
+///         The expectation is the whole point. A verdict is only true of the state it was decided from, so the collapse
+///         matches each one against the live row and takes only the rows that still agree. A row that moved under the
+///         caller — or one that became stranded after the caller read — is left exactly as it is: collapsing it
+///         unjudged would strand it at <c>Pending</c>, where nothing would ever judge it again, and repairing it from
+///         stale evidence would spend an attempt on a state it is no longer in.
+///     </para>
+/// </summary>
+public sealed record DevWorkflowNodeRunVerdict(
+    Guid NodeRunId,
+    DevWorkflowNodeRunStatus ObservedStatus,
+    int ObservedAttempt,
+    Guid? ObservedWorkSessionId,
+    IReadOnlyList<TransitionDevWorkflowNodeRunCommand> Repairs);
 
 /// <summary>
 ///     What one mutation committed: the watermark it allocated for its event, and the run row's post-commit version,
@@ -548,22 +567,23 @@ public interface IDevWorkflowStore
     ///     states and survive untouched. Idempotent by construction: a second pass finds none of those states and returns
     ///     empty.
     ///     <para>
-    ///         <paramref name="repairs" /> are the caller's per-row verdicts — an attempt spent, a human needed — applied
-    ///         IN ORDER inside the same transaction as the collapse, because a recovery that commits the collapse alone
-    ///         is one the next boot cannot finish: those rows read as ordinary <c>Pending</c> and would be re-run with no
-    ///         attempt or budget accounting at all. Committing both together makes recovery all-or-nothing, so any number
-    ///         of crashes during startup still repairs every interrupted node-run exactly once.
+    ///         <paramref name="verdicts" /> carry the caller's per-row decisions — an attempt spent, a human needed —
+    ///         applied IN ORDER inside the same transaction as the collapse, because a recovery that commits the collapse
+    ///         alone is one the next boot cannot finish: those rows read as ordinary <c>Pending</c> and would be re-run
+    ///         with no attempt or budget accounting at all. Committing both together makes recovery all-or-nothing, so
+    ///         any number of crashes during startup still repairs every interrupted node-run exactly once.
     ///     </para>
     ///     <para>
-    ///         A repair naming a node-run this pass did not collapse is skipped: the rows are re-selected under the
-    ///         writer lock, so such a repair describes a state that no longer exists. A repair's expected version is
-    ///         checked against the run as the collapse has already left it, so recovery passes
-    ///         <see cref="DevWorkflowVersions.Any" /> — the version it read before the collapse is by then stale by one
-    ///         event per row.
+    ///         ONLY the rows whose live state still matches their verdict are collapsed. A stranded row with no verdict,
+    ///         or one whose status, attempt or work session moved since the verdict was decided, is left untouched for
+    ///         the caller's next pass — this is what makes the method safe against a writer the caller did not expect,
+    ///         such as a second process sharing the database. Repairs run under
+    ///         <see cref="DevWorkflowVersions.Any" />: the run's version has by then moved by one event per collapsed
+    ///         row, and the per-row match is the check that matters here.
     ///     </para>
     /// </summary>
     Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
-        IReadOnlyList<TransitionDevWorkflowNodeRunCommand> repairs,
+        IReadOnlyList<DevWorkflowNodeRunVerdict> verdicts,
         CancellationToken cancellationToken = default);
 
     Task<DevWorkflowMutationResult> MaterializeNodeRunsAsync(MaterializeDevWorkflowNodesCommand command, CancellationToken cancellationToken = default);

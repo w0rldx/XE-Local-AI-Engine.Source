@@ -30,6 +30,13 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
 {
     private const string InterruptedReason = "The host restarted while the node run was in flight.";
 
+    /// <summary>
+    ///     How many times recovery re-reads and re-judges before it gives up and leaves the rest to the next boot.
+    ///     Bounded rather than open-ended: a writer that keeps moving these rows is one this cannot outrace, and a
+    ///     startup that spins on it never reaches the dispatcher.
+    /// </summary>
+    private const int RecoveryPasses = 3;
+
     private readonly ILogger<DevWorkflowStartupReconciler> _logger;
     private readonly DevWorkflowOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -56,15 +63,28 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
         var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
         var sessions = scope.ServiceProvider.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>();
 
-        // Read first, decide everything, then write once. Judging the rows before anything is committed is what makes
-        // recovery all-or-nothing: a crash during startup leaves them exactly as the dead host left them, so the next
-        // boot judges the same rows again rather than finding repaired-looking rows nothing will ever finish repairing.
-        var interrupted = await store.ListInterruptedNodeRunsAsync(cancellationToken).ConfigureAwait(false);
-        var repairs = await ComposeRepairsAsync(store, sessions, interrupted, cancellationToken).ConfigureAwait(false);
-        var reconciled = await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, repairs, cancellationToken).ConfigureAwait(false);
-        if (reconciled.Count > 0)
+        // Read, decide, write once — and only the rows that are still what they were when they were judged. A pass that
+        // finds rows it cannot judge (a second process moved one, or stranded one after the read) leaves those alone and
+        // goes round again, because collapsing an unjudged row would strand it at Pending with nothing left to decide
+        // what re-running it costs.
+        var recovered = 0;
+        var remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken).ConfigureAwait(false);
+        for (var pass = 1; pass <= RecoveryPasses && remaining.Count > 0; pass++)
         {
-            _logger.LogInformation("Reconciled {Count} in-flight development workflow node run(s) after host startup.", reconciled.Count);
+            var verdicts = await ComposeVerdictsAsync(store, sessions, remaining, cancellationToken).ConfigureAwait(false);
+            recovered += (await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, verdicts, cancellationToken).ConfigureAwait(false)).Count;
+            remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (remaining.Count > 0)
+        {
+            _logger.LogWarning("{Count} in-flight development workflow node run(s) kept changing under startup recovery, so the next boot reconciles them.",
+                remaining.Count);
+        }
+
+        if (recovered > 0)
+        {
+            _logger.LogInformation("Reconciled {Count} in-flight development workflow node run(s) after host startup.", recovered);
         }
 
         // Unconditional, unlike everything above it: an orphan is a session no node run references, so there is no
@@ -88,46 +108,32 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
     ///         a queued row that was never dispatched. Neither is a failure, so neither is an attempt.
     ///     </para>
     ///     <para>
-    ///         Every verdict is composed as a transition the collapse commits WITH it, in this order, so a row that both
-    ///         spends its attempt and then exhausts its run's budget records both — the re-attempt and the intervention
-    ///         it ran into — exactly as two separate writes did before they had to be atomic.
+    ///         Every verdict carries the row as it was observed, plus the transitions the collapse commits WITH it, in
+    ///         order — so a row that both spends its attempt and then exhausts its run's budget records both, the
+    ///         re-attempt and the intervention it ran into, exactly as two separate writes did before they had to be
+    ///         atomic.
     ///     </para>
     ///     <para>
-    ///         The budget counts a run's RE-attempts — the sum of <c>Attempt − 1</c> over its node runs, plus the ones
-    ///         this pass is about to spend — so a graph that has merely started has spent none of it however many nodes
-    ///         it declares. It is the guard against a definition that restart-loops: without it, a node run the host
-    ///         keeps dying under would spend an attempt on every boot forever. <c>MaxNodeRunsPerRun</c> is deliberately
-    ///         NOT re-checked: it is enforced where the rows are created, and a run that somehow held more than it
-    ///         allows cannot be repaired by blocking every node run it has — that would turn a bounded accounting error
-    ///         into a dead run.
+    ///         The budget counts a run's RE-attempts — the sum of <c>Attempt − 1</c> over its node runs — so a graph that
+    ///         has merely started has spent none of it however many nodes it declares. What is left is handed out to the
+    ///         interrupted sandbox node runs in node-key order, and the ones it does not reach are blocked WITHOUT an
+    ///         attempt: several interrupted siblings each taking one would spend more than the run allows by the width
+    ///         of its fan-out, which is precisely the restart loop this budget exists to stop. <c>MaxNodeRunsPerRun</c>
+    ///         is deliberately NOT re-checked: it is enforced where the rows are created, and a run that somehow held
+    ///         more than it allows cannot be repaired by blocking every node run it has — that would turn a bounded
+    ///         accounting error into a dead run.
     ///     </para>
     /// </summary>
-    private async Task<IReadOnlyList<TransitionDevWorkflowNodeRunCommand>> ComposeRepairsAsync(IDevWorkflowStore store,
+    private async Task<IReadOnlyList<DevWorkflowNodeRunVerdict>> ComposeVerdictsAsync(IDevWorkflowStore store,
         IWorkflowOwnedWorkSessionLifecycle sessions,
         IReadOnlyList<DevWorkflowReconciledNodeRun> interrupted,
         CancellationToken cancellationToken)
     {
-        var repairs = new List<TransitionDevWorkflowNodeRunCommand>();
-        var reattempted = new HashSet<Guid>();
+        var repairs = new Dictionary<Guid, List<TransitionDevWorkflowNodeRunCommand>>();
         var blocked = new HashSet<Guid>();
 
         foreach (var nodeRun in interrupted)
         {
-            if (nodeRun.NodeType is DevWorkflowNodeType.Tool or DevWorkflowNodeType.DevTask && nodeRun.Status == DevWorkflowNodeRunStatus.Running)
-            {
-                // The sandbox process is gone and its workspace may be half-prepared, so the re-run is a real second
-                // attempt and has to count against the node's budget — unlike an agent, whose session resumes from a
-                // checkpoint it wrote itself.
-                repairs.Add(new TransitionDevWorkflowNodeRunCommand(nodeRun.RunId,
-                    nodeRun.NodeRunId,
-                    DevWorkflowVersions.Any,
-                    DevWorkflowNodeRunStatus.Pending,
-                    IncrementAttempt: true,
-                    Outcome: DevWorkflowOutcomes.Interrupted));
-                _ = reattempted.Add(nodeRun.NodeRunId);
-                continue;
-            }
-
             if (nodeRun is not { NodeType: DevWorkflowNodeType.Agent, WorkSessionId: { } sessionId })
             {
                 continue;
@@ -141,9 +147,11 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
             {
                 // Deleted out from under the run. Nothing can resume it and a retry would only create a second session
                 // for work whose transcript is already gone, so it goes to a human with the reason on the row.
-                repairs.Add(Block(nodeRun,
-                    DevWorkflowFailureClasses.Configuration,
-                    "The work session this node run was driving no longer exists, so the host restart could not resume it."));
+                Repair(repairs,
+                    nodeRun,
+                    Block(nodeRun,
+                        DevWorkflowFailureClasses.Configuration,
+                        "The work session this node run was driving no longer exists, so the host restart could not resume it."));
                 _ = blocked.Add(nodeRun.NodeRunId);
             }
         }
@@ -151,20 +159,78 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
         foreach (var group in interrupted.GroupBy(static nodeRun => nodeRun.RunId))
         {
             var nodeRuns = await store.ListNodeRunsAsync(group.Key, cancellationToken).ConfigureAwait(false);
-            var spent = nodeRuns.Sum(static nodeRun => nodeRun.Attempt - 1) + group.Count(nodeRun => reattempted.Contains(nodeRun.NodeRunId));
+            var spent = nodeRuns.Sum(static nodeRun => nodeRun.Attempt - 1);
+
+            // The re-attempts this run can still afford, handed out in a fixed order so the same boot always admits the
+            // same rows. Several interrupted sandbox node runs otherwise each take an attempt they were never all
+            // entitled to, and the run ends up having spent more than it allows by however wide its fan-out is.
+            var affordable = Math.Max(0, _options.MaxTotalAttempts - spent);
+            var sandboxed = group.Where(static nodeRun => nodeRun.NodeType is DevWorkflowNodeType.Tool or DevWorkflowNodeType.DevTask
+                                                          && nodeRun.Status == DevWorkflowNodeRunStatus.Running)
+                                 .OrderBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal)
+                                 .ThenBy(static nodeRun => nodeRun.NodeRunId)
+                                 .ToList();
+            var admitted = Math.Min(affordable, sandboxed.Count);
+            spent += admitted;
+            var exhausted = $"This run has already spent {spent} re-attempts, which is as many re-attempts as this run allows.";
+
+            foreach (var nodeRun in sandboxed.Take(admitted))
+            {
+                // The sandbox process is gone and its workspace may be half-prepared, so the re-run is a real second
+                // attempt and has to count against the node's budget — unlike an agent, whose session resumes from a
+                // checkpoint it wrote itself.
+                Repair(repairs,
+                    nodeRun,
+                    new TransitionDevWorkflowNodeRunCommand(nodeRun.RunId,
+                        nodeRun.NodeRunId,
+                        DevWorkflowVersions.Any,
+                        DevWorkflowNodeRunStatus.Pending,
+                        IncrementAttempt: true,
+                        Outcome: DevWorkflowOutcomes.Interrupted));
+            }
+
+            foreach (var nodeRun in sandboxed.Skip(admitted))
+            {
+                // Nothing left to pay for this one's re-run, so it is handed over UNSPENT: an attempt recorded here
+                // would be one the run never had, and the row would read as having tried again when it never did.
+                Repair(repairs, nodeRun, Block(nodeRun, DevWorkflowFailureClasses.BudgetExhausted, exhausted));
+                _ = blocked.Add(nodeRun.NodeRunId);
+            }
+
             if (spent < _options.MaxTotalAttempts)
             {
                 continue;
             }
 
             _logger.LogWarning("Development workflow run {RunId} has spent {Spent} re-attempts, so its interrupted node runs need a human.", group.Key, spent);
-            repairs.AddRange(group.Where(nodeRun => !blocked.Contains(nodeRun.NodeRunId))
-                                  .Select(nodeRun => Block(nodeRun,
-                                      DevWorkflowFailureClasses.BudgetExhausted,
-                                      $"This run has already spent {spent} re-attempts, which is as many re-attempts as this run allows.")));
+            foreach (var nodeRun in group.Where(nodeRun => !blocked.Contains(nodeRun.NodeRunId)))
+            {
+                Repair(repairs, nodeRun, Block(nodeRun, DevWorkflowFailureClasses.BudgetExhausted, exhausted));
+            }
         }
 
-        return repairs;
+        return
+        [
+            .. interrupted.Select(nodeRun => new DevWorkflowNodeRunVerdict(nodeRun.NodeRunId,
+                nodeRun.Status,
+                nodeRun.Attempt,
+                nodeRun.WorkSessionId,
+                repairs.TryGetValue(nodeRun.NodeRunId, out var composed) ? composed : []))
+        ];
+    }
+
+    /// <summary>Repairs apply in the order they are added, which is what lets one row spend its attempt and then block on the budget it just exhausted.</summary>
+    private static void Repair(Dictionary<Guid, List<TransitionDevWorkflowNodeRunCommand>> repairs,
+        DevWorkflowReconciledNodeRun nodeRun,
+        TransitionDevWorkflowNodeRunCommand command)
+    {
+        if (!repairs.TryGetValue(nodeRun.NodeRunId, out var composed))
+        {
+            composed = [];
+            repairs[nodeRun.NodeRunId] = composed;
+        }
+
+        composed.Add(command);
     }
 
     /// <summary>

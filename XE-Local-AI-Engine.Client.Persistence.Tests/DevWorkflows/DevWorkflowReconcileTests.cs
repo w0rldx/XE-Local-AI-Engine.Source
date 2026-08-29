@@ -58,7 +58,11 @@ public sealed class DevWorkflowReconcileTests
         var interrupted = await store.ListInterruptedNodeRunsAsync().ConfigureAwait(false);
         AssertEx.Equal(expected: 2, interrupted.Count, "The read answers the same rows the collapse takes, so a caller can judge them before anything is written.");
 
-        var reconciled = await store.ReconcileNonTerminalNodeRunsAsync("The engine restarted while this node was in flight.", []).ConfigureAwait(false);
+        // Judged with nothing to repair, which is what an agent resuming its own session and a never-dispatched queued
+        // row both come to: the verdict still has to be there, because a row nobody judged is a row nobody collapses.
+        var reconciled = await store.ReconcileNonTerminalNodeRunsAsync("The engine restarted while this node was in flight.",
+                                        [.. interrupted.Select(row => Verdict(row))])
+                                    .ConfigureAwait(false);
 
         AssertEx.Equal(expected: 2, reconciled.Count, "Only the queued and running node runs lost an executor.");
         var reconciledRunning = reconciled.Single(row => row.NodeRunId == runningId);
@@ -104,14 +108,7 @@ public sealed class DevWorkflowReconcileTests
         var (seed, nodeRunId) = await SeedRunningToolAsync(store).ConfigureAwait(false);
 
         var reconciled = await store.ReconcileNonTerminalNodeRunsAsync("The host restarted.",
-                                        [
-                                            new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                                                nodeRunId,
-                                                DevWorkflowVersions.Any,
-                                                DevWorkflowNodeRunStatus.Pending,
-                                                IncrementAttempt: true,
-                                                Outcome: "interrupted")
-                                        ])
+                                        [await ReattemptVerdictAsync(store, nodeRunId, "interrupted").ConfigureAwait(false)])
                                     .ConfigureAwait(false);
 
         AssertEx.Equal(expected: 1, reconciled.Count);
@@ -138,14 +135,14 @@ public sealed class DevWorkflowReconcileTests
         var store = DevWorkflowTestFixture.StoreFor(context);
         var (seed, nodeRunId) = await SeedRunningToolAsync(store).ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.ReconcileNonTerminalNodeRunsAsync("The host restarted.",
-                                  [
-                                      new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                                          nodeRunId,
-                                          long.MaxValue,
-                                          DevWorkflowNodeRunStatus.Pending,
-                                          IncrementAttempt: true)
-                                  ]))
+        var doomed = new DevWorkflowNodeRunVerdict(nodeRunId,
+            DevWorkflowNodeRunStatus.Running,
+            ObservedAttempt: 1,
+            ObservedWorkSessionId: null,
+            [
+                new TransitionDevWorkflowNodeRunCommand(seed.RunId, nodeRunId, long.MaxValue, DevWorkflowNodeRunStatus.Pending, IncrementAttempt: true)
+            ]);
+        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.ReconcileNonTerminalNodeRunsAsync("The host restarted.", [doomed]))
                           .ConfigureAwait(false);
 
         var stranded = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
@@ -156,19 +153,79 @@ public sealed class DevWorkflowReconcileTests
         // And the next boot finds it, repairs it, and spends exactly one attempt on the one interruption.
         AssertEx.Equal(expected: 1, (await store.ListInterruptedNodeRunsAsync().ConfigureAwait(false)).Count);
         _ = await store.ReconcileNonTerminalNodeRunsAsync("The host restarted.",
-                           [
-                               new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                                   nodeRunId,
-                                   DevWorkflowVersions.Any,
-                                   DevWorkflowNodeRunStatus.Pending,
-                                   IncrementAttempt: true)
-                           ])
+                           [await ReattemptVerdictAsync(store, nodeRunId).ConfigureAwait(false)])
                        .ConfigureAwait(false);
 
         var repaired = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, repaired.Status);
         AssertEx.Equal(expected: 2, repaired.Attempt);
     }
+
+    /// <summary>
+    ///     A verdict is only true of the row it was decided from. A row that moved between the caller's read and the
+    ///     collapse — another process took it, or it became stranded after the read — must be left alone rather than
+    ///     collapsed on evidence that no longer holds: once at <c>Pending</c> nothing would ever judge it again, and its
+    ///     re-run would cost neither an attempt nor a glance at the budget.
+    /// </summary>
+    [Test]
+    public async Task AVerdictWhoseRowMovedSinceItWasJudged_LeavesThatRowForTheNextPass()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var (seed, steadyId) = await SeedRunningToolAsync(store).ConfigureAwait(false);
+        var driftingId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, driftingId, "drifting", DevWorkflowVersions.Any, DevWorkflowNodeType.Tool)
+                                                  .ConfigureAwait(false);
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId, driftingId, version, DevWorkflowNodeRunStatus.Running))
+                       .ConfigureAwait(false);
+
+        var snapshot = await store.ListInterruptedNodeRunsAsync().ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, snapshot.Count);
+
+        // The interleaving: after the snapshot, something else re-attempts one of the two rows. It is still Running, so
+        // it is still stranded — but it is no longer the row the verdict was decided from.
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                           driftingId,
+                           DevWorkflowVersions.Any,
+                           DevWorkflowNodeRunStatus.Running,
+                           IncrementAttempt: true))
+                       .ConfigureAwait(false);
+
+        var reconciled = await store.ReconcileNonTerminalNodeRunsAsync("The host restarted.",
+                                        [.. snapshot.Select(row => Verdict(row, Reattempt(row)))])
+                                    .ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, reconciled.Count, "Only the row that was still what the verdict described is collapsed.");
+        AssertEx.Equal(steadyId, reconciled.Single().NodeRunId);
+        AssertEx.Equal(expected: 2, (await store.GetNodeRunAsync(steadyId).ConfigureAwait(false)).Attempt);
+
+        var drifted = await store.GetNodeRunAsync(driftingId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, drifted.Status, "The row that moved is untouched: not collapsed, and not repaired from stale evidence.");
+        AssertEx.Equal(expected: 2, drifted.Attempt, "The stale repair must not have spent a second attempt on it.");
+
+        // The pass that follows reads it as it now is and finishes the job.
+        var second = await store.ListInterruptedNodeRunsAsync().ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, second.Count);
+        _ = await store.ReconcileNonTerminalNodeRunsAsync("The host restarted.", [.. second.Select(row => Verdict(row, Reattempt(row)))]).ConfigureAwait(false);
+
+        var repaired = await store.GetNodeRunAsync(driftingId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, repaired.Status);
+        AssertEx.Equal(expected: 3, repaired.Attempt);
+    }
+
+    /// <summary>The verdict a startup recovery composes for a stranded sandbox row: re-attempt it, bound to the row it read.</summary>
+    private static async Task<DevWorkflowNodeRunVerdict> ReattemptVerdictAsync(DevWorkflowStore store, Guid nodeRunId, string? outcome = null)
+    {
+        var row = (await store.ListInterruptedNodeRunsAsync().ConfigureAwait(false)).Single(candidate => candidate.NodeRunId == nodeRunId);
+        return Verdict(row, Reattempt(row, outcome));
+    }
+
+    private static DevWorkflowNodeRunVerdict Verdict(DevWorkflowReconciledNodeRun row, params TransitionDevWorkflowNodeRunCommand[] repairs) =>
+        new(row.NodeRunId, row.Status, row.Attempt, row.WorkSessionId, repairs);
+
+    private static TransitionDevWorkflowNodeRunCommand Reattempt(DevWorkflowReconciledNodeRun row, string? outcome = null) =>
+        new(row.RunId, row.NodeRunId, DevWorkflowVersions.Any, DevWorkflowNodeRunStatus.Pending, IncrementAttempt: true, Outcome: outcome);
 
     /// <summary>A run with one Tool node run the host left mid-command — the row every atomicity test starts from.</summary>
     private static async Task<(DevWorkflowSeed Seed, Guid NodeRunId)> SeedRunningToolAsync(DevWorkflowStore store)

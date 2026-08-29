@@ -525,17 +525,18 @@ internal sealed partial class DevWorkflowStore
                          entity.NodeKey,
                          entity.NodeType,
                          entity.Status,
+                         entity.Attempt,
                          entity.WorkSessionId))
                      .ToListAsync(cancellationToken)
                      .ConfigureAwait(false)
         ];
 
     public async Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
-        IReadOnlyList<TransitionDevWorkflowNodeRunCommand> repairs,
+        IReadOnlyList<DevWorkflowNodeRunVerdict> verdicts,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedReason);
-        ArgumentNullException.ThrowIfNull(repairs);
+        ArgumentNullException.ThrowIfNull(verdicts);
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -551,13 +552,33 @@ internal sealed partial class DevWorkflowStore
             var runs = await _dbContext.DevWorkflowRuns.Where(entity => runIds.Contains(entity.Id)).ToDictionaryAsync(entity => entity.Id, cancellationToken)
                                        .ConfigureAwait(false);
 
+            var judged = verdicts.ToDictionary(verdict => verdict.NodeRunId);
             var now = Now();
             var reconciled = new List<DevWorkflowReconciledNodeRun>(stranded.Count);
+            var repairs = new List<(DevWorkflowRun Run, TransitionDevWorkflowNodeRunCommand Command)>();
             foreach (var nodeRun in stranded)
             {
+                // A row the caller did not judge, or judged as something it no longer is, is left exactly where it is:
+                // collapsing it would strand it at Pending with nobody left to decide what re-running it costs. The
+                // caller reads again and judges it on its next pass.
+                if (!judged.TryGetValue(nodeRun.Id, out var verdict)
+                    || verdict.ObservedStatus != nodeRun.Status
+                    || verdict.ObservedAttempt != nodeRun.Attempt
+                    || verdict.ObservedWorkSessionId != nodeRun.WorkSessionId
+                    || !runs.TryGetValue(nodeRun.RunId, out var run))
+                {
+                    continue;
+                }
+
                 // The status BEFORE the collapse is the informative one: it says whether the node-run was merely
                 // admitted or actually mid-execution. Where it lands is always Pending.
-                reconciled.Add(new DevWorkflowReconciledNodeRun(nodeRun.Id, nodeRun.RunId, nodeRun.NodeKey, nodeRun.NodeType, nodeRun.Status, nodeRun.WorkSessionId));
+                reconciled.Add(new DevWorkflowReconciledNodeRun(nodeRun.Id,
+                    nodeRun.RunId,
+                    nodeRun.NodeKey,
+                    nodeRun.NodeType,
+                    nodeRun.Status,
+                    nodeRun.Attempt,
+                    nodeRun.WorkSessionId));
 
                 // Re-dispatchable means clean: a row sitting at Pending must not carry a terminal reason, or the UI
                 // reads "the engine restarted" as this attempt's outcome. The reason is on the node.interrupted event.
@@ -568,23 +589,19 @@ internal sealed partial class DevWorkflowStore
                 nodeRun.FailureClass = null;
                 nodeRun.TerminalReason = null;
 
-                if (runs.TryGetValue(nodeRun.RunId, out var run))
-                {
-                    AddEvent(run, DevWorkflowEventTypes.NodeInterrupted, nodeRun.Id, "interrupted", operationId: null, ReasonDetail(sanitizedReason));
-                    run.Version++;
-                    run.UpdatedAtUtc = now;
-                }
+                AddEvent(run, DevWorkflowEventTypes.NodeInterrupted, nodeRun.Id, "interrupted", operationId: null, ReasonDetail(sanitizedReason));
+                run.Version++;
+                run.UpdatedAtUtc = now;
+                repairs.AddRange(verdict.Repairs.Select(command => (run, command)));
             }
 
-            // Keyed off the rows this pass actually took, never off the command's own run id: the collapse is the
-            // authority on which node run belongs where, and a repair that disagrees describes a row it did not take.
-            var collapsed = reconciled.ToDictionary(row => row.NodeRunId, row => row.RunId);
-            foreach (var repair in repairs.Where(repair => collapsed.ContainsKey(repair.NodeRunId)))
+            // The run comes from the row the collapse took, never from the command: the collapse is the authority on
+            // which node run belongs where.
+            foreach (var (run, command) in repairs)
             {
-                var run = runs[collapsed[repair.NodeRunId]];
-                EnsureVersion(run, repair.ExpectedVersion);
-                var outcome = await ApplyNodeRunTransitionAsync(run, repair, cancellationToken).ConfigureAwait(false);
-                _ = AddEvent(run, outcome.EventType, outcome.NodeRunId, outcome.Outcome, repair.OperationId, outcome.DetailJson);
+                EnsureVersion(run, command.ExpectedVersion);
+                var outcome = await ApplyNodeRunTransitionAsync(run, command, cancellationToken).ConfigureAwait(false);
+                _ = AddEvent(run, outcome.EventType, outcome.NodeRunId, outcome.Outcome, command.OperationId, outcome.DetailJson);
                 run.Version++;
                 run.UpdatedAtUtc = now;
             }
