@@ -22,6 +22,7 @@ interface ReactFlowMockProps {
 	readonly nodes: readonly Node[];
 	readonly edges: readonly Edge[];
 	readonly nodeTypes: NodeTypes;
+	readonly minZoom?: number;
 	readonly onNodeClick?: (event: React.MouseEvent, node: Node) => void;
 	readonly children?: React.ReactNode;
 }
@@ -34,8 +35,8 @@ vi.mock("@xyflow/react", () => ({
 	Controls: () => null,
 	ReactFlowProvider: ({ children }: { children: React.ReactNode }) => children,
 	useReactFlow: () => ({ fitView: () => Promise.resolve(true) }),
-	ReactFlow: ({ nodes, edges, nodeTypes, onNodeClick, children }: ReactFlowMockProps) => (
-		<div data-testid="react-flow" data-edges={edges.map((edge) => edge.id).join(" ")}>
+	ReactFlow: ({ nodes, edges, nodeTypes, minZoom, onNodeClick, children }: ReactFlowMockProps) => (
+		<div data-testid="react-flow" data-edges={edges.map((edge) => edge.id).join(" ")} data-min-zoom={minZoom}>
 			{nodes.map((node) => {
 				const NodeComponent = nodeTypes[node.type ?? ""];
 				return (
@@ -210,6 +211,18 @@ describe("DevWorkflowGraphView", () => {
 
 		expect(screen.getByTestId("dev-workflow-graph-over-cap").textContent).toContain("201");
 		expect(screen.queryByTestId("react-flow")).toBeNull();
+	});
+
+	it("lets the viewport zoom out far enough to frame a whole run", () => {
+		renderWithProviders(
+			<DevWorkflowGraphView
+				run={chainRun([devWorkflowNodeRunSummary({ id: "node-research", nodeKey: "research" })])}
+				onSelect={vi.fn()}
+			/>,
+		);
+
+		// React Flow's default minZoom (0.5) clamps fitView, and a clamped fit opens clipped with Zoom Out disabled.
+		expect(screen.getByTestId("react-flow").getAttribute("data-min-zoom")).toBe("0.1");
 	});
 
 	it("says the run has no node-runs yet rather than drawing an empty canvas", () => {
