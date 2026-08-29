@@ -18,9 +18,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class WorkSessionAgentSeederTests
 {
+    [ClassDataSource<SeededWorkSessionAgentsFixture>(Shared = SharedType.PerClass)]
+    public required SeededWorkSessionAgentsFixture Host { get; init; }
+
     [Test]
     public async Task Seeder_SeedsBothPersonasOnce_AndIsIdempotent()
     {
+        // Private host: it counts the seeded rows of a whole database, which only holds on a database it owns.
         await using var factory = new TestServerWebAppFactory();
         var seeder = new WorkSessionAgentSeeder(factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<WorkSessionAgentSeeder>.Instance);
 
@@ -43,6 +47,7 @@ public sealed class WorkSessionAgentSeederTests
     [Test]
     public async Task Seeder_AfterTheRowIsDeleted_ReSeedsItBySlug()
     {
+        // Private host: it deletes a seeded persona, which every other test in this class reads.
         await using var factory = new TestServerWebAppFactory();
         var scopeFactory = factory.Services.GetRequiredService<IServiceScopeFactory>();
         var seeder = new WorkSessionAgentSeeder(scopeFactory, NullLogger<WorkSessionAgentSeeder>.Instance);
@@ -67,8 +72,7 @@ public sealed class WorkSessionAgentSeederTests
     [Test]
     public async Task GeneralPersona_CarriesTheStateToolsAskUserAndTheClock()
     {
-        await using var factory = new TestServerWebAppFactory();
-        var definition = await ReadSeededAsync(factory, AgentDefaults.WorkSessionGeneralAgentSeedSlug).ConfigureAwait(false);
+        var definition = await ReadSeededAsync(Host.Factory, AgentDefaults.WorkSessionGeneralAgentSeedSlug).ConfigureAwait(false);
 
         AssertEx.Equal(AgentDefaults.WorkSessionGeneralAgentName, definition.Name);
         AssertEx.Equal(AgentDefinitionSource.Seeded, definition.Source);
@@ -89,8 +93,7 @@ public sealed class WorkSessionAgentSeederTests
     [Test]
     public async Task ResearchPersona_AddsTheKnowledgeBaseReads()
     {
-        await using var factory = new TestServerWebAppFactory();
-        var definition = await ReadSeededAsync(factory, AgentDefaults.WorkSessionResearchAgentSeedSlug).ConfigureAwait(false);
+        var definition = await ReadSeededAsync(Host.Factory, AgentDefaults.WorkSessionResearchAgentSeedSlug).ConfigureAwait(false);
 
         AssertEx.Contains(definition.AllowedToolNames, SearchKnowledgeBaseToolDefinition.ToolName);
         AssertEx.Contains(definition.AllowedToolNames, ReadDocumentToolDefinition.ToolName);
@@ -101,15 +104,13 @@ public sealed class WorkSessionAgentSeederTests
     [Test]
     public async Task BothPersonas_ApproveEveryToolExceptAskUser()
     {
-        await using var factory = new TestServerWebAppFactory();
-
         foreach (var slug in new[]
                  {
                      AgentDefaults.WorkSessionGeneralAgentSeedSlug,
                      AgentDefaults.WorkSessionResearchAgentSeedSlug
                  })
         {
-            var definition = await ReadSeededAsync(factory, slug).ConfigureAwait(false);
+            var definition = await ReadSeededAsync(Host.Factory, slug).ConfigureAwait(false);
             foreach (var (name, requiresApproval) in definition.ToolApprovals)
             {
                 var expected = string.Equals(name, AskUserTool.ToolName, StringComparison.Ordinal);
@@ -124,10 +125,9 @@ public sealed class WorkSessionAgentSeederTests
 
     private static async Task<AgentDefinitionRecord> ReadSeededAsync(TestServerWebAppFactory factory, string slug)
     {
-        // The fixture removes every hosted service, so the seeder runs here rather than at host startup.
-        var seeder = new WorkSessionAgentSeeder(factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<WorkSessionAgentSeeder>.Instance);
-        await seeder.StartAsync(CancellationToken.None).ConfigureAwait(false);
-
+        // The host fixture strips every hosted service, so its InitializeAsync ran the seeder once for the whole class
+        // and verified the result. Running it again per test would race a sibling into the seed_slug unique index,
+        // whose violation the seeder's best-effort contract swallows — leaving this test silently unseeded.
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         return AssertEx.NotNull(await store.GetBySeedSlugAsync(slug).ConfigureAwait(false), $"The seeder must have created {slug}.");

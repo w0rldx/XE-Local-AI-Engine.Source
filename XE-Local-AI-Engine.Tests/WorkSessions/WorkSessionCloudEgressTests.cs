@@ -17,10 +17,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class WorkSessionCloudEgressTests
 {
+    [ClassDataSource<WorkSessionServiceHostFixture>(Shared = SharedType.PerClass)]
+    public required WorkSessionServiceHostFixture Host { get; init; }
+
     [Test]
     public async Task Update_RepointingASessionWithFindingsAtACloudAgent_IsRefused()
     {
-        await using var factory = WorkSessionServiceTests.NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         await RecordAFindingAsync(factory, sessionId).ConfigureAwait(false);
@@ -38,7 +41,7 @@ public sealed class WorkSessionCloudEgressTests
     [Test]
     public async Task Update_RepointingASessionWithNoFindingsAtACloudAgent_IsAllowed()
     {
-        await using var factory = WorkSessionServiceTests.NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         var cloudAgentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "a-cloud-model").ConfigureAwait(false);
@@ -54,6 +57,7 @@ public sealed class WorkSessionCloudEgressTests
     [Test]
     public async Task Update_WhenTheOperatorOptedCloudDataAccessIn_AllowsTheRepoint()
     {
+        // Private host: the operator opt-in it asserts on is a host-level config value.
         await using var factory = WorkSessionServiceTests.NewFactory(("KnowledgeBase:AllowCloudModelAccess", "true"));
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
@@ -71,7 +75,7 @@ public sealed class WorkSessionCloudEgressTests
     [Test]
     public async Task Update_RepointingASessionWithFindingsAtAnotherLocalAgent_IsAllowed()
     {
-        await using var factory = WorkSessionServiceTests.NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         await RecordAFindingAsync(factory, sessionId).ConfigureAwait(false);

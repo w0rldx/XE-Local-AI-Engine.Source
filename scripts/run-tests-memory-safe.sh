@@ -251,9 +251,11 @@ fi
 # came out worse than the stale table it replaced (486s vs 479s of true load on the fullest bin).
 # Listing down to 10s brings that to 439s; going below 10s buys another ~13s for 11 more entries.
 HEAVY=(
+  XE_Local_AI_Engine.Tests.DevWorkflows                 # 196s (single sample, 2026-08-29 merged-tree run)
   XE_Local_AI_Engine.Tests.Endpoints.Benchmarks.V1      # 118s
-  XE_Local_AI_Engine.Tests.WorkSessions                 # 114s
+  XE_Local_AI_Engine.Tests.WorkSessions                 # 108s
   XE_Local_AI_Engine.Tests.Endpoints.Training.V1        # 88s
+  XE_Local_AI_Engine.Tests.Endpoints.DevelopmentWorkflows.V1 # 74s (single sample, 2026-08-29 merged-tree run)
   XE_Local_AI_Engine.Tests.Development                  # 70s
   XE_Local_AI_Engine.Tests.Endpoints.WorkSessions.V1    # 65s
   XE_Local_AI_Engine.Tests.Mcp                          # 65s

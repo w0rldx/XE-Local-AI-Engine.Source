@@ -4,11 +4,92 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
+using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Tests.Testing;
+
+/// <summary>
+///     One work-session host for a whole test class (<c>ClassDataSource(SharedType.PerClass)</c>), so a class pays the
+///     ~1.2 s host build once instead of once per test. It carries the work-session defaults and nothing else — a test
+///     that needs a different config value, or its own fake, keeps a private host and says why.
+///     <para>
+///         The host is shared, so its SQLite database is too: every test that writes must scope what it reads back to
+///         its own GUID session id, and none may assert on an absolute row count or on an empty table.
+///     </para>
+/// </summary>
+public sealed class WorkSessionHostFixture : IAsyncInitializer, IAsyncDisposable
+{
+    public TestServerWebAppFactory Factory { get; } = new()
+    {
+        AdditionalConfiguration = WorkSessionTestSupport.Configuration()
+    };
+
+    public Task InitializeAsync() =>
+        Task.CompletedTask;
+
+    public ValueTask DisposeAsync() =>
+        Factory.DisposeAsync();
+}
+
+/// <summary>
+///     <see cref="WorkSessionHostFixture" /> plus the deterministic capability and default-model stubs the service-level
+///     suites need — the real resolvers probe installed providers, which would make those assertions depend on the box.
+/// </summary>
+public sealed class WorkSessionServiceHostFixture : IAsyncInitializer, IAsyncDisposable
+{
+    public TestServerWebAppFactory Factory { get; } = WorkSessionServiceTests.NewFactory();
+
+    public Task InitializeAsync() =>
+        Task.CompletedTask;
+
+    public ValueTask DisposeAsync() =>
+        Factory.DisposeAsync();
+}
+
+/// <summary>
+///     A host whose two work-session personas are already seeded, once, before any test runs.
+///     <para>
+///         <c>seed_slug</c> carries a filtered unique index, so two tests seeding concurrently on one shared database
+///         cannot double-insert — the loser takes a <c>DbUpdateException</c>, which the seeder's best-effort startup
+///         contract swallows and logs. That test would then run against a persona it believes was seeded. Seeding once
+///         here removes the race; the two tests that exercise seeding itself keep private hosts.
+///     </para>
+/// </summary>
+public sealed class SeededWorkSessionAgentsFixture : IAsyncInitializer, IAsyncDisposable
+{
+    public TestServerWebAppFactory Factory { get; } = new();
+
+    public async Task InitializeAsync()
+    {
+        await new WorkSessionAgentSeeder(Factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<WorkSessionAgentSeeder>.Instance)
+              .StartAsync(CancellationToken.None)
+              .ConfigureAwait(false);
+
+        // StartAsync reports success whether or not it seeded: it catches its own failures by contract, and this
+        // fixture hands it a NullLogger, so the warning goes nowhere. Without this check a seeding failure would
+        // surface as every persona test asserting on a definition that was never written.
+        using var scope = Factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
+        foreach (var slug in new[]
+                 {
+                     AgentDefaults.WorkSessionGeneralAgentSeedSlug,
+                     AgentDefaults.WorkSessionResearchAgentSeedSlug
+                 })
+        {
+            _ = await store.GetBySeedSlugAsync(slug).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"The work-session agent seeder did not create '{slug}'.");
+        }
+    }
+
+    public ValueTask DisposeAsync() =>
+        Factory.DisposeAsync();
+}
 
 /// <summary>
 ///     One scripted turn: what the fake stream service yields, and what the tools of that turn would have written.

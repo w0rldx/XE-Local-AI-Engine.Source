@@ -17,9 +17,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class WorkSessionServiceTests
 {
+    [ClassDataSource<WorkSessionServiceHostFixture>(Shared = SharedType.PerClass)]
+    public required WorkSessionServiceHostFixture Host { get; init; }
+
     [Test]
     public async Task Create_MintsTheOwnedConversationAndReturnsTheEffectiveStepBudget()
     {
+        // Private host: the step budget it asserts on IS a host-level config override.
         await using var factory = NewFactory(("WorkSessions:MaxStepsPerRun", "9"));
         var agentId = await SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
 
@@ -38,7 +42,7 @@ public sealed class WorkSessionServiceTests
     [Test]
     public async Task Create_WhenTheAgentIsUnknown_IsRejected()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
 
@@ -54,7 +58,7 @@ public sealed class WorkSessionServiceTests
     {
         // A session on a non-tool-capable model can never call a state tool: it would run its whole step budget writing
         // nothing at all.
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var agentId = await SeedAgentAsync(factory, "a-model-without-tools").ConfigureAwait(false);
 
         await using var scope = factory.Services.CreateAsyncScope();
@@ -73,7 +77,7 @@ public sealed class WorkSessionServiceTests
         // while the operator's allow-list — which the offer applies unconditionally, cloud pins included — says no. The
         // session would be created, every state-tool call would come back "Requested function ... not found", and the
         // run would spend its whole step budget writing nothing.
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var agentId = await SeedAgentAsync(factory, "a-model-nobody-listed").ConfigureAwait(false);
 
         await using var scope = factory.Services.CreateAsyncScope();
@@ -87,13 +91,18 @@ public sealed class WorkSessionServiceTests
         AssertEx.Contains(rejection.Message, "a-model-nobody-listed");
         AssertEx.False(rejection.Message.Contains("cannot call tools", StringComparison.Ordinal),
             "The two gates have different fixes, so they must not share a message.");
-        AssertEx.Empty(await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ListAsync().ConfigureAwait(false));
+
+        // Scoped to this test's own agent rather than asserting an empty list: the host — and so the session table — is
+        // shared with every sibling in this class.
+        AssertEx.False((await scope.ServiceProvider.GetRequiredService<IWorkSessionService>().ListAsync().ConfigureAwait(false))
+                       .Any(summary => summary.AgentDefinitionId == agentId),
+            "The refused create persisted no session.");
     }
 
     [Test]
     public async Task Update_RepointingAtAnAgentOutsideTheToolCapableList_IsRejected_ButAListedOneIsAccepted()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var seeded = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         var unlistedAgentId = await SeedAgentAsync(factory, "a-model-nobody-listed").ConfigureAwait(false);
@@ -117,7 +126,7 @@ public sealed class WorkSessionServiceTests
     [Test]
     public async Task Create_WhenTheKindIsDevelopment_IsRejected()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var agentId = await SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
 
         await using var scope = factory.Services.CreateAsyncScope();
@@ -130,7 +139,7 @@ public sealed class WorkSessionServiceTests
     [Test]
     public async Task EveryReader_OnAnUnknownSession_ThrowsWorkSessionNotFound()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         await using var scope = factory.Services.CreateAsyncScope();
         var service = scope.ServiceProvider.GetRequiredService<IWorkSessionService>();
         var unknown = Guid.NewGuid();
@@ -146,7 +155,7 @@ public sealed class WorkSessionServiceTests
     [Test]
     public async Task Update_WhileTheSessionIsRunning_RefusesTheObjective_ButNotTheTitle()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         await using var scope = factory.Services.CreateAsyncScope();
@@ -165,7 +174,7 @@ public sealed class WorkSessionServiceTests
     [Test]
     public async Task Resume_OnARunningSession_IsRefused()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         await using var scope = factory.Services.CreateAsyncScope();
@@ -181,7 +190,7 @@ public sealed class WorkSessionServiceTests
     [Test]
     public async Task Delete_WhileTheSessionIsRunning_IsRefused()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         await using var scope = factory.Services.CreateAsyncScope();
@@ -199,7 +208,7 @@ public sealed class WorkSessionServiceTests
     [Test]
     public async Task Delete_TakesTheOwnedConversationWithIt()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
 
@@ -217,7 +226,7 @@ public sealed class WorkSessionServiceTests
     {
         // The cap lives in the chat hub, which a REST follow-up never passes through — and the row is persisted before
         // anything downstream could inspect it.
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
 
@@ -242,6 +251,7 @@ public sealed class WorkSessionServiceTests
         var publisher = new RecordingWorkSessionEventPublisher();
         FakeNodeChatStreamService? stream = null;
         var sessionId = Guid.NewGuid();
+        // Private host: it replaces the stream service and the event publisher with per-test recording fakes.
         await using var factory = NewFactory(configureExtra: services =>
             {
                 services.RemoveAll<INodeChatStreamService>();
@@ -278,7 +288,7 @@ public sealed class WorkSessionServiceTests
     {
         // A parked step already owns the node's one invocation slot and its prompt is answered through the chat card, so
         // a follow-up queues for the next step rather than starting one.
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
 
@@ -296,7 +306,7 @@ public sealed class WorkSessionServiceTests
     [Test]
     public async Task ReadArtifactContent_ForAnUnknownOrInvalidArtifact_ThrowsWorkSessionNotFound()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
 
@@ -326,7 +336,7 @@ public sealed class WorkSessionServiceTests
     [Test]
     public async Task GetArtifact_ReturnsTheRowWithoutOpeningTheBytes_AndRefusesAForeignSession()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         var otherSessionId = Guid.NewGuid();
@@ -363,7 +373,7 @@ public sealed class WorkSessionServiceTests
     [Test]
     public async Task ListEvents_ClampsTheRequestedPageSize_AndCarriesTheOperationId()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
 
@@ -385,6 +395,7 @@ public sealed class WorkSessionServiceTests
     [Test]
     public async Task LifecycleVerbs_WhenTheFeatureIsDisabled_SaySoRatherThanFailingOpaquely()
     {
+        // Private host: the kill switch it asserts on is a host-level config value.
         await using var factory = new TestServerWebAppFactory
         {
             AdditionalConfiguration = new Dictionary<string, string?>
@@ -426,7 +437,9 @@ public sealed class WorkSessionServiceTests
     {
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
-        var definition = await store.AddAsync(new AgentDefinitionInput($"Agent on {modelProfile}",
+        // GUID-suffixed: the classes that call this share one host, so a fixed name would make the definition table
+        // unfilterable for a test that wants only its own agent.
+        var definition = await store.AddAsync(new AgentDefinitionInput($"Agent on {modelProfile} {Guid.NewGuid():N}",
                                         Description: null,
                                         "Work the objective.",
                                         modelProfile,
