@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
@@ -12,6 +13,45 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
+
+/// <summary>
+///     One workflow host for a whole test class (<c>ClassDataSource(SharedType.PerClass)</c>), so a class pays the
+///     ~1.2 s host build once instead of once per test. Each test still gets its own <see cref="DevWorkflowHarness" />
+///     over it — the harness itself is stateless beyond the replacement dispatcher a restart installs.
+///     <para>
+///         The host is shared, so three things on it are shared too, and a test that touches any of them keeps a
+///         private host and says so at the construction site:
+///         <list type="bullet">
+///             <item>the SQLite database — scope every read to your own run id, and assert on no absolute row count;</item>
+///             <item>
+///                 the <see cref="FakeDevWorkflowAgentSession" />, which is a container singleton: its
+///                 <c>HasCapacity</c>, <c>RefuseStart</c>, <c>RefuseCreateWith</c> and <c>OnDeleting</c> switches are
+///                 host-wide, and its <c>Created</c>, <c>Objectives</c> and <c>Calls</c> lists accumulate every
+///                 sibling's traffic (a <c>Calls</c> assertion filtered to your own session id is still safe);
+///             </item>
+///             <item>
+///                 the dispatcher singleton, whose signal channel <see cref="DevWorkflowHarness.WasSignalled" /> DRAINS
+///                 — one test's drain would eat a concurrent sibling's signal.
+///             </item>
+///         </list>
+///     </para>
+///     <para>
+///         <c>MaxConcurrentRuns</c> is raised to the schema maximum because the cap counts <c>Running</c> runs across
+///         the whole DATABASE: at the product default of four, the fifth concurrent test in a class would sit Pending
+///         forever. The cap's own behaviour is asserted by two tests in <c>DevWorkflowDispatcherTests</c>, which pin it
+///         explicitly on private hosts.
+///     </para>
+/// </summary>
+public sealed class DevWorkflowHostFixture : IAsyncInitializer, IAsyncDisposable
+{
+    public TestServerWebAppFactory Factory { get; } = DevWorkflowHarness.NewFactory(("DevWorkflows:MaxConcurrentRuns", "64"));
+
+    public Task InitializeAsync() =>
+        Task.CompletedTask;
+
+    public ValueTask DisposeAsync() =>
+        Factory.DisposeAsync();
+}
 
 /// <summary>
 ///     Drives the real dispatcher over the real store, one tick at a time.
@@ -36,9 +76,28 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     /// </summary>
     private readonly TestServerWebAppFactory _factory;
 
+    /// <summary>Whether this harness built the host and so has to tear it down; false for the class's shared one.</summary>
+    private readonly bool _ownsFactory;
+
     private DevWorkflowDispatcher? _replacement;
 
+    /// <summary>
+    ///     A host of this test's own. Take one only to hold host-level state a concurrent sibling must not see — a
+    ///     config value, one of the fake agent's switches, an absolute row count, or the signal channel — and say which
+    ///     at the construction site. Everything else shares the class host (see <see cref="DevWorkflowHostFixture" />).
+    /// </summary>
     public DevWorkflowHarness(params (string Key, string Value)[] configuration)
+    {
+        _factory = NewFactory(configuration);
+        _ownsFactory = true;
+    }
+
+    /// <summary>The class's shared host, with this test's own runs on it. See <see cref="DevWorkflowHostFixture" />.</summary>
+    public DevWorkflowHarness(DevWorkflowHostFixture host) =>
+        _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;
+
+    /// <summary>The workflow host shape: the feature on, no sweep inside any test's lifetime, and the agent seam faked.</summary>
+    internal static TestServerWebAppFactory NewFactory(params (string Key, string Value)[] configuration)
     {
         var settings = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
@@ -51,7 +110,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
             settings[key] = value;
         }
 
-        _factory = new TestServerWebAppFactory
+        return new TestServerWebAppFactory
         {
             AdditionalConfiguration = settings,
 
@@ -108,7 +167,10 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
             await replacement.DisposeAsync().ConfigureAwait(false);
         }
 
-        await _factory.DisposeAsync().ConfigureAwait(false);
+        if (_ownsFactory)
+        {
+            await _factory.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     /// <summary>Creates a work item, a definition on <paramref name="graphJson" />, and a run pinned to it.</summary>

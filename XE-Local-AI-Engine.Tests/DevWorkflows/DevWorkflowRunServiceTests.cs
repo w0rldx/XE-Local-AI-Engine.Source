@@ -34,6 +34,9 @@ public sealed class DevWorkflowRunServiceTests
                                        }
                                        """;
 
+    [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]
+    public required DevWorkflowHostFixture Host { get; init; }
+
     /// <summary>
     ///     A start pins the graph, gives every node a row, seeds the entry rows with what was asked, and tells the
     ///     dispatcher — the last of which is what keeps a fresh run from sitting visibly Pending until the next sweep.
@@ -41,6 +44,8 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task StartingARun_MaterializesTheGraphSeedsTheRequestAndSignals()
     {
+        // A private host: WasSignalled DRAINS the dispatcher's signal channel, so a concurrent sibling's drain
+        // could take this run's signal before this test reads it.
         await using var harness = new DevWorkflowHarness();
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly, "Explain the inference path.").ConfigureAwait(false);
 
@@ -64,6 +69,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task StartingARunTwiceWithOneOperationId_ReturnsTheSameRun()
     {
+        // A private host: the run count is the whole database's, so a sibling's run would be counted here.
         await using var harness = new DevWorkflowHarness();
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var operationId = Guid.NewGuid();
@@ -80,7 +86,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task StartingASecondLiveRunOnOneWorkItem_IsRefused()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         _ = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false);
 
@@ -97,6 +103,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task StartingARepositoryBoundGraphOnAProjectlessWorkItem_IsRefused()
     {
+        // A private host, for the same reason: "no run at all" is an assertion about the whole database.
         await using var harness = new DevWorkflowHarness();
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync("""
                                                                            {
@@ -119,7 +126,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task StartingFromAnArchivedDefinition_IsRefused()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         await harness.ArchiveDefinitionAsync(definitionId).ConfigureAwait(false);
 
@@ -137,6 +144,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task TheLifecycleCommands_WriteTheirIntentAndSignal()
     {
+        // A private host: WasSignalled drains the shared signal channel (see StartingARun_... above).
         await using var harness = new DevWorkflowHarness();
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
@@ -160,7 +168,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task ResumingARunThatIsNotPaused_IsRefused()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -176,7 +184,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task DecidingAGate_RecordsTheSubjectAndReplaysTheSameDecision()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -221,7 +229,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task DecidingAnAlreadyAnsweredGateUnderANewOperationId_IsRefusedWithTheStandingDecision()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -254,7 +262,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task DecidingANodeRunThatIsNotWaiting_IsRefused()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var detail = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false);
         var nodeRunId = detail.NodeRuns.Single().Id;
@@ -279,7 +287,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task RetryingAnUnansweredGate_IsRefused()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -305,7 +313,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task SkippingAnOpenGate_IsRefused()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -335,7 +343,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task SkippingABlockedNodeRun_LetsTheRunFinish()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -363,7 +371,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task ReplayingAStartWithADifferentWorkItem_IsRefused()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var (otherWorkItemId, _) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var operationId = Guid.NewGuid();
@@ -384,6 +392,8 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task DeletingAWorkItem_ReleasesItsSessionsOnlyAfterTheRowsAreGone()
     {
+        // A private host: OnDeleting is a switch on the container's single fake agent, so setting it would fire
+        // on a sibling's deletes too.
         await using var harness = new DevWorkflowHarness();
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -407,6 +417,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task DeletingAWorkItemWithALiveRun_IsRefusedAndReleasesNothing()
     {
+        // A private host: "no delete happened at all" is an assertion about every call the shared fake recorded.
         await using var harness = new DevWorkflowHarness();
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -430,6 +441,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task RetryingPastTheRunWideAttemptBudget_IsRefusedAndLeavesTheOtherAnswersOpen()
     {
+        // A private host: the run-wide attempt budget is pinned for this test alone.
         await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxTotalAttempts", "1"));
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
@@ -492,7 +504,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task ReplayingACancelAfterTheRunHasDrained_AnswersWithTheRunRatherThanAConflict()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -521,7 +533,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task ReplayingAResumeAfterTheRunIsRunningAgain_AnswersWithTheRunRatherThanAConflict()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -548,7 +560,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task ReusingALifecycleOperationIdOnADifferentVerb_IsRefused()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -576,7 +588,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task ReusingADecisionOperationIdForADifferentAct_IsRefused()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -626,7 +638,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task TheDetailAndTheListRow_NameTheSameBlockingNodeRun()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -647,7 +659,7 @@ public sealed class DevWorkflowRunServiceTests
     [Test]
     public async Task TheComposedDetail_NamesWhatTheRunIsWaitingOn()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
         var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);

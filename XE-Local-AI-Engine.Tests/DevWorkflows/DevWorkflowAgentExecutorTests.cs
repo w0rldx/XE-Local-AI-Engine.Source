@@ -38,12 +38,16 @@ public sealed class DevWorkflowAgentExecutorTests
                                          }
                                          """;
 
+    [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]
+    public required DevWorkflowHostFixture Host { get; init; }
+
     /// <summary>
     ///     The Phase A3 gate, first half: a scripted agent completes, and the node run settles on what its session did.
     /// </summary>
     [Test]
     public async Task AnAgentNode_RunsItsWorkSessionAndSucceedsOnIt()
     {
+        // A private host: Created.Count is the shared fake's whole history, not this run's.
         await using var harness = new DevWorkflowHarness();
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
 
@@ -79,6 +83,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task AnAgentNodeWhoseAttachFails_DeletesTheSessionItHadJustCreated()
     {
+        // A private host, for the same reason: the window under test is "exactly one session was created".
         await using var harness = new DevWorkflowHarness();
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
@@ -115,6 +120,8 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task AnAgentNode_WhenTheNodeHasNoSlot_StaysQueuedWithAReasonAndNoFailure()
     {
+        // A private host: HasCapacity is a switch on the container's single fake agent, so flipping it would
+        // stall every concurrent sibling's agent node too.
         await using var harness = new DevWorkflowHarness();
         harness.Agent.HasCapacity = false;
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
@@ -144,6 +151,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task AnAgentNode_WhenTheStartLosesTheAdmissionRace_KeepsItsSessionAndStaysQueued()
     {
+        // A private host: RefuseStart is the same host-wide switch, and Created.Count is the fake's whole history.
         await using var harness = new DevWorkflowHarness();
         harness.Agent.RefuseStart = true;
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
@@ -168,6 +176,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task AnAgentNode_WhoseAgentCannotBeUsed_BlocksForAHumanWithTheReasonVerbatim()
     {
+        // A private host: RefuseCreateWith is the same host-wide switch.
         await using var harness = new DevWorkflowHarness();
         harness.Agent.RefuseCreateWith = "The agent's model cannot call tools.";
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
@@ -191,7 +200,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task ANodeBlockingWhileASiblingWorksOn_LeavesTheRunRunningAndTheWorkItemBlocked()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync("""
                                                 {
                                                   "schemaVersion": 1,
@@ -236,7 +245,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task AnAgentNode_BindingNoAgentAtAll_BlocksForAHuman()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync("""
                                                 {
                                                   "schemaVersion": 1,
@@ -260,6 +269,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task AnAgentNode_WhoseSessionParks_ResumesItUntilTheBudgetIsSpent()
     {
+        // A private host: the per-node-run resume budget is pinned for this test alone.
         await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxSessionResumesPerNodeRun", "2"));
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -286,7 +296,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task AnAgentNode_WhoseSessionFails_FailsTheNodeRunAsAProviderError()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -311,7 +321,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task CancellingARun_StopsTheAgentsSessionAndSettlesTheRowOnIt()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         var sessionId = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
@@ -331,6 +341,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task PausingARun_ParksTheAgentsSessionAndResumingContinuesIt()
     {
+        // A private host: Created.Count is the shared fake's whole history.
         await using var harness = new DevWorkflowHarness();
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -360,7 +371,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task ACompletedAgent_PromotesWhatItsSessionProducedOntoTheRun()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -384,7 +395,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task AGateAfterAnAgent_RecordsThatAgentsArtifactsAsItsEvidence()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -410,6 +421,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_CarriesTheRequestAndTheUpstreamArtifacts()
     {
+        // A private host: Objectives.Single() is an assertion about every objective the shared fake was handed.
         await using var harness = new DevWorkflowHarness();
         var runId = await harness.StartRunAsync(AgentThenGate, "Explain how the inference path works.").ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
