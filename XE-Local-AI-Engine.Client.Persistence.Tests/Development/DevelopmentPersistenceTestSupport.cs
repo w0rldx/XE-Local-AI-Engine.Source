@@ -59,6 +59,37 @@ internal sealed class DevelopmentTestFixture : IDisposable
             "requirements",
             "[\"acceptance\"]");
 
+    /// <summary>
+    ///     A project whose single task the review chain has taken to <c>AwaitingApply</c> — the status a Dev Mode task
+    ///     reaches when its review approved it and only the apply is left. Shared, because the dev-workflows suite needs
+    ///     the same real task to hang a <c>DevTask</c> node run's <c>DevelopmentTaskId</c> off.
+    /// </summary>
+    public static async Task<(DevelopmentCreateProjectCommand Seed, long Version)> SeedTaskAwaitingApplyAsync(IDevelopmentStore store)
+    {
+        var seed = CreateSeed();
+        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
+        var version = 1L;
+        foreach (var status in new[]
+                 {
+                     DevelopmentTaskStatus.Ready,
+                     DevelopmentTaskStatus.InProgress,
+                     DevelopmentTaskStatus.Validation,
+                     DevelopmentTaskStatus.InReview,
+                     DevelopmentTaskStatus.AwaitingApply
+                 })
+        {
+            var result = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
+                                        Guid.NewGuid(),
+                                        status,
+                                        version,
+                                        ApprovedSubjectHash: status == DevelopmentTaskStatus.AwaitingApply ? "subject" : null))
+                                    .ConfigureAwait(false);
+            version = result.Version;
+        }
+
+        return (seed, version);
+    }
+
     public void Dispose()
     {
         _keyHolder.Dispose();

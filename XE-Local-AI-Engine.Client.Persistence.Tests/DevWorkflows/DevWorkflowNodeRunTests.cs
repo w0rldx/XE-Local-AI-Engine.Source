@@ -346,7 +346,7 @@ public sealed class DevWorkflowNodeRunTests
         var development = new DevelopmentStore(context, TimeProvider.System);
         await SeedSelectedFolderAsync(context, fixture.DatabasePath).ConfigureAwait(false);
 
-        var firstTask = await SeedTaskAwaitingApplyAsync(development).ConfigureAwait(false);
+        var (firstTask, _) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(development).ConfigureAwait(false);
         var seed = await DevWorkflowTestFixture.SeedRunAsync(store, developmentProjectId: firstTask.ProjectId).ConfigureAwait(false);
 
         var nodeRunId = Guid.NewGuid();
@@ -390,7 +390,7 @@ public sealed class DevWorkflowNodeRunTests
             reattempting.DevelopmentTaskId,
             "A re-attempt does not orphan the task that holds attempt 1's evidence; the executor replaces the pointer when it has a new task to point at.");
 
-        var secondTask = await SeedTaskAwaitingApplyAsync(development).ConfigureAwait(false);
+        var (secondTask, _) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(development).ConfigureAwait(false);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
                            nodeRunId,
                            retried.Version,
@@ -404,36 +404,6 @@ public sealed class DevWorkflowNodeRunTests
         AssertEx.Equal(expected: 1,
             await fixture.RawCountAsync("dev_workflow_node_runs", "development_task_id", secondTask.TaskId).ConfigureAwait(false),
             "Written to the column, not held only by the change tracker.");
-    }
-
-    /// <summary>
-    ///     A <c>DevelopmentProject</c> whose single task the existing chain has taken to <c>AwaitingApply</c> — the
-    ///     status a Dev Mode task reaches when its review approved it and only the apply is left.
-    /// </summary>
-    private static async Task<(Guid ProjectId, Guid TaskId)> SeedTaskAwaitingApplyAsync(DevelopmentStore development)
-    {
-        var seed = DevelopmentTestFixture.CreateSeed();
-        _ = await development.CreateProjectAsync(seed).ConfigureAwait(false);
-        var version = 1L;
-        foreach (var status in new[]
-                 {
-                     DevelopmentTaskStatus.Ready,
-                     DevelopmentTaskStatus.InProgress,
-                     DevelopmentTaskStatus.Validation,
-                     DevelopmentTaskStatus.InReview,
-                     DevelopmentTaskStatus.AwaitingApply
-                 })
-        {
-            var result = await development.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                              Guid.NewGuid(),
-                                              status,
-                                              version,
-                                              ApprovedSubjectHash: status == DevelopmentTaskStatus.AwaitingApply ? "subject" : null))
-                                          .ConfigureAwait(false);
-            version = result.Version;
-        }
-
-        return (seed.ProjectId, seed.TaskId);
     }
 
     /// <summary>The repository row a development project points at; both seeded projects share it.</summary>
