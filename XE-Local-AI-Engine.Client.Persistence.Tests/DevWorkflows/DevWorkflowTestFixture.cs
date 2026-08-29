@@ -63,9 +63,10 @@ internal sealed class DevWorkflowTestFixture : IDisposable
     public static async Task<DevWorkflowSeed> SeedRunAsync(DevWorkflowStore store,
         string title = "Seeded work item",
         string request = "Seeded request",
-        string graphJson = SampleGraph)
+        string graphJson = SampleGraph,
+        Guid? developmentProjectId = null)
     {
-        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), title, request)).ConfigureAwait(false);
+        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), title, request, developmentProjectId)).ConfigureAwait(false);
         var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Seeded definition", graphJson, NodeCount: 1))
                                     .ConfigureAwait(false);
         var run = await store.StartRunAsync(new StartDevWorkflowRunCommand(Guid.NewGuid(),
@@ -86,12 +87,20 @@ internal sealed class DevWorkflowTestFixture : IDisposable
         long expectedVersion,
         DevWorkflowNodeType nodeType = DevWorkflowNodeType.Agent,
         int maxAttempts = 3,
-        string? inputJson = null)
+        string? inputJson = null,
+        Guid? developmentProjectId = null)
     {
         var result = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(runId,
                                     expectedVersion,
                                     Guid.NewGuid(),
-                                    [new DevWorkflowNodeRunSeed(nodeRunId, nodeKey, nodeType, maxAttempts, InputJson: inputJson)]))
+                                    [
+                                        new DevWorkflowNodeRunSeed(nodeRunId,
+                                            nodeKey,
+                                            nodeType,
+                                            maxAttempts,
+                                            DevelopmentProjectId: developmentProjectId,
+                                            InputJson: inputJson)
+                                    ]))
                                 .ConfigureAwait(false);
         return result.Version;
     }
