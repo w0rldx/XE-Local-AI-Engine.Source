@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
@@ -28,7 +29,15 @@ internal sealed class DevWorkflowAgentExecutor
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    ///     The objective's own ceiling in characters, deliberately inside the work-session limit of 8000
+    ///     (<c>WorkSessionService.MaxObjectiveLength</c>), which REFUSES an over-long objective rather than trimming it —
+    ///     and that refusal blocks the node run for a human. The gap covers the headers written around each artifact.
+    /// </summary>
+    private const int MaxObjectiveCharacters = 7000;
+
     private readonly IAgentDefinitionStore _agents;
+    private readonly IDevWorkflowArtifactBlobStore _blobs;
     private readonly ILogger<DevWorkflowAgentExecutor> _logger;
     private readonly DevWorkflowOptions _options;
     private readonly DevWorkflowArtifactPromotion _promotion;
@@ -39,6 +48,7 @@ internal sealed class DevWorkflowAgentExecutor
         IAgentWorkSessionStore sessionStore,
         IAgentDefinitionStore agents,
         DevWorkflowArtifactPromotion promotion,
+        IDevWorkflowArtifactBlobStore blobs,
         IOptions<DevWorkflowOptions> options,
         ILogger<DevWorkflowAgentExecutor> logger)
     {
@@ -47,6 +57,7 @@ internal sealed class DevWorkflowAgentExecutor
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
         _agents = agents ?? throw new ArgumentNullException(nameof(agents));
         _promotion = promotion ?? throw new ArgumentNullException(nameof(promotion));
+        _blobs = blobs ?? throw new ArgumentNullException(nameof(blobs));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
     }
@@ -377,8 +388,14 @@ internal sealed class DevWorkflowAgentExecutor
     ///     What the agent is asked to do: the node's own instructions, the operator's request, and the artifacts the
     ///     nodes before it produced — recorded as consumed in the same breath, so the audit says what this attempt was
     ///     given rather than what a later read can guess.
+    ///     <para>
+    ///         Each upstream artifact is rendered with its CONTENTS, not merely its name and id. A reference alone is
+    ///         useless to a node that has no way to dereference it: the seeded plan node is told to turn research.md
+    ///         into a plan, and handed only "Report 'research.md' (version 1, id …)" it would invent one. The bytes
+    ///         travel in the objective because that is the one channel the agent lane already has.
+    ///     </para>
     /// </summary>
-    private static async Task<string> ComposeObjectiveAsync(IDevWorkflowStore store,
+    private async Task<string> ComposeObjectiveAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowGraphNode node,
@@ -401,13 +418,58 @@ internal sealed class DevWorkflowAgentExecutor
         if (upstream.Count > 0)
         {
             _ = objective.AppendLine().AppendLine("## What the steps before you produced");
-            foreach (var artifact in upstream)
+            for (var index = 0; index < upstream.Count; index++)
             {
-                _ = objective.AppendLine(CultureInfo.InvariantCulture, $"- {artifact.Kind} '{artifact.Name}' (version {artifact.Version}, id {artifact.Id})");
+                var artifact = upstream[index];
+                _ = objective.AppendLine()
+                             .AppendLine(CultureInfo.InvariantCulture, $"### {artifact.Kind} '{artifact.Name}' (version {artifact.Version}, id {artifact.Id})");
+
+                // Each artifact still to be written gets an equal share of the room left, so a long first document
+                // cannot crowd out the ones after it and a short one hands its slack on. Recomputed inside the loop
+                // because the headers spend from the same budget the contents do.
+                var share = (MaxObjectiveCharacters - objective.Length) / (upstream.Count - index);
+                _ = objective.AppendLine(await RenderArtifactAsync(run.Id, artifact, share, cancellationToken).ConfigureAwait(false));
             }
         }
 
         return objective.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    ///     One upstream artifact's contents, or the line that says why they are not here.
+    ///     <para>
+    ///         Text only, decided from the DECLARED media type rather than by sniffing bytes, and only once the blob
+    ///         store has verified the artifact row's own digest and size. An artifact whose bytes no longer match what
+    ///         produced them is handed over as a reference and a warning: silently injecting unverified content is how
+    ///         a tampered file would end up being reasoned about as if it were the research.
+    ///     </para>
+    /// </summary>
+    private async Task<string> RenderArtifactAsync(Guid runId, DevWorkflowArtifactSnapshot artifact, int budget, CancellationToken cancellationToken)
+    {
+        if (!ArtifactMediaTypes.IsText(artifact.MediaType))
+        {
+            return $"(Its bytes are {artifact.MediaType}, not text, so only this reference is given.)";
+        }
+
+        if (budget <= 0)
+        {
+            return "(The objective had no room left for its contents, so only this reference is given.)";
+        }
+
+        var read = await _blobs.ReadAsync(runId, artifact.Id, artifact.ContentSha256, artifact.SizeBytes, cancellationToken).ConfigureAwait(false);
+        if (read.Status != DevWorkflowArtifactReadStatus.Found)
+        {
+            _logger.LogWarning("Development workflow artifact {ArtifactId} of run {RunId} was not injected into an objective: {Status}.",
+                artifact.Id,
+                runId,
+                read.Status);
+            return $"(Its stored bytes did not verify ({read.Status}), so only this reference is given. Do not assume what it said.)";
+        }
+
+        var content = Encoding.UTF8.GetString(read.Content.Span);
+        return content.Length <= budget
+            ? content
+            : $"{content[..budget]}{Environment.NewLine}(Truncated: the first {budget} of {content.Length} characters.)";
     }
 
     /// <summary>
