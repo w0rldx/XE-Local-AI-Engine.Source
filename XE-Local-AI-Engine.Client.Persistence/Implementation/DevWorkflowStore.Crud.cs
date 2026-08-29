@@ -516,22 +516,31 @@ internal sealed partial class DevWorkflowStore
         ];
     }
 
+    public async Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ListInterruptedNodeRunsAsync(CancellationToken cancellationToken = default) =>
+        [
+            .. await StrandedNodeRuns()
+                     .AsNoTracking()
+                     .Select(entity => new DevWorkflowReconciledNodeRun(entity.Id,
+                         entity.RunId,
+                         entity.NodeKey,
+                         entity.NodeType,
+                         entity.Status,
+                         entity.WorkSessionId))
+                     .ToListAsync(cancellationToken)
+                     .ConfigureAwait(false)
+        ];
+
     public async Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
+        IReadOnlyList<TransitionDevWorkflowNodeRunCommand> repairs,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedReason);
+        ArgumentNullException.ThrowIfNull(repairs);
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // Only Queued and Running lost an executor to the host's death. Pending was never dispatched, and
-            // WaitingForApproval/Blocked are durable human-wait states that a restart does not invalidate.
-            var stranded = await _dbContext.DevWorkflowNodeRuns
-                                           .Where(entity => entity.Status == DevWorkflowNodeRunStatus.Queued || entity.Status == DevWorkflowNodeRunStatus.Running)
-                                           .OrderBy(entity => entity.RunId)
-                                           .ThenBy(entity => entity.Sequence)
-                                           .ToListAsync(cancellationToken)
-                                           .ConfigureAwait(false);
+            var stranded = await StrandedNodeRuns().ToListAsync(cancellationToken).ConfigureAwait(false);
             if (stranded.Count == 0)
             {
                 await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -548,7 +557,7 @@ internal sealed partial class DevWorkflowStore
             {
                 // The status BEFORE the collapse is the informative one: it says whether the node-run was merely
                 // admitted or actually mid-execution. Where it lands is always Pending.
-                reconciled.Add(new DevWorkflowReconciledNodeRun(nodeRun.Id, nodeRun.NodeKey, nodeRun.NodeType, nodeRun.Status, nodeRun.WorkSessionId));
+                reconciled.Add(new DevWorkflowReconciledNodeRun(nodeRun.Id, nodeRun.RunId, nodeRun.NodeKey, nodeRun.NodeType, nodeRun.Status, nodeRun.WorkSessionId));
 
                 // Re-dispatchable means clean: a row sitting at Pending must not carry a terminal reason, or the UI
                 // reads "the engine restarted" as this attempt's outcome. The reason is on the node.interrupted event.
@@ -567,6 +576,19 @@ internal sealed partial class DevWorkflowStore
                 }
             }
 
+            // Keyed off the rows this pass actually took, never off the command's own run id: the collapse is the
+            // authority on which node run belongs where, and a repair that disagrees describes a row it did not take.
+            var collapsed = reconciled.ToDictionary(row => row.NodeRunId, row => row.RunId);
+            foreach (var repair in repairs.Where(repair => collapsed.ContainsKey(repair.NodeRunId)))
+            {
+                var run = runs[collapsed[repair.NodeRunId]];
+                EnsureVersion(run, repair.ExpectedVersion);
+                var outcome = await ApplyNodeRunTransitionAsync(run, repair, cancellationToken).ConfigureAwait(false);
+                _ = AddEvent(run, outcome.EventType, outcome.NodeRunId, outcome.Outcome, repair.OperationId, outcome.DetailJson);
+                run.Version++;
+                run.UpdatedAtUtc = now;
+            }
+
             await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return reconciled;
@@ -582,6 +604,17 @@ internal sealed partial class DevWorkflowStore
             throw;
         }
     }
+
+    /// <summary>
+    ///     The node-runs a host death stranded. Only Queued and Running lost an executor: Pending was never dispatched,
+    ///     and WaitingForApproval/Blocked are durable human-wait states that a restart does not invalidate. Shared by
+    ///     the read and the write so the set the caller judged cannot differ from the set the collapse takes.
+    /// </summary>
+    private IOrderedQueryable<DevWorkflowNodeRun> StrandedNodeRuns() =>
+        _dbContext.DevWorkflowNodeRuns
+                  .Where(entity => entity.Status == DevWorkflowNodeRunStatus.Queued || entity.Status == DevWorkflowNodeRunStatus.Running)
+                  .OrderBy(entity => entity.RunId)
+                  .ThenBy(entity => entity.Sequence);
 
     /// <summary>
     ///     Writes a definition edit under the row's version token.

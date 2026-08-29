@@ -179,10 +179,12 @@ public sealed record DevWorkflowDecisionSnapshot(
 /// <summary>
 ///     One row per node-run the host left mid-flight, carrying enough detail for the runtime to rebuild its dispatch
 ///     table without a follow-up read per row. <see cref="Status" /> is the status the node-run held <em>before</em> the
-///     collapse — what it was doing is the useful fact; where it landed is always <c>Pending</c>.
+///     collapse — what it was doing is the useful fact; where it landed is always <c>Pending</c>, unless a repair moved
+///     it further.
 /// </summary>
 public sealed record DevWorkflowReconciledNodeRun(
     Guid NodeRunId,
+    Guid RunId,
     string NodeKey,
     DevWorkflowNodeType NodeType,
     DevWorkflowNodeRunStatus Status,
@@ -533,12 +535,36 @@ public interface IDevWorkflowStore
     Task<DevWorkflowMutationResult> TransitionRunAsync(TransitionDevWorkflowRunCommand command, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Restart recovery. Runs auto-resume, so no run-level status moves; only node-runs the host left <c>Queued</c>
-    ///     or <c>Running</c> collapse back to <c>Pending</c> so the dispatcher can re-admit them, each with one
-    ///     <c>node.interrupted</c> event. <c>WaitingForApproval</c> and <c>Blocked</c> are durable human-wait states and
-    ///     survive untouched. Idempotent by construction: a second pass finds none of those states and returns empty.
+    ///     The node-runs a restart has to judge: everything left <c>Queued</c> or <c>Running</c>, read without writing
+    ///     anything. The caller decides what each one costs — an attempt, a human, nothing — and hands those decisions
+    ///     back to <see cref="ReconcileNonTerminalNodeRunsAsync" />, which is where they are committed.
     /// </summary>
-    Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ListInterruptedNodeRunsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Restart recovery, as ONE transaction. Runs auto-resume, so no run-level status moves; only node-runs the host
+    ///     left <c>Queued</c> or <c>Running</c> collapse back to <c>Pending</c> so the dispatcher can re-admit them, each
+    ///     with one <c>node.interrupted</c> event. <c>WaitingForApproval</c> and <c>Blocked</c> are durable human-wait
+    ///     states and survive untouched. Idempotent by construction: a second pass finds none of those states and returns
+    ///     empty.
+    ///     <para>
+    ///         <paramref name="repairs" /> are the caller's per-row verdicts — an attempt spent, a human needed — applied
+    ///         IN ORDER inside the same transaction as the collapse, because a recovery that commits the collapse alone
+    ///         is one the next boot cannot finish: those rows read as ordinary <c>Pending</c> and would be re-run with no
+    ///         attempt or budget accounting at all. Committing both together makes recovery all-or-nothing, so any number
+    ///         of crashes during startup still repairs every interrupted node-run exactly once.
+    ///     </para>
+    ///     <para>
+    ///         A repair naming a node-run this pass did not collapse is skipped: the rows are re-selected under the
+    ///         writer lock, so such a repair describes a state that no longer exists. A repair's expected version is
+    ///         checked against the run as the collapse has already left it, so recovery passes
+    ///         <see cref="DevWorkflowVersions.Any" /> — the version it read before the collapse is by then stale by one
+    ///         event per row.
+    ///     </para>
+    /// </summary>
+    Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
+        IReadOnlyList<TransitionDevWorkflowNodeRunCommand> repairs,
+        CancellationToken cancellationToken = default);
 
     Task<DevWorkflowMutationResult> MaterializeNodeRunsAsync(MaterializeDevWorkflowNodesCommand command, CancellationToken cancellationToken = default);
 

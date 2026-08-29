@@ -509,6 +509,35 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         _replacement = CreateReplacementDispatcher();
     }
 
+    /// <summary>
+    ///     A startup recovery that dies before it commits — the one window a restart has: between collapsing the rows
+    ///     the dead host stranded and writing what each of them costs.
+    ///     <para>
+    ///         The transaction is made to fail by handing it a repair under a version the run cannot have, rather than
+    ///         by killing a process: what the tests using this assert is the transaction BOUNDARY — that a recovery
+    ///         which does not commit leaves nothing behind — and the cause of the failure is not what makes that true.
+    ///     </para>
+    /// </summary>
+    public async Task FailRecoveryAsync()
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
+        var interrupted = await store.ListInterruptedNodeRunsAsync().ConfigureAwait(false);
+        if (interrupted.Count == 0)
+        {
+            throw new AssertionException("There was no in-flight node run for the failed recovery to have died on.");
+        }
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.ReconcileNonTerminalNodeRunsAsync("The host restarted.",
+                                  [
+                                      .. interrupted.Select(row => new TransitionDevWorkflowNodeRunCommand(row.RunId,
+                                          row.NodeRunId,
+                                          long.MaxValue,
+                                          DevWorkflowNodeRunStatus.Pending))
+                                  ]))
+                          .ConfigureAwait(false);
+    }
+
     /// <summary>Moves the run itself, the way the run service's fire-and-forget commands will.</summary>
     public async Task TransitionRunAsync(Guid runId, DevWorkflowRunStatus target)
     {

@@ -39,6 +39,14 @@ public sealed class DevWorkflowRestartTests
                                     }
                                     """;
 
+    private const string SingleTool = """
+                                      {
+                                        "schemaVersion": 1,
+                                        "nodes": [{ "nodeKey": "validate", "nodeType": "Tool" }],
+                                        "edges": []
+                                      }
+                                      """;
+
     /// <summary>Row #1 — killed before the graph snapshot was ever materialized. There is nothing to reconcile.</summary>
     [Test]
     public async Task ARunKilledBeforeItMaterialized_MaterializesOnTheFirstTickAfterTheRestart()
@@ -212,14 +220,7 @@ public sealed class DevWorkflowRestartTests
     public async Task AToolNodeKilledMidCommand_CountsItsReRunAsASecondAttempt()
     {
         await using var harness = new DevWorkflowHarness();
-        var runId = await harness.StartRunAsync("""
-                                                {
-                                                  "schemaVersion": 1,
-                                                  "nodes": [{ "nodeKey": "validate", "nodeType": "Tool" }],
-                                                  "edges": []
-                                                }
-                                                """)
-                                 .ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
         await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
 
@@ -238,14 +239,7 @@ public sealed class DevWorkflowRestartTests
     public async Task ARunThatHasSpentItsAttemptBudget_BlocksItsInterruptedNodeRunsInsteadOfLooping()
     {
         await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxTotalAttempts", "1"));
-        var runId = await harness.StartRunAsync("""
-                                                {
-                                                  "schemaVersion": 1,
-                                                  "nodes": [{ "nodeKey": "validate", "nodeType": "Tool" }],
-                                                  "edges": []
-                                                }
-                                                """)
-                                 .ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
         await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
 
@@ -257,6 +251,81 @@ public sealed class DevWorkflowRestartTests
         var blocked = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, blocked.FailureClass);
+    }
+
+    /// <summary>
+    ///     The restart's own crash window: the host dies while recovering, between collapsing the stranded rows and
+    ///     writing what each one costs. Nothing may be left half-repaired — a row that read as an ordinary <c>Pending</c>
+    ///     would be re-run on the next boot with no attempt spent and no budget consulted, for ever.
+    /// </summary>
+    [Test]
+    public async Task ARecoveryThatDiesBeforeItCommits_LeavesTheNodeRunForTheNextBootToRepairExactlyOnce()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+
+        await harness.FailRecoveryAsync().ConfigureAwait(false);
+        await harness.FailRecoveryAsync().ConfigureAwait(false);
+
+        var stranded = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, stranded.Status, "A recovery that did not commit leaves the row exactly as the dead host left it.");
+        AssertEx.Equal(expected: 1, stranded.Attempt);
+
+        await harness.RestartAsync().ConfigureAwait(false);
+
+        var repaired = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, repaired.Status, "The boot that does commit finds the row and repairs it.");
+        AssertEx.Equal(expected: 2, repaired.Attempt, "One interruption costs one attempt, however many boots died trying to record it.");
+        AssertEx.Equal(expected: 1,
+            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "node.interrupted"),
+            "and one interrupted event, for the same reason.");
+    }
+
+    /// <summary>
+    ///     The same window, for the row a restart cannot repair at all: a failed recovery must not lose the fact that
+    ///     this node run needs a human, which is what a row left at <c>Pending</c> would do.
+    /// </summary>
+    [Test]
+    public async Task ARecoveryThatDiesBeforeItCommits_StillBlocksAnAgentWhoseSessionIsGoneOnTheNextBoot()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.Agent.DeleteAsync(await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false)).ConfigureAwait(false);
+
+        await harness.FailRecoveryAsync().ConfigureAwait(false);
+        await harness.RestartAsync().ConfigureAwait(false);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.Configuration, blocked.FailureClass);
+    }
+
+    /// <summary>
+    ///     And for the budget: the guard against a restart loop is exactly what a lost repair would disable, so a boot
+    ///     that died mid-recovery must still hand its over-budget node runs to a human rather than re-attempting them.
+    /// </summary>
+    [Test]
+    public async Task ARecoveryThatDiesBeforeItCommits_StillEnforcesTheAttemptBudgetOnTheNextBoot()
+    {
+        await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxTotalAttempts", "1"));
+        var runId = await harness.StartRunAsync(SingleTool).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+
+        // The first restart spends the run's one re-attempt; the second dies before it can record anything, and the
+        // third has to find the budget gone rather than a Pending row nothing accounted for.
+        await harness.RestartAsync().ConfigureAwait(false);
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Running).ConfigureAwait(false);
+        await harness.FailRecoveryAsync().ConfigureAwait(false);
+        await harness.RestartAsync().ConfigureAwait(false);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, blocked.FailureClass);
+        AssertEx.Equal(expected: 3, blocked.Attempt, "Two boots committed one re-attempt each; the one that died between them spent nothing.");
     }
 
     /// <summary>Row #7 — the two human waits are durable states. A restart does not touch them at all.</summary>

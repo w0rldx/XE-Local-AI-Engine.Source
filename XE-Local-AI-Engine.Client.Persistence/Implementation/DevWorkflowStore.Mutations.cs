@@ -97,82 +97,91 @@ internal sealed partial class DevWorkflowStore
         return ExecuteMutationAsync(command.RunId,
             command.ExpectedVersion,
             command.OperationId,
-            async run =>
-            {
-                var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken).ConfigureAwait(false);
-                var now = Now();
-
-                if (command.IncrementAttempt)
-                {
-                    // In place: the node-run is one row per node key for its whole life, and the per-attempt history
-                    // lives in the event log instead.
-                    nodeRun.Attempt++;
-                }
-
-                if (command.ClearWorkSession)
-                {
-                    // The resume budget goes with it: it bounds ONE attempt's session, and carrying a spent one into a
-                    // fresh attempt would block the new session before it had taken a step.
-                    nodeRun.WorkSessionId = null;
-                    nodeRun.SessionResumes = 0;
-                }
-
-                nodeRun.Status = command.TargetStatus;
-                nodeRun.QueueReason = command.TargetStatus == DevWorkflowNodeRunStatus.Queued ? command.QueueReason : null;
-                nodeRun.PendingDecisionKind = command.PendingDecisionKind;
-
-                if (command.TargetStatus == DevWorkflowNodeRunStatus.Queued)
-                {
-                    nodeRun.QueuedAtUtc = now;
-                }
-                else if (command.TargetStatus == DevWorkflowNodeRunStatus.Running)
-                {
-                    nodeRun.StartedAtUtc = now;
-                }
-                else if (command.TargetStatus == DevWorkflowNodeRunStatus.Pending)
-                {
-                    // A re-attempt starts from a clean slate. The timestamps, or the UI shows it queued since its first
-                    // try; the failure fields too, or a node-run reports the previous attempt's failure while it runs
-                    // again. What that attempt failed with is already on its node.failed event.
-                    nodeRun.QueuedAtUtc = null;
-                    nodeRun.StartedAtUtc = null;
-                    nodeRun.EndedAtUtc = null;
-                    nodeRun.FailureClass = null;
-                    nodeRun.TerminalReason = null;
-                }
-
-                if (IsTerminal(command.TargetStatus))
-                {
-                    nodeRun.EndedAtUtc = now;
-                }
-
-                if (command.OutputJson is not null)
-                {
-                    nodeRun.OutputJson = Utf8(command.OutputJson);
-                }
-
-                if (command.FailureClass is not null)
-                {
-                    nodeRun.FailureClass = command.FailureClass;
-                }
-
-                if (command.TerminalReason is not null)
-                {
-                    nodeRun.TerminalReason = command.TerminalReason;
-                }
-
-                if (command.DevelopmentTaskId is { } developmentTaskId)
-                {
-                    nodeRun.DevelopmentTaskId = developmentTaskId;
-                }
-
-                await ApplyWorkItemStatusAsync(run.WorkItemId, command.WorkItemStatus, cancellationToken).ConfigureAwait(false);
-                return new MutationOutcome(EventTypeFor(command.TargetStatus),
-                    command.Outcome ?? OutcomeFor(command.TargetStatus),
-                    ReasonDetail(command.TerminalReason),
-                    nodeRun.Id);
-            },
+            run => ApplyNodeRunTransitionAsync(run, command, cancellationToken),
             cancellationToken);
+    }
+
+    /// <summary>
+    ///     One node-run status move against an already-loaded run row, without the transaction and event append around
+    ///     it. Factored out because restart recovery applies a batch of these inside ITS transaction, and two copies of
+    ///     what a transition writes would drift.
+    /// </summary>
+    private async Task<MutationOutcome> ApplyNodeRunTransitionAsync(DevWorkflowRun run,
+        TransitionDevWorkflowNodeRunCommand command,
+        CancellationToken cancellationToken)
+    {
+        var nodeRun = await LoadNodeRunAsync(run.Id, command.NodeRunId, cancellationToken).ConfigureAwait(false);
+        var now = Now();
+
+        if (command.IncrementAttempt)
+        {
+            // In place: the node-run is one row per node key for its whole life, and the per-attempt history
+            // lives in the event log instead.
+            nodeRun.Attempt++;
+        }
+
+        if (command.ClearWorkSession)
+        {
+            // The resume budget goes with it: it bounds ONE attempt's session, and carrying a spent one into a
+            // fresh attempt would block the new session before it had taken a step.
+            nodeRun.WorkSessionId = null;
+            nodeRun.SessionResumes = 0;
+        }
+
+        nodeRun.Status = command.TargetStatus;
+        nodeRun.QueueReason = command.TargetStatus == DevWorkflowNodeRunStatus.Queued ? command.QueueReason : null;
+        nodeRun.PendingDecisionKind = command.PendingDecisionKind;
+
+        if (command.TargetStatus == DevWorkflowNodeRunStatus.Queued)
+        {
+            nodeRun.QueuedAtUtc = now;
+        }
+        else if (command.TargetStatus == DevWorkflowNodeRunStatus.Running)
+        {
+            nodeRun.StartedAtUtc = now;
+        }
+        else if (command.TargetStatus == DevWorkflowNodeRunStatus.Pending)
+        {
+            // A re-attempt starts from a clean slate. The timestamps, or the UI shows it queued since its first
+            // try; the failure fields too, or a node-run reports the previous attempt's failure while it runs
+            // again. What that attempt failed with is already on its node.failed event.
+            nodeRun.QueuedAtUtc = null;
+            nodeRun.StartedAtUtc = null;
+            nodeRun.EndedAtUtc = null;
+            nodeRun.FailureClass = null;
+            nodeRun.TerminalReason = null;
+        }
+
+        if (IsTerminal(command.TargetStatus))
+        {
+            nodeRun.EndedAtUtc = now;
+        }
+
+        if (command.OutputJson is not null)
+        {
+            nodeRun.OutputJson = Utf8(command.OutputJson);
+        }
+
+        if (command.FailureClass is not null)
+        {
+            nodeRun.FailureClass = command.FailureClass;
+        }
+
+        if (command.TerminalReason is not null)
+        {
+            nodeRun.TerminalReason = command.TerminalReason;
+        }
+
+        if (command.DevelopmentTaskId is { } developmentTaskId)
+        {
+            nodeRun.DevelopmentTaskId = developmentTaskId;
+        }
+
+        await ApplyWorkItemStatusAsync(run.WorkItemId, command.WorkItemStatus, cancellationToken).ConfigureAwait(false);
+        return new MutationOutcome(EventTypeFor(command.TargetStatus),
+            command.Outcome ?? OutcomeFor(command.TargetStatus),
+            ReasonDetail(command.TerminalReason),
+            nodeRun.Id);
     }
 
     public Task<DevWorkflowMutationResult> AttachWorkSessionAsync(AttachDevWorkflowWorkSessionCommand command, CancellationToken cancellationToken = default)
