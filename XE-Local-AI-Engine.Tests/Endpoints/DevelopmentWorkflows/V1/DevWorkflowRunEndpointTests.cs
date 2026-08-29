@@ -7,7 +7,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
-using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
@@ -35,11 +34,11 @@ public sealed class DevWorkflowRunEndpointTests
 
     /// <summary>The seeded Slice-A shape: one agent into one TERMINAL gate — no out-edge takes a rejection.</summary>
     private const string SampleGraph = """
-        {"schemaVersion":1,
-         "nodes":[{"nodeKey":"research","nodeType":"Agent","label":"Research","agentSeedSlug":"researcher","modelProfile":"qwen","maxAttempts":3},
-                  {"nodeKey":"approval","nodeType":"HumanGate","label":"Approve the plan","instructions":"Read the plan, then answer."}],
-         "edges":[{"from":"research","to":"approval"}]}
-        """;
+                                       {"schemaVersion":1,
+                                        "nodes":[{"nodeKey":"research","nodeType":"Agent","label":"Research","agentSeedSlug":"researcher","modelProfile":"qwen","maxAttempts":3},
+                                                 {"nodeKey":"approval","nodeType":"HumanGate","label":"Approve the plan","instructions":"Read the plan, then answer."}],
+                                        "edges":[{"from":"research","to":"approval"}]}
+                                       """;
 
     [Test]
     [Arguments("GET", Runs)]
@@ -356,7 +355,10 @@ public sealed class DevWorkflowRunEndpointTests
     public async Task GetNodeRun_OfAnotherRun_ReadsAsAbsent()
     {
         var store = Store();
-        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with { RunId = Guid.NewGuid() });
+        store.GetNodeRunAsync(GateNodeRunId, Arg.Any<CancellationToken>()).Returns(GateNodeRun() with
+        {
+            RunId = Guid.NewGuid()
+        });
         await using var factory = EnabledFactory(store, RunService());
 
         using var response = await SendAsync(factory, "GET", NodeRun).ConfigureAwait(false);
@@ -393,7 +395,15 @@ public sealed class DevWorkflowRunEndpointTests
     [Arguments("application/octet-stream", true, "AAECAw==")]
     public async Task ArtifactContent_DecidesBase64FromTheMediaType(string mediaType, bool expectBase64, string expectedContent)
     {
-        var bytes = expectBase64 ? new byte[] { 0, 1, 2, 3 } : Encoding.UTF8.GetBytes("# the plan");
+        var bytes = expectBase64
+            ? new byte[]
+            {
+                0,
+                1,
+                2,
+                3
+            }
+            : Encoding.UTF8.GetBytes("# the plan");
         var store = Store();
         store.GetArtifactAsync(ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact(mediaType: mediaType, sizeBytes: bytes.Length));
         var blobs = Substitute.For<IDevWorkflowArtifactBlobStore>();
@@ -442,7 +452,10 @@ public sealed class DevWorkflowRunEndpointTests
     public async Task ArtifactContent_OfAnotherRun_ReadsAsAbsent()
     {
         var store = Store();
-        store.GetArtifactAsync(ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact() with { RunId = Guid.NewGuid() });
+        store.GetArtifactAsync(ArtifactId, Arg.Any<CancellationToken>()).Returns(Artifact() with
+        {
+            RunId = Guid.NewGuid()
+        });
         await using var factory = EnabledFactory(store, RunService());
 
         using var response = await SendAsync(factory, "GET", ArtifactContent).ConfigureAwait(false);

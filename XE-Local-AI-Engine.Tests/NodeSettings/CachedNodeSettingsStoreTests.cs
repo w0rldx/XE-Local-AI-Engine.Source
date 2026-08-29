@@ -82,9 +82,15 @@ public sealed class CachedNodeSettingsStoreTests
         using var cache = NewCache();
         var sut = new CachedNodeSettingsStore(inner, cache);
 
-        var slow = sut.SaveAsync(new StoredNodeSettings { DefaultModelName = "first" });
+        var slow = sut.SaveAsync(new StoredNodeSettings
+        {
+            DefaultModelName = "first"
+        });
         await inner.WaitUntilWritingAsync();
-        await sut.SaveAsync(new StoredNodeSettings { DefaultModelName = "second" });
+        await sut.SaveAsync(new StoredNodeSettings
+        {
+            DefaultModelName = "second"
+        });
         inner.ReleaseFirstWrite();
         await slow;
 
@@ -102,7 +108,10 @@ public sealed class CachedNodeSettingsStoreTests
         // The load reads the pre-write value, a write lands while it is in flight, and the load then tries to publish.
         var load = sut.LoadAsync();
         await inner.WaitUntilReadingAsync();
-        await sut.SaveAsync(new StoredNodeSettings { DefaultModelName = "written" });
+        await sut.SaveAsync(new StoredNodeSettings
+        {
+            DefaultModelName = "written"
+        });
         inner.ReleaseRead();
         AssertEx.Null((await load).DefaultModelName);
 

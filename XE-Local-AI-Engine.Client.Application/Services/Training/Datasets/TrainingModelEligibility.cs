@@ -34,8 +34,7 @@ internal static class TrainingModelEligibility
     {
         if (ExternalModelId.HasExternalScheme(modelName))
         {
-            throw new TrainingValidationException(
-                $"'{modelName}' is an external model; {roleDescription} must run on a runtime this node owns.");
+            throw new TrainingValidationException($"'{modelName}' is an external model; {roleDescription} must run on a runtime this node owns.");
         }
     }
 }

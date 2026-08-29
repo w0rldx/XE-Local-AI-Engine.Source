@@ -142,7 +142,7 @@ internal sealed record DevWorkflowCondition(string Path, DevWorkflowConditionOpe
         }
 
         var op = element.TryGetProperty("op", out var opElement) && opElement.ValueKind == JsonValueKind.String
-                 && Enum.TryParse<DevWorkflowConditionOperator>(opElement.GetString(), ignoreCase: true, out var parsed)
+                                                                 && Enum.TryParse<DevWorkflowConditionOperator>(opElement.GetString(), ignoreCase: true, out var parsed)
             ? parsed
             : throw new DevWorkflowValidationException($"The condition on edge {edgeDescription} needs an 'op' from "
                                                        + $"{string.Join(", ", Enum.GetNames<DevWorkflowConditionOperator>())}.");

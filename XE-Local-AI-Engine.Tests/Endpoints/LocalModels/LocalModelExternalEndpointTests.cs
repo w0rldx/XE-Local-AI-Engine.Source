@@ -164,8 +164,7 @@ public sealed class LocalModelExternalEndpointTests
         var provider = Substitute.For<ILocalModelProvider>();
         provider.ProviderName.Returns(ExternalProviderConstants.ProviderName);
         provider.DeleteModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                .Returns<Task>(_ => throw new ExternalProviderOperationNotSupportedException(
-                    "External models are removed by unregistering them on their connection, not by deleting local weights."));
+                .Returns<Task>(_ => throw new ExternalProviderOperationNotSupportedException("External models are removed by unregistering them on their connection, not by deleting local weights."));
         await using var factory = CreateFactory(externalProvider: provider);
         using var client = factory.CreateClient();
 

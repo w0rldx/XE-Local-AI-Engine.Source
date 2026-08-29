@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.DevWorkflows;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
@@ -23,32 +24,32 @@ public sealed class DevWorkflowReconcileTests
         var waitingId = Guid.NewGuid();
         var doneId = Guid.NewGuid();
         var materialized = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
-                                           seed.RunVersion,
-                                           Guid.NewGuid(),
-                                           [
-                                               new DevWorkflowNodeRunSeed(queuedId, "queued", DevWorkflowNodeType.Agent),
-                                               new DevWorkflowNodeRunSeed(runningId, "running", DevWorkflowNodeType.Tool),
-                                               new DevWorkflowNodeRunSeed(waitingId, "approval", DevWorkflowNodeType.HumanGate),
-                                               new DevWorkflowNodeRunSeed(doneId, "done", DevWorkflowNodeType.Agent)
-                                           ]))
+                                          seed.RunVersion,
+                                          Guid.NewGuid(),
+                                          [
+                                              new DevWorkflowNodeRunSeed(queuedId, "queued", DevWorkflowNodeType.Agent),
+                                              new DevWorkflowNodeRunSeed(runningId, "running", DevWorkflowNodeType.Tool),
+                                              new DevWorkflowNodeRunSeed(waitingId, "approval", DevWorkflowNodeType.HumanGate),
+                                              new DevWorkflowNodeRunSeed(doneId, "done", DevWorkflowNodeType.Agent)
+                                          ]))
                                       .ConfigureAwait(false);
 
         var sessionId = Guid.NewGuid();
         var version = materialized.Version;
         version = (await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                                   queuedId,
-                                   version,
-                                   DevWorkflowNodeRunStatus.Queued,
-                                   QueueReason: "awaiting-agent-slot"))
+                                  queuedId,
+                                  version,
+                                  DevWorkflowNodeRunStatus.Queued,
+                                  QueueReason: "awaiting-agent-slot"))
                               .ConfigureAwait(false)).Version;
         version = (await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand(seed.RunId, runningId, version, sessionId)).ConfigureAwait(false)).Version;
         version = (await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId, runningId, version, DevWorkflowNodeRunStatus.Running))
                               .ConfigureAwait(false)).Version;
         version = (await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                                   waitingId,
-                                   version,
-                                   DevWorkflowNodeRunStatus.WaitingForApproval,
-                                   PendingDecisionKind: DevWorkflowDecisionKind.Approve))
+                                  waitingId,
+                                  version,
+                                  DevWorkflowNodeRunStatus.WaitingForApproval,
+                                  PendingDecisionKind: DevWorkflowDecisionKind.Approve))
                               .ConfigureAwait(false)).Version;
         version = (await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId, doneId, version, DevWorkflowNodeRunStatus.Succeeded))
                               .ConfigureAwait(false)).Version;
@@ -97,16 +98,16 @@ public sealed class DevWorkflowReconcileTests
         using var fixture = new DevWorkflowTestFixture();
         await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
         var store = DevWorkflowTestFixture.StoreFor(context);
-        var sessionStore = new Persistence.Implementation.AgentWorkSessionStore(context, TimeProvider.System);
+        var sessionStore = new AgentWorkSessionStore(context, TimeProvider.System);
         var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
 
         var sessionId = Guid.NewGuid();
         _ = await sessionStore.CreateAsync(new CreateWorkSessionCommand(sessionId,
-                                   Guid.NewGuid(),
-                                   Guid.NewGuid(),
-                                   AgentWorkSessionKind.Workflow,
-                                   "Research the thing",
-                                   "Find out what we are building."))
+                                  Guid.NewGuid(),
+                                  Guid.NewGuid(),
+                                  AgentWorkSessionKind.Workflow,
+                                  "Research the thing",
+                                  "Find out what we are building."))
                               .ConfigureAwait(false);
 
         var nodeRunId = Guid.NewGuid();
@@ -129,25 +130,24 @@ public sealed class DevWorkflowReconcileTests
     {
         using var fixture = new DevWorkflowTestFixture();
         await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
-        var sessionStore = new Persistence.Implementation.AgentWorkSessionStore(context, TimeProvider.System);
+        var sessionStore = new AgentWorkSessionStore(context, TimeProvider.System);
 
         var created = await sessionStore.CreateAsync(new CreateWorkSessionCommand(Guid.NewGuid(),
-                                             Guid.NewGuid(),
-                                             Guid.NewGuid(),
-                                             AgentWorkSessionKind.Workflow,
-                                             "Workflow node",
-                                             "Do the node's work."))
+                                            Guid.NewGuid(),
+                                            Guid.NewGuid(),
+                                            AgentWorkSessionKind.Workflow,
+                                            "Workflow node",
+                                            "Do the node's work."))
                                         .ConfigureAwait(false);
         AssertEx.Equal(AgentWorkSessionKind.Workflow, created.Kind);
 
-        _ = await AssertEx.ThrowsAsync<ArgumentException>(
-                () => sessionStore.CreateAsync(new CreateWorkSessionCommand(Guid.NewGuid(),
-                    Guid.NewGuid(),
-                    Guid.NewGuid(),
-                    AgentWorkSessionKind.Development,
-                    "Reserved",
-                    "Reserved.")),
-                "Development stays reserved by the series this module supersedes.")
-            .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => sessionStore.CreateAsync(new CreateWorkSessionCommand(Guid.NewGuid(),
+                                  Guid.NewGuid(),
+                                  Guid.NewGuid(),
+                                  AgentWorkSessionKind.Development,
+                                  "Reserved",
+                                  "Reserved.")),
+                              "Development stays reserved by the series this module supersedes.")
+                          .ConfigureAwait(false);
     }
 }

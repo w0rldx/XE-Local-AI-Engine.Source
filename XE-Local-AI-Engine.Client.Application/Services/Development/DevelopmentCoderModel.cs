@@ -206,8 +206,7 @@ internal sealed class DevelopmentCoderModel(
 
         if (await _modelTrustResolver.ResolveAsync(modelId, cancellationToken).ConfigureAwait(false) != ModelTrustLocality.Local)
         {
-            throw new DevelopmentWorkspaceSecurityException(
-                "Development attempts cannot use an external model that is not declared local to this node's trust boundary.");
+            throw new DevelopmentWorkspaceSecurityException("Development attempts cannot use an external model that is not declared local to this node's trust boundary.");
         }
     }
 

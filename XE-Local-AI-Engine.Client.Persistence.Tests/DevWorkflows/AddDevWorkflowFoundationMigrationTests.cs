@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.DevWorkflows;
 
+using Microsoft.Data.Sqlite;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 public sealed class AddDevWorkflowFoundationMigrationTests
@@ -177,7 +178,7 @@ public sealed class AddDevWorkflowFoundationMigrationTests
     private static async Task<IReadOnlySet<string>> EnsureCreatedColumnsAsync(DevWorkflowTestFixture fixture, string table)
     {
         var columns = new HashSet<string>(StringComparer.Ordinal);
-        await using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={fixture.DatabasePath}");
+        await using var connection = new SqliteConnection($"Data Source={fixture.DatabasePath}");
         await connection.OpenAsync().ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT name FROM pragma_table_info($table);";

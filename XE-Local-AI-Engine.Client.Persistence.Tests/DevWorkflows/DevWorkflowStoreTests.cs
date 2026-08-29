@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.DevWorkflows;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
@@ -23,22 +22,22 @@ public sealed class DevWorkflowStoreTests
 
         var artifactId = Guid.NewGuid();
         var appended = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(seed.RunId,
-                                       artifactId,
-                                       nodeRunId,
-                                       version,
-                                       Guid.NewGuid(),
-                                       DevWorkflowArtifactKind.Research,
-                                       "brief",
-                                       "text/markdown",
-                                       "hash-1",
-                                       SizeBytes: 12,
-                                       "reference-1"))
+                                      artifactId,
+                                      nodeRunId,
+                                      version,
+                                      Guid.NewGuid(),
+                                      DevWorkflowArtifactKind.Research,
+                                      "brief",
+                                      "text/markdown",
+                                      "hash-1",
+                                      SizeBytes: 12,
+                                      "reference-1"))
                                   .ConfigureAwait(false);
         var transitioned = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                                           nodeRunId,
-                                           appended.Version,
-                                           DevWorkflowNodeRunStatus.Queued,
-                                           QueueReason: "awaiting-agent-slot"))
+                                          nodeRunId,
+                                          appended.Version,
+                                          DevWorkflowNodeRunStatus.Queued,
+                                          QueueReason: "awaiting-agent-slot"))
                                       .ConfigureAwait(false);
 
         var run = await store.GetRunAsync(seed.RunId).ConfigureAwait(false);
@@ -71,10 +70,9 @@ public sealed class DevWorkflowStoreTests
 
         var moved = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, seed.RunVersion, DevWorkflowRunStatus.Running)).ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(
-                () => store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, seed.RunVersion, DevWorkflowRunStatus.Paused)),
-                "A writer holding the pre-transition version must lose.")
-            .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, seed.RunVersion, DevWorkflowRunStatus.Paused)),
+                              "A writer holding the pre-transition version must lose.")
+                          .ConfigureAwait(false);
 
         var withSentinel = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, DevWorkflowVersions.Any, DevWorkflowRunStatus.Paused))
                                       .ConfigureAwait(false);
@@ -93,16 +91,16 @@ public sealed class DevWorkflowStoreTests
 
         var operationId = Guid.NewGuid();
         var first = await store.AppendEventAsync(new AppendDevWorkflowEventCommand(seed.RunId,
-                                    seed.RunVersion,
-                                    DevWorkflowEventTypes.PolicyResolved,
-                                    OperationId: operationId))
+                                   seed.RunVersion,
+                                   DevWorkflowEventTypes.PolicyResolved,
+                                   OperationId: operationId))
                                .ConfigureAwait(false);
         var eventsAfterFirst = await store.ListEventsAsync(seed.RunId).ConfigureAwait(false);
 
         var replay = await store.AppendEventAsync(new AppendDevWorkflowEventCommand(seed.RunId,
-                                     first.Version,
-                                     DevWorkflowEventTypes.PolicyResolved,
-                                     OperationId: operationId))
+                                    first.Version,
+                                    DevWorkflowEventTypes.PolicyResolved,
+                                    OperationId: operationId))
                                 .ConfigureAwait(false);
         var eventsAfterReplay = await store.ListEventsAsync(seed.RunId).ConfigureAwait(false);
 
@@ -165,7 +163,7 @@ public sealed class DevWorkflowStoreTests
             new(Guid.NewGuid(), seed.WorkItemId, definition.Id, definition.Version, definition.GraphHash, DevWorkflowTestFixture.SampleGraph);
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() => store.StartRunAsync(Second()),
-                                 "A second live run on one work item must be rejected by the database, not by a racy read-modify-write.")
+                              "A second live run on one work item must be rejected by the database, not by a racy read-modify-write.")
                           .ConfigureAwait(false);
 
         _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, DevWorkflowVersions.Any, DevWorkflowRunStatus.Completed)).ConfigureAwait(false);
@@ -187,10 +185,10 @@ public sealed class DevWorkflowStoreTests
         var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, Guid.NewGuid(), "research", seed.RunVersion).ConfigureAwait(false);
         version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, gateNodeRunId, "approval", version, DevWorkflowNodeType.HumanGate).ConfigureAwait(false);
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
-                            gateNodeRunId,
-                            version,
-                            DevWorkflowNodeRunStatus.WaitingForApproval,
-                            PendingDecisionKind: DevWorkflowDecisionKind.Approve))
+                           gateNodeRunId,
+                           version,
+                           DevWorkflowNodeRunStatus.WaitingForApproval,
+                           PendingDecisionKind: DevWorkflowDecisionKind.Approve))
                        .ConfigureAwait(false);
 
         var listed = await store.ListWorkItemsAsync().ConfigureAwait(false);
@@ -238,11 +236,11 @@ public sealed class DevWorkflowStoreTests
         await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
         var store = DevWorkflowTestFixture.StoreFor(context);
         var created = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(),
-                                      "Feature development",
-                                      DevWorkflowTestFixture.SampleGraph,
-                                      NodeCount: 7,
-                                      DevWorkflowDefinitionSource.Seeded,
-                                      "feature-development-v1"))
+                                     "Feature development",
+                                     DevWorkflowTestFixture.SampleGraph,
+                                     NodeCount: 7,
+                                     DevWorkflowDefinitionSource.Seeded,
+                                     "feature-development-v1"))
                                  .ConfigureAwait(false);
 
         var summary = (await store.ListDefinitionsAsync().ConfigureAwait(false)).Single();
@@ -264,7 +262,7 @@ public sealed class DevWorkflowStoreTests
 
         _ = await store.CreateDefinitionAsync(Seeded()).ConfigureAwait(false);
         _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.CreateDefinitionAsync(Seeded()),
-                                 "A re-seed must never duplicate a seeded template.")
+                              "A re-seed must never duplicate a seeded template.")
                           .ConfigureAwait(false);
 
         // Manual rows leave the slug null, so any number of them coexist — that is what the filter on the index is for.
@@ -308,10 +306,10 @@ public sealed class DevWorkflowStoreTests
                                         .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(definitionId, ExpectedVersion: 1, "Winner"))
                                         .ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(
-                                 () => DevWorkflowTestFixture.StoreFor(loserContext)
-                                                             .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(definitionId, ExpectedVersion: 1, "Loser")),
-                                 "The version check cannot see a write that landed after this writer read it, so the token has to.")
+        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => DevWorkflowTestFixture.StoreFor(loserContext)
+                                                                                                    .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(definitionId, ExpectedVersion: 1,
+                                                                                                        "Loser")),
+                              "The version check cannot see a write that landed after this writer read it, so the token has to.")
                           .ConfigureAwait(false);
 
         await using var readContext = fixture.CreateContext();
@@ -341,8 +339,7 @@ public sealed class DevWorkflowStoreTests
 
         // Exactly the write a run start performs, on its own connection, landing inside the PATCH's save: the status
         // moves and the concurrency token moves with it.
-        var interceptor = new CompetingWriteInterceptor(() => fixture.RawExecuteAsync(
-            "UPDATE dev_workflow_work_items SET status = 'Active', version = version + 1 WHERE id = $id;",
+        var interceptor = new CompetingWriteInterceptor(() => fixture.RawExecuteAsync("UPDATE dev_workflow_work_items SET status = 'Active', version = version + 1 WHERE id = $id;",
             command => command.Parameters.AddWithValue("$id", workItemId)));
 
         await using var editContext = fixture.CreateContext(interceptor);

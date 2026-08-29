@@ -25,12 +25,12 @@ public sealed class ExternalProviderProbeServiceTests
     public async Task Probe_WhenTheListingIsWellFormed_ReturnsTheIdsAndTheDeclaredWindows()
     {
         var transport = new ProbeTransport(_ => Json("""
-            {"object":"list","data":[
-              {"id":"qwen3-27b","max_model_len":32768},
-              {"id":"org/other-model","context_length":8192},
-              {"id":"no-window"}
-            ]}
-            """));
+                                                     {"object":"list","data":[
+                                                       {"id":"qwen3-27b","max_model_len":32768},
+                                                       {"id":"org/other-model","context_length":8192},
+                                                       {"id":"no-window"}
+                                                     ]}
+                                                     """));
         var service = CreateService(transport);
 
         var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null))
@@ -54,8 +54,8 @@ public sealed class ExternalProviderProbeServiceTests
     {
         // A pick-to-add row whose id fails the wire-id grammar would produce a registration the store always rejects.
         var transport = new ProbeTransport(_ => Json("""
-            {"object":"list","data":[{"id":"good-model"},{"id":"../escape"},{"id":""},{"id":"good-model"}]}
-            """));
+                                                     {"object":"list","data":[{"id":"good-model"},{"id":"../escape"},{"id":""},{"id":"good-model"}]}
+                                                     """));
         var service = CreateService(transport);
 
         var result = await service.ProbeAsync(new ExternalProviderProbeQuery(ConnectionId: null, "http://127.0.0.1:18099", ApiKey: null))

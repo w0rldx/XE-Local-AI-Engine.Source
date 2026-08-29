@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.ExternalProviders;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
@@ -11,8 +10,6 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
 using XE_Local_AI_Engine.Client.Services.Compute;
 using XE_Local_AI_Engine.Client.Services.Development;
-using XE_Local_AI_Engine.Providers.Abstractions;
-using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -230,7 +227,10 @@ public sealed class ExternalModelPolicyGateTests
             Trust());
 
         // No Development marker: an ordinary chat turn to a declared-cloud external model is a supported flow.
-        _ = await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], new ChatOptions { ModelId = CloudExternalModel });
+        _ = await runtime.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], new ChatOptions
+        {
+            ModelId = CloudExternalModel
+        });
 
         AssertEx.Equal(expected: 1, localClient.CallCount);
     }
@@ -323,21 +323,29 @@ public sealed class ExternalModelPolicyGateTests
         public DevelopmentCommandProfile Profile { get; } =
             DevelopmentCommandProfileCatalog.Materialize(DevelopmentCommandProfileCatalog.GenericGit, buildTarget: null);
 
-        public Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default) => Unused();
+        public Task<string> ListFilesAsync(string? path, CancellationToken cancellationToken = default) =>
+            Unused();
 
-        public Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default) => Unused();
+        public Task<string> ReadFileAsync(string path, CancellationToken cancellationToken = default) =>
+            Unused();
 
-        public Task<string> SearchTextAsync(string pattern, string? path, CancellationToken cancellationToken = default) => Unused();
+        public Task<string> SearchTextAsync(string pattern, string? path, CancellationToken cancellationToken = default) =>
+            Unused();
 
-        public Task<string> WriteFileAsync(string path, string content, CancellationToken cancellationToken = default) => Unused();
+        public Task<string> WriteFileAsync(string path, string content, CancellationToken cancellationToken = default) =>
+            Unused();
 
-        public Task<string> ApplyPatchAsync(string patch, CancellationToken cancellationToken = default) => Unused();
+        public Task<string> ApplyPatchAsync(string patch, CancellationToken cancellationToken = default) =>
+            Unused();
 
-        public Task<string> GetStatusAsync(CancellationToken cancellationToken = default) => Unused();
+        public Task<string> GetStatusAsync(CancellationToken cancellationToken = default) =>
+            Unused();
 
-        public Task<string> GetDiffAsync(CancellationToken cancellationToken = default) => Unused();
+        public Task<string> GetDiffAsync(CancellationToken cancellationToken = default) =>
+            Unused();
 
-        public Task<string> RunCommandAsync(string commandId, CancellationToken cancellationToken = default) => Unused();
+        public Task<string> RunCommandAsync(string commandId, CancellationToken cancellationToken = default) =>
+            Unused();
 
         private static Task<string> Unused() =>
             throw new InvalidOperationException("A refused Development attempt must never touch the workspace.");
@@ -370,7 +378,8 @@ public sealed class ExternalModelPolicyGateTests
             return AsyncEnumerable.Empty<ChatResponseUpdate>();
         }
 
-        public object? GetService(Type serviceType, object? serviceKey = null) => null;
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            null;
 
         public void Dispose()
         {

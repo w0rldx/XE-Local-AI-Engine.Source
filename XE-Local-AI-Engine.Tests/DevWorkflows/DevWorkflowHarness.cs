@@ -35,6 +35,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     ///     <c>AdvanceSafelyAsync</c> rather than by this harness.
     /// </summary>
     private readonly TestServerWebAppFactory _factory;
+
     private DevWorkflowDispatcher? _replacement;
 
     public DevWorkflowHarness(params (string Key, string Value)[] configuration)
@@ -433,15 +434,15 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
 
         var scopes = Services.GetRequiredService<IServiceScopeFactory>();
         await new WorkSessionStartupReconciler(scopes,
-                Services.GetRequiredService<IOptions<WorkSessionOptions>>(),
-                Services.GetRequiredService<ILogger<WorkSessionStartupReconciler>>())
-            .StartAsync(CancellationToken.None)
-            .ConfigureAwait(false);
+                  Services.GetRequiredService<IOptions<WorkSessionOptions>>(),
+                  Services.GetRequiredService<ILogger<WorkSessionStartupReconciler>>())
+              .StartAsync(CancellationToken.None)
+              .ConfigureAwait(false);
         await new DevWorkflowStartupReconciler(scopes,
-                Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
-                Services.GetRequiredService<ILogger<DevWorkflowStartupReconciler>>())
-            .StartAsync(CancellationToken.None)
-            .ConfigureAwait(false);
+                  Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+                  Services.GetRequiredService<ILogger<DevWorkflowStartupReconciler>>())
+              .StartAsync(CancellationToken.None)
+              .ConfigureAwait(false);
 
         _replacement = CreateReplacementDispatcher();
     }

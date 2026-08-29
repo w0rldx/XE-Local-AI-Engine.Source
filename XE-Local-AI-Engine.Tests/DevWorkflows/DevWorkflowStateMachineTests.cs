@@ -338,13 +338,11 @@ public sealed class DevWorkflowStateMachineTests
     [Test]
     public void EnsureLegal_RejectsAnIllegalMoveThroughTheStoresRejectionChannel()
     {
-        AssertEx.Contains(
-            AssertEx.Throws<DevWorkflowInvalidTransitionException>(() =>
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowInvalidTransitionException>(() =>
                 DevWorkflowStateMachine.EnsureLegal(DevWorkflowRunStatus.Completed, DevWorkflowRunStatus.Running)).Message,
             "cannot move to Running");
 
-        AssertEx.Contains(
-            AssertEx.Throws<DevWorkflowInvalidTransitionException>(() =>
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowInvalidTransitionException>(() =>
                 DevWorkflowStateMachine.EnsureLegal(DevWorkflowNodeRunStatus.Pending, DevWorkflowNodeRunStatus.Succeeded, "plan")).Message,
             "Node run 'plan' is Pending");
     }

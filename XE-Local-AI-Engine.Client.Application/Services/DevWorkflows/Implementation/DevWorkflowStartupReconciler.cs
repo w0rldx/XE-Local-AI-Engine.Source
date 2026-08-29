@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -98,13 +97,13 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
             // attempt and has to count against the node's budget — unlike an agent, whose session resumes from a
             // checkpoint it wrote itself.
             _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(nodeRun.RunId,
-                                nodeRun.Id,
-                                DevWorkflowVersions.Any,
-                                DevWorkflowNodeRunStatus.Pending,
-                                IncrementAttempt: true,
-                                Outcome: DevWorkflowOutcomes.Interrupted),
-                            cancellationToken)
-                        .ConfigureAwait(false);
+                                   nodeRun.Id,
+                                   DevWorkflowVersions.Any,
+                                   DevWorkflowNodeRunStatus.Pending,
+                                   IncrementAttempt: true,
+                                   Outcome: DevWorkflowOutcomes.Interrupted),
+                               cancellationToken)
+                           .ConfigureAwait(false);
             return;
         }
 
@@ -232,13 +231,13 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
         string sanitizedReason,
         CancellationToken cancellationToken) =>
         _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(nodeRun.RunId,
-                            nodeRun.Id,
-                            DevWorkflowVersions.Any,
-                            DevWorkflowNodeRunStatus.Blocked,
-                            PendingDecisionKind: DevWorkflowDecisionKind.Abandon,
-                            FailureClass: failureClass,
-                            TerminalReason: sanitizedReason,
-                            WorkItemStatus: DevWorkflowWorkItemStatus.Blocked),
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                               nodeRun.Id,
+                               DevWorkflowVersions.Any,
+                               DevWorkflowNodeRunStatus.Blocked,
+                               PendingDecisionKind: DevWorkflowDecisionKind.Abandon,
+                               FailureClass: failureClass,
+                               TerminalReason: sanitizedReason,
+                               WorkItemStatus: DevWorkflowWorkItemStatus.Blocked),
+                           cancellationToken)
+                       .ConfigureAwait(false);
 }

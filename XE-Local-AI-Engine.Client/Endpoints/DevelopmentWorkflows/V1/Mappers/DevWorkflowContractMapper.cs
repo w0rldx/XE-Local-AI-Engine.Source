@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
@@ -20,7 +21,7 @@ internal static class DevWorkflowContractMapper
     /// </summary>
     private static readonly JsonSerializerOptions GraphOptions = new(JsonSerializerDefaults.Web)
     {
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
     /// <summary>

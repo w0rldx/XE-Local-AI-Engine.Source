@@ -92,13 +92,13 @@ public sealed class DevWorkflowAgentExecutorTests
              .ThrowsAsyncForAnyArgs(new DevWorkflowInvalidTransitionException("The attach lost its race."));
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                              executor.DispatchAsync(store,
-                                  DevWorkflowGraph.Parse(SingleAgent),
-                                  run,
-                                  DevWorkflowGraph.Parse(SingleAgent).Nodes["research"],
-                                  nodeRun,
-                                  [nodeRun],
-                                  CancellationToken.None),
+                                  executor.DispatchAsync(store,
+                                      DevWorkflowGraph.Parse(SingleAgent),
+                                      run,
+                                      DevWorkflowGraph.Parse(SingleAgent).Nodes["research"],
+                                      nodeRun,
+                                      [nodeRun],
+                                      CancellationToken.None),
                               "the attach's failure is what the caller sees; the cleanup is not the story.")
                           .ConfigureAwait(false);
 

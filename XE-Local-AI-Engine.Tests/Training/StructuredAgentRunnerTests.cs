@@ -135,7 +135,10 @@ public sealed class StructuredAgentRunnerTests
         using var client = new RecordingChatClient(SampleJson);
 
         var exception = await AssertEx.ThrowsAsync<TrainingValidationException>(() =>
-            runner.RunAsync(client, Request(TeacherOutputMode.ValidateAfter) with { ModelName = teacherModel }));
+            runner.RunAsync(client, Request(TeacherOutputMode.ValidateAfter) with
+            {
+                ModelName = teacherModel
+            }));
 
         AssertEx.Contains(exception.Message, "external model");
         AssertEx.False(client.WasCalled, "A refused teacher must never reach the transport.");

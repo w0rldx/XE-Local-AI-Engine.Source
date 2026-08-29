@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1;
 
 using System.Globalization;
+using System.Text;
 using FastEndpoints;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Common;
@@ -115,7 +115,7 @@ public sealed class GetDevWorkflowArtifactContentEndpoint(IDevWorkflowStore stor
         }
 
         var isBase64 = !ArtifactMediaTypes.IsText(artifact.MediaType);
-        var content = isBase64 ? Convert.ToBase64String(read.Content.Span) : System.Text.Encoding.UTF8.GetString(read.Content.Span);
+        var content = isBase64 ? Convert.ToBase64String(read.Content.Span) : Encoding.UTF8.GetString(read.Content.Span);
         await Send.OkAsync(new DevWorkflowArtifactContentResponse(artifact.ToResponse(), content, isBase64), ct).ConfigureAwait(false);
     }
 }

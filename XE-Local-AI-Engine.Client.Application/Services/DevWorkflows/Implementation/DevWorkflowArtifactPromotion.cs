@@ -68,18 +68,18 @@ internal sealed class DevWorkflowArtifactPromotion
             var artifactId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"artifact:{artifact.Name}");
             var write = await _runBlobs.WriteAsync(run.Id, artifactId, read.Content, cancellationToken).ConfigureAwait(false);
             var result = await _store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(run.Id,
-                                          artifactId,
-                                          nodeRun.Id,
-                                          DevWorkflowVersions.Any,
-                                          DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"promote:{artifact.Name}"),
-                                          MapKind(artifact.Kind),
-                                          artifact.Name,
-                                          artifact.MediaType,
-                                          write.ContentHash,
-                                          write.ByteCount,
-                                          write.OpaqueReference),
-                                      cancellationToken)
-                                  .ConfigureAwait(false);
+                                             artifactId,
+                                             nodeRun.Id,
+                                             DevWorkflowVersions.Any,
+                                             DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"promote:{artifact.Name}"),
+                                             MapKind(artifact.Kind),
+                                             artifact.Name,
+                                             artifact.MediaType,
+                                             write.ContentHash,
+                                             write.ByteCount,
+                                             write.OpaqueReference),
+                                         cancellationToken)
+                                     .ConfigureAwait(false);
             promoted++;
 
             if (result.SupersededArtifactId is not { } superseded)
@@ -91,12 +91,12 @@ internal sealed class DevWorkflowArtifactPromotion
             // human decides what to do about it. Nothing is regenerated, and the superseded bytes stay — versioning is
             // the point.
             _ = await _store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand(run.Id,
-                                superseded,
-                                artifactId,
-                                DevWorkflowVersions.Any,
-                                DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"stale:{artifact.Name}")),
-                            cancellationToken)
-                        .ConfigureAwait(false);
+                                    superseded,
+                                    artifactId,
+                                    DevWorkflowVersions.Any,
+                                    DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"stale:{artifact.Name}")),
+                                cancellationToken)
+                            .ConfigureAwait(false);
         }
 
         return promoted;

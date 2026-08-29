@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1;
 using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
@@ -93,8 +94,8 @@ public sealed class DevWorkflowRunHub(IDevWorkflowStore store, IDevWorkflowRunSe
         var events = await _store.ListEventsAsync(runId, afterSeq, ReplayCap + 1, cancellationToken).ConfigureAwait(false);
         return new DevWorkflowRunSubscriptionSnapshot(runId,
             detail.Run.Status.ToString(),
-            detail.NodeRuns.Count(static nodeRun => nodeRun.Status == Persistence.Entities.DevWorkflowNodeRunStatus.Queued),
-            detail.NodeRuns.Count(static nodeRun => nodeRun.Status == Persistence.Entities.DevWorkflowNodeRunStatus.Running),
+            detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Queued),
+            detail.NodeRuns.Count(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running),
             detail.PendingDecisionCount,
             detail.BlockingGateNodeRunId,
             detail.Run.LastSequence,

@@ -73,13 +73,13 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         // ONE call. The seeds carry the caller's inputs, which have no other home, so a run row that committed without
         // them would be a durable workflow quietly running a different request from the one that was asked.
         var run = await _store.StartRunAsync(new StartDevWorkflowRunCommand(operationId,
-                                  workItemId,
-                                  definitionId,
-                                  definition.Version,
-                                  definition.GraphHash,
-                                  definition.GraphJson,
-                                  DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson, _options.MaxNodeRunsPerRun)),
-                              cancellationToken)
+                                      workItemId,
+                                      definitionId,
+                                      definition.Version,
+                                      definition.GraphHash,
+                                      definition.GraphJson,
+                                      DevWorkflowRunSeeds.Compose(graph, workItem, inputsJson, _options.MaxNodeRunsPerRun)),
+                                  cancellationToken)
                               .ConfigureAwait(false);
 
         return await SignalAndComposeAsync(run.Id, cancellationToken).ConfigureAwait(false);
@@ -228,17 +228,17 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         }
 
         _ = await _store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(runId,
-                            Guid.NewGuid(),
-                            nodeRunId,
-                            DevWorkflowVersions.Any,
-                            operationId,
-                            decision,
-                            comment,
-                            payloadJson,
-                            decidedBySubject,
-                            decision == DevWorkflowDecisionKind.Retry ? _options.MaxTotalAttempts : null),
-                        cancellationToken)
-                    .ConfigureAwait(false);
+                                Guid.NewGuid(),
+                                nodeRunId,
+                                DevWorkflowVersions.Any,
+                                operationId,
+                                decision,
+                                comment,
+                                payloadJson,
+                                decidedBySubject,
+                                decision == DevWorkflowDecisionKind.Retry ? _options.MaxTotalAttempts : null),
+                            cancellationToken)
+                        .ConfigureAwait(false);
 
         var detail = await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false);
         var settled = await _store.FindDecisionByOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false)

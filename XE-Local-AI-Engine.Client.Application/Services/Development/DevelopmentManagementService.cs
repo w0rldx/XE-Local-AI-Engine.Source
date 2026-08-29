@@ -316,8 +316,7 @@ internal sealed class DevelopmentManagementService(
         if (ExternalModelId.HasExternalScheme(modelId)
             && await _modelTrustResolver.ResolveAsync(modelId, cancellationToken).ConfigureAwait(false) != ModelTrustLocality.Local)
         {
-            throw new DevelopmentWorkspaceSecurityException(
-                "Development execution cannot start with an external model that is not declared local to this node's trust boundary.");
+            throw new DevelopmentWorkspaceSecurityException("Development execution cannot start with an external model that is not declared local to this node's trust boundary.");
         }
 
         var cloudProvider = _cloudFactory.ResolveActiveCloudProviderName(modelId);

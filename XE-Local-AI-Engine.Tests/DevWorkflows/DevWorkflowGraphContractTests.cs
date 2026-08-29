@@ -12,27 +12,27 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class DevWorkflowGraphContractTests
 {
     private const string TerminalGate = """
-        {"schemaVersion":1,
-         "nodes":[{"nodeKey":"research","nodeType":"Agent"},{"nodeKey":"approval","nodeType":"HumanGate"}],
-         "edges":[{"from":"research","to":"approval"}]}
-        """;
+                                        {"schemaVersion":1,
+                                         "nodes":[{"nodeKey":"research","nodeType":"Agent"},{"nodeKey":"approval","nodeType":"HumanGate"}],
+                                         "edges":[{"from":"research","to":"approval"}]}
+                                        """;
 
     private const string BranchingGate = """
-        {"schemaVersion":1,
-         "nodes":[{"nodeKey":"research","nodeType":"Agent"},{"nodeKey":"approval","nodeType":"HumanGate"},
-                  {"nodeKey":"ship","nodeType":"Agent"},{"nodeKey":"rework","nodeType":"Agent"}],
-         "edges":[{"from":"research","to":"approval"},
-                  {"from":"approval","to":"ship","condition":{"path":"decision","op":"eq","value":"Approve"}},
-                  {"from":"approval","to":"rework","condition":{"path":"decision","op":"eq","value":"Reject"}}]}
-        """;
+                                         {"schemaVersion":1,
+                                          "nodes":[{"nodeKey":"research","nodeType":"Agent"},{"nodeKey":"approval","nodeType":"HumanGate"},
+                                                   {"nodeKey":"ship","nodeType":"Agent"},{"nodeKey":"rework","nodeType":"Agent"}],
+                                          "edges":[{"from":"research","to":"approval"},
+                                                   {"from":"approval","to":"ship","condition":{"path":"decision","op":"eq","value":"Approve"}},
+                                                   {"from":"approval","to":"rework","condition":{"path":"decision","op":"eq","value":"Reject"}}]}
+                                         """;
 
     private const string ApproveOnlyGate = """
-        {"schemaVersion":1,
-         "nodes":[{"nodeKey":"research","nodeType":"Agent"},{"nodeKey":"approval","nodeType":"HumanGate"},
-                  {"nodeKey":"ship","nodeType":"Agent"}],
-         "edges":[{"from":"research","to":"approval"},
-                  {"from":"approval","to":"ship","condition":{"path":"decision","op":"eq","value":"Approve"}}]}
-        """;
+                                           {"schemaVersion":1,
+                                            "nodes":[{"nodeKey":"research","nodeType":"Agent"},{"nodeKey":"approval","nodeType":"HumanGate"},
+                                                     {"nodeKey":"ship","nodeType":"Agent"}],
+                                            "edges":[{"from":"research","to":"approval"},
+                                                     {"from":"approval","to":"ship","condition":{"path":"decision","op":"eq","value":"Approve"}}]}
+                                           """;
 
     /// <summary>
     ///     The panel is driven by this list, and the endpoint refuses everything outside it with a 409. A status that

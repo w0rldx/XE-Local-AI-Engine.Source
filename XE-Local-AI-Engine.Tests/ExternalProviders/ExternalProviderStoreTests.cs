@@ -120,7 +120,13 @@ public sealed class ExternalProviderStoreTests : IDisposable
         using var store = CreateStore();
 
         _ = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () =>
-            await SaveAsync(store, Request(models: [Model("qwen3") with { DefaultReasoningEffort = "extreme" }])));
+            await SaveAsync(store, Request(models:
+            [
+                Model("qwen3") with
+                {
+                    DefaultReasoningEffort = "extreme"
+                }
+            ])));
     }
 
     [Test]
@@ -194,7 +200,10 @@ public sealed class ExternalProviderStoreTests : IDisposable
         using var store = CreateStore();
         _ = await SaveAsync(store, Request(baseUrl: "http://127.0.0.1:18099/v1", apiKey: "sk-unsloth-original"));
 
-        var moved = await SaveAsync(store, Request(baseUrl: "http://127.0.0.1:19000/v1", apiKey: null) with { ClearApiKey = true });
+        var moved = await SaveAsync(store, Request(baseUrl: "http://127.0.0.1:19000/v1", apiKey: null) with
+        {
+            ClearApiKey = true
+        });
 
         AssertEx.Null(moved.Config.Connections.Single().ApiKey);
         AssertEx.Equal("http://127.0.0.1:19000/v1/", moved.Config.Connections.Single().BaseUrl);
@@ -218,7 +227,10 @@ public sealed class ExternalProviderStoreTests : IDisposable
         using var store = CreateStore();
         _ = await SaveAsync(store, Request(apiKey: "sk-unsloth-original"));
 
-        var cleared = await SaveAsync(store, Request(apiKey: null) with { ClearApiKey = true });
+        var cleared = await SaveAsync(store, Request(apiKey: null) with
+        {
+            ClearApiKey = true
+        });
 
         // The only way back from authenticated to keyless — and keyless means NO Authorization header at all.
         AssertEx.Null(cleared.Config.Connections.Single().ApiKey);
@@ -230,7 +242,10 @@ public sealed class ExternalProviderStoreTests : IDisposable
         using var store = CreateStore();
         _ = await SaveAsync(store, Request(apiKey: "sk-original"));
 
-        var cleared = await SaveAsync(store, Request(apiKey: "sk-new") with { ClearApiKey = true });
+        var cleared = await SaveAsync(store, Request(apiKey: "sk-new") with
+        {
+            ClearApiKey = true
+        });
 
         AssertEx.Null(cleared.Config.Connections.Single().ApiKey);
     }
@@ -242,7 +257,10 @@ public sealed class ExternalProviderStoreTests : IDisposable
         var first = await SaveAsync(store, Request());
         _ = await SaveAsync(store, Request(displayName: "Edited elsewhere"));
 
-        var result = await store.SaveConnectionAsync(Request(displayName: "Stale editor") with { ExpectedRevision = first.Config.Revision });
+        var result = await store.SaveConnectionAsync(Request(displayName: "Stale editor") with
+        {
+            ExpectedRevision = first.Config.Revision
+        });
 
         var superseded = result as ExternalProviderWriteResult.Superseded;
         AssertEx.NotNull(superseded);
@@ -255,7 +273,10 @@ public sealed class ExternalProviderStoreTests : IDisposable
         using var store = CreateStore();
         var first = await SaveAsync(store, Request());
 
-        var result = await store.SaveConnectionAsync(Request(displayName: "Same editor") with { ExpectedRevision = first.Config.Revision });
+        var result = await store.SaveConnectionAsync(Request(displayName: "Same editor") with
+        {
+            ExpectedRevision = first.Config.Revision
+        });
 
         AssertEx.Equal("Same editor", (result as ExternalProviderWriteResult.Committed)!.Config.Connections.Single().DisplayName);
     }
@@ -422,8 +443,13 @@ public sealed class ExternalProviderStoreTests : IDisposable
         // reason, but here is its default reasoning effort" has no defensible reading: accepting it would put
         // reasoning_effort on the wire for a model the catalog reports as non-reasoning.
         _ = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () =>
-            await SaveAsync(store, Request(models: [
-                Model("qwen3") with { SupportsReasoning = false, SupportsReasoningEffort = true }
+            await SaveAsync(store, Request(models:
+            [
+                Model("qwen3") with
+                {
+                    SupportsReasoning = false,
+                    SupportsReasoningEffort = true
+                }
             ])));
     }
 
@@ -433,8 +459,14 @@ public sealed class ExternalProviderStoreTests : IDisposable
         using var store = CreateStore();
 
         _ = await AssertEx.ThrowsAsync<ExternalProviderValidationException>(async () =>
-            await SaveAsync(store, Request(models: [
-                Model("qwen3") with { SupportsReasoning = true, SupportsReasoningEffort = false, DefaultReasoningEffort = "medium" }
+            await SaveAsync(store, Request(models:
+            [
+                Model("qwen3") with
+                {
+                    SupportsReasoning = true,
+                    SupportsReasoningEffort = false,
+                    DefaultReasoningEffort = "medium"
+                }
             ])));
     }
 
@@ -443,8 +475,14 @@ public sealed class ExternalProviderStoreTests : IDisposable
     {
         using var store = CreateStore();
 
-        var committed = await SaveAsync(store, Request(models: [
-            Model("qwen3") with { SupportsReasoning = true, SupportsReasoningEffort = true, DefaultReasoningEffort = "medium" }
+        var committed = await SaveAsync(store, Request(models:
+        [
+            Model("qwen3") with
+            {
+                SupportsReasoning = true,
+                SupportsReasoningEffort = true,
+                DefaultReasoningEffort = "medium"
+            }
         ]));
 
         AssertEx.Equal("medium", committed.Config.Connections.Single().Models.Single().DefaultReasoningEffort);

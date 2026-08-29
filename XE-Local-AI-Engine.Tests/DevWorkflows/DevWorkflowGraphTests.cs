@@ -145,7 +145,8 @@ public sealed class DevWorkflowGraphTests
     [Test]
     public void Parse_WithTwoEntryNodes_IsRejected()
     {
-        const string TwoEntries = """{"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Agent"},{"nodeKey":"c","nodeType":"Join"}],"edges":[{"from":"a","to":"c"},{"from":"b","to":"c"}]}""";
+        const string TwoEntries =
+            """{"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Agent"},{"nodeKey":"c","nodeType":"Join"}],"edges":[{"from":"a","to":"c"},{"from":"b","to":"c"}]}""";
 
         AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(TwoEntries)).Message, "exactly one entry node");
     }

@@ -176,7 +176,11 @@ internal sealed partial class DevWorkflowStore
                                                  && entity.Status != DevWorkflowRunStatus.Completed
                                                  && entity.Status != DevWorkflowRunStatus.Failed
                                                  && entity.Status != DevWorkflowRunStatus.Cancelled)
-                                .Select(entity => new { entity.Id, entity.Status })
+                                .Select(entity => new
+                                {
+                                    entity.Id,
+                                    entity.Status
+                                })
                                 .FirstOrDefaultAsync(cancellationToken)
                                 .ConfigureAwait(false) is { } live)
             {
@@ -728,7 +732,8 @@ internal sealed partial class DevWorkflowStore
 
     private sealed record LatestRunProjection(Guid RunId, DevWorkflowRunStatus Status, string? DefinitionName);
 
-    private sealed record RunSummaryProjection(Guid Id,
+    private sealed record RunSummaryProjection(
+        Guid Id,
         Guid WorkItemId,
         Guid DefinitionId,
         string? DefinitionName,

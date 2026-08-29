@@ -240,10 +240,10 @@ internal sealed class WorkSessionService : IWorkSessionService, IWorkflowOwnedWo
             try
             {
                 _ = await BeginAsync(sessionId,
-                                  [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted],
-                                  workflowOwned: false,
-                                  cancellationToken)
-                              .ConfigureAwait(false);
+                        [AgentWorkSessionStatus.Paused, AgentWorkSessionStatus.Interrupted],
+                        workflowOwned: false,
+                        cancellationToken)
+                    .ConfigureAwait(false);
             }
             catch (WorkSessionInvalidTransitionException exception)
             {

@@ -27,11 +27,11 @@ public sealed class DevWorkflowEndpointTests
 
     /// <summary>The graph the seeded Slice-A template has: one agent into one terminal gate.</summary>
     private const string SampleGraph = """
-        {"schemaVersion":1,
-         "nodes":[{"nodeKey":"research","nodeType":"Agent","label":"Research","agentSeedSlug":"researcher","maxAttempts":3},
-                  {"nodeKey":"approval","nodeType":"HumanGate","label":"Approve the plan","instructions":"Read the plan."}],
-         "edges":[{"from":"research","to":"approval"}]}
-        """;
+                                       {"schemaVersion":1,
+                                        "nodes":[{"nodeKey":"research","nodeType":"Agent","label":"Research","agentSeedSlug":"researcher","maxAttempts":3},
+                                                 {"nodeKey":"approval","nodeType":"HumanGate","label":"Approve the plan","instructions":"Read the plan."}],
+                                        "edges":[{"from":"research","to":"approval"}]}
+                                       """;
 
     [Test]
     [Arguments("GET", WorkItems)]
@@ -312,7 +312,8 @@ public sealed class DevWorkflowEndpointTests
     ///     route is refused here, with the parser's own message.
     /// </summary>
     [Test]
-    [Arguments("""{"schemaVersion":1,"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Agent"},{"nodeKey":"c","nodeType":"Agent"}],"edges":[{"from":"a","to":"b"},{"from":"b","to":"c"},{"from":"c","to":"b"}]}""",
+    [Arguments(
+        """{"schemaVersion":1,"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Agent"},{"nodeKey":"c","nodeType":"Agent"}],"edges":[{"from":"a","to":"b"},{"from":"b","to":"c"},{"from":"c","to":"b"}]}""",
         "cycle")]
     [Arguments("""{"schemaVersion":1,"nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Agent"}],"edges":[]}""", "entry node")]
     [Arguments("""{"schemaVersion":1,"nodes":[{"nodeKey":"a","nodeType":"Nonsense"}],"edges":[]}""", "'nodeType'")]
@@ -340,10 +341,10 @@ public sealed class DevWorkflowEndpointTests
     public async Task Definition_KeepsAConditionValuesJsonTypeThroughTheRoundTrip()
     {
         const string ConditionGraph = """
-            {"schemaVersion":1,
-             "nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Agent"}],
-             "edges":[{"from":"a","to":"b","condition":{"path":"passed","op":"eq","value":true}}]}
-            """;
+                                      {"schemaVersion":1,
+                                       "nodes":[{"nodeKey":"a","nodeType":"Agent"},{"nodeKey":"b","nodeType":"Agent"}],
+                                       "edges":[{"from":"a","to":"b","condition":{"path":"passed","op":"eq","value":true}}]}
+                                      """;
         var store = Store();
         string? stored = null;
         store.CreateDefinitionAsync(Arg.Any<CreateDevWorkflowDefinitionCommand>(), Arg.Any<CancellationToken>())

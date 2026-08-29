@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 
-using Microsoft.Extensions.AI;
+using System.Net;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
@@ -174,7 +174,7 @@ public sealed class ExternalOpenAiModelProviderTests
     {
         var recorder = new OpenAiWireRecorder
         {
-            Responder = static _ => new HttpResponseMessage(System.Net.HttpStatusCode.Unauthorized)
+            Responder = static _ => new HttpResponseMessage(HttpStatusCode.Unauthorized)
         };
         var registry = new FakeExternalProviderRegistry().Add(ExternalProviderTestData.Connection(), ExternalProviderTestData.Model());
 

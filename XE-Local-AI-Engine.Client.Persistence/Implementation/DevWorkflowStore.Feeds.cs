@@ -18,8 +18,8 @@ internal sealed partial class DevWorkflowStore
                                        .ToListAsync(cancellationToken)
                                        .ConfigureAwait(false);
         var available = await LoadAvailableWorkSessionsAsync([.. nodeRuns.Where(entity => entity.WorkSessionId is not null).Select(entity => entity.WorkSessionId!.Value)],
-                                cancellationToken)
-                            .ConfigureAwait(false);
+                cancellationToken)
+            .ConfigureAwait(false);
         return [.. nodeRuns.Select(entity => NodeRunSnapshot(entity, available))];
     }
 
@@ -65,7 +65,10 @@ internal sealed partial class DevWorkflowStore
                                       .Where(entity => entity.LineageId == artifact.LineageId)
                                       .MaxAsync(entity => entity.Version, cancellationToken)
                                       .ConfigureAwait(false);
-        return ArtifactSnapshot(artifact, new Dictionary<Guid, int> { [artifact.LineageId] = highest });
+        return ArtifactSnapshot(artifact, new Dictionary<Guid, int>
+        {
+            [artifact.LineageId] = highest
+        });
     }
 
     public async Task<IReadOnlyList<Guid>> ListConsumedArtifactIdsAsync(Guid nodeRunId, CancellationToken cancellationToken = default)

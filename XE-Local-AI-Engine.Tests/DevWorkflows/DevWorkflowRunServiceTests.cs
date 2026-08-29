@@ -85,7 +85,7 @@ public sealed class DevWorkflowRunServiceTests
         _ = await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false);
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() =>
-                              harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())),
+                                  harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())),
                               "Its own conflict type, because the operator's next move differs from any other invalid transition: wait for the live run, or cancel it.")
                           .ConfigureAwait(false);
     }
@@ -99,12 +99,12 @@ public sealed class DevWorkflowRunServiceTests
     {
         await using var harness = new DevWorkflowHarness();
         var (workItemId, definitionId) = await harness.SeedDefinitionAsync("""
-                                                                          {
-                                                                            "schemaVersion": 1,
-                                                                            "nodes": [{ "nodeKey": "validate", "nodeType": "Tool" }],
-                                                                            "edges": []
-                                                                          }
-                                                                          """)
+                                                                           {
+                                                                             "schemaVersion": 1,
+                                                                             "nodes": [{ "nodeKey": "validate", "nodeType": "Tool" }],
+                                                                             "edges": []
+                                                                           }
+                                                                           """)
                                                       .ConfigureAwait(false);
 
         var refusal = await AssertEx.ThrowsAsync<DevWorkflowValidationException>(() =>
@@ -604,13 +604,13 @@ public sealed class DevWorkflowRunServiceTests
         AssertEx.Contains(differentAnswer.Message, "already recorded a different decision");
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
-                              harness.WithRunServiceAsync(service => service.DecideAsync(runId,
-                                  nodeRunId,
-                                  operationId,
-                                  DevWorkflowDecisionKind.Approve,
-                                  comment: null,
-                                  payloadJson: null,
-                                  "someone-else@localhost.test")),
+                                  harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                                      nodeRunId,
+                                      operationId,
+                                      DevWorkflowDecisionKind.Approve,
+                                      comment: null,
+                                      payloadJson: null,
+                                      "someone-else@localhost.test")),
                               "and the same answer attributed to a different person is a different act too.")
                           .ConfigureAwait(false);
 
@@ -671,8 +671,17 @@ public sealed class DevWorkflowRunServiceTests
     {
         using var request = new CancellationTokenSource();
         var workItemId = Guid.NewGuid();
-        var sessionIds = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
-        var runIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var sessionIds = new[]
+        {
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            Guid.NewGuid()
+        };
+        var runIds = new[]
+        {
+            Guid.NewGuid(),
+            Guid.NewGuid()
+        };
 
         var store = Substitute.For<IDevWorkflowStore>();
         _ = store.GetWorkItemAsync(workItemId, Arg.Any<CancellationToken>())
@@ -714,7 +723,11 @@ public sealed class DevWorkflowRunServiceTests
 
         await service.DeleteWorkItemAsync(workItemId, request.Token).ConfigureAwait(false);
 
-        AssertEx.Equal(string.Join(", ", new[] { sessionIds[0], sessionIds[2] }),
+        AssertEx.Equal(string.Join(", ", new[]
+            {
+                sessionIds[0],
+                sessionIds[2]
+            }),
             string.Join(", ", sessions.Deleted),
             "Every session the delete orphaned has to be released, past the cancellation and past the one that was refused.");
         AssertEx.Equal(string.Join(", ", runIds), string.Join(", ", swept), "And so does every run's artifact directory, which nothing else will ever collect.");

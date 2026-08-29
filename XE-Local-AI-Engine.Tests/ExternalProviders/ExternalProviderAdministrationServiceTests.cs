@@ -113,7 +113,10 @@ public sealed class ExternalProviderAdministrationServiceTests
     /// <summary>A store whose write outcome the test scripts, so every branch of the side-effect ladder is reachable.</summary>
     private sealed class ScriptedExternalProviderStore : IExternalProviderStore
     {
-        private readonly StoredExternalProviderConfig _config = new() { Revision = "r1" };
+        private readonly StoredExternalProviderConfig _config = new()
+        {
+            Revision = "r1"
+        };
 
         public Func<StoredExternalProviderConfig, ExternalProviderWriteResult> NextResult { get; set; } =
             config => new ExternalProviderWriteResult.Committed(config, Changed: true);

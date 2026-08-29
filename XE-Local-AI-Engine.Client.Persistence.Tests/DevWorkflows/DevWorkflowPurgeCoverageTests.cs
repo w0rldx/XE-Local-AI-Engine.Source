@@ -103,29 +103,29 @@ public sealed class DevWorkflowPurgeCoverageTests
 
             var artifactId = Guid.NewGuid();
             var appended = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(seed.RunId,
-                                           artifactId,
-                                           producerId,
-                                           version,
-                                           Guid.NewGuid(),
-                                           DevWorkflowArtifactKind.Research,
-                                           "brief",
-                                           "text/markdown",
-                                           "hash-1",
-                                           SizeBytes: 10,
-                                           "reference-1"))
+                                          artifactId,
+                                          producerId,
+                                          version,
+                                          Guid.NewGuid(),
+                                          DevWorkflowArtifactKind.Research,
+                                          "brief",
+                                          "text/markdown",
+                                          "hash-1",
+                                          SizeBytes: 10,
+                                          "reference-1"))
                                       .ConfigureAwait(false);
             var used = await store.RecordArtifactUsesAsync(new RecordDevWorkflowArtifactUsesCommand(seed.RunId, consumerId, appended.Version, Guid.NewGuid(), [artifactId]))
                                   .ConfigureAwait(false);
             _ = await store.RecordDecisionAsync(new RecordDevWorkflowDecisionCommand(seed.RunId,
-                                Guid.NewGuid(),
-                                consumerId,
-                                used.Version,
-                                Guid.NewGuid(),
-                                DevWorkflowDecisionKind.Approve))
+                               Guid.NewGuid(),
+                               consumerId,
+                               used.Version,
+                               Guid.NewGuid(),
+                               DevWorkflowDecisionKind.Approve))
                            .ConfigureAwait(false);
 
             _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() => store.DeleteWorkItemAsync(workItemId),
-                                     "A work item whose run is still live must not be deleted out from under the executor driving it.")
+                                  "A work item whose run is still live must not be deleted out from under the executor driving it.")
                               .ConfigureAwait(false);
             _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, DevWorkflowVersions.Any, DevWorkflowRunStatus.Cancelled))
                            .ConfigureAwait(false);
@@ -167,16 +167,16 @@ public sealed class DevWorkflowPurgeCoverageTests
         var nodeRunId = Guid.NewGuid();
         var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion).ConfigureAwait(false);
         _ = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(seed.RunId,
-                            Guid.NewGuid(),
-                            nodeRunId,
-                            version,
-                            Guid.NewGuid(),
-                            DevWorkflowArtifactKind.Research,
-                            "brief",
-                            "text/markdown",
-                            "hash-1",
-                            SizeBytes: 10,
-                            "reference-1"))
+                           Guid.NewGuid(),
+                           nodeRunId,
+                           version,
+                           Guid.NewGuid(),
+                           DevWorkflowArtifactKind.Research,
+                           "brief",
+                           "text/markdown",
+                           "hash-1",
+                           SizeBytes: 10,
+                           "reference-1"))
                        .ConfigureAwait(false);
 
         await using (var transaction = await context.Database.BeginTransactionAsync().ConfigureAwait(false))

@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.DevWorkflows;
 
 using System.Globalization;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -90,9 +89,9 @@ internal sealed class DevWorkflowTestFixture : IDisposable
         string? inputJson = null)
     {
         var result = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(runId,
-                                     expectedVersion,
-                                     Guid.NewGuid(),
-                                     [new DevWorkflowNodeRunSeed(nodeRunId, nodeKey, nodeType, maxAttempts, InputJson: inputJson)]))
+                                    expectedVersion,
+                                    Guid.NewGuid(),
+                                    [new DevWorkflowNodeRunSeed(nodeRunId, nodeKey, nodeType, maxAttempts, InputJson: inputJson)]))
                                 .ConfigureAwait(false);
         return result.Version;
     }

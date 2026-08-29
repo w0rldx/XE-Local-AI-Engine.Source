@@ -87,15 +87,13 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
     /// <inheritdoc />
     public Task PullModelAsync(string modelName, IProgress<PullProgress>? progress, CancellationToken ct)
     {
-        throw new ExternalProviderOperationNotSupportedException(
-            "External models are served by their connection's endpoint and cannot be pulled onto this node.");
+        throw new ExternalProviderOperationNotSupportedException("External models are served by their connection's endpoint and cannot be pulled onto this node.");
     }
 
     /// <inheritdoc />
     public Task DeleteModelAsync(string modelName, CancellationToken ct)
     {
-        throw new ExternalProviderOperationNotSupportedException(
-            "External models are removed by unregistering them on their connection, not by deleting local weights.");
+        throw new ExternalProviderOperationNotSupportedException("External models are removed by unregistering them on their connection, not by deleting local weights.");
     }
 
     /// <inheritdoc />

@@ -249,7 +249,12 @@ internal static class DevWorkflowStateMachine
     {
         ArgumentNullException.ThrowIfNull(nodeRuns);
 
-        var projected = nodeRuns.Select(nodeRun => nodeRun.Id == nodeRunId ? nodeRun with { Status = target } : nodeRun).ToList();
+        var projected = nodeRuns.Select(nodeRun => nodeRun.Id == nodeRunId
+            ? nodeRun with
+            {
+                Status = target
+            }
+            : nodeRun).ToList();
         return WorkItemStatusFor(Recompute(runStatus, projected), projected);
     }
 

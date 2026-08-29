@@ -57,12 +57,12 @@ public sealed class DevWorkflowArtifactLineageTests
         var firstSibling = Guid.NewGuid();
         var secondSibling = Guid.NewGuid();
         var materialized = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
-                                           seed.RunVersion,
-                                           Guid.NewGuid(),
-                                           [
-                                               new DevWorkflowNodeRunSeed(firstSibling, "implement#1", DevWorkflowNodeType.DevTask, MaterializationIndex: 0),
-                                               new DevWorkflowNodeRunSeed(secondSibling, "implement#2", DevWorkflowNodeType.DevTask, MaterializationIndex: 1)
-                                           ]))
+                                          seed.RunVersion,
+                                          Guid.NewGuid(),
+                                          [
+                                              new DevWorkflowNodeRunSeed(firstSibling, "implement#1", DevWorkflowNodeType.DevTask, MaterializationIndex: 0),
+                                              new DevWorkflowNodeRunSeed(secondSibling, "implement#2", DevWorkflowNodeType.DevTask, MaterializationIndex: 1)
+                                          ]))
                                       .ConfigureAwait(false);
 
         var first = await AppendAsync(store, seed.RunId, Guid.NewGuid(), firstSibling, materialized.Version, "patch", "hash-a").ConfigureAwait(false);
@@ -91,13 +91,13 @@ public sealed class DevWorkflowArtifactLineageTests
         var consumerId = Guid.NewGuid();
         var bystanderId = Guid.NewGuid();
         var version = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
-                                      seed.RunVersion,
-                                      Guid.NewGuid(),
-                                      [
-                                          new DevWorkflowNodeRunSeed(producerId, "specify", DevWorkflowNodeType.Agent),
-                                          new DevWorkflowNodeRunSeed(consumerId, "plan", DevWorkflowNodeType.Agent),
-                                          new DevWorkflowNodeRunSeed(bystanderId, "research", DevWorkflowNodeType.Agent)
-                                      ]))
+                                     seed.RunVersion,
+                                     Guid.NewGuid(),
+                                     [
+                                         new DevWorkflowNodeRunSeed(producerId, "specify", DevWorkflowNodeType.Agent),
+                                         new DevWorkflowNodeRunSeed(consumerId, "plan", DevWorkflowNodeType.Agent),
+                                         new DevWorkflowNodeRunSeed(bystanderId, "research", DevWorkflowNodeType.Agent)
+                                     ]))
                                  .ConfigureAwait(false);
 
         var specificationV1 = Guid.NewGuid();
@@ -213,9 +213,9 @@ public sealed class DevWorkflowArtifactLineageTests
         var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
 
         _ = await AssertEx.ThrowsAsync<DevWorkflowNotFoundException>(
-                () => store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand(seed.RunId, Guid.NewGuid(), Guid.NewGuid(), DevWorkflowVersions.Any)),
-                "A superseded id that does not belong to the run must be rejected.")
-            .ConfigureAwait(false);
+                              () => store.MarkDependentsStaleAsync(new MarkDevWorkflowStaleCommand(seed.RunId, Guid.NewGuid(), Guid.NewGuid(), DevWorkflowVersions.Any)),
+                              "A superseded id that does not belong to the run must be rejected.")
+                          .ConfigureAwait(false);
     }
 
     /// <summary>Recording the same use twice must not duplicate the edge — the unique index is what staleness counts on.</summary>
@@ -230,12 +230,12 @@ public sealed class DevWorkflowArtifactLineageTests
         var producerId = Guid.NewGuid();
         var consumerId = Guid.NewGuid();
         var version = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(seed.RunId,
-                                      seed.RunVersion,
-                                      Guid.NewGuid(),
-                                      [
-                                          new DevWorkflowNodeRunSeed(producerId, "specify", DevWorkflowNodeType.Agent),
-                                          new DevWorkflowNodeRunSeed(consumerId, "plan", DevWorkflowNodeType.Agent)
-                                      ]))
+                                     seed.RunVersion,
+                                     Guid.NewGuid(),
+                                     [
+                                         new DevWorkflowNodeRunSeed(producerId, "specify", DevWorkflowNodeType.Agent),
+                                         new DevWorkflowNodeRunSeed(consumerId, "plan", DevWorkflowNodeType.Agent)
+                                     ]))
                                  .ConfigureAwait(false);
 
         var artifactId = Guid.NewGuid();
@@ -252,7 +252,7 @@ public sealed class DevWorkflowArtifactLineageTests
             "A repeated capture must not duplicate the consumed-by edge.");
     }
 
-    private static Task<DevWorkflowMutationResult> AppendAsync(Stores.IDevWorkflowStore store,
+    private static Task<DevWorkflowMutationResult> AppendAsync(IDevWorkflowStore store,
         Guid runId,
         Guid artifactId,
         Guid nodeRunId,

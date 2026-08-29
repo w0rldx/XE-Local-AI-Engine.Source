@@ -70,8 +70,8 @@ public sealed class DevWorkflowSliceATests
         FakeNodeChatStreamService? stream = null;
         var publisher = new RecordingWorkSessionEventPublisher();
         await using var factory = NewFactory(services => WorkSessionTestSupport.WithFakes(
-                provider => stream = new FakeNodeChatStreamService(provider.GetRequiredService<INodeChatStreamCancellationRegistry>(), provider, Guid.Empty),
-                publisher)(services));
+            provider => stream = new FakeNodeChatStreamService(provider.GetRequiredService<INodeChatStreamCancellationRegistry>(), provider, Guid.Empty),
+            publisher)(services));
 
         await SeedTemplatesAsync(factory).ConfigureAwait(false);
 
@@ -166,12 +166,12 @@ public sealed class DevWorkflowSliceATests
     {
         var scopes = factory.Services.GetRequiredService<IServiceScopeFactory>();
         await new WorkSessionAgentSeeder(scopes, factory.Services.GetRequiredService<ILogger<WorkSessionAgentSeeder>>()).StartAsync(CancellationToken.None)
-                                                                                                                       .ConfigureAwait(false);
+                                                                                                                        .ConfigureAwait(false);
         await new DevWorkflowDefinitionSeeder(scopes,
-                factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
-                factory.Services.GetRequiredService<ILogger<DevWorkflowDefinitionSeeder>>())
-            .StartAsync(CancellationToken.None)
-            .ConfigureAwait(false);
+                  factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+                  factory.Services.GetRequiredService<ILogger<DevWorkflowDefinitionSeeder>>())
+              .StartAsync(CancellationToken.None)
+              .ConfigureAwait(false);
     }
 
     /// <summary>A host restart: both reconcilers in registration order, then a dispatcher that remembers nothing.</summary>
@@ -181,15 +181,15 @@ public sealed class DevWorkflowSliceATests
 
         var scopes = factory.Services.GetRequiredService<IServiceScopeFactory>();
         await new WorkSessionStartupReconciler(scopes,
-                factory.Services.GetRequiredService<IOptions<WorkSessionOptions>>(),
-                factory.Services.GetRequiredService<ILogger<WorkSessionStartupReconciler>>())
-            .StartAsync(CancellationToken.None)
-            .ConfigureAwait(false);
+                  factory.Services.GetRequiredService<IOptions<WorkSessionOptions>>(),
+                  factory.Services.GetRequiredService<ILogger<WorkSessionStartupReconciler>>())
+              .StartAsync(CancellationToken.None)
+              .ConfigureAwait(false);
         await new DevWorkflowStartupReconciler(scopes,
-                factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
-                factory.Services.GetRequiredService<ILogger<DevWorkflowStartupReconciler>>())
-            .StartAsync(CancellationToken.None)
-            .ConfigureAwait(false);
+                  factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
+                  factory.Services.GetRequiredService<ILogger<DevWorkflowStartupReconciler>>())
+              .StartAsync(CancellationToken.None)
+              .ConfigureAwait(false);
 
         return new DevWorkflowDispatcher(scopes,
             new DevWorkflowGraphCache(),

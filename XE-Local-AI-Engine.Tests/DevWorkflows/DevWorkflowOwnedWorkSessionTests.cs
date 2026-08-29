@@ -25,10 +25,9 @@ public sealed class DevWorkflowOwnedWorkSessionTests
     {
         FakeNodeChatStreamService? stream = null;
         var publisher = new RecordingWorkSessionEventPublisher();
-        await using var factory = WorkSessionServiceTests.NewFactory(
-            services => WorkSessionTestSupport.WithFakes(
-                provider => stream = new FakeNodeChatStreamService(provider.GetRequiredService<INodeChatStreamCancellationRegistry>(), provider, Guid.Empty),
-                publisher)(services));
+        await using var factory = WorkSessionServiceTests.NewFactory(services => WorkSessionTestSupport.WithFakes(
+            provider => stream = new FakeNodeChatStreamService(provider.GetRequiredService<INodeChatStreamCancellationRegistry>(), provider, Guid.Empty),
+            publisher)(services));
 
         var agentId = await WorkSessionServiceTests.SeedAgentAsync(factory, "tool-capable-model").ConfigureAwait(false);
 

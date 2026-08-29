@@ -132,8 +132,7 @@ public sealed class RuntimeChatClient : IChatClient
 
         if (_modelTrustResolver.ClassifyExternalCached(requestedModelId) is { } trust && trust != ModelTrustLocality.Local)
         {
-            throw new CloudEgressAuthorizationException(
-                "A Development request cannot be sent to an external model that is not declared local to this node's trust boundary.");
+            throw new CloudEgressAuthorizationException("A Development request cannot be sent to an external model that is not declared local to this node's trust boundary.");
         }
     }
 
