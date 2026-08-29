@@ -20,6 +20,16 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
+# PR pushes supersede each other; develop pushes and release-gate calls are never replaced.
+# A shared group replaces a PENDING run even with cancel-in-progress: false, so every non-PR
+# event gets its own group. The key is event+ref+sha, not sha alone: a tag push (which reaches
+# this file via release.yml's workflow_call, carrying the CALLER's event/ref/sha) can sit on the
+# same commit as a develop push, and a bare-sha group would let one replace the other's queued
+# run. Re-running a run keeps its key, which is intended.
+concurrency:
+  group: build-and-test-${{ github.event_name == 'pull_request' && github.ref || format('{0}-{1}-{2}', github.event_name, github.ref, github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Repo Python quality gate (ruff / pyrefly / pytest / bandit) over tools/training and scripts/**,
   # driven by the root pyproject.toml + uv.lock (dev tooling only — the training runtime manifest
