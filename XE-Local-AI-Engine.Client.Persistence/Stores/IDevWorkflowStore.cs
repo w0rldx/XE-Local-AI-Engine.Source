@@ -540,6 +540,17 @@ public interface IDevWorkflowStore
     Task<DevWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid nodeRunId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Every work session a node run currently owns, across all runs — the set a workflow-kind session must belong
+    ///     to in order to be reachable at all.
+    ///     <para>
+    ///         One distinct-projection query, for the startup sweep that deletes the sessions nothing points at: a
+    ///         session created for a node run whose attach never committed is invisible to a work-item delete and
+    ///         refused to every external caller, so this is the only thing that can find it.
+    ///     </para>
+    /// </summary>
+    Task<IReadOnlyList<Guid>> ListOwnedWorkSessionIdsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Records an artifact, resolving its lineage by <c>(run, producing node key, name)</c>: the same node key
     ///     appending again versions the same lineage, and materialized siblings under one template get distinct ones.
     ///     Deleting the superseded version's bytes is the caller's job.
@@ -574,7 +585,8 @@ public interface IDevWorkflowStore
     Task<DevWorkflowDecisionSnapshot?> FindDecisionByOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Whether this operation has already committed against this run.
+    ///     The <c>event_type</c> this operation has already committed against this run, or <see langword="null" /> when
+    ///     it has not run.
     ///     <para>
     ///         Every mutation resolves the same fact internally, so a replayed command is safe wherever it lands. It is
     ///         exposed because a caller has to ask BEFORE judging legality: a command that committed and was then
@@ -582,12 +594,18 @@ public interface IDevWorkflowStore
     ///         caller who did nothing wrong.
     ///     </para>
     ///     <para>
-    ///         Deliberately a bool rather than the recorded <see cref="DevWorkflowMutationResult" />. The caller answers
-    ///         from the run as it stands NOW, and a read returning a mutation's result would be indistinguishable — to a
-    ///         reader, and to the reflection that holds the publishing decorator to every mutation — from one.
+    ///         It answers the event TYPE rather than merely "yes", because an operation id names one ACT and not one
+    ///         run: a caller that reuses a pause's id on a cancel is replaying nothing, and a bare yes would report
+    ///         that cancel as done without anything having been cancelled. The caller compares what was recorded
+    ///         against the verb it is serving.
+    ///     </para>
+    ///     <para>
+    ///         Deliberately not the recorded <see cref="DevWorkflowMutationResult" />: a read handing back a mutation's
+    ///         result is indistinguishable — to a reader, and to the reflection that holds the publishing decorator to
+    ///         every mutation this interface declares — from having committed one.
     ///     </para>
     /// </summary>
-    Task<bool> HasOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default);
+    Task<string?> FindOperationEventTypeAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default);
 
     Task<DevWorkflowMutationResult> AppendEventAsync(AppendDevWorkflowEventCommand command, CancellationToken cancellationToken = default);
 

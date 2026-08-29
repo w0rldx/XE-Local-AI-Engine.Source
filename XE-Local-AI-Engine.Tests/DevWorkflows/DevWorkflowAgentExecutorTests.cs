@@ -1,7 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -61,6 +66,46 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Equal("run.created, node.materialized, run.started, node.queued, worksession.attached, node.started, node.completed, run.completed",
             await harness.ReadEventTrailAsync(runId).ConfigureAwait(false),
             "the queue hop and the session it was handed are both part of the audit.");
+    }
+
+    /// <summary>
+    ///     A session whose attach fails is deleted again on the way out.
+    ///     <para>
+    ///         Between the create and the attach nothing references the session: the next tick creates another, a
+    ///         work-item delete can only release what its node runs point at, and the owner surface refuses a
+    ///         workflow-kind session to every other caller. Left behind it is unreachable for good.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AnAgentNodeWhoseAttachFails_DeletesTheSessionItHadJustCreated()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var executor = scope.ServiceProvider.GetRequiredService<DevWorkflowAgentExecutor>();
+        var store = Substitute.For<IDevWorkflowStore>();
+        store.ListOwnedWorkSessionIdsAsync(Arg.Any<CancellationToken>()).Returns([]);
+        store.AttachWorkSessionAsync(Arg.Any<AttachDevWorkflowWorkSessionCommand>(), Arg.Any<CancellationToken>())
+             .ThrowsAsyncForAnyArgs(new DevWorkflowInvalidTransitionException("The attach lost its race."));
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
+                              executor.DispatchAsync(store,
+                                  DevWorkflowGraph.Parse(SingleAgent),
+                                  run,
+                                  DevWorkflowGraph.Parse(SingleAgent).Nodes["research"],
+                                  nodeRun,
+                                  [nodeRun],
+                                  CancellationToken.None),
+                              "the attach's failure is what the caller sees; the cleanup is not the story.")
+                          .ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, harness.Agent.Created.Count, "a session WAS created — that is the window under test.");
+        var created = harness.Agent.Created.Single();
+        AssertEx.True(harness.Agent.Calls.Any(call => call.Verb == "delete" && call.SessionId == created),
+            "and it was released again, because nothing else will ever be able to find it.");
     }
 
     /// <summary>

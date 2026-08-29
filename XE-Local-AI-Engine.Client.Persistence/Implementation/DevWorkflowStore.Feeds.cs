@@ -23,6 +23,14 @@ internal sealed partial class DevWorkflowStore
         return [.. nodeRuns.Select(entity => NodeRunSnapshot(entity, available))];
     }
 
+    public async Task<IReadOnlyList<Guid>> ListOwnedWorkSessionIdsAsync(CancellationToken cancellationToken = default) =>
+        await _dbContext.DevWorkflowNodeRuns.AsNoTracking()
+                        .Where(entity => entity.WorkSessionId != null)
+                        .Select(entity => entity.WorkSessionId!.Value)
+                        .Distinct()
+                        .ToListAsync(cancellationToken)
+                        .ConfigureAwait(false);
+
     public async Task<DevWorkflowNodeRunSnapshot> GetNodeRunAsync(Guid nodeRunId, CancellationToken cancellationToken = default)
     {
         var nodeRun = await _dbContext.DevWorkflowNodeRuns.AsNoTracking().SingleOrDefaultAsync(entity => entity.Id == nodeRunId, cancellationToken).ConfigureAwait(false)

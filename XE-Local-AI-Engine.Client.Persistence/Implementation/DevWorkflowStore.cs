@@ -134,8 +134,13 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
         }
     }
 
-    public async Task<bool> HasOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
-        await FindOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is not null;
+    /// <summary>Projected to the one column the caller compares, so a replay probe never decrypts an event's detail.</summary>
+    public async Task<string?> FindOperationEventTypeAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
+        await _dbContext.DevWorkflowRunEvents.AsNoTracking()
+                        .Where(entity => entity.RunId == runId && entity.OperationId == operationId)
+                        .Select(entity => entity.EventType)
+                        .SingleOrDefaultAsync(cancellationToken)
+                        .ConfigureAwait(false);
 
     /// <summary>
     ///     The event already recorded for this operation, rebuilt against the run row as it stands now — a replayed step

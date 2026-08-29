@@ -53,18 +53,24 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
         // One query, and the rows come back carrying the status they held BEFORE the collapse — which is the useful
         // fact here, because what a node run was doing decides what re-running it costs.
         var reconciled = await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, cancellationToken).ConfigureAwait(false);
-        if (reconciled.Count == 0)
-        {
-            return;
-        }
-
         foreach (var nodeRun in reconciled)
         {
             await RepairAsync(store, sessions, nodeRun, cancellationToken).ConfigureAwait(false);
         }
 
-        await EnforceAttemptBudgetAsync(store, reconciled, cancellationToken).ConfigureAwait(false);
-        _logger.LogInformation("Reconciled {Count} in-flight development workflow node run(s) after host startup.", reconciled.Count);
+        if (reconciled.Count > 0)
+        {
+            await EnforceAttemptBudgetAsync(store, reconciled, cancellationToken).ConfigureAwait(false);
+            _logger.LogInformation("Reconciled {Count} in-flight development workflow node run(s) after host startup.", reconciled.Count);
+        }
+
+        // Unconditional, unlike everything above it: an orphan is a session no node run references, so there is no
+        // reconciled row that could lead to one.
+        await SweepOrphanedWorkSessionsAsync(store,
+                sessions,
+                scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>(),
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) =>
@@ -165,6 +171,55 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
                         $"This run has already spent {spent} re-attempts, which is as many re-attempts as this run allows.",
                         cancellationToken)
                     .ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Deletes every workflow-kind work session no node run references.
+    ///     <para>
+    ///         Such a session is unreachable by design: the owner surface refuses workflow-kind sessions to every
+    ///         external caller, and a work-item delete can only release what its node runs point AT — so nothing else
+    ///         will ever find it. Two ways to make one, and this closes both: a host death between creating a session
+    ///         and attaching it, and a crash between a work item's rows committing and its sessions being released.
+    ///     </para>
+    ///     <para>
+    ///         Startup only, and two queries — every workflow-kind session, and the ids node runs own. It is deliberately
+    ///         NOT a per-tick sweep: a session created a millisecond ago and not yet attached is indistinguishable from
+    ///         an orphan, and a sweep running concurrently with the executor would delete live work.
+    ///     </para>
+    ///     <para>
+    ///         <b>A retry's superseded session is swept too</b>, and that is a real consequence rather than an oversight:
+    ///         a re-attempt clears <c>WorkSessionId</c> so the fresh attempt does not resume a poisoned context, which
+    ///         leaves the previous attempt's session owned by nothing and therefore indistinguishable here from the two
+    ///         orphan shapes. Those transcripts are visible on the work-sessions page until the next restart, and they
+    ///         leak forever without this. Narrow it to <c>session.Status == AgentWorkSessionStatus.Draft</c> if keeping
+    ///         them wins — that keeps every driven session at the cost of no longer mopping up the delete residue.
+    ///     </para>
+    /// </summary>
+    private async Task SweepOrphanedWorkSessionsAsync(IDevWorkflowStore store,
+        IWorkflowOwnedWorkSessionLifecycle sessions,
+        IAgentWorkSessionStore workSessions,
+        CancellationToken cancellationToken)
+    {
+        var owned = (await store.ListOwnedWorkSessionIdsAsync(cancellationToken).ConfigureAwait(false)).ToHashSet();
+        var orphans = (await workSessions.ListAsync(cancellationToken).ConfigureAwait(false))
+                      .Where(session => session.Kind == AgentWorkSessionKind.Workflow && !owned.Contains(session.Id))
+                      .Select(static session => session.Id)
+                      .ToList();
+
+        foreach (var orphan in orphans)
+        {
+            // Named, one line each: this is a workflow that lost a transcript, and a silent delete would erase the
+            // evidence of the crash that made it along with the session.
+            _logger.LogWarning("Deleting orphaned workflow work session {SessionId}, which no development workflow node run references.", orphan);
+            try
+            {
+                await sessions.DeleteAsync(orphan, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is WorkSessionInvalidTransitionException or WorkSessionNotFoundException)
+            {
+                _logger.LogWarning(exception, "Orphaned workflow work session {SessionId} could not be deleted and has to be removed by hand.", orphan);
             }
         }
     }

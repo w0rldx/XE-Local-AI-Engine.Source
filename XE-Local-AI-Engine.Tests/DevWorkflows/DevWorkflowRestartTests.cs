@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -366,5 +367,34 @@ public sealed class DevWorkflowRestartTests
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status);
         AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     A workflow-kind session no node run references is deleted at startup; one a node run owns is left alone.
+    ///     <para>
+    ///         Two crashes make such an orphan — one between creating a session and attaching it, one between a work
+    ///         item's rows committing and its sessions being released — and afterwards nothing else can find it: the
+    ///         owner surface refuses workflow-kind sessions to every external caller, and a work-item delete can only
+    ///         release what its node runs point AT. This sweep is what closes both windows.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ARestart_DeletesWorkflowSessionsNoNodeRunOwnsAndKeepsTheOnesItDoes()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var owned = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
+
+        // Exactly what a crash between CreateAsync and AttachWorkSessionAsync leaves: a real workflow-kind session row
+        // that no node run has ever pointed at.
+        var orphan = (await harness.Agent.CreateAsync("Orphaned research", "objective", Guid.NewGuid()).ConfigureAwait(false)).Id;
+
+        await harness.RestartAsync().ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => harness.Agent.GetAsync(orphan),
+                              "an unreferenced workflow session is unreachable for good, so a restart is where it has to be cleaned up.")
+                          .ConfigureAwait(false);
+        _ = await harness.Agent.GetAsync(owned).ConfigureAwait(false);
     }
 }

@@ -96,7 +96,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         // Ahead of the status check below for the same reason it runs ahead of the transition table in CommandAsync: a
         // resume that committed and was then retried is a replay, and by then the run it resumed is legitimately
         // Running — the one status this method refuses.
-        if (await TryReplayAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is { } replayed)
+        if (await TryReplayAsync(runId, operationId, DevWorkflowRunStatus.Running, cancellationToken).ConfigureAwait(false) is { } replayed)
         {
             return replayed;
         }
@@ -239,7 +239,7 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
     /// </summary>
     private async Task<DevWorkflowRunDetail> CommandAsync(Guid runId, Guid operationId, DevWorkflowRunStatus target, CancellationToken cancellationToken)
     {
-        if (await TryReplayAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is { } replayed)
+        if (await TryReplayAsync(runId, operationId, target, cancellationToken).ConfigureAwait(false) is { } replayed)
         {
             return replayed;
         }
@@ -262,11 +262,50 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
     ///         the status its own first attempt produced would answer a conflict to a caller that did exactly the right
     ///         thing. The store keeps the same promise one level down; this is that promise made visible to the verbs.
     ///     </para>
+    ///     <para>
+    ///         It is the replay of THIS verb or it is not a replay at all. An operation id names one act, so the same
+    ///         id arriving on a different verb is a caller bug — and answering it with the run would report a cancel as
+    ///         done while the run carried on, which is exactly the failure the decision replay's identity check exists
+    ///         to prevent one method up.
+    ///     </para>
     /// </summary>
-    private async Task<DevWorkflowRunDetail?> TryReplayAsync(Guid runId, Guid operationId, CancellationToken cancellationToken) =>
-        await _store.HasOperationAsync(runId, operationId, cancellationToken).ConfigureAwait(false)
-            ? await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false)
-            : null;
+    private async Task<DevWorkflowRunDetail?> TryReplayAsync(Guid runId,
+        Guid operationId,
+        DevWorkflowRunStatus target,
+        CancellationToken cancellationToken)
+    {
+        if (await _store.FindOperationEventTypeAsync(runId, operationId, cancellationToken).ConfigureAwait(false) is not { } recorded)
+        {
+            return null;
+        }
+
+        var expected = EventTypeFor(target);
+        if (!string.Equals(recorded, expected, StringComparison.Ordinal))
+        {
+            throw new DevWorkflowInvalidTransitionException($"Operation '{operationId}' already recorded '{recorded}' on this run, so it cannot also record '{expected}'.");
+        }
+
+        return await SignalAndComposeAsync(runId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     The event a lifecycle verb writes, which is what identifies that verb in the log.
+    ///     <para>
+    ///         A second spelling of the store's own status-to-event mapping rather than a shared constant, and kept
+    ///         honest by the tests instead: a true replay of each verb must still read as a replay, so a drift here
+    ///         fails those three immediately.
+    ///     </para>
+    /// </summary>
+    private static string EventTypeFor(DevWorkflowRunStatus target) =>
+        target switch
+        {
+            DevWorkflowRunStatus.Cancelling => DevWorkflowEventTypes.RunCancelled,
+            DevWorkflowRunStatus.Pausing => DevWorkflowEventTypes.RunPaused,
+
+            // Running reaches here only from ResumeAsync, and a run that never started cannot be resumed — so the
+            // store's first-start branch (run.started) is unreachable from this surface.
+            _ => DevWorkflowEventTypes.RunResumed
+        };
 
     /// <summary>
     ///     Signals AFTER the commit, which is the whole of the runtime's obligation to the dispatcher: without it a

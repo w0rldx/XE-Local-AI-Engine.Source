@@ -537,6 +537,33 @@ public sealed class DevWorkflowRunServiceTests
     }
 
     /// <summary>
+    ///     An operation id names one ACT, so a lifecycle replay is a replay of its OWN verb or it is nothing. Reused
+    ///     across verbs it used to answer success for a cancel that never happened, while the run carried on.
+    /// </summary>
+    [Test]
+    public async Task ReusingALifecycleOperationIdOnADifferentVerb_IsRefused()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync(GateOnly).ConfigureAwait(false);
+        var runId = (await harness.WithRunServiceAsync(service => service.StartAsync(workItemId, definitionId, inputsJson: null, Guid.NewGuid())).ConfigureAwait(false)).Run.Id;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var operationId = Guid.NewGuid();
+
+        _ = await harness.WithRunServiceAsync(service => service.PauseAsync(runId, operationId)).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+
+        var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() =>
+                                        harness.WithRunServiceAsync(service => service.CancelAsync(runId, operationId)))
+                                    .ConfigureAwait(false);
+
+        AssertEx.Contains(refusal.Message, "run.paused", message: "the refusal says what that operation id actually did.");
+        AssertEx.Equal(DevWorkflowRunStatus.Paused,
+            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            "and nothing was cancelled — the failure this closes reported success while the run stood still.");
+    }
+
+    /// <summary>
     ///     A replay has to be a replay of the SAME act. A reused operation id asking for something else is a caller
     ///     bug, and answering it with the recorded decision would report success for a decision nobody took — in the
     ///     one table that exists to say who decided what.

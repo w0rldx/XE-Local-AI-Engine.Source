@@ -272,14 +272,59 @@ internal sealed class DevWorkflowAgentExecutor
         var objective = await ComposeObjectiveAsync(store, graph, run, node, nodeRun, cancellationToken).ConfigureAwait(false);
         var created = await _sessions.CreateAsync(node.Label, objective, agentDefinitionId, cancellationToken).ConfigureAwait(false);
 
-        _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand(run.Id,
-                            nodeRun.Id,
-                            DevWorkflowVersions.Any,
-                            created.Id,
-                            DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "attach")),
-                        cancellationToken)
-                    .ConfigureAwait(false);
+        try
+        {
+            _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand(run.Id,
+                                nodeRun.Id,
+                                DevWorkflowVersions.Any,
+                                created.Id,
+                                DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "attach")),
+                            cancellationToken)
+                        .ConfigureAwait(false);
+        }
+        catch
+        {
+            // Until the attach commits, NOTHING points at this session: the next tick creates another, a work-item
+            // delete cannot find it, and the external lifecycle refuses a workflow-kind session to every other caller.
+            // So the create is undone here rather than left for the startup sweep, and the original failure is what
+            // propagates — the compensation is not the story.
+            await ReleaseUnattachedAsync(store, created.Id).ConfigureAwait(false);
+            throw;
+        }
+
         return created;
+    }
+
+    /// <summary>
+    ///     Deletes a session no node run owns, and leaves an owned one alone.
+    ///     <para>
+    ///         Ownership is re-read across ALL node runs rather than assumed from the failure, and both directions
+    ///         matter: an attach can commit and still throw on the way back — a cancellation between the commit and
+    ///         the return — and an attach can fail precisely BECAUSE another node run already owns that session.
+    ///         Deleting in either case would take a transcript out from under a row that points at it.
+    ///     </para>
+    ///     <para>
+    ///         Runs without a cancellation token, because this is the cleanup for a call that may itself have been
+    ///         cancelled.
+    ///     </para>
+    /// </summary>
+    private async Task ReleaseUnattachedAsync(IDevWorkflowStore store, Guid sessionId)
+    {
+        try
+        {
+            if ((await store.ListOwnedWorkSessionIdsAsync(CancellationToken.None).ConfigureAwait(false)).Contains(sessionId))
+            {
+                return;
+            }
+
+            await _sessions.DeleteAsync(sessionId, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            // Reported, never rethrown: the caller's failure is the one worth surfacing, and a session left here is
+            // exactly what the startup sweep is for.
+            _logger.LogWarning(exception, "Work session {SessionId} could not be released after its attach failed.", sessionId);
+        }
     }
 
     /// <summary>

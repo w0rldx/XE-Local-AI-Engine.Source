@@ -138,8 +138,11 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner, IDevWo
         _inner.FindDecisionByOperationAsync(runId, operationId, cancellationToken);
 
     /// <summary>A read: nothing committed, so there is nothing to announce.</summary>
-    public Task<bool> HasOperationAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
-        _inner.HasOperationAsync(runId, operationId, cancellationToken);
+    public Task<string?> FindOperationEventTypeAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
+        _inner.FindOperationEventTypeAsync(runId, operationId, cancellationToken);
+
+    public Task<IReadOnlyList<Guid>> ListOwnedWorkSessionIdsAsync(CancellationToken cancellationToken = default) =>
+        _inner.ListOwnedWorkSessionIdsAsync(cancellationToken);
 
     public Task<DevWorkflowMutationResult> AppendEventAsync(AppendDevWorkflowEventCommand command, CancellationToken cancellationToken = default) =>
         PublishAsync(_inner.AppendEventAsync(command, cancellationToken), DevWorkflowChangeKind.Run, cancellationToken);
