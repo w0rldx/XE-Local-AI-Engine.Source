@@ -4973,7 +4973,15 @@
 				"confirm": "Löschen",
 				"failed": "Das Arbeitspaket konnte nicht gelöscht werden."
 			},
+			"graph": {
+				"title": "Graph",
+				"label": "Workflow-Graph",
+				"start": "Start",
+				"end": "Ende",
+				"overCap": "Dieser Lauf hat {{count}} Knoten — mehr, als der Graph zeichnet. Arbeiten Sie sie über den Tab „Knoten“ ab."
+			},
 			"nodes": {
+				"title": "Knoten",
 				"empty": "Dieser Lauf hat noch keine Knotenläufe.",
 				"columnNode": "Knoten",
 				"columnStatus": "Status",

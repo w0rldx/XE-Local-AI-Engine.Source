@@ -1,0 +1,91 @@
+.node {
+	min-width: 190px;
+	max-width: 240px;
+	border-radius: var(--mantine-radius-md);
+	border: 1px solid var(--mantine-color-default-border);
+	background: var(--mantine-color-body);
+	padding: var(--mantine-spacing-xs);
+	box-shadow: var(--mantine-shadow-xs);
+}
+
+/* An outline, not a box-shadow: selection has to survive every status class, and a Blocked ring or a Running pulse
+   would otherwise win the box-shadow cascade and leave the selected card looking like every other one. */
+
+.node-selected {
+	outline: 2px solid var(--mantine-color-blue-5);
+	outline-offset: 1px;
+}
+
+/* O5: a node the runtime created from a template, rather than one the definition named. */
+
+.node-materialized {
+	border-style: dashed;
+}
+
+.node-running {
+	border-color: var(--mantine-color-blue-6);
+}
+
+/* Y20: retries are exhausted and the run is stopped until a human acts, so this is the loudest border on the canvas. */
+
+.node-blocked {
+	border-color: var(--mantine-color-red-6);
+	box-shadow: 0 0 0 1px var(--mantine-color-red-6);
+}
+
+.node-waiting {
+	border-color: var(--mantine-color-orange-6);
+}
+
+.node-succeeded {
+	border-color: var(--mantine-color-teal-6);
+}
+
+.node-failed {
+	border-color: var(--mantine-color-red-6);
+}
+
+/* Only ever applied when useReducedMotion() is false — the repo's motion convention is a JS gate, and this is the
+   media query that also holds when the preference changes without a re-render. */
+
+.node-pulse {
+	animation: dev-workflow-node-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+	.node-pulse {
+		animation: none;
+	}
+}
+
+@keyframes dev-workflow-node-pulse {
+
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 var(--mantine-color-blue-4);
+	}
+
+	50% {
+		box-shadow: 0 0 0 3px var(--mantine-color-blue-2);
+	}
+}
+
+.node-title {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+	min-width: 0;
+}
+
+.anchor {
+	border-radius: var(--mantine-radius-xl);
+	border: 1px dashed var(--mantine-color-dimmed);
+	background: var(--mantine-color-body);
+	padding: 4px 12px;
+	color: var(--mantine-color-dimmed);
+	font-size: var(--mantine-font-size-xs);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}

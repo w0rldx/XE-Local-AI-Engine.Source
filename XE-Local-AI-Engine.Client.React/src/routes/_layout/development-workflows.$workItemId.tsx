@@ -7,8 +7,9 @@ import { devWorkflowDetailTabs } from "@/features/devWorkflows/models/DevWorkflo
 import { type DevWorkflowDetailSelection, DevWorkflowDetailPage } from "@/features/devWorkflows/pages/DevWorkflowDetailPage";
 
 // The three pieces of selection that must survive a reload and be shareable as a URL: which run is displayed, which
-// node-run the panel is on, and which side tab is open. `graph` is deliberately NOT a valid tab — the graph view does
-// not exist until Slice A1, so an URL cannot deep-link to a view that would render nothing.
+// node-run the panel is on, and which tab is open. One `tab` param serves both tab strips — `graph`/`nodes` for the
+// centre pane, `artifacts`/`events` for the side pane — and the union comes from the feature's model, so the schema
+// follows it without editing here.
 const devWorkflowDetailSearchSchema = z.object({
 	run: z.string().optional(),
 	node: z.string().optional(),

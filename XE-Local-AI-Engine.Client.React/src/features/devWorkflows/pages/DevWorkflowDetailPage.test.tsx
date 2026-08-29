@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
@@ -13,7 +14,7 @@ import {
 	devWorkflowTestIds,
 	devWorkflowWorkItem,
 } from "@/features/devWorkflows/test/DevWorkflowFixtures";
-import { DevWorkflowDetailPage } from "@/features/devWorkflows/pages/DevWorkflowDetailPage";
+import { type DevWorkflowDetailSelection, DevWorkflowDetailPage } from "@/features/devWorkflows/pages/DevWorkflowDetailPage";
 import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { setupMswServer } from "@/test/UseMswServer";
@@ -70,7 +71,7 @@ function baseRoutes(overrides: { run?: unknown; nodeRun?: unknown } = {}) {
 	];
 }
 
-function renderPage(selection: { run?: string; node?: string; tab?: "artifacts" | "events" } = {}) {
+function renderPage(selection: DevWorkflowDetailSelection = {}) {
 	const onSelectionChange = vi.fn();
 	renderWithProviders(
 		<ConfirmProvider>
@@ -287,5 +288,63 @@ describe("DevWorkflowDetailPage", () => {
 		// rendering last-good state. The notice is the toolbar's, and it must not be an error.
 		await screen.findByTestId("dev-workflow-run-toolbar");
 		expect(screen.queryByTestId("dev-workflow-detail-error")).toBeNull();
+	});
+
+	// A1: the centre pane is two views over one selection. `?tab=` is one param across both tab strips — the centre
+	// defaults to `graph`, the side pane to `artifacts` — so a value belonging to the other strip reads as that
+	// strip's default rather than blanking it.
+	it("opens on the graph with no tab selected, and keeps the node table mounted behind it", async () => {
+		server.use(...baseRoutes());
+		renderPage();
+
+		expect((await screen.findByTestId("dev-workflow-tab-graph")).getAttribute("aria-selected")).toBe("true");
+		expect(screen.getByTestId("dev-workflow-tab-nodes").getAttribute("aria-selected")).toBe("false");
+		// Mantine keeps an inactive panel mounted, which is the point: the table is still the keyboard path through the
+		// run, and every A0 test that finds a row without naming a tab still finds one.
+		expect(await screen.findByTestId(`dev-workflow-node-row-${nodeRunId}`)).toBeDefined();
+	});
+
+	it("activates the node table for ?tab=nodes and leaves the side tabs on artifacts", async () => {
+		server.use(...baseRoutes());
+		renderPage({ tab: "nodes" });
+
+		expect((await screen.findByTestId("dev-workflow-tab-nodes")).getAttribute("aria-selected")).toBe("true");
+		expect(screen.getByTestId("dev-workflow-tab-artifacts").getAttribute("aria-selected")).toBe("true");
+	});
+
+	it("selects the centre tab through the search params, like every other selection on this page", async () => {
+		server.use(...baseRoutes());
+		const { onSelectionChange } = renderPage();
+
+		fireEvent.click(await screen.findByTestId("dev-workflow-tab-nodes"));
+
+		expect(onSelectionChange).toHaveBeenCalledWith({ tab: "nodes" });
+		expect(navigate).not.toHaveBeenCalled();
+	});
+
+	it("leaves the centre pane alone when a side tab is clicked, because both strips write the same param", async () => {
+		server.use(...baseRoutes());
+		// The selection has to round-trip for this to mean anything: the side tab overwrites `tab` with `events`, and
+		// the centre pane must not read its own state back out of it.
+		function StatefulDetailPage() {
+			const [selection, setSelection] = useState<DevWorkflowDetailSelection>({ tab: "nodes" });
+			return (
+				<DevWorkflowDetailPage
+					workItemId={workItemId}
+					selection={selection}
+					onSelectionChange={(next) => setSelection((current) => ({ ...current, ...next }))}
+				/>
+			);
+		}
+		renderWithProviders(
+			<ConfirmProvider>
+				<StatefulDetailPage />
+			</ConfirmProvider>,
+		);
+
+		fireEvent.click(await screen.findByTestId("dev-workflow-tab-events"));
+
+		expect(screen.getByTestId("dev-workflow-tab-events").getAttribute("aria-selected")).toBe("true");
+		expect(screen.getByTestId("dev-workflow-tab-nodes").getAttribute("aria-selected")).toBe("true");
 	});
 });

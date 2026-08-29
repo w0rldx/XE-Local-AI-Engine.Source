@@ -18,6 +18,7 @@ import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPa
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { DevWorkflowArtifactsTab } from "@/features/devWorkflows/components/DevWorkflowArtifactsTab";
 import { DevWorkflowEventsTab } from "@/features/devWorkflows/components/DevWorkflowEventsTab";
+import { DevWorkflowGraphView } from "@/features/devWorkflows/components/DevWorkflowGraphView";
 import { DevWorkflowNodePanel } from "@/features/devWorkflows/components/DevWorkflowNodePanel";
 import { DevWorkflowNodeRunTable } from "@/features/devWorkflows/components/DevWorkflowNodeRunTable";
 import { DevWorkflowRunSummaryPanel } from "@/features/devWorkflows/components/DevWorkflowRunSummaryPanel";
@@ -65,6 +66,10 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	const [summaryDrawerOpened, summaryDrawer] = useDisclosure(false);
 	const [sideDrawerOpened, sideDrawer] = useDisclosure(false);
 	const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
+	// Seeded once from `?tab=`, sticky after that. Both tab strips write the same search param, so reading the centre
+	// pane straight off it meant a click on Events threw the operator back to the graph. Accepted drift: a reload after
+	// a side-tab click opens the centre on the graph again, because the param no longer says otherwise.
+	const [centreTab, setCentreTab] = useState<"graph" | "nodes">(selection.tab === "nodes" ? "nodes" : "graph");
 
 	const workItemQuery = useDevWorkflowWorkItem(workItemId);
 	// Absent `?run=` means the latest run; an explicit one renders a historical run from its OWN pinned graph snapshot.
@@ -274,13 +279,43 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 						onCancel={() => lifecycle.cancel.mutate({ path: { runId }, body: { operationId: crypto.randomUUID() } })}
 						onJumpToDecision={(nodeRunId) => select({ node: nodeRunId })}
 					/>
-					<div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-						<DevWorkflowNodeRunTable
-							nodes={nodes}
-							selectedNodeRunId={selection.node}
-							onSelect={(nodeRunId) => select({ node: nodeRunId })}
-						/>
-					</div>
+					{/* Two views over ONE selection: a click on a graph card and a click on a table row are the same
+					    `?node=` change. Mantine keeps both panels mounted, which is deliberate — the table stays in the
+					    DOM (and stays the keyboard path through the run) while the graph is on top. */}
+					<Tabs
+						value={centreTab}
+						onChange={(value) => {
+							const next = value === "nodes" ? "nodes" : "graph";
+							setCentreTab(next);
+							// Still written to the URL, so the choice is deep-linkable and survives a share.
+							select({ tab: next });
+						}}
+						style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
+						data-testid="dev-workflow-centre-tabs"
+					>
+						<Tabs.List>
+							<Tabs.Tab value="graph" data-testid="dev-workflow-tab-graph">
+								{t("pages.devWorkflows.graph.title", "Graph")}
+							</Tabs.Tab>
+							<Tabs.Tab value="nodes" data-testid="dev-workflow-tab-nodes">
+								{t("pages.devWorkflows.nodes.title", "Nodes")}
+							</Tabs.Tab>
+						</Tabs.List>
+						<Tabs.Panel value="graph" pt="xs" style={{ flex: 1, minHeight: 0 }}>
+							<DevWorkflowGraphView
+								run={run}
+								selectedNodeRunId={selection.node}
+								onSelect={(nodeRunId) => select({ node: nodeRunId })}
+							/>
+						</Tabs.Panel>
+						<Tabs.Panel value="nodes" pt="xs" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+							<DevWorkflowNodeRunTable
+								nodes={nodes}
+								selectedNodeRunId={selection.node}
+								onSelect={(nodeRunId) => select({ node: nodeRunId })}
+							/>
+						</Tabs.Panel>
+					</Tabs>
 				</>
 			) : (
 				<Alert color="blue" variant="light" data-testid="dev-workflow-detail-no-run">
