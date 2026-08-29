@@ -411,6 +411,11 @@ internal sealed partial class DevWorkflowStore
                         standing.Decision);
                 }
 
+                if (command is { Decision: DevWorkflowDecisionKind.Retry, MaxTotalAttempts: { } budget })
+                {
+                    await EnsureRetryBudgetAsync(run.Id, budget, cancellationToken).ConfigureAwait(false);
+                }
+
                 _dbContext.DevWorkflowDecisions.Add(new DevWorkflowDecision
                 {
                     Id = command.DecisionId,

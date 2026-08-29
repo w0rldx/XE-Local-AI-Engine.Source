@@ -367,6 +367,19 @@ public sealed record MarkDevWorkflowStaleCommand(
     Guid? OperationId = null,
     string StaleReason = DevWorkflowStaleReasons.SupersededInput);
 
+/// <summary>
+///     One human decision on one node-run attempt.
+///     <para>
+///         <see cref="MaxTotalAttempts" /> is the run-wide re-attempt budget this act has to fit inside. It travels on
+///         the command because the store reads no options, and it is set only for <c>Retry</c> — the one decision that
+///         authorises another attempt. Null means no budget applies to this act, which is every other decision.
+///     </para>
+///     <para>
+///         Carried at all rather than left to the caller because the admission has to happen where the write does:
+///         several blocked node runs each checked against the budget before the dispatcher settles any would each see
+///         the same unspent budget and each pass, and the run would then spend more re-attempts than it allows.
+///     </para>
+/// </summary>
 public sealed record RecordDevWorkflowDecisionCommand(
     Guid RunId,
     Guid DecisionId,
@@ -376,7 +389,8 @@ public sealed record RecordDevWorkflowDecisionCommand(
     DevWorkflowDecisionKind Decision,
     string? Comment = null,
     string? PayloadJson = null,
-    string? DecidedBySubject = null);
+    string? DecidedBySubject = null,
+    int? MaxTotalAttempts = null);
 
 public sealed record AppendDevWorkflowEventCommand(
     Guid RunId,

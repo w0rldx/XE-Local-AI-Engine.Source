@@ -201,8 +201,11 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         {
             // A human Retry ignores the NODE's attempt cap on purpose — that is what makes it an override — but the
             // run-wide budget still bounds it, or a definition nobody can fix becomes a person clicking Retry for ever.
-            // Checked here because this is where a re-attempt is authorised; the startup reconciler checks the same
-            // budget for the attempts a restart spends.
+            // The startup reconciler checks the same budget for the attempts a restart spends.
+            //
+            // This is the fast path and the friendly message, NOT the authority: it reads a count that several blocked
+            // node runs answered in the same tick window would each read as unspent. The budget therefore travels on
+            // the command and is admitted inside the transaction that records the decision, where the count is true.
             var spent = (await _store.ListNodeRunsAsync(runId, cancellationToken).ConfigureAwait(false)).Sum(static row => row.Attempt - 1);
             if (spent >= _options.MaxTotalAttempts)
             {
@@ -219,7 +222,8 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
                             decision,
                             comment,
                             payloadJson,
-                            decidedBySubject),
+                            decidedBySubject,
+                            decision == DevWorkflowDecisionKind.Retry ? _options.MaxTotalAttempts : null),
                         cancellationToken)
                     .ConfigureAwait(false);
 

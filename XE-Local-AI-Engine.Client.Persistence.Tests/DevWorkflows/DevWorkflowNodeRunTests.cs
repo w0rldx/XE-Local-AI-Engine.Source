@@ -163,6 +163,53 @@ public sealed class DevWorkflowNodeRunTests
         AssertEx.Null(await store.FindDecisionByOperationAsync(seed.RunId, Guid.NewGuid()).ConfigureAwait(false));
     }
 
+    /// <summary>
+    ///     The run-wide re-attempt budget is admitted where the decision is written, so a Retry that is recorded but not
+    ///     yet settled still counts. Two blocked node runs answered in the same tick window — before the dispatcher has
+    ///     turned either answer into an attempt — is exactly the case a check taken before recording lets through: both
+    ///     read the budget as unspent, and a run whose budget is one spends two.
+    /// </summary>
+    [Test]
+    public async Task RecordDecision_CountsAnUnsettledRetryAgainstTheRunWideBudget()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var firstNodeRunId = Guid.NewGuid();
+        var secondNodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, firstNodeRunId, "implement", seed.RunVersion).ConfigureAwait(false);
+        _ = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, secondNodeRunId, "validate", version).ConfigureAwait(false);
+
+        RecordDevWorkflowDecisionCommand Retry(Guid nodeRunId, int budget) =>
+            new(seed.RunId, Guid.NewGuid(), nodeRunId, DevWorkflowVersions.Any, Guid.NewGuid(), DevWorkflowDecisionKind.Retry, MaxTotalAttempts: budget);
+
+        _ = await store.RecordDecisionAsync(Retry(firstNodeRunId, budget: 1)).ConfigureAwait(false);
+
+        var refusal = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() => store.RecordDecisionAsync(Retry(secondNodeRunId, budget: 1)),
+                                        "The first Retry has promised the run's only re-attempt, and no attempt has happened yet for a sum over Attempt to see.")
+                                    .ConfigureAwait(false);
+        AssertEx.True(refusal.Message.Contains("as many re-attempts as this run allows", StringComparison.Ordinal),
+            "The store's refusal has to read like the endpoint's, since either can reach an operator.");
+        AssertEx.Equal(expected: 1, (await store.ListDecisionsAsync(seed.RunId).ConfigureAwait(false)).Count, "Exactly one of the two Retries may be admitted.");
+
+        // Settling the first one converts the reservation into a spent attempt rather than counting it twice: a budget
+        // of two still has room for the second Retry, and a budget of one still does not.
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                            firstNodeRunId,
+                            DevWorkflowVersions.Any,
+                            DevWorkflowNodeRunStatus.Pending,
+                            IncrementAttempt: true))
+                       .ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() => store.RecordDecisionAsync(Retry(secondNodeRunId, budget: 1)),
+                                 "The re-attempt has landed, so the budget of one is spent rather than merely promised.")
+                          .ConfigureAwait(false);
+        _ = await store.RecordDecisionAsync(Retry(secondNodeRunId, budget: 2)).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, (await store.ListDecisionsAsync(seed.RunId).ConfigureAwait(false)).Count, "A settled Retry must not go on reserving what it already spent.");
+    }
+
     /// <summary>Queued and Running are distinct states with distinct timestamps, which is what makes the UI's progress honest.</summary>
     [Test]
     public async Task QueuedAndRunning_AreDistinctStatesWithTheirOwnTimestampsAndReason()

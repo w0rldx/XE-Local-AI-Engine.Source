@@ -134,6 +134,44 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
         }
     }
 
+    /// <summary>
+    ///     Admits a Retry against the run-wide re-attempt budget, inside the transaction that records it — which is the
+    ///     only place the count can be true.
+    ///     <para>
+    ///         Spent is Σ(Attempt − 1) over the run's node runs: the re-attempts that have actually happened. A Retry
+    ///         that is recorded but not yet settled has spent none of that sum and would be invisible to it, so it
+    ///         counts as a RESERVATION — the dispatcher turns it into an attempt on a later tick, and until then it is
+    ///         an attempt this run has already promised. Settled has one definition here: the node run's <c>Attempt</c>
+    ///         has moved past the attempt its decision was recorded against.
+    ///     </para>
+    ///     <para>
+    ///         The decision endpoint checks the same budget first, for the message an operator reads. This is the
+    ///         authority: two people answering two blocked node runs in the same tick window both pass a check taken
+    ///         before either decision exists, and only a count taken under the writer lock refuses the second.
+    ///     </para>
+    /// </summary>
+    private async Task EnsureRetryBudgetAsync(Guid runId, int maxTotalAttempts, CancellationToken cancellationToken)
+    {
+        var attempts = await _dbContext.DevWorkflowNodeRuns.AsNoTracking()
+                                       .Where(entity => entity.RunId == runId)
+                                       .Select(entity => new NodeRunAttempt(entity.Id, entity.Attempt))
+                                       .ToListAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+        var recorded = await _dbContext.DevWorkflowDecisions.AsNoTracking()
+                                       .Where(entity => entity.RunId == runId && entity.Decision == DevWorkflowDecisionKind.Retry)
+                                       .Select(entity => new NodeRunAttempt(entity.NodeRunId, entity.Attempt))
+                                       .ToListAsync(cancellationToken)
+                                       .ConfigureAwait(false);
+
+        var spent = attempts.Sum(static row => row.Attempt - 1);
+        var reserved = recorded.Count(decision => attempts.Any(row => row.NodeRunId == decision.NodeRunId && row.Attempt == decision.Attempt));
+        if (spent + reserved >= maxTotalAttempts)
+        {
+            throw new DevWorkflowInvalidTransitionException($"This run has already spent or promised {spent + reserved} re-attempts, which is as many "
+                                                            + "re-attempts as this run allows, so it cannot be retried again.");
+        }
+    }
+
     /// <summary>Projected to the one column the caller compares, so a replay probe never decrypts an event's detail.</summary>
     public async Task<string?> FindOperationEventTypeAsync(Guid runId, Guid operationId, CancellationToken cancellationToken = default) =>
         await _dbContext.DevWorkflowRunEvents.AsNoTracking()
@@ -338,6 +376,9 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
         value is null ? null : Encoding.UTF8.GetString(value);
 
     private sealed record MutationOutcome(string EventType, string? Outcome, byte[]? DetailJson, Guid? NodeRunId = null, Guid? SupersededArtifactId = null);
+
+    /// <summary>A node run and the attempt number some row is stamped with — the two columns the budget count needs.</summary>
+    private sealed record NodeRunAttempt(Guid NodeRunId, int Attempt);
 
     private sealed record ReasonDetailPayload(string Reason);
 
