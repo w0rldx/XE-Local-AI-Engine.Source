@@ -55,6 +55,8 @@ export interface DevWorkflowCanvasNodeData extends Record<string, unknown> {
  * reads as truncated. Never selectable, so it can never become a drill-down target. */
 export interface DevWorkflowAnchorNodeData extends Record<string, unknown> {
 	readonly anchor: "start" | "end";
+	/** The entry/terminal node this anchor was synthesised for — a graph with two entries needs two distinct Starts. */
+	readonly nodeKey: string;
 }
 
 export type DevWorkflowCanvasNode = Node<DevWorkflowCanvasNodeData>;
@@ -82,9 +84,11 @@ function optional<T>(value: T | null | undefined): T | undefined {
 }
 
 export function devWorkflowGraphStructuralKey(run: DevWorkflowRunResponse | undefined): string {
-	const nodeIds = (run?.nodes ?? []).map((node) => node.id ?? "").join(",");
+	// Sorted, like the edge pairs: the key answers "is this the same graph", and a server reordering an unchanged node
+	// set is not a different graph — re-framing the viewport over it would be a jump the operator did not ask for.
+	const nodeIds = (run?.nodes ?? []).map((node) => node.id ?? "").toSorted();
 	const edgePairs = (run?.graph?.edges ?? []).map((edge) => `${edge.from ?? ""}>${edge.to ?? ""}`).toSorted();
-	return `${nodeIds}|${edgePairs.join(",")}`;
+	return `${nodeIds.join(",")}|${edgePairs.join(",")}`;
 }
 
 export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined): DevWorkflowCanvasGraph {
@@ -95,24 +99,28 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 		return { nodes: [], edges: [], structuralKey, nodeRunCount: nodeRuns.length, isOverCap: true };
 	}
 
+	const graphEdges = run?.graph?.edges ?? [];
 	const nodeRunIdByKey = new Map(nodeRuns.map((node) => [node.nodeKey ?? "", node.id ?? ""]));
 	// A1 is linear-only, so the only endpoint that can be missing today is a materialization TEMPLATE — it has no
 	// node-run row until its children are materialized (Slice C). Dropping the edge is the honest render: there is no
 	// node to draw it to.
-	const joined = (run?.graph?.edges ?? []).flatMap((edge) => {
+	const joined = graphEdges.flatMap((edge) => {
 		const from = nodeRunIdByKey.get(edge.from ?? "");
 		const to = nodeRunIdByKey.get(edge.to ?? "");
 		return from && to ? [{ from, to }] : [];
 	});
 
-	const hasInbound = new Set(joined.map((edge) => edge.to));
-	const hasOutbound = new Set(joined.map((edge) => edge.from));
+	// Degree is asked of the DEFINITION's edges, not of the joined ones: a node whose successor is a materialization
+	// template has an outbound edge the canvas cannot draw yet, and capping it with an "End" anchor would claim the run
+	// finishes there. It dangles instead, which is the truth until Slice C materializes the children.
+	const hasInboundKey = new Set(graphEdges.map((edge) => edge.to ?? ""));
+	const hasOutboundKey = new Set(graphEdges.map((edge) => edge.from ?? ""));
 	const anchors: { anchor: "start" | "end"; nodeRunId: string; nodeKey: string }[] = nodeRuns.flatMap((node) => {
 		const id = node.id ?? "";
 		const nodeKey = node.nodeKey ?? "";
 		return [
-			...(hasInbound.has(id) ? [] : [{ anchor: "start" as const, nodeRunId: id, nodeKey }]),
-			...(hasOutbound.has(id) ? [] : [{ anchor: "end" as const, nodeRunId: id, nodeKey }]),
+			...(hasInboundKey.has(nodeKey) ? [] : [{ anchor: "start" as const, nodeRunId: id, nodeKey }]),
+			...(hasOutboundKey.has(nodeKey) ? [] : [{ anchor: "end" as const, nodeRunId: id, nodeKey }]),
 		];
 	});
 
@@ -178,7 +186,7 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 				connectable: false,
 				selectable: false,
 				focusable: false,
-				data: { anchor: entry.anchor },
+				data: { anchor: entry.anchor, nodeKey: entry.nodeKey },
 			}),
 		),
 	];

@@ -97,6 +97,10 @@ describe("toDevWorkflowCanvasGraph", () => {
 		);
 
 		expect(graph.edges.some((edge) => edge.target === "decompose-template")).toBe(false);
+		// And `plan` is NOT capped with an End anchor: it has a successor the canvas cannot draw yet, so it dangles
+		// rather than claiming the run finishes there. Degree is asked of the DEFINITION's edges for exactly this.
+		const anchors = graph.nodes.filter((node) => node.type === "anchor");
+		expect(anchors.map((anchor) => anchor.data["anchor"])).toEqual(["start"]);
 	});
 
 	it("synthesises a start anchor at the entry and an end anchor at the terminal, neither of them selectable", () => {
@@ -135,6 +139,13 @@ describe("toDevWorkflowCanvasGraph", () => {
 		);
 
 		expect(after).toBe(before);
+	});
+
+	it("keeps the structural key identical when the server returns the same nodes in a different order", () => {
+		const forward = chainRun();
+		const reversed = chainRun({ nodes: (forward.nodes ?? []).toReversed() });
+
+		expect(devWorkflowGraphStructuralKey(reversed)).toBe(devWorkflowGraphStructuralKey(forward));
 	});
 
 	it("changes the structural key when a node is materialized into the run", () => {
