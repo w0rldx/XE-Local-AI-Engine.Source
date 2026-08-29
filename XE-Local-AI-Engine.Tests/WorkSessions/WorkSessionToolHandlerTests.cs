@@ -17,10 +17,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class WorkSessionToolHandlerTests
 {
+    [ClassDataSource<WorkSessionHostFixture>(Shared = SharedType.PerClass)]
+    public required WorkSessionHostFixture Host { get; init; }
+
     [Test]
     public async Task UpdateWorkPlan_AddsAndCompletesTasks()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
@@ -50,7 +53,7 @@ public sealed class WorkSessionToolHandlerTests
     {
         // The pointer used to move only on a status transition, so it went stale for the rest of a multi-step run every
         // time the agent switched tasks — and WorkSessionDetail.CurrentTaskId is what the session page reads.
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
@@ -91,7 +94,7 @@ public sealed class WorkSessionToolHandlerTests
     {
         // A 27B model reached for these keys instead of 'title' and, when the unknown key failed the whole batch at
         // deserialization, burned the step's entire provider-call budget retrying.
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
@@ -110,7 +113,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task UpdateWorkPlan_Add_WhenNoTitleOrAlias_ReturnsSentenceWithExample()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
@@ -126,7 +129,7 @@ public sealed class WorkSessionToolHandlerTests
     {
         // Valid JSON, wrong shape: the deserializer rejects the unknown key for the whole batch, and its own message
         // names the CLR request type — useless to a model and the thing that used to be echoed straight back.
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
@@ -140,7 +143,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task UpdateWorkPlan_WhenAnOperationIsUnknown_ReturnsAnActionableSentence()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
@@ -153,7 +156,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task UpdateWorkPlan_WhenATitleIsOverLength_ReturnsTheBoundSentence()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
         var handler = Handler(factory, WorkSessionToolDefinitions.UpdateWorkPlan.ToolName);
 
@@ -167,6 +170,7 @@ public sealed class WorkSessionToolHandlerTests
     public async Task RecordFinding_WritesTheRowAndPublishesItsWatermark()
     {
         var publisher = new RecordingWorkSessionEventPublisher();
+        // Private host: the recording publisher is per-test state, so sharing it would let siblings' publishes bleed in.
         await using var factory = NewFactory(publisher);
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
@@ -189,7 +193,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task RecordFinding_WhenTheKindIsUnknown_ReturnsTheEnumSentence()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
         var handler = Handler(factory, WorkSessionToolDefinitions.RecordFinding.ToolName);
 
@@ -201,7 +205,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task SaveArtifact_WritesTheBlobThenTheRow_AndReplacesByName()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         var handler = Handler(factory, WorkSessionToolDefinitions.SaveArtifact.ToolName);
@@ -226,7 +230,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task SaveArtifact_WhenBothOrNeitherPayloadIsGiven_Refuses()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
         var handler = Handler(factory, WorkSessionToolDefinitions.SaveArtifact.ToolName);
 
@@ -239,6 +243,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task SaveArtifact_WhenTheContentIsOverTheNodeCap_RefusesWithoutWritingARow()
     {
+        // Private host: the artifact cap it asserts on is a host-level config value.
         await using var factory = NewFactory(configuration: ("WorkSessions:MaxArtifactBytes", "32"));
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
@@ -257,7 +262,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task CompleteWorkSession_RecordsTheRequestWithoutTerminalizingTheSession()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         var handler = Handler(factory, WorkSessionToolDefinitions.CompleteWorkSession.ToolName);
@@ -277,7 +282,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task EveryHandler_WithoutAnAmbientConversation_FailsClosed()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
 
         foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => WorkSessionToolDefinitions.ToolNames.Contains(candidate.ToolName)))
         {
@@ -290,7 +295,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task EveryHandler_OnAConversationWithNoSession_FailsClosed()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
 
         using var scope = AgentRunConversationContext.BeginScope(Guid.NewGuid());
         foreach (var handler in factory.Services.GetServices<IClientLocalToolHandler>().Where(candidate => WorkSessionToolDefinitions.ToolNames.Contains(candidate.ToolName)))
@@ -302,7 +307,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task EveryHandler_OnAClosedSession_Refuses()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
         await using (var scope = factory.Services.CreateAsyncScope())
@@ -325,7 +330,7 @@ public sealed class WorkSessionToolHandlerTests
     public async Task EveryHandler_WhenTheFeatureIsDisabled_SaysSoRatherThanWriting()
     {
         // The kill switch gates behaviour, never registration: an empty container would answer 500 where a disabled node
-        // has to answer legibly.
+        // has to answer legibly. Private host: that kill switch is a host-level config value.
         await using var factory = new TestServerWebAppFactory
         {
             AdditionalConfiguration = new Dictionary<string, string?>
@@ -343,7 +348,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task EveryHandler_OnMalformedJson_ReturnsTheParseSentence()
     {
-        await using var factory = NewFactory();
+        var factory = Host.Factory;
         var session = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, Guid.NewGuid()).ConfigureAwait(false);
 
         using var scope = AgentRunConversationContext.BeginScope(session.ConversationId);

@@ -252,7 +252,7 @@ fi
 # Listing down to 10s brings that to 439s; going below 10s buys another ~13s for 11 more entries.
 HEAVY=(
   XE_Local_AI_Engine.Tests.Endpoints.Benchmarks.V1      # 118s
-  XE_Local_AI_Engine.Tests.WorkSessions                 # 114s
+  XE_Local_AI_Engine.Tests.WorkSessions                 # 101s
   XE_Local_AI_Engine.Tests.Endpoints.Training.V1        # 88s
   XE_Local_AI_Engine.Tests.Development                  # 70s
   XE_Local_AI_Engine.Tests.Endpoints.WorkSessions.V1    # 65s
