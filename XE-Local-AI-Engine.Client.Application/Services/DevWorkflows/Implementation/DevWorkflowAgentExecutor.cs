@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
 /// <summary>
@@ -28,7 +29,43 @@ internal sealed class DevWorkflowAgentExecutor
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
+    /// <summary>
+    ///     The ceiling this composition holds itself to, in characters.
+    ///     <para>
+    ///         <b>Coupled to <c>WorkSessionService.MaxObjectiveLength</c> (8000), which is private to that class.</b> The
+    ///         work-session layer REFUSES an over-long objective rather than trimming it, and that refusal reaches here
+    ///         as a validation failure that blocks the node run for a human — so an objective this lane composes must
+    ///         never approach it. The margin absorbs a modest reduction there without this noticing;
+    ///         <c>TheObjectiveLimit_IsTheOneTheWorkSessionLayerActuallyEnforces</c> fails if the two ever cross.
+    ///     </para>
+    ///     <para>
+    ///         Only the ARTIFACT phase is bounded by it. Instructions and inputs are appended first and uncapped: a node
+    ///         whose own instructions exceed the work-session limit is the pre-existing refusal, and silently trimming
+    ///         what an author wrote would be a worse answer than the block.
+    ///     </para>
+    /// </summary>
+    internal const int MaxObjectiveCharacters = 7000;
+
+    /// <summary>
+    ///     Room set aside from an artifact's share for the truncation marker that may follow its body. Comfortably over
+    ///     the marker's own worst case; the append guard is what actually enforces the bound, so this only has to stop
+    ///     the common case from being dropped for the sake of forty characters.
+    /// </summary>
+    private const int TruncationMarkerReserve = 64;
+
+    /// <summary>
+    ///     The largest artifact whose bytes are worth reading to fill an objective, in bytes.
+    ///     <para>
+    ///         Two orders of magnitude above anything <see cref="MaxObjectiveCharacters" /> could use, and two below the
+    ///         64 MiB an artifact is allowed to be: the point is not to pick the smallest workable number but to keep a
+    ///         node with several large upstream artifacts from reading — and decoding — all of them to keep a few
+    ///         thousand characters of the first.
+    ///     </para>
+    /// </summary>
+    private const int MaxInjectableArtifactBytes = 256 * 1024;
+
     private readonly IAgentDefinitionStore _agents;
+    private readonly IDevWorkflowArtifactBlobStore _blobs;
     private readonly ILogger<DevWorkflowAgentExecutor> _logger;
     private readonly DevWorkflowOptions _options;
     private readonly DevWorkflowArtifactPromotion _promotion;
@@ -39,6 +76,7 @@ internal sealed class DevWorkflowAgentExecutor
         IAgentWorkSessionStore sessionStore,
         IAgentDefinitionStore agents,
         DevWorkflowArtifactPromotion promotion,
+        IDevWorkflowArtifactBlobStore blobs,
         IOptions<DevWorkflowOptions> options,
         ILogger<DevWorkflowAgentExecutor> logger)
     {
@@ -47,6 +85,7 @@ internal sealed class DevWorkflowAgentExecutor
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
         _agents = agents ?? throw new ArgumentNullException(nameof(agents));
         _promotion = promotion ?? throw new ArgumentNullException(nameof(promotion));
+        _blobs = blobs ?? throw new ArgumentNullException(nameof(blobs));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
     }
@@ -377,8 +416,14 @@ internal sealed class DevWorkflowAgentExecutor
     ///     What the agent is asked to do: the node's own instructions, the operator's request, and the artifacts the
     ///     nodes before it produced — recorded as consumed in the same breath, so the audit says what this attempt was
     ///     given rather than what a later read can guess.
+    ///     <para>
+    ///         Each upstream artifact is rendered with its CONTENTS, not merely its name and id. A reference alone is
+    ///         useless to a node that has no way to dereference it: the seeded plan node is told to turn research.md
+    ///         into a plan, and handed only "Report 'research.md' (version 1, id …)" it would invent one. The bytes
+    ///         travel in the objective because that is the one channel the agent lane already has.
+    ///     </para>
     /// </summary>
-    private static async Task<string> ComposeObjectiveAsync(IDevWorkflowStore store,
+    private async Task<string> ComposeObjectiveAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowGraphNode node,
@@ -398,16 +443,94 @@ internal sealed class DevWorkflowAgentExecutor
         }
 
         var upstream = await DevWorkflowUpstreamArtifacts.RecordAsync(store, graph, run, nodeRun, cancellationToken).ConfigureAwait(false);
-        if (upstream.Count > 0)
+        var section = $"{Environment.NewLine}## What the steps before you produced{Environment.NewLine}";
+        if (upstream.Count > 0 && objective.Length + section.Length <= MaxObjectiveCharacters)
         {
-            _ = objective.AppendLine().AppendLine("## What the steps before you produced");
-            foreach (var artifact in upstream)
+            _ = objective.Append(section);
+            for (var index = 0; index < upstream.Count; index++)
             {
-                _ = objective.AppendLine(CultureInfo.InvariantCulture, $"- {artifact.Kind} '{artifact.Name}' (version {artifact.Version}, id {artifact.Id})");
+                var artifact = upstream[index];
+                var header = string.Create(CultureInfo.InvariantCulture,
+                    $"{Environment.NewLine}### {artifact.Kind} '{artifact.Name}' (version {artifact.Version}, id {artifact.Id}){Environment.NewLine}");
+
+                // Everything still to be written shares the room left equally, so a long first document cannot crowd
+                // out the ones after it and a short one hands its slack on. The share has to cover this artifact's own
+                // header and marker as well as its body, which is why both come off it before the body is asked for.
+                var share = (MaxObjectiveCharacters - objective.Length) / (upstream.Count - index);
+                var body = await RenderArtifactAsync(run.Id, artifact, share - header.Length - TruncationMarkerReserve, cancellationToken).ConfigureAwait(false);
+
+                // The bound is enforced HERE, on the FINISHED block, with the header, the body, whichever marker was
+                // rendered and the newlines all counted. Nothing reaches the objective except through this check, so
+                // no reference-only line, marker or rounding can push it past the limit. A block that will not fit
+                // falls back to its header alone — the agent still learns the artifact exists, which is the half that
+                // matters most — and an artifact with no room even for that is dropped rather than allowed to overrun.
+                foreach (var candidate in new[] { header + body + Environment.NewLine, header })
+                {
+                    if (objective.Length + candidate.Length <= MaxObjectiveCharacters)
+                    {
+                        _ = objective.Append(candidate);
+                        break;
+                    }
+                }
             }
         }
 
         return objective.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    ///     One upstream artifact's contents, or the line that says why they are not here.
+    ///     <para>
+    ///         Text only, decided from the DECLARED media type rather than by sniffing bytes, and only once the blob
+    ///         store has verified the artifact row's own digest and size. An artifact whose bytes no longer match what
+    ///         produced them is handed over as a reference and a warning: silently injecting unverified content is how
+    ///         a tampered file would end up being reasoned about as if it were the research.
+    ///     </para>
+    /// </summary>
+    private async Task<string> RenderArtifactAsync(Guid runId, DevWorkflowArtifactSnapshot artifact, int budget, CancellationToken cancellationToken)
+    {
+        if (!ArtifactMediaTypes.IsText(artifact.MediaType))
+        {
+            return $"(Its bytes are {artifact.MediaType}, not text, so only this reference is given.)";
+        }
+
+        if (budget <= 0)
+        {
+            return "(The objective had no room left for its contents, so only this reference is given.)";
+        }
+
+        if (artifact.SizeBytes > MaxInjectableArtifactBytes)
+        {
+            // Gated on the row's recorded size BEFORE the read, because reading is what costs: the blob store
+            // materialises the whole blob and the decode allocates a UTF-16 copy of it, and an artifact may be as
+            // large as DevWorkflowOptions allows — so a fan-in of them would allocate hundreds of megabytes to keep a
+            // few thousand characters. The trade is that a huge document loses even its prefix, which is the right way
+            // round: the first few thousand characters of a 64 MiB file were never grounding, and the marker says so.
+            return $"(It is {artifact.SizeBytes} bytes, too large to include here, so only this reference is given.)";
+        }
+
+        var read = await _blobs.ReadAsync(runId, artifact.Id, artifact.ContentSha256, artifact.SizeBytes, cancellationToken).ConfigureAwait(false);
+        if (read.Status != DevWorkflowArtifactReadStatus.Found)
+        {
+            _logger.LogWarning("Development workflow artifact {ArtifactId} of run {RunId} was not injected into an objective: {Status}.",
+                artifact.Id,
+                runId,
+                read.Status);
+            return $"(Its stored bytes did not verify ({read.Status}), so only this reference is given. Do not assume what it said.)";
+        }
+
+        var content = Encoding.UTF8.GetString(read.Content.Span);
+        if (content.Length <= budget)
+        {
+            return content;
+        }
+
+        // Never cut BETWEEN a surrogate pair. The budget counts UTF-16 code units, and an astral character — an emoji,
+        // most CJK extensions — is two of them: keeping only the high half leaves an unpaired surrogate that becomes
+        // U+FFFD the moment the objective is persisted as UTF-8, so the agent would be handed a corrupted character
+        // rather than one fewer.
+        var cut = char.IsHighSurrogate(content[budget - 1]) ? budget - 1 : budget;
+        return $"{content[..cut]}{Environment.NewLine}(Truncated: the first {cut} of {content.Length} characters.)";
     }
 
     /// <summary>

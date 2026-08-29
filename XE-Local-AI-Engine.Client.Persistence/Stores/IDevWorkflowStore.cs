@@ -179,14 +179,48 @@ public sealed record DevWorkflowDecisionSnapshot(
 /// <summary>
 ///     One row per node-run the host left mid-flight, carrying enough detail for the runtime to rebuild its dispatch
 ///     table without a follow-up read per row. <see cref="Status" /> is the status the node-run held <em>before</em> the
-///     collapse — what it was doing is the useful fact; where it landed is always <c>Pending</c>.
+///     collapse — what it was doing is the useful fact; where it landed is always <c>Pending</c>, unless a repair moved
+///     it further.
 /// </summary>
 public sealed record DevWorkflowReconciledNodeRun(
     Guid NodeRunId,
+    Guid RunId,
     string NodeKey,
     DevWorkflowNodeType NodeType,
     DevWorkflowNodeRunStatus Status,
+    int Attempt,
     Guid? WorkSessionId);
+
+/// <summary>
+///     One judged node-run: the row as the caller observed it, and what to do with it once the collapse has confirmed
+///     it is still that row.
+///     <para>
+///         The expectation is the whole point. A verdict is only true of the state it was decided from, so the collapse
+///         matches each one against the live row and takes only the rows that still agree. A row that moved under the
+///         caller — or one that became stranded after the caller read — is left exactly as it is: collapsing it
+///         unjudged would strand it at <c>Pending</c>, where nothing would ever judge it again, and repairing it from
+///         stale evidence would spend an attempt on a state it is no longer in.
+///     </para>
+/// </summary>
+public sealed record DevWorkflowNodeRunVerdict(
+    Guid NodeRunId,
+    DevWorkflowNodeRunStatus ObservedStatus,
+    int ObservedAttempt,
+    Guid? ObservedWorkSessionId,
+    IReadOnlyList<TransitionDevWorkflowNodeRunCommand> Repairs);
+
+/// <summary>
+///     Turns a reconciliation into a SETTLING pass: every stranded node-run no verdict matched is blocked for a human
+///     instead of being left as it is.
+///     <para>
+///         The blocked state is this record's business rather than the caller's, because it is what the pass promises:
+///         a settling pass leaves no node-run stranded, and a row that is neither dispatchable nor waiting on a person
+///         is one nothing will ever pick up. So the row lands <c>Blocked</c> with an <c>Abandon</c> decision pending
+///         and its work item blocked with it — costing no attempt, which is the only honest price for a row nobody
+///         could judge.
+///     </para>
+/// </summary>
+public sealed record DevWorkflowUnjudgedNodeRunBlock(string FailureClass, string SanitizedReason);
 
 /// <summary>
 ///     What one mutation committed: the watermark it allocated for its event, and the run row's post-commit version,
@@ -533,12 +567,44 @@ public interface IDevWorkflowStore
     Task<DevWorkflowMutationResult> TransitionRunAsync(TransitionDevWorkflowRunCommand command, CancellationToken cancellationToken = default);
 
     /// <summary>
-    ///     Restart recovery. Runs auto-resume, so no run-level status moves; only node-runs the host left <c>Queued</c>
-    ///     or <c>Running</c> collapse back to <c>Pending</c> so the dispatcher can re-admit them, each with one
-    ///     <c>node.interrupted</c> event. <c>WaitingForApproval</c> and <c>Blocked</c> are durable human-wait states and
-    ///     survive untouched. Idempotent by construction: a second pass finds none of those states and returns empty.
+    ///     The node-runs a restart has to judge: everything left <c>Queued</c> or <c>Running</c>, read without writing
+    ///     anything. The caller decides what each one costs — an attempt, a human, nothing — and hands those decisions
+    ///     back to <see cref="ReconcileNonTerminalNodeRunsAsync" />, which is where they are committed.
     /// </summary>
-    Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ListInterruptedNodeRunsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Restart recovery, as ONE transaction. Runs auto-resume, so no run-level status moves; only node-runs the host
+    ///     left <c>Queued</c> or <c>Running</c> collapse back to <c>Pending</c> so the dispatcher can re-admit them, each
+    ///     with one <c>node.interrupted</c> event. <c>WaitingForApproval</c> and <c>Blocked</c> are durable human-wait
+    ///     states and survive untouched. Idempotent by construction: a second pass finds none of those states and returns
+    ///     empty.
+    ///     <para>
+    ///         <paramref name="verdicts" /> carry the caller's per-row decisions — an attempt spent, a human needed —
+    ///         applied IN ORDER inside the same transaction as the collapse, because a recovery that commits the collapse
+    ///         alone is one the next boot cannot finish: those rows read as ordinary <c>Pending</c> and would be re-run
+    ///         with no attempt or budget accounting at all. Committing both together makes recovery all-or-nothing, so
+    ///         any number of crashes during startup still repairs every interrupted node-run exactly once.
+    ///     </para>
+    ///     <para>
+    ///         ONLY the rows whose live state still matches their verdict are collapsed. A stranded row with no verdict,
+    ///         or one whose status, attempt or work session moved since the verdict was decided, is left untouched for
+    ///         the caller's next pass — this is what makes the method safe against a writer the caller did not expect,
+    ///         such as a second process sharing the database. Repairs run under
+    ///         <see cref="DevWorkflowVersions.Any" />: the run's version has by then moved by one event per collapsed
+    ///         row, and the per-row match is the check that matters here.
+    ///     </para>
+    ///     <para>
+    ///         A non-null <paramref name="unjudged" /> makes this the caller's LAST pass: the rows it could not judge are
+    ///         blocked for a human rather than left, decided against the live row inside this transaction and so immune
+    ///         to the drift that stranded them in the first place. Pass it when walking away is worse than a human wait
+    ///         — which it is at startup, because nothing downstream picks a stranded row up again.
+    ///     </para>
+    /// </summary>
+    Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
+        IReadOnlyList<DevWorkflowNodeRunVerdict> verdicts,
+        DevWorkflowUnjudgedNodeRunBlock? unjudged = null,
+        CancellationToken cancellationToken = default);
 
     Task<DevWorkflowMutationResult> MaterializeNodeRunsAsync(MaterializeDevWorkflowNodesCommand command, CancellationToken cancellationToken = default);
 

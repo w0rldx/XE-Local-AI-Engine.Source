@@ -516,22 +516,39 @@ internal sealed partial class DevWorkflowStore
         ];
     }
 
+    public async Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ListInterruptedNodeRunsAsync(CancellationToken cancellationToken = default) =>
+        [
+            .. await StrandedNodeRuns()
+                     .AsNoTracking()
+                     .Select(entity => new DevWorkflowReconciledNodeRun(entity.Id,
+                         entity.RunId,
+                         entity.NodeKey,
+                         entity.NodeType,
+                         entity.Status,
+                         entity.Attempt,
+                         entity.WorkSessionId))
+                     .ToListAsync(cancellationToken)
+                     .ConfigureAwait(false)
+        ];
+
     public async Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
+        IReadOnlyList<DevWorkflowNodeRunVerdict> verdicts,
+        DevWorkflowUnjudgedNodeRunBlock? unjudged = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedReason);
+        ArgumentNullException.ThrowIfNull(verdicts);
+
+        // Every pass reads the world afresh. A caller that reconciles more than once holds one scope, and the identity
+        // map from its earlier pass would hand back run rows as they stood BEFORE whatever moved these node runs — so
+        // this would allocate sequence numbers that are already taken. Nothing outside can hold an entity of ours: the
+        // store answers snapshots.
+        _dbContext.ChangeTracker.Clear();
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // Only Queued and Running lost an executor to the host's death. Pending was never dispatched, and
-            // WaitingForApproval/Blocked are durable human-wait states that a restart does not invalidate.
-            var stranded = await _dbContext.DevWorkflowNodeRuns
-                                           .Where(entity => entity.Status == DevWorkflowNodeRunStatus.Queued || entity.Status == DevWorkflowNodeRunStatus.Running)
-                                           .OrderBy(entity => entity.RunId)
-                                           .ThenBy(entity => entity.Sequence)
-                                           .ToListAsync(cancellationToken)
-                                           .ConfigureAwait(false);
+            var stranded = await StrandedNodeRuns().ToListAsync(cancellationToken).ConfigureAwait(false);
             if (stranded.Count == 0)
             {
                 await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -542,13 +559,39 @@ internal sealed partial class DevWorkflowStore
             var runs = await _dbContext.DevWorkflowRuns.Where(entity => runIds.Contains(entity.Id)).ToDictionaryAsync(entity => entity.Id, cancellationToken)
                                        .ConfigureAwait(false);
 
+            var judged = verdicts.ToDictionary(verdict => verdict.NodeRunId);
             var now = Now();
             var reconciled = new List<DevWorkflowReconciledNodeRun>(stranded.Count);
+            var repairs = new List<(DevWorkflowRun Run, TransitionDevWorkflowNodeRunCommand Command)>();
             foreach (var nodeRun in stranded)
             {
+                if (!runs.TryGetValue(nodeRun.RunId, out var run))
+                {
+                    continue;
+                }
+
+                // A row the caller did not judge, or judged as something it no longer is, is left exactly where it is:
+                // collapsing it would strand it at Pending with nobody left to decide what re-running it costs. The
+                // caller reads again and judges it on its next pass — or ends the matter with `unjudged`, which blocks
+                // it for a human off the row in front of us, where no snapshot can be stale.
+                var matched = judged.TryGetValue(nodeRun.Id, out var verdict)
+                              && verdict.ObservedStatus == nodeRun.Status
+                              && verdict.ObservedAttempt == nodeRun.Attempt
+                              && verdict.ObservedWorkSessionId == nodeRun.WorkSessionId;
+                if (!matched && unjudged is null)
+                {
+                    continue;
+                }
+
                 // The status BEFORE the collapse is the informative one: it says whether the node-run was merely
                 // admitted or actually mid-execution. Where it lands is always Pending.
-                reconciled.Add(new DevWorkflowReconciledNodeRun(nodeRun.Id, nodeRun.NodeKey, nodeRun.NodeType, nodeRun.Status, nodeRun.WorkSessionId));
+                reconciled.Add(new DevWorkflowReconciledNodeRun(nodeRun.Id,
+                    nodeRun.RunId,
+                    nodeRun.NodeKey,
+                    nodeRun.NodeType,
+                    nodeRun.Status,
+                    nodeRun.Attempt,
+                    nodeRun.WorkSessionId));
 
                 // Re-dispatchable means clean: a row sitting at Pending must not carry a terminal reason, or the UI
                 // reads "the engine restarted" as this attempt's outcome. The reason is on the node.interrupted event.
@@ -559,12 +602,23 @@ internal sealed partial class DevWorkflowStore
                 nodeRun.FailureClass = null;
                 nodeRun.TerminalReason = null;
 
-                if (runs.TryGetValue(nodeRun.RunId, out var run))
-                {
-                    AddEvent(run, DevWorkflowEventTypes.NodeInterrupted, nodeRun.Id, "interrupted", operationId: null, ReasonDetail(sanitizedReason));
-                    run.Version++;
-                    run.UpdatedAtUtc = now;
-                }
+                AddEvent(run, DevWorkflowEventTypes.NodeInterrupted, nodeRun.Id, "interrupted", operationId: null, ReasonDetail(sanitizedReason));
+                run.Version++;
+                run.UpdatedAtUtc = now;
+                repairs.AddRange(matched
+                    ? verdict!.Repairs.Select(command => (run, command))
+                    : [(run, BlockUnjudged(nodeRun, unjudged!))]);
+            }
+
+            // The run comes from the row the collapse took, never from the command: the collapse is the authority on
+            // which node run belongs where.
+            foreach (var (run, command) in repairs)
+            {
+                EnsureVersion(run, command.ExpectedVersion);
+                var outcome = await ApplyNodeRunTransitionAsync(run, command, cancellationToken).ConfigureAwait(false);
+                _ = AddEvent(run, outcome.EventType, outcome.NodeRunId, outcome.Outcome, command.OperationId, outcome.DetailJson);
+                run.Version++;
+                run.UpdatedAtUtc = now;
             }
 
             await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -582,6 +636,28 @@ internal sealed partial class DevWorkflowStore
             throw;
         }
     }
+
+    /// <summary>Where a settling pass puts a node-run it could not judge: a human's in-tray, with no attempt spent on it.</summary>
+    private static TransitionDevWorkflowNodeRunCommand BlockUnjudged(DevWorkflowNodeRun nodeRun, DevWorkflowUnjudgedNodeRunBlock unjudged) =>
+        new(nodeRun.RunId,
+            nodeRun.Id,
+            DevWorkflowVersions.Any,
+            DevWorkflowNodeRunStatus.Blocked,
+            PendingDecisionKind: DevWorkflowDecisionKind.Abandon,
+            FailureClass: unjudged.FailureClass,
+            TerminalReason: unjudged.SanitizedReason,
+            WorkItemStatus: DevWorkflowWorkItemStatus.Blocked);
+
+    /// <summary>
+    ///     The node-runs a host death stranded. Only Queued and Running lost an executor: Pending was never dispatched,
+    ///     and WaitingForApproval/Blocked are durable human-wait states that a restart does not invalidate. Shared by
+    ///     the read and the write so the set the caller judged cannot differ from the set the collapse takes.
+    /// </summary>
+    private IOrderedQueryable<DevWorkflowNodeRun> StrandedNodeRuns() =>
+        _dbContext.DevWorkflowNodeRuns
+                  .Where(entity => entity.Status == DevWorkflowNodeRunStatus.Queued || entity.Status == DevWorkflowNodeRunStatus.Running)
+                  .OrderBy(entity => entity.RunId)
+                  .ThenBy(entity => entity.Sequence);
 
     /// <summary>
     ///     Writes a definition edit under the row's version token.
