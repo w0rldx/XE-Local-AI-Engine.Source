@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.DevWorkflows;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -317,5 +318,61 @@ public sealed class DevWorkflowStoreTests
         var settled = await DevWorkflowTestFixture.StoreFor(readContext).GetDefinitionAsync(definitionId).ConfigureAwait(false);
         AssertEx.Equal("Winner", settled.Name, "The write that won has to survive: the silent overwrite IS the defect.");
         AssertEx.Equal(expected: 2, settled.Version, "And exactly one of the two edits may have bumped the version.");
+    }
+
+    /// <summary>
+    ///     The runtime moves a work item's status while a human is editing its title, and it does so through the same
+    ///     version token the edit is written under. The two writes touch disjoint fields, so the PATCH re-reads and
+    ///     re-applies rather than failing: an operator renaming an item must not be told 409 — or handed a 500 — because
+    ///     the dispatcher happened to start their run in the same instant.
+    /// </summary>
+    [Test]
+    public async Task UpdateWorkItem_SurvivesTheRuntimeWritingStatusBetweenItsReadAndItsSave()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        Guid workItemId;
+        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        {
+            var created = await DevWorkflowTestFixture.StoreFor(context)
+                                                      .CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Original title", "Original request"))
+                                                      .ConfigureAwait(false);
+            workItemId = created.Id;
+        }
+
+        // Exactly the write a run start performs, on its own connection, landing inside the PATCH's save: the status
+        // moves and the concurrency token moves with it.
+        var interceptor = new CompetingWriteInterceptor(() => fixture.RawExecuteAsync(
+            "UPDATE dev_workflow_work_items SET status = 'Active', version = version + 1 WHERE id = $id;",
+            command => command.Parameters.AddWithValue("$id", workItemId)));
+
+        await using var editContext = fixture.CreateContext(interceptor);
+        var updated = await DevWorkflowTestFixture.StoreFor(editContext)
+                                                  .UpdateWorkItemAsync(new UpdateDevWorkflowWorkItemCommand(workItemId, DevWorkflowVersions.Any, "Renamed"))
+                                                  .ConfigureAwait(false);
+
+        AssertEx.Equal("Renamed", updated.Title, "The edit has to land: it raced a write whose fields it does not touch.");
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Active,
+            updated.Status,
+            "And the runtime's status write has to survive, rather than be overwritten by a re-apply against the row this edit first read.");
+        AssertEx.Equal("Original request", updated.Request, "A PATCH that named only the title may not rewrite the request.");
+    }
+
+    /// <summary>Performs one competing write, on its own connection, inside the first save it intercepts.</summary>
+    private sealed class CompetingWriteInterceptor(Func<Task> write) : SaveChangesInterceptor
+    {
+        private bool _fired;
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_fired)
+            {
+                _fired = true;
+                await write().ConfigureAwait(false);
+            }
+
+            return await base.SavingChangesAsync(eventData, result, cancellationToken).ConfigureAwait(false);
+        }
     }
 }

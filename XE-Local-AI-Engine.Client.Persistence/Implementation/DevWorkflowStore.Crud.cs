@@ -52,34 +52,62 @@ internal sealed partial class DevWorkflowStore
             EnsureNotBlank(command.Request, nameof(command.Request));
         }
 
-        var workItem = await _dbContext.DevWorkflowWorkItems.SingleOrDefaultAsync(entity => entity.Id == command.WorkItemId, cancellationToken).ConfigureAwait(false)
-                       ?? throw new DevWorkflowNotFoundException($"Development workflow work item '{command.WorkItemId}' was not found.");
-        if (command.ExpectedVersion != DevWorkflowVersions.Any && workItem.Version != command.ExpectedVersion)
+        // Re-read and re-applied when the row moves underneath this edit. The version is a concurrency token and the
+        // RUNTIME is its other writer — a dispatcher tick that moves the item to Active mid-PATCH is correct behaviour,
+        // not a conflict, and the two writes touch disjoint fields because status is absent from this command by
+        // design. So the honest answer to losing that race is the caller's fields applied to the row as it now stands.
+        // Bounded at three, because a retry that never gave up would sit here for as long as the run kept moving; past
+        // that the caller gets a retryable conflict rather than the 500 an unmapped store exception would become.
+        const int maxAttempts = 3;
+        var attempt = 0;
+        while (true)
         {
-            throw new DevWorkflowConcurrencyException($"The work item version is stale (expected {command.ExpectedVersion}, current {workItem.Version}).");
-        }
+            attempt++;
+            var workItem = await _dbContext.DevWorkflowWorkItems.SingleOrDefaultAsync(entity => entity.Id == command.WorkItemId, cancellationToken).ConfigureAwait(false)
+                           ?? throw new DevWorkflowNotFoundException($"Development workflow work item '{command.WorkItemId}' was not found.");
+            if (command.ExpectedVersion != DevWorkflowVersions.Any && workItem.Version != command.ExpectedVersion)
+            {
+                throw new DevWorkflowConcurrencyException($"The work item version is stale (expected {command.ExpectedVersion}, current {workItem.Version}).");
+            }
 
-        if (command.Title is not null)
-        {
-            workItem.Title = command.Title;
-        }
+            if (command.Title is not null)
+            {
+                workItem.Title = command.Title;
+            }
 
-        if (command.Request is not null)
-        {
-            workItem.Request = Utf8(command.Request);
-        }
+            if (command.Request is not null)
+            {
+                workItem.Request = Utf8(command.Request);
+            }
 
-        if (command.DevelopmentProjectId is { } projectId)
-        {
-            workItem.DevelopmentProjectId = projectId;
-        }
+            if (command.DevelopmentProjectId is { } projectId)
+            {
+                workItem.DevelopmentProjectId = projectId;
+            }
 
-        // Status is deliberately absent from this command: it is the runtime's to write, inside the transaction that
-        // transitions a run. Letting a client set it would make the list filter lie the moment the two disagreed.
-        workItem.Version++;
-        workItem.UpdatedAtUtc = Now();
-        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-        return await ComposeWorkItemAsync(workItem, cancellationToken).ConfigureAwait(false);
+            // Status is deliberately absent from this command: it is the runtime's to write, inside the transaction that
+            // transitions a run. Letting a client set it would make the list filter lie the moment the two disagreed.
+            workItem.Version++;
+            workItem.UpdatedAtUtc = Now();
+            try
+            {
+                await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (DbUpdateConcurrencyException exception)
+            {
+                // Cleared, or the next pass is handed back the stale instance this one holds instead of the row the
+                // winner wrote — and re-applying the edit to that would overwrite the status it just landed.
+                _dbContext.ChangeTracker.Clear();
+                if (attempt == maxAttempts)
+                {
+                    throw new DevWorkflowConcurrencyException("The work item kept changing while this edit was being written, so it was not applied.", exception);
+                }
+
+                continue;
+            }
+
+            return await ComposeWorkItemAsync(workItem, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     public async Task<IReadOnlyList<DevWorkflowWorkItemSnapshot>> ListWorkItemsAsync(DevWorkflowWorkItemStatus? status = null,
