@@ -151,7 +151,7 @@ export function DevWorkflowAnchorCard({ data }: NodeProps<DevWorkflowAnchorNode>
 	const { t } = useTranslation();
 	const isStart = data.anchor === "start";
 	return (
-		<div className={classes["anchor"]} data-testid={`dev-workflow-graph-anchor-${data.anchor}`}>
+		<div className={classes["anchor"]} data-testid={`dev-workflow-graph-anchor-${data.anchor}-${data.nodeKey}`}>
 			{isStart ? null : <Handle type="target" position={Position.Left} isConnectable={false} />}
 			{isStart ? t("pages.devWorkflows.graph.start", "Start") : t("pages.devWorkflows.graph.end", "End")}
 			{isStart ? <Handle type="source" position={Position.Right} isConnectable={false} /> : null}

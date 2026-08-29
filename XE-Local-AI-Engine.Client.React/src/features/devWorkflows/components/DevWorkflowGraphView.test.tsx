@@ -176,16 +176,21 @@ describe("DevWorkflowGraphView", () => {
 		const onSelect = vi.fn();
 		renderWithProviders(
 			<DevWorkflowGraphView
-				run={chainRun([
-					devWorkflowNodeRunSummary({ id: "node-research", nodeKey: "research" }),
-					devWorkflowNodeRunSummary({ id: "node-plan", nodeKey: "plan" }),
-				])}
+				// Both edges of this definition are drawable, so `plan` really is the terminal — an End anchor here is
+				// the truth, unlike the dangling case the mapper's own test covers.
+				run={devWorkflowRun({
+					graph: { schemaVersion: 1, nodes: [], edges: [{ from: "research", to: "plan" }] },
+					nodes: [
+						devWorkflowNodeRunSummary({ id: "node-research", nodeKey: "research" }),
+						devWorkflowNodeRunSummary({ id: "node-plan", nodeKey: "plan" }),
+					],
+				})}
 				onSelect={onSelect}
 			/>,
 		);
 
-		expect(screen.getByTestId("dev-workflow-graph-anchor-start").textContent).toBe("Start");
-		expect(screen.getByTestId("dev-workflow-graph-anchor-end").textContent).toBe("End");
+		expect(screen.getByTestId("dev-workflow-graph-anchor-start-research").textContent).toBe("Start");
+		expect(screen.getByTestId("dev-workflow-graph-anchor-end-plan").textContent).toBe("End");
 
 		fireEvent.click(screen.getByTestId("react-flow-node-dev-workflow-anchor-start-node-research"));
 		expect(onSelect).not.toHaveBeenCalled();
