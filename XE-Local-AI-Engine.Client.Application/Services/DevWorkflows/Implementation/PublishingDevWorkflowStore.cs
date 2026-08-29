@@ -85,8 +85,9 @@ internal sealed class PublishingDevWorkflowStore(IDevWorkflowStore inner, IDevWo
     /// </summary>
     public Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
         IReadOnlyList<DevWorkflowNodeRunVerdict> verdicts,
+        DevWorkflowUnjudgedNodeRunBlock? unjudged = null,
         CancellationToken cancellationToken = default) =>
-        _inner.ReconcileNonTerminalNodeRunsAsync(sanitizedReason, verdicts, cancellationToken);
+        _inner.ReconcileNonTerminalNodeRunsAsync(sanitizedReason, verdicts, unjudged, cancellationToken);
 
     public Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ListInterruptedNodeRunsAsync(CancellationToken cancellationToken = default) =>
         _inner.ListInterruptedNodeRunsAsync(cancellationToken);

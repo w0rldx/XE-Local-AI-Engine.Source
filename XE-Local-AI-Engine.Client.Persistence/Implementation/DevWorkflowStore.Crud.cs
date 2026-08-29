@@ -533,10 +533,17 @@ internal sealed partial class DevWorkflowStore
 
     public async Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
         IReadOnlyList<DevWorkflowNodeRunVerdict> verdicts,
+        DevWorkflowUnjudgedNodeRunBlock? unjudged = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sanitizedReason);
         ArgumentNullException.ThrowIfNull(verdicts);
+
+        // Every pass reads the world afresh. A caller that reconciles more than once holds one scope, and the identity
+        // map from its earlier pass would hand back run rows as they stood BEFORE whatever moved these node runs — so
+        // this would allocate sequence numbers that are already taken. Nothing outside can hold an entity of ours: the
+        // store answers snapshots.
+        _dbContext.ChangeTracker.Clear();
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -558,14 +565,20 @@ internal sealed partial class DevWorkflowStore
             var repairs = new List<(DevWorkflowRun Run, TransitionDevWorkflowNodeRunCommand Command)>();
             foreach (var nodeRun in stranded)
             {
+                if (!runs.TryGetValue(nodeRun.RunId, out var run))
+                {
+                    continue;
+                }
+
                 // A row the caller did not judge, or judged as something it no longer is, is left exactly where it is:
                 // collapsing it would strand it at Pending with nobody left to decide what re-running it costs. The
-                // caller reads again and judges it on its next pass.
-                if (!judged.TryGetValue(nodeRun.Id, out var verdict)
-                    || verdict.ObservedStatus != nodeRun.Status
-                    || verdict.ObservedAttempt != nodeRun.Attempt
-                    || verdict.ObservedWorkSessionId != nodeRun.WorkSessionId
-                    || !runs.TryGetValue(nodeRun.RunId, out var run))
+                // caller reads again and judges it on its next pass — or ends the matter with `unjudged`, which blocks
+                // it for a human off the row in front of us, where no snapshot can be stale.
+                var matched = judged.TryGetValue(nodeRun.Id, out var verdict)
+                              && verdict.ObservedStatus == nodeRun.Status
+                              && verdict.ObservedAttempt == nodeRun.Attempt
+                              && verdict.ObservedWorkSessionId == nodeRun.WorkSessionId;
+                if (!matched && unjudged is null)
                 {
                     continue;
                 }
@@ -592,7 +605,9 @@ internal sealed partial class DevWorkflowStore
                 AddEvent(run, DevWorkflowEventTypes.NodeInterrupted, nodeRun.Id, "interrupted", operationId: null, ReasonDetail(sanitizedReason));
                 run.Version++;
                 run.UpdatedAtUtc = now;
-                repairs.AddRange(verdict.Repairs.Select(command => (run, command)));
+                repairs.AddRange(matched
+                    ? verdict!.Repairs.Select(command => (run, command))
+                    : [(run, BlockUnjudged(nodeRun, unjudged!))]);
             }
 
             // The run comes from the row the collapse took, never from the command: the collapse is the authority on
@@ -621,6 +636,17 @@ internal sealed partial class DevWorkflowStore
             throw;
         }
     }
+
+    /// <summary>Where a settling pass puts a node-run it could not judge: a human's in-tray, with no attempt spent on it.</summary>
+    private static TransitionDevWorkflowNodeRunCommand BlockUnjudged(DevWorkflowNodeRun nodeRun, DevWorkflowUnjudgedNodeRunBlock unjudged) =>
+        new(nodeRun.RunId,
+            nodeRun.Id,
+            DevWorkflowVersions.Any,
+            DevWorkflowNodeRunStatus.Blocked,
+            PendingDecisionKind: DevWorkflowDecisionKind.Abandon,
+            FailureClass: unjudged.FailureClass,
+            TerminalReason: unjudged.SanitizedReason,
+            WorkItemStatus: DevWorkflowWorkItemStatus.Blocked);
 
     /// <summary>
     ///     The node-runs a host death stranded. Only Queued and Running lost an executor: Pending was never dispatched,

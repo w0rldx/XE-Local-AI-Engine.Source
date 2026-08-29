@@ -210,6 +210,19 @@ public sealed record DevWorkflowNodeRunVerdict(
     IReadOnlyList<TransitionDevWorkflowNodeRunCommand> Repairs);
 
 /// <summary>
+///     Turns a reconciliation into a SETTLING pass: every stranded node-run no verdict matched is blocked for a human
+///     instead of being left as it is.
+///     <para>
+///         The blocked state is this record's business rather than the caller's, because it is what the pass promises:
+///         a settling pass leaves no node-run stranded, and a row that is neither dispatchable nor waiting on a person
+///         is one nothing will ever pick up. So the row lands <c>Blocked</c> with an <c>Abandon</c> decision pending
+///         and its work item blocked with it — costing no attempt, which is the only honest price for a row nobody
+///         could judge.
+///     </para>
+/// </summary>
+public sealed record DevWorkflowUnjudgedNodeRunBlock(string FailureClass, string SanitizedReason);
+
+/// <summary>
 ///     What one mutation committed: the watermark it allocated for its event, and the run row's post-commit version,
 ///     status and graph revision.
 ///     <para>
@@ -581,9 +594,16 @@ public interface IDevWorkflowStore
     ///         <see cref="DevWorkflowVersions.Any" />: the run's version has by then moved by one event per collapsed
     ///         row, and the per-row match is the check that matters here.
     ///     </para>
+    ///     <para>
+    ///         A non-null <paramref name="unjudged" /> makes this the caller's LAST pass: the rows it could not judge are
+    ///         blocked for a human rather than left, decided against the live row inside this transaction and so immune
+    ///         to the drift that stranded them in the first place. Pass it when walking away is worse than a human wait
+    ///         — which it is at startup, because nothing downstream picks a stranded row up again.
+    ///     </para>
     /// </summary>
     Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReconcileNonTerminalNodeRunsAsync(string sanitizedReason,
         IReadOnlyList<DevWorkflowNodeRunVerdict> verdicts,
+        DevWorkflowUnjudgedNodeRunBlock? unjudged = null,
         CancellationToken cancellationToken = default);
 
     Task<DevWorkflowMutationResult> MaterializeNodeRunsAsync(MaterializeDevWorkflowNodesCommand command, CancellationToken cancellationToken = default);

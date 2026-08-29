@@ -30,10 +30,12 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
 {
     private const string InterruptedReason = "The host restarted while the node run was in flight.";
 
+    private const string UnjudgedReason = "Startup recovery could not settle this node run, because it kept changing while the host was starting.";
+
     /// <summary>
-    ///     How many times recovery re-reads and re-judges before it gives up and leaves the rest to the next boot.
-    ///     Bounded rather than open-ended: a writer that keeps moving these rows is one this cannot outrace, and a
-    ///     startup that spins on it never reaches the dispatcher.
+    ///     How many times recovery re-reads and re-judges before the last pass settles whatever is left. Bounded rather
+    ///     than open-ended: a writer that keeps moving these rows is one this cannot outrace, and a startup that spins
+    ///     on it never reaches the dispatcher.
     /// </summary>
     private const int RecoveryPasses = 3;
 
@@ -72,13 +74,25 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
         for (var pass = 1; pass <= RecoveryPasses && remaining.Count > 0; pass++)
         {
             var verdicts = await ComposeVerdictsAsync(store, sessions, remaining, cancellationToken).ConfigureAwait(false);
-            recovered += (await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, verdicts, cancellationToken).ConfigureAwait(false)).Count;
+
+            // The last pass settles what it could not judge instead of walking away from it, because nothing downstream
+            // would pick those rows up: the dispatcher admits Pending rows and follows Running AGENT ones, so a stranded
+            // Tool row left behind wedges its run for good — "the next boot" is not something anybody schedules. The
+            // settlement is decided against the live row inside that transaction, so the drift that caused this cannot
+            // reach it.
+            var unjudged = pass == RecoveryPasses
+                ? new DevWorkflowUnjudgedNodeRunBlock(DevWorkflowFailureClasses.Interrupted, UnjudgedReason)
+                : null;
+            recovered += (await store.ReconcileNonTerminalNodeRunsAsync(InterruptedReason, verdicts, unjudged, cancellationToken).ConfigureAwait(false)).Count;
             remaining = await store.ListInterruptedNodeRunsAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (remaining.Count > 0)
         {
-            _logger.LogWarning("{Count} in-flight development workflow node run(s) kept changing under startup recovery, so the next boot reconciles them.",
+            // Only reachable when something stranded these AFTER the settling pass looked, which makes them its rows
+            // rather than ours: whatever is writing them is running, and blocking another writer's live work would be
+            // the worse mistake.
+            _logger.LogWarning("{Count} development workflow node run(s) went in flight while startup recovery was finishing, so recovery left them alone.",
                 remaining.Count);
         }
 

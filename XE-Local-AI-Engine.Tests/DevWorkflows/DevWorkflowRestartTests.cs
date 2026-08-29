@@ -366,6 +366,33 @@ public sealed class DevWorkflowRestartTests
         AssertEx.Equal(expected: 1, unfunded.Attempt, "A row nothing could pay for must not read as having tried again.");
     }
 
+    /// <summary>
+    ///     A node run that keeps moving under recovery is settled by its last pass rather than left in flight. Nothing
+    ///     downstream would ever pick it up — the dispatcher admits <c>Pending</c> rows and follows <c>Running</c> agent
+    ///     ones, and no boot is scheduled to try again — so a row recovery walked away from would wedge its run for
+    ///     good. It goes to a human instead, unspent.
+    /// </summary>
+    [Test]
+    public async Task ANodeRunThatKeepsMovingUnderRecovery_IsSettledForAHumanRatherThanLeftInFlight()
+    {
+        await using var harness = DevWorkflowHarness.WithASecondWriter();
+        var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        // From here every session read re-attempts the row, so each pass judges a row that has already moved on.
+        harness.Drift.Target = (runId, (await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false)).Id);
+
+        await harness.RestartAsync().ConfigureAwait(false);
+
+        AssertEx.Empty(await harness.ReadInterruptedNodeRunsAsync().ConfigureAwait(false),
+            "Nothing may still be in flight when the dispatcher starts: it polls neither a Queued row nor a Running sandbox one.");
+        var settled = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, settled.Status);
+        AssertEx.Equal(DevWorkflowFailureClasses.Interrupted, settled.FailureClass);
+        AssertEx.Equal(DevWorkflowDecisionKind.Abandon, settled.PendingDecisionKind, "and it asks for an answer, or nobody would look at it.");
+        AssertEx.Contains(AssertEx.NotNull(settled.TerminalReason), "could not settle");
+    }
+
     /// <summary>Row #7 — the two human waits are durable states. A restart does not touch them at all.</summary>
     [Test]
     [Arguments(DevWorkflowNodeRunStatus.WaitingForApproval)]

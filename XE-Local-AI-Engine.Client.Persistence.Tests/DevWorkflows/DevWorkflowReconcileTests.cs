@@ -214,6 +214,51 @@ public sealed class DevWorkflowReconcileTests
         AssertEx.Equal(expected: 3, repaired.Attempt);
     }
 
+    /// <summary>
+    ///     The last pass has to end the matter. Nothing downstream re-reads a stranded row — the dispatcher admits
+    ///     <c>Pending</c> rows and follows <c>Running</c> agent ones — so a Tool row left behind by a recovery that gave
+    ///     up would wedge its run for good. A settling pass blocks what it could not judge, off the live row, and leaves
+    ///     nothing stranded whatever raced it.
+    /// </summary>
+    [Test]
+    public async Task ASettlingPass_BlocksTheStrandedRowsItCouldNotJudgeInsteadOfLeavingThemLive()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var (seed, steadyId) = await SeedRunningToolAsync(store).ConfigureAwait(false);
+        var driftingId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, driftingId, "drifting", DevWorkflowVersions.Any, DevWorkflowNodeType.Tool)
+                                                  .ConfigureAwait(false);
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId, driftingId, version, DevWorkflowNodeRunStatus.Running))
+                       .ConfigureAwait(false);
+
+        var snapshot = await store.ListInterruptedNodeRunsAsync().ConfigureAwait(false);
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                           driftingId,
+                           DevWorkflowVersions.Any,
+                           DevWorkflowNodeRunStatus.Running,
+                           IncrementAttempt: true))
+                       .ConfigureAwait(false);
+
+        var reconciled = await store.ReconcileNonTerminalNodeRunsAsync("The host restarted.",
+                                        [.. snapshot.Select(row => Verdict(row, Reattempt(row)))],
+                                        new DevWorkflowUnjudgedNodeRunBlock("Interrupted", "Startup recovery could not settle this node run."))
+                                    .ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2, reconciled.Count, "A settling pass takes every stranded row: the ones it judged, and the ones it could not.");
+        AssertEx.Empty(await store.ListInterruptedNodeRunsAsync().ConfigureAwait(false), "Nothing may still be in flight when the dispatcher starts.");
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, (await store.GetNodeRunAsync(steadyId).ConfigureAwait(false)).Status);
+
+        var settled = await store.GetNodeRunAsync(driftingId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, settled.Status, "A row nobody could judge goes to a human rather than staying live with no executor.");
+        AssertEx.Equal(DevWorkflowDecisionKind.Abandon, settled.PendingDecisionKind, "and it asks for an answer, or no one would ever see it.");
+        AssertEx.Equal(expected: 2, settled.Attempt, "Blocking costs nothing: the row never re-ran.");
+        AssertEx.True(AssertEx.NotNull(settled.TerminalReason).Contains("could not settle", StringComparison.Ordinal),
+            "The row has to say why a person is looking at it.");
+    }
+
     /// <summary>The verdict a startup recovery composes for a stranded sandbox row: re-attempt it, bound to the row it read.</summary>
     private static async Task<DevWorkflowNodeRunVerdict> ReattemptVerdictAsync(DevWorkflowStore store, Guid nodeRunId, string? outcome = null)
     {

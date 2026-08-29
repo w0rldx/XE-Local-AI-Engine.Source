@@ -92,12 +92,28 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         _ownsFactory = true;
     }
 
+    private DevWorkflowHarness(bool drifting)
+    {
+        _factory = NewFactory(drifting, []);
+        _ownsFactory = true;
+    }
+
+    /// <summary>
+    ///     A host of this test's own whose session reads move a node run underneath the reader — a second writer racing
+    ///     startup recovery, made deterministic. Name the row to move through <see cref="Drift" />.
+    /// </summary>
+    public static DevWorkflowHarness WithASecondWriter() =>
+        new(drifting: true);
+
     /// <summary>The class's shared host, with this test's own runs on it. See <see cref="DevWorkflowHostFixture" />.</summary>
     public DevWorkflowHarness(DevWorkflowHostFixture host) =>
         _factory = (host ?? throw new ArgumentNullException(nameof(host))).Factory;
 
     /// <summary>The workflow host shape: the feature on, no sweep inside any test's lifetime, and the agent seam faked.</summary>
-    internal static TestServerWebAppFactory NewFactory(params (string Key, string Value)[] configuration)
+    internal static TestServerWebAppFactory NewFactory(params (string Key, string Value)[] configuration) =>
+        NewFactory(drifting: false, configuration);
+
+    private static TestServerWebAppFactory NewFactory(bool drifting, (string Key, string Value)[] configuration)
     {
         var settings = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
@@ -120,7 +136,11 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
             {
                 services.RemoveAll<IWorkflowOwnedWorkSessionLifecycle>();
                 services.AddSingleton<IWorkflowOwnedWorkSessionLifecycle>(provider =>
-                    new FakeDevWorkflowAgentSession(provider.GetRequiredService<IServiceScopeFactory>()));
+                {
+                    var scopes = provider.GetRequiredService<IServiceScopeFactory>();
+                    var agent = new FakeDevWorkflowAgentSession(scopes);
+                    return drifting ? new DriftingWorkSessions(agent, scopes) : agent;
+                });
             }
         };
     }
@@ -131,7 +151,13 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     ///     The scripted agent. Resolving the seam is what builds it, because a test scripts the agent BEFORE the first
     ///     tick asks the container for one.
     /// </summary>
-    public FakeDevWorkflowAgentSession Agent => (FakeDevWorkflowAgentSession)Services.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>();
+    public FakeDevWorkflowAgentSession Agent =>
+        Services.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>() is DriftingWorkSessions drifting
+            ? drifting.Agent
+            : (FakeDevWorkflowAgentSession)Services.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>();
+
+    /// <summary>The second writer, on a host that has one. See <see cref="WithASecondWriter" />.</summary>
+    public DriftingWorkSessions Drift => (DriftingWorkSessions)Services.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>();
 
     /// <summary>
     ///     The dispatcher under test: the container's, or the one a simulated restart replaced it with. Resolved from
@@ -544,6 +570,13 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
                           .ConfigureAwait(false);
     }
 
+    /// <summary>What a restart would still have to reconcile: the node runs sitting in flight with no executor behind them.</summary>
+    public async Task<IReadOnlyList<DevWorkflowReconciledNodeRun>> ReadInterruptedNodeRunsAsync()
+    {
+        await using var scope = Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListInterruptedNodeRunsAsync().ConfigureAwait(false);
+    }
+
     /// <summary>Moves the run itself, the way the run service's fire-and-forget commands will.</summary>
     public async Task TransitionRunAsync(Guid runId, DevWorkflowRunStatus target)
     {
@@ -552,4 +585,61 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
                        .TransitionRunAsync(new TransitionDevWorkflowRunCommand(runId, DevWorkflowVersions.Any, target))
                        .ConfigureAwait(false);
     }
+}
+
+/// <summary>
+///     The fake agent session with one thing added: every read of a session re-attempts the node run under test, which
+///     is what a second process writing the same database looks like from inside startup recovery.
+///     <para>
+///         The session read is the hook because recovery does exactly one of them per pass, AFTER it has read the rows
+///         it is judging — so every verdict it composes is stale by the time it tries to apply it, on every pass, for
+///         as many passes as recovery is willing to take.
+///     </para>
+/// </summary>
+internal sealed class DriftingWorkSessions(FakeDevWorkflowAgentSession agent, IServiceScopeFactory scopes) : IWorkflowOwnedWorkSessionLifecycle
+{
+    public FakeDevWorkflowAgentSession Agent { get; } = agent;
+
+    /// <summary>The node run to move, or null while the writer is asleep. Set it once the row under test exists.</summary>
+    public (Guid RunId, Guid NodeRunId)? Target { get; set; }
+
+    public bool HasCapacity => Agent.HasCapacity;
+
+    public Task<WorkSessionDetail> CreateAsync(string title, string objective, Guid agentDefinitionId, CancellationToken cancellationToken = default) =>
+        Agent.CreateAsync(title, objective, agentDefinitionId, cancellationToken);
+
+    public async Task<WorkSessionDetail> GetAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        var detail = await Agent.GetAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        if (Target is not { } target)
+        {
+            return detail;
+        }
+
+        await using var scope = scopes.CreateAsyncScope();
+        _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
+                       .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(target.RunId,
+                               target.NodeRunId,
+                               DevWorkflowVersions.Any,
+                               DevWorkflowNodeRunStatus.Running,
+                               IncrementAttempt: true),
+                           cancellationToken)
+                       .ConfigureAwait(false);
+        return detail;
+    }
+
+    public Task<WorkSessionDetail> StartAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        Agent.StartAsync(sessionId, cancellationToken);
+
+    public Task<WorkSessionDetail> PauseAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        Agent.PauseAsync(sessionId, cancellationToken);
+
+    public Task<WorkSessionDetail> ResumeAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        Agent.ResumeAsync(sessionId, cancellationToken);
+
+    public Task<WorkSessionDetail> CancelAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        Agent.CancelAsync(sessionId, cancellationToken);
+
+    public Task DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default) =>
+        Agent.DeleteAsync(sessionId, cancellationToken);
 }
