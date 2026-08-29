@@ -4973,7 +4973,15 @@
 				"confirm": "Delete",
 				"failed": "Could not delete this work item."
 			},
+			"graph": {
+				"title": "Graph",
+				"label": "Workflow graph",
+				"start": "Start",
+				"end": "End",
+				"overCap": "This run has {{count}} nodes — more than the graph draws. Use the Nodes tab to work through them."
+			},
 			"nodes": {
+				"title": "Nodes",
 				"empty": "This run has no node-runs yet.",
 				"columnNode": "Node",
 				"columnStatus": "Status",
