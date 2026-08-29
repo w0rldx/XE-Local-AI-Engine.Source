@@ -8,6 +8,9 @@ import { useCreateMcpWorkspace, useDeleteMcpWorkspace, useMcpWorkspaces } from "
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
 
 // These hooks are thin by design — the generated `*Options()`/`*Mutation()` factory supplies the URL, the query key
 // and the response validator, and the hook adds only a `select` mapping and an invalidation. Mocking the generated

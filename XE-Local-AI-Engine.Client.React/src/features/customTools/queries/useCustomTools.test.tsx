@@ -14,6 +14,9 @@ import {
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
 
 // Served over MSW rather than mocked at the generated module, so the generated URLs, query keys and zod response
 // validators stay in the test. The two invalidation rules these hooks add are asserted by the REFETCHES they cause:

@@ -23,6 +23,9 @@ import {
 import { domainErrorRoute, jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
 
 // These hooks call the generated SDK functions imperatively (not through the TanStack `*Options()` wrappers) because
 // several derive their poll cadence from already-mapped domain data. Serving the routes over MSW keeps the generated
