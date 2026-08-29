@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -54,18 +55,37 @@ public sealed class WorkSessionServiceHostFixture : IAsyncInitializer, IAsyncDis
 /// <summary>
 ///     A host whose two work-session personas are already seeded, once, before any test runs.
 ///     <para>
-///         The seeder is check-then-insert against a table with no unique slug index, so two tests calling it
-///         concurrently on one shared database could both insert. Seeding here instead means the read-only persona
-///         tests never race; the two tests that exercise seeding itself keep private hosts.
+///         <c>seed_slug</c> carries a filtered unique index, so two tests seeding concurrently on one shared database
+///         cannot double-insert — the loser takes a <c>DbUpdateException</c>, which the seeder's best-effort startup
+///         contract swallows and logs. That test would then run against a persona it believes was seeded. Seeding once
+///         here removes the race; the two tests that exercise seeding itself keep private hosts.
 ///     </para>
 /// </summary>
 public sealed class SeededWorkSessionAgentsFixture : IAsyncInitializer, IAsyncDisposable
 {
     public TestServerWebAppFactory Factory { get; } = new();
 
-    public Task InitializeAsync() =>
-        new WorkSessionAgentSeeder(Factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<WorkSessionAgentSeeder>.Instance)
-            .StartAsync(CancellationToken.None);
+    public async Task InitializeAsync()
+    {
+        await new WorkSessionAgentSeeder(Factory.Services.GetRequiredService<IServiceScopeFactory>(), NullLogger<WorkSessionAgentSeeder>.Instance)
+              .StartAsync(CancellationToken.None)
+              .ConfigureAwait(false);
+
+        // StartAsync reports success whether or not it seeded: it catches its own failures by contract, and this
+        // fixture hands it a NullLogger, so the warning goes nowhere. Without this check a seeding failure would
+        // surface as every persona test asserting on a definition that was never written.
+        using var scope = Factory.Services.CreateScope();
+        var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
+        foreach (var slug in new[]
+                 {
+                     AgentDefaults.WorkSessionGeneralAgentSeedSlug,
+                     AgentDefaults.WorkSessionResearchAgentSeedSlug
+                 })
+        {
+            _ = await store.GetBySeedSlugAsync(slug).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"The work-session agent seeder did not create '{slug}'.");
+        }
+    }
 
     public ValueTask DisposeAsync() =>
         Factory.DisposeAsync();

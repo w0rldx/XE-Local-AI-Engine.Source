@@ -125,8 +125,9 @@ public sealed class WorkSessionAgentSeederTests
 
     private static async Task<AgentDefinitionRecord> ReadSeededAsync(TestServerWebAppFactory factory, string slug)
     {
-        // The host fixture strips every hosted service, so its InitializeAsync already ran the seeder once for the
-        // whole class — running it again per test would race a sibling through the seeder's check-then-insert.
+        // The host fixture strips every hosted service, so its InitializeAsync ran the seeder once for the whole class
+        // and verified the result. Running it again per test would race a sibling into the seed_slug unique index,
+        // whose violation the seeder's best-effort contract swallows — leaving this test silently unseeded.
         using var scope = factory.Services.CreateScope();
         var store = scope.ServiceProvider.GetRequiredService<IAgentDefinitionStore>();
         return AssertEx.NotNull(await store.GetBySeedSlugAsync(slug).ConfigureAwait(false), $"The seeder must have created {slug}.");
