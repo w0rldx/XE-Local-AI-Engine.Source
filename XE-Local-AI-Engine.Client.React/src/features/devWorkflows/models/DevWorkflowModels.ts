@@ -85,12 +85,13 @@ export const devWorkflowArtifactKinds = [
 export type DevWorkflowArtifactKind = (typeof devWorkflowArtifactKinds)[number];
 
 /**
- * The detail page's side-tab selection, carried in `?tab=`. Only the two values that select something: `artifacts` is
- * the default, so its absence already means it. `nodes` and `graph` are deliberately absent — the node table is the
- * centre pane rather than a tab, and the graph does not exist until Slice A1, so neither would render anything
- * distinct, and a URL must not validate against a value that changes nothing.
+ * The detail page's tab selection, carried in ONE `?tab=` search param across two Tabs components (ruled):
+ * `graph`/`nodes` select the CENTRE pane, `artifacts`/`events` the side pane. Each component derives its own value with
+ * its own default — `graph` for the centre, `artifacts` for the side — so an absent or foreign-pane value simply reads
+ * as that pane's default rather than blanking it. One param, because a URL that carries two tab states for a surface
+ * that shows both at once is two params nobody would ever set independently.
  */
-export const devWorkflowDetailTabs = ["artifacts", "events"] as const;
+export const devWorkflowDetailTabs = ["artifacts", "events", "graph", "nodes"] as const;
 export type DevWorkflowDetailTab = (typeof devWorkflowDetailTabs)[number];
 
 /** Y4: written by the runtime, never by the client. A `Failed` run maps here to `Blocked` — it needs attention. */

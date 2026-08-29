@@ -18,6 +18,7 @@ import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPa
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { DevWorkflowArtifactsTab } from "@/features/devWorkflows/components/DevWorkflowArtifactsTab";
 import { DevWorkflowEventsTab } from "@/features/devWorkflows/components/DevWorkflowEventsTab";
+import { DevWorkflowGraphView } from "@/features/devWorkflows/components/DevWorkflowGraphView";
 import { DevWorkflowNodePanel } from "@/features/devWorkflows/components/DevWorkflowNodePanel";
 import { DevWorkflowNodeRunTable } from "@/features/devWorkflows/components/DevWorkflowNodeRunTable";
 import { DevWorkflowRunSummaryPanel } from "@/features/devWorkflows/components/DevWorkflowRunSummaryPanel";
@@ -274,13 +275,38 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 						onCancel={() => lifecycle.cancel.mutate({ path: { runId }, body: { operationId: crypto.randomUUID() } })}
 						onJumpToDecision={(nodeRunId) => select({ node: nodeRunId })}
 					/>
-					<div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-						<DevWorkflowNodeRunTable
-							nodes={nodes}
-							selectedNodeRunId={selection.node}
-							onSelect={(nodeRunId) => select({ node: nodeRunId })}
-						/>
-					</div>
+					{/* Two views over ONE selection: a click on a graph card and a click on a table row are the same
+					    `?node=` change. Mantine keeps both panels mounted, which is deliberate — the table stays in the
+					    DOM (and stays the keyboard path through the run) while the graph is on top. */}
+					<Tabs
+						value={selection.tab === "nodes" ? "nodes" : "graph"}
+						onChange={(value) => select({ tab: value === "nodes" ? "nodes" : "graph" })}
+						style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
+						data-testid="dev-workflow-centre-tabs"
+					>
+						<Tabs.List>
+							<Tabs.Tab value="graph" data-testid="dev-workflow-tab-graph">
+								{t("pages.devWorkflows.graph.title", "Graph")}
+							</Tabs.Tab>
+							<Tabs.Tab value="nodes" data-testid="dev-workflow-tab-nodes">
+								{t("pages.devWorkflows.nodes.title", "Nodes")}
+							</Tabs.Tab>
+						</Tabs.List>
+						<Tabs.Panel value="graph" pt="xs" style={{ flex: 1, minHeight: 0 }}>
+							<DevWorkflowGraphView
+								run={run}
+								selectedNodeRunId={selection.node}
+								onSelect={(nodeRunId) => select({ node: nodeRunId })}
+							/>
+						</Tabs.Panel>
+						<Tabs.Panel value="nodes" pt="xs" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+							<DevWorkflowNodeRunTable
+								nodes={nodes}
+								selectedNodeRunId={selection.node}
+								onSelect={(nodeRunId) => select({ node: nodeRunId })}
+							/>
+						</Tabs.Panel>
+					</Tabs>
 				</>
 			) : (
 				<Alert color="blue" variant="light" data-testid="dev-workflow-detail-no-run">
