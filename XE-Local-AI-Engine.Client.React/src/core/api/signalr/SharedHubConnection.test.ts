@@ -14,8 +14,12 @@ interface FakeConnection {
 	on: ReturnType<typeof vi.fn>;
 	off: ReturnType<typeof vi.fn>;
 	onreconnected: ReturnType<typeof vi.fn>;
-	/** The manager's fan-out callback, captured from its onreconnected registration. */
+	onreconnecting: ReturnType<typeof vi.fn>;
+	onclose: ReturnType<typeof vi.fn>;
+	/** The manager's fan-out callbacks, captured from its lifecycle registrations. */
 	reconnectedFanout?: (connectionId?: string) => void;
+	reconnectingFanout?: (error?: Error) => void;
+	closedFanout?: (error?: Error) => void;
 	/** Resolve the in-flight start(), flipping the connection to Connected (mirrors a successful negotiate). */
 	resolveStart: () => void;
 }
@@ -40,6 +44,12 @@ const hoisted = vi.hoisted(() => {
 			off: vi.fn(),
 			onreconnected: vi.fn((callback: (connectionId?: string) => void) => {
 				connection.reconnectedFanout = callback;
+			}),
+			onreconnecting: vi.fn((callback: (error?: Error) => void) => {
+				connection.reconnectingFanout = callback;
+			}),
+			onclose: vi.fn((callback: (error?: Error) => void) => {
+				connection.closedFanout = callback;
 			}),
 			resolveStart: () => {
 				connection.state = "Connected";
@@ -258,6 +268,40 @@ describe("acquireHubConnection", () => {
 		hoisted.builtConnections[0]?.reconnectedFanout?.("id-2");
 		expect(cb1).not.toHaveBeenCalled();
 		expect(cb2).toHaveBeenCalledWith("id-2");
+	});
+
+	it("fans reconnecting and closed out per handle too, and drops them on release", async () => {
+		// A subscriber cannot register these on the connection itself: SignalR has no way to remove ONE onreconnecting or
+		// onclose callback, so a shared connection would accumulate one per mount. Without them, a transport that drops
+		// after a good subscribe is invisible — the page keeps painting frozen data behind a healthy-looking UI.
+		const first = acquireHubConnection(HUB);
+		const second = acquireHubConnection(HUB);
+		hoisted.builtConnections[0]?.resolveStart();
+		await flushMicrotasks();
+
+		const reconnecting = vi.fn();
+		const closed = vi.fn();
+		first.onReconnecting(reconnecting);
+		first.onClosed(closed);
+		const secondClosed = vi.fn();
+		second.onClosed(secondClosed);
+
+		const error = new Error("transport lost");
+		hoisted.builtConnections[0]?.reconnectingFanout?.(error);
+		hoisted.builtConnections[0]?.closedFanout?.(error);
+		expect(reconnecting).toHaveBeenCalledWith(error);
+		expect(closed).toHaveBeenCalledWith(error);
+		expect(secondClosed).toHaveBeenCalledWith(error);
+
+		first.release();
+		reconnecting.mockClear();
+		closed.mockClear();
+		secondClosed.mockClear();
+		hoisted.builtConnections[0]?.reconnectingFanout?.();
+		hoisted.builtConnections[0]?.closedFanout?.();
+		expect(reconnecting).not.toHaveBeenCalled();
+		expect(closed).not.toHaveBeenCalled();
+		expect(secondClosed).toHaveBeenCalled();
 	});
 
 	it("unregisters a single reconnected callback via the returned dispose fn without dropping the other", async () => {

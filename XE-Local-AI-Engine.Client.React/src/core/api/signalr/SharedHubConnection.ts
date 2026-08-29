@@ -31,6 +31,9 @@ import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 /** Registered reconnected callback: receives the new connectionId (undefined when the transport reports none). */
 type ReconnectedCallback = (connectionId?: string) => void;
 
+/** Registered reconnecting/closed callback: receives the transport error when there was one. */
+type HubLifecycleCallback = (error?: Error) => void;
+
 /** A single subscriber's lease on a shared hub connection. Valid from acquire until {@link SharedHubHandle.release}. */
 export interface SharedHubHandle {
 	/** The shared connection, started on first acquire. Stable for this handle's lifetime (a fixed connection until release). */
@@ -48,6 +51,16 @@ export interface SharedHubHandle {
 	 * callback this handle registered, so a hook may rely on release alone.
 	 */
 	onReconnected(callback: ReconnectedCallback): () => void;
+	/**
+	 * Register a callback for the transport dropping and starting to retry, scoped to THIS handle. Same reason for the
+	 * per-handle set as {@link onReconnected}: SignalR's own `onreconnecting` cannot unregister one callback.
+	 */
+	onReconnecting(callback: HubLifecycleCallback): () => void;
+	/**
+	 * Register a callback for the connection closing for good — the automatic-reconnect policy gave up, so nothing
+	 * further arrives on this connection and a subscriber must fall back to polling until it is rebuilt.
+	 */
+	onClosed(callback: HubLifecycleCallback): () => void;
 	/** Release this acquisition. The last release stops (and discards) the shared connection. Idempotent. */
 	release(): void;
 }
@@ -55,6 +68,8 @@ export interface SharedHubHandle {
 interface HubEntry {
 	readonly connection: HubConnection;
 	readonly reconnectedCallbacks: Set<ReconnectedCallback>;
+	readonly reconnectingCallbacks: Set<HubLifecycleCallback>;
+	readonly closedCallbacks: Set<HubLifecycleCallback>;
 	refCount: number;
 	/** The (already-caught, always-resolving) initial start promise. Stop is deferred behind it. */
 	readonly startPromise: Promise<void>;
@@ -84,11 +99,26 @@ function buildEntry(hubPath: string): HubEntry {
 		.build();
 
 	const reconnectedCallbacks = new Set<ReconnectedCallback>();
-	// A single fan-out registration: SignalR gives no way to remove one onreconnected callback, so per-handle callbacks
-	// live in this set (add on onReconnected, remove on release) and are dispatched from here.
+	const reconnectingCallbacks = new Set<HubLifecycleCallback>();
+	const closedCallbacks = new Set<HubLifecycleCallback>();
+	// One fan-out registration per lifecycle event: SignalR gives no way to remove a single onreconnected /
+	// onreconnecting / onclose callback, so per-handle callbacks live in these sets (added on registration, dropped on
+	// release) and are dispatched from here.
 	connection.onreconnected((connectionId) => {
 		for (const callback of reconnectedCallbacks) {
 			callback(connectionId ?? undefined);
+		}
+	});
+	connection.onreconnecting((error) => {
+		for (const callback of reconnectingCallbacks) {
+			callback(error);
+		}
+	});
+	// The retry policy gave up. Nothing more arrives on this connection, and — unlike a reconnecting blip — nothing will
+	// announce that later either, so a subscriber that ignores this shows frozen data behind a healthy-looking page.
+	connection.onclose((error) => {
+		for (const callback of closedCallbacks) {
+			callback(error);
 		}
 	});
 
@@ -99,7 +129,7 @@ function buildEntry(hubPath: string): HubEntry {
 		console.warn(`shared signalr hub "${hubPath}" failed to start`, error);
 	});
 
-	return { connection, reconnectedCallbacks, refCount: 0, startPromise };
+	return { connection, reconnectedCallbacks, reconnectingCallbacks, closedCallbacks, refCount: 0, startPromise };
 }
 
 function releaseEntry(hubPath: string, entry: HubEntry): void {
@@ -148,32 +178,36 @@ export function acquireHubConnection(hubPath: string): SharedHubHandle {
 	const activeEntry = entry;
 
 	let released = false;
-	// The onReconnected unregister fns this handle owns, so release() can drop them all (SignalR itself cannot).
-	const ownReconnectedUnsubscribers = new Set<() => void>();
+	// Every lifecycle unregister fn this handle owns, so release() can drop them all (SignalR itself cannot).
+	const ownUnsubscribers = new Set<() => void>();
+
+	function register<T>(set: Set<T>, callback: T): () => void {
+		set.add(callback);
+		const unsubscribe = (): void => {
+			set.delete(callback);
+		};
+		ownUnsubscribers.add(unsubscribe);
+		return () => {
+			ownUnsubscribers.delete(unsubscribe);
+			unsubscribe();
+		};
+	}
 
 	return {
 		connection: activeEntry.connection,
 		whenStarted: activeEntry.startPromise,
-		onReconnected(callback: ReconnectedCallback): () => void {
-			activeEntry.reconnectedCallbacks.add(callback);
-			const unsubscribe = (): void => {
-				activeEntry.reconnectedCallbacks.delete(callback);
-			};
-			ownReconnectedUnsubscribers.add(unsubscribe);
-			return () => {
-				ownReconnectedUnsubscribers.delete(unsubscribe);
-				unsubscribe();
-			};
-		},
+		onReconnected: (callback: ReconnectedCallback) => register(activeEntry.reconnectedCallbacks, callback),
+		onReconnecting: (callback: HubLifecycleCallback) => register(activeEntry.reconnectingCallbacks, callback),
+		onClosed: (callback: HubLifecycleCallback) => register(activeEntry.closedCallbacks, callback),
 		release(): void {
 			if (released) {
 				return;
 			}
 			released = true;
-			for (const unsubscribe of ownReconnectedUnsubscribers) {
+			for (const unsubscribe of ownUnsubscribers) {
 				unsubscribe();
 			}
-			ownReconnectedUnsubscribers.clear();
+			ownUnsubscribers.clear();
 			releaseEntry(hubPath, activeEntry);
 		},
 	};
@@ -188,6 +222,8 @@ export function acquireHubConnection(hubPath: string): SharedHubHandle {
 export function resetSharedHubConnectionsForTest(): void {
 	for (const entry of entries.values()) {
 		entry.reconnectedCallbacks.clear();
+		entry.reconnectingCallbacks.clear();
+		entry.closedCallbacks.clear();
 		if (entry.lingerTimer !== undefined) {
 			clearTimeout(entry.lingerTimer);
 			entry.lingerTimer = undefined;

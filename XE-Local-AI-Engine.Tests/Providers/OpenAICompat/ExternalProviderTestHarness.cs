@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
 
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
 /// <summary>
@@ -169,7 +170,7 @@ internal sealed class OpenAiWireRecorder
 
     private static string JsonString(string value)
     {
-        return System.Text.Json.JsonSerializer.Serialize(value);
+        return JsonSerializer.Serialize(value);
     }
 
     private sealed class RecordingHandler(OpenAiWireRecorder recorder) : HttpMessageHandler

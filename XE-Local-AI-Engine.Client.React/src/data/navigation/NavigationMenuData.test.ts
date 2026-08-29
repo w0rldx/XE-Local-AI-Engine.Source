@@ -211,16 +211,26 @@ describe("navigationLinks", () => {
 		]);
 	});
 
-	it("groups Open Canvas, Image Generation and Development Mode under the Preview group as a pure toggle", () => {
+	it("groups Open Canvas, Image Generation, Development Mode and Workflow Runs under the Preview group as a pure toggle", () => {
 		const preview = navigationLinks.find((link) => link.id === "preview");
 
-		// Preview is a group (no own route); Open Canvas, Image Generation and Development Mode are its children.
+		// Preview is a group (no own route); the four experimental surfaces are its children.
 		expect(preview?.to).toBeUndefined();
 		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.preview,
 			nodeRoutePaths.images,
 			nodeRoutePaths.development,
+			nodeRoutePaths.devWorkflows,
 		]);
+	});
+
+	// C42: the module is "Development Workflows" but the NAV entry says "Workflow Runs", because it sits directly under
+	// "Development" and two adjacent "Development…" entries are indistinguishable at a glance.
+	it("labels the Development Workflows child so it does not read as Development Mode's sibling", () => {
+		const preview = navigationLinks.find((link) => link.id === "preview");
+		const child = preview?.links?.find((nestedLink) => nestedLink.to === nodeRoutePaths.devWorkflows);
+
+		expect(child?.translationKey).toBe("navigation.devWorkflows");
 	});
 
 	it("keeps the other preview children when the preview (Open Canvas) capability is off", async () => {
@@ -229,20 +239,44 @@ describe("navigationLinks", () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ preview: false });
 		const preview = gatedLinks.find((link) => link.id === "preview");
 
-		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.images, nodeRoutePaths.development]);
+		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.images,
+			nodeRoutePaths.development,
+			nodeRoutePaths.devWorkflows,
+		]);
 	});
 
 	it("drops the Image Generation child from Preview when the images capability is off", async () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ images: false });
 		const preview = gatedLinks.find((link) => link.id === "preview");
 
-		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.preview, nodeRoutePaths.development]);
+		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.preview,
+			nodeRoutePaths.development,
+			nodeRoutePaths.devWorkflows,
+		]);
 		// It must not reappear as a top-level entry either.
 		expect(gatedLinks.some((link) => link.id === "images")).toBe(false);
 	});
 
-	it("drops the Preview group entirely when the preview, images and development capabilities are all off", async () => {
-		const { navigationLinks: gatedLinks } = await mockCapabilities({ preview: false, images: false, development: false });
+	it("drops the Workflow Runs child from Preview when the devWorkflows capability is off", async () => {
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ devWorkflows: false });
+		const preview = gatedLinks.find((link) => link.id === "preview");
+
+		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.preview,
+			nodeRoutePaths.images,
+			nodeRoutePaths.development,
+		]);
+	});
+
+	it("drops the Preview group entirely when every one of its children's capabilities is off", async () => {
+		const { navigationLinks: gatedLinks } = await mockCapabilities({
+			preview: false,
+			images: false,
+			development: false,
+			devWorkflows: false,
+		});
 
 		expect(gatedLinks.some((link) => link.id === "preview")).toBe(false);
 	});

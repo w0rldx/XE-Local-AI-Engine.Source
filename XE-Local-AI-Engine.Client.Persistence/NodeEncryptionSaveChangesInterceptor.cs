@@ -666,6 +666,57 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
             EncryptOptionalProperty(entry, entry.Property(entity => entity.DetailJson), entry.Entity.SessionId, entry.Entity.Id, "work_session_event_detail_json", trackedProperties);
         }
 
+        // Dev workflows take the work-session layout: the row's own id fills both AAD slots on a root row, and the
+        // owning id fills the conversation slot on every child row so a writer cannot re-parent a run onto another work
+        // item, or a node-run onto another run, and have the blob read back as that owner's.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<DevWorkflowWorkItem>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Request), entry.Entity.Id, entry.Entity.Id, "dev_workflow_work_item_request", trackedProperties);
+        }
+
+        // The definition is node-scoped, so the empty conversation id plus its own id — but under an AAD column name
+        // distinct from the run's pinned copy below, so neither ciphertext is presentable as the other.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<DevWorkflowDefinition>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.GraphJson), Guid.Empty, entry.Entity.Id, "dev_workflow_definition_graph_json", trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<DevWorkflowRun>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.GraphJson), entry.Entity.WorkItemId, entry.Entity.Id, "dev_workflow_run_graph_json", trackedProperties);
+        }
+
+        // Three distinct AAD column names on one row, and not cosmetically: a Gate node's decision is a function of
+        // output_json, so if these shared a name a database writer could swap a policy or input blob into the output
+        // column and flip a gate without forging a ciphertext or a tag.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<DevWorkflowNodeRun>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.InputJson), entry.Entity.RunId, entry.Entity.Id, "dev_workflow_node_run_input_json", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.OutputJson), entry.Entity.RunId, entry.Entity.Id, "dev_workflow_node_run_output_json", trackedProperties);
+            EncryptOptionalProperty(entry,
+                entry.Property(entity => entity.PolicyResolutionJson),
+                entry.Entity.RunId,
+                entry.Entity.Id,
+                "dev_workflow_node_run_policy_json",
+                trackedProperties);
+        }
+
+        // The payload is the structured, machine-consumed half of a decision; the comment is free text. Distinct names
+        // so the one that a runtime acts on can never be substituted from the one a human typed.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<DevWorkflowDecision>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.Comment), entry.Entity.RunId, entry.Entity.Id, "dev_workflow_decision_comment", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.PayloadJson), entry.Entity.RunId, entry.Entity.Id, "dev_workflow_decision_payload_json", trackedProperties);
+        }
+
+        foreach (var entry in nodeContext.ChangeTracker.Entries<DevWorkflowRunEvent>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.DetailJson), entry.Entity.RunId, entry.Entity.Id, "dev_workflow_run_event_detail_json", trackedProperties);
+        }
+
+        // The two artifact tables add nothing here on purpose: the bytes live on disk under the blob store's own AAD
+        // column (dev_workflow_artifact_blob), and every column that stays in the row is structural.
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;

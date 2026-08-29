@@ -901,10 +901,10 @@ public sealed partial class InvocationRunner : IInvocationRunner
         // one scope: the workflow interleaves its participants inside this single async flow, so they cannot each own a
         // nested scope, and the pins are looked up by model id anyway.
         var resolvedParticipantPins = await ExternalProviderInvocationPin
-                                           .ResolveAsync(_externalProviderRegistry,
-                                               definition.Participants.Select(participant => participant.ModelId),
-                                               invocationToken)
-                                           .ConfigureAwait(false);
+                                            .ResolveAsync(_externalProviderRegistry,
+                                                definition.Participants.Select(participant => participant.ModelId),
+                                                invocationToken)
+                                            .ConfigureAwait(false);
         using var participantPins = ExternalProviderBindingPinScope.Begin(resolvedParticipantPins);
 
         // Unify with the single-agent path (see TurnPolicy): the workflow seed is budgeted the same way the

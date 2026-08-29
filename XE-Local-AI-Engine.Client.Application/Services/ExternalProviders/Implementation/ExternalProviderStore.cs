@@ -293,7 +293,13 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
     private static bool IsUnchanged(StoredExternalProviderConnection left, StoredExternalProviderConnection right)
     {
         var noModels = Array.Empty<StoredExternalProviderModel>();
-        return left with { Models = noModels } == right with { Models = noModels }
+        return left with
+               {
+                   Models = noModels
+               } == right with
+               {
+                   Models = noModels
+               }
                && left.Models.SequenceEqual(right.Models);
     }
 
@@ -320,7 +326,8 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         if (request.TimeoutSeconds is { } timeout
             && timeout is < ExternalProviderStoreSchema.MinTimeoutSeconds or > ExternalProviderStoreSchema.MaxTimeoutSeconds)
         {
-            throw new ExternalProviderValidationException($"An external connection timeout must be {ExternalProviderStoreSchema.MinTimeoutSeconds}-{ExternalProviderStoreSchema.MaxTimeoutSeconds} seconds.");
+            throw new ExternalProviderValidationException(
+                $"An external connection timeout must be {ExternalProviderStoreSchema.MinTimeoutSeconds}-{ExternalProviderStoreSchema.MaxTimeoutSeconds} seconds.");
         }
 
         return new StoredExternalProviderConnection
@@ -376,8 +383,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             // filled in wrong. The effort switch is only meaningful alongside a reasoning channel.
             if (!model.SupportsReasoning && (model.SupportsReasoningEffort || !string.IsNullOrWhiteSpace(model.DefaultReasoningEffort)))
             {
-                throw new ExternalProviderValidationException(
-                    $"The external model '{wireId}' declares a reasoning effort but not reasoning support. Enable reasoning, or remove the effort settings.");
+                throw new ExternalProviderValidationException($"The external model '{wireId}' declares a reasoning effort but not reasoning support. Enable reasoning, or remove the effort settings.");
             }
 
             if (!model.SupportsReasoningEffort && !string.IsNullOrWhiteSpace(model.DefaultReasoningEffort))
@@ -448,7 +454,8 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
             {
                 // Written by a NEWER build. Refuse to interpret it, and refuse to delete it: the operator downgraded,
                 // and silently discarding their connections (and keys) would be the worse of the two failures.
-                _logger.LogWarning("The external provider store was written at schema version {StoredVersion}, newer than this build's {CurrentVersion}; leaving it untouched and refusing to write it.",
+                _logger.LogWarning(
+                    "The external provider store was written at schema version {StoredVersion}, newer than this build's {CurrentVersion}; leaving it untouched and refusing to write it.",
                     config.SchemaVersion,
                     ExternalProviderStoreSchema.CurrentVersion);
                 return new ExternalProviderLoadResult.UnsupportedSchema(config.SchemaVersion);
@@ -473,8 +480,7 @@ public sealed class ExternalProviderStore : IExternalProviderStore, IDisposable
         {
             ExternalProviderLoadResult.Loaded loaded => loaded.Config,
             ExternalProviderLoadResult.Missing => new StoredExternalProviderConfig(),
-            ExternalProviderLoadResult.Unreadable unreadable => throw new ExternalProviderValidationException(
-                $"{unreadable.Reason} Nothing was changed; retry once the file is accessible."),
+            ExternalProviderLoadResult.Unreadable unreadable => throw new ExternalProviderValidationException($"{unreadable.Reason} Nothing was changed; retry once the file is accessible."),
             ExternalProviderLoadResult.UnsupportedSchema unsupported => throw new ExternalProviderValidationException(
                 $"The external connection store was written by a newer version of this application (schema {unsupported.StoredVersion}). Nothing was changed. Upgrade, or remove the store file to start over."),
             _ => throw new ExternalProviderValidationException("The external connection store is in an unrecognized state; nothing was changed.")

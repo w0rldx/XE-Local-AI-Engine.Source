@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Tests.Development;
 using System.Diagnostics;
 using System.Text;
 using Microsoft.Extensions.Options;
-using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
@@ -126,13 +125,11 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
         var sandbox = new RecordingSandbox(SandboxProviderCapabilities.SupportsTrustedHostWorkspace
                                            | SandboxProviderCapabilities.SupportsKill);
 
-        var (_, store) = await PrepareAsync(sandbox, ".env", "certs/server.pem").ConfigureAwait(false);
+        var (_, sink) = await PrepareAsync(sandbox, ".env", "certs/server.pem").ConfigureAwait(false);
 
         AssertEx.Empty(sandbox.Created[0].Mounts!.Where(static mount => mount.ReadOnly));
-        _ = store.Received(1).RecordWorkspaceSecretsAsync(Arg.Any<Guid>(),
-            Arg.Any<Guid>(),
-            Arg.Is<IReadOnlyList<string>>(paths => paths.Count == 2 && paths[0] == ".env" && paths[1] == "certs/server.pem"),
-            Arg.Any<CancellationToken>());
+        AssertEx.Equal(expected: 1, sink.Recorded.Count);
+        AssertEx.Equal(".env, certs/server.pem", string.Join(", ", sink.Recorded[0].Paths));
     }
 
     /// <summary>
@@ -156,11 +153,9 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
         // bound there — detection alone is unbounded work the engine can afford.
         var detectionOnly = new RecordingSandbox(SandboxProviderCapabilities.SupportsTrustedHostWorkspace
                                                  | SandboxProviderCapabilities.SupportsKill);
-        var (_, store) = await PrepareAsync(detectionOnly, many).ConfigureAwait(false);
-        _ = store.Received(1).RecordWorkspaceSecretsAsync(Arg.Any<Guid>(),
-            Arg.Any<Guid>(),
-            Arg.Is<IReadOnlyList<string>>(paths => paths.Count == 33),
-            Arg.Any<CancellationToken>());
+        var (_, sink) = await PrepareAsync(detectionOnly, many).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, sink.Recorded.Count);
+        AssertEx.Equal(expected: 33, sink.Recorded[0].Paths.Count);
     }
 
     /// <summary>
@@ -174,13 +169,10 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
                                            | SandboxProviderCapabilities.SupportsReadOnlyMounts
                                            | SandboxProviderCapabilities.SupportsKill);
 
-        var (_, store) = await PrepareAsync(sandbox).ConfigureAwait(false);
+        var (_, sink) = await PrepareAsync(sandbox).ConfigureAwait(false);
 
         AssertEx.Empty(sandbox.Created[0].Mounts!.Where(static mount => mount.TargetIsWorkspaceRelative));
-        _ = store.DidNotReceive().RecordWorkspaceSecretsAsync(Arg.Any<Guid>(),
-            Arg.Any<Guid>(),
-            Arg.Any<IReadOnlyList<string>>(),
-            Arg.Any<CancellationToken>());
+        AssertEx.Empty(sink.Recorded);
     }
 
     /// <summary>
@@ -194,19 +186,16 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
                                            | SandboxProviderCapabilities.SupportsReadOnlyMounts
                                            | SandboxProviderCapabilities.SupportsKill);
 
-        var (_, store) = await PrepareAsync(sandbox, committed: [], untracked: [".env"]).ConfigureAwait(false);
+        var (_, sink) = await PrepareAsync(sandbox, committed: [], untracked: [".env"]).ConfigureAwait(false);
 
         AssertEx.Empty(sandbox.Created[0].Mounts!.Where(static mount => mount.TargetIsWorkspaceRelative));
-        _ = store.DidNotReceive().RecordWorkspaceSecretsAsync(Arg.Any<Guid>(),
-            Arg.Any<Guid>(),
-            Arg.Any<IReadOnlyList<string>>(),
-            Arg.Any<CancellationToken>());
+        AssertEx.Empty(sink.Recorded);
     }
 
-    private Task<(DevelopmentWorkspaceSession Session, IDevelopmentStore Store)> PrepareAsync(RecordingSandbox sandbox, params string[] committed) =>
+    private Task<(DevelopmentWorkspaceSession Session, RecordingWorkspaceSecretsSink Sink)> PrepareAsync(RecordingSandbox sandbox, params string[] committed) =>
         PrepareAsync(sandbox, committed, untracked: []);
 
-    private async Task<(DevelopmentWorkspaceSession Session, IDevelopmentStore Store)> PrepareAsync(RecordingSandbox sandbox,
+    private async Task<(DevelopmentWorkspaceSession Session, RecordingWorkspaceSecretsSink Sink)> PrepareAsync(RecordingSandbox sandbox,
         string[] committed,
         string[] untracked)
     {
@@ -238,16 +227,16 @@ public sealed class DevelopmentWorkspaceSecretShadowTests : IDisposable
         Directory.CreateDirectory(data);
         var identity = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository));
         var snapshot = Snapshot(identity);
-        var store = Substitute.For<IDevelopmentStore>();
+        var sink = new RecordingWorkspaceSecretsSink();
         var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data),
             sandbox,
             Options.Create(OptionsValue()),
             TimeProvider.System,
-            store);
+            sink);
         var session = await provider.PrepareAsync(snapshot,
                                         new DevelopmentRepositoryBinding(snapshot.ProjectId, snapshot.SelectedFolderId!.Value, "repository", repository, identity))
                                     .ConfigureAwait(false);
-        return (session, store);
+        return (session, sink);
     }
 
     private static async Task<string> ReadGitOutputAsync(string workingDirectory, params string[] arguments)

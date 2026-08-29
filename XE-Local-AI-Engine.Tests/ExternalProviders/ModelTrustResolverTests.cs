@@ -129,8 +129,7 @@ public sealed class ModelTrustResolverTests
     [Test]
     public async Task ClassifyExternalCached_AfterPriming_MatchesTheAsyncAnswer()
     {
-        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(
-            ExternalProviderRegistryTests.Connection("local-box", ["qwen3"]),
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(ExternalProviderRegistryTests.Connection("local-box", ["qwen3"]),
             ExternalProviderRegistryTests.Connection("cloud-box", ["qwen3"], locality: ExternalProviderLocality.Cloud)));
         await registry.PrimeAsync();
         var resolver = new ModelTrustResolver(registry, registry, Substitute.For<IActiveCloudChatClientFactory>(), NullLogger<ModelTrustResolver>.Instance);

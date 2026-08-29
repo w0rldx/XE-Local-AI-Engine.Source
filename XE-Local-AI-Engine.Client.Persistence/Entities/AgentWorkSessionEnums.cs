@@ -6,10 +6,18 @@ public enum AgentWorkSessionKind
     Research,
 
     /// <summary>
-    ///     Reserved. Development sessions join only after the Dev Mode to chat series lands, so the store rejects this
-    ///     kind at creation rather than persisting rows no code path can execute.
+    ///     Reserved, and now permanently so: this member was held for the Dev Mode to chat series, which the Development
+    ///     Workflows module supersedes. Nothing will claim it, but removing it would touch merged, migrated rows for no
+    ///     gain, so the store keeps rejecting it at creation. New workflow-driven sessions use <see cref="Workflow" />.
     /// </summary>
-    Development
+    Development,
+
+    /// <summary>
+    ///     A session owned by one agent node-run of a development workflow. The session is execution scratch — the
+    ///     transcript, the checkpoints and the stepwise state that make pause/restart/resume work — while the
+    ///     <c>dev_workflow_*</c> tables are the audit.
+    /// </summary>
+    Workflow
 }
 
 public enum AgentWorkSessionStatus

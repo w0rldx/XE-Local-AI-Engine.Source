@@ -13,6 +13,8 @@ const signalRMock = vi.hoisted(() => {
 		on: vi.fn(),
 		off: vi.fn(),
 		onreconnected: vi.fn(),
+		onreconnecting: vi.fn(),
+		onclose: vi.fn(),
 		start: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 		stop: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
 	};

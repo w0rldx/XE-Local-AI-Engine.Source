@@ -11,7 +11,8 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 ///     endpoint polls per selected model and would flood the console), while a failed model-list read is unexpected
 ///     enough to warrant a Warning.
 /// </summary>
-public sealed class CloudModelResolver(ICloudCredentialStore cloudCredentialStore,
+public sealed class CloudModelResolver(
+    ICloudCredentialStore cloudCredentialStore,
     IModelTrustResolver modelTrustResolver,
     ILogger<CloudModelResolver> logger)
     : ICloudModelResolver

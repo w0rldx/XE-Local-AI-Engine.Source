@@ -182,7 +182,8 @@ public sealed class ExternalProviderRegistry : IExternalProviderRegistry, IExter
     ///     two different generations. They are never projected onto a descriptor, so the key-free read model every
     ///     catalog, UI and policy consumer sees is unchanged.
     /// </remarks>
-    private sealed record ExternalProviderSnapshot(long Generation,
+    private sealed record ExternalProviderSnapshot(
+        long Generation,
         IReadOnlyList<ExternalProviderModelRegistration> Registrations,
         FrozenDictionary<string, ExternalProviderModelRegistration> ByModelId,
         FrozenDictionary<string, string> KeysByConnectionId)

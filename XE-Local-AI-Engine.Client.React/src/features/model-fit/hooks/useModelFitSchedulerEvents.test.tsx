@@ -13,6 +13,8 @@ const signalRMock = vi.hoisted(() => {
 		on: vi.fn(),
 		off: vi.fn(),
 		onreconnected: vi.fn(),
+		onreconnecting: vi.fn(),
+		onclose: vi.fn(),
 		// The hook reads connection.state in the connect-time catch-up guard; start() resolves immediately here, so the
 		// connection is reported Connected.
 		state: "Connected",

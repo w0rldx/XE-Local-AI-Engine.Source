@@ -49,8 +49,7 @@ public sealed class ExternalProviderProbeEndpointTests
         // A key the operator just typed is USED and never echoed — the response is rendered in a settings page whose
         // screenshots and bug reports travel.
         AssertEx.False(body.Contains("sk-typed-in-the-form", StringComparison.Ordinal));
-        await probeService.Received(1).ProbeAsync(
-            Arg.Is<ExternalProviderProbeQuery>(query =>
+        await probeService.Received(1).ProbeAsync(Arg.Is<ExternalProviderProbeQuery>(query =>
                 query.ConnectionId == "unsloth-box" && query.BaseUrl == "http://127.0.0.1:18099" && query.ApiKey == "sk-typed-in-the-form"),
             Arg.Any<CancellationToken>());
     }

@@ -36,7 +36,8 @@ type NavigationCapabilityKey =
 	| "binding"
 	| "benchmarks"
 	| "training"
-	| "workSessions";
+	| "workSessions"
+	| "devWorkflows";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -149,6 +150,9 @@ const allNavigationLinks: INavigationLink[] = [
 			{ translationKey: "navigation.preview", to: nodeRoutePaths.preview, capability: "preview" },
 			{ translationKey: "navigation.images", to: nodeRoutePaths.images, capability: "images" },
 			{ translationKey: "navigation.development", to: nodeRoutePaths.development, capability: "development" },
+			// Labelled "Workflow Runs", not "Development Workflows" (C42): sitting next to "Development" the module name
+			// reads as its sibling, and the two are not siblings — this one lists work items, their runs and their nodes.
+			{ translationKey: "navigation.devWorkflows", to: nodeRoutePaths.devWorkflows, capability: "devWorkflows" },
 		],
 	},
 	{

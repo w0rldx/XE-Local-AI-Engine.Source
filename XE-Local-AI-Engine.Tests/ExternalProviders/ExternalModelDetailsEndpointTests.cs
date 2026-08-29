@@ -30,8 +30,7 @@ public sealed class ExternalModelDetailsEndpointTests
 
         using var request = CreateRequest(factory, "/api/local/v1/models/ext%3Alocal-box%2Fqwen3/details");
         using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var details = JsonSerializer.Deserialize<LocalModelDetailsResponse>(
-            await response.Content.ReadAsStringAsync().ConfigureAwait(false), JsonOptions)!;
+        var details = JsonSerializer.Deserialize<LocalModelDetailsResponse>(await response.Content.ReadAsStringAsync().ConfigureAwait(false), JsonOptions)!;
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Equal("ext:local-box/qwen3", details.ModelName);
@@ -53,8 +52,7 @@ public sealed class ExternalModelDetailsEndpointTests
 
         using var request = CreateRequest(factory, "/api/local/v1/models/ext%3Alocal-box%2Fqwen3/details");
         using var response = await client.SendAsync(request).ConfigureAwait(false);
-        var details = JsonSerializer.Deserialize<LocalModelDetailsResponse>(
-            await response.Content.ReadAsStringAsync().ConfigureAwait(false), JsonOptions)!;
+        var details = JsonSerializer.Deserialize<LocalModelDetailsResponse>(await response.Content.ReadAsStringAsync().ConfigureAwait(false), JsonOptions)!;
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
         AssertEx.Null(details.MaxContextTokens);

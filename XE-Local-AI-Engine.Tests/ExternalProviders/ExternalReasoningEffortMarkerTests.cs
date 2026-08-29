@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ExternalProviders;
 
+using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.AI.Agent.Invocation;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
@@ -70,9 +71,9 @@ public sealed class ExternalReasoningEffortMarkerTests
     {
         // The two halves of the contract meet here: the resolver emits the node's seven-value vocabulary, and the
         // provider narrows it to the low|medium|high set that is interoperable across OpenAI, vLLM, llama.cpp and Groq.
-        AssertEx.Equal(Microsoft.Extensions.AI.ReasoningEffort.Low,
+        AssertEx.Equal(ReasoningEffort.Low,
             ExternalReasoningEffort.ToWireEffort(ReasoningOptionsResolver.ResolveExternalReasoningEffort(ExternalModel, "minimal")));
-        AssertEx.Equal(Microsoft.Extensions.AI.ReasoningEffort.High,
+        AssertEx.Equal(ReasoningEffort.High,
             ExternalReasoningEffort.ToWireEffort(ReasoningOptionsResolver.ResolveExternalReasoningEffort(ExternalModel, "xhigh")));
         AssertEx.Null(ExternalReasoningEffort.ToWireEffort(ReasoningOptionsResolver.ResolveExternalReasoningEffort(ExternalModel, "none")));
         AssertEx.Null(ExternalReasoningEffort.ToWireEffort(ReasoningOptionsResolver.ResolveExternalReasoningEffort(ExternalModel, "on")));

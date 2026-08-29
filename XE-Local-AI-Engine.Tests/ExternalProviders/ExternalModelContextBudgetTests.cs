@@ -6,7 +6,6 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Events;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.Invocation.Policy;
-using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 

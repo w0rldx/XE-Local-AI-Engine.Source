@@ -1035,6 +1035,7 @@ public sealed class DevelopmentValidationReviewAndApplyTests : IDisposable
                                                                                           serviceProvider.GetRequiredService<NodeEncryptionMaterializationInterceptor>()));
         services.AddScoped<IDevelopmentStore, DevelopmentStore>();
         services.AddSingleton<IDevelopmentArtifactBlobStore, ManagedDevelopmentArtifactBlobStore>();
+        services.AddScoped<IDevelopmentWorkspaceSecretsSink, DevelopmentStoreWorkspaceSecretsSink>();
         services.AddScoped<IDevelopmentWorkspaceProvider, DevelopmentWorkspaceProvider>();
         services.AddScoped<IDevelopmentPatchEvidenceService, DevelopmentPatchEvidenceService>();
         services.AddScoped<IDevelopmentEvidenceService, DevelopmentEvidenceService>();

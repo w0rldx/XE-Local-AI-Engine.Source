@@ -25,6 +25,7 @@ using XE_Local_AI_Engine.Client.DependencyInjection;
 using XE_Local_AI_Engine.Client.Endpoints.Automation.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Development;
+using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
 using XE_Local_AI_Engine.Client.HealthChecks;
 using XE_Local_AI_Engine.Client.Hosting;
@@ -35,6 +36,7 @@ using XE_Local_AI_Engine.Client.Security.DataProtection;
 using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Mcp;
@@ -209,6 +211,14 @@ public static class ConfigureServices
         // TryAddSingleton, so a change committed by the supervisor or by a state tool reaches the session view live.
         builder.Services.AddSingleton<IWorkSessionEventPublisher, WorkSessionEventPublisher>();
 
+        // Same posture for development workflows: the hub-backed publisher supersedes the no-op the module registers
+        // with TryAddSingleton, so every committed run change reaches an open run view live.
+        builder.Services.AddSingleton<IDevWorkflowEventPublisher, DevWorkflowEventPublisher>();
+
+        // Composes the run-detail and node-detail read shapes, which need the pinned graph and the agent names beside
+        // the rows. Scoped, because the stores it reads are.
+        builder.Services.AddScoped<DevWorkflowRunComposer>();
+
         // Development ships enabled. Keep the no-op publisher only when the administrator explicitly disables it.
         var developmentEnabled = configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true);
         if (developmentEnabled)
@@ -224,6 +234,7 @@ public static class ConfigureServices
                .AddExceptionHandler<TrainingExceptionHandler>()
                .AddExceptionHandler<BenchmarkExceptionHandler>()
                .AddExceptionHandler<WorkSessionNotFoundExceptionHandler>()
+               .AddExceptionHandler<DevWorkflowNotFoundExceptionHandler>()
                .AddExceptionHandler<DefaultExceptionHandler>();
         builder.Services.AddProblemDetails();
 

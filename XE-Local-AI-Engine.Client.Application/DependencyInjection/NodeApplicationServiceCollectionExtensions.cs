@@ -47,6 +47,10 @@ public static class NodeApplicationServiceCollectionExtensions
         // rows orphaned by a crash before the work-session reconciler collapses those sessions to Interrupted.
         builder.AddNodeWorkSessions(configuration);
         builder.AddNodeDevelopment(configuration);
+
+        // After both: a workflow's agent nodes own work sessions and its DevTask nodes drive Development Mode tasks,
+        // so it is the composition of the two that came before it.
+        builder.AddNodeDevWorkflows(configuration);
         // Development Mode container sandbox (ADR 0004). After AddNodeDevelopment so it reads as what it is: a
         // Development Mode concern, not an AgentHome one.
         builder.AddNodeContainerSandbox(configuration);

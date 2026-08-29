@@ -72,6 +72,7 @@ export const zXeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetai
 			.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
 			.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
 			.nullish(),
+		standingDecision: z.string().nullish(),
 	}),
 );
 
@@ -3837,6 +3838,479 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvi
 		.nullish(),
 	models: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderModelRequest),
 	expectedRevision: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse = z.object({
+	id: z.guid().optional(),
+	nodeRunId: z.guid().optional(),
+	attempt: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	decision: z.string().optional(),
+	comment: z.string().nullish(),
+	decidedBySubject: z.string().nullish(),
+	decidedAtUtc: z.int().optional(),
+	operationId: z.guid().optional(),
+	sequence: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResultResponse = z.object({
+	decision: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse.optional(),
+	runStatus: z.string().optional(),
+	nodeRunStatus: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionRequest = z.object({
+	operationId: z.guid().min(1),
+	decision: z.string().optional(),
+	comment: z.string().min(0).max(8000).nullish(),
+	payloadJson: z.string().min(0).max(262144).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionSummaryResponse = z.object({
+	id: z.guid().optional(),
+	name: z.string().optional(),
+	source: z.string().optional(),
+	seedSlug: z.string().nullish(),
+	archived: z.boolean().optional(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	nodeCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	updatedAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionSummaryResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsRequest = z.record(
+	z.string(),
+	z.never(),
+);
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowMaterialization = z.object({
+	templateNodeKey: z.string().optional(),
+	artifactKind: z.string().optional(),
+	joinNodeKey: z.string().optional(),
+	maxChildren: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode = z.object({
+	nodeKey: z.string().optional(),
+	nodeType: z.string().optional(),
+	label: z.string().optional(),
+	agentDefinitionId: z.guid().nullish(),
+	agentSeedSlug: z.string().nullish(),
+	instructions: z.string().nullish(),
+	modelProfile: z.string().nullish(),
+	reasoningEffort: z.string().nullish(),
+	validationCommandIds: z.array(z.string()).nullish(),
+	joinPolicy: z.string().nullish(),
+	maxAttempts: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	retryDelaySeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	nodeTimeoutSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	retryTarget: z.string().nullish(),
+	materialization: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowMaterialization.nullish(),
+	requiredCapabilities: z.record(z.string(), z.string()).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowEdgeCondition = z.object({
+	path: z.string().optional(),
+	op: z.string().optional(),
+	value: z.unknown().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphEdge = z.object({
+	from: z.string().optional(),
+	to: z.string().optional(),
+	condition: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowEdgeCondition.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph = z.object({
+	schemaVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	nodes: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphNode).optional(),
+	edges: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraphEdge).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse = z.object({
+	id: z.guid().optional(),
+	name: z.string().optional(),
+	graph: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph.optional(),
+	graphHash: z.string().optional(),
+	source: z.string().optional(),
+	seedSlug: z.string().nullish(),
+	archived: z.boolean().optional(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	createdAtUtc: z.int().optional(),
+	updatedAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowDefinitionRequest = z.object({
+	name: z.string().min(0).max(200),
+	graph: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph,
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowDefinitionRequest = z.object({
+	version: z.int().gt(0).max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }).optional(),
+	name: z.string().min(0).max(200),
+	graph: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse = z.object({
+	id: z.guid().optional(),
+	name: z.string().optional(),
+	contentSha256: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse = z.object({
+	id: z.guid().optional(),
+	runId: z.guid().optional(),
+	nodeKey: z.string().optional(),
+	nodeType: z.string().optional(),
+	label: z.string().optional(),
+	status: z.string().optional(),
+	attempt: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAttempts: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	sessionResumes: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	queueReason: z.string().nullish(),
+	queuedAtUtc: z.int().nullish(),
+	agentDefinitionId: z.guid().nullish(),
+	agentDisplayName: z.string().nullish(),
+	modelLabel: z.string().nullish(),
+	workSessionId: z.guid().nullish(),
+	conversationId: z.guid().nullish(),
+	workSessionAvailable: z.boolean().optional(),
+	developmentProjectId: z.guid().nullish(),
+	developmentTaskId: z.guid().nullish(),
+	primaryArtifactId: z.guid().nullish(),
+	instructions: z.string().nullish(),
+	inputJson: z.string().nullish(),
+	outputJson: z.string().nullish(),
+	producedArtifactIds: z.array(z.guid()).optional(),
+	consumedArtifactIds: z.array(z.guid()).optional(),
+	appliedRuleSets: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowAppliedRuleSetResponse).optional(),
+	pendingDecisionKind: z.string().nullish(),
+	allowedDecisions: z.array(z.string()).optional(),
+	hasRejectBranch: z.boolean().optional(),
+	failureClass: z.string().nullish(),
+	terminalReason: z.string().nullish(),
+	decisions: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse).optional(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+	sequence: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse = z.object({
+	id: z.guid().optional(),
+	lineageId: z.guid().optional(),
+	version: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	sequence: z.int().optional(),
+	kind: z.string().optional(),
+	name: z.string().optional(),
+	mediaType: z.string().optional(),
+	contentSha256: z.string().optional(),
+	sizeBytes: z.int().optional(),
+	producedByNodeRunId: z.guid().optional(),
+	producingNodeKey: z.string().optional(),
+	isValid: z.boolean().optional(),
+	isStale: z.boolean().optional(),
+	staleBecauseArtifactId: z.guid().nullish(),
+	staleReason: z.string().nullish(),
+	isLatest: z.boolean().optional(),
+	createdAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowArtifactsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse).optional(),
+	lastSequence: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactFeedRequest = z.record(
+	z.string(),
+	z.never(),
+);
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactContentResponse = z.object({
+	artifact: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse.optional(),
+	content: z.string().optional(),
+	isBase64: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse = z.object({
+	id: z.guid().optional(),
+	workItemId: z.guid().optional(),
+	definitionId: z.guid().optional(),
+	definitionName: z.string().nullish(),
+	status: z.string().optional(),
+	queuedNodeCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	runningNodeCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	completedNodeCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	totalNodeCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	pendingDecisionCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	blockingGateNodeRunId: z.guid().nullish(),
+	startedAtUtc: z.int().nullish(),
+	updatedAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse = z.object({
+	id: z.guid().optional(),
+	nodeKey: z.string().optional(),
+	nodeType: z.string().optional(),
+	label: z.string().optional(),
+	status: z.string().optional(),
+	attempt: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	maxAttempts: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	queueReason: z.string().nullish(),
+	queuedAtUtc: z.int().nullish(),
+	waitingOnNodeKeys: z.array(z.string()).nullish(),
+	pendingDecisionKind: z.string().nullish(),
+	isMaterialized: z.boolean().optional(),
+	materializedFromNodeKey: z.string().nullish(),
+	materializationIndex: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	developmentProjectId: z.guid().nullish(),
+	developmentTaskId: z.guid().nullish(),
+	agentDefinitionId: z.guid().nullish(),
+	agentDisplayName: z.string().nullish(),
+	modelLabel: z.string().nullish(),
+	hasStaleInputs: z.boolean().optional(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+	sequence: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse = z.object({
+	id: z.guid().optional(),
+	workItemId: z.guid().optional(),
+	definitionId: z.guid().optional(),
+	definitionVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	definitionName: z.string().nullish(),
+	graphRevision: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	graph: zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph.optional(),
+	status: z.string().optional(),
+	nodes: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse).optional(),
+	queuedNodeCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	runningNodeCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	pendingDecisionCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	blockingGateNodeRunId: z.guid().nullish(),
+	failureClass: z.string().nullish(),
+	terminalReason: z.string().nullish(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+	version: z.int().optional(),
+	lastSequence: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1StartDevWorkflowRunRequest = z.object({
+	operationId: z.guid().min(1),
+	definitionId: z.guid().min(1),
+	inputsJson: z.string().min(0).max(32768).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunActionRequest = z.object({
+	operationId: z.guid().min(1),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse = z.object({
+	id: z.guid().optional(),
+	sequence: z.int().optional(),
+	eventType: z.string().optional(),
+	nodeRunId: z.guid().nullish(),
+	outcome: z.string().nullish(),
+	detailJson: z.string().nullish(),
+	operationId: z.guid().nullish(),
+	occurredAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunEventsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse).optional(),
+	lastSequence: z.int().optional(),
+	hasMore: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventFeedRequest = z.record(
+	z.string(),
+	z.never(),
+);
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemSummaryResponse = z.object({
+	id: z.guid().optional(),
+	title: z.string().optional(),
+	developmentProjectId: z.guid().nullish(),
+	status: z.string().optional(),
+	latestRunId: z.guid().nullish(),
+	latestRunStatus: z.string().nullish(),
+	definitionName: z.string().nullish(),
+	queuedNodeCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	runningNodeCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	completedNodeCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	totalNodeCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	updatedAtUtc: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemSummaryResponse).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsRequest = z.record(
+	z.string(),
+	z.never(),
+);
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse = z.object({
+	id: z.guid().optional(),
+	title: z.string().optional(),
+	request: z.string().optional(),
+	developmentProjectId: z.guid().nullish(),
+	status: z.string().optional(),
+	latestRunId: z.guid().nullish(),
+	runs: z.array(zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunSummaryResponse).optional(),
+	createdAtUtc: z.int().optional(),
+	updatedAtUtc: z.int().optional(),
+	version: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowWorkItemRequest = z.object({
+	title: z.string().min(0).max(200),
+	request: z.string().min(0).max(8000),
+	developmentProjectId: z.guid().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowWorkItemRequest = z.object({
+	title: z.string().min(0).max(200),
+	request: z.string().min(0).max(8000),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentContainerDaemonResponse = z.object({
@@ -8152,6 +8626,241 @@ export const zProbeExternalProviderBody = zXeLocalAiEngineClientEndpointsExterna
  * Success
  */
 export const zProbeExternalProviderResponse = zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse;
+
+export const zDecideDevWorkflowNodeRunBody = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionRequest;
+
+export const zDecideDevWorkflowNodeRunPath = z.object({
+	runId: z.guid(),
+	nodeRunId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zDecideDevWorkflowNodeRunResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResultResponse;
+
+export const zListDevWorkflowDefinitionsQuery = z.object({
+	includeArchived: z.boolean(),
+});
+
+/**
+ * Success
+ */
+export const zListDevWorkflowDefinitionsResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowDefinitionsResponse;
+
+export const zCreateDevWorkflowDefinitionBody =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowDefinitionRequest;
+
+/**
+ * Success
+ */
+export const zCreateDevWorkflowDefinitionResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse;
+
+export const zArchiveDevWorkflowDefinitionPath = z.object({
+	definitionId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zArchiveDevWorkflowDefinitionResponse = z.void();
+
+export const zGetDevWorkflowDefinitionPath = z.object({
+	definitionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetDevWorkflowDefinitionResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse;
+
+export const zUpdateDevWorkflowDefinitionBody =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowDefinitionRequest;
+
+export const zUpdateDevWorkflowDefinitionPath = z.object({
+	definitionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateDevWorkflowDefinitionResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionResponse;
+
+export const zGetDevWorkflowNodeRunPath = z.object({
+	runId: z.guid(),
+	nodeRunId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetDevWorkflowNodeRunResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse;
+
+export const zListDevWorkflowArtifactsPath = z.object({
+	runId: z.guid(),
+});
+
+export const zListDevWorkflowArtifactsQuery = z.object({
+	sinceSeq: z.int(),
+});
+
+/**
+ * Success
+ */
+export const zListDevWorkflowArtifactsResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowArtifactsResponse;
+
+export const zGetDevWorkflowArtifactContentPath = z.object({
+	runId: z.guid(),
+	artifactId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetDevWorkflowArtifactContentResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactContentResponse;
+
+export const zListDevWorkflowRunsQuery = z.object({
+	workItemId: z.guid().nullish(),
+	status: z.string().nullish(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+/**
+ * Success
+ */
+export const zListDevWorkflowRunsResponse = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunsResponse;
+
+export const zStartDevWorkflowRunBody = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1StartDevWorkflowRunRequest;
+
+export const zStartDevWorkflowRunPath = z.object({
+	workItemId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zStartDevWorkflowRunResponse = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse;
+
+export const zGetDevWorkflowRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetDevWorkflowRunResponse = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse;
+
+export const zPauseDevWorkflowRunBody = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunActionRequest;
+
+export const zPauseDevWorkflowRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zPauseDevWorkflowRunResponse = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse;
+
+export const zResumeDevWorkflowRunBody = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunActionRequest;
+
+export const zResumeDevWorkflowRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zResumeDevWorkflowRunResponse = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse;
+
+export const zCancelDevWorkflowRunBody = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunActionRequest;
+
+export const zCancelDevWorkflowRunPath = z.object({
+	runId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zCancelDevWorkflowRunResponse = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunResponse;
+
+export const zListDevWorkflowRunEventsPath = z.object({
+	runId: z.guid(),
+});
+
+export const zListDevWorkflowRunEventsQuery = z.object({
+	sinceSeq: z.int(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+/**
+ * Success
+ */
+export const zListDevWorkflowRunEventsResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowRunEventsResponse;
+
+export const zListDevWorkflowWorkItemsQuery = z.object({
+	status: z.string().nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListDevWorkflowWorkItemsResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1ListDevWorkflowWorkItemsResponse;
+
+export const zCreateDevWorkflowWorkItemBody =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1CreateDevWorkflowWorkItemRequest;
+
+/**
+ * Success
+ */
+export const zCreateDevWorkflowWorkItemResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse;
+
+export const zDeleteDevWorkflowWorkItemPath = z.object({
+	workItemId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteDevWorkflowWorkItemResponse = z.void();
+
+export const zGetDevWorkflowWorkItemPath = z.object({
+	workItemId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetDevWorkflowWorkItemResponse = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse;
+
+export const zUpdateDevWorkflowWorkItemBody =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1UpdateDevWorkflowWorkItemRequest;
+
+export const zUpdateDevWorkflowWorkItemPath = z.object({
+	workItemId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateDevWorkflowWorkItemResponse =
+	zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowWorkItemResponse;
 
 /**
  * Success

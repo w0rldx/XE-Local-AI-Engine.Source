@@ -28,6 +28,7 @@ internal static class AddNodeDevelopmentExtensions
         builder.Services.AddScoped<IDevelopmentHostApplyPort, TrustedDevelopmentHostApplyPort>();
         builder.Services.AddScoped<IDevelopmentCoordinator, DevelopmentCoordinator>();
         builder.Services.AddSingleton<IDevelopmentArtifactBlobStore, ManagedDevelopmentArtifactBlobStore>();
+        builder.Services.AddScoped<IDevelopmentWorkspaceSecretsSink, DevelopmentStoreWorkspaceSecretsSink>();
         builder.Services.AddScoped<IDevelopmentWorkspaceProvider, DevelopmentWorkspaceProvider>();
         builder.Services.AddScoped<IDevelopmentPatchEvidenceService, DevelopmentPatchEvidenceService>();
         builder.Services.AddScoped<IDevelopmentEvidenceService, DevelopmentEvidenceService>();
