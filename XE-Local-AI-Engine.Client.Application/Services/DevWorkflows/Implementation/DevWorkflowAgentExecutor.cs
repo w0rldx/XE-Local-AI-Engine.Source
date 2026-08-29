@@ -53,6 +53,17 @@ internal sealed class DevWorkflowAgentExecutor
     /// </summary>
     private const int TruncationMarkerReserve = 64;
 
+    /// <summary>
+    ///     The largest artifact whose bytes are worth reading to fill an objective, in bytes.
+    ///     <para>
+    ///         Two orders of magnitude above anything <see cref="MaxObjectiveCharacters" /> could use, and two below the
+    ///         64 MiB an artifact is allowed to be: the point is not to pick the smallest workable number but to keep a
+    ///         node with several large upstream artifacts from reading — and decoding — all of them to keep a few
+    ///         thousand characters of the first.
+    ///     </para>
+    /// </summary>
+    private const int MaxInjectableArtifactBytes = 256 * 1024;
+
     private readonly IAgentDefinitionStore _agents;
     private readonly IDevWorkflowArtifactBlobStore _blobs;
     private readonly ILogger<DevWorkflowAgentExecutor> _logger;
@@ -486,6 +497,16 @@ internal sealed class DevWorkflowAgentExecutor
         if (budget <= 0)
         {
             return "(The objective had no room left for its contents, so only this reference is given.)";
+        }
+
+        if (artifact.SizeBytes > MaxInjectableArtifactBytes)
+        {
+            // Gated on the row's recorded size BEFORE the read, because reading is what costs: the blob store
+            // materialises the whole blob and the decode allocates a UTF-16 copy of it, and an artifact may be as
+            // large as DevWorkflowOptions allows — so a fan-in of them would allocate hundreds of megabytes to keep a
+            // few thousand characters. The trade is that a huge document loses even its prefix, which is the right way
+            // round: the first few thousand characters of a 64 MiB file were never grounding, and the marker says so.
+            return $"(It is {artifact.SizeBytes} bytes, too large to include here, so only this reference is given.)";
         }
 
         var read = await _blobs.ReadAsync(runId, artifact.Id, artifact.ContentSha256, artifact.SizeBytes, cancellationToken).ConfigureAwait(false);

@@ -701,6 +701,47 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
+    ///     An artifact far larger than any objective could hold is never read at all. Reading is what costs — the whole
+    ///     blob, plus a UTF-16 copy of it — and no prefix of a document that size was going to ground anything.
+    ///     <para>
+    ///         That the read did not happen is proved by removing the bytes first: had anything gone looking for them,
+    ///         the objective would say they could not be verified rather than that the artifact is too large.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task TheObjective_ForAnArtifactTooLargeToInject_SaysSoWithoutEverReadingIt()
+    {
+        // A private host: HasCapacity is a host-wide switch, and this parks the plan node with it.
+        await using var harness = new DevWorkflowHarness();
+        var runId = await harness.StartRunAsync(ResearchThenPlan).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        _ = await harness.SaveAgentArtifactAsync(runId, "research", "research.md", new string('a', 300_000)).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
+
+        // Promotion and the next node's dispatch share one tick, so the plan node waits at the queue for the tick that
+        // promotes — the only window in which the promoted bytes can be taken away again.
+        harness.Agent.HasCapacity = false;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var promoted = AssertEx.NotNull((await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).SingleOrDefault());
+        await using (var scope = harness.Services.CreateAsyncScope())
+        {
+            scope.ServiceProvider.GetRequiredService<IDevWorkflowArtifactBlobStore>().Delete(runId, promoted.Id);
+        }
+
+        harness.Agent.HasCapacity = true;
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var objective = harness.Agent.Objectives[1];
+        AssertEx.Contains(objective, "research.md", message: "the node is still told the artifact exists.");
+        AssertEx.Contains(objective, "too large to include here", message: "and why it is holding a reference rather than contents.");
+        AssertEx.False(objective.Contains("did not verify", StringComparison.Ordinal),
+            "the bytes were gone, so anything that read them would have reported that instead — the size gate ran first.");
+        AssertEx.False(objective.Contains("aaaaaaaaaa", StringComparison.Ordinal), "and no content was injected.");
+    }
+
+    /// <summary>
     ///     The case the append guard exists for: instructions leave room for the section and its header but not for a
     ///     body, so what is rendered is a marker rather than content — and a marker is characters too. A bound that
     ///     capped only bodies would let the header and the marker together carry the objective past the limit with no
