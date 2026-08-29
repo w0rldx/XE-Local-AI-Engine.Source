@@ -15,10 +15,13 @@ public sealed class TrainingEvaluationEndpointTests
     private const string Evaluations = "/api/local/v1/training/evaluations";
     private const string Comparisons = "/api/local/v1/training/comparisons";
 
+    [ClassDataSource<TestServerWebAppFactory>(Shared = SharedType.PerClass)]
+    public required TestServerWebAppFactory Factory { get; init; }
+
     [Test]
     public async Task EveryEvaluationAndComparisonRoute_WithoutABearerToken_ReturnsUnauthorized()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var list = await client.GetAsync(Evaluations).ConfigureAwait(false);
@@ -52,7 +55,7 @@ public sealed class TrainingEvaluationEndpointTests
     [Test]
     public async Task ListEvaluationsAndComparisons_WithOperatorToken_ReturnEmptyListsOnACleanDatabase()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var evaluationsRequest = new HttpRequestMessage(HttpMethod.Get, Evaluations);
@@ -72,7 +75,7 @@ public sealed class TrainingEvaluationEndpointTests
     [Test]
     public async Task GetEvaluationAndComparison_WhenUnknown_ReturnNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var evaluationRequest = new HttpRequestMessage(HttpMethod.Get, $"{Evaluations}/{Guid.NewGuid()}");
@@ -95,7 +98,7 @@ public sealed class TrainingEvaluationEndpointTests
     [Test]
     public async Task DeleteEvaluationAndComparison_WithTheGeneratedClientsBody_ReachTheServiceAndReturnNotFound()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var evaluationRequest = new HttpRequestMessage(HttpMethod.Delete, $"{Evaluations}/{Guid.NewGuid()}")
@@ -125,7 +128,7 @@ public sealed class TrainingEvaluationEndpointTests
     [Test]
     public async Task CreateEvaluation_ForAnUnknownRun_IsARejectionNotAFault()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Evaluations)
@@ -147,7 +150,7 @@ public sealed class TrainingEvaluationEndpointTests
     [Test]
     public async Task SuggestComparison_ForAnUnknownRun_IsARejectionNotAFault()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{Comparisons}/suggest?trainingRunId={Guid.NewGuid()}");
@@ -160,7 +163,7 @@ public sealed class TrainingEvaluationEndpointTests
     [Test]
     public async Task CreateComparison_ForUnknownEvaluations_IsARejectionNotAFault()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, Comparisons)
@@ -182,7 +185,7 @@ public sealed class TrainingEvaluationEndpointTests
     [Test]
     public async Task ResumeAndCancelEvaluation_WhenUnknown_AreNotAFault()
     {
-        await using var factory = new TestServerWebAppFactory();
+        var factory = Factory;
         using var client = factory.CreateClient();
 
         // Both are bodyless POSTs whose whole request is the route id — without the declared Accepts they would come
