@@ -8,6 +8,7 @@ import { DevWorkflowArtifactsTab } from "@/features/devWorkflows/components/DevW
 import { devWorkflowArtifact, devWorkflowTestIds } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
+import { setupMswServer } from "@/test/UseMswServer";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const { run: runId, artifact: artifactId } = devWorkflowTestIds;
@@ -18,6 +19,8 @@ function contentRoute(onRequest?: () => void) {
 		return HttpResponse.json({ artifact: devWorkflowArtifact(), content: "# Survey", isBase64: false });
 	});
 }
+
+setupMswServer();
 
 describe("DevWorkflowArtifactsTab", () => {
 	afterEach(() => {

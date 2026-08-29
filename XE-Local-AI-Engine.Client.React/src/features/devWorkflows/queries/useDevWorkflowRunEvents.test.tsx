@@ -21,6 +21,7 @@ import {
 import { devWorkflowRunEvent, devWorkflowTestIds } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
+import { setupMswServer } from "@/test/UseMswServer";
 
 const runId = devWorkflowTestIds.run;
 
@@ -78,6 +79,8 @@ async function loadMore(result: { readonly current: { readonly fetchNextPage: ()
 function sequences(events: readonly { readonly sequence?: number }[] | undefined): number[] {
 	return (events ?? []).map((event) => event.sequence ?? 0);
 }
+
+setupMswServer();
 
 describe("useDevWorkflowRunEvents", () => {
 	it("merges the pages in ascending order across a NON-CONTIGUOUS sequence boundary", async () => {

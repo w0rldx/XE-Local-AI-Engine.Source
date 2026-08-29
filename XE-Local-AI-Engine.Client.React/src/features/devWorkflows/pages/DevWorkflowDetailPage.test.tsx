@@ -16,6 +16,7 @@ import {
 import { DevWorkflowDetailPage } from "@/features/devWorkflows/pages/DevWorkflowDetailPage";
 import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
+import { setupMswServer } from "@/test/UseMswServer";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const navigate = vi.hoisted(() => vi.fn());
@@ -78,6 +79,8 @@ function renderPage(selection: { run?: string; node?: string; tab?: "artifacts" 
 	);
 	return { onSelectionChange };
 }
+
+setupMswServer();
 
 describe("DevWorkflowDetailPage", () => {
 	beforeEach(() => {

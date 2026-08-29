@@ -12,6 +12,7 @@ import {
 import { DevWorkflowsPage } from "@/features/devWorkflows/pages/DevWorkflowsPage";
 import { jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
+import { setupMswServer } from "@/test/UseMswServer";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const navigate = vi.hoisted(() => vi.fn());
@@ -46,6 +47,8 @@ function definitionsRoute() {
 function projectsRoute() {
 	return jsonRoute("get", "development/projects", { items: [] });
 }
+
+setupMswServer();
 
 describe("DevWorkflowsPage", () => {
 	beforeEach(() => {
