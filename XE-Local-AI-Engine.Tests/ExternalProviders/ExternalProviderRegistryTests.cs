@@ -23,8 +23,7 @@ public sealed class ExternalProviderRegistryTests
     [Test]
     public async Task ListRegistrationsAsync_ProjectsEveryModelOfEveryConnection()
     {
-        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(
-            Connection("box-a", models: ["qwen3", "llama4"]),
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("box-a", models: ["qwen3", "llama4"]),
             Connection("box-b", models: ["qwen3"])));
 
         var registrations = await registry.ListRegistrationsAsync(CancellationToken.None);
@@ -91,8 +90,7 @@ public sealed class ExternalProviderRegistryTests
     [Test]
     public async Task TryResolveTransportBindingAsync_ReturnsTheStoredKeyAndNullWhenKeyless()
     {
-        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(
-            Connection("keyed", models: ["qwen3"], apiKey: "sk-secret"),
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("keyed", models: ["qwen3"], apiKey: "sk-secret"),
             Connection("keyless", models: ["qwen3"])));
 
         AssertEx.Equal("sk-secret", AssertEx.NotNull(await registry.TryResolveTransportBindingAsync("ext:keyed/qwen3", CancellationToken.None)).ApiKey);
@@ -112,8 +110,7 @@ public sealed class ExternalProviderRegistryTests
     [Test]
     public async Task TryResolveTransportBindingAsync_BindsTheKeyToItsOwnEndpoint()
     {
-        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(
-            Connection("box-a", models: ["qwen3"], apiKey: "sk-a", baseUrl: "http://127.0.0.1:18099/v1/"),
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("box-a", models: ["qwen3"], apiKey: "sk-a", baseUrl: "http://127.0.0.1:18099/v1/"),
             Connection("box-b", models: ["qwen3"], apiKey: "sk-b", baseUrl: "http://127.0.0.1:18100/v1/")));
 
         // The endpoint and the credential come out of ONE snapshot. Read separately they can come from two
@@ -168,8 +165,10 @@ public sealed class ExternalProviderRegistryTests
     [Test]
     public async Task Build_WithAnUnparseableStoredBaseUrl_DropsOnlyThatConnection()
     {
-        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(
-            Connection("broken", models: ["qwen3"]) with { BaseUrl = "not a url" },
+        var registry = new ExternalProviderRegistry(new FakeExternalProviderStore(Connection("broken", models: ["qwen3"]) with
+            {
+                BaseUrl = "not a url"
+            },
             Connection("healthy", models: ["qwen3"])));
 
         var registrations = await registry.ListRegistrationsAsync(CancellationToken.None);

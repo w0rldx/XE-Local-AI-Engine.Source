@@ -415,6 +415,39 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     workSessionEvent.Id,
                     "work_session_event_detail_json");
                 break;
+            case DevWorkflowWorkItem workItem:
+                workItem.Request = NodePayloadProtector.Decrypt(workItem.Request, context.NodeEncryptionKey.Span, workItem.Id, workItem.Id, "dev_workflow_work_item_request");
+                break;
+            case DevWorkflowDefinition definitionGraph:
+                definitionGraph.GraphJson = NodePayloadProtector.Decrypt(definitionGraph.GraphJson,
+                    context.NodeEncryptionKey.Span,
+                    Guid.Empty,
+                    definitionGraph.Id,
+                    "dev_workflow_definition_graph_json");
+                break;
+            case DevWorkflowRun workflowRun:
+                // The owning work item sits in the conversation slot, so a run row re-parented onto another work item
+                // fails the tag check here rather than reading back as that work item's executed graph.
+                workflowRun.GraphJson = NodePayloadProtector.Decrypt(workflowRun.GraphJson,
+                    context.NodeEncryptionKey.Span,
+                    workflowRun.WorkItemId,
+                    workflowRun.Id,
+                    "dev_workflow_run_graph_json");
+                break;
+            case DevWorkflowNodeRun nodeRun:
+                nodeRun.InputJson = DecryptIfPresent(nodeRun.InputJson, context.NodeEncryptionKey.Span, nodeRun.RunId, nodeRun.Id, "dev_workflow_node_run_input_json");
+                nodeRun.OutputJson = DecryptIfPresent(nodeRun.OutputJson, context.NodeEncryptionKey.Span, nodeRun.RunId, nodeRun.Id, "dev_workflow_node_run_output_json");
+                nodeRun.PolicyResolutionJson =
+                    DecryptIfPresent(nodeRun.PolicyResolutionJson, context.NodeEncryptionKey.Span, nodeRun.RunId, nodeRun.Id, "dev_workflow_node_run_policy_json");
+                break;
+            case DevWorkflowDecision decision:
+                decision.Comment = DecryptIfPresent(decision.Comment, context.NodeEncryptionKey.Span, decision.RunId, decision.Id, "dev_workflow_decision_comment");
+                decision.PayloadJson = DecryptIfPresent(decision.PayloadJson, context.NodeEncryptionKey.Span, decision.RunId, decision.Id, "dev_workflow_decision_payload_json");
+                break;
+            case DevWorkflowRunEvent workflowEvent:
+                workflowEvent.DetailJson =
+                    DecryptIfPresent(workflowEvent.DetailJson, context.NodeEncryptionKey.Span, workflowEvent.RunId, workflowEvent.Id, "dev_workflow_run_event_detail_json");
+                break;
         }
 
         return entity;

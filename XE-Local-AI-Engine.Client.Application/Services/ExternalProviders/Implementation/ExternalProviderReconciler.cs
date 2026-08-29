@@ -90,7 +90,8 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
             // both caches expire.
             _providerResolver.InvalidateModelProviderMap();
             _chatClientCacheInvalidator.ClearClientCache();
-            _logger.LogInformation("External provider reconciliation repaired drift: {MapWritten} map row(s) written, {MapRemoved} removed, {AllowAdded} allow-list entr(ies) added, {AllowRemoved} removed, default cleared: {DefaultCleared}.",
+            _logger.LogInformation(
+                "External provider reconciliation repaired drift: {MapWritten} map row(s) written, {MapRemoved} removed, {AllowAdded} allow-list entr(ies) added, {AllowRemoved} removed, default cleared: {DefaultCleared}.",
                 report.MapRowsWritten,
                 report.MapRowsRemoved,
                 report.AllowListAdded,
@@ -230,8 +231,7 @@ public sealed class ExternalProviderReconciler : IExternalProviderReconciler
         }
     }
 
-    private async Task<(int Added, int Removed, bool DefaultCleared)> ReconcileNodeSettingsAsync(
-        IReadOnlyList<ExternalProviderModelRegistration> registrations,
+    private async Task<(int Added, int Removed, bool DefaultCleared)> ReconcileNodeSettingsAsync(IReadOnlyList<ExternalProviderModelRegistration> registrations,
         HashSet<string> registeredSet,
         CancellationToken cancellationToken)
     {

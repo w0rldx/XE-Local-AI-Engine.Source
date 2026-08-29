@@ -45,6 +45,10 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             ModelOperationNotSupportedByProviderException => NodeConflictProblemType.ModelOperationNotSupportedByProvider,
             WorkSessionInvalidTransitionException => NodeConflictProblemType.WorkSessionInvalidTransition,
             WorkSessionConcurrencyException => NodeConflictProblemType.WorkSessionVersionConflict,
+            DevWorkflowGateAlreadyDecidedException => NodeConflictProblemType.DevWorkflowGateAlreadyDecided,
+            DevWorkflowRunInFlightException => NodeConflictProblemType.DevWorkflowRunInFlight,
+            DevWorkflowInvalidTransitionException => NodeConflictProblemType.DevWorkflowInvalidTransition,
+            DevWorkflowConcurrencyException => NodeConflictProblemType.DevWorkflowVersionConflict,
             _ => (NodeConflictProblemType?)null
         };
 
@@ -83,9 +87,9 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
     }
 
     /// <summary>
-    ///     Carries the numbers an operator needs to act on a cap rejection. They are typed members of the one conflict
-    ///     envelope (omitted when null) so the OpenAPI schema names them; the wire body is the same as when they were
-    ///     problem-details extensions.
+    ///     Carries the detail an operator needs to act on the refusal — the cap that was hit, or the decision that
+    ///     already stands. They are typed members of the one conflict envelope (omitted when null) so the OpenAPI
+    ///     schema names them; the wire body is the same as when they were problem-details extensions.
     /// </summary>
     private static void SetCapMembers(ConflictProblemDetails problemDetails, Exception exception)
     {
@@ -97,6 +101,9 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             case PreviewWorkflowModelCapExceededException modelCap:
                 problemDetails.DistinctModelCount = modelCap.DistinctModelCount;
                 problemDetails.MaxLoadedProcesses = modelCap.MaxLoadedProcesses;
+                break;
+            case DevWorkflowGateAlreadyDecidedException alreadyDecided:
+                problemDetails.StandingDecision = alreadyDecided.StandingDecision.ToString();
                 break;
             default:
                 break;

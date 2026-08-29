@@ -34,6 +34,8 @@ vi.mock("@microsoft/signalr", () => {
 				onreconnected: (callback: () => void) => {
 					onReconnected = callback;
 				},
+				onreconnecting: () => undefined,
+				onclose: () => undefined,
 				start: () => {
 					state = "Connected";
 					return Promise.resolve();

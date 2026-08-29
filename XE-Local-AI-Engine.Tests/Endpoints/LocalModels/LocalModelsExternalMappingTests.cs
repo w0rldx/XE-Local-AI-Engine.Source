@@ -30,8 +30,7 @@ public sealed class LocalModelsExternalMappingTests
     [Test]
     public void ToExternalProviderModelResponses_CarriesTheDeclaredCapabilitiesAndTheConnectionIdentity()
     {
-        var responses = LocalModelsMapper.ToExternalProviderModelResponses(
-            [
+        var responses = LocalModelsMapper.ToExternalProviderModelResponses([
                 Registration(ExternalProviderLocality.Local,
                     supportsTools: true,
                     supportsVision: true,
@@ -66,11 +65,9 @@ public sealed class LocalModelsExternalMappingTests
     [Test]
     public void ToExternalProviderModelResponses_SeparatesGradedEffortFromPlainReasoning()
     {
-        var graded = LocalModelsMapper.ToExternalProviderModelResponses(
-            [Registration(ExternalProviderLocality.Local, supportsReasoning: true, supportsReasoningEffort: true)],
+        var graded = LocalModelsMapper.ToExternalProviderModelResponses([Registration(ExternalProviderLocality.Local, supportsReasoning: true, supportsReasoningEffort: true)],
             selectedModelName: null);
-        var binaryOnly = LocalModelsMapper.ToExternalProviderModelResponses(
-            [Registration(ExternalProviderLocality.Local, supportsReasoning: true)],
+        var binaryOnly = LocalModelsMapper.ToExternalProviderModelResponses([Registration(ExternalProviderLocality.Local, supportsReasoning: true)],
             selectedModelName: null);
 
         // Both models reason; only one honours reasoning_effort. Without this pair the composer offers a graded menu

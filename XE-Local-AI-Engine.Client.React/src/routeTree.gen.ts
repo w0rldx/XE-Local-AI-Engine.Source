@@ -37,6 +37,8 @@ import { Route as LayoutSchedulerRouteImport } from './routes/_layout/scheduler'
 import { Route as LayoutSkillsRouteImport } from './routes/_layout/skills'
 import { Route as LayoutToolsRouteImport } from './routes/_layout/tools'
 import { Route as LayoutUsageRouteImport } from './routes/_layout/usage'
+import { Route as LayoutDevelopmentWorkflowsIndexRouteImport } from './routes/_layout/development-workflows.index'
+import { Route as LayoutDevelopmentWorkflowsWorkItemIdRouteImport } from './routes/_layout/development-workflows.$workItemId'
 import { Route as LayoutTrainingIndexRouteImport } from './routes/_layout/training.index'
 import { Route as LayoutTrainingComparisonsRouteImport } from './routes/_layout/training.comparisons'
 import { Route as LayoutTrainingDatasetsRouteImport } from './routes/_layout/training.datasets'
@@ -183,6 +185,18 @@ const LayoutUsageRoute = LayoutUsageRouteImport.update({
   path: '/usage',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutDevelopmentWorkflowsIndexRoute =
+  LayoutDevelopmentWorkflowsIndexRouteImport.update({
+    id: '/development-workflows/',
+    path: '/development-workflows/',
+    getParentRoute: () => LayoutRoute,
+  } as any)
+const LayoutDevelopmentWorkflowsWorkItemIdRoute =
+  LayoutDevelopmentWorkflowsWorkItemIdRouteImport.update({
+    id: '/development-workflows/$workItemId',
+    path: '/development-workflows/$workItemId',
+    getParentRoute: () => LayoutRoute,
+  } as any)
 const LayoutTrainingIndexRoute = LayoutTrainingIndexRouteImport.update({
   id: '/training/',
   path: '/training/',
@@ -239,9 +253,11 @@ export interface FileRoutesByFullPath {
   '/skills': typeof LayoutSkillsRoute
   '/tools': typeof LayoutToolsRoute
   '/usage': typeof LayoutUsageRoute
+  '/development-workflows/$workItemId': typeof LayoutDevelopmentWorkflowsWorkItemIdRoute
   '/training/comparisons': typeof LayoutTrainingComparisonsRoute
   '/training/datasets': typeof LayoutTrainingDatasetsRoute
   '/work-sessions/$sessionId': typeof LayoutWorkSessionsSessionIdRoute
+  '/development-workflows/': typeof LayoutDevelopmentWorkflowsIndexRoute
   '/training/': typeof LayoutTrainingIndexRoute
   '/work-sessions/': typeof LayoutWorkSessionsIndexRoute
 }
@@ -273,9 +289,11 @@ export interface FileRoutesByTo {
   '/tools': typeof LayoutToolsRoute
   '/usage': typeof LayoutUsageRoute
   '/': typeof LayoutIndexRoute
+  '/development-workflows/$workItemId': typeof LayoutDevelopmentWorkflowsWorkItemIdRoute
   '/training/comparisons': typeof LayoutTrainingComparisonsRoute
   '/training/datasets': typeof LayoutTrainingDatasetsRoute
   '/work-sessions/$sessionId': typeof LayoutWorkSessionsSessionIdRoute
+  '/development-workflows': typeof LayoutDevelopmentWorkflowsIndexRoute
   '/training': typeof LayoutTrainingIndexRoute
   '/work-sessions': typeof LayoutWorkSessionsIndexRoute
 }
@@ -309,9 +327,11 @@ export interface FileRoutesById {
   '/_layout/tools': typeof LayoutToolsRoute
   '/_layout/usage': typeof LayoutUsageRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/development-workflows/$workItemId': typeof LayoutDevelopmentWorkflowsWorkItemIdRoute
   '/_layout/training/comparisons': typeof LayoutTrainingComparisonsRoute
   '/_layout/training/datasets': typeof LayoutTrainingDatasetsRoute
   '/_layout/work-sessions/$sessionId': typeof LayoutWorkSessionsSessionIdRoute
+  '/_layout/development-workflows/': typeof LayoutDevelopmentWorkflowsIndexRoute
   '/_layout/training/': typeof LayoutTrainingIndexRoute
   '/_layout/work-sessions/': typeof LayoutWorkSessionsIndexRoute
 }
@@ -345,9 +365,11 @@ export interface FileRouteTypes {
     | '/skills'
     | '/tools'
     | '/usage'
+    | '/development-workflows/$workItemId'
     | '/training/comparisons'
     | '/training/datasets'
     | '/work-sessions/$sessionId'
+    | '/development-workflows/'
     | '/training/'
     | '/work-sessions/'
   fileRoutesByTo: FileRoutesByTo
@@ -379,9 +401,11 @@ export interface FileRouteTypes {
     | '/tools'
     | '/usage'
     | '/'
+    | '/development-workflows/$workItemId'
     | '/training/comparisons'
     | '/training/datasets'
     | '/work-sessions/$sessionId'
+    | '/development-workflows'
     | '/training'
     | '/work-sessions'
   id:
@@ -414,9 +438,11 @@ export interface FileRouteTypes {
     | '/_layout/tools'
     | '/_layout/usage'
     | '/_layout/'
+    | '/_layout/development-workflows/$workItemId'
     | '/_layout/training/comparisons'
     | '/_layout/training/datasets'
     | '/_layout/work-sessions/$sessionId'
+    | '/_layout/development-workflows/'
     | '/_layout/training/'
     | '/_layout/work-sessions/'
   fileRoutesById: FileRoutesById
@@ -625,6 +651,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutUsageRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/development-workflows/': {
+      id: '/_layout/development-workflows/'
+      path: '/development-workflows'
+      fullPath: '/development-workflows/'
+      preLoaderRoute: typeof LayoutDevelopmentWorkflowsIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/development-workflows/$workItemId': {
+      id: '/_layout/development-workflows/$workItemId'
+      path: '/development-workflows/$workItemId'
+      fullPath: '/development-workflows/$workItemId'
+      preLoaderRoute: typeof LayoutDevelopmentWorkflowsWorkItemIdRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/training/': {
       id: '/_layout/training/'
       path: '/training'
@@ -689,9 +729,11 @@ interface LayoutRouteChildren {
   LayoutToolsRoute: typeof LayoutToolsRoute
   LayoutUsageRoute: typeof LayoutUsageRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
+  LayoutDevelopmentWorkflowsWorkItemIdRoute: typeof LayoutDevelopmentWorkflowsWorkItemIdRoute
   LayoutTrainingComparisonsRoute: typeof LayoutTrainingComparisonsRoute
   LayoutTrainingDatasetsRoute: typeof LayoutTrainingDatasetsRoute
   LayoutWorkSessionsSessionIdRoute: typeof LayoutWorkSessionsSessionIdRoute
+  LayoutDevelopmentWorkflowsIndexRoute: typeof LayoutDevelopmentWorkflowsIndexRoute
   LayoutTrainingIndexRoute: typeof LayoutTrainingIndexRoute
   LayoutWorkSessionsIndexRoute: typeof LayoutWorkSessionsIndexRoute
 }
@@ -722,9 +764,12 @@ const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutToolsRoute: LayoutToolsRoute,
   LayoutUsageRoute: LayoutUsageRoute,
   LayoutIndexRoute: LayoutIndexRoute,
+  LayoutDevelopmentWorkflowsWorkItemIdRoute:
+    LayoutDevelopmentWorkflowsWorkItemIdRoute,
   LayoutTrainingComparisonsRoute: LayoutTrainingComparisonsRoute,
   LayoutTrainingDatasetsRoute: LayoutTrainingDatasetsRoute,
   LayoutWorkSessionsSessionIdRoute: LayoutWorkSessionsSessionIdRoute,
+  LayoutDevelopmentWorkflowsIndexRoute: LayoutDevelopmentWorkflowsIndexRoute,
   LayoutTrainingIndexRoute: LayoutTrainingIndexRoute,
   LayoutWorkSessionsIndexRoute: LayoutWorkSessionsIndexRoute,
 }

@@ -25,8 +25,7 @@ internal sealed class InMemoryCoordinatedModelProviderMapStore : ICoordinatedMod
     {
         // Lease-free by contract, ordered by model name like the persisted store, so a reconciliation pass under test
         // sees the same stable order it sees in production.
-        return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>(
-            [.. _mappings.Values.OrderBy(mapping => mapping.ModelName, StringComparer.OrdinalIgnoreCase)]);
+        return Task.FromResult<IReadOnlyList<ModelProviderMapRecord>>([.. _mappings.Values.OrderBy(mapping => mapping.ModelName, StringComparer.OrdinalIgnoreCase)]);
     }
 
     public Task<ModelProviderMapRecord?> ReadWithRevisionAsync(IModelProviderMapReadLease lease,
@@ -107,8 +106,7 @@ internal sealed class InMemoryCoordinatedModelProviderMapStore : ICoordinatedMod
 
         _ = _mappings.Remove(modelName);
         MutationCount++;
-        return Task.FromResult<ProviderMapRemovalResult>(
-            new ProviderMapRemovalResult.Removed(new ProviderMapMutationReceipt(modelName, current, Mutation: null, WasRemoval: true)));
+        return Task.FromResult<ProviderMapRemovalResult>(new ProviderMapRemovalResult.Removed(new ProviderMapMutationReceipt(modelName, current, Mutation: null, WasRemoval: true)));
     }
 
     private static ModelProviderMapRecord Create(string modelName, string providerName) =>

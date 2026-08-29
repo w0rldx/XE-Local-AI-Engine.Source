@@ -33,4 +33,13 @@ public class ConflictProblemDetails : ProblemDetails
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonPropertyName("maxLoadedProcesses")]
     public int? MaxLoadedProcesses { get; set; }
+
+    /// <summary>
+    ///     Set for <c>DevWorkflowGateAlreadyDecided</c>: the <c>DevWorkflowDecisionKind</c> name that already stands on
+    ///     the node run. Without it the refused second click can only say "conflict", when the useful answer is
+    ///     "someone already approved this".
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonPropertyName("standingDecision")]
+    public string? StandingDecision { get; set; }
 }

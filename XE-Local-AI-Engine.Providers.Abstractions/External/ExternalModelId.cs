@@ -84,8 +84,10 @@ public static class ExternalModelId
     /// <param name="connectionId">The canonical (lowered) connection slug on success.</param>
     /// <param name="wireId">The backing model id, exactly as it must appear on the wire, on success.</param>
     public static bool TryParse(string? modelName,
-        [NotNullWhen(true)] out string? connectionId,
-        [NotNullWhen(true)] out string? wireId)
+        [NotNullWhen(true)]
+        out string? connectionId,
+        [NotNullWhen(true)]
+        out string? wireId)
     {
         connectionId = null;
         wireId = null;

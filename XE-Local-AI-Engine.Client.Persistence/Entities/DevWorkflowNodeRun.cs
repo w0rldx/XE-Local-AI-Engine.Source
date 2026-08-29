@@ -1,0 +1,70 @@
+namespace XE_Local_AI_Engine.Client.Persistence.Entities;
+
+/// <summary>
+///     One row per <c>(run, node key)</c>. <see cref="Attempt" /> increments in place; there is no per-attempt row.
+///     Per-attempt history — prior session ids, prior failures — lives in the run event log, which is what makes the
+///     <c>(run_id, node_key)</c> unique index the node-run's identity rather than a secondary constraint.
+/// </summary>
+internal sealed class DevWorkflowNodeRun
+{
+    public Guid Id { get; set; }
+    public Guid RunId { get; set; }
+
+    /// <summary>The graph node id; a materialized child is <c>"{template}#{taskId}"</c>. Structural, so plaintext — labels and instructions stay in the encrypted graph.</summary>
+    public string NodeKey { get; set; } = string.Empty;
+
+    public DevWorkflowNodeType NodeType { get; set; }
+    public int Attempt { get; set; }
+
+    /// <summary>Copied from the graph node at materialization so the runtime never re-reads the graph to answer "may I retry?".</summary>
+    public int MaxAttempts { get; set; }
+
+    /// <summary>How many times the owned work session was resumed after an interruption.</summary>
+    public int SessionResumes { get; set; }
+
+    public DevWorkflowNodeRunStatus Status { get; set; }
+
+    /// <summary>Which queue this node-run is actually waiting in. Plaintext — it is what makes queued-vs-running honest instead of a spinner.</summary>
+    public string? QueueReason { get; set; }
+
+    /// <summary>What human input this node-run is blocked on, so run detail can count pending decisions without a run-level column.</summary>
+    public DevWorkflowDecisionKind? PendingDecisionKind { get; set; }
+
+    /// <summary>
+    ///     Allocated from the run watermark at insert only. This is a stable creation order, not a change watermark: a
+    ///     node-run that changes status eight times keeps its original sequence, so node-runs are deliberately not a
+    ///     <c>sinceSeq</c> feed. Status changes are observed through the event log and a run-detail refetch.
+    /// </summary>
+    public long Sequence { get; set; }
+
+    /// <summary>The work session this agent node-run owns. Loose reference, no foreign key: a purged session must read back as recoverable state.</summary>
+    public Guid? WorkSessionId { get; set; }
+
+    public Guid? AgentDefinitionId { get; set; }
+
+    /// <summary>The Dev Mode project and task a <c>DevTask</c> node drives. Together they are the workspace identity, which is why no separate workspace reference exists.</summary>
+    public Guid? DevelopmentProjectId { get; set; }
+
+    public Guid? DevelopmentTaskId { get; set; }
+
+    /// <summary>
+    ///     The resolved input handed to the node. For an entry node — one with no inbound edges — this is where the
+    ///     operator's request reaches the first agent: run start seeds it with the work-item request and the run inputs.
+    /// </summary>
+    public byte[]? InputJson { get; set; }
+
+    /// <summary>The node's structured output. Gate nodes decide over this, which is why it carries its own AAD column name.</summary>
+    public byte[]? OutputJson { get; set; }
+
+    /// <summary>One <c>{id, name, contentSha256}</c> per applied rule set, captured at materialization.</summary>
+    public byte[]? PolicyResolutionJson { get; set; }
+
+    public Guid? MaterializedFromNodeRunId { get; set; }
+    public int? MaterializationIndex { get; set; }
+    public string? FailureClass { get; set; }
+    public string? TerminalReason { get; set; }
+    public long? QueuedAtUtc { get; set; }
+    public long? StartedAtUtc { get; set; }
+    public long? EndedAtUtc { get; set; }
+    public long CreatedAtUtc { get; set; }
+}

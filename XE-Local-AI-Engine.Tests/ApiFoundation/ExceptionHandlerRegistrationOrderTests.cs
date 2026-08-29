@@ -20,6 +20,7 @@ public sealed class ExceptionHandlerRegistrationOrderTests
                 nameof(TrainingExceptionHandler),
                 nameof(BenchmarkExceptionHandler),
                 nameof(WorkSessionNotFoundExceptionHandler),
+                nameof(DevWorkflowNotFoundExceptionHandler),
                 nameof(DefaultExceptionHandler)),
             string.Join(Environment.NewLine, handlerTypes),
             "Exception-handler order is behavioral: the default handler must remain last and family handlers must not preempt shared contracts.");

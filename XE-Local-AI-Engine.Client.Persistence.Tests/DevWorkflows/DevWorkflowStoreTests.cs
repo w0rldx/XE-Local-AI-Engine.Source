@@ -1,0 +1,375 @@
+namespace XE_Local_AI_Engine.Client.Persistence.Tests.DevWorkflows;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
+
+public sealed class DevWorkflowStoreTests
+{
+    /// <summary>T-1: the run's counter is the one watermark, and it never repeats or skips across child tables.</summary>
+    [Test]
+    public async Task Sequence_IsStrictlyIncreasingAndGapFreeAcrossEveryChildTable()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "research", seed.RunVersion).ConfigureAwait(false);
+
+        var artifactId = Guid.NewGuid();
+        var appended = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(seed.RunId,
+                                      artifactId,
+                                      nodeRunId,
+                                      version,
+                                      Guid.NewGuid(),
+                                      DevWorkflowArtifactKind.Research,
+                                      "brief",
+                                      "text/markdown",
+                                      "hash-1",
+                                      SizeBytes: 12,
+                                      "reference-1"))
+                                  .ConfigureAwait(false);
+        var transitioned = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                          nodeRunId,
+                                          appended.Version,
+                                          DevWorkflowNodeRunStatus.Queued,
+                                          QueueReason: "awaiting-agent-slot"))
+                                      .ConfigureAwait(false);
+
+        var run = await store.GetRunAsync(seed.RunId).ConfigureAwait(false);
+        var events = await store.ListEventsAsync(seed.RunId).ConfigureAwait(false);
+
+        AssertEx.Equal(transitioned.Sequence, run.LastSequence, "The run's watermark must be the last sequence any child write allocated.");
+
+        // Gap-free: every value from 1 to the watermark is claimed exactly once, by an event, a node run or an artifact.
+        var claimed = new List<long>();
+        claimed.AddRange(events.Select(item => item.Sequence));
+        claimed.AddRange((await store.ListNodeRunsAsync(seed.RunId).ConfigureAwait(false)).Select(item => item.Sequence));
+        claimed.AddRange((await store.ListArtifactsAsync(seed.RunId).ConfigureAwait(false)).Select(item => item.Sequence));
+        claimed.Sort();
+
+        AssertEx.Equal(run.LastSequence, claimed.Count, "Every allocated sequence must belong to exactly one row.");
+        for (var index = 0; index < claimed.Count; index++)
+        {
+            AssertEx.Equal(index + 1L, claimed[index], "The run's sequence values must be strictly increasing and gap-free.");
+        }
+    }
+
+    /// <summary>T-2: a stale expected version loses; the Any sentinel never does.</summary>
+    [Test]
+    public async Task ExpectedVersion_RejectsAStaleWriterAndTheAnySentinelAlwaysWins()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var moved = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, seed.RunVersion, DevWorkflowRunStatus.Running)).ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, seed.RunVersion, DevWorkflowRunStatus.Paused)),
+                              "A writer holding the pre-transition version must lose.")
+                          .ConfigureAwait(false);
+
+        var withSentinel = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, DevWorkflowVersions.Any, DevWorkflowRunStatus.Paused))
+                                      .ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Paused, withSentinel.Status);
+        AssertEx.True(withSentinel.Version > moved.Version, "The sentinel write must still bump the version it did not check.");
+    }
+
+    /// <summary>T-3, sequential half: a replayed operation returns the recorded result and appends nothing.</summary>
+    [Test]
+    public async Task OperationId_ReplayReturnsTheRecordedResultWithoutAppending()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var operationId = Guid.NewGuid();
+        var first = await store.AppendEventAsync(new AppendDevWorkflowEventCommand(seed.RunId,
+                                   seed.RunVersion,
+                                   DevWorkflowEventTypes.PolicyResolved,
+                                   OperationId: operationId))
+                               .ConfigureAwait(false);
+        var eventsAfterFirst = await store.ListEventsAsync(seed.RunId).ConfigureAwait(false);
+
+        var replay = await store.AppendEventAsync(new AppendDevWorkflowEventCommand(seed.RunId,
+                                    first.Version,
+                                    DevWorkflowEventTypes.PolicyResolved,
+                                    OperationId: operationId))
+                                .ConfigureAwait(false);
+        var eventsAfterReplay = await store.ListEventsAsync(seed.RunId).ConfigureAwait(false);
+
+        AssertEx.Equal(first.Sequence, replay.Sequence, "A replay must answer with the watermark the first attempt allocated.");
+        AssertEx.Equal(eventsAfterFirst.Count, eventsAfterReplay.Count, "A replayed operation must not append a second event.");
+    }
+
+    /// <summary>
+    ///     T-3, concurrent half: two writers on separate connections submitting the same operation id both receive the
+    ///     one recorded result, and neither gets an exception. That is the contract an idempotency key exists to give —
+    ///     a run is written by the dispatcher AND by human HTTP actions that can genuinely arrive together, unlike a
+    ///     work session, which one supervisor drives.
+    ///     <para>
+    ///         What satisfies it here is the store's <em>in-transaction</em> query-first check, not its post-failure
+    ///         recovery: EF opens SQLite transactions as <c>BEGIN IMMEDIATE</c>, so the loser blocks on the writer lock
+    ///         until the winner commits and then sees the recorded operation before writing anything. Measured — the
+    ///         recovery branch is never entered on this provider.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task OperationId_ConcurrentWritersBothReceiveTheRecordedResult()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        Guid runId;
+        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        {
+            var store = DevWorkflowTestFixture.StoreFor(context);
+            runId = (await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false)).RunId;
+        }
+
+        var operationId = Guid.NewGuid();
+
+        // Separate contexts: two writers on one DbContext would share a change tracker and never actually contend.
+        await using var firstContext = fixture.CreateContext();
+        await using var secondContext = fixture.CreateContext();
+        var firstStore = DevWorkflowTestFixture.StoreFor(firstContext);
+        var secondStore = DevWorkflowTestFixture.StoreFor(secondContext);
+
+        var command = new AppendDevWorkflowEventCommand(runId, DevWorkflowVersions.Any, DevWorkflowEventTypes.PolicyResolved, OperationId: operationId);
+        var results = await Task.WhenAll(Task.Run(() => firstStore.AppendEventAsync(command)), Task.Run(() => secondStore.AppendEventAsync(command))).ConfigureAwait(false);
+
+        AssertEx.Equal(results[0].Sequence, results[1].Sequence, "Both writers must be told about the one event that landed.");
+
+        await using var readContext = fixture.CreateContext();
+        var events = await DevWorkflowTestFixture.StoreFor(readContext).ListEventsAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 1, events.Count(item => item.OperationId == operationId), "Exactly one event may carry the operation id.");
+    }
+
+    /// <summary>T-13: the partial unique index, not a check-then-insert, is what makes one live run per work item true.</summary>
+    [Test]
+    public async Task StartRun_RejectsASecondLiveRunAndAdmitsOneAfterTheFirstTerminates()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+        var definition = await store.GetDefinitionAsync(seed.DefinitionId).ConfigureAwait(false);
+
+        StartDevWorkflowRunCommand Second() =>
+            new(Guid.NewGuid(), seed.WorkItemId, definition.Id, definition.Version, definition.GraphHash, DevWorkflowTestFixture.SampleGraph);
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowRunInFlightException>(() => store.StartRunAsync(Second()),
+                              "A second live run on one work item must be rejected by the database, not by a racy read-modify-write.")
+                          .ConfigureAwait(false);
+
+        _ = await store.TransitionRunAsync(new TransitionDevWorkflowRunCommand(seed.RunId, DevWorkflowVersions.Any, DevWorkflowRunStatus.Completed)).ConfigureAwait(false);
+
+        var next = await store.StartRunAsync(Second()).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Pending, next.Status, "Once the first run is terminal, the work item may start another.");
+    }
+
+    /// <summary>The list is two queries whatever the row count, and it carries each item's latest run and its counters.</summary>
+    [Test]
+    public async Task ListWorkItems_CarriesTheLatestRunAndItsNodeCounters()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store, "Ship the thing").ConfigureAwait(false);
+
+        var gateNodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, Guid.NewGuid(), "research", seed.RunVersion).ConfigureAwait(false);
+        version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, gateNodeRunId, "approval", version, DevWorkflowNodeType.HumanGate).ConfigureAwait(false);
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                           gateNodeRunId,
+                           version,
+                           DevWorkflowNodeRunStatus.WaitingForApproval,
+                           PendingDecisionKind: DevWorkflowDecisionKind.Approve))
+                       .ConfigureAwait(false);
+
+        var listed = await store.ListWorkItemsAsync().ConfigureAwait(false);
+        var item = listed.Single();
+
+        AssertEx.Equal("Ship the thing", item.Title);
+
+        // The list projects the entity rather than its columns, so this also pins that the materialization interceptor
+        // still runs inside a projection — otherwise the request would come back as ciphertext, silently.
+        AssertEx.Equal("Seeded request", item.Request);
+        AssertEx.Equal(seed.RunId, item.LatestRunId);
+        AssertEx.Equal("Seeded definition", item.LatestRunDefinitionName);
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Active, item.Status, "Starting a run makes the work item active, and the runtime is what writes that.");
+        AssertEx.Equal(expected: 2, item.LatestRunNodes.Total);
+        AssertEx.Equal(expected: 1, item.LatestRunNodes.PendingDecisionCount);
+        AssertEx.Equal(gateNodeRunId, item.LatestRunNodes.BlockingGateNodeRunId);
+
+        var filteredOut = await store.ListWorkItemsAsync(DevWorkflowWorkItemStatus.Draft).ConfigureAwait(false);
+        AssertEx.Empty(filteredOut, "The status filter belongs in the query, not in a post-filter the caller forgets.");
+    }
+
+    /// <summary>Archiving hides a definition from the picker and leaves the runs that pinned it alone.</summary>
+    [Test]
+    public async Task ArchiveDefinition_HidesItFromTheListWithoutTouchingItsRuns()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        _ = await store.ArchiveDefinitionAsync(seed.DefinitionId).ConfigureAwait(false);
+
+        AssertEx.Empty(await store.ListDefinitionsAsync().ConfigureAwait(false), "An archived definition must not reach the picker.");
+        AssertEx.Equal(expected: 1, (await store.ListDefinitionsAsync(includeArchived: true).ConfigureAwait(false)).Count);
+
+        var run = await store.GetRunAsync(seed.RunId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowTestFixture.SampleGraph, run.GraphJson, "A run renders from its own pinned snapshot, so archiving cannot disturb it.");
+    }
+
+    /// <summary>The definition list never decrypts a graph blob, which is what the denormalized node count is for.</summary>
+    [Test]
+    public async Task ListDefinitions_ReportsTheNodeCountWithoutTheGraph()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var created = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(),
+                                     "Feature development",
+                                     DevWorkflowTestFixture.SampleGraph,
+                                     NodeCount: 7,
+                                     DevWorkflowDefinitionSource.Seeded,
+                                     "feature-development-v1"))
+                                 .ConfigureAwait(false);
+
+        var summary = (await store.ListDefinitionsAsync().ConfigureAwait(false)).Single();
+        AssertEx.Equal(expected: 7, summary.NodeCount);
+        AssertEx.Equal(created.GraphHash, summary.GraphHash, "The hash is written with the graph, so the summary can name the graph without loading it.");
+        AssertEx.Equal("feature-development-v1", summary.SeedSlug);
+    }
+
+    /// <summary>Re-seeding under a slug already taken must fail on the filtered unique index, not duplicate the template.</summary>
+    [Test]
+    public async Task CreateDefinition_RejectsADuplicateSeedSlug()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+
+        static CreateDevWorkflowDefinitionCommand Seeded() =>
+            new(Guid.NewGuid(), "Research to approval", DevWorkflowTestFixture.SampleGraph, NodeCount: 3, DevWorkflowDefinitionSource.Seeded, "research-plan-approval");
+
+        _ = await store.CreateDefinitionAsync(Seeded()).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => store.CreateDefinitionAsync(Seeded()),
+                              "A re-seed must never duplicate a seeded template.")
+                          .ConfigureAwait(false);
+
+        // Manual rows leave the slug null, so any number of them coexist — that is what the filter on the index is for.
+        _ = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Manual one", DevWorkflowTestFixture.SampleGraph, NodeCount: 1))
+                       .ConfigureAwait(false);
+        _ = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Manual two", DevWorkflowTestFixture.SampleGraph, NodeCount: 1))
+                       .ConfigureAwait(false);
+        AssertEx.Equal(expected: 3, (await store.ListDefinitionsAsync().ConfigureAwait(false)).Count);
+    }
+
+    /// <summary>
+    ///     Two PUTs that each read version 1, which is what two people saving the same definition produce. The store's
+    ///     read-then-check passes for both — neither read saw the other's write — so the row's concurrency token is the
+    ///     only thing standing between the later write and a silent overwrite of the earlier one.
+    /// </summary>
+    [Test]
+    public async Task UpdateDefinition_RefusesTheWriterThatReadTheVersionAnotherWriteHasSinceBumped()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        Guid definitionId;
+        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        {
+            var created = await DevWorkflowTestFixture.StoreFor(context)
+                                                      .CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(),
+                                                          "Original",
+                                                          DevWorkflowTestFixture.SampleGraph,
+                                                          NodeCount: 1))
+                                                      .ConfigureAwait(false);
+            definitionId = created.Id;
+        }
+
+        // Separate contexts: two writers on one would share a change tracker and never actually contend.
+        await using var loserContext = fixture.CreateContext();
+        await using var winnerContext = fixture.CreateContext();
+
+        // The loser holds the row as it stood before the race — the state a request that has already loaded the
+        // definition is in while the other request commits.
+        _ = await loserContext.DevWorkflowDefinitions.SingleAsync(entity => entity.Id == definitionId).ConfigureAwait(false);
+
+        _ = await DevWorkflowTestFixture.StoreFor(winnerContext)
+                                        .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(definitionId, ExpectedVersion: 1, "Winner"))
+                                        .ConfigureAwait(false);
+
+        _ = await AssertEx.ThrowsAsync<DevWorkflowConcurrencyException>(() => DevWorkflowTestFixture.StoreFor(loserContext)
+                                                                                                    .UpdateDefinitionAsync(new UpdateDevWorkflowDefinitionCommand(definitionId, ExpectedVersion: 1,
+                                                                                                        "Loser")),
+                              "The version check cannot see a write that landed after this writer read it, so the token has to.")
+                          .ConfigureAwait(false);
+
+        await using var readContext = fixture.CreateContext();
+        var settled = await DevWorkflowTestFixture.StoreFor(readContext).GetDefinitionAsync(definitionId).ConfigureAwait(false);
+        AssertEx.Equal("Winner", settled.Name, "The write that won has to survive: the silent overwrite IS the defect.");
+        AssertEx.Equal(expected: 2, settled.Version, "And exactly one of the two edits may have bumped the version.");
+    }
+
+    /// <summary>
+    ///     The runtime moves a work item's status while a human is editing its title, and it does so through the same
+    ///     version token the edit is written under. The two writes touch disjoint fields, so the PATCH re-reads and
+    ///     re-applies rather than failing: an operator renaming an item must not be told 409 — or handed a 500 — because
+    ///     the dispatcher happened to start their run in the same instant.
+    /// </summary>
+    [Test]
+    public async Task UpdateWorkItem_SurvivesTheRuntimeWritingStatusBetweenItsReadAndItsSave()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        Guid workItemId;
+        await using (var context = await fixture.CreateSchemaAsync().ConfigureAwait(false))
+        {
+            var created = await DevWorkflowTestFixture.StoreFor(context)
+                                                      .CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Original title", "Original request"))
+                                                      .ConfigureAwait(false);
+            workItemId = created.Id;
+        }
+
+        // Exactly the write a run start performs, on its own connection, landing inside the PATCH's save: the status
+        // moves and the concurrency token moves with it.
+        var interceptor = new CompetingWriteInterceptor(() => fixture.RawExecuteAsync("UPDATE dev_workflow_work_items SET status = 'Active', version = version + 1 WHERE id = $id;",
+            command => command.Parameters.AddWithValue("$id", workItemId)));
+
+        await using var editContext = fixture.CreateContext(interceptor);
+        var updated = await DevWorkflowTestFixture.StoreFor(editContext)
+                                                  .UpdateWorkItemAsync(new UpdateDevWorkflowWorkItemCommand(workItemId, DevWorkflowVersions.Any, "Renamed"))
+                                                  .ConfigureAwait(false);
+
+        AssertEx.Equal("Renamed", updated.Title, "The edit has to land: it raced a write whose fields it does not touch.");
+        AssertEx.Equal(DevWorkflowWorkItemStatus.Active,
+            updated.Status,
+            "And the runtime's status write has to survive, rather than be overwritten by a re-apply against the row this edit first read.");
+        AssertEx.Equal("Original request", updated.Request, "A PATCH that named only the title may not rewrite the request.");
+    }
+
+    /// <summary>Performs one competing write, on its own connection, inside the first save it intercepts.</summary>
+    private sealed class CompetingWriteInterceptor(Func<Task> write) : SaveChangesInterceptor
+    {
+        private bool _fired;
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (!_fired)
+            {
+                _fired = true;
+                await write().ConfigureAwait(false);
+            }
+
+            return await base.SavingChangesAsync(eventData, result, cancellationToken).ConfigureAwait(false);
+        }
+    }
+}

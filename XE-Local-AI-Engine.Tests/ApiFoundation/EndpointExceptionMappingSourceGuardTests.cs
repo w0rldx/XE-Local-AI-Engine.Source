@@ -75,6 +75,41 @@ public sealed class EndpointExceptionMappingSourceGuardTests
             "WorkSession endpoint-local raw KeyNotFoundException catches can turn unrelated defects into 404. Throw the typed persistence family and let its global handler map it.");
     }
 
+    [Test]
+    public void GlobalHandlers_RegisterDevWorkflowNotFoundBeforeTheDefaultHandler()
+    {
+        var root = FindRepositoryRoot();
+        var composition = File.ReadAllText(Path.Combine(root, "XE-Local-AI-Engine.Client", "ConfigureServices.cs"));
+        var devWorkflowHandler = composition.IndexOf(".AddExceptionHandler<DevWorkflowNotFoundExceptionHandler>()", StringComparison.Ordinal);
+        var defaultHandler = composition.IndexOf(".AddExceptionHandler<DefaultExceptionHandler>()", StringComparison.Ordinal);
+
+        AssertEx.True(devWorkflowHandler >= 0, "The typed DevWorkflow not-found handler must be registered in the global exception chain.");
+        AssertEx.True(defaultHandler >= 0, "The default exception handler registration must remain present.");
+        AssertEx.True(devWorkflowHandler < defaultHandler, "The typed DevWorkflow not-found handler must run before the default 500 handler.");
+    }
+
+    /// <summary>
+    ///     The sweep above is hardcoded per family, so a new endpoint folder is not covered by it — "still green" after
+    ///     adding one would be true trivially. This is that folder's own sweep.
+    /// </summary>
+    [Test]
+    public void DevWorkflowEndpoints_CatchNothingAndTranslateNoRawKeyNotFoundExceptions()
+    {
+        var root = FindRepositoryRoot();
+        var endpoints = Path.Combine(root, "XE-Local-AI-Engine.Client", "Endpoints", "DevelopmentWorkflows");
+        AssertEx.True(Directory.Exists(endpoints), "The development-workflow endpoint folder must exist for this guard to mean anything.");
+
+        var offenders = Directory.EnumerateFiles(endpoints, "*.cs", SearchOption.AllDirectories)
+                                 .Where(path => CountCatches(File.ReadAllText(path)) > 0)
+                                 .Select(path => Path.GetRelativePath(endpoints, path).Replace('\\', '/'))
+                                 .OrderBy(static path => path, StringComparer.Ordinal)
+                                 .ToArray();
+
+        AssertEx.Empty(offenders,
+            "Development-workflow endpoints must throw the typed persistence and runtime families and let the global handlers map them. "
+            + "An endpoint-local catch turns unrelated defects into 404s and 400s, and duplicates a mapping that already exists in one place.");
+    }
+
     private static void AssertCatchAllowlist(string familyRoot, IReadOnlyDictionary<string, int> expected)
     {
         var actual = Directory.EnumerateFiles(familyRoot, "*.cs", SearchOption.AllDirectories)

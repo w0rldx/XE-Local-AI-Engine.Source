@@ -110,14 +110,14 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     private readonly DevelopmentOptions _options;
     private readonly IDevelopmentSandboxRuntimeProvider _sandbox;
     private readonly DevelopmentSandboxOptions _sandboxOptions;
-    private readonly IDevelopmentStore _store;
+    private readonly IDevelopmentWorkspaceSecretsSink _secretsSink;
     private readonly TimeProvider _timeProvider;
 
     public DevelopmentWorkspaceProvider(INodeDataDirectory dataDirectory,
         IDevelopmentSandboxRuntimeProvider sandbox,
         IOptions<DevelopmentOptions> options,
         TimeProvider timeProvider,
-        IDevelopmentStore store,
+        IDevelopmentWorkspaceSecretsSink secretsSink,
         ISensitiveFileExclusionService? exclusions = null,
         IOptions<DevelopmentSandboxOptions>? sandboxOptions = null,
         IOptions<ComputeOptions>? ceilingDefaults = null,
@@ -128,7 +128,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _store = store ?? throw new ArgumentNullException(nameof(store));
+        _secretsSink = secretsSink ?? throw new ArgumentNullException(nameof(secretsSink));
 
         // The product's single definition of "this file may hold a credential", shared with the workspace tools' read
         // gate and AgentHome's copy filter. Defaulted rather than required so a directly constructed provider behaves
@@ -291,7 +291,9 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
 
         if (secrets.Count > 0)
         {
-            _ = await _store.RecordWorkspaceSecretsAsync(snapshot.TaskId, snapshot.AttemptId, secrets, cancellationToken).ConfigureAwait(false);
+            // Through the sink, not the store: the snapshot's task and attempt ids are the workspace's isolation keys
+            // here, and a caller outside Dev Mode has no rows behind them (see IDevelopmentWorkspaceSecretsSink).
+            await _secretsSink.RecordAsync(snapshot.TaskId, snapshot.AttemptId, secrets, cancellationToken).ConfigureAwait(false);
         }
 
         await EnsureWarmRestoreAsync(git,

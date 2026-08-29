@@ -2305,6 +2305,639 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         });
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowArtifact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ContentSha256")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("content_sha256");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<bool>("IsStale")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_stale");
+
+                    b.Property<bool>("IsValid")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_valid");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("LineageId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("lineage_id");
+
+                    b.Property<string>("ManagedReference")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("managed_reference");
+
+                    b.Property<string>("MediaType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("media_type");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("ProducedByNodeRunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("produced_by_node_run_id");
+
+                    b.Property<string>("ProducingNodeKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("producing_node_key");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<Guid?>("StaleBecauseArtifactId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("stale_because_artifact_id");
+
+                    b.Property<string>("StaleReason")
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("stale_reason");
+
+                    b.Property<long?>("StaleSinceSequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("stale_since_sequence");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProducedByNodeRunId")
+                        .HasDatabaseName("ix_dev_workflow_artifacts_producer");
+
+                    b.HasIndex("LineageId", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("ux_dev_workflow_artifacts_lineage_version");
+
+                    b.HasIndex("RunId", "Sequence")
+                        .HasDatabaseName("ix_dev_workflow_artifacts_run_sequence");
+
+                    b.HasIndex("RunId", "ProducingNodeKey", "Name")
+                        .HasDatabaseName("ix_dev_workflow_artifacts_run_node_name");
+
+                    b.ToTable("dev_workflow_artifacts", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowArtifactUse", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ArtifactId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("artifact_id");
+
+                    b.Property<Guid>("NodeRunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("node_run_id");
+
+                    b.Property<long>("RecordedSequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("recorded_sequence");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArtifactId")
+                        .HasDatabaseName("ix_dev_workflow_artifact_uses_artifact");
+
+                    b.HasIndex("RunId");
+
+                    b.HasIndex("NodeRunId", "ArtifactId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_dev_workflow_artifact_uses_node_artifact");
+
+                    b.ToTable("dev_workflow_artifact_uses", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowDecision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attempt");
+
+                    b.Property<byte[]>("Comment")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("comment");
+
+                    b.Property<long>("DecidedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("decided_at_utc");
+
+                    b.Property<string>("DecidedBySubject")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("decided_by_subject");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("decision");
+
+                    b.Property<Guid>("NodeRunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("node_run_id");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("operation_id");
+
+                    b.Property<byte[]>("PayloadJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("payload_json");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NodeRunId", "Attempt")
+                        .IsUnique()
+                        .HasDatabaseName("ux_dev_workflow_decisions_node_run_attempt");
+
+                    b.HasIndex("RunId", "OperationId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_dev_workflow_decisions_operation");
+
+                    b.HasIndex("RunId", "Sequence")
+                        .HasDatabaseName("ix_dev_workflow_decisions_run_sequence");
+
+                    b.ToTable("dev_workflow_decisions", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Archived")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("archived");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("GraphHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("graph_hash");
+
+                    b.Property<byte[]>("GraphJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("graph_json");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<int>("NodeCount")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("node_count");
+
+                    b.Property<string>("SeedSlug")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("seed_slug");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("source");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .HasDatabaseName("ix_dev_workflow_definitions_name");
+
+                    b.HasIndex("SeedSlug")
+                        .IsUnique()
+                        .HasDatabaseName("ux_dev_workflow_definitions_seed_slug")
+                        .HasFilter("\"seed_slug\" IS NOT NULL");
+
+                    b.HasIndex("Archived", "Name")
+                        .HasDatabaseName("ix_dev_workflow_definitions_archived");
+
+                    b.ToTable("dev_workflow_definitions", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowNodeRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AgentDefinitionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("agent_definition_id");
+
+                    b.Property<int>("Attempt")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("attempt");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid?>("DevelopmentProjectId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("development_project_id");
+
+                    b.Property<Guid?>("DevelopmentTaskId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("development_task_id");
+
+                    b.Property<long?>("EndedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ended_at_utc");
+
+                    b.Property<string>("FailureClass")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failure_class");
+
+                    b.Property<byte[]>("InputJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("input_json");
+
+                    b.Property<int?>("MaterializationIndex")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("materialization_index");
+
+                    b.Property<Guid?>("MaterializedFromNodeRunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("materialized_from_node_run_id");
+
+                    b.Property<int>("MaxAttempts")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("max_attempts");
+
+                    b.Property<string>("NodeKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("node_key");
+
+                    b.Property<string>("NodeType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("node_type");
+
+                    b.Property<byte[]>("OutputJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("output_json");
+
+                    b.Property<string>("PendingDecisionKind")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("pending_decision_kind");
+
+                    b.Property<byte[]>("PolicyResolutionJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("policy_resolution_json");
+
+                    b.Property<string>("QueueReason")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("queue_reason");
+
+                    b.Property<long?>("QueuedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("queued_at_utc");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.Property<int>("SessionResumes")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("session_resumes");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TerminalReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("terminal_reason");
+
+                    b.Property<Guid?>("WorkSessionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("work_session_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DevelopmentTaskId")
+                        .HasDatabaseName("ix_dev_workflow_node_runs_development_task");
+
+                    b.HasIndex("MaterializedFromNodeRunId")
+                        .HasDatabaseName("ix_dev_workflow_node_runs_materialized_from");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_dev_workflow_node_runs_status");
+
+                    b.HasIndex("WorkSessionId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_dev_workflow_node_runs_work_session")
+                        .HasFilter("\"work_session_id\" IS NOT NULL");
+
+                    b.HasIndex("RunId", "NodeKey")
+                        .IsUnique()
+                        .HasDatabaseName("ux_dev_workflow_node_runs_run_node");
+
+                    b.HasIndex("RunId", "Sequence")
+                        .HasDatabaseName("ix_dev_workflow_node_runs_run_sequence");
+
+                    b.ToTable("dev_workflow_node_runs", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("DefinitionGraphHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("definition_graph_hash");
+
+                    b.Property<Guid>("DefinitionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("definition_id");
+
+                    b.Property<int>("DefinitionVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("definition_version");
+
+                    b.Property<long?>("EndedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("ended_at_utc");
+
+                    b.Property<string>("FailureClass")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failure_class");
+
+                    b.Property<byte[]>("GraphJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("graph_json");
+
+                    b.Property<int>("GraphRevision")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("graph_revision");
+
+                    b.Property<long>("LastSequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_sequence");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TerminalReason")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("terminal_reason");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.Property<Guid>("WorkItemId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("work_item_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DefinitionId")
+                        .HasDatabaseName("ix_dev_workflow_runs_definition");
+
+                    b.HasIndex("WorkItemId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_dev_workflow_runs_live_per_work_item")
+                        .HasFilter("\"status\" IN ('Pending','Running','Pausing','Paused','WaitingForApproval','Cancelling')");
+
+                    b.HasIndex("Status", "UpdatedAtUtc")
+                        .HasDatabaseName("ix_dev_workflow_runs_status_updated");
+
+                    b.HasIndex("WorkItemId", "CreatedAtUtc")
+                        .HasDatabaseName("ix_dev_workflow_runs_work_item");
+
+                    b.ToTable("dev_workflow_runs", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowRunEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("DetailJson")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("detail_json");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("event_type");
+
+                    b.Property<Guid?>("NodeRunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("node_run_id");
+
+                    b.Property<long>("OccurredAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<Guid?>("OperationId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("operation_id");
+
+                    b.Property<string>("Outcome")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("outcome");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("run_id");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NodeRunId")
+                        .HasDatabaseName("ix_dev_workflow_run_events_node_run");
+
+                    b.HasIndex("RunId", "OperationId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_dev_workflow_run_events_operation")
+                        .HasFilter("\"operation_id\" IS NOT NULL");
+
+                    b.HasIndex("RunId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ux_dev_workflow_run_events_run_sequence");
+
+                    b.ToTable("dev_workflow_run_events", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowWorkItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid?>("DevelopmentProjectId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("development_project_id");
+
+                    b.Property<byte[]>("Request")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("request");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("title");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DevelopmentProjectId")
+                        .HasDatabaseName("ix_dev_workflow_work_items_project");
+
+                    b.HasIndex("Status", "UpdatedAtUtc")
+                        .HasDatabaseName("ix_dev_workflow_work_items_status_updated");
+
+                    b.ToTable("dev_workflow_work_items", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifact", b =>
                 {
                     b.Property<Guid>("Id")
@@ -5840,6 +6473,60 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .WithMany()
                         .HasForeignKey("DatasetId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowArtifact", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowArtifactUse", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowDecision", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowNodeRun", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowRun", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowWorkItem", null)
+                        .WithMany()
+                        .HasForeignKey("WorkItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowRunEvent", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.DevWorkflowRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

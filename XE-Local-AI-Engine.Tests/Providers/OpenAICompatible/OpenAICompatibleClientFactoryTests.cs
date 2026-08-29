@@ -1,6 +1,8 @@
 namespace XE_Local_AI_Engine.Tests.Providers.OpenAICompatible;
 
+using System.ClientModel;
 using System.ClientModel.Primitives;
+using System.Net;
 using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Tests.Providers.OpenAICompat;
@@ -71,14 +73,14 @@ public sealed class OpenAICompatibleClientFactoryTests
         // classically retryable, so exactly one transport hit proves the pinned ClientRetryPolicy(0) survived assembly.
         var recorder = new OpenAiWireRecorder
         {
-            Responder = static _ => new HttpResponseMessage(System.Net.HttpStatusCode.ServiceUnavailable)
+            Responder = static _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
             {
                 Content = new StringContent("{}")
             }
         };
         using var chat = BuildChatClient(recorder, apiKey: "k");
 
-        _ = await AssertEx.ThrowsAsync<System.ClientModel.ClientResultException>(() =>
+        _ = await AssertEx.ThrowsAsync<ClientResultException>(() =>
             chat.GetResponseAsync([new ChatMessage(ChatRole.User, "hi")], options: null, CancellationToken.None));
 
         AssertEx.Equal(1, recorder.Requests.Count);
