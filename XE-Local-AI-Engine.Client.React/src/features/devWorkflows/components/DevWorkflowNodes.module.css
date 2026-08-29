@@ -8,9 +8,12 @@
 	box-shadow: var(--mantine-shadow-xs);
 }
 
+/* An outline, not a box-shadow: selection has to survive every status class, and a Blocked ring or a Running pulse
+   would otherwise win the box-shadow cascade and leave the selected card looking like every other one. */
+
 .node-selected {
-	border-color: var(--mantine-color-blue-5);
-	box-shadow: 0 0 0 1px var(--mantine-color-blue-5);
+	outline: 2px solid var(--mantine-color-blue-5);
+	outline-offset: 1px;
 }
 
 /* O5: a node the runtime created from a template, rather than one the definition named. */
