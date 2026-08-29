@@ -21,7 +21,13 @@ using XE_Local_AI_Engine.Client.Services.WorkSessions;
 /// </summary>
 internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLifecycle
 {
+    // The class host shares one of these across every test in the class, and a settle appends from outside the
+    // dispatcher's advance gate — so the three histories are written concurrently and read while being written. They
+    // are guarded, and handed out as copies, for the same reason RecordingWorkSessionEventPublisher's are.
+    private readonly Lock _gate = new();
     private readonly List<Guid> _created = [];
+    private readonly List<string> _objectives = [];
+    private readonly List<(string Verb, Guid SessionId)> _calls = [];
     private readonly IServiceScopeFactory _scopes;
 
     public FakeDevWorkflowAgentSession(IServiceScopeFactory scopes) =>
@@ -37,13 +43,30 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
     public string? RefuseCreateWith { get; set; }
 
     /// <summary>Every session this created, in order.</summary>
-    public IReadOnlyList<Guid> Created => [.. _created];
+    public IReadOnlyList<Guid> Created => Snapshot(_created);
 
     /// <summary>Every objective it was handed, so a test can assert what the agent was actually asked.</summary>
-    public List<string> Objectives { get; } = [];
+    public IReadOnlyList<string> Objectives => Snapshot(_objectives);
 
     /// <summary>Every lifecycle call, in order, as <c>verb</c> against the session it named.</summary>
-    public List<(string Verb, Guid SessionId)> Calls { get; } = [];
+    public IReadOnlyList<(string Verb, Guid SessionId)> Calls => Snapshot(_calls);
+
+    /// <summary>A copy taken under the recording lock, so an enumeration cannot tear against a concurrent append.</summary>
+    private IReadOnlyList<T> Snapshot<T>(List<T> history)
+    {
+        lock (_gate)
+        {
+            return [.. history];
+        }
+    }
+
+    private void Record(string verb, Guid sessionId)
+    {
+        lock (_gate)
+        {
+            _calls.Add((verb, sessionId));
+        }
+    }
 
     public async Task<WorkSessionDetail> CreateAsync(string title, string objective, Guid agentDefinitionId, CancellationToken cancellationToken = default)
     {
@@ -52,7 +75,11 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
             throw new WorkSessionValidationException(refusal);
         }
 
-        Objectives.Add(objective);
+        lock (_gate)
+        {
+            _objectives.Add(objective);
+        }
+
         await using var scope = _scopes.CreateAsyncScope();
 
         // A real conversation, because a session owns one and the delete path sweeps it. Nothing here sends a turn on it.
@@ -68,8 +95,12 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
                                          objective),
                                      cancellationToken)
                                  .ConfigureAwait(false);
-        _created.Add(created.Id);
-        Calls.Add(("create", created.Id));
+        lock (_gate)
+        {
+            _created.Add(created.Id);
+            _calls.Add(("create", created.Id));
+        }
+
         return ToDetail(created);
     }
 
@@ -97,7 +128,7 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
 
     public async Task DeleteAsync(Guid sessionId, CancellationToken cancellationToken = default)
     {
-        Calls.Add(("delete", sessionId));
+        Record("delete", sessionId);
         if (OnDeleting is { } observe)
         {
             await observe(sessionId).ConfigureAwait(false);
@@ -113,7 +144,7 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
 
     private async Task<WorkSessionDetail> MoveAsync(string verb, Guid sessionId, AgentWorkSessionStatus target, CancellationToken cancellationToken)
     {
-        Calls.Add((verb, sessionId));
+        Record(verb, sessionId);
         if (RefuseStart && verb is "start" or "resume")
         {
             throw new WorkSessionInvalidTransitionException("The node could not admit the work session just now.");
