@@ -123,10 +123,11 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
         // refusal — and the ids come back from the commit, so there is no page for a caller to walk or forget.
         var deleted = await _store.DeleteWorkItemAsync(workItemId, cancellationToken).ConfigureAwait(false);
 
-        // Best-effort and idempotent, because the rows that named these are already gone: a session that refuses to be
-        // deleted is an orphan a later sweep can still find by kind, while throwing here would report a failure for a
-        // delete that succeeded. A crash inside this loop leaves the same orphans — recoverable, and never a dangling
-        // reference, since nothing points at them any more.
+        // Best-effort, because the rows that named these are already gone: throwing here would report a failure for a
+        // delete that in fact succeeded. What a refusal — or a crash inside this loop — leaves behind is a session
+        // nothing points at any more: never a dangling reference, and recoverable by hand through the owner surface.
+        // The startup sweep does NOT collect these; it takes only never-driven sessions, so a transcript is never
+        // destroyed by a sweep that cannot tell which crash produced it.
         foreach (var sessionId in deleted.WorkSessionIds)
         {
             try

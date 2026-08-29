@@ -176,25 +176,26 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
     }
 
     /// <summary>
-    ///     Deletes every workflow-kind work session no node run references.
+    ///     Deletes every workflow-kind work session that no node run references AND that was never driven.
     ///     <para>
-    ///         Such a session is unreachable by design: the owner surface refuses workflow-kind sessions to every
-    ///         external caller, and a work-item delete can only release what its node runs point AT — so nothing else
-    ///         will ever find it. Two ways to make one, and this closes both: a host death between creating a session
-    ///         and attaching it, and a crash between a work item's rows committing and its sessions being released.
+    ///         That is precisely what a host death between <c>CreateAsync</c> and <c>AttachWorkSessionAsync</c> leaves
+    ///         behind, and it is unreachable by design: the owner surface refuses workflow-kind sessions to every
+    ///         external caller, a work-item delete can only release what its node runs point AT, and the next tick
+    ///         creates a fresh session rather than finding this one. Never started, it holds no transcript to lose.
+    ///     </para>
+    ///     <para>
+    ///         <c>Draft</c> is what makes that last sentence true, and it is load-bearing rather than tidiness. A
+    ///         re-attempt clears <c>WorkSessionId</c> so the fresh attempt cannot resume a poisoned context, which
+    ///         leaves the PREVIOUS attempt's session owned by nothing as well — but that one RAN, and its transcript is
+    ///         the evidence of an attempt the event log keeps only the id of. Auditability is this module's pillar, so
+    ///         a driven session is never swept. A work-item delete interrupted before it released its sessions
+    ///         therefore leaves recoverable orphans rather than being mopped up here: rare, kind-scoped, and deletable
+    ///         through the owner surface.
     ///     </para>
     ///     <para>
     ///         Startup only, and two queries — every workflow-kind session, and the ids node runs own. It is deliberately
     ///         NOT a per-tick sweep: a session created a millisecond ago and not yet attached is indistinguishable from
     ///         an orphan, and a sweep running concurrently with the executor would delete live work.
-    ///     </para>
-    ///     <para>
-    ///         <b>A retry's superseded session is swept too</b>, and that is a real consequence rather than an oversight:
-    ///         a re-attempt clears <c>WorkSessionId</c> so the fresh attempt does not resume a poisoned context, which
-    ///         leaves the previous attempt's session owned by nothing and therefore indistinguishable here from the two
-    ///         orphan shapes. Those transcripts are visible on the work-sessions page until the next restart, and they
-    ///         leak forever without this. Narrow it to <c>session.Status == AgentWorkSessionStatus.Draft</c> if keeping
-    ///         them wins — that keeps every driven session at the cost of no longer mopping up the delete residue.
     ///     </para>
     /// </summary>
     private async Task SweepOrphanedWorkSessionsAsync(IDevWorkflowStore store,
@@ -204,15 +205,16 @@ public sealed class DevWorkflowStartupReconciler : IHostedService
     {
         var owned = (await store.ListOwnedWorkSessionIdsAsync(cancellationToken).ConfigureAwait(false)).ToHashSet();
         var orphans = (await workSessions.ListAsync(cancellationToken).ConfigureAwait(false))
-                      .Where(session => session.Kind == AgentWorkSessionKind.Workflow && !owned.Contains(session.Id))
+                      .Where(session => session is { Kind: AgentWorkSessionKind.Workflow, Status: AgentWorkSessionStatus.Draft } && !owned.Contains(session.Id))
                       .Select(static session => session.Id)
                       .ToList();
 
         foreach (var orphan in orphans)
         {
-            // Named, one line each: this is a workflow that lost a transcript, and a silent delete would erase the
-            // evidence of the crash that made it along with the session.
-            _logger.LogWarning("Deleting orphaned workflow work session {SessionId}, which no development workflow node run references.", orphan);
+            // Named, one line each: a session lost this way is a crash that happened, and deleting it silently would
+            // erase the evidence along with the row.
+            _logger.LogWarning("Deleting orphaned workflow work session {SessionId}, which was never driven and which no development workflow node run references.",
+                orphan);
             try
             {
                 await sessions.DeleteAsync(orphan, cancellationToken).ConfigureAwait(false);

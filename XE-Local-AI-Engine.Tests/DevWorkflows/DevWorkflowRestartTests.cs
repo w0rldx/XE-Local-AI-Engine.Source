@@ -370,31 +370,32 @@ public sealed class DevWorkflowRestartTests
     }
 
     /// <summary>
-    ///     A workflow-kind session no node run references is deleted at startup; one a node run owns is left alone.
-    ///     <para>
-    ///         Two crashes make such an orphan — one between creating a session and attaching it, one between a work
-    ///         item's rows committing and its sessions being released — and afterwards nothing else can find it: the
-    ///         owner surface refuses workflow-kind sessions to every external caller, and a work-item delete can only
-    ///         release what its node runs point AT. This sweep is what closes both windows.
-    ///     </para>
+    ///     A workflow session that was never driven and that no node run references is deleted at startup. A session a
+    ///     node run owns is kept — and so is one that RAN and then lost its reference, because that is a re-attempt's
+    ///     superseded session and its transcript is the only record of what that attempt actually did.
     /// </summary>
     [Test]
-    public async Task ARestart_DeletesWorkflowSessionsNoNodeRunOwnsAndKeepsTheOnesItDoes()
+    public async Task ARestart_DeletesNeverDrivenOrphansAndKeepsEveryDrivenSession()
     {
         await using var harness = new DevWorkflowHarness();
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         var owned = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
 
-        // Exactly what a crash between CreateAsync and AttachWorkSessionAsync leaves: a real workflow-kind session row
-        // that no node run has ever pointed at.
+        // Exactly what a crash between CreateAsync and AttachWorkSessionAsync leaves: a real workflow-kind session row,
+        // never started, that no node run has ever pointed at.
         var orphan = (await harness.Agent.CreateAsync("Orphaned research", "objective", Guid.NewGuid()).ConfigureAwait(false)).Id;
+
+        // And the shape a re-attempt leaves behind: driven, then released when the retry took a fresh session.
+        var superseded = (await harness.Agent.CreateAsync("Superseded attempt", "objective", Guid.NewGuid()).ConfigureAwait(false)).Id;
+        _ = await harness.Agent.StartAsync(superseded).ConfigureAwait(false);
 
         await harness.RestartAsync().ConfigureAwait(false);
 
         _ = await AssertEx.ThrowsAsync<WorkSessionNotFoundException>(() => harness.Agent.GetAsync(orphan),
-                              "an unreferenced workflow session is unreachable for good, so a restart is where it has to be cleaned up.")
+                              "a never-driven unreferenced session holds no transcript and nothing can ever reach it, so the restart cleans it up.")
                           .ConfigureAwait(false);
+        _ = await harness.Agent.GetAsync(superseded).ConfigureAwait(false);
         _ = await harness.Agent.GetAsync(owned).ConfigureAwait(false);
     }
 }
