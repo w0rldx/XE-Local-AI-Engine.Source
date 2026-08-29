@@ -66,6 +66,10 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	const [summaryDrawerOpened, summaryDrawer] = useDisclosure(false);
 	const [sideDrawerOpened, sideDrawer] = useDisclosure(false);
 	const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
+	// Seeded once from `?tab=`, sticky after that. Both tab strips write the same search param, so reading the centre
+	// pane straight off it meant a click on Events threw the operator back to the graph. Accepted drift: a reload after
+	// a side-tab click opens the centre on the graph again, because the param no longer says otherwise.
+	const [centreTab, setCentreTab] = useState<"graph" | "nodes">(selection.tab === "nodes" ? "nodes" : "graph");
 
 	const workItemQuery = useDevWorkflowWorkItem(workItemId);
 	// Absent `?run=` means the latest run; an explicit one renders a historical run from its OWN pinned graph snapshot.
@@ -279,8 +283,13 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 					    `?node=` change. Mantine keeps both panels mounted, which is deliberate — the table stays in the
 					    DOM (and stays the keyboard path through the run) while the graph is on top. */}
 					<Tabs
-						value={selection.tab === "nodes" ? "nodes" : "graph"}
-						onChange={(value) => select({ tab: value === "nodes" ? "nodes" : "graph" })}
+						value={centreTab}
+						onChange={(value) => {
+							const next = value === "nodes" ? "nodes" : "graph";
+							setCentreTab(next);
+							// Still written to the URL, so the choice is deep-linkable and survives a share.
+							select({ tab: next });
+						}}
 						style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
 						data-testid="dev-workflow-centre-tabs"
 					>
