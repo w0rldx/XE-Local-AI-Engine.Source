@@ -42,8 +42,9 @@ export function devWorkflowWorkItemSummary(overrides: Partial<WorkItemSummaryRes
 	};
 }
 
-/** Only ever reached through `devWorkflowWorkItem`'s embedded `runs[]`, which is where the detail page reads it. */
-function devWorkflowRunSummary(overrides: Partial<RunSummaryResponse> = {}): RunSummaryResponse {
+/** Reached through `devWorkflowWorkItem`'s embedded `runs[]`, which is where the detail page reads it — including
+ * whether ANY run of the item is still live, so a test needs to build a second, older row of its own. */
+export function devWorkflowRunSummary(overrides: Partial<RunSummaryResponse> = {}): RunSummaryResponse {
 	return {
 		id: devWorkflowTestIds.run,
 		workItemId: devWorkflowTestIds.workItem,

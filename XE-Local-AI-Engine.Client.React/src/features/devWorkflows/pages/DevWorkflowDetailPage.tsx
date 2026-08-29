@@ -92,8 +92,13 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	const nodes = run?.nodes ?? [];
 	const pendingDecisionCount = run?.pendingDecisionCount ?? live.pendingDecisionCount ?? 0;
 	const blockingGateNodeRunId = run?.blockingGateNodeRunId ?? live.blockingGateNodeRunId ?? undefined;
-	// X14: one live run per work item, so a second start is refused with a 409. The control is simply not offered.
-	const canStartRun = Boolean(run === undefined || !isActiveDevWorkflowRunStatus(runStatus));
+	// X14: one live run per work item, so a second start is refused with a 409. The control is simply not offered — and
+	// the question is asked of the WORK ITEM's runs, not the selected one: viewing a terminal historical run under a
+	// newer live run offered a Start that could only ever 409. Same rows the summary panel lists, so what the operator
+	// sees and what the control believes cannot disagree.
+	const canStartRun = !(workItemQuery.data?.runs ?? []).some((summary) =>
+		isActiveDevWorkflowRunStatus(toDevWorkflowRunStatus(summary.status)),
+	);
 
 	const select = useCallback(
 		(next: DevWorkflowDetailSelection) => onSelectionChange({ ...selection, ...next }),

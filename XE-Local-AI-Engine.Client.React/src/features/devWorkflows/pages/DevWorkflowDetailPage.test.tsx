@@ -9,6 +9,7 @@ import {
 	devWorkflowNodeRunDetail,
 	devWorkflowNodeRunSummary,
 	devWorkflowRun,
+	devWorkflowRunSummary,
 	devWorkflowTestIds,
 	devWorkflowWorkItem,
 } from "@/features/devWorkflows/test/DevWorkflowFixtures";
@@ -37,6 +38,25 @@ vi.mock("@/core/api/signalr/SharedHubConnection", () => ({
 }));
 
 const { workItem: workItemId, run: runId, nodeRun: nodeRunId } = devWorkflowTestIds;
+/** An older run of the same work item — the one an operator selects with `?run=` to read a finished attempt. */
+const olderRunId = "77777777-7777-4777-8777-777777777777";
+
+/** The feeds a selected run pulls, for any run id: the detail page reads all three off whatever `?run=` names. */
+function runRoutes(id: string, status: string) {
+	return [
+		jsonRoute("get", `development-workflows/runs/${id}`, devWorkflowRun({ id, status, nodes: [] })),
+		jsonRoute("get", `development-workflows/runs/${id}/events`, { items: [], lastSequence: 0, hasMore: false }),
+		jsonRoute("get", `development-workflows/runs/${id}/artifacts`, { items: [], lastSequence: 0 }),
+	];
+}
+
+const startableDefinition = {
+	id: devWorkflowTestIds.definition,
+	name: "Research → Plan → Approval",
+	version: 1,
+	nodeCount: 3,
+	archived: false,
+};
 
 function baseRoutes(overrides: { run?: unknown; nodeRun?: unknown } = {}) {
 	return [
@@ -202,15 +222,58 @@ describe("DevWorkflowDetailPage", () => {
 	it("offers a run to start, and no run to cancel, for a work item that has never run", async () => {
 		server.use(
 			jsonRoute("get", `development-workflows/work-items/${workItemId}`, devWorkflowWorkItem({ latestRunId: null, runs: [] })),
-			jsonRoute("get", "development-workflows/definitions", {
-				items: [{ id: devWorkflowTestIds.definition, name: "Research → Plan → Approval", version: 1, nodeCount: 3, archived: false }],
-			}),
+			jsonRoute("get", "development-workflows/definitions", { items: [startableDefinition] }),
 		);
 		renderPage();
 
 		expect(await screen.findByTestId("dev-workflow-detail-no-run")).toBeDefined();
 		expect(screen.getByTestId("dev-workflow-start-run")).toBeDefined();
 		expect(screen.queryByTestId("dev-workflow-run-toolbar")).toBeNull();
+	});
+
+	it("offers no Start while a newer run is live, even though the SELECTED run has finished", async () => {
+		let definitionReads = 0;
+		server.use(
+			// Registered first so this counting handler wins the match, and the assertion below can wait for the picker's
+			// own feed rather than for a timeout: a Start hidden because the definitions never arrived proves nothing.
+			http.get(localApiPath("development-workflows/definitions"), () => {
+				definitionReads += 1;
+				return HttpResponse.json({ items: [startableDefinition] });
+			}),
+			jsonRoute(
+				"get",
+				`development-workflows/work-items/${workItemId}`,
+				devWorkflowWorkItem({
+					latestRunId: runId,
+					runs: [devWorkflowRunSummary({ id: olderRunId, status: "Completed" }), devWorkflowRunSummary({ status: "Running" })],
+				}),
+			),
+			...runRoutes(olderRunId, "Completed"),
+		);
+		renderPage({ run: olderRunId });
+
+		expect(await screen.findByTestId(`dev-workflow-run-${runId}`)).toBeDefined();
+		await waitFor(() => expect(definitionReads).toBeGreaterThan(0));
+		// X14 allows one live run per work item: offering the control here would earn a 409 on every click.
+		expect(screen.queryByTestId("dev-workflow-start-run")).toBeNull();
+	});
+
+	it("offers a Start once every run is terminal, whichever run is selected", async () => {
+		server.use(
+			jsonRoute(
+				"get",
+				`development-workflows/work-items/${workItemId}`,
+				devWorkflowWorkItem({
+					latestRunId: runId,
+					runs: [devWorkflowRunSummary({ id: olderRunId, status: "Cancelled" }), devWorkflowRunSummary({ status: "Completed" })],
+				}),
+			),
+			jsonRoute("get", "development-workflows/definitions", { items: [startableDefinition] }),
+			...runRoutes(olderRunId, "Cancelled"),
+		);
+		renderPage({ run: olderRunId });
+
+		expect(await screen.findByTestId("dev-workflow-start-run")).toBeDefined();
 	});
 
 	it("degrades to a polling notice rather than an error when the hub cannot subscribe", async () => {
