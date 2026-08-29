@@ -13,6 +13,12 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         without an operator having to restart anything is the whole reason the runtime keeps its truth in rows. Each
 ///         test asserts what was LOST as much as where the run landed.
 ///     </para>
+///     <para>
+///         Every test here keeps a private host, so this class alone does not share one the way the rest of the
+///         namespace does: <c>RestartAsync</c> runs the two startup reconcilers, which sweep EVERY run and every
+///         workflow-owned work session in the database. On a shared host they would terminalize concurrent siblings'
+///         runs — and reconciling the whole node is precisely what these tests assert, so it cannot be narrowed.
+///     </para>
 /// </summary>
 public sealed class DevWorkflowRestartTests
 {

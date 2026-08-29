@@ -17,6 +17,14 @@ using XE_Local_AI_Engine.Tests.WorkSessions;
 public sealed class DevWorkflowOwnedWorkSessionTests
 {
     /// <summary>
+    ///     The work-session service host, shared by the two refusal suites below: both seed a GUID session of their own
+    ///     and read nothing else back. The first test keeps a private host — it captures a fake stream service the
+    ///     container builds, which is host-level state.
+    /// </summary>
+    [ClassDataSource<WorkSessionServiceHostFixture>(Shared = SharedType.PerClass)]
+    public required WorkSessionServiceHostFixture Host { get; init; }
+
+    /// <summary>
     ///     The Phase 0 gate: a <c>Workflow</c> session is admitted at create — it is a deny-list on <c>Development</c>,
     ///     not an allow-list — and runs its scripted steps to <c>Completed</c> through the owner surface.
     /// </summary>
@@ -72,7 +80,7 @@ public sealed class DevWorkflowOwnedWorkSessionTests
     [Arguments("delete")]
     public async Task WorkflowSession_RefusesEveryLifecycleVerbFromTheOrdinaryServiceSurface(string verb)
     {
-        await using var factory = WorkSessionServiceTests.NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId, AgentWorkSessionKind.Workflow).ConfigureAwait(false);
 
@@ -98,7 +106,7 @@ public sealed class DevWorkflowOwnedWorkSessionTests
     [Test]
     public async Task OwnerSurface_OnASessionNoRunOwns_IsRefused()
     {
-        await using var factory = WorkSessionServiceTests.NewFactory();
+        var factory = Host.Factory;
         var sessionId = Guid.NewGuid();
         _ = await WorkSessionTestSupport.SeedSessionAsync(factory.Services, sessionId).ConfigureAwait(false);
 

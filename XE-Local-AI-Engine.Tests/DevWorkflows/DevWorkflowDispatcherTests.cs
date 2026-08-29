@@ -32,6 +32,9 @@ public sealed class DevWorkflowDispatcherTests
                                        }
                                        """;
 
+    [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]
+    public required DevWorkflowHostFixture Host { get; init; }
+
     /// <summary>
     ///     A run's node runs are written with the run row, so the dispatcher never composes any of its own.
     ///     <para>
@@ -44,7 +47,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task ARunFoundWithoutNodeRuns_IsNotMaterializedByTheDispatcher()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunWithoutNodeRunsAsync(GateOnly).ConfigureAwait(false);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -63,6 +66,8 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task ARunOverTheConcurrencyCap_WaitsUntilAnotherFinishes()
     {
+        // A private host: the cap counts Running runs across the whole DATABASE, so pinning it to one is a
+        // host-level fact a shared sibling's run would break.
         await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxConcurrentRuns", "1"));
         var first = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(first).ConfigureAwait(false);
@@ -91,7 +96,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task AHumanGateDefinition_RunsToCompletionOnItsDecision()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(GateOnly).ConfigureAwait(false);
 
         AssertEx.Equal(DevWorkflowRunStatus.Pending, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
@@ -134,7 +139,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task ARunsEventSequenceIsStrictlyIncreasing()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(GateOnly).ConfigureAwait(false);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -156,7 +161,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task AdvancingAQuiescentRunWritesNothing()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(GateOnly).ConfigureAwait(false);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -178,7 +183,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task AGateDecisionRoutesThroughItsOutEdges()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.ApprovalBranches).ConfigureAwait(false);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -209,7 +214,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task AGateAnswerNoBranchAcceptsCancelsTheRunThroughTheDrain()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.ApprovalBranches).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -241,7 +246,7 @@ public sealed class DevWorkflowDispatcherTests
     [Arguments("RequestChanges")]
     public async Task ANonApproveAnswerAtATerminalGateCancelsTheRun(string decision)
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.TerminalGate).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -259,7 +264,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task AnApproveAtATerminalGateCompletesTheRun()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.TerminalGate).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -280,7 +285,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task ARejectionTakenWhilePausingSurvivesTheResume()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.TerminalGate).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -300,7 +305,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task ARejectionTakenWhilePausingSurvivesTheResumeAtABranchingGate()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.ApprovalBranches).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -322,7 +327,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task AnApproveNoBranchAcceptsCancelsTheRunToo()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
 
         // Both branches test for something other than Approve, so approving matches neither.
         const string NoApproveBranch = """
@@ -359,7 +364,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task APoisonedDecisionRowCostsItsOwnNodeRunAndNoOther()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.TwoStalledSiblings).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -391,7 +396,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task PausingCollapsesAQueuedNodeRunSoItCannotPinTheDrain()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.TerminalGate).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -419,6 +424,7 @@ public sealed class DevWorkflowDispatcherTests
         // The cap is raised past the run count deliberately: what is under test is the sweep's PAGE reaching the oldest
         // run, and at the default cap of four the last two would stay Pending for admission reasons instead — a pass
         // for the wrong reason if it went the other way, and a failure that says nothing about paging if it did not.
+        // A private host: the cap is raised for this test alone, and SweepAsync visits every run in the database.
         await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxConcurrentRuns", "8"));
 
         var runIds = new List<Guid>();
@@ -449,6 +455,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task OneSignalCarriesARunThroughEveryTickItStillHasWorkFor()
     {
+        // A private host: this starts the real signal and sweep pumps, which would then drive a sibling's runs too.
         await using var harness = new DevWorkflowHarness();
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.ResearchPlanApproval).ConfigureAwait(false);
 
@@ -466,6 +473,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task ADisabledNodeStartsNoPump()
     {
+        // A private host, for the same reason: it starts a dispatcher, and asserts that nothing moved.
         await using var harness = new DevWorkflowHarness();
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.TerminalGate).ConfigureAwait(false);
 
@@ -484,7 +492,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task ASkippedBranchPropagatesToEveryNodeBelowIt()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
 
         // The gate node succeeds with no upstream, so its 'passed' condition finds nothing and fails closed — which is
         // exactly the "route on evidence that is not there" case the whole chain below must not take.
@@ -508,7 +516,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task CancellingDrainsTheLiveNodeRunsBeforeTheRunReachesCancelled()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(GateOnly).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -529,7 +537,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task PausingLeavesAHumanWaitStandingAndResumingPicksItBackUp()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(GateOnly).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -562,7 +570,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task AHumanSkipOnABlockedNodeRunLetsTheRunFinish()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.ResearchPlanApproval).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -587,7 +595,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task AHumanAbandonFailsTheNodeRunAndTheRunWithIt()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.ResearchPlanApproval).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -606,7 +614,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task TheEntryNodeRunIsSeededWithTheWorkItemsRequest()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.ResearchPlanApproval, "Explain the KV cache").ConfigureAwait(false);
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
 
@@ -630,7 +638,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task ARunWhosePinnedGraphCannotBeRoutedFailsAtItsFirstTick()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
 
         // Two entry nodes: routable JSON, unroutable graph. Nothing validates a definition on the way in yet, so this
         // is exactly the shape a stale or hand-written definition would present at run start.
@@ -656,6 +664,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task TheParsedGraphIsCachedAcrossTicksAndDroppedWhenTheRunTerminalizes()
     {
+        // A private host: ParseCount is the graph cache's own counter, and a sibling parsing would inflate the delta.
         await using var harness = new DevWorkflowHarness();
         var cache = harness.Graphs;
         var runId = await harness.StartRunAsync(GateOnly).ConfigureAwait(false);
@@ -681,7 +690,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task ARunSurvivesTheDispatcherBeingReplacedMidFlight()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(GateOnly).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
