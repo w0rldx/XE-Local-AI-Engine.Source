@@ -5130,7 +5130,44 @@
 				"noReport": "Noch kein Prüfbericht.",
 				"devTask": "Entwicklungsaufgabe",
 				"openDevelopment": "Development Mode öffnen",
+				"devTaskReviewRound": "Prüfrunde {{round}}",
+				"devTaskNoStage": "Diese Aufgabe hat noch keinen Stand gemeldet.",
+				"devTaskEvidence": "Development Mode zeigt Versuche, Patch und Prüfnachweise dieser Aufgabe. Die Freigabe, mit der ein Patch übernommen wird, ist ein Gate-Knoten in diesem Workflow.",
 				"objective": "Zielvorgabe"
+			},
+			"validation": {
+				"loadFailed": "Der Prüfbericht dieses Knotens konnte nicht geladen werden.",
+				"unreadable": "Der Prüfbericht dieses Knotens konnte nicht gelesen werden, sein Ergebnis ist deshalb nicht belastbar. Öffnen Sie ihn im Reiter „Artefakte“, um den gespeicherten Inhalt zu sehen.",
+				"refused": "Es wurde kein Prüfbericht geschrieben: Dieser Knoten endete, bevor ein Befehl Nachweise erzeugt hat — er belegt daher nichts über den Code.",
+				"passed": "Prüfung bestanden",
+				"failed": "Prüfung fehlgeschlagen",
+				"base": "Basis {{commit}} · Profil {{profile}}",
+				"partial": "Dieser Bericht ist unvollständig: Dem Knoten lief die Zeit davon, bevor alle deklarierten Befehle gelaufen waren.",
+				"noCommands": "Es lief kein Prüfbefehl, dieser Bericht belegt daher nichts über den Code.",
+				"command": {
+					"incomplete": "Nicht abgeschlossen",
+					"truncated": "Ausgabe gekürzt",
+					"exitCode": "Exit {{code}}"
+				},
+				"tests": {
+					"unparsed": "Die Testergebnisse konnten nicht gelesen werden; für diesen Lauf gibt es daher keine Zahl ausgeführter, bestandener oder fehlgeschlagener Tests.",
+					"discovered": "Gefunden",
+					"executed": "Ausgeführt",
+					"passed": "Bestanden",
+					"failed": "Fehlgeschlagen"
+				}
+			},
+			"devTaskStatus": {
+				"Planned": "Geplant",
+				"Ready": "Bereit",
+				"InProgress": "In Arbeit",
+				"Validation": "Wird geprüft",
+				"InReview": "In Review",
+				"ChangesRequested": "Änderungen erbeten",
+				"AwaitingApply": "Wartet auf Übernahme",
+				"Completed": "Abgeschlossen",
+				"Blocked": "Blockiert",
+				"Cancelled": "Abgebrochen"
 			}
 		}
 	},

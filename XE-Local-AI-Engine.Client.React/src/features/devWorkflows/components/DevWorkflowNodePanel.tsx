@@ -5,13 +5,14 @@ import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { DevWorkflowDevTaskNodePanel } from "@/features/devWorkflows/components/DevWorkflowDevTaskNodePanel";
 import {
 	type DevWorkflowDecisionSubmission,
 	DevWorkflowHumanGatePanel,
 } from "@/features/devWorkflows/components/DevWorkflowHumanGatePanel";
 import { DevWorkflowNodeStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
+import { DevWorkflowToolNodePanel } from "@/features/devWorkflows/components/DevWorkflowToolNodePanel";
 import {
 	type DevWorkflowNodeRunDetailResponse,
 	toDevWorkflowNodeStatus,
@@ -35,9 +36,10 @@ export interface DevWorkflowNodePanelProps {
 }
 
 /**
- * The right-zone pane for the selected node-run. It dispatches on node type, and in Slice A0 every type-specific
- * section is a LINK-OUT rather than a re-hosted surface: the work-session view and the Dev Mode evidence chain already
- * exist at their own routes, and re-hosting either would fork the one place each is rendered.
+ * The right-zone pane for the selected node-run. It dispatches on node type. A Tool node renders its own validation
+ * report, because that evidence is workflow-owned and lives nowhere else; the Agent and DevTask sections stay LINK-OUTS,
+ * because the work-session view and the Dev Mode evidence chain already exist at their own routes and re-hosting either
+ * would fork the one place each is rendered.
  */
 export function DevWorkflowNodePanel({
 	nodeRun,
@@ -146,8 +148,8 @@ export function DevWorkflowNodePanel({
 				/>
 
 				{nodeType === "Agent" ? <AgentSection nodeRun={nodeRun} /> : null}
-				{nodeType === "Tool" ? <ToolSection nodeRun={nodeRun} onShowArtifacts={onShowArtifacts} /> : null}
-				{nodeType === "DevTask" ? <DevTaskSection nodeRun={nodeRun} /> : null}
+				{nodeType === "Tool" ? <DevWorkflowToolNodePanel nodeRun={nodeRun} onShowArtifacts={onShowArtifacts} /> : null}
+				{nodeType === "DevTask" ? <DevWorkflowDevTaskNodePanel nodeRun={nodeRun} /> : null}
 
 				<ObjectiveSection nodeRun={nodeRun} />
 			</Stack>
@@ -192,49 +194,6 @@ function AgentSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDetailResponse }
 						{t("pages.devWorkflows.node.openSession", "Open the agent's work session")}
 					</Button>
 				) : null
-			) : null}
-		</SectionCard>
-	);
-}
-
-function ToolSection({ nodeRun, onShowArtifacts }: { nodeRun: DevWorkflowNodeRunDetailResponse; onShowArtifacts: () => void }) {
-	const { t } = useTranslation();
-	return (
-		<SectionCard title={t("pages.devWorkflows.node.tool", "Validation")} gap="xs" data-testid="dev-workflow-node-tool">
-			{nodeRun.primaryArtifactId ? (
-				<Button size="xs" variant="light" onClick={onShowArtifacts} data-testid="dev-workflow-node-tool-report">
-					{t("pages.devWorkflows.node.openReport", "Open the validation report")}
-				</Button>
-			) : (
-				<EmptyState size="sm" message={t("pages.devWorkflows.node.noReport", "No validation report yet.")} />
-			)}
-		</SectionCard>
-	);
-}
-
-function DevTaskSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDetailResponse }) {
-	const { t } = useTranslation();
-	const navigate = useNavigate();
-	if (!nodeRun.developmentTaskId) {
-		return null;
-	}
-	return (
-		<SectionCard title={t("pages.devWorkflows.node.devTask", "Development task")} gap="xs" data-testid="dev-workflow-node-devtask">
-			{/* The task id is shown because the deep link cannot carry it yet: /development takes no search params, and
-			    adding them is a change to a live, merged feature that belongs with the Tool/DevTask phase, not here. */}
-			<Text size="xs" c="dimmed" data-testid="dev-workflow-node-devtask-id">
-				{nodeRun.developmentTaskId}
-			</Text>
-			{nodeCapabilities.development ? (
-				<Button
-					size="xs"
-					variant="subtle"
-					leftSection={<IconExternalLink size={14} />}
-					onClick={() => navigate({ to: "/development" })}
-					data-testid="dev-workflow-node-development-link"
-				>
-					{t("pages.devWorkflows.node.openDevelopment", "Open Development Mode")}
-				</Button>
 			) : null}
 		</SectionCard>
 	);

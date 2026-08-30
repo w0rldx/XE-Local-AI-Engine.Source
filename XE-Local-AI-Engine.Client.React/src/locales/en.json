@@ -5130,7 +5130,44 @@
 				"noReport": "No validation report yet.",
 				"devTask": "Development task",
 				"openDevelopment": "Open Development Mode",
+				"devTaskReviewRound": "review round {{round}}",
+				"devTaskNoStage": "This task has not reported a stage yet.",
+				"devTaskEvidence": "Dev Mode shows this task's attempts, patch and validation evidence. The approval that lets a patch land is a gate node in this workflow.",
 				"objective": "Objective"
+			},
+			"validation": {
+				"loadFailed": "Could not load this node's validation report.",
+				"unreadable": "This node's validation report could not be read, so its result cannot be trusted. Open it in the artifacts tab to see what was stored.",
+				"refused": "No validation report was written: this node ended before any command produced evidence, so it evidences nothing about the code.",
+				"passed": "Validation passed",
+				"failed": "Validation failed",
+				"base": "base {{commit}} · profile {{profile}}",
+				"partial": "This report is partial: the node ran out of time before every declared command had run.",
+				"noCommands": "No validation command ran, so this report evidences nothing about the code.",
+				"command": {
+					"incomplete": "Did not complete",
+					"truncated": "Output truncated",
+					"exitCode": "exit {{code}}"
+				},
+				"tests": {
+					"unparsed": "The test results could not be read, so no executed, passed or failed count is available for this run.",
+					"discovered": "Discovered",
+					"executed": "Executed",
+					"passed": "Passed",
+					"failed": "Failed"
+				}
+			},
+			"devTaskStatus": {
+				"Planned": "Planned",
+				"Ready": "Ready",
+				"InProgress": "In progress",
+				"Validation": "Validating",
+				"InReview": "In review",
+				"ChangesRequested": "Changes requested",
+				"AwaitingApply": "Awaiting apply",
+				"Completed": "Completed",
+				"Blocked": "Blocked",
+				"Cancelled": "Cancelled"
 			}
 		}
 	},
