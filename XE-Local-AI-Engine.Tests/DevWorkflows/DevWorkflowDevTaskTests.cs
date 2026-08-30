@@ -287,7 +287,8 @@ public sealed class DevWorkflowDevTaskTests
     {
         await using var scope = harness.Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var attempt = (await store.ListAttemptsAsync(taskId).ConfigureAwait(false)).Last();
+        var attempts = await store.ListAttemptsAsync(taskId).ConfigureAwait(false);
+        var attempt = attempts[^1];
         _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attempt.Id,
                                Guid.NewGuid(),
                                DevelopmentAttemptStatus.Succeeded,

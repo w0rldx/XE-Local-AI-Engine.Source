@@ -203,11 +203,8 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
 
             var tests = evidence.Select(static command => command.TestOutcome).OfType<DevelopmentTestOutcome>().Where(static outcome => outcome.Parsed).ToList();
             var passed = verdict.Passed && timedOutAfterSeconds is null;
-            var failureClass = passed
-                ? null
-                : timedOutAfterSeconds is null
-                    ? DevWorkflowFailureClasses.ToolCommandFailed
-                    : DevWorkflowFailureClasses.Timeout;
+            var refusal = timedOutAfterSeconds is null ? DevWorkflowFailureClasses.ToolCommandFailed : DevWorkflowFailureClasses.Timeout;
+            var failureClass = passed ? null : refusal;
 
             return new DevWorkflowToolRun(passed,
                 failureClass,
