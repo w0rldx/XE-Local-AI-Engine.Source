@@ -287,8 +287,13 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     ///         for that here would hold the advance gate, and with it every other run, for as long as a build takes to
     ///         notice it has been cancelled.
     ///     </para>
+    ///     <para>
+    ///         Removing the entry is the load-bearing half, not the cancel: a row settled with its entry left behind
+    ///         would refuse the next attempt's admission its place in the registry, and that attempt's pass would then
+    ///         run with nothing polling it.
+    ///     </para>
     /// </summary>
-    private async Task DiscardAsync(Guid nodeRunId)
+    public async Task DiscardAsync(Guid nodeRunId)
     {
         if (!_inflight.TryRemove(nodeRunId, out var flight))
         {

@@ -297,12 +297,67 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                 continue;
             }
 
-            written += current.NodeType == DevWorkflowNodeType.Agent
+            var polled = current.NodeType == DevWorkflowNodeType.Agent
                 ? await agent.PollAsync(store, graph, run, current, nodeRuns, cancellationToken).ConfigureAwait(false)
                 : await _tools.PollAsync(store, graph, run, current, nodeRuns, cancellationToken).ConfigureAwait(false);
+
+            // Only a row its lane had nothing to say about. A pass that landed inside its budget is settled off what it
+            // actually came to — including a sandbox timeout, which arrives with the evidence gathered before the clock
+            // ran out — and expiring it here as well would overwrite that answer with a coarser one.
+            written += polled > 0
+                ? polled
+                : await ExpireAsync(store, agent, graph, run, current, nodeRuns, cancellationToken).ConfigureAwait(false);
         }
 
         return written;
+    }
+
+    /// <summary>
+    ///     Ends a node run that has been running longer than its node allows, and answers how many transitions it wrote.
+    ///     <para>
+    ///         The deadline is re-derived from the row every tick rather than armed once in memory, so it survives the
+    ///         restart that would otherwise leave a node run bounded by nothing. Where the expiry LEADS — another
+    ///         attempt, the node that produced what this one was judging, or a human — is the retry policy's answer, the
+    ///         same as for every other retryable failure class.
+    ///     </para>
+    /// </summary>
+    private async Task<int> ExpireAsync(IDevWorkflowStore store,
+        DevWorkflowAgentExecutor agent,
+        DevWorkflowGraph graph,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
+        CancellationToken cancellationToken)
+    {
+        if (!graph.Nodes.TryGetValue(nodeRun.NodeKey, out var node) || !DevWorkflowDeadline.HasExpired(node, nodeRun, _timeProvider))
+        {
+            return 0;
+        }
+
+        // Dropped BEFORE the row is settled, and dropped rather than merely stopped: a re-attempt lands the row on a new
+        // attempt inside this same call, and this tick's admission would then find the registry still holding the pass
+        // that ran out of time — leaving the fresh attempt's pass running with nothing to poll it.
+        if (nodeRun.NodeType == DevWorkflowNodeType.Tool)
+        {
+            await _tools.DiscardAsync(nodeRun.Id).ConfigureAwait(false);
+        }
+        else if (nodeRun is { NodeType: DevWorkflowNodeType.Agent, WorkSessionId: { } sessionId })
+        {
+            await agent.StopAsync(sessionId, cancel: true, cancellationToken).ConfigureAwait(false);
+        }
+
+        return await _retries.SettleFailureAsync(store,
+                graph,
+                run,
+                nodeRun,
+                nodeRuns,
+                new DevWorkflowFailure(DevWorkflowFailureClasses.Timeout,
+                    $"This node run did not finish within the {node.NodeTimeoutSeconds} seconds its node allows.",
+                    JsonSerializer.Serialize(new TimedOutOutput(DevWorkflowNodeOutputStatuses.Failed, nodeRun.Attempt, DevWorkflowFailureClasses.Timeout),
+                        JsonOptions),
+                    DevWorkflowOutcomes.Timeout),
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -1072,6 +1127,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     }
 
     private sealed record ReasonDetail(string Reason);
+
+    /// <summary>
+    ///     What a node run that ran out of time leaves as its output document. Deliberately the three members every
+    ///     output carries and nothing else: the lane holds the detail, and this row's lane had nothing to hand over.
+    /// </summary>
+    private sealed record TimedOutOutput(string Status, int Attempt, string FailureClass);
 
     private sealed record InlineOutput(string Status, int Attempt, string? Branch);
 }

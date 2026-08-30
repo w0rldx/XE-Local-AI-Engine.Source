@@ -50,10 +50,13 @@ internal sealed class DevWorkflowRetryPolicy
     /// <summary>
     ///     When a re-attempt may be admitted, for the node runs whose node asks for a delay.
     ///     <para>
-    ///         ponytail: in memory, so a restart re-admits immediately. That shortens a cushion and can never break a
-    ///         bound — the delay exists so a provider hiccup has a moment to pass, and every real limit on re-attempts is
-    ///         a counter on a row. A durable not-before belongs with B5's DB-derived node deadlines, which is where the
-    ///         same question is answered for the same reason.
+    ///         ponytail: in memory, so a restart re-admits immediately, and that is the answer rather than a gap in it.
+    ///         A delay is a CUSHION, never a bound — the bounds are <c>Attempt</c> on the row and the run's total, both
+    ///         durable — so re-admitting a node run early can only shorten a wait, in the one situation (a restart) that
+    ///         has already cost more wall-clock than any delay a definition would ask for. The durable record exists
+    ///         either way: <c>node.retry.scheduled</c> carries <c>delayUntil</c>, so the log says what was promised even
+    ///         though nothing re-arms it. Upgrade path, if a definition ever asks for a delay long enough to matter:
+    ///         re-read that event for the node runs whose node declares a delay, at startup, rather than adding a column.
     ///     </para>
     /// </summary>
     private readonly ConcurrentDictionary<Guid, DateTimeOffset> _notBefore = new();
