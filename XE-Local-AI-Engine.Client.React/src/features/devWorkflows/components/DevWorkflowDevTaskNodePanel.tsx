@@ -25,7 +25,7 @@ export interface DevWorkflowDevTaskNodePanelProps {
 export function DevWorkflowDevTaskNodePanel({ nodeRun }: DevWorkflowDevTaskNodePanelProps) {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
-	const stage = useMemo(() => readDevTaskStage(nodeRun.outputJson), [nodeRun.outputJson]);
+	const stage = useMemo(() => readDevTaskStage(nodeRun.outputJson, nodeRun.attempt ?? 1), [nodeRun.outputJson, nodeRun.attempt]);
 
 	if (!nodeRun.developmentTaskId) {
 		return null;
@@ -91,8 +91,16 @@ export function DevWorkflowDevTaskNodePanel({ nodeRun }: DevWorkflowDevTaskNodeP
  * The slice of the node's output document this panel reads. Shaped by `DevWorkflowDevTaskExecutor`, so it is a
  * workflow contract rather than a Dev Mode one — the task's own status string travels through it, which is why the
  * label is looked up by token with the raw value as its fallback.
+ *
+ * The document is only this node's stage while it describes the attempt the row is ON. A re-attempt writes Pending
+ * WITHOUT clearing OutputJson, so the previous attempt's `taskStatus` — an "Awaiting apply" that no longer awaits
+ * anything — would otherwise be printed over a task that is being implemented again. An attempt the document does not
+ * name cannot be checked, and an unverifiable stage is exactly the one not to invent.
  */
-function readDevTaskStage(outputJson: string | null | undefined): { taskStatus: string; reviewRound: number } | null {
+function readDevTaskStage(
+	outputJson: string | null | undefined,
+	currentAttempt: number,
+): { taskStatus: string; reviewRound: number } | null {
 	if (typeof outputJson !== "string" || outputJson.length === 0) {
 		return null;
 	}
@@ -103,6 +111,9 @@ function readDevTaskStage(outputJson: string | null | undefined): { taskStatus: 
 		return null;
 	}
 	if (typeof parsed !== "object" || parsed === null) {
+		return null;
+	}
+	if ((parsed as Record<string, unknown>)["attempt"] !== currentAttempt) {
 		return null;
 	}
 	const taskStatus = (parsed as Record<string, unknown>)["taskStatus"];

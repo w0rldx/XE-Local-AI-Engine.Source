@@ -54,6 +54,12 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 		[raw],
 	);
 	const report = useMemo(() => parseDevWorkflowValidationReport(text), [text]);
+	// `primaryArtifactId` is the node's newest artifact, NOT this attempt's: a retry or an X9 fix-loop reset (which
+	// puts Succeeded rows back to Pending) leaves attempt N's report standing until attempt N+1's commands land. The
+	// report says which attempt it measured, so an older one is never painted as the current result — a stale
+	// "Validation passed" over a node that is re-validating is the one lie this panel must not tell.
+	const priorAttempt =
+		report && typeof report.attempt === "number" && report.attempt < (nodeRun.attempt ?? 1) ? report.attempt : undefined;
 
 	return (
 		<SectionCard title={t("pages.devWorkflows.node.tool", "Validation")} gap="xs" data-testid="dev-workflow-node-tool">
@@ -80,7 +86,17 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 				</Alert>
 			) : null}
 
-			{report ? <ValidationReport report={report} nodeRun={nodeRun} /> : null}
+			{priorAttempt === undefined ? null : (
+				<Alert color="yellow" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-stale-attempt">
+					{t(
+						"pages.devWorkflows.validation.priorAttempt",
+						"The stored report is attempt {{reportAttempt}}'s, and this node is on attempt {{attempt}}. It is not the current result — open it from the artifacts tab if you want the earlier evidence.",
+						{ reportAttempt: priorAttempt, attempt: nodeRun.attempt ?? 1 },
+					)}
+				</Alert>
+			)}
+
+			{report && priorAttempt === undefined ? <ValidationReport report={report} nodeRun={nodeRun} /> : null}
 
 			{artifactId ? (
 				<Button size="xs" variant="subtle" onClick={onShowArtifacts} data-testid="dev-workflow-node-tool-report">
@@ -92,10 +108,14 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 }
 
 /**
- * The node ended without writing a report, so no command produced evidence. The row's sanitized `terminalReason` is the
- * only account of why — a dependency manifest the sandbox has no network for, an unacknowledged repository, an
- * operator's cancel — and it is a sentence someone can act on, so it is shown as the result rather than hidden behind
- * "no validation report yet", which reads as "nothing wrong".
+ * The node ended without a report of its own. The row's sanitized `terminalReason` is the only account of why — a
+ * dependency manifest the sandbox has no network for, an unacknowledged repository, an operator's cancel, or the
+ * dispatcher's backstop discarding a flight whose deadline passed — and it is a sentence someone can act on, so it is
+ * shown as the result rather than hidden behind "no validation report yet", which reads as "nothing wrong".
+ *
+ * The copy claims only that no report was written. On the backstop-timeout path commands HAVE run — workspace prep
+ * happens before the in-lane clock starts, so a cold clone is the ORDINARY way to get here — and their evidence is
+ * simply discarded with the flight.
  */
 function RefusedWithoutReport({ nodeRun }: { readonly nodeRun: DevWorkflowNodeRunDetailResponse }) {
 	const { t } = useTranslation();
@@ -120,7 +140,7 @@ function RefusedWithoutReport({ nodeRun }: { readonly nodeRun: DevWorkflowNodeRu
 				<Text size="sm">
 					{t(
 						"pages.devWorkflows.validation.refused",
-						"No validation report was written: this node ended before any command produced evidence, so it evidences nothing about the code.",
+						"No validation report was written, so there is nothing here that evidences the code.",
 					)}
 				</Text>
 				{nodeRun.terminalReason ? (

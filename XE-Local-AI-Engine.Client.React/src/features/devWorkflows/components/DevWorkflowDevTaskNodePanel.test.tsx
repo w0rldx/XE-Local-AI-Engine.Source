@@ -47,15 +47,18 @@ describe("DevWorkflowDevTaskNodePanel", () => {
 		expect(navigate).toHaveBeenCalledWith({ to: "/development", search: { project: projectId, task: taskId } });
 	});
 
-	it("says the stage is unreported rather than inventing one while the task is still working", () => {
+	it("says the stage is unreported rather than printing the previous attempt's on a re-attempt", () => {
+		// The store's Pending re-attempt branch does NOT clear OutputJson, so attempt 1's document is still on the row
+		// while attempt 2 is implementing. "Awaiting apply" here would be a stage nothing is in.
 		renderWithProviders(
 			<DevWorkflowDevTaskNodePanel
 				nodeRun={devWorkflowNodeRunDetail({
 					nodeType: "DevTask",
 					status: "Running",
+					attempt: 2,
 					developmentProjectId: projectId,
 					developmentTaskId: taskId,
-					outputJson: null,
+					outputJson: JSON.stringify({ status: "Failed", attempt: 1, taskStatus: "AwaitingApply", reviewRound: 1 }),
 				})}
 			/>,
 		);
@@ -71,7 +74,7 @@ describe("DevWorkflowDevTaskNodePanel", () => {
 					nodeType: "DevTask",
 					developmentProjectId: projectId,
 					developmentTaskId: taskId,
-					outputJson: JSON.stringify({ taskStatus: "AwaitingSignoff" }),
+					outputJson: JSON.stringify({ attempt: 1, taskStatus: "AwaitingSignoff" }),
 				})}
 			/>,
 		);

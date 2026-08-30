@@ -209,4 +209,35 @@ describe("DevWorkflowToolNodePanel", () => {
 			),
 		);
 	});
+
+	it("never paints a previous attempt's report as the current result", async () => {
+		// `primaryArtifactId` still points at attempt 1's report until attempt 2's commands land, so without the guard
+		// a node that is re-validating renders a green "Validation passed" it has not earned.
+		serveContent(
+			report({
+				passed: true,
+				attempt: 1,
+				commands: [
+					{
+						commandId: "dotnet_test_release_no_build",
+						exitCode: 0,
+						completed: true,
+						outputTruncated: false,
+						durationMilliseconds: 1000,
+						standardOutput: "Passed!",
+						standardError: "",
+						testOutcome: null,
+					},
+				],
+			}),
+		);
+
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Tool", attempt: 2, primaryArtifactId: artifactId }));
+
+		expect(await screen.findByTestId("dev-workflow-validation-stale-attempt")).toBeDefined();
+		expect(screen.queryByTestId("dev-workflow-validation-result")).toBeNull();
+		expect(screen.queryByTestId("dev-workflow-validation-report")).toBeNull();
+		// The earlier evidence is not destroyed, only demoted: it stays one click away.
+		expect(screen.getByTestId("dev-workflow-node-tool-report")).toBeDefined();
+	});
 });

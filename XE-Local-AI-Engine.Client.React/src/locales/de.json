@@ -5138,7 +5138,8 @@
 			"validation": {
 				"loadFailed": "Der Prüfbericht dieses Knotens konnte nicht geladen werden.",
 				"unreadable": "Der Prüfbericht dieses Knotens konnte nicht gelesen werden, sein Ergebnis ist deshalb nicht belastbar. Öffnen Sie ihn im Reiter „Artefakte“, um den gespeicherten Inhalt zu sehen.",
-				"refused": "Es wurde kein Prüfbericht geschrieben: Dieser Knoten endete, bevor ein Befehl Nachweise erzeugt hat — er belegt daher nichts über den Code.",
+				"refused": "Es wurde kein Prüfbericht geschrieben, hier steht daher nichts, was den Code belegt.",
+				"priorAttempt": "Der gespeicherte Bericht stammt aus Versuch {{reportAttempt}}, dieser Knoten ist bei Versuch {{attempt}}. Er ist nicht das aktuelle Ergebnis — öffnen Sie ihn im Reiter „Artefakte“, wenn Sie den früheren Nachweis brauchen.",
 				"passed": "Prüfung bestanden",
 				"failed": "Prüfung fehlgeschlagen",
 				"base": "Basis {{commit}} · Profil {{profile}}",
