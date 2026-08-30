@@ -116,20 +116,5 @@ export function artifactEditorLanguage(kind: WorkSessionArtifactKind, mediaType:
 	return "plaintext";
 }
 
-/**
- * Decodes an artifact body for the read-only editor. The server sends allowlisted text media types directly and
- * base64-encodes every other type, so invalid UTF-8 is reported as binary instead of rendered as mojibake.
- */
-export function decodeArtifactContent(content: string, isBase64: boolean): { text: string; isBinary: boolean } {
-	if (!isBase64) {
-		return { text: content, isBinary: false };
-	}
-	try {
-		const binary = atob(content);
-		const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-		// `fatal` is what turns "this is not text" into an error instead of a page full of replacement characters.
-		return { text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), isBinary: false };
-	} catch {
-		return { text: "", isBinary: true };
-	}
-}
+/** Re-exported so no work-session call site had to move when the decoder became shared (P4 §2.10). */
+export { decodeArtifactContent } from "@/core/artifacts/ArtifactContent";
