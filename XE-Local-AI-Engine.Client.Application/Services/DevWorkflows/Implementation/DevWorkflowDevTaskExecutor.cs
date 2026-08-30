@@ -22,15 +22,22 @@ using XE_Local_AI_Engine.Client.Services.Development;
 ///         this run's own audit trail.
 ///     </para>
 ///     <para>
-///         <b>One task per project, which the Development schema enforces with a unique index, so the node run drives
-///         the project's EXISTING task rather than creating one.</b> A re-attempt therefore re-drives the same task —
-///         which is Dev Mode's own rework loop, and leaves the per-round evidence where the rest of that evidence
-///         already lives: on the task's own attempts and artifacts, reachable through the Development views this module
-///         deliberately does not duplicate.
+///         <b>Which task it drives is decided once and then remembered.</b> A node run that already names one drives
+///         that one — the pointer survives a reset, so a re-attempt re-drives the same task, which is Dev Mode's own
+///         rework loop and leaves the per-round evidence where the rest of it already lives. A MATERIALIZED child gets
+///         a task of its OWN in the same project, because it implements its own slice and two children sharing one task
+///         would overwrite each other's work. Anything else — the ordinary undecomposed graph — drives the project's
+///         existing task rather than creating one.
 ///     </para>
 /// </summary>
 internal sealed class DevWorkflowDevTaskExecutor
 {
+    /// <summary>
+    ///     The attempt a child task's creation is keyed under. Not any real attempt number — attempts start at one —
+    ///     because the task belongs to the node for the whole run and every re-attempt must find the same one.
+    /// </summary>
+    private const int ChildTaskAttempt = 0;
+
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -108,8 +115,7 @@ internal sealed class DevWorkflowDevTaskExecutor
                 .ConfigureAwait(false);
         }
 
-        var tasks = await development.ListTasksAsync(projectId, cancellationToken).ConfigureAwait(false);
-        if (tasks.Count == 0)
+        if (await ResolveTaskAsync(graph, run, nodeRun, development, projectId, cancellationToken).ConfigureAwait(false) is not { } taskId)
         {
             return await BlockAsync(store,
                     graph,
@@ -134,7 +140,7 @@ internal sealed class DevWorkflowDevTaskExecutor
                                nodeRun.Id,
                                DevWorkflowVersions.Any,
                                DevWorkflowNodeRunStatus.Running,
-                               DevelopmentTaskId: tasks[0].Id),
+                               DevelopmentTaskId: taskId),
                            cancellationToken)
                        .ConfigureAwait(false);
 
@@ -144,17 +150,97 @@ internal sealed class DevWorkflowDevTaskExecutor
                 nodeRun with
                 {
                     Status = DevWorkflowNodeRunStatus.Running,
-                    DevelopmentTaskId = tasks[0].Id,
+                    DevelopmentTaskId = taskId,
                     StartedAtUtc = startedAt
                 },
                 nodeRuns,
                 development,
                 management,
                 projectId,
-                tasks[0].Id,
+                taskId,
                 cancellationToken)
             .ConfigureAwait(false);
     }
+
+    /// <summary>
+    ///     The task this node run implements: the one it already names, its own newly created one when it is a
+    ///     materialized child, or the project's existing task.
+    ///     <para>
+    ///         The pointer comes FIRST and is never second-guessed. It survives a reset by design (a previous attempt's
+    ///         task is that attempt's evidence), so re-resolving here would let a re-attempt walk away from work that
+    ///         is already under way.
+    ///     </para>
+    ///     <para>
+    ///         A materialized child implements its own slice of the project, so it gets its own task. Creating it is
+    ///         keyed on the run and node key WITHOUT the attempt — the task belongs to the node for the life of the run
+    ///         — so a crash between the create and the pointer write is answered by the same task on re-dispatch rather
+    ///         than by a second one nothing points at.
+    ///     </para>
+    /// </summary>
+    private static async Task<Guid?> ResolveTaskAsync(DevWorkflowGraph graph,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        IDevelopmentStore development,
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        if (nodeRun.DevelopmentTaskId is { } pinned)
+        {
+            return pinned;
+        }
+
+        var tasks = await development.ListTasksAsync(projectId, cancellationToken).ConfigureAwait(false);
+        if (tasks.Count == 0)
+        {
+            return null;
+        }
+
+        if (nodeRun.MaterializedFromNodeRunId is null)
+        {
+            return tasks[0].Id;
+        }
+
+        // The project's first task is the operator-authored one, and it carries the standard this project's work is
+        // judged against: the child inherits its acceptance criteria and review budget, and overrides the title and
+        // requirements from the brief its materialization wrote onto the row.
+        var brief = Brief(nodeRun.InputJson);
+        var created = await development.CreateTaskAsync(new DevelopmentCreateTaskCommand(projectId,
+                                           Guid.NewGuid(),
+                                           DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, ChildTaskAttempt, "devtask-create"),
+                                           brief?.Title ?? Label(graph, nodeRun.NodeKey),
+                                           brief?.Requirements ?? tasks[0].Requirements,
+                                           brief?.AcceptanceCriteriaJson ?? tasks[0].AcceptanceCriteriaJson,
+                                           tasks[0].MaxReviewRounds),
+                                       cancellationToken)
+                                   .ConfigureAwait(false);
+        return created.TaskId;
+    }
+
+    /// <summary>
+    ///     What a materialized child was told to implement, when its input document says — the seam decomposition
+    ///     writes through. An input that is absent, unparseable or shaped for something else leaves every field to the
+    ///     project's own task rather than failing the node: a child with an inherited brief still implements something
+    ///     real, and a blocked node here would be the run standing down over prose.
+    /// </summary>
+    private static DevTaskBrief? Brief(string? inputJson)
+    {
+        if (string.IsNullOrWhiteSpace(inputJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<DevTaskBrief>(inputJson, JsonOptions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string Label(DevWorkflowGraph graph, string nodeKey) =>
+        graph.Nodes.TryGetValue(nodeKey, out var node) && !string.IsNullOrWhiteSpace(node.Label) ? node.Label : nodeKey;
 
     /// <summary>
     ///     Reads what the development chain has made of the task and settles the node run when it has finished with it,
@@ -562,6 +648,12 @@ internal sealed class DevWorkflowDevTaskExecutor
             task?.Status.ToString(),
             task?.CurrentReviewRound),
             JsonOptions);
+
+    /// <summary>
+    ///     What a materialized child's input document may say about the task it is there to implement. Every field is
+    ///     optional and the project's own task answers for the ones it does not carry.
+    /// </summary>
+    private sealed record DevTaskBrief(string? Title, string? Requirements, string? AcceptanceCriteriaJson);
 
     private sealed record DevTaskOutput(
         string Status,
