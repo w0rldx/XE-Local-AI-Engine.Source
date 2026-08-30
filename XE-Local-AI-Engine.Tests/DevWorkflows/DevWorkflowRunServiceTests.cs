@@ -99,16 +99,23 @@ public sealed class DevWorkflowRunServiceTests
     /// <summary>
     ///     A graph that runs commands in a repository needs one. Checked at run start rather than at save, because the
     ///     same definition is legitimately reusable by a work item that does name a project.
+    ///     <para>
+    ///         Both repository-bound node types, because they need the project for different things — the tool node runs
+    ///         its commands in that project's workspace, and the implementation node drives that project's task — and a
+    ///         rule that held for only one of them would be a hole rather than a rule.
+    ///     </para>
     /// </summary>
     [Test]
-    public async Task StartingARepositoryBoundGraphOnAProjectlessWorkItem_IsRefused()
+    [Arguments("Tool")]
+    [Arguments("DevTask")]
+    public async Task StartingARepositoryBoundGraphOnAProjectlessWorkItem_IsRefused(string nodeType)
     {
         // A private host, for the same reason: "no run at all" is an assertion about the whole database.
         await using var harness = new DevWorkflowHarness();
-        var (workItemId, definitionId) = await harness.SeedDefinitionAsync("""
+        var (workItemId, definitionId) = await harness.SeedDefinitionAsync($$"""
                                                                            {
                                                                              "schemaVersion": 1,
-                                                                             "nodes": [{ "nodeKey": "validate", "nodeType": "Tool" }],
+                                                                             "nodes": [{ "nodeKey": "validate", "nodeType": "{{nodeType}}" }],
                                                                              "edges": []
                                                                            }
                                                                            """)
