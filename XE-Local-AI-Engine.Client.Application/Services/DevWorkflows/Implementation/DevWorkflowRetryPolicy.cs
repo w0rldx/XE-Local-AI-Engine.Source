@@ -48,7 +48,8 @@ internal sealed class DevWorkflowRetryPolicy
     };
 
     /// <summary>
-    ///     When a re-attempt may be admitted, for the node runs whose node asks for a delay.
+    ///     When a re-attempt may be admitted, for the node runs whose node asks for a delay. Keyed by node run, and each
+    ///     entry naming its run so a run that ends mid-delay can be forgotten in one call.
     ///     <para>
     ///         ponytail: in memory, so a restart re-admits immediately, and that is the answer rather than a gap in it.
     ///         A delay is a CUSHION, never a bound — the bounds are <c>Attempt</c> on the row and the run's total, both
@@ -59,17 +60,22 @@ internal sealed class DevWorkflowRetryPolicy
     ///         re-read that event for the node runs whose node declares a delay, at startup, rather than adding a column.
     ///     </para>
     /// </summary>
-    private readonly ConcurrentDictionary<Guid, DateTimeOffset> _notBefore = new();
+    private readonly ConcurrentDictionary<Guid, ScheduledRetry> _notBefore = new();
 
     private readonly DevWorkflowOptions _options;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
 
-    public DevWorkflowRetryPolicy(IOptions<DevWorkflowOptions> options, TimeProvider timeProvider)
+    public DevWorkflowRetryPolicy(IServiceScopeFactory scopeFactory, IOptions<DevWorkflowOptions> options, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(options);
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _options = options.Value;
     }
+
+    /// <summary>How many re-attempts are waiting on a clock. Instrumentation: the only way to assert nothing accumulates.</summary>
+    internal int ScheduledRetryCount => _notBefore.Count;
 
     /// <summary>
     ///     Whether a re-attempt's delay has passed. Answers <see langword="true" /> for every node run that never asked
@@ -77,18 +83,40 @@ internal sealed class DevWorkflowRetryPolicy
     /// </summary>
     public bool IsReady(Guid nodeRunId)
     {
-        if (!_notBefore.TryGetValue(nodeRunId, out var notBefore))
+        if (!_notBefore.TryGetValue(nodeRunId, out var scheduled))
         {
             return true;
         }
 
-        if (_timeProvider.GetUtcNow() < notBefore)
+        if (_timeProvider.GetUtcNow() < scheduled.NotBefore)
         {
             return false;
         }
 
         _ = _notBefore.TryRemove(nodeRunId, out _);
         return true;
+    }
+
+    /// <summary>
+    ///     Drops what this run had promised itself, because it will never ask again.
+    ///     <para>
+    ///         Called wherever the dispatcher forgets a run's parsed graph, for the same reason and at the same moments:
+    ///         a run that is cancelled or fails while one of its node runs is waiting out a delay never reaches
+    ///         <see cref="IsReady" /> again, so the entry would otherwise sit here until the process restarted. A PAUSED
+    ///         run is deliberately not forgotten — it is coming back, and its cushions still stand. Deleting a work item
+    ///         needs nothing of its own: the store refuses a delete while any run of the item is non-terminal, so a
+    ///         deletable run has already been through here.
+    ///     </para>
+    /// </summary>
+    public void Forget(Guid runId)
+    {
+        foreach (var (nodeRunId, scheduled) in _notBefore)
+        {
+            if (scheduled.RunId == runId)
+            {
+                _ = _notBefore.TryRemove(nodeRunId, out _);
+            }
+        }
     }
 
     /// <summary>
@@ -285,22 +313,37 @@ internal sealed class DevWorkflowRetryPolicy
         {
             // Only the node that failed ended failed. The rest are being re-run because the answer they gave is about
             // to describe something that no longer exists, and stamping their event "failed" would say they broke.
-            written += row.Id == nodeRun.Id
-                ? await ReAttemptAsync(store, run, row, delaySeconds: 0, DetailFor(row, failure), failure.Outcome ?? DevWorkflowOutcomes.Failed, cancellationToken)
-                    .ConfigureAwait(false)
-                : await ReAttemptAsync(store,
+            if (row.Id == nodeRun.Id)
+            {
+                written += await ReAttemptAsync(store,
                         run,
                         row,
                         delaySeconds: 0,
-                        new RetryDetail(row.Attempt,
-                            failure.FailureClass,
-                            $"Node '{retryTarget}' is being re-attempted because '{nodeRun.NodeKey}' failed, so this node run's result no longer describes it.",
-                            DelayUntil: null),
-                        outcome: null,
+                        DetailFor(row, failure),
+                        failure.Outcome ?? DevWorkflowOutcomes.Failed,
                         cancellationToken)
                     .ConfigureAwait(false);
+                continue;
+            }
+
+            await QuiesceAsync(row, cancellationToken).ConfigureAwait(false);
+            written += await ReAttemptAsync(store,
+                    run,
+                    row,
+                    delaySeconds: 0,
+                    new RetryDetail(row.Attempt,
+                        failure.FailureClass,
+                        $"Node '{retryTarget}' is being re-attempted because '{nodeRun.NodeKey}' failed, so this node run's result no longer describes it.",
+                        DelayUntil: null),
+                    outcome: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
+        // The target is almost always Succeeded by the time anything downstream of it can fail, so this is almost
+        // always a no-op — but an Any join lets a descendant run on a sibling branch while the target is still working,
+        // and that target is as live as any other row the reset moves.
+        await QuiesceAsync(target, cancellationToken).ConfigureAwait(false);
         written += await ReAttemptAsync(store,
                 run,
                 target,
@@ -311,6 +354,59 @@ internal sealed class DevWorkflowRetryPolicy
                 PriorFailure(target.InputJson, nodeRun.NodeKey, failure.OutputJson))
             .ConfigureAwait(false);
         return written;
+    }
+
+    /// <summary>
+    ///     Stops the lane work a node run is about to lose, immediately before the reset takes away the only row that
+    ///     could ever have settled it.
+    ///     <para>
+    ///         Without this a fix loop orphans live work rather than replacing it. An agent row's re-attempt clears its
+    ///         <c>WorkSessionId</c>, so the session it was driving keeps the node's one invocation slot with nothing left
+    ///         pointing at it — and the fresh attempt then queues behind the very session it supersedes. A dev-task row
+    ///         leaves an attempt holding Dev Mode's one-active-attempt rule the same way. The sandbox lane recovers on
+    ///         its own at the next tick's <c>ForgetSupersededAsync</c>, so dropping its pass here is promptness rather
+    ///         than repair: it gives the slot back and stops a build whose answer is already being thrown away.
+    ///     </para>
+    ///     <para>
+    ///         ASKED to stop, never deleted: a superseded work session RAN, so it is audit evidence and the run's event
+    ///         log still names it. The tool lane DISCARDS instead of stopping, which is B5's expiry rule for the same
+    ///         reason it was made there — a registry entry left behind would refuse the next attempt its place and leave
+    ///         that attempt's pass with nothing polling it.
+    ///     </para>
+    ///     <para>
+    ///         Its own scope, because the two row-driving lanes are scoped and this is a singleton: it is the
+    ///         <c>Cancelling</c> drain's stop, reached from the one place that supersedes a row without draining its run.
+    ///     </para>
+    /// </summary>
+    private async Task QuiesceAsync(DevWorkflowNodeRunSnapshot nodeRun, CancellationToken cancellationToken)
+    {
+        if (nodeRun.Status is not (DevWorkflowNodeRunStatus.Running or DevWorkflowNodeRunStatus.Queued))
+        {
+            return;
+        }
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        switch (nodeRun)
+        {
+            case { NodeType: DevWorkflowNodeType.Tool }:
+                await scope.ServiceProvider.GetRequiredService<DevWorkflowToolExecutor>().DiscardAsync(nodeRun.Id).ConfigureAwait(false);
+                break;
+
+            case { NodeType: DevWorkflowNodeType.DevTask }:
+                _ = await scope.ServiceProvider.GetRequiredService<DevWorkflowDevTaskExecutor>()
+                               .StopAttemptAsync(nodeRun, cancel: true, cancellationToken)
+                               .ConfigureAwait(false);
+                break;
+
+            case { NodeType: DevWorkflowNodeType.Agent, WorkSessionId: { } sessionId }:
+                await scope.ServiceProvider.GetRequiredService<DevWorkflowAgentExecutor>().StopAsync(sessionId, cancel: true, cancellationToken).ConfigureAwait(false);
+                break;
+
+            default:
+                // An inline node holds nothing: it is Running only for the width of the tick that admitted it, and a
+                // human gate's wait is a durable row rather than work.
+                break;
+        }
     }
 
     /// <summary>
@@ -354,7 +450,7 @@ internal sealed class DevWorkflowRetryPolicy
         // map from accumulating an entry per delayed retry for the life of the process.
         if (delayUntil is { } notBefore)
         {
-            _notBefore[nodeRun.Id] = notBefore;
+            _notBefore[nodeRun.Id] = new ScheduledRetry(run.Id, notBefore);
         }
         else
         {
@@ -510,6 +606,9 @@ internal sealed class DevWorkflowRetryPolicy
     ///     per-attempt history readable off the log the single-row node-run schema does not keep.
     /// </summary>
     private sealed record RetryDetail(int Attempt, string FailureClass, string Reason, long? DelayUntil);
+
+    /// <summary>One promised re-attempt: when it may go, and the run whose ending makes the promise moot.</summary>
+    private sealed record ScheduledRetry(Guid RunId, DateTimeOffset NotBefore);
 
     private sealed record RoutedDetail(string From, string To, string FailureClass, string Reason);
 }

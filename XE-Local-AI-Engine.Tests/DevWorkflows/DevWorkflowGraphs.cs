@@ -159,6 +159,34 @@ internal static class DevWorkflowGraphs
                                                   """;
 
     /// <summary>
+    ///     A check that routes its failure upstream while BOTH other branches are genuinely working: an agent node
+    ///     holding the node's invocation slot and a tool node holding a sandbox slot. The one shape in which the reset
+    ///     reaches live lane work that nothing else is coming to settle.
+    /// </summary>
+    public const string LiveSiblingsBesideAFixLoop = """
+                                                     {
+                                                       "schemaVersion": 1,
+                                                       "nodes": [
+                                                         { "nodeKey": "implement", "nodeType": "Agent", "label": "Implement",
+                                                           "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                         { "nodeKey": "review", "nodeType": "Agent", "label": "Review",
+                                                           "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                         { "nodeKey": "slow", "nodeType": "Tool" },
+                                                         { "nodeKey": "check", "nodeType": "Tool", "retryTarget": "implement" },
+                                                         { "nodeKey": "join", "nodeType": "Join" }
+                                                       ],
+                                                       "edges": [
+                                                         { "from": "implement", "to": "review" },
+                                                         { "from": "implement", "to": "slow" },
+                                                         { "from": "implement", "to": "check" },
+                                                         { "from": "review", "to": "join" },
+                                                         { "from": "slow", "to": "join" },
+                                                         { "from": "check", "to": "join" }
+                                                       ]
+                                                     }
+                                                     """;
+
+    /// <summary>
     ///     A chain whose last node routes its failure back to the first, so the re-run passes back through a node that
     ///     has already produced an artifact and through the node that CONSUMED that artifact and produced one of its own.
     ///     The only shape in which superseding and the staleness that follows it are both observable.

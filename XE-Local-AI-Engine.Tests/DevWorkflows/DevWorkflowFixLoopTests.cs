@@ -208,6 +208,55 @@ public sealed class DevWorkflowFixLoopTests
     }
 
     /// <summary>
+    ///     The reset reaching work that is still running. An agent sibling's re-attempt clears its <c>WorkSessionId</c>,
+    ///     so a session left driving would hold the node's one invocation slot with nothing pointing at it — and the
+    ///     fresh attempt would then queue behind the very session it supersedes. Both live siblings are stood down
+    ///     before their rows move, and the superseded session is CANCELLED rather than deleted: it ran, so it is this
+    ///     run's audit evidence.
+    /// </summary>
+    [Test]
+    public async Task AResetSubtreeStandsDownTheLiveWorkItWouldOtherwiseOrphan()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var held = harness.Tools.Hold("slow");
+        harness.Tools.Answer("check", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.LiveSiblingsBesideAFixLoop, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+
+        // Round one: the implementation lands and all three of its successors are admitted by the same tick.
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        await held.Started.ConfigureAwait(false);
+
+        var reviewSession = await harness.ReadSessionIdAsync(runId, "review").ConfigureAwait(false);
+        var slow = await harness.ReadNodeRunAsync(runId, "slow").ConfigureAwait(false);
+        var check = await harness.ReadNodeRunAsync(runId, "check").ConfigureAwait(false);
+        AssertEx.True(harness.ToolLane.IsInFlight(slow.Id), "the held sibling really is holding a sandbox slot when the check routes.");
+
+        // The check's verdict lands and sends the run back to the implementation, resetting both live siblings.
+        await harness.ToolLane.WaitForCompletionAsync(check.Id).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+
+        var review = await harness.ReadNodeRunAsync(runId, "review").ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, review.Attempt, "the agent sibling was reset along with everything else downstream of the target.");
+        AssertEx.Null(review.WorkSessionId, "and the reset released the session it was driving.");
+        AssertEx.Contains(harness.Agent.Calls, ("cancel", reviewSession), "which is only honest if the session was ASKED to stop first.");
+        AssertEx.Equal(AgentWorkSessionStatus.Cancelled,
+            (await harness.Agent.GetAsync(reviewSession).ConfigureAwait(false)).Status,
+            "the superseded session still EXISTS — it ran, so it is audit evidence — and it is no longer holding the node's slot.");
+        AssertEx.False(harness.ToolLane.IsInFlight(slow.Id), "the sandbox sibling's pass was dropped rather than left running for an attempt nobody will poll.");
+
+        // Round two drives fresh work rather than resuming what it superseded.
+        held.Release();
+        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.NotEqual(reviewSession,
+            await harness.ReadSessionIdAsync(runId, "review").ConfigureAwait(false),
+            "the re-attempt gets a NEW session, so it does not resume the context that was thrown away.");
+    }
+
+    /// <summary>
     ///     A routed retry costs the target's attempt AND one for every node run it resets, so the run-wide budget has to
     ///     be able to afford the whole cascade. Admitting it one attempt at a time is how a fan-out spends more than the
     ///     run allows by the width of its graph — and the node that failed is the one that then asks for a human, while
