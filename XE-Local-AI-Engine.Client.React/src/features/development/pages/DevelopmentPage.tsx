@@ -16,7 +16,13 @@ import { DevelopmentProjectSetup } from "@/features/development/components/Devel
 import { SandboxIsolationPanel } from "@/features/development/components/SandboxIsolationPanel";
 import { useDevelopmentPageController } from "@/features/development/hooks/useDevelopmentPageController";
 
-export function DevelopmentPage() {
+export interface DevelopmentPageProps {
+	/** Deep-link seed (X8). Absent — the ordinary arrival — leaves the default-to-the-first-project behaviour alone. */
+	readonly initialProjectId?: string;
+	readonly initialTaskId?: string;
+}
+
+export function DevelopmentPage({ initialProjectId, initialTaskId }: DevelopmentPageProps = {}) {
 	const {
 		t,
 		capabilityQuery,
@@ -72,7 +78,7 @@ export function DevelopmentPage() {
 		cancelMutation,
 		previewMutation,
 		applyMutation,
-	} = useDevelopmentPageController();
+	} = useDevelopmentPageController({ initialProjectId, initialTaskId });
 	if (capabilityQuery.isLoading) {
 		return (
 			<PageShell>

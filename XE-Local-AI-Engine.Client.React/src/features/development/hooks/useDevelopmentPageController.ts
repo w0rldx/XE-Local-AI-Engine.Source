@@ -35,7 +35,13 @@ import {
 	useStartDevelopmentNextAction,
 } from "@/features/development/queries/useDevelopment";
 
-export function useDevelopmentPageController() {
+export interface DevelopmentPageControllerOptions {
+	/** From the route's optional `?project=` / `?task=` (X8). Both seed the INITIAL selection and nothing else. */
+	readonly initialProjectId?: string;
+	readonly initialTaskId?: string;
+}
+
+export function useDevelopmentPageController({ initialProjectId, initialTaskId }: DevelopmentPageControllerOptions = {}) {
 	const { t } = useTranslation();
 	const capabilityQuery = useDevelopmentCapability();
 	const developmentEnabled = capabilityQuery.data?.enabled === true;
@@ -48,7 +54,7 @@ export function useDevelopmentPageController() {
 	const repositoriesQuery = useDevelopmentRepositories(developmentEnabled);
 	const templatesQuery = useDevelopmentTemplates(developmentEnabled);
 	const projectsQuery = useDevelopmentProjects(developmentEnabled);
-	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId ?? null);
 	const [reconnectFolderId, setReconnectFolderId] = useState<string | null>(null);
 	const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
 	const [profileFolderId, setProfileFolderId] = useState<string | null>(null);
@@ -75,7 +81,10 @@ export function useDevelopmentPageController() {
 	}, [projects, selectedProjectId]);
 
 	const detail = projectQuery.data;
-	const taskDetail = detail?.tasks?.[0];
+	// A project carries exactly one task today (the project id is uniquely indexed on the task table), so the deep
+	// link's `?task=` picks the same row the fallback does. It is honoured anyway: it costs one predicate, and it is
+	// the difference between a link that keeps working and a link that quietly opens the wrong task if that ever changes.
+	const taskDetail = detail?.tasks?.find((entry) => entry.task?.id === initialTaskId) ?? detail?.tasks?.[0];
 	const task = taskDetail?.task;
 	const attempts = taskDetail?.attempts ?? [];
 	const artifacts = taskDetail?.artifacts ?? [];
