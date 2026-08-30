@@ -24,6 +24,10 @@ internal sealed class FakeDevWorkflowToolCommands : IDevWorkflowToolCommands
     private readonly List<string> _ran = [];
     private readonly Dictionary<string, IReadOnlyList<DevWorkflowToolRun>> _answers = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ToolHold> _holds = new(StringComparer.Ordinal);
+    private int _concurrent;
+    private int _peakConcurrent;
+    private int _wanted;
+    private TaskCompletionSource? _reached;
 
     /// <summary>Every node key whose commands were asked for, in order.</summary>
     public IReadOnlyList<string> Ran
@@ -48,6 +52,40 @@ internal sealed class FakeDevWorkflowToolCommands : IDevWorkflowToolCommands
         lock (_gate)
         {
             _answers[nodeKey] = results;
+        }
+    }
+
+    /// <summary>
+    ///     The most passes that were inside their commands at the SAME MOMENT. The lane's cap observed rather than
+    ///     inferred: a peak read off the rows would only say what the dispatcher wrote, not what really ran at once.
+    /// </summary>
+    public int PeakConcurrent
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _peakConcurrent;
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Completes once this many passes are inside their commands at the same moment, so a cap assertion reads a
+    ///     peak that has actually been reached rather than one still climbing. Ask for it before the run starts.
+    /// </summary>
+    public Task WaitForConcurrentAsync(int count)
+    {
+        lock (_gate)
+        {
+            _wanted = count;
+            _reached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (_concurrent >= count)
+            {
+                _ = _reached.TrySetResult();
+            }
+
+            return _reached.Task;
         }
     }
 
@@ -84,18 +122,38 @@ internal sealed class FakeDevWorkflowToolCommands : IDevWorkflowToolCommands
                 // what its attempt answered rather than walking the script on.
                 answer = scripted[Math.Min(nodeRun.Attempt - 1, scripted.Count - 1)];
             }
+
+            // Counted here rather than around the lane's own slot, so the number is what a COMMAND could observe: the
+            // slot is taken before this is called and given back after it returns, which makes this a lower bound on
+            // the lane's occupancy and never an over-count.
+            _concurrent++;
+            _peakConcurrent = Math.Max(_peakConcurrent, _concurrent);
+            if (_reached is not null && _concurrent >= _wanted)
+            {
+                _ = _reached.TrySetResult();
+            }
         }
 
-        if (hold is not null)
+        try
         {
-            hold.Enter();
+            if (hold is not null)
+            {
+                hold.Enter();
 
-            // WaitAsync rather than a token registration: a cancelled hold has to throw the same
-            // OperationCanceledException a cancelled sandbox command does, because that is what the lane reads.
-            await hold.Released.WaitAsync(cancellationToken).ConfigureAwait(false);
+                // WaitAsync rather than a token registration: a cancelled hold has to throw the same
+                // OperationCanceledException a cancelled sandbox command does, because that is what the lane reads.
+                await hold.Released.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return answer ?? Passing();
         }
-
-        return answer ?? Passing();
+        finally
+        {
+            lock (_gate)
+            {
+                _concurrent--;
+            }
+        }
     }
 
     /// <summary>A clean pass with a small report, which is what a green validation node looks like.</summary>

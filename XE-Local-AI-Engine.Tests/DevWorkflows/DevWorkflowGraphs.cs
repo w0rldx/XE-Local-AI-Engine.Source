@@ -252,6 +252,34 @@ internal static class DevWorkflowGraphs
                                            """;
 
     /// <summary>
+    ///     A fan-out WIDER than the sandbox lane, so the cap is observed under real contention rather than inferred
+    ///     from a lane of one. Four tool nodes admitted by the same tick against two slots.
+    /// </summary>
+    public const string FourParallelTools = """
+                                            {
+                                              "schemaVersion": 1,
+                                              "nodes": [
+                                                { "nodeKey": "fanout", "nodeType": "Parallel" },
+                                                { "nodeKey": "lanea", "nodeType": "Tool" },
+                                                { "nodeKey": "laneb", "nodeType": "Tool" },
+                                                { "nodeKey": "lanec", "nodeType": "Tool" },
+                                                { "nodeKey": "laned", "nodeType": "Tool" },
+                                                { "nodeKey": "lanejoin", "nodeType": "Join" }
+                                              ],
+                                              "edges": [
+                                                { "from": "fanout", "to": "lanea" },
+                                                { "from": "fanout", "to": "laneb" },
+                                                { "from": "fanout", "to": "lanec" },
+                                                { "from": "fanout", "to": "laned" },
+                                                { "from": "lanea", "to": "lanejoin" },
+                                                { "from": "laneb", "to": "lanejoin" },
+                                                { "from": "lanec", "to": "lanejoin" },
+                                                { "from": "laned", "to": "lanejoin" }
+                                              ]
+                                            }
+                                            """;
+
+    /// <summary>
     ///     A human gate beside sandbox work that is genuinely in flight — the X10 case as it actually occurs: one branch
     ///     is mid-build at the moment the other's approval is refused.
     /// </summary>
