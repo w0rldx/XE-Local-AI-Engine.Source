@@ -362,6 +362,11 @@ internal sealed class DevWorkflowMaterializer
         // A leaf of the template is what the join is actually waiting for. Computed from the template's OWN edges, so a
         // template that already names the join keeps that edge and one that names nothing gets it — either way the join
         // waits for every task's last node rather than firing while they run.
+        //
+        // ponytail: an `Any` join is left to the author. One task expanding into an `Any` join gives it a single live
+        // inbound edge, which parse refuses — the run then FAILS as unroutable with that sentence rather than hanging,
+        // and the seeded templates all join with `All`. Upgrade path, if a template ever wants it: relax the two-edge
+        // rule for a join a materialization names, since its real width is only known once the package is read.
         var leaves = subtree.Where(key => !graph.OutboundEdges(key).Any(edge => subtree.Contains(edge.To))).ToList();
         var clones = new List<Clone>();
         var wired = new HashSet<(string From, string To)>();
