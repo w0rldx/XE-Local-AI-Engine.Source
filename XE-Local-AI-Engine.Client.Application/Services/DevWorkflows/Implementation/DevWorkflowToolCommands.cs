@@ -86,14 +86,40 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
             // The node cannot run AS CONFIGURED: a project row that is gone, a repository that needs reconnecting, a
             // sandbox backend that cannot hold a trusted workspace. A human changes something or nothing changes.
             // Ahead of the security catch because the repository conflict IS one, and it is the more specific answer.
-            return Refused(DevWorkflowFailureClasses.Configuration, exception.Message, secrets);
+            return Refused(DevWorkflowFailureClasses.Configuration, Sanitized(exception), secrets);
         }
         catch (DevelopmentWorkspaceSecurityException exception)
         {
             // A protected path, an unacknowledged repository, a command that moved the worktree off its base commit, or
             // evidence carrying a credential no redaction can salvage. None of them is answered differently by running
-            // the same commands again, so the class is the non-retryable one and the message is already sanitized.
-            return Refused(DevWorkflowFailureClasses.Policy, exception.Message, secrets);
+            // the same commands again, so the class is the non-retryable one.
+            return Refused(DevWorkflowFailureClasses.Policy, Sanitized(exception), secrets);
+        }
+    }
+
+    /// <summary>
+    ///     One exception's message, fit to be stored on a row and rendered on a wire.
+    ///     <para>
+    ///         These sentences are the ONE thing this lane surfaces that nothing has already redacted: the sandbox
+    ///         interpolates an inner IOException's text into its own failure message, and that text can carry a host
+    ///         path. The report artifact goes through the same sanitizer, so this closes the other half.
+    ///     </para>
+    ///     <para>
+    ///         No protected roots are passed, deliberately: the generic absolute-path patterns fire on any path, and at
+    ///         this point the repository may not have resolved. A message the sanitizer REFUSES — one carrying
+    ///         credential-like material it cannot redact — is replaced wholesale rather than allowed to escape as a
+    ///         second exception, because the failure being reported is the one worth surfacing.
+    ///     </para>
+    /// </summary>
+    private static string Sanitized(Exception exception)
+    {
+        try
+        {
+            return DevelopmentArtifactSanitizer.SanitizeText(exception.Message);
+        }
+        catch (DevelopmentWorkspaceSecurityException)
+        {
+            return "This node run's workspace could not be prepared, and the reason could not be shown safely. The engine log has the detail.";
         }
     }
 
