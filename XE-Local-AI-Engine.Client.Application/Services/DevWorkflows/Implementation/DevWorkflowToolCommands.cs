@@ -135,8 +135,9 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
 
         // The commands share ONE deadline, the way the Dev Mode gate does: bounding each command alone lets a
         // four-command profile run for four times the budget it is meant to respect.
+        var budgetSeconds = BudgetSeconds(node, project);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(TimeSpan.FromSeconds(BudgetSeconds(node, project)));
+        deadline.CancelAfter(TimeSpan.FromSeconds(budgetSeconds));
         try
         {
             foreach (var commandId in commandIds)
@@ -148,8 +149,12 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         {
             // The node's own budget, not the drain's — the drain's cancel propagates, because only the lane knows
             // whether a run was cancelled or paused.
+            //
+            // ponytail: the commands that DID finish before the budget ran out are dropped, so the row's reason is all
+            // an operator gets. Carry a partial report here when B5 takes over node deadlines — it already has to
+            // decide what a timed-out attempt leaves behind, and composing one in two places would let them disagree.
             return Refused(DevWorkflowFailureClasses.Timeout,
-                $"This node run did not finish its validation commands within the {BudgetSeconds(node, project)} seconds it was given.",
+                $"This node run did not finish its validation commands within the {budgetSeconds} seconds it was given.",
                 secrets);
         }
 
