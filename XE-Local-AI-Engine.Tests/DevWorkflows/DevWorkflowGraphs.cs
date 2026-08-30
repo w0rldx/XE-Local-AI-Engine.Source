@@ -274,6 +274,37 @@ internal static class DevWorkflowGraphs
                                                     }
                                                     """;
 
+    /// <summary>
+    ///     <see cref="DecompositionIntoDevTasks" /> with the integration stage on the end: the fan-out joins, an
+    ///     operator is asked, and only their approval routes into the node that applies the patches. The seeded
+    ///     <c>feature-development-v1</c> shape without its research, plan and verification agents, which add ticks and
+    ///     sessions to script and nothing to what integration does.
+    /// </summary>
+    public const string DecompositionIntoDevTasksAndIntegration = """
+                                                                  {
+                                                                    "schemaVersion": 1,
+                                                                    "nodes": [
+                                                                      { "nodeKey": "decompose", "nodeType": "Agent", "label": "Decompose",
+                                                                        "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b",
+                                                                        "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                                                      { "nodeKey": "implement", "nodeType": "DevTask", "label": "Implement", "nodeTimeoutSeconds": 900 },
+                                                                      { "nodeKey": "validate", "nodeType": "Tool", "retryTarget": "implement" },
+                                                                      { "nodeKey": "join", "nodeType": "Join" },
+                                                                      { "nodeKey": "integrationapproval", "nodeType": "HumanGate", "label": "Approve integration" },
+                                                                      { "nodeKey": "integrate", "nodeType": "Tool", "toolMode": "Apply", "label": "Apply the approved patches" },
+                                                                      { "nodeKey": "fullvalidate", "nodeType": "Tool", "label": "Validate the integrated result" }
+                                                                    ],
+                                                                    "edges": [
+                                                                      { "from": "decompose", "to": "join" },
+                                                                      { "from": "implement", "to": "validate" },
+                                                                      { "from": "validate", "to": "join" },
+                                                                      { "from": "join", "to": "integrationapproval" },
+                                                                      { "from": "integrationapproval", "to": "integrate", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                                      { "from": "integrate", "to": "fullvalidate" }
+                                                                    ]
+                                                                  }
+                                                                  """;
+
     /// <summary>One tool node on its own: the smallest thing the sandbox lane can be asked to run.</summary>
     public const string SingleTool = """
                                      {

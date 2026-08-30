@@ -34,8 +34,10 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
 
     private readonly Lock _gate = new();
     private readonly List<string> _actions = [];
+    private readonly List<Guid> _applied = [];
     private readonly List<Guid> _cancelled = [];
     private readonly IServiceScopeFactory _scopes;
+    private int? _appliesAllowed;
     private int _failuresOwed;
     private int _holdsOwed;
 
@@ -50,6 +52,18 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
             lock (_gate)
             {
                 return [.. _actions];
+            }
+        }
+    }
+
+    /// <summary>The tasks whose patches were handed to the apply gate, in the order they were.</summary>
+    public IReadOnlyList<Guid> Applied
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _applied];
             }
         }
     }
@@ -241,8 +255,74 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     public Task<DevelopmentPatchPreviewResult> PreviewAsync(Guid projectId, Guid taskId, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
-    public Task<DevelopmentOperationResult> ApplyAsync(Guid projectId, Guid taskId, Guid operationId, CancellationToken cancellationToken = default) =>
-        throw new NotSupportedException();
+    /// <summary>
+    ///     Lets this many applies land and makes every one after them come back BLOCKED — which is what the real gate
+    ///     answers when the host repository is not at the exact base the approved patch was reviewed against, and so
+    ///     what the SECOND patch of one fan-out meets: the first one's change is sitting in the tree it was approved
+    ///     against.
+    /// </summary>
+    public void AllowApplies(int count)
+    {
+        lock (_gate)
+        {
+            _appliesAllowed = count;
+        }
+    }
+
+    /// <summary>
+    ///     The apply, with the host mutation scripted and the LEDGER real: the store's own <c>CompleteApply</c> /
+    ///     <c>BlockApply</c> commands run, so the operation key, the task transition and the events are the ones the
+    ///     real service writes. What is skipped is <c>DevelopmentApplyService</c>'s evidence verification and the git
+    ///     apply itself, both of which need a real repository, a real coder attempt and a real reviewer attempt.
+    ///     <para>
+    ///         The evidence chain those two would enforce is asserted where it is real, by the Development suite's own
+    ///         apply tests, which this phase left untouched.
+    ///     </para>
+    /// </summary>
+    public async Task<DevelopmentOperationResult> ApplyAsync(Guid projectId, Guid taskId, Guid operationId, CancellationToken cancellationToken = default)
+    {
+        await using var scope = _scopes.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var task = await store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+        if (task.ProjectId != projectId)
+        {
+            throw new KeyNotFoundException("The Development task does not belong to the project.");
+        }
+
+        // The real service's own first two lines: an apply already recorded under this key answers with what it did
+        // rather than doing it again. Kept here so a replayed node attempt is as idempotent through the fake as it is
+        // through the service.
+        if (await store.FindOperationAsync(projectId, operationId, DevelopmentOperationPhases.ApplyCompleted, cancellationToken).ConfigureAwait(false) is { } completed)
+        {
+            return completed;
+        }
+
+        if (await store.FindOperationAsync(projectId, operationId, DevelopmentOperationPhases.ApplyBlocked, cancellationToken).ConfigureAwait(false) is { } refused)
+        {
+            return refused;
+        }
+
+        bool blocked;
+        lock (_gate)
+        {
+            _applied.Add(taskId);
+            blocked = _appliesAllowed is { } allowed && _applied.Count > allowed;
+        }
+
+        var subject = new DevelopmentApprovedApplySubject(projectId,
+            taskId,
+            task.Version,
+            "0000000000000000000000000000000000000000",
+            "patch-hash",
+            "manifest-hash",
+            "result-hash",
+            string.Concat(projectId.ToString("N"), "/", Guid.Empty.ToString("N")),
+            string.Concat(projectId.ToString("N"), "/", Guid.Empty.ToString("N")),
+            SubjectHash: task.ApprovedSubjectHash ?? string.Empty);
+        return blocked
+            ? await store.BlockApplyAsync(operationId, subject, "The scripted host repository was not at the approved base.", cancellationToken).ConfigureAwait(false)
+            : await store.CompleteApplyAsync(operationId, subject, cancellationToken).ConfigureAwait(false);
+    }
 
     public Task<DevelopmentProjectAggregate> ReconnectRepositoryAsync(Guid projectId,
         Guid selectedFolderId,
