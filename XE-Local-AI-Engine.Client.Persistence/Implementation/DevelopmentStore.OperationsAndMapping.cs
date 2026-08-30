@@ -9,44 +9,73 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public sealed partial class DevelopmentStore
 {
+    /// <summary>
+    ///     How many times one operation re-runs after losing its write before that is answered as a conflict.
+    ///     <para>
+    ///         A project's event sequence is <c>MAX(sequence) + 1</c> under a unique index, so two writers on the SAME
+    ///         project — which is what a decomposition's children are, now that a project may carry more than one task —
+    ///         can compute the same number, and one of them must lose. Losing that way is not a conflict about anything:
+    ///         nothing was overwritten, the whole transaction rolled back, and a re-run reads a sequence that has moved
+    ///         on. The same is true of the commoner cause, a busy database refusing the write outright.
+    ///     </para>
+    ///     <para>
+    ///         Measured, so this claims no more than it should: on this store's SQLite connection the collision is hard
+    ///         to provoke, because the file lock serializes the whole read-then-write and four concurrent creators land
+    ///         four distinct sequences with or without this. It is the answer to the case that DOES get through rather
+    ///         than a fix for one seen in the wild — and it is bounded, because a re-run that keeps losing is a caller
+    ///         under real contention, whose honest answer is the exception this always threw.
+    ///     </para>
+    /// </summary>
+    private const int MaxOperationAttempts = 5;
+
     private async Task<DevelopmentOperationResult> ExecuteOperationAsync(Guid projectId,
         Guid operationId,
         string phase,
         Func<Task<DevelopmentOperationResult>> mutation,
         CancellationToken cancellationToken)
     {
-        var existing = await FindOperationCoreAsync(projectId, operationId, phase, cancellationToken).ConfigureAwait(false);
-        if (existing is not null)
+        for (var attempt = 1; ; attempt++)
         {
-            return existing;
-        }
-
-        await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
-        existing = await FindOperationCoreAsync(projectId, operationId, phase, cancellationToken).ConfigureAwait(false);
-        if (existing is not null)
-        {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return existing;
-        }
-
-        try
-        {
-            var result = await mutation().ConfigureAwait(false);
-            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-            return result;
-        }
-        catch (DbUpdateException exception)
-        {
-            await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
-            _dbContext.ChangeTracker.Clear();
-            existing = await FindOperationCoreAsync(projectId, operationId, phase, CancellationToken.None).ConfigureAwait(false);
+            var existing = await FindOperationCoreAsync(projectId, operationId, phase, cancellationToken).ConfigureAwait(false);
             if (existing is not null)
             {
                 return existing;
             }
 
-            throw new DevelopmentConcurrencyException("A concurrent Development operation won the database race.", exception);
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+            existing = await FindOperationCoreAsync(projectId, operationId, phase, cancellationToken).ConfigureAwait(false);
+            if (existing is not null)
+            {
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                return existing;
+            }
+
+            try
+            {
+                var result = await mutation().ConfigureAwait(false);
+                await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                return result;
+            }
+            catch (DbUpdateException exception)
+            {
+                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+
+                // Cleared before anything is re-read, and before the mutation is composed again: every one of them
+                // loads what it needs INSIDE itself, so a second pass reads the state the winner left rather than the
+                // state this one lost against.
+                _dbContext.ChangeTracker.Clear();
+                existing = await FindOperationCoreAsync(projectId, operationId, phase, CancellationToken.None).ConfigureAwait(false);
+                if (existing is not null)
+                {
+                    return existing;
+                }
+
+                if (attempt >= MaxOperationAttempts)
+                {
+                    throw new DevelopmentConcurrencyException("A concurrent Development operation won the database race.", exception);
+                }
+            }
         }
     }
 

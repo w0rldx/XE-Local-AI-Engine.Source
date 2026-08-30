@@ -96,6 +96,55 @@ public sealed class DevelopmentCreateTaskTests : IDisposable
     }
 
     /// <summary>
+    ///     Four children of one decomposition, creating their tasks at once in the SAME project — the shape the widening
+    ///     made reachable and the one thing that was serialized before it.
+    ///     <para>
+    ///         What it pins is the OUTCOME: four tasks, four distinct ledger sequences, no caller answered a conflict.
+    ///         The sequence is <c>MAX(sequence) + 1</c> under a unique index, so concurrent writers on one project can
+    ///         compute the same number — and this passes with the store's re-run disabled as well, because SQLite's own
+    ///         file lock serializes the read and the write together. That is worth writing down rather than dressing up:
+    ///         the guard against the collision is in the store, and this is the assertion that the widening did not make
+    ///         a project's own ledger the thing that refuses its work.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task FourChildrenCreatingTheirTasksAtOnce_AllGetOne()
+    {
+        await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
+        await using var seedScope = provider.CreateAsyncScope();
+        var seed = DevelopmentTestFixture.CreateSeed();
+        _ = await seedScope.ServiceProvider.GetRequiredService<IDevelopmentStore>().CreateProjectAsync(seed).ConfigureAwait(false);
+
+        // A scope each, because a DbContext is not shared; a barrier, so they really are inside the write at the same
+        // moment rather than merely started together; and Task.Run, because an async lambda runs SYNCHRONOUSLY up to
+        // its first await — the barrier would otherwise block the thread composing the second one and wait for three
+        // callers that had not been created yet.
+        using var start = new Barrier(participantCount: 4);
+        var created = await Task.WhenAll(Enumerable.Range(1, 4)
+                                                   .Select(index => Task.Run(async () =>
+                                                   {
+                                                       await using var scope = provider.CreateAsyncScope();
+                                                       var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+                                                       _ = start.SignalAndWait(TimeSpan.FromSeconds(30));
+                                                       return await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(seed.ProjectId,
+                                                                              Guid.NewGuid(),
+                                                                              Guid.NewGuid(),
+                                                                              $"Slice {index}",
+                                                                              $"Implement slice {index}.",
+                                                                              "[\"the slice is done\"]"))
+                                                                          .ConfigureAwait(false);
+                                                   })))
+                                 .ConfigureAwait(false);
+
+        await using var readScope = provider.CreateAsyncScope();
+        var reader = readScope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        AssertEx.Equal(expected: 5, (await reader.ListTasksAsync(seed.ProjectId).ConfigureAwait(false)).Count, "the project's own task, plus one per child.");
+        AssertEx.Equal(expected: 4,
+            created.Select(static result => result.Sequence).Distinct().Count(),
+            "each landed on a sequence of its own: the ledger is what the project's history is read from.");
+    }
+
+    /// <summary>
     ///     A task named against a project that does not exist is refused rather than written. The node connection runs
     ///     without foreign-key enforcement, so nothing below this would catch it and the row would simply be unreachable.
     /// </summary>
