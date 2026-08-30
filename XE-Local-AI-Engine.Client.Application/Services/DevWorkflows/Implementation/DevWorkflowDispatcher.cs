@@ -846,9 +846,9 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     /// <summary>
     ///     Queues an eligible node run and, for the four node types the inline lane owns, runs it in the same tick.
     ///     <para>
-    ///         Inline nodes still pass through <c>Queued</c> and <c>Running</c>: it costs two event rows and it is what
-    ///         makes the timing of a fan-out visible, which is the only reason Parallel and Join exist as node types at
-    ///         all.
+    ///         An inline node goes <c>Pending</c> → <c>Running</c> → <c>Succeeded</c>, skipping <c>Queued</c> — see the
+    ///         remark at the inline write below. It still costs two event rows, and that is what makes the timing of a
+    ///         fan-out visible, which is the only reason Parallel and Join exist as node types at all.
     ///     </para>
     ///     <para>
     ///         <b>Seam:</b> the dev-task lane attaches here. Until it does, a node run of that type is blocked for a
