@@ -73,12 +73,15 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(nodeRun);
 
-        if (_inflight.ContainsKey(nodeRun.Id))
+        if (_inflight.TryGetValue(nodeRun.Id, out var inflight) && inflight.Attempt == nodeRun.Attempt)
         {
-            // The commands are already running: the only thing that can have left the row behind them is the Running
-            // write below having failed. Re-running them would spend a whole build to arrive at the answer already in
-            // hand, so the row is caught up instead and the next poll settles it. A pass whose row has been re-attempted
-            // since is not here to be found — the tick drops those before it admits anything.
+            // THIS attempt's commands are already running: the only thing that can have left the row behind them is the
+            // Running write below having failed. Re-running them would spend a whole build to arrive at the answer
+            // already in hand, so the row is caught up instead and the next poll settles it.
+            //
+            // The attempt is compared rather than assumed: a fix loop can reset a row this lane is driving, and nothing
+            // in this method's own ordering rules that out. Admitting such a row against the pass belonging to the
+            // attempt before it would settle one attempt off another's answer.
             return nodeRun.Status == DevWorkflowNodeRunStatus.Running
                 ? 0
                 : await RunningAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false);

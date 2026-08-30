@@ -398,7 +398,9 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task AnAgentNode_WhoseSessionFails_ReAttemptsOnANewSessionUntilItsCapIsSpent()
     {
-        await using var harness = new DevWorkflowHarness(Host);
+        // A host of its own: this reads the fake agent's Objectives list by position, and on the shared host that list
+        // accumulates every sibling's traffic.
+        await using var harness = new DevWorkflowHarness();
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         var first = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
@@ -414,6 +416,13 @@ public sealed class DevWorkflowAgentExecutorTests
             "a retry drives a NEW session; the failed one keeps its transcript as evidence.");
         var trail = await harness.ReadEventTrailAsync(runId).ConfigureAwait(false);
         AssertEx.Contains(trail, "node.retry.scheduled");
+
+        // A new session is only half of it: composed from the same inputs it would be handed a byte-identical
+        // objective and do the same thing again, so the attempt that failed travels into the one that follows.
+        var objectives = harness.Agent.Objectives;
+        AssertEx.NotEqual(objectives[0], objectives[1], "a re-attempt must not be asked for exactly what the attempt before it was asked for.");
+        AssertEx.Contains(objectives[1], "priorFailure");
+        AssertEx.Contains(objectives[1], "ProviderError");
 
         var scheduled = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Last(static entry => entry.EventType == "node.retry.scheduled");
         AssertEx.Contains(AssertEx.NotNull(scheduled.DetailJson),

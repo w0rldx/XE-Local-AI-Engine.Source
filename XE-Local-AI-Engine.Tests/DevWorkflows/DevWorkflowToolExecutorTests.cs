@@ -209,7 +209,9 @@ public sealed class DevWorkflowToolExecutorTests
     [Test]
     public async Task ANodeThatAsksForARetryDelayIsNotReAdmittedUntilItHasPassed()
     {
-        await using var harness = new DevWorkflowHarness();
+        // A clock this test moves, so the wait costs a method call rather than a real second.
+        var clock = new ManualTimeProvider();
+        await using var harness = new DevWorkflowHarness(services => services.AddSingleton<TimeProvider>(clock));
         harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
         var runId = await harness.StartRunAsync(DelayedRetryToolGraph, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
 
@@ -224,7 +226,7 @@ public sealed class DevWorkflowToolExecutorTests
         var scheduled = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Last(static entry => entry.EventType == "node.retry.scheduled");
         AssertEx.Contains(AssertEx.NotNull(scheduled.DetailJson), "\"delayUntil\":", message: "the log says when the re-attempt may go.");
 
-        await Task.Delay(TimeSpan.FromMilliseconds(1200)).ConfigureAwait(false);
+        clock.Advance(TimeSpan.FromSeconds(1));
         await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);

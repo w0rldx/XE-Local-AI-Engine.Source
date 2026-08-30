@@ -179,13 +179,17 @@ internal sealed class DevWorkflowRetryPolicy
                 .ConfigureAwait(false);
         }
 
+        // The next attempt is told what the last one came to (§7.2), or the agent composes a byte-identical objective
+        // and does the same thing again. Read off the failure in hand rather than the row, which the Pending write is
+        // about to clear; the helper strips any earlier priorFailure, so rounds replace rather than nest.
         return await ReAttemptAsync(store,
                 run,
                 nodeRun,
                 node.RetryDelaySeconds,
                 DetailFor(nodeRun, failure),
                 failure.Outcome ?? DevWorkflowOutcomes.Failed,
-                cancellationToken)
+                cancellationToken,
+                PriorFailure(nodeRun.InputJson, nodeRun.NodeKey, failure.OutputJson))
             .ConfigureAwait(false);
     }
 
@@ -270,6 +274,9 @@ internal sealed class DevWorkflowRetryPolicy
                            cancellationToken)
                        .ConfigureAwait(false);
 
+        // The target is reset LAST, deliberately. A crash part-way through leaves descendants at the new attempt and the
+        // target still terminal, which the next round re-derives in one pass; target-first would leave the target
+        // running again while descendants still carry the answers it is about to replace.
         var written = 1;
         foreach (var row in reset)
         {
@@ -339,9 +346,16 @@ internal sealed class DevWorkflowRetryPolicy
                            cancellationToken)
                        .ConfigureAwait(false);
 
+        // Written on EVERY re-attempt, including the ones that ask for no delay: a fix-loop reset of a row that was
+        // already waiting on a clock must not inherit the previous attempt's, and the removal is also what keeps the
+        // map from accumulating an entry per delayed retry for the life of the process.
         if (delayUntil is { } notBefore)
         {
             _notBefore[nodeRun.Id] = notBefore;
+        }
+        else
+        {
+            _ = _notBefore.TryRemove(nodeRun.Id, out _);
         }
 
         return 1;
