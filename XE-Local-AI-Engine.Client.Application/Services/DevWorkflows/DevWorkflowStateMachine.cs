@@ -324,9 +324,13 @@ internal static class DevWorkflowStateMachine
                 or DevWorkflowNodeRunStatus.Cancelled,
             // NOT Skipped (X3): a gate's three answers all SUCCEED it and route on the answer, while the three
             // interventions belong to Blocked. Skipping an open gate would be an operator walking past an approval
-            // instead of giving one — the one thing a gate exists to make impossible. The only other move is the
-            // drain's, and that is a cancel.
-            DevWorkflowNodeRunStatus.WaitingForApproval => to is DevWorkflowNodeRunStatus.Succeeded or DevWorkflowNodeRunStatus.Cancelled,
+            // instead of giving one — the one thing a gate exists to make impossible. The only other moves are the
+            // drain's cancel and the fix loop's reset, and the reset is the OPPOSITE of walking past it: an open gate
+            // downstream of a node being re-attempted is being asked to approve work that is being replaced, so it is
+            // re-asked from the start of a new attempt rather than answered about the old one.
+            DevWorkflowNodeRunStatus.WaitingForApproval => to is DevWorkflowNodeRunStatus.Succeeded
+                or DevWorkflowNodeRunStatus.Cancelled
+                or DevWorkflowNodeRunStatus.Pending,
 
             // The intervention answers: Retry re-attempts, Skip routes around, Abandon gives up for good.
             DevWorkflowNodeRunStatus.Blocked => to is DevWorkflowNodeRunStatus.Pending

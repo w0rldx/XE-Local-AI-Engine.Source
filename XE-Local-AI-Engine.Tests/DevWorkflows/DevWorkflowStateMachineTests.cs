@@ -318,7 +318,11 @@ public sealed class DevWorkflowStateMachineTests
                      (DevWorkflowNodeRunStatus.Succeeded, DevWorkflowNodeRunStatus.Pending),
                      (DevWorkflowNodeRunStatus.Failed, DevWorkflowNodeRunStatus.Pending),
                      (DevWorkflowNodeRunStatus.Skipped, DevWorkflowNodeRunStatus.Pending),
-                     (DevWorkflowNodeRunStatus.Cancelled, DevWorkflowNodeRunStatus.Pending)
+                     (DevWorkflowNodeRunStatus.Cancelled, DevWorkflowNodeRunStatus.Pending),
+
+                     // An open gate is reset too: it is being asked to approve work that is being replaced, so it is
+                     // re-asked rather than answered about the old round. That is the opposite of X3's walk-past.
+                     (DevWorkflowNodeRunStatus.WaitingForApproval, DevWorkflowNodeRunStatus.Pending)
                  })
         {
             AssertEx.True(DevWorkflowStateMachine.IsLegal(from, to), $"{from} → {to}");

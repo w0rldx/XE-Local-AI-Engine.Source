@@ -113,6 +113,29 @@ internal static class DevWorkflowGraphs
                                         """;
 
     /// <summary>
+    ///     A check that routes its failure upstream while a human gate on the OTHER branch is still open — the one shape
+    ///     in which the reset has to move a node run out of a durable human wait.
+    /// </summary>
+    public const string FixLoopBesideAnOpenGate = """
+                                                  {
+                                                    "schemaVersion": 1,
+                                                    "nodes": [
+                                                      { "nodeKey": "implement", "nodeType": "Agent", "label": "Implement",
+                                                        "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                      { "nodeKey": "approve", "nodeType": "HumanGate" },
+                                                      { "nodeKey": "test", "nodeType": "Tool", "retryTarget": "implement" },
+                                                      { "nodeKey": "join", "nodeType": "Join", "joinPolicy": "Any" }
+                                                    ],
+                                                    "edges": [
+                                                      { "from": "implement", "to": "approve" },
+                                                      { "from": "implement", "to": "test" },
+                                                      { "from": "approve", "to": "join" },
+                                                      { "from": "test", "to": "join" }
+                                                    ]
+                                                  }
+                                                  """;
+
+    /// <summary>
     ///     A chain whose last node routes its failure back to the first, so the re-run passes back through a node that
     ///     has already produced an artifact and through the node that CONSUMED that artifact and produced one of its own.
     ///     The only shape in which superseding and the staleness that follows it are both observable.

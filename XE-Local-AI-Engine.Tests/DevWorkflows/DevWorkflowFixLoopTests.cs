@@ -140,6 +140,41 @@ public sealed class DevWorkflowFixLoopTests
     }
 
     /// <summary>
+    ///     A gate that is still open when the check beside it routes its failure upstream. The approval it is asking for
+    ///     is about work that is being replaced, so it is re-asked from a fresh attempt rather than left standing over
+    ///     the round that has been thrown away — and answering the old round would approve something that no longer
+    ///     exists.
+    /// </summary>
+    [Test]
+    public async Task AGateStillWaitingForAnAnswerIsReAskedRatherThanLeftOverAReplacedRound()
+    {
+        await using var harness = new DevWorkflowHarness();
+        harness.Tools.Answer("test", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.FixLoopBesideAnOpenGate, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var gate = await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, gate.Status, "the open gate went back to the start of a new attempt rather than wedging the route.");
+        AssertEx.Equal(expected: 2, gate.Attempt);
+        AssertEx.Null(gate.PendingDecisionKind, "and it is no longer asking for the answer it wanted about the round that was replaced.");
+
+        // The second round re-opens it, and the answer it takes then is one about work that still exists.
+        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var reopened = await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, reopened.Status);
+        AssertEx.Equal(DevWorkflowDecisionKind.Approve, reopened.PendingDecisionKind);
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
     ///     A routed retry costs the target's attempt AND one for every node run it resets, so the run-wide budget has to
     ///     be able to afford the whole cascade. Admitting it one attempt at a time is how a fan-out spends more than the
     ///     run allows by the width of its graph — and the node that failed is the one that then asks for a human, while
