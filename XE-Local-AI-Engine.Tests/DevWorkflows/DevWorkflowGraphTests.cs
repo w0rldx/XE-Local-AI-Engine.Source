@@ -11,6 +11,16 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class DevWorkflowGraphTests
 {
+    /// <summary>The smallest legal integration shape: work, a human gate, an apply behind it.</summary>
+    private const string GatedApply = """
+                                      {
+                                        "nodes": [{ "nodeKey": "check", "nodeType": "Tool" },
+                                                  { "nodeKey": "gate", "nodeType": "HumanGate" },
+                                                  { "nodeKey": "apply", "nodeType": "Tool", "toolMode": "Apply" }],
+                                        "edges": [{ "from": "check", "to": "gate" }, { "from": "gate", "to": "apply" }]
+                                      }
+                                      """;
+
     [Test]
     public void Parse_ReadsNodesEdgesAndTheirDefaults()
     {
@@ -317,5 +327,100 @@ public sealed class DevWorkflowGraphTests
                                      """;
 
         AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(GhostTemplate)).Message, "names template node");
+    }
+
+    /// <summary>
+    ///     The apply variant is a Tool node with a config field, not an eighth node type (Y6): the seven stay closed and
+    ///     what a Tool node does with the repository is a property of the node.
+    /// </summary>
+    [Test]
+    public void Parse_ReadsTheToolModeAndDefaultsItToValidate()
+    {
+        var graph = DevWorkflowGraph.Parse(GatedApply);
+
+        AssertEx.Equal(DevWorkflowToolMode.Apply, graph.Nodes["apply"].ToolMode);
+        AssertEx.Equal(DevWorkflowToolMode.Validate, graph.Nodes["check"].ToolMode, "a Tool node that says nothing runs commands, as every Tool node did before this field existed.");
+        AssertEx.Equal(DevWorkflowToolMode.Validate, DevWorkflowGraph.Parse(DevWorkflowGraphs.SingleTool).Nodes["validate"].ToolMode);
+    }
+
+    [Test]
+    public void Parse_WithAnUnknownToolMode_IsRejected()
+    {
+        const string Nonsense = """{"nodes":[{"nodeKey":"only","nodeType":"Tool","toolMode":"Deploy"}],"edges":[]}""";
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Nonsense)).Message, "unknown 'toolMode'");
+    }
+
+    /// <summary>A field that does nothing where it is written is a definition claiming something the runtime will not do.</summary>
+    [Test]
+    public void Parse_WithAToolModeOnANodeThatIsNotATool_IsRejected()
+    {
+        const string Misplaced = """{"nodes":[{"nodeKey":"only","nodeType":"DevTask","toolMode":"Apply","nodeTimeoutSeconds":60}],"edges":[]}""";
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Misplaced)).Message, "only a Tool node runs one");
+    }
+
+    [Test]
+    public void Parse_WithValidationCommandsOnAnApplyNode_IsRejected()
+    {
+        var contradictory = GatedApply.Replace("""{ "nodeKey": "apply", "nodeType": "Tool", "toolMode": "Apply" }""",
+            """{ "nodeKey": "apply", "nodeType": "Tool", "toolMode": "Apply", "validationCommandIds": ["dotnet_build"] }""",
+            StringComparison.Ordinal);
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(contradictory)).Message, "will never run");
+    }
+
+    /// <summary>
+    ///     Y3 made structural. The rule is that no AI-authored patch reaches a real repository without an operator
+    ///     decision in the run's own audit trail, and a definition is the only place that can be checked before the fact:
+    ///     by the time an ungated apply runs, the approval it should have waited for does not exist to be missed.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnApplyNodeOnAPathThatPassesNoHumanGate_IsRejected()
+    {
+        var ungated = GatedApply.Replace("""{ "nodeKey": "gate", "nodeType": "HumanGate" }""",
+            """{ "nodeKey": "gate", "nodeType": "Gate" }""",
+            StringComparison.Ordinal);
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(ungated)).Message, "passes no human gate");
+    }
+
+    /// <summary>
+    ///     One branch may not route around the gate. The walk is a dominance question — every path from the entry, not
+    ///     some path — and this is the shape that tells the two apart.
+    /// </summary>
+    [Test]
+    public void Parse_WithOneBranchReachingTheApplyWithoutTheGate_IsRejected()
+    {
+        const string SideDoor = """
+                                {
+                                  "nodes": [{ "nodeKey": "split", "nodeType": "Parallel" },
+                                            { "nodeKey": "gate", "nodeType": "HumanGate" },
+                                            { "nodeKey": "check", "nodeType": "Tool" },
+                                            { "nodeKey": "apply", "nodeType": "Tool", "toolMode": "Apply" }],
+                                  "edges": [{ "from": "split", "to": "gate" }, { "from": "split", "to": "check" },
+                                            { "from": "gate", "to": "apply" }, { "from": "check", "to": "apply" }]
+                                }
+                                """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(SideDoor)).Message, "passes no human gate");
+    }
+
+    /// <summary>An apply inside a template would be cloned per task, and each clone would apply the whole fan-out again.</summary>
+    [Test]
+    public void Parse_WithAnApplyNodeInsideAMaterializationTemplate_IsRejected()
+    {
+        const string ClonedApply = """
+                                   {
+                                     "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
+                                                 "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                               { "nodeKey": "implement", "nodeType": "DevTask" },
+                                               { "nodeKey": "apply", "nodeType": "Tool", "toolMode": "Apply" },
+                                               { "nodeKey": "join", "nodeType": "Join" }],
+                                     "edges": [{ "from": "decompose", "to": "join" }, { "from": "implement", "to": "apply" }, { "from": "apply", "to": "join" }]
+                                   }
+                                   """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(ClonedApply)).Message, "Integration runs once");
     }
 }

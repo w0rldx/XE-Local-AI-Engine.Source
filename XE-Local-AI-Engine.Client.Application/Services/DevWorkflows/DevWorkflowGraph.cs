@@ -10,6 +10,17 @@ internal enum DevWorkflowJoinPolicy
     Any
 }
 
+/// <summary>
+///     What a Tool node does with the repository it names. A CONFIG field rather than a node type, because the seven
+///     types are closed (Y6) and these two are the same lane doing the same thing to the same workspace — one asks the
+///     project's command profile whether the result is good, the other asks Dev Mode's apply gate to let it out.
+/// </summary>
+internal enum DevWorkflowToolMode
+{
+    Validate,
+    Apply
+}
+
 /// <summary>The decomposition template a node expands into. All four fields are load-bearing.</summary>
 internal sealed record DevWorkflowMaterialization(string TemplateNodeKey, DevWorkflowArtifactKind ArtifactKind, string JoinNodeKey, int MaxChildren);
 
@@ -32,7 +43,8 @@ internal sealed record DevWorkflowGraphNode(
     int RetryDelaySeconds,
     int? NodeTimeoutSeconds,
     string? RetryTarget,
-    DevWorkflowMaterialization? Materialization);
+    DevWorkflowMaterialization? Materialization,
+    DevWorkflowToolMode ToolMode);
 
 internal sealed record DevWorkflowGraphEdge(string From, string To, DevWorkflowCondition? Condition)
 {
@@ -232,6 +244,8 @@ internal sealed class DevWorkflowGraph
         var nodeKey = RequiredString(element, "nodeKey", "a node");
         var nodeType = RequiredEnum<DevWorkflowNodeType>(element, "nodeType", $"node '{nodeKey}'");
         var isWorkNode = nodeType is DevWorkflowNodeType.Agent or DevWorkflowNodeType.Tool or DevWorkflowNodeType.DevTask;
+        var commandIds = OptionalStringArray(element, "validationCommandIds", nodeKey);
+        var toolMode = ParseToolMode(element, nodeKey, nodeType, commandIds);
 
         return new DevWorkflowGraphNode(nodeKey,
             nodeType,
@@ -239,13 +253,40 @@ internal sealed class DevWorkflowGraph
             OptionalGuid(element, "agentDefinitionId", nodeKey),
             OptionalString(element, "agentSeedSlug"),
             OptionalString(element, "instructions"),
-            OptionalStringArray(element, "validationCommandIds", nodeKey),
+            commandIds,
             OptionalEnum(element, "joinPolicy", nodeKey, DevWorkflowJoinPolicy.All),
             OptionalPositiveInt(element, "maxAttempts", nodeKey) ?? (isWorkNode ? DefaultWorkNodeMaxAttempts : 1),
             OptionalNonNegativeInt(element, "retryDelaySeconds", nodeKey) ?? 0,
             OptionalPositiveInt(element, "nodeTimeoutSeconds", nodeKey),
             OptionalString(element, "retryTarget"),
-            ParseMaterialization(element, nodeKey));
+            ParseMaterialization(element, nodeKey),
+            toolMode);
+    }
+
+    /// <summary>
+    ///     Which of the two things a Tool node is. Refused on any other node type even when it names the default: a
+    ///     field that does nothing where it is written is a definition saying something the runtime will not do.
+    /// </summary>
+    private static DevWorkflowToolMode ParseToolMode(JsonElement element,
+        string nodeKey,
+        DevWorkflowNodeType nodeType,
+        IReadOnlyList<string> commandIds)
+    {
+        if (element.TryGetProperty("toolMode", out var declared)
+            && declared.ValueKind != JsonValueKind.Null
+            && nodeType != DevWorkflowNodeType.Tool)
+        {
+            throw new DevWorkflowValidationException($"Node '{nodeKey}' declares a 'toolMode' but is a {nodeType} node, and only a Tool node runs one.");
+        }
+
+        var toolMode = OptionalEnum(element, "toolMode", nodeKey, DevWorkflowToolMode.Validate);
+        if (toolMode == DevWorkflowToolMode.Apply && commandIds.Count > 0)
+        {
+            throw new DevWorkflowValidationException($"Node '{nodeKey}' applies approved patches and names validation commands, which it will never run. "
+                                                     + "Validating the integrated result is a Tool node of its own, after this one.");
+        }
+
+        return toolMode;
     }
 
     private static DevWorkflowMaterialization? ParseMaterialization(JsonElement element, string nodeKey)
@@ -357,6 +398,7 @@ internal sealed class DevWorkflowGraph
         }
 
         EnsureAcyclic();
+        EnsureAppliesAreGated(entries[0]);
 
         // Template subtrees are exempt WHOLE: the edge rule above is what makes that safe, because it says the only way
         // out of one is the join, so exempting the set cannot exempt anything the run would otherwise have to run.
@@ -379,6 +421,62 @@ internal sealed class DevWorkflowGraph
                 throw new DevWorkflowValidationException($"Node '{node.NodeKey}' declares retryTarget '{node.RetryTarget}', which is not one of its ancestors. "
                                                          + "Routing a failure to a node that does not lead back here would livelock the run.");
             }
+        }
+    }
+
+    /// <summary>
+    ///     Y3 made structural: no path from the entry node to an apply node may avoid a human gate.
+    ///     <para>
+    ///         The rule the whole integration stage rests on is that no AI-authored patch reaches a real repository
+    ///         without an operator decision recorded in the run's own audit trail. A template that placed the gate
+    ///         elsewhere — or nowhere — would be a definition that quietly applies, and nothing downstream could tell
+    ///         the difference: by the time the node runs, the decision it should have waited for does not exist to be
+    ///         missed. Checking it here costs one walk and makes the invariant a property of the graph.
+    ///     </para>
+    ///     <para>
+    ///         The walk is the dominance question stated the cheap way: follow the edges from the entry but never THROUGH
+    ///         a human gate, and whatever is still reachable is reachable without an approval. An apply node inside a
+    ///         materialization template is not reachable from the entry at all, so it is refused above rather than here.
+    ///     </para>
+    /// </summary>
+    private void EnsureAppliesAreGated(string entry)
+    {
+        var applies = Nodes.Values.Where(static node => node.ToolMode == DevWorkflowToolMode.Apply).Select(static node => node.NodeKey).ToList();
+        if (applies.Count == 0)
+        {
+            return;
+        }
+
+        if (applies.FirstOrDefault(TemplateKeys.Contains) is { } cloned)
+        {
+            throw new DevWorkflowValidationException($"Node '{cloned}' applies approved patches and is inside a materialization template, so every child would apply "
+                                                     + "the whole fan-out again. Integration runs once, after the join.");
+        }
+
+        var ungated = new HashSet<string>(StringComparer.Ordinal)
+        {
+            entry
+        };
+        var pending = new Stack<string>();
+        pending.Push(entry);
+        while (pending.Count > 0)
+        {
+            var nodeKey = pending.Pop();
+            if (Nodes[nodeKey].NodeType == DevWorkflowNodeType.HumanGate)
+            {
+                continue;
+            }
+
+            foreach (var edge in OutboundEdges(nodeKey).Where(edge => ungated.Add(edge.To)))
+            {
+                pending.Push(edge.To);
+            }
+        }
+
+        if (applies.FirstOrDefault(ungated.Contains) is { } exposed)
+        {
+            throw new DevWorkflowValidationException($"Node '{exposed}' applies approved patches on a path from the entry node that passes no human gate. An apply "
+                                                     + "changes a real repository, so a definition has to put an approval in front of it.");
         }
     }
 
