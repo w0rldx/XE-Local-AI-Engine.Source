@@ -34,7 +34,8 @@ public sealed partial class DevelopmentStore
         Func<Task<DevelopmentOperationResult>> mutation,
         CancellationToken cancellationToken)
     {
-        for (var attempt = 1; ; attempt++)
+        DbUpdateException? lost = null;
+        for (var attempt = 1; attempt <= MaxOperationAttempts; attempt++)
         {
             var existing = await FindOperationCoreAsync(projectId, operationId, phase, cancellationToken).ConfigureAwait(false);
             if (existing is not null)
@@ -71,12 +72,11 @@ public sealed partial class DevelopmentStore
                     return existing;
                 }
 
-                if (attempt >= MaxOperationAttempts)
-                {
-                    throw new DevelopmentConcurrencyException("A concurrent Development operation won the database race.", exception);
-                }
+                lost = exception;
             }
         }
+
+        throw new DevelopmentConcurrencyException("A concurrent Development operation won the database race.", lost);
     }
 
     private async Task<DevelopmentOperationResult?> FindOperationCoreAsync(Guid projectId,
