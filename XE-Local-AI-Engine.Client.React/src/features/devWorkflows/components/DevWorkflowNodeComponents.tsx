@@ -41,7 +41,7 @@ const nodeTypeIcons: Record<DevWorkflowNodeType, typeof IconRobot> = {
  * and no motion — it is waiting for a slot another node is holding, and a canvas that animated it would claim a GPU is
  * working on it. The `Running` spinner comes from the shared status badge, which already gates itself on reduced motion.
  */
-function statusClass(status: DevWorkflowNodeStatus): string | undefined {
+function statusClass(status: DevWorkflowNodeStatus | undefined): string | undefined {
 	switch (status) {
 		case "Running":
 			return classes["node-running"];
@@ -76,7 +76,8 @@ export function DevWorkflowNodeCard({ id, data, selected }: NodeProps<DevWorkflo
 	const reduced = useReducedMotion();
 	const nodeData = data as DevWorkflowCanvasNodeData;
 	const Icon = nodeTypeIcons[nodeData.nodeType];
-	const isRunning = isDevWorkflowNodeInProgress(nodeData.status);
+	// A definition render carries no status — nothing has run — so nothing here may imply one.
+	const isRunning = nodeData.status !== undefined && isDevWorkflowNodeInProgress(nodeData.status);
 	const showsAttempt = nodeData.maxAttempts > 1 && nodeData.attempt > 1;
 
 	return (
@@ -99,7 +100,9 @@ export function DevWorkflowNodeCard({ id, data, selected }: NodeProps<DevWorkflo
 					</Text>
 				</div>
 				<Group gap={4} wrap="wrap">
-					<DevWorkflowNodeStatusBadge status={nodeData.status} testId={`dev-workflow-graph-node-status-${id}`} />
+					{nodeData.status ? (
+						<DevWorkflowNodeStatusBadge status={nodeData.status} testId={`dev-workflow-graph-node-status-${id}`} />
+					) : null}
 					<Badge size="xs" variant="light" color="gray">
 						{t(`pages.devWorkflows.nodeType.${nodeData.nodeType}`, nodeData.nodeType)}
 					</Badge>

@@ -5157,6 +5157,12 @@
 					"failed": "Failed"
 				}
 			},
+			"definition": {
+				"pick": "Pick a template to see the workflow it will run.",
+				"loadFailed": "Could not load this template.",
+				"version": "v{{version}}",
+				"preview": "Nothing has run yet — this is the template, not a run."
+			},
 			"devTaskStatus": {
 				"Planned": "Planned",
 				"Ready": "Ready",

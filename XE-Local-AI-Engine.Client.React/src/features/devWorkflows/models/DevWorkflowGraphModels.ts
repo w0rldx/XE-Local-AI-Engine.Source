@@ -15,6 +15,7 @@ import {
 	layoutDevWorkflowGraph,
 } from "@/features/devWorkflows/models/DevWorkflowLayout";
 import {
+	type DevWorkflowGraph,
 	type DevWorkflowNodeStatus,
 	type DevWorkflowNodeType,
 	type DevWorkflowRunResponse,
@@ -34,7 +35,11 @@ export interface DevWorkflowCanvasNodeData extends Record<string, unknown> {
 	// Y6: seven members — Start/End are IMPLICIT (entry = no inbound edges, terminal = no outbound).
 	readonly nodeType: DevWorkflowNodeType;
 	readonly label: string;
-	readonly status: DevWorkflowNodeStatus;
+	/**
+	 * Absent on a DEFINITION render, where nothing has run. A definition node painted `Pending` would claim it is
+	 * materialized and waiting on a dependency, which is a run's state and not a template's.
+	 */
+	readonly status?: DevWorkflowNodeStatus;
 	readonly queueReason?: string;
 	readonly queuedAtUtc?: number;
 	readonly startedAtUtc?: number;
@@ -91,6 +96,15 @@ export function devWorkflowGraphStructuralKey(run: DevWorkflowRunResponse | unde
 	return `${nodeIds.join(",")}|${edgePairs.join(",")}`;
 }
 
+/** One card's worth of input, from either data source: a node-run row or a definition's graph node. */
+interface DevWorkflowCanvasEntry {
+	readonly id: string;
+	readonly nodeKey: string;
+	readonly materializedFromNodeKey?: string;
+	readonly materializationIndex?: number;
+	readonly data: DevWorkflowCanvasNodeData;
+}
+
 export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined): DevWorkflowCanvasGraph {
 	const nodeRuns = run?.nodes ?? [];
 	const structuralKey = devWorkflowGraphStructuralKey(run);
@@ -99,8 +113,71 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 		return { nodes: [], edges: [], structuralKey, nodeRunCount: nodeRuns.length, isOverCap: true };
 	}
 
-	const graphEdges = run?.graph?.edges ?? [];
-	const nodeRunIdByKey = new Map(nodeRuns.map((node) => [node.nodeKey ?? "", node.id ?? ""]));
+	const entries: DevWorkflowCanvasEntry[] = nodeRuns.map((node) => ({
+		id: node.id ?? "",
+		nodeKey: node.nodeKey ?? "",
+		materializedFromNodeKey: optional(node.materializedFromNodeKey),
+		materializationIndex: optional(node.materializationIndex),
+		data: {
+			nodeType: toDevWorkflowNodeType(node.nodeType),
+			label: node.label ?? node.nodeKey ?? "",
+			status: toDevWorkflowNodeStatus(node.status),
+			queueReason: optional(node.queueReason),
+			queuedAtUtc: optional(node.queuedAtUtc),
+			startedAtUtc: optional(node.startedAtUtc),
+			attempt: node.attempt ?? 1,
+			maxAttempts: node.maxAttempts ?? 1,
+			agentDisplayName: optional(node.agentDisplayName),
+			modelLabel: optional(node.modelLabel),
+			isMaterialized: node.isMaterialized ?? false,
+			materializedFromNodeKey: optional(node.materializedFromNodeKey),
+			materializationIndex: optional(node.materializationIndex),
+			hasStaleInputs: node.hasStaleInputs ?? false,
+			waitingOnNodeKeys: optional(node.waitingOnNodeKeys),
+			developmentProjectId: optional(node.developmentProjectId),
+			developmentTaskId: optional(node.developmentTaskId),
+		},
+	}));
+
+	return buildCanvasGraph(entries, run?.graph?.edges ?? [], structuralKey);
+}
+
+/**
+ * The same canvas over a DEFINITION (P4 §4, slice B: one component, two data sources). A definition's nodes ARE its
+ * key space, so identity is the node key and there is no row to join against — and no status, because nothing has run.
+ */
+export function toDevWorkflowDefinitionCanvasGraph(graph: DevWorkflowGraph | undefined): DevWorkflowCanvasGraph {
+	const graphNodes = graph?.nodes ?? [];
+	const structuralKey = `${graphNodes.map((node) => node.nodeKey ?? "").toSorted().join(",")}|${(graph?.edges ?? [])
+		.map((edge) => `${edge.from ?? ""}>${edge.to ?? ""}`)
+		.toSorted()
+		.join(",")}`;
+	if (graphNodes.length > DEV_WORKFLOW_MAX_RENDERED_NODES) {
+		return { nodes: [], edges: [], structuralKey, nodeRunCount: graphNodes.length, isOverCap: true };
+	}
+
+	const entries: DevWorkflowCanvasEntry[] = graphNodes.map((node) => ({
+		id: node.nodeKey ?? "",
+		nodeKey: node.nodeKey ?? "",
+		data: {
+			nodeType: toDevWorkflowNodeType(node.nodeType),
+			label: node.label ?? node.nodeKey ?? "",
+			attempt: 1,
+			maxAttempts: node.maxAttempts ?? 1,
+			isMaterialized: false,
+			hasStaleInputs: false,
+		},
+	}));
+
+	return buildCanvasGraph(entries, graph?.edges ?? [], structuralKey);
+}
+
+function buildCanvasGraph(
+	entries: readonly DevWorkflowCanvasEntry[],
+	graphEdges: readonly { from?: string; to?: string }[],
+	structuralKey: string,
+): DevWorkflowCanvasGraph {
+	const nodeRunIdByKey = new Map(entries.map((entry) => [entry.nodeKey, entry.id]));
 	// A1 is linear-only, so the only endpoint that can be missing today is a materialization TEMPLATE — it has no
 	// node-run row until its children are materialized (Slice C). Dropping the edge is the honest render: there is no
 	// node to draw it to.
@@ -115,9 +192,9 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 	// finishes there. It dangles instead, which is the truth until Slice C materializes the children.
 	const hasInboundKey = new Set(graphEdges.map((edge) => edge.to ?? ""));
 	const hasOutboundKey = new Set(graphEdges.map((edge) => edge.from ?? ""));
-	const anchors: { anchor: "start" | "end"; nodeRunId: string; nodeKey: string }[] = nodeRuns.flatMap((node) => {
-		const id = node.id ?? "";
-		const nodeKey = node.nodeKey ?? "";
+	const anchors: { anchor: "start" | "end"; nodeRunId: string; nodeKey: string }[] = entries.flatMap((node) => {
+		const id = node.id;
+		const nodeKey = node.nodeKey;
 		return [
 			...(hasInboundKey.has(nodeKey) ? [] : [{ anchor: "start" as const, nodeRunId: id, nodeKey }]),
 			...(hasOutboundKey.has(nodeKey) ? [] : [{ anchor: "end" as const, nodeRunId: id, nodeKey }]),
@@ -127,11 +204,11 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 	// The anchors are ranked WITH the real nodes (Y6) rather than offset from them, so they cannot land on top of
 	// anything: a start anchor is simply the only thing left with no inbound edge.
 	const layoutNodes: DevWorkflowLayoutNode[] = [
-		...nodeRuns.map((node) => ({
-			id: node.id ?? "",
-			nodeKey: node.nodeKey ?? "",
-			materializedFromNodeKey: optional(node.materializedFromNodeKey),
-			materializationIndex: optional(node.materializationIndex),
+		...entries.map((node) => ({
+			id: node.id,
+			nodeKey: node.nodeKey,
+			materializedFromNodeKey: node.materializedFromNodeKey,
+			materializationIndex: node.materializationIndex,
 		})),
 		...anchors.map((entry) => ({ id: anchorId(entry.anchor, entry.nodeRunId), nodeKey: entry.nodeKey })),
 	];
@@ -147,33 +224,15 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 	};
 
 	const nodes: Node[] = [
-		...nodeRuns.map(
+		...entries.map(
 			(node): DevWorkflowCanvasNode => ({
-				id: node.id ?? "",
-				type: toDevWorkflowNodeType(node.nodeType),
-				position: positionOf(node.id ?? ""),
+				id: node.id,
+				type: node.data.nodeType,
+				position: positionOf(node.id),
 				deletable: false,
 				draggable: false,
 				connectable: false,
-				data: {
-					nodeType: toDevWorkflowNodeType(node.nodeType),
-					label: node.label ?? node.nodeKey ?? "",
-					status: toDevWorkflowNodeStatus(node.status),
-					queueReason: optional(node.queueReason),
-					queuedAtUtc: optional(node.queuedAtUtc),
-					startedAtUtc: optional(node.startedAtUtc),
-					attempt: node.attempt ?? 1,
-					maxAttempts: node.maxAttempts ?? 1,
-					agentDisplayName: optional(node.agentDisplayName),
-					modelLabel: optional(node.modelLabel),
-					isMaterialized: node.isMaterialized ?? false,
-					materializedFromNodeKey: optional(node.materializedFromNodeKey),
-					materializationIndex: optional(node.materializationIndex),
-					hasStaleInputs: node.hasStaleInputs ?? false,
-					waitingOnNodeKeys: optional(node.waitingOnNodeKeys),
-					developmentProjectId: optional(node.developmentProjectId),
-					developmentTaskId: optional(node.developmentTaskId),
-				},
+				data: node.data,
 			}),
 		),
 		...anchors.map(
@@ -207,5 +266,5 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 		};
 	});
 
-	return { nodes, edges, structuralKey, nodeRunCount: nodeRuns.length, isOverCap: false };
+	return { nodes, edges, structuralKey, nodeRunCount: entries.length, isOverCap: false };
 }

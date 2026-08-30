@@ -10,6 +10,7 @@ import { DevWorkflowAnchorCard, DevWorkflowNodeCard } from "@/features/devWorkfl
 import {
 	DEV_WORKFLOW_ANCHOR_NODE_TYPE,
 	DEV_WORKFLOW_MAX_RENDERED_NODES,
+	type DevWorkflowCanvasGraph,
 	toDevWorkflowCanvasGraph,
 } from "@/features/devWorkflows/models/DevWorkflowGraphModels";
 import { type DevWorkflowRunResponse, devWorkflowNodeTypes } from "@/features/devWorkflows/models/DevWorkflowModels";
@@ -22,17 +23,22 @@ const canvasNodeTypes: NodeTypes = {
 } as NodeTypes;
 
 export interface DevWorkflowGraphViewProps {
-	readonly run: DevWorkflowRunResponse | undefined;
+	readonly run?: DevWorkflowRunResponse | undefined;
+	/**
+	 * A prebuilt canvas, which is how the read-only DEFINITION view reaches this component (P4 §4, slice B: one
+	 * component, two data sources). It wins over `run`, and the cards it carries have no status because nothing ran.
+	 */
+	readonly graph?: DevWorkflowCanvasGraph;
 	readonly selectedNodeRunId?: string;
 	readonly onSelect: (nodeRunId: string) => void;
 }
 
-function DevWorkflowGraphViewInner({ run, selectedNodeRunId, onSelect }: DevWorkflowGraphViewProps) {
+function DevWorkflowGraphViewInner({ run, graph: provided, selectedNodeRunId, onSelect }: DevWorkflowGraphViewProps) {
 	const { t } = useTranslation();
 	const { fitView } = useReactFlow();
 	// The layout is deterministic, so recomputing it on a status tick cannot move a node; what an operator WOULD see is
 	// the viewport re-framing under their cursor, and that is keyed on the structural key alone.
-	const graph = useMemo(() => toDevWorkflowCanvasGraph(run), [run]);
+	const graph = useMemo(() => provided ?? toDevWorkflowCanvasGraph(run), [provided, run]);
 	const nodes = useMemo(
 		() => graph.nodes.map((node): Node => ({ ...node, selected: node.id === selectedNodeRunId })),
 		[graph.nodes, selectedNodeRunId],

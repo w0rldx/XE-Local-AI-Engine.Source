@@ -5157,6 +5157,12 @@
 					"failed": "Fehlgeschlagen"
 				}
 			},
+			"definition": {
+				"pick": "Wählen Sie eine Vorlage, um den Workflow zu sehen, den sie ausführt.",
+				"loadFailed": "Diese Vorlage konnte nicht geladen werden.",
+				"version": "v{{version}}",
+				"preview": "Es lief noch nichts — dies ist die Vorlage, kein Lauf."
+			},
 			"devTaskStatus": {
 				"Planned": "Geplant",
 				"Ready": "Bereit",
