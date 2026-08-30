@@ -87,9 +87,9 @@ public sealed class AddDevelopmentModeFoundationMigrationTests
             "The per-project event sequence must be unique.");
 
         AssertEx.True(await probe.IndexExistsAsync("development_tasks",
-                "ux_development_tasks_project_id",
-                unique: true,
+                "ix_development_tasks_project_id",
+                unique: false,
                 "project_id").ConfigureAwait(false),
-            "A project carries at most one task.");
+            "A project's tasks are indexed but not capped at one: decomposition gives each child node its own task in the same project.");
     }
 }
