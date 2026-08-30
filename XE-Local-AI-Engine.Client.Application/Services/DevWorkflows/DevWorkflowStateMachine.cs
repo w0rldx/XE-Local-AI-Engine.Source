@@ -291,6 +291,15 @@ internal static class DevWorkflowStateMachine
     ///         edge: a retry scheduled after a retryable failure, and a collapse after the host restarted under the
     ///         node run. Both re-derive the same way, which is why the row is cleaned rather than annotated.
     ///     </para>
+    ///     <para>
+    ///         The four edges OUT of a terminal status back to <c>Pending</c> belong to the cross-node fix loop (X9) and
+    ///         to nothing else: when a failure routes to an upstream node, every node run downstream of that node has to
+    ///         re-run against the new implementation, and those rows are settled by definition — the whole point is that
+    ///         they already produced an answer to a question that is being asked again. A <c>Succeeded</c> row left
+    ///         alone would be a stale result masquerading as a current one, which is the outcome that rule exists to
+    ///         prevent. Nothing else may write them: the decision path only ever moves a row out of
+    ///         <c>WaitingForApproval</c> or <c>Blocked</c>, and every executor settles forwards.
+    ///     </para>
     /// </summary>
     public static bool IsLegal(DevWorkflowNodeRunStatus from, DevWorkflowNodeRunStatus to) =>
         from switch
@@ -324,6 +333,12 @@ internal static class DevWorkflowStateMachine
                 or DevWorkflowNodeRunStatus.Skipped
                 or DevWorkflowNodeRunStatus.Failed
                 or DevWorkflowNodeRunStatus.Cancelled,
+
+            // The fix loop's reset, and only it. See the remarks above.
+            DevWorkflowNodeRunStatus.Succeeded
+                or DevWorkflowNodeRunStatus.Failed
+                or DevWorkflowNodeRunStatus.Skipped
+                or DevWorkflowNodeRunStatus.Cancelled => to is DevWorkflowNodeRunStatus.Pending,
             _ => false
         };
 

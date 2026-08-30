@@ -88,6 +88,51 @@ internal static class DevWorkflowGraphs
                                  }
                                  """;
 
+    /// <summary>
+    ///     The same fan-out as a shape the runtime can actually drive today: the implementation node is an Agent because
+    ///     the DevTask lane arrives in B6, and everything the fix loop is specified against — one producer, two checks
+    ///     that both depend on it, a join, and the failing check routing back — is unchanged.
+    /// </summary>
+    public const string FanOutFixLoop = """
+                                        {
+                                          "schemaVersion": 1,
+                                          "nodes": [
+                                            { "nodeKey": "implement", "nodeType": "Agent", "label": "Implement",
+                                              "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                            { "nodeKey": "lint", "nodeType": "Tool" },
+                                            { "nodeKey": "test", "nodeType": "Tool", "retryTarget": "implement" },
+                                            { "nodeKey": "join", "nodeType": "Join" }
+                                          ],
+                                          "edges": [
+                                            { "from": "implement", "to": "lint" },
+                                            { "from": "implement", "to": "test" },
+                                            { "from": "lint", "to": "join" },
+                                            { "from": "test", "to": "join" }
+                                          ]
+                                        }
+                                        """;
+
+    /// <summary>
+    ///     A chain whose last node routes its failure back to the first, so the re-run passes back through a node that
+    ///     has already produced an artifact and through the node that CONSUMED that artifact and produced one of its own.
+    ///     The only shape in which superseding and the staleness that follows it are both observable.
+    /// </summary>
+    public const string FixLoopOverAConsumedArtifact = """
+                                                       {
+                                                         "schemaVersion": 1,
+                                                         "nodes": [
+                                                           { "nodeKey": "validate", "nodeType": "Tool" },
+                                                           { "nodeKey": "summarize", "nodeType": "Agent", "label": "Summarize",
+                                                             "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                           { "nodeKey": "verify", "nodeType": "Tool", "retryTarget": "validate" }
+                                                         ],
+                                                         "edges": [
+                                                           { "from": "validate", "to": "summarize" },
+                                                           { "from": "summarize", "to": "verify" }
+                                                         ]
+                                                       }
+                                                       """;
+
     /// <summary>A decomposing node whose template is unreachable on purpose.</summary>
     public const string Decomposition = """
                                         {

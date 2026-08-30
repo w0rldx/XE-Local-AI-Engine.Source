@@ -311,7 +311,14 @@ public sealed class DevWorkflowStateMachineTests
                      (DevWorkflowNodeRunStatus.WaitingForApproval, DevWorkflowNodeRunStatus.Succeeded),
                      (DevWorkflowNodeRunStatus.Blocked, DevWorkflowNodeRunStatus.Pending),
                      (DevWorkflowNodeRunStatus.Blocked, DevWorkflowNodeRunStatus.Skipped),
-                     (DevWorkflowNodeRunStatus.Blocked, DevWorkflowNodeRunStatus.Failed)
+                     (DevWorkflowNodeRunStatus.Blocked, DevWorkflowNodeRunStatus.Failed),
+
+                     // The fix loop's reset (X9), and the only way out of a terminal status: a node run downstream of a
+                     // node being re-attempted holds an answer about work that is being replaced.
+                     (DevWorkflowNodeRunStatus.Succeeded, DevWorkflowNodeRunStatus.Pending),
+                     (DevWorkflowNodeRunStatus.Failed, DevWorkflowNodeRunStatus.Pending),
+                     (DevWorkflowNodeRunStatus.Skipped, DevWorkflowNodeRunStatus.Pending),
+                     (DevWorkflowNodeRunStatus.Cancelled, DevWorkflowNodeRunStatus.Pending)
                  })
         {
             AssertEx.True(DevWorkflowStateMachine.IsLegal(from, to), $"{from} → {to}");
@@ -322,10 +329,13 @@ public sealed class DevWorkflowStateMachineTests
                      (DevWorkflowNodeRunStatus.Pending, DevWorkflowNodeRunStatus.Succeeded),
                      (DevWorkflowNodeRunStatus.Queued, DevWorkflowNodeRunStatus.Succeeded),
                      (DevWorkflowNodeRunStatus.Queued, DevWorkflowNodeRunStatus.WaitingForApproval),
-                     (DevWorkflowNodeRunStatus.Succeeded, DevWorkflowNodeRunStatus.Pending),
-                     (DevWorkflowNodeRunStatus.Failed, DevWorkflowNodeRunStatus.Pending),
+
+                     // A reset is the ONLY move out of a terminal status: it goes back to the start of an attempt, never
+                     // sideways into one that is already under way.
+                     (DevWorkflowNodeRunStatus.Succeeded, DevWorkflowNodeRunStatus.Running),
                      (DevWorkflowNodeRunStatus.Skipped, DevWorkflowNodeRunStatus.Queued),
-                     (DevWorkflowNodeRunStatus.Cancelled, DevWorkflowNodeRunStatus.Pending),
+                     (DevWorkflowNodeRunStatus.Cancelled, DevWorkflowNodeRunStatus.Succeeded),
+                     (DevWorkflowNodeRunStatus.Failed, DevWorkflowNodeRunStatus.Blocked),
 
                      // X3: Skip is an intervention on a Blocked row, never a way past an open gate.
                      (DevWorkflowNodeRunStatus.WaitingForApproval, DevWorkflowNodeRunStatus.Skipped)
