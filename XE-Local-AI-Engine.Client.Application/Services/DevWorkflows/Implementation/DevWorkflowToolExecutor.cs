@@ -152,18 +152,16 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                 .ConfigureAwait(false);
         }
 
+        var written = 0;
+
         if (!flight.Work.IsCompleted)
         {
             // Still building. The dispatcher holds nothing about it, so this is the only place its state is read.
-            return 0;
+            return written;
         }
 
-        _ = _inflight.TryRemove(nodeRun.Id, out _);
-        flight.Cancellation.Dispose();
-
-        if (flight.Work.IsCanceled)
-        {
-            return await SettleAsync(store,
+        written += flight.Work.IsCanceled
+            ? await SettleAsync(store,
                     run,
                     nodeRun,
                     nodeRuns,
@@ -173,10 +171,26 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                     Output(nodeRun, DevWorkflowFailureClasses.Cancelled, run: null),
                     DevWorkflowOutcomes.Cancelled,
                     cancellationToken)
-                .ConfigureAwait(false);
-        }
+                .ConfigureAwait(false)
+            : await SettleLandedAsync(store, run, nodeRun, nodeRuns, await flight.Work.ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
 
-        var result = await flight.Work.ConfigureAwait(false);
+        // Consumed only once the settle has COMMITTED. Doing it first would spend the result on a write that may throw
+        // — an over-budget blob, a lost version race — and the next poll would then find no entry, take the branch
+        // above and record "the host stopped" about a pass that finished perfectly. The settle is idempotent, so a
+        // replayed poll re-derives the same answer instead.
+        _ = _inflight.TryRemove(nodeRun.Id, out _);
+        flight.Cancellation.Dispose();
+        return written;
+    }
+
+    /// <summary>Turns one landed pass into evidence and a status. Idempotent: every write it makes is keyed.</summary>
+    private async Task<int> SettleLandedAsync(IDevWorkflowStore store,
+        DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot nodeRun,
+        IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
+        DevWorkflowToolRun result,
+        CancellationToken cancellationToken)
+    {
         await RecordSecretsAsync(store, run, nodeRun, result, cancellationToken).ConfigureAwait(false);
 
         // Evidence first, status last — the same order the agent lane and the work-session loop use one level down. A

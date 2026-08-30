@@ -92,6 +92,16 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         _ownsFactory = true;
     }
 
+    /// <summary>
+    ///     A host of this test's own with one more service replaced — for standing a dependency in a state only it can
+    ///     produce, such as a blob store that refuses one write.
+    /// </summary>
+    public DevWorkflowHarness(Action<IServiceCollection> configureServices, params (string Key, string Value)[] configuration)
+    {
+        _factory = NewFactory(drifting: false, fakeTools: true, configuration, configureServices);
+        _ownsFactory = true;
+    }
+
     private DevWorkflowHarness(bool drifting, bool fakeTools, (string Key, string Value)[] configuration)
     {
         _factory = NewFactory(drifting, fakeTools, configuration);
@@ -121,7 +131,10 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     internal static TestServerWebAppFactory NewFactory(params (string Key, string Value)[] configuration) =>
         NewFactory(drifting: false, fakeTools: true, configuration);
 
-    private static TestServerWebAppFactory NewFactory(bool drifting, bool fakeTools, (string Key, string Value)[] configuration)
+    private static TestServerWebAppFactory NewFactory(bool drifting,
+        bool fakeTools,
+        (string Key, string Value)[] configuration,
+        Action<IServiceCollection>? configureServices = null)
     {
         var settings = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
@@ -150,15 +163,15 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
                     return drifting ? new DriftingWorkSessions(agent, scopes) : agent;
                 });
 
-                if (!fakeTools)
+                if (fakeTools)
                 {
-                    return;
+                    // The sandbox lane's one seam, replaced wholesale for the same reason the agent's is: everything
+                    // above it — the slots, the in-flight registry, the report artifact, the rows — stays real.
+                    services.RemoveAll<IDevWorkflowToolCommands>();
+                    services.AddSingleton<IDevWorkflowToolCommands, FakeDevWorkflowToolCommands>();
                 }
 
-                // The sandbox lane's one seam, replaced wholesale for the same reason the agent's is: everything above
-                // it — the slots, the in-flight registry, the report artifact, the rows — stays the real thing.
-                services.RemoveAll<IDevWorkflowToolCommands>();
-                services.AddSingleton<IDevWorkflowToolCommands, FakeDevWorkflowToolCommands>();
+                configureServices?.Invoke(services);
             }
         };
     }

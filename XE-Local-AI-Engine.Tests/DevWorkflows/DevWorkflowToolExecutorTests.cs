@@ -1,7 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -204,5 +207,107 @@ public sealed class DevWorkflowToolExecutorTests
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
         AssertEx.Equal(DevWorkflowRunStatus.Paused, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     A settle that throws must not cost the result it was settling.
+    ///     <para>
+    ///         The pass is consumed from the lane's registry only once its settle has COMMITTED. Consuming it first
+    ///         would spend a finished build on a write that may fail — an over-budget blob, a lost version race — and
+    ///         the next poll, finding no entry, would record "the host stopped" about a pass that had in fact finished
+    ///         perfectly: a false <c>Interrupted</c> in the audit log AND the evidence gone.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AThrowWhileSettlingCostsTheRetryAndNotTheResult()
+    {
+        await using var harness = new DevWorkflowHarness(static services =>
+        {
+            services.RemoveAll<IDevWorkflowArtifactBlobStore>();
+            services.AddSingleton<IDevWorkflowArtifactBlobStore>(static provider =>
+                new BlobStoreThatRefusesItsFirstWrite(ActivatorUtilities.CreateInstance<ManagedDevWorkflowArtifactBlobStore>(provider)));
+        });
+
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+
+        // Two explicit ticks rather than "advance until quiescent": the tick that starts the run and the tick that
+        // admits the node. Stopping here is what puts the throw in the settle rather than somewhere a loop swallows it.
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        var dispatched = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, dispatched.Status);
+        await harness.ToolLane.WaitForCompletionAsync(dispatched.Id).ConfigureAwait(false);
+
+        // The report write refuses once. In production the loop's own guard logs such a throw and re-signals the run.
+        // Here the tick is driven directly, so the throw surfaces where that guard would have caught it.
+        _ = await AssertEx.ThrowsAsync<IOException>(() => harness.AdvanceAsync(runId)).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
+            (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status,
+            "the row is untouched by a settle that did not commit.");
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, nodeRun.Status, "the TRUE outcome, re-derived from the pass the lane still held.");
+        AssertEx.Null(nodeRun.FailureClass);
+        AssertEx.Equal(expected: 1, harness.Tools.Ran.Count, "and the build was not run a second time to get it.");
+
+        var artifact = (await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).Single();
+        AssertEx.Equal("""{"passed":true}""",
+            await harness.ReadArtifactTextAsync(runId, artifact).ConfigureAwait(false),
+            "the evidence survived the failed write.");
+        AssertEx.False((await harness.ReadEventTrailAsync(runId).ConfigureAwait(false)).Contains("node.interrupted", StringComparison.Ordinal),
+            "nothing may claim the host stopped under a pass that finished.");
+    }
+
+    /// <summary>
+    ///     With Development Mode switched off there is no workspace provider, no repository binding and no sandbox, so
+    ///     the node cannot run as configured. It says that, rather than surfacing a container failure from inside a
+    ///     detached task as an unexplained <c>Internal</c>.
+    /// </summary>
+    [Test]
+    public async Task AToolNodeWithDevelopmentModeOffSaysSoRatherThanFailingInternally()
+    {
+        // The REAL optional-resolve path: with the seam faked there would be nothing left to resolve optionally.
+        await using var harness = DevWorkflowHarness.WithARealSandbox(("Development:Enabled", "false"));
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, nodeRun.Status);
+        AssertEx.Equal("Configuration", nodeRun.FailureClass, "no retry turns Development Mode back on.");
+        AssertEx.Contains(AssertEx.NotNull(nodeRun.TerminalReason), "Development Mode is switched off on this node");
+        AssertEx.Equal(DevWorkflowDecisionKind.Abandon, nodeRun.PendingDecisionKind);
+    }
+
+    /// <summary>
+    ///     Refuses its first write and then behaves. A decorator over the real store rather than a stub, so everything
+    ///     after the refusal — the digest, the size, the round trip — is still the production path.
+    /// </summary>
+    private sealed class BlobStoreThatRefusesItsFirstWrite(IDevWorkflowArtifactBlobStore inner) : IDevWorkflowArtifactBlobStore
+    {
+        private int _refused;
+
+        public Task<DevWorkflowArtifactBlobWriteResult> WriteAsync(Guid runId,
+            Guid artifactId,
+            ReadOnlyMemory<byte> content,
+            CancellationToken cancellationToken = default) =>
+            Interlocked.Exchange(ref _refused, value: 1) == 0
+                ? throw new IOException("The artifact could not be written this time.")
+                : inner.WriteAsync(runId, artifactId, content, cancellationToken);
+
+        public Task<DevWorkflowArtifactBlobReadResult> ReadAsync(Guid runId,
+            Guid artifactId,
+            string expectedHash,
+            long expectedByteCount,
+            CancellationToken cancellationToken = default) =>
+            inner.ReadAsync(runId, artifactId, expectedHash, expectedByteCount, cancellationToken);
+
+        public void Delete(Guid runId, Guid artifactId) =>
+            inner.Delete(runId, artifactId);
+
+        public void DeleteRun(Guid runId) =>
+            inner.DeleteRun(runId);
     }
 }
