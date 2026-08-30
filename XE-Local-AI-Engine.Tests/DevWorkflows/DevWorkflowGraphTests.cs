@@ -66,25 +66,104 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     A template with edges of its own is refused, because the alternative hangs rather than fails: the template is
-    ///     the one node deliberately never instantiated, so a successor it declared would get a node run at run start and
-    ///     then wait forever on an inbound edge whose source has no row and never will.
+    ///     A template is a SUBTREE, so it may declare its own internal edges — that is what keeps the per-task fix loop
+    ///     (<c>Implement → Validate → Implement</c>) authorable at all. What the subtree carries is the set of nodes a
+    ///     run start gives no row to, and the join is deliberately not one of them: it belongs to the graph.
     /// </summary>
     [Test]
-    public void Parse_WithATemplateThatDeclaresItsOwnEdges_IsRejected()
+    public void Parse_ReadsATemplateAsTheWholeSubtreeShortOfItsJoin()
     {
-        const string TemplateSubtree = """
-                                       {
-                                         "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
-                                                     "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
-                                                   { "nodeKey": "implement", "nodeType": "DevTask" },
-                                                   { "nodeKey": "verify", "nodeType": "Tool" },
-                                                   { "nodeKey": "join", "nodeType": "Join" }],
-                                         "edges": [{ "from": "decompose", "to": "join" }, { "from": "implement", "to": "verify" }]
-                                       }
-                                       """;
+        var graph = DevWorkflowGraph.Parse(DevWorkflowGraphs.DecompositionSubtree);
 
-        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(TemplateSubtree)).Message, "declares edges of its own");
+        AssertEx.Equal("implement, validate", string.Join(", ", graph.TemplateKeys.OrderBy(static key => key, StringComparer.Ordinal)));
+        AssertEx.False(graph.TemplateKeys.Contains("join"), "walking through the join would make the rest of the run part of the template.");
+        AssertEx.Equal("decompose", string.Join(", ", graph.EntryNodeKeys.Where(key => !graph.TemplateKeys.Contains(key))));
+    }
+
+    /// <summary>
+    ///     An edge INTO the subtree from outside is refused, because the alternative hangs rather than fails: its source
+    ///     would be waiting on the one node deliberately never instantiated.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnEdgeIntoTheTemplateSubtreeFromOutside_IsRejected()
+    {
+        const string PointingIn = """
+                                  {
+                                    "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
+                                                "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                              { "nodeKey": "implement", "nodeType": "DevTask" },
+                                              { "nodeKey": "join", "nodeType": "Join" }],
+                                    "edges": [{ "from": "decompose", "to": "join" }, { "from": "decompose", "to": "implement" }]
+                                  }
+                                  """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(PointingIn)).Message, "points into the materialization template");
+    }
+
+    /// <summary>
+    ///     The same rule catches the shape that would otherwise be silent: a node the run really does have to execute,
+    ///     which the template also reaches, is swallowed into the template — given no row at run start while the live
+    ///     graph waits on it. That is the mirror of the plan's "no edge leaves the subtree except to the join", and it
+    ///     is the half a subtree defined by what it reaches cannot break any other way.
+    /// </summary>
+    [Test]
+    public void Parse_WithATemplateSubtreeThatSwallowsALiveNode_IsRejected()
+    {
+        const string Swallowed = """
+                                 {
+                                   "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
+                                               "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                             { "nodeKey": "implement", "nodeType": "DevTask" },
+                                             { "nodeKey": "deploy", "nodeType": "Tool" },
+                                             { "nodeKey": "join", "nodeType": "Join" }],
+                                   "edges": [{ "from": "decompose", "to": "deploy" }, { "from": "implement", "to": "deploy" }, { "from": "deploy", "to": "join" }]
+                                 }
+                                 """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Swallowed)).Message, "points into the materialization template");
+    }
+
+    /// <summary>
+    ///     Nested materialization is named as v2 and refused here rather than discovered at run time: a clone that
+    ///     decomposed again would expand a template that has already been expanded, under keys nothing can tell apart.
+    /// </summary>
+    [Test]
+    public void Parse_WithAMaterializationInsideATemplateSubtree_IsRejected()
+    {
+        const string Nested = """
+                              {
+                                "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
+                                            "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                          { "nodeKey": "implement", "nodeType": "Agent",
+                                            "materialization": { "templateNodeKey": "subtask", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                          { "nodeKey": "subtask", "nodeType": "DevTask" },
+                                          { "nodeKey": "join", "nodeType": "Join" }],
+                                "edges": [{ "from": "decompose", "to": "join" }]
+                              }
+                              """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Nested)).Message, "Nested materialization is not supported");
+    }
+
+    /// <summary>
+    ///     The width bound (R5) is checked where a definition asks for it, not where a run tries to commit it: the
+    ///     expansion rewrites the run's whole encrypted graph blob, so the fan-out a template allows is the size of that
+    ///     write.
+    /// </summary>
+    [Test]
+    public void Parse_WithAMaterializationOverTheChildCap_IsRejected()
+    {
+        const string TooWide = """
+                               {
+                                 "nodes": [{ "nodeKey": "decompose", "nodeType": "Agent",
+                                             "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 21 } },
+                                           { "nodeKey": "implement", "nodeType": "DevTask" },
+                                           { "nodeKey": "join", "nodeType": "Join" }],
+                                 "edges": [{ "from": "decompose", "to": "join" }]
+                               }
+                               """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(TooWide)).Message, "more than the 20");
     }
 
     [Test]

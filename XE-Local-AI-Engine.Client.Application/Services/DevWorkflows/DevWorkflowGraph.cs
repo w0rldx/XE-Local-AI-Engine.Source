@@ -52,6 +52,13 @@ internal sealed class DevWorkflowGraph
     /// <summary>Defaults for a node that names none. Human waits and inline decisions get one try; work gets three.</summary>
     private const int DefaultWorkNodeMaxAttempts = 3;
 
+    /// <summary>
+    ///     The most children one decomposition may expand into (P2 R5). The materialization transaction rewrites the
+    ///     run's whole encrypted graph blob, so the width of a fan-out is the size of that write — bounded here, at the
+    ///     one place a definition can ask for it, rather than discovered when a run tries to commit it.
+    /// </summary>
+    private const int MaxTemplateChildren = 20;
+
     private readonly Dictionary<string, List<DevWorkflowGraphEdge>> _inbound;
     private readonly Dictionary<string, List<DevWorkflowGraphEdge>> _outbound;
 
@@ -68,6 +75,8 @@ internal sealed class DevWorkflowGraph
         }
 
         EntryNodeKeys = [.. nodes.Keys.Where(key => _inbound[key].Count == 0).OrderBy(key => key, StringComparer.Ordinal)];
+        TemplateKeys = new HashSet<string>(nodes.Values.Where(static node => node.Materialization is not null).SelectMany(node => TemplateSubtree(node.Materialization!)),
+            StringComparer.Ordinal);
     }
 
     public IReadOnlyDictionary<string, DevWorkflowGraphNode> Nodes { get; }
@@ -80,6 +89,13 @@ internal sealed class DevWorkflowGraph
     ///     set to materialize at run start.
     /// </summary>
     public IReadOnlyList<string> EntryNodeKeys { get; }
+
+    /// <summary>
+    ///     Every node of every materialization template SUBTREE — each template root plus what it reaches short of its
+    ///     join node. These are the nodes a run does NOT give a row to at start: they are clones-in-waiting, and one
+    ///     given a row would wait forever on a source the run never instantiates.
+    /// </summary>
+    public IReadOnlySet<string> TemplateKeys { get; }
 
     public IReadOnlyList<DevWorkflowGraphEdge> InboundEdges(string nodeKey) =>
         _inbound.TryGetValue(nodeKey, out var edges) ? edges : [];
@@ -103,6 +119,36 @@ internal sealed class DevWorkflowGraph
 
         _ = seen.Remove(from);
         return seen;
+    }
+
+    /// <summary>
+    ///     One template's nodes: its root and everything reachable from it WITHOUT passing through the join.
+    ///     <para>
+    ///         The join is where a template subtree hands its work back to the graph, so it belongs to the graph and not
+    ///         to the template — walking through it would swallow the whole rest of the run into the set of nodes a run
+    ///         start refuses to instantiate.
+    ///     </para>
+    /// </summary>
+    public HashSet<string> TemplateSubtree(DevWorkflowMaterialization materialization)
+    {
+        ArgumentNullException.ThrowIfNull(materialization);
+
+        var subtree = new HashSet<string>(StringComparer.Ordinal)
+        {
+            materialization.TemplateNodeKey
+        };
+        var pending = new Stack<string>();
+        pending.Push(materialization.TemplateNodeKey);
+        while (pending.Count > 0)
+        {
+            foreach (var edge in OutboundEdges(pending.Pop())
+                         .Where(edge => !string.Equals(edge.To, materialization.JoinNodeKey, StringComparison.Ordinal) && subtree.Add(edge.To)))
+            {
+                pending.Push(edge.To);
+            }
+        }
+
+        return subtree;
     }
 
     /// <summary>
@@ -267,26 +313,19 @@ internal sealed class DevWorkflowGraph
     /// </summary>
     private void Validate()
     {
-        var templateKeys = Nodes.Values.Where(static node => node.Materialization is not null)
-                                .Select(static node => node.Materialization!.TemplateNodeKey)
-                                .ToHashSet(StringComparer.Ordinal);
-
         foreach (var node in Nodes.Values)
         {
             if (node.Materialization is { } materialization)
             {
                 EnsureDeclared(materialization.TemplateNodeKey, $"The materialization on node '{node.NodeKey}' names template node");
                 EnsureDeclared(materialization.JoinNodeKey, $"The materialization on node '{node.NodeKey}' names join node");
-
-                // A template is cloned once per task and every edge its children get is synthesised at materialization,
-                // so it carries none of its own. The rule exists because the alternative HANGS rather than fails: a
-                // template's declared successor would be given a node run at run start, and then wait forever on an
-                // inbound edge whose source is the one node deliberately never instantiated.
-                if (InboundEdges(materialization.TemplateNodeKey).Count > 0 || OutboundEdges(materialization.TemplateNodeKey).Count > 0)
+                if (materialization.MaxChildren > MaxTemplateChildren)
                 {
-                    throw new DevWorkflowValidationException($"Template node '{materialization.TemplateNodeKey}' declares edges of its own. A materialization "
-                                                             + "template is cloned once per task and its children's edges are generated, so the template itself must have none.");
+                    throw new DevWorkflowValidationException($"The materialization on node '{node.NodeKey}' allows {materialization.MaxChildren} children, "
+                                                             + $"more than the {MaxTemplateChildren} one decomposition may expand into.");
                 }
+
+                ValidateTemplateSubtree(node.NodeKey, materialization);
             }
 
             if (node.JoinPolicy == DevWorkflowJoinPolicy.Any && InboundEdges(node.NodeKey).Count < 2)
@@ -296,10 +335,9 @@ internal sealed class DevWorkflowGraph
             }
         }
 
-        // Deliberately exempt: a template node has no inbound edge on purpose, so that the editor can author it and this
-        // validator can check it while nothing ever instantiates it directly. C2 widens this to a template SUBTREE —
-        // its root plus descendants, cloned whole per task — at which point the edge rule above widens with it.
-        var entries = EntryNodeKeys.Where(key => !templateKeys.Contains(key)).ToList();
+        // Deliberately exempt: a template subtree has no inbound edge from outside on purpose, so that the editor can
+        // author it and this validator can check it while nothing ever instantiates it directly.
+        var entries = EntryNodeKeys.Where(key => !TemplateKeys.Contains(key)).ToList();
         if (entries.Count != 1)
         {
             throw new DevWorkflowValidationException(entries.Count == 0
@@ -309,12 +347,13 @@ internal sealed class DevWorkflowGraph
 
         EnsureAcyclic();
 
-        // Templates are exempt, and by the edge rule above they are exempt alone: a template has no subtree to carry in.
+        // Template subtrees are exempt WHOLE: the edge rule above is what makes that safe, because it says the only way
+        // out of one is the join, so exempting the set cannot exempt anything the run would otherwise have to run.
         var reachable = new HashSet<string>(Descendants(entries[0]), StringComparer.Ordinal)
         {
             entries[0]
         };
-        reachable.UnionWith(templateKeys);
+        reachable.UnionWith(TemplateKeys);
 
         if (Nodes.Keys.FirstOrDefault(key => !reachable.Contains(key)) is { } orphan)
         {
@@ -328,6 +367,36 @@ internal sealed class DevWorkflowGraph
             {
                 throw new DevWorkflowValidationException($"Node '{node.NodeKey}' declares retryTarget '{node.RetryTarget}', which is not one of its ancestors. "
                                                          + "Routing a failure to a node that does not lead back here would livelock the run.");
+            }
+        }
+    }
+
+    /// <summary>
+    ///     The structural rule on a template SUBTREE: nothing outside it points into it.
+    ///     <para>
+    ///         It exists because breaking it HANGS rather than fails — a node outside the template that depended on it
+    ///         would wait, at run start and forever, on the one node deliberately never instantiated. It is also the
+    ///         whole of the rule the plan states in two halves: because the subtree is defined as everything the
+    ///         template reaches SHORT OF the join, "no edge leaves it except to the join" is true by construction, and
+    ///         the only way a live node could be swallowed into a template is by being pointed at from outside it,
+    ///         which is what this refuses.
+    ///     </para>
+    /// </summary>
+    private void ValidateTemplateSubtree(string nodeKey, DevWorkflowMaterialization materialization)
+    {
+        var subtree = TemplateSubtree(materialization);
+        foreach (var key in subtree)
+        {
+            if (Nodes[key].Materialization is not null && !string.Equals(key, nodeKey, StringComparison.Ordinal))
+            {
+                throw new DevWorkflowValidationException($"Node '{key}' decomposes work and is inside the materialization template of node '{nodeKey}'. Nested "
+                                                         + "materialization is not supported: a clone that decomposed again would expand a template already expanded.");
+            }
+
+            if (InboundEdges(key).FirstOrDefault(edge => !subtree.Contains(edge.From)) is { } inbound)
+            {
+                throw new DevWorkflowValidationException($"Edge {inbound} points into the materialization template of node '{nodeKey}' from outside it. A template "
+                                                         + "subtree is cloned once per task, so nothing outside it may depend on the copy that is never run.");
             }
         }
     }

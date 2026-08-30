@@ -30,15 +30,12 @@ internal static class DevWorkflowRunSeeds
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(workItem);
 
-        var templateKeys = graph.Nodes.Values.Where(static node => node.Materialization is not null)
-                                .Select(static node => node.Materialization!.TemplateNodeKey)
-                                .ToHashSet(StringComparer.Ordinal);
-        var entryKeys = graph.EntryNodeKeys.Where(key => !templateKeys.Contains(key)).ToHashSet(StringComparer.Ordinal);
+        var entryKeys = graph.EntryNodeKeys.Where(key => !graph.TemplateKeys.Contains(key)).ToHashSet(StringComparer.Ordinal);
 
         // The operator's request has to reach the first agent, and there is no run-level input column: every ENTRY node
         // run is seeded with it, and the objective composer renders it at the top.
         var entryInput = JsonSerializer.Serialize(new EntryInput(workItem.Request, inputsJson), JsonOptions);
-        var seeds = graph.Nodes.Values.Where(node => !templateKeys.Contains(node.NodeKey))
+        var seeds = graph.Nodes.Values.Where(node => !graph.TemplateKeys.Contains(node.NodeKey))
                          .OrderBy(static node => node.NodeKey, StringComparer.Ordinal)
                          .Select(node => new DevWorkflowNodeRunSeed(Guid.NewGuid(),
                              node.NodeKey,

@@ -223,6 +223,32 @@ internal static class DevWorkflowGraphs
                                         }
                                         """;
 
+    /// <summary>
+    ///     The §5.10 decomposition shape: the template is a SUBTREE — an implementation and the validation that judges
+    ///     it, with the fix loop between them — cloned whole once per task into the join the decomposition names. The
+    ///     implementation is an Agent rather than a DevTask so the clones can be driven end to end without a repository;
+    ///     what C2 writes for a DevTask child is its input brief, which is asserted on the row.
+    /// </summary>
+    public const string DecompositionSubtree = """
+                                               {
+                                                 "schemaVersion": 1,
+                                                 "nodes": [
+                                                   { "nodeKey": "decompose", "nodeType": "Agent", "label": "Decompose",
+                                                     "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b",
+                                                     "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                                   { "nodeKey": "implement", "nodeType": "Agent", "label": "Implement",
+                                                     "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                   { "nodeKey": "validate", "nodeType": "Tool", "retryTarget": "implement" },
+                                                   { "nodeKey": "join", "nodeType": "Join" }
+                                                 ],
+                                                 "edges": [
+                                                   { "from": "decompose", "to": "join" },
+                                                   { "from": "implement", "to": "validate" },
+                                                   { "from": "validate", "to": "join" }
+                                                 ]
+                                               }
+                                               """;
+
     /// <summary>One tool node on its own: the smallest thing the sandbox lane can be asked to run.</summary>
     public const string SingleTool = """
                                      {
