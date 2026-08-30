@@ -33,6 +33,20 @@ public sealed record DevelopmentCreateProjectCommand(
     int? MaxDurationSeconds = null,
     string? CommandProfileJson = null);
 
+/// <summary>
+///     One more task on a project that already exists — the task-shaped half of
+///     <see cref="DevelopmentCreateProjectCommand" />, with everything the project owns (repository, trust
+///     acknowledgement, models, egress policy, command profile) inherited by living in it.
+/// </summary>
+public sealed record DevelopmentCreateTaskCommand(
+    Guid ProjectId,
+    Guid TaskId,
+    Guid OperationId,
+    string Title,
+    string Requirements,
+    string AcceptanceCriteriaJson,
+    int MaxReviewRounds = 3);
+
 public sealed record DevelopmentStartAttemptCommand(
     Guid TaskId,
     Guid AttemptId,
@@ -250,6 +264,20 @@ public sealed record DevelopmentArtifactSnapshot(
 public interface IDevelopmentStore
 {
     Task<DevelopmentOperationResult> CreateProjectAsync(DevelopmentCreateProjectCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Adds a task to an existing project. INTERNAL: no endpoint reaches this — the caller is workflow
+    ///     decomposition, which gives every implementation child its own task inside the project the run was already
+    ///     authorised against.
+    ///     <para>
+    ///         Idempotent on <see cref="DevelopmentCreateTaskCommand.OperationId" /> like every other Development
+    ///         mutation, and that is what makes it safe to call before the pointer to the new task is written: a caller
+    ///         that crashes in between re-asks with the same operation identity and is handed the SAME task rather than
+    ///         orphaning it and creating another.
+    ///     </para>
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">The project does not exist.</exception>
+    Task<DevelopmentOperationResult> CreateTaskAsync(DevelopmentCreateTaskCommand command, CancellationToken cancellationToken = default);
     Task<DevelopmentOperationResult> StartAttemptAsync(DevelopmentStartAttemptCommand command, CancellationToken cancellationToken = default);
     Task<DevelopmentOperationResult> TerminalizeAttemptAsync(DevelopmentTerminalizeAttemptCommand command, CancellationToken cancellationToken = default);
     Task<DevelopmentOperationResult> TransitionTaskAsync(DevelopmentTransitionTaskCommand command, CancellationToken cancellationToken = default);

@@ -141,12 +141,18 @@ public sealed partial class DevelopmentStore
         EnsureNotBlank(command.Objective, "objective");
         EnsureNotBlank(command.RepositoryIdentityHash, "repositoryIdentityHash");
         EnsureNotBlank(command.BaseBranch, "baseBranch");
-        EnsureNotBlank(command.Title, "title");
-        EnsureNotBlank(command.Requirements, "requirements");
-        EnsureNotBlank(command.AcceptanceCriteriaJson, "acceptanceCriteriaJson");
-        if (command.MaxReviewRounds <= 0)
+        ValidateTask(command.Title, command.Requirements, command.AcceptanceCriteriaJson, command.MaxReviewRounds);
+    }
+
+    /// <summary>What every task needs whether it arrives with its project or is added to one later.</summary>
+    private static void ValidateTask(string title, string requirements, string acceptanceCriteriaJson, int maxReviewRounds)
+    {
+        EnsureNotBlank(title, "title");
+        EnsureNotBlank(requirements, "requirements");
+        EnsureNotBlank(acceptanceCriteriaJson, "acceptanceCriteriaJson");
+        if (maxReviewRounds <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(command), "Maximum review rounds must be positive.");
+            throw new ArgumentOutOfRangeException(nameof(maxReviewRounds), "Maximum review rounds must be positive.");
         }
     }
 
