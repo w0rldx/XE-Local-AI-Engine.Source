@@ -47,6 +47,10 @@ internal static class AddNodeDevWorkflowsExtensions
         // delay a node asks for before trying again outlives the tick that scheduled it.
         builder.Services.AddSingleton<DevWorkflowRetryPolicy>();
 
+        // A singleton for the same reason, and because it holds nothing between ticks: everything it reads it is
+        // handed, and everything it writes goes through the store inside the tick's own serialization.
+        builder.Services.AddSingleton<DevWorkflowMaterializer>();
+
         // Scoped: both reach the run store and the work-session family through scoped stores, and the dispatcher
         // resolves them inside the per-tick scope it already opens.
         builder.Services.AddScoped<DevWorkflowArtifactPromotion>();

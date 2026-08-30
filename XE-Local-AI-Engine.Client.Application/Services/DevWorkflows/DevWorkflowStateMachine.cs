@@ -100,8 +100,14 @@ internal static class DevWorkflowStateMachine
     ///     <para>
     ///         <c>All</c> over ZERO inbound edges is vacuously satisfied, and that is load-bearing rather than pedantic:
     ///         it is how an entry node becomes eligible at all (Start is implicit, so an entry node is one with no
-    ///         inbound edges), and it is what lets a decomposition that produced no tasks finish — the join is left with
-    ///         no inbound edges, proceeds, and the run completes. The opposite reading hangs such a run forever.
+    ///         inbound edges), and it is what lets a decomposition that produced no tasks finish — its join is left with
+    ///         nothing to wait for, proceeds, and the run completes. The opposite reading hangs such a run forever.
+    ///     </para>
+    ///     <para>
+    ///         An edge whose source is a materialization TEMPLATE is not a dependency and is dropped here. The template
+    ///         is the one node deliberately never instantiated, so its edge into the join can never be satisfied and can
+    ///         never die either — it is the authored shape the clones' own edges stand in for, and reading it as a
+    ///         dependency would leave every decomposing run waiting on a row that is never written.
     ///     </para>
     /// </summary>
     public static DevWorkflowNodeAdmission Admission(DevWorkflowGraphNode node,
@@ -113,6 +119,7 @@ internal static class DevWorkflowStateMachine
         ArgumentNullException.ThrowIfNull(nodeRunsByKey);
 
         var states = graph.InboundEdges(node.NodeKey)
+                          .Where(edge => !graph.TemplateKeys.Contains(edge.From))
                           .Select(edge => EdgeState(edge, nodeRunsByKey.GetValueOrDefault(edge.From)))
                           .ToList();
 
@@ -356,9 +363,14 @@ internal static class DevWorkflowStateMachine
                 or DevWorkflowNodeRunStatus.Failed
                 or DevWorkflowNodeRunStatus.Cancelled,
 
+            // Succeeded has one move the other terminals do not, and exactly one: a decomposition's output is JUDGED
+            // after the row that produced it settled, so a task package nothing can use has to stand its own author
+            // down for a human. Leaving it Succeeded would let the run complete over work it never decomposed, and
+            // failing it would say the agent broke when what it did was answer badly.
+            DevWorkflowNodeRunStatus.Succeeded => to is DevWorkflowNodeRunStatus.Pending or DevWorkflowNodeRunStatus.Blocked,
+
             // The fix loop's reset, and only it. See the remarks above.
-            DevWorkflowNodeRunStatus.Succeeded
-                or DevWorkflowNodeRunStatus.Failed
+            DevWorkflowNodeRunStatus.Failed
                 or DevWorkflowNodeRunStatus.Skipped
                 or DevWorkflowNodeRunStatus.Cancelled => to is DevWorkflowNodeRunStatus.Pending,
             _ => false

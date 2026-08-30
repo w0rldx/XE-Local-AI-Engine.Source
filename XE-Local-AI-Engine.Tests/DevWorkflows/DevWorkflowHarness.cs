@@ -227,6 +227,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
             // handed itself a fresh set of slots would be simulating a machine with twice the sandbox capacity.
             Services.GetRequiredService<DevWorkflowToolExecutor>(),
             Services.GetRequiredService<DevWorkflowRetryPolicy>(),
+            Services.GetRequiredService<DevWorkflowMaterializer>(),
             Options.Create(new DevWorkflowOptions
             {
                 Enabled = enabled,

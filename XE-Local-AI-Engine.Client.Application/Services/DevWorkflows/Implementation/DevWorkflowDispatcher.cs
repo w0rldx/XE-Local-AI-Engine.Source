@@ -72,6 +72,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     private readonly CancellationTokenSource _stopping = new();
     private readonly DevWorkflowGraphCache _graphs;
     private readonly ILogger<DevWorkflowDispatcher> _logger;
+    private readonly DevWorkflowMaterializer _materializer;
     private readonly DevWorkflowOptions _options;
     private readonly DevWorkflowRetryPolicy _retries;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -84,6 +85,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         DevWorkflowGraphCache graphs,
         DevWorkflowToolExecutor tools,
         DevWorkflowRetryPolicy retries,
+        DevWorkflowMaterializer materializer,
         IOptions<DevWorkflowOptions> options,
         TimeProvider timeProvider,
         ILogger<DevWorkflowDispatcher> logger)
@@ -93,6 +95,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
         _tools = tools ?? throw new ArgumentNullException(nameof(tools));
         _retries = retries ?? throw new ArgumentNullException(nameof(retries));
+        _materializer = materializer ?? throw new ArgumentNullException(nameof(materializer));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
@@ -240,6 +243,21 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         {
             written += await DrainAsync(store, lanes, run, cancellationToken).ConfigureAwait(false);
             return written;
+        }
+
+        // A decomposition that has settled grows the graph, and the tick ENDS there (§5.3): everything below judges
+        // node runs against a parsed graph, and this call has just replaced the one this tick parsed. The next tick
+        // re-parses on the bumped revision and admits what the expansion created — which is what the parse-count
+        // assertion pins, because the failure mode is silent rather than loud.
+        var materialized = await _materializer.MaterializeAsync(store,
+                graph,
+                run,
+                await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false),
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (materialized > 0)
+        {
+            return written + materialized;
         }
 
         written += await AdmitAsync(store, lanes, run, graph, cancellationToken).ConfigureAwait(false);
