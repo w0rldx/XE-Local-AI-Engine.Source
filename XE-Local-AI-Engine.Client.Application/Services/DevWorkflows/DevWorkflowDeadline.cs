@@ -7,7 +7,13 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     <para>
 ///         Derived from the ROW — its <c>StartedAtUtc</c> plus the node's declared timeout — and never held in memory. A
 ///         deadline a process owns dies with that process, and the node run it was bounding would then run until
-///         something else noticed; re-deriving it from the row on every tick is what makes a restart cost nothing here.
+///         something else noticed.
+///     </para>
+///     <para>
+///         Restart recovery is NOT this class's story, and claiming it would be an overclaim: the startup reconciler
+///         collapses every in-flight sandbox row to <c>Pending</c> before the first tick, so a row that survived a
+///         restart carries no start instant for anything here to expire. What this reaches is what nothing else bounds
+///         — an agent session that never lands, and a sandbox pass that stops answering its own budget.
 ///     </para>
 ///     <para>
 ///         A pause needs no special case, which is the payoff for deriving it this way. The store clears

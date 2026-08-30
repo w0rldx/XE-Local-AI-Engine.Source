@@ -44,6 +44,16 @@ public sealed class DevWorkflowDevTaskTests
                                                        }
                                                        """;
 
+    /// <summary>One implementation node on a five-second budget, with nothing left to try after it.</summary>
+    private const string ImpatientDevTask = """
+                                            {
+                                              "schemaVersion": 1,
+                                              "nodes": [{ "nodeKey": "implement", "nodeType": "DevTask", "label": "Implement", "maxAttempts": 1,
+                                                          "nodeTimeoutSeconds": 5 }],
+                                              "edges": []
+                                            }
+                                            """;
+
     /// <summary>One implementation node with one re-attempt in hand.</summary>
     private const string SingleDevTask = """
                                          {
@@ -235,12 +245,70 @@ public sealed class DevWorkflowDevTaskTests
         AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "Development Mode is switched off");
     }
 
+    /// <summary>
+    ///     A node deadline reaches the development chain too: the attempt in flight is stopped and the node run ends on
+    ///     the clock rather than on whatever that attempt would eventually have said.
+    /// </summary>
+    [Test]
+    public async Task ADevTaskNodeRunPastItsDeadlineStopsTheAttemptAndEndsOnTheClock()
+    {
+        var clock = new ManualTimeProvider();
+        await using var harness = NewHarness(clock);
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        harness.Chain.HoldNextAttempt();
+        var runId = await harness.StartRunAsync(ImpatientDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Status);
+
+        clock.Advance(TimeSpan.FromMinutes(10));
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1, harness.Chain.CancelledAttempts.Count, "the attempt is stopped rather than left running under a settled row.");
+        var expired = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, expired.Status, "the node allowed one attempt, so a timeout has nowhere left to go but a human.");
+        AssertEx.Equal(DevWorkflowFailureClasses.Timeout, expired.FailureClass, "the clock is why it ended, not the attempt it happened to cancel on the way.");
+        AssertEx.Contains(AssertEx.NotNull(expired.TerminalReason), "5 seconds");
+        AssertEx.Equal(taskId, expired.DevelopmentTaskId);
+    }
+
+    /// <summary>
+    ///     A node run against a task the chain has ALREADY driven to <c>AwaitingApply</c> succeeds without asking it for
+    ///     anything — the development state machine has no way back to <c>InProgress</c>, and the claim the node makes
+    ///     is true either way. This is what a fix loop routed into an implementation node lands on.
+    /// </summary>
+    [Test]
+    public async Task ANodeRunAgainstAnAlreadyImplementedTaskSucceedsWithoutDrivingIt()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        while ((await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status != DevelopmentTaskStatus.AwaitingApply)
+        {
+            _ = await harness.Chain.StartNextActionAsync(projectId, taskId, Guid.NewGuid()).ConfigureAwait(false);
+        }
+
+        var driven = harness.Chain.Actions.Count;
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
+        AssertEx.Equal(expected: 1, implemented.Attempt);
+        AssertEx.Contains(AssertEx.NotNull(implemented.OutputJson), "\"taskStatus\":\"AwaitingApply\"");
+        AssertEx.Equal(driven, harness.Chain.Actions.Count, "the node run asked the chain for nothing: there was nothing left for it to do.");
+    }
+
     /// <summary>The workflow host with the development chain scripted, and its own development project to drive.</summary>
-    private static DevWorkflowHarness NewHarness() =>
+    private static DevWorkflowHarness NewHarness(TimeProvider? clock = null) =>
         new(services =>
         {
             services.RemoveAll<IDevelopmentManagementService>();
             services.AddSingleton<IDevelopmentManagementService>(provider => new FakeDevelopmentTaskChain(provider.GetRequiredService<IServiceScopeFactory>()));
+            if (clock is not null)
+            {
+                services.AddSingleton(clock);
+            }
         });
 
     /// <summary>

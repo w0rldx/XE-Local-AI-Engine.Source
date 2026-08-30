@@ -44,20 +44,26 @@ internal sealed class DevWorkflowDevTaskExecutor
     private readonly ILogger<DevWorkflowDevTaskExecutor> _logger;
     private readonly DevWorkflowRetryPolicy _retries;
     private readonly IServiceProvider _services;
+    private readonly TimeProvider _timeProvider;
 
-    public DevWorkflowDevTaskExecutor(IServiceProvider services, DevWorkflowRetryPolicy retries, ILogger<DevWorkflowDevTaskExecutor> logger)
+    public DevWorkflowDevTaskExecutor(IServiceProvider services,
+        DevWorkflowRetryPolicy retries,
+        TimeProvider timeProvider,
+        ILogger<DevWorkflowDevTaskExecutor> logger)
     {
         _services = services ?? throw new ArgumentNullException(nameof(services));
         _retries = retries ?? throw new ArgumentNullException(nameof(retries));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
     ///     Binds the node run to the task it implements and asks the chain for its next action.
     ///     <para>
-    ///         No <c>Queued</c> hop: this lane hands out no slots. What bounds the work is Dev Mode's own rule that a
-    ///         task has at most one active attempt, and a <c>Queued</c> row would have to name a queue reason for a
-    ///         queue that does not exist.
+    ///         No <c>Queued</c> hop: this lane hands out no slots, and a <c>Queued</c> row would have to name a queue
+    ///         reason for a queue that does not exist. What bounds the work is <c>MaxConcurrentRuns</c> — Dev Mode's own
+    ///         one-active-attempt rule is per TASK, so four runs on four projects legitimately drive four attempts at
+    ///         once — and each of those attempts carries the development attempt-duration budget of its own.
     ///     </para>
     /// </summary>
     public async Task<int> DispatchAsync(IDevWorkflowStore store,
@@ -116,6 +122,11 @@ internal sealed class DevWorkflowDevTaskExecutor
                 .ConfigureAwait(false);
         }
 
+        // Read from the same clock the store stamps the row with, and read BEFORE the write so it is a lower bound on
+        // that stamp. The dispatch path has to carry it: the row this call goes on to judge attempts against is the one
+        // composed below, and a snapshot still holding the pre-dispatch null would make that comparison vacuous.
+        var startedAt = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
         // The pointer is written with the status, in the same transaction: a row reading Running with no task named is
         // a row nothing can poll, and this is the only write that could leave one.
         DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowNodeRunStatus.Running, nodeRun.NodeKey);
@@ -133,7 +144,8 @@ internal sealed class DevWorkflowDevTaskExecutor
                 nodeRun with
                 {
                     Status = DevWorkflowNodeRunStatus.Running,
-                    DevelopmentTaskId = tasks[0].Id
+                    DevelopmentTaskId = tasks[0].Id,
+                    StartedAtUtc = startedAt
                 },
                 nodeRuns,
                 development,
@@ -354,8 +366,8 @@ internal sealed class DevWorkflowDevTaskExecutor
         // Only the attempts THIS node-run attempt is answerable for. A failed attempt from a previous round is still on
         // the task — it is the evidence of that round — and reading it as this round's answer would settle every
         // re-attempt off the failure that caused it, spending the node's whole budget without ever asking the chain to
-        // try again. Both instants come from the same clock and the row is stamped Running before anything is started,
-        // so the comparison is a fact about ordering rather than a guess.
+        // try again. Both instants come from the same clock and the row's is taken before anything is started, so the
+        // comparison is a fact about ordering rather than a guess.
         if (attempts.LastOrDefault(attempt => attempt.StartedAtUtc >= nodeRun.StartedAtUtc) is { Status: not DevelopmentAttemptStatus.Succeeded } landed)
         {
             // The attempt failed, was interrupted by a restart, or was cancelled. Where that leads — another attempt at
