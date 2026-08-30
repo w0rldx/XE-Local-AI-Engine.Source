@@ -58,15 +58,13 @@ internal sealed class DevWorkflowRetryPolicy
     /// </summary>
     private readonly ConcurrentDictionary<Guid, DateTimeOffset> _notBefore = new();
 
-    private readonly ILogger<DevWorkflowRetryPolicy> _logger;
     private readonly DevWorkflowOptions _options;
     private readonly TimeProvider _timeProvider;
 
-    public DevWorkflowRetryPolicy(IOptions<DevWorkflowOptions> options, TimeProvider timeProvider, ILogger<DevWorkflowRetryPolicy> logger)
+    public DevWorkflowRetryPolicy(IOptions<DevWorkflowOptions> options, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(options);
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
     }
 
