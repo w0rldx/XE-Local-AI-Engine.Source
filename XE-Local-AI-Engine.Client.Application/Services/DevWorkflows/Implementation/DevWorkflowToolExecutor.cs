@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -258,6 +259,11 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     }
 
     /// <summary>The detached pass: its own scope, its own cancellation, and a result rather than a row.</summary>
+    [SuppressMessage("Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "Ownership transfers to the in-flight entry, which outlives this call by design: the poll disposes it "
+                        + "when it settles the row, and DisposeAsync disposes whatever is left. Disposing here would cancel "
+                        + "the pass that was just started.")]
     private InFlight Start(DevWorkflowRunSnapshot run, DevWorkflowGraphNode node, DevWorkflowNodeRunSnapshot nodeRun)
     {
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
