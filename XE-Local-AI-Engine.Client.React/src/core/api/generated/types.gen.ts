@@ -3714,6 +3714,7 @@ export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse =
 	blockedReason?: string | null;
 	approvedSubjectHash?: string | null;
 	version?: number;
+	workflowRunId?: string | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse = {

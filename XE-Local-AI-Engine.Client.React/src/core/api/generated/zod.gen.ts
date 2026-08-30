@@ -4461,6 +4461,7 @@ export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentTaskResponse
 	blockedReason: z.string().nullish(),
 	approvedSubjectHash: z.string().nullish(),
 	version: z.int().optional(),
+	workflowRunId: z.guid().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentV1DevelopmentAttemptResponse = z.object({

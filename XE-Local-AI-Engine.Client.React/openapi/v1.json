@@ -32728,6 +32728,11 @@
           },
           "version": {
             "type": "integer"
+          },
+          "workflowRunId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
           }
         }
       },
