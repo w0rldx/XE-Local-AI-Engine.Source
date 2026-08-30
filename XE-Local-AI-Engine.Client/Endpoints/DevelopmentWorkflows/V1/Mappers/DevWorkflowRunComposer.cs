@@ -38,11 +38,14 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         var definitions = await _store.ListDefinitionsAsync(includeArchived: true, cancellationToken).ConfigureAwait(false);
         var definitionName = definitions.FirstOrDefault(definition => definition.Id == run.DefinitionId)?.Name;
 
+        // Once for the run, not once per node run: it is a parse of the same blob every summary would otherwise repeat.
+        var templates = DevWorkflowGraphContract.TemplateNodeKeys(run.GraphJson);
         var nodes = detail.NodeRuns
                           .Select(nodeRun => ToSummary(nodeRun,
                               nodesByKey.GetValueOrDefault(nodeRun.NodeKey),
                               graph,
                               byKey,
+                              templates,
                               keysByNodeRunId,
                               agentsById,
                               staleInputs.Contains(nodeRun.Id)))
@@ -142,6 +145,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
         DevWorkflowGraphNode? node,
         DevWorkflowGraph graph,
         IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey,
+        IReadOnlySet<string> templates,
         IReadOnlyDictionary<Guid, string> keysByNodeRunId,
         IReadOnlyDictionary<Guid, AgentDefinitionRecord> agentsById,
         bool hasStaleInputs) =>
@@ -154,7 +158,7 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             nodeRun.MaxAttempts,
             nodeRun.QueueReason,
             nodeRun.QueuedAtUtc,
-            WaitingOnNodeKeys(nodeRun, graph, byKey),
+            WaitingOnNodeKeys(nodeRun, graph, byKey, templates),
             nodeRun.PendingDecisionKind?.ToString(),
             nodeRun.MaterializedFromNodeRunId is not null,
             nodeRun.MaterializedFromNodeRunId is { } parent ? keysByNodeRunId.GetValueOrDefault(parent) : null,
@@ -183,14 +187,14 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
     /// </summary>
     private static IReadOnlyList<string>? WaitingOnNodeKeys(DevWorkflowNodeRunSnapshot nodeRun,
         DevWorkflowGraph graph,
-        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey)
+        IReadOnlyDictionary<string, DevWorkflowNodeRunSnapshot> byKey,
+        IReadOnlySet<string> templates)
     {
         if (nodeRun.Status != DevWorkflowNodeRunStatus.Pending)
         {
             return null;
         }
 
-        var templates = TemplateKeys(graph);
         var waiting = graph.Edges.Where(edge => string.Equals(edge.To, nodeRun.NodeKey, StringComparison.Ordinal))
                            .Select(static edge => edge.From)
                            .Where(from => !templates.Contains(from)
@@ -203,37 +207,6 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
                            .OrderBy(static key => key, StringComparer.Ordinal)
                            .ToList();
         return waiting.Count == 0 ? null : waiting;
-    }
-
-    /// <summary>
-    ///     Every node of every materialization template subtree — each template root plus what it reaches short of its
-    ///     join, which is exactly the set the runtime gives no node run to. Computed off the wire graph already in hand
-    ///     rather than by re-parsing the blob, and it mirrors the runtime's own reading of the same document.
-    /// </summary>
-    private static HashSet<string> TemplateKeys(DevWorkflowGraph graph)
-    {
-        var templates = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var materialization in graph.Nodes.Select(static node => node.Materialization).OfType<DevWorkflowMaterialization>())
-        {
-            var pending = new Stack<string>();
-            if (templates.Add(materialization.TemplateNodeKey))
-            {
-                pending.Push(materialization.TemplateNodeKey);
-            }
-
-            while (pending.Count > 0)
-            {
-                var key = pending.Pop();
-                foreach (var edge in graph.Edges.Where(edge => string.Equals(edge.From, key, StringComparison.Ordinal)
-                                                               && !string.Equals(edge.To, materialization.JoinNodeKey, StringComparison.Ordinal)
-                                                               && templates.Add(edge.To)))
-                {
-                    pending.Push(edge.To);
-                }
-            }
-        }
-
-        return templates;
     }
 
     /// <summary>

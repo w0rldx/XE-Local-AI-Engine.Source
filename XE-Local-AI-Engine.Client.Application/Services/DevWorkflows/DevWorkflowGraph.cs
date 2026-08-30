@@ -270,6 +270,7 @@ internal sealed class DevWorkflowGraph
     private static List<DevWorkflowGraphEdge> ParseEdges(JsonElement root, Dictionary<string, DevWorkflowGraphNode> nodes)
     {
         var edges = new List<DevWorkflowGraphEdge>();
+        var pairs = new HashSet<(string From, string To)>();
         if (!root.TryGetProperty("edges", out var edgesElement) || edgesElement.ValueKind == JsonValueKind.Null)
         {
             return edges;
@@ -298,6 +299,16 @@ internal sealed class DevWorkflowGraph
             if (!nodes.ContainsKey(from) || !nodes.ContainsKey(to))
             {
                 throw new DevWorkflowValidationException($"Edge {edge} names a node the graph does not declare.");
+            }
+
+            // One edge per pair of nodes. Two of them cannot mean what an author writing two would intend: the
+            // admission rule judges every inbound edge on its own, so a second edge whose condition does not fire is
+            // DEAD and skips the target — an "or" written this way routes the opposite of the way it reads. Refusing
+            // it here is also what keeps the pair usable as a key, which the materialization's edge rewrite relies on.
+            if (!pairs.Add((from, to)))
+            {
+                throw new DevWorkflowValidationException($"The workflow graph declares edge {edge} twice. A second edge between the same two nodes "
+                                                         + "cannot widen the first: each is judged on its own, and one whose condition does not fire skips the target.");
             }
 
             edges.Add(edge);

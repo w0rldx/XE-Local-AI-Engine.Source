@@ -249,10 +249,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         // node runs against a parsed graph, and this call has just replaced the one this tick parsed. The next tick
         // re-parses on the bumped revision and admits what the expansion created — which is what the parse-count
         // assertion pins, because the failure mode is silent rather than loud.
+        // The rows this tick already read, re-read ONLY if a decision moved one: the decomposition it is looking for
+        // has to be Succeeded, and a tick that settled nothing cannot have changed which rows are.
         var materialized = await _materializer.MaterializeAsync(store,
                 graph,
                 run,
-                await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false),
+                settledCount > 0 ? await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false) : nodeRuns,
                 cancellationToken)
             .ConfigureAwait(false);
         if (materialized > 0)

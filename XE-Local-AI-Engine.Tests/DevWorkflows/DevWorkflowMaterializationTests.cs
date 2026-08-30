@@ -140,8 +140,14 @@ public sealed class DevWorkflowMaterializationTests
 
     /// <summary>
     ///     Walkthrough #9: the expansion is idempotent. A tick replayed after a crash — or simply another tick over a
-    ///     decomposition that has already grown — finds the commit marker and writes nothing, rather than cloning the
-    ///     template a second time under keys the store would refuse.
+    ///     decomposition that has already grown — finds the commit marker and does not expand again.
+    ///     <para>
+    ///         The assertion that carries this is the DECOMPOSITION's own row, not the row count. Without the marker
+    ///         the second pass re-reads the same package, re-derives the same clone keys, and is refused for taking
+    ///         node keys the run already carries — which stands the decomposition down and re-attempts it. The counts
+    ///         all still match at that point, so a test asserting only those passes while the run quietly re-runs the
+    ///         node whose answer it had already used.
+    ///     </para>
     /// </summary>
     [Test]
     public async Task AReplayedMaterializationWritesNothingASecondTime()
@@ -155,6 +161,11 @@ public sealed class DevWorkflowMaterializationTests
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
         var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        var decompose = await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded,
+            decompose.Status,
+            $"the replay left the decomposition alone; it is {decompose.Status}: {decompose.TerminalReason}");
+        AssertEx.Equal(expected: 1, decompose.Attempt, "and did not spend an attempt re-running the node whose answer the run already used.");
         AssertEx.Equal(rowsAfterFirst, (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Count, "a replay clones nothing again.");
         AssertEx.Equal(expected: 1, run.GraphRevision, "and bumps no second revision, so the graph a reader pinned is still the graph.");
         AssertEx.Equal(expected: 1, (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "graph.changed"));
@@ -176,9 +187,10 @@ public sealed class DevWorkflowMaterializationTests
         AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
         AssertEx.Equal(expected: 2, (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Count, "no children, and no rows invented for a template nothing cloned.");
         AssertEx.Equal(expected: 0, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).GraphRevision, "there was no rewrite to make: the graph already said this.");
-        AssertEx.Equal(expected: 1,
-            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "graph.changed"),
-            "the marker is still written, or every later tick would read the same artifact and decide the same thing again.");
+        var marker = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Single(static entry => entry.EventType == "graph.changed");
+        AssertEx.Contains(AssertEx.NotNull(marker.DetailJson),
+            "\"revisionBumped\":false",
+            message: "the one graph.changed that changes no graph says so, or a consumer refetches and gets the same revision back.");
     }
 
     /// <summary>
@@ -266,6 +278,51 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
+    ///     A collision on a NON-root clone is refused as cleanly as one on the root. The template's descendants are
+    ///     cloned under the same "{nodeKey}#{taskId}" layout, so a graph that happens to declare a node by one of those
+    ///     names collides just as hard — and reaching the store with it is not a refusal, it is a throw out of the tick
+    ///     that leaves the run with nothing moving and nothing to read.
+    /// </summary>
+    [Test]
+    public async Task ATaskWhoseCloneWouldTakeANonRootNodeKeyIsRefusedRatherThanWedging()
+    {
+        const string CollidingGraph = """
+                                      {
+                                        "schemaVersion": 1,
+                                        "nodes": [
+                                          { "nodeKey": "decompose", "nodeType": "Agent", "label": "Decompose",
+                                            "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b",
+                                            "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                          { "nodeKey": "implement", "nodeType": "Agent", "label": "Implement",
+                                            "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                          { "nodeKey": "validate", "nodeType": "Tool" },
+                                          { "nodeKey": "join", "nodeType": "Join" },
+                                          { "nodeKey": "validate#alpha", "nodeType": "Tool", "label": "A node an author happened to name this" }
+                                        ],
+                                        "edges": [
+                                          { "from": "decompose", "to": "join" },
+                                          { "from": "implement", "to": "validate" },
+                                          { "from": "validate", "to": "join" },
+                                          { "from": "join", "to": "validate#alpha" }
+                                        ]
+                                      }
+                                      """;
+
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness, """[{"id":"alpha","goal":"Do the half nobody named."}]""", CollidingGraph).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var decompose = await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, decompose.Status, $"the row settled on {decompose.Status} rather than the run wedging on a refused insert.");
+        AssertEx.Contains(AssertEx.NotNull(decompose.TerminalReason), "validate#alpha");
+        AssertEx.Equal(expected: 3,
+            (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Count,
+            "the run still carries only its own rows: decompose, the join, and the node whose name was taken.");
+    }
+
+    /// <summary>
     ///     The seam that makes any of this reachable: a work session has no word for a task package, so the NODE declares
     ///     the kind it produces and the promotion writes it. Without it every decomposition's own output lands as an
     ///     ordinary report and §5.9 step 1 finds nothing to read.
@@ -283,9 +340,9 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>Starts a decomposing run and takes it to the point where its package is written and its session done.</summary>
-    private static async Task<Guid> DecomposeAsync(DevWorkflowHarness harness, string package)
+    private static async Task<Guid> DecomposeAsync(DevWorkflowHarness harness, string package, string? graphJson = null)
     {
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(graphJson ?? DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", package).ConfigureAwait(false);
         await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);

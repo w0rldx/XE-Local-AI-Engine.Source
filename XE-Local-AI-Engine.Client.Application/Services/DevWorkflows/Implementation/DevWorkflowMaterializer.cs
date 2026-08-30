@@ -119,12 +119,21 @@ internal sealed class DevWorkflowMaterializer
             // A decomposition may legitimately answer "there is no follow-up work". The graph is left exactly as it is
             // — the join keeps its edge from this node and fires on it — and only the marker is written, so the next
             // tick knows this decomposition is done rather than reading its artifact again forever.
+            //
+            // The detail says so: this is the one graph.changed that changes no graph, and a consumer that refetched
+            // on the token alone would fetch the same revision back. `graphRevision` is the run's CURRENT one, which
+            // has not moved.
             _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand(run.Id,
                                    DevWorkflowVersions.Any,
                                    DevWorkflowEventTypes.GraphChanged,
                                    producer.Id,
                                    operationId,
-                                   DetailJson: JsonSerializer.Serialize(new ExpansionDetail(producer.NodeKey, TaskCount: 0, package.ArtifactId), JsonOptions)),
+                                   DetailJson: JsonSerializer.Serialize(new ExpansionDetail(producer.NodeKey,
+                                           TaskCount: 0,
+                                           package.ArtifactId,
+                                           run.GraphRevision,
+                                           RevisionBumped: false),
+                                       JsonOptions)),
                                cancellationToken)
                            .ConfigureAwait(false);
             return 1;
@@ -159,6 +168,14 @@ internal sealed class DevWorkflowMaterializer
     ///         carrying the schema error in its objective — the cheapest correction loop available, since the thing that
     ///         wrote the document is the thing that can fix it — and the answer when that is spent is a human.
     ///     </para>
+    ///     <para>
+    ///         Two things the stand-down does to a row that had SUCCEEDED, both deliberate. Its <c>EndedAtUtc</c> is
+    ///         the success's, and is left alone: the agent really did finish then, and re-stamping it would date the
+    ///         node's work to the moment its output was judged. And its <c>OutputJson</c> is REPLACED by the refusal,
+    ///         losing the document the node panel had been rendering — accepted, because the panel's job is to explain
+    ///         the row's current state, that state is Blocked, and the reason it is blocked is the more useful of the
+    ///         two answers. The promoted artifact still holds what the node actually produced.
+    ///     </para>
     /// </summary>
     private async Task<int> RejectAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
@@ -185,6 +202,16 @@ internal sealed class DevWorkflowMaterializer
     /// <summary>
     ///     The newest task package this node produced, parsed — or the sentence an operator and the next attempt are
     ///     both told.
+    ///     <para>
+    ///         <b>Deliberately not attempt-scoped, and this is the one place that reading is right.</b> Artifacts are
+    ///         run-scoped, so a re-attempt that saved nothing leaves attempt 1's package the newest — and judging
+    ///         attempt 2 on it is the correct answer here, because the package IS the node's output: an attempt that
+    ///         produced no new one has not corrected anything, and the second refusal is what stands the node down for
+    ///         a human. Do not "fix" this by keying on the attempt. It is the shape F5's HIGH-1 got wrong for a node
+    ///         PANEL — where showing a previous attempt's evidence as current is a lie — reaching the opposite verdict
+    ///         here for the same reason: there, the question is "what did this attempt do"; here, it is "is there a
+    ///         usable package on this run yet".
+    ///     </para>
     /// </summary>
     private async Task<TaskPackage> ReadPackageAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
@@ -261,7 +288,8 @@ internal sealed class DevWorkflowMaterializer
             return $"The task package names {tasks.Count} tasks, more than the {materialization.MaxChildren} this decomposition allows.";
         }
 
-        if (existingNodeRuns + (tasks.Count * graph.TemplateSubtree(materialization).Count) > maxNodeRunsPerRun)
+        var subtree = graph.TemplateSubtree(materialization);
+        if (existingNodeRuns + (tasks.Count * subtree.Count) > maxNodeRunsPerRun)
         {
             return $"Expanding {tasks.Count} tasks would take this run past the {maxNodeRunsPerRun} node runs it may carry.";
         }
@@ -284,9 +312,12 @@ internal sealed class DevWorkflowMaterializer
                 return $"The task package names '{task.Id}' twice, and two tasks cannot share one identity.";
             }
 
-            if (graph.Nodes.ContainsKey(CloneKey(materialization.TemplateNodeKey, task.Id)))
+            // EVERY node of the subtree, not just its root: a graph that happens to declare a node named like one of
+            // the other clones collides just as hard, and the collision surfaces at the store as a refused insert —
+            // which throws out of the tick and wedges the run rather than standing this node down.
+            if (subtree.Select(key => CloneKey(key, task.Id)).FirstOrDefault(graph.Nodes.ContainsKey) is { } taken)
             {
-                return $"Task '{task.Id}' would take the node key of one this run already carries.";
+                return $"Task '{task.Id}' would take the node key '{taken}', which this run already carries.";
             }
         }
 
@@ -478,8 +509,8 @@ internal sealed class DevWorkflowMaterializer
     /// </summary>
     private sealed record DevTaskBrief(string? Title, string Requirements, string? AcceptanceCriteriaJson);
 
-    /// <summary>What the commit marker carries when there is no expansion to describe: which node, and off what.</summary>
-    private sealed record ExpansionDetail(string NodeKey, int TaskCount, Guid SourceArtifactId);
+    /// <summary>What the commit marker carries when there is no expansion to describe: which node, off what, and that the graph did not move.</summary>
+    private sealed record ExpansionDetail(string NodeKey, int TaskCount, Guid SourceArtifactId, int GraphRevision, bool RevisionBumped);
 
     /// <summary>A decomposition whose own output it cannot use. The reason travels into the next attempt's objective.</summary>
     private sealed record RejectedOutput(string Status, int Attempt, string FailureClass, string MaterializationError);

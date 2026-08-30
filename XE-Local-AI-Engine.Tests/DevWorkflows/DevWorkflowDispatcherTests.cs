@@ -658,6 +658,34 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
+    ///     A run pinned to a graph that declares one edge twice fails the same way, with the sentence saying why.
+    ///     <para>
+    ///         A CONSEQUENCE of refusing duplicates at parse, and the better of the two failures available: such a
+    ///         graph used to parse, and then threw out of the materialization step on a duplicate key — where the
+    ///         tick's catch-all logs it and drops it, so every sweep re-threw and the run sat with nothing moving and
+    ///         nothing to read. A refusal a person can act on beats a silent wedge.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ARunPinnedToAGraphWithADuplicateEdgeFailsWithTheReasonRatherThanWedging()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync("""
+                                                {"schemaVersion":1,
+                                                 "nodes":[{"nodeKey":"a","nodeType":"Gate"},{"nodeKey":"b","nodeType":"Join"}],
+                                                 "edges":[{"from":"a","to":"b"},{"from":"a","to":"b"}]}
+                                                """)
+                                 .ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Failed, run.Status, "a graph nothing can route is written down as refused, not retried forever.");
+        AssertEx.Equal("Configuration", run.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(run.TerminalReason), "twice");
+    }
+
+    /// <summary>
     ///     The parsed graph is cached per run and invalidated by the run's revision, so a run that ticks many times
     ///     decrypts and parses its graph exactly once.
     /// </summary>

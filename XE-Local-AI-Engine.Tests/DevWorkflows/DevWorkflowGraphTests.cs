@@ -146,6 +146,26 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
+    ///     Two edges between the same pair of nodes are refused. An author writing them means "either of these", and
+    ///     that is the one thing they cannot mean: admission judges every inbound edge on its own, so the second one's
+    ///     condition failing makes that edge DEAD and SKIPS the target — the opposite of the intent. Refusing it is also
+    ///     what lets the materialization key an authored edge on its endpoints, which is where this was found.
+    /// </summary>
+    [Test]
+    public void Parse_WithTheSameEdgeDeclaredTwice_IsRejected()
+    {
+        const string Twice = """
+                             {
+                               "nodes": [{ "nodeKey": "gate", "nodeType": "Gate" }, { "nodeKey": "ship", "nodeType": "Join" }],
+                               "edges": [{ "from": "gate", "to": "ship", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                         { "from": "gate", "to": "ship", "condition": { "path": "decision", "op": "eq", "value": "RequestChanges" } }]
+                             }
+                             """;
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Twice)).Message, "declares edge 'gate' → 'ship' twice");
+    }
+
+    /// <summary>
     ///     The width bound (R5) is checked where a definition asks for it, not where a run tries to commit it: the
     ///     expansion rewrites the run's whole encrypted graph blob, so the fan-out a template allows is the size of that
     ///     write.
