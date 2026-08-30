@@ -233,6 +233,24 @@ internal static class DevWorkflowStateMachine
         };
 
     /// <summary>
+    ///     Whether a human may answer <paramref name="decision" /> on a node run in <paramref name="status" />.
+    ///     <para>
+    ///         Nearly the transition table, and deliberately not quite: that table answers "may the RUNTIME move this row
+    ///         here", and one of its edges — an open gate going back to <c>Pending</c> — belongs to the fix loop's reset
+    ///         and to nothing a person clicks. A <c>Retry</c> on an unanswered gate has no failed attempt to schedule
+    ///         again, and X3 is explicit that a gate takes the first three answers and nothing else.
+    ///     </para>
+    ///     <para>
+    ///         Shared by the decision endpoint and by the surface that advertises the answers, so what is offered and
+    ///         what is accepted cannot drift.
+    ///     </para>
+    /// </summary>
+    public static bool IsDecidable(DevWorkflowNodeRunStatus status, DevWorkflowDecisionKind decision) =>
+        status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked
+        && (status != DevWorkflowNodeRunStatus.WaitingForApproval || decision != DevWorkflowDecisionKind.Retry)
+        && IsLegal(status, TargetFor(decision));
+
+    /// <summary>
     ///     Where a node-run transition about to be written leaves the work item, so the move can carry it in its own
     ///     transaction.
     ///     <para>

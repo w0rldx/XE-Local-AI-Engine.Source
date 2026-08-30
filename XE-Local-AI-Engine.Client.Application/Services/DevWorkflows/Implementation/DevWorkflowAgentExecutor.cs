@@ -243,7 +243,7 @@ internal sealed class DevWorkflowAgentExecutor
                 // The retry policy's answer, not this lane's: a provider failure is retryable, and whether THIS one is
                 // re-attempted depends on the node's cap, the run's budget and whether the node routes its failures
                 // upstream — none of which is the session's business.
-                return (await _retries.SettleFailureAsync(store,
+                return await _retries.SettleFailureAsync(store,
                         graph,
                         run,
                         nodeRun,
@@ -252,7 +252,7 @@ internal sealed class DevWorkflowAgentExecutor
                             "The agent's work session failed.",
                             FailureOutput(nodeRun, session, DevWorkflowFailureClasses.ProviderError)),
                         cancellationToken)
-                    .ConfigureAwait(false)).Written;
+                    .ConfigureAwait(false);
 
             case AgentWorkSessionStatus.Cancelled:
                 return await SettleAsync(store,

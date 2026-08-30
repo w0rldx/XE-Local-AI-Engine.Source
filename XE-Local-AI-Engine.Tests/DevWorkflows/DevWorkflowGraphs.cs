@@ -113,6 +113,29 @@ internal static class DevWorkflowGraphs
                                         """;
 
     /// <summary>
+    ///     TWO checks that both route their failures to the same producer, so both can fail in one round and each is a
+    ///     node the other's reset would move. The shape a fix loop deadlocks on if a route waits for its siblings.
+    /// </summary>
+    public const string TwoChecksBothRoutingBack = """
+                                                   {
+                                                     "schemaVersion": 1,
+                                                     "nodes": [
+                                                       { "nodeKey": "implement", "nodeType": "Agent", "label": "Implement",
+                                                         "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                                       { "nodeKey": "checkone", "nodeType": "Tool", "retryTarget": "implement" },
+                                                       { "nodeKey": "checktwo", "nodeType": "Tool", "retryTarget": "implement" },
+                                                       { "nodeKey": "join", "nodeType": "Join" }
+                                                     ],
+                                                     "edges": [
+                                                       { "from": "implement", "to": "checkone" },
+                                                       { "from": "implement", "to": "checktwo" },
+                                                       { "from": "checkone", "to": "join" },
+                                                       { "from": "checktwo", "to": "join" }
+                                                     ]
+                                                   }
+                                                   """;
+
+    /// <summary>
     ///     A check that routes its failure upstream while a human gate on the OTHER branch is still open — the one shape
     ///     in which the reset has to move a node run out of a durable human wait.
     /// </summary>

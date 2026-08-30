@@ -15,20 +15,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 internal sealed record DevWorkflowFailure(string FailureClass, string SanitizedReason, string OutputJson, string? Outcome = null);
 
 /// <summary>
-///     What settling a failure came to: how many transitions it wrote, and whether the lane may now forget the result.
-///     <para>
-///         <see cref="Settled" /> is <see langword="false" /> only when a routed retry is waiting for a sibling that is
-///         still working. The result must then stay in the lane's hands, because the next tick has to decide again from
-///         it — and a lane that had already discarded it would settle the row as an interrupted host instead.
-///     </para>
-/// </summary>
-internal readonly record struct DevWorkflowFailureSettlement(int Written, bool Settled)
-{
-    /// <summary>Nothing written and nothing consumed: ask again next tick.</summary>
-    public static DevWorkflowFailureSettlement Deferred { get; } = new(Written: 0, Settled: false);
-}
-
-/// <summary>
 ///     Where a failed node run's next move is decided: re-attempt it, re-run the upstream node that produced what it was
 ///     judging (X9), or stand it down for a human.
 ///     <para>
@@ -114,7 +100,7 @@ internal sealed class DevWorkflowRetryPolicy
     ///         <c>Pending</c>, which is exactly where the pause drain parks work anyway.
     ///     </para>
     /// </summary>
-    public async Task<DevWorkflowFailureSettlement> SettleFailureAsync(IDevWorkflowStore store,
+    public async Task<int> SettleFailureAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
@@ -131,32 +117,32 @@ internal sealed class DevWorkflowRetryPolicy
 
         if (run.Status == DevWorkflowRunStatus.Cancelling)
         {
-            return Settled(await FailAsync(store, run, nodeRun, nodeRuns, failure, cancellationToken).ConfigureAwait(false));
+            return await FailAsync(store, run, nodeRun, nodeRuns, failure, cancellationToken).ConfigureAwait(false);
         }
 
         if (!graph.Nodes.TryGetValue(nodeRun.NodeKey, out var node))
         {
             // The run's pinned graph no longer declares it, so there is no attempt cap and no retry target to read.
-            return Settled(await BlockAsync(store,
+            return await BlockAsync(store,
                     run,
                     nodeRun,
                     DevWorkflowFailureClasses.Configuration,
                     $"The run's graph no longer declares node '{nodeRun.NodeKey}', so this failure cannot be retried.",
                     failure.OutputJson,
                     cancellationToken)
-                .ConfigureAwait(false));
+                .ConfigureAwait(false);
         }
 
         if (!IsRetryable(failure.FailureClass, nodeRun.Attempt))
         {
             // No attempt is spent: nothing was tried again, and a row reading attempt 2 would say one was.
-            return Settled(await BlockAsync(store, run, nodeRun, failure.FailureClass, failure.SanitizedReason, failure.OutputJson, cancellationToken)
-                .ConfigureAwait(false));
+            return await BlockAsync(store, run, nodeRun, failure.FailureClass, failure.SanitizedReason, failure.OutputJson, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         return node.RetryTarget is { } retryTarget
             ? await RouteAsync(store, graph, run, node, retryTarget, nodeRun, nodeRuns, failure, cancellationToken).ConfigureAwait(false)
-            : Settled(await ReAttemptSameNodeAsync(store, run, node, nodeRun, nodeRuns, failure, cancellationToken).ConfigureAwait(false));
+            : await ReAttemptSameNodeAsync(store, run, node, nodeRun, nodeRuns, failure, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -215,7 +201,7 @@ internal sealed class DevWorkflowRetryPolicy
     ///         presented as a current one, and a re-run that was not needed is the cheaper mistake.
     ///     </para>
     /// </summary>
-    private async Task<DevWorkflowFailureSettlement> RouteAsync(IDevWorkflowStore store,
+    private async Task<int> RouteAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowGraphNode node,
@@ -234,14 +220,14 @@ internal sealed class DevWorkflowRetryPolicy
         {
             // Declared and validated as an ancestor at parse, so the row exists in every run this build materializes.
             // Reaching here means the graph and the rows disagree, which nothing downstream should guess about.
-            return Settled(await BlockAsync(store,
+            return await BlockAsync(store,
                     run,
                     nodeRun,
                     DevWorkflowFailureClasses.Configuration,
                     $"This node routes its failures to '{retryTarget}', which this run has no node run for.",
                     failure.OutputJson,
                     cancellationToken)
-                .ConfigureAwait(false));
+                .ConfigureAwait(false);
         }
 
         var reset = graph.Descendants(retryTarget)
@@ -254,25 +240,16 @@ internal sealed class DevWorkflowRetryPolicy
                          .OrderBy(static row => row.NodeKey, StringComparer.Ordinal)
                          .ToList();
 
-        if (reset.Concat([target]).Any(row => row.Id != nodeRun.Id && row.Status is DevWorkflowNodeRunStatus.Queued or DevWorkflowNodeRunStatus.Running))
-        {
-            // A sibling is still working. Resetting it would leave its lane driving a pass whose row has moved on, and
-            // cancelling it would throw away work that is about to answer — so the route waits for the round to finish,
-            // and the sibling's own settling is the tick that brings it back here.
-            _logger.LogDebug("Development workflow run {RunId} defers routing '{From}' to '{To}' until its siblings settle.", run.Id, nodeRun.NodeKey, retryTarget);
-            return DevWorkflowFailureSettlement.Deferred;
-        }
-
         if (target.Attempt >= target.MaxAttempts)
         {
-            return Settled(await BlockAsync(store,
+            return await BlockAsync(store,
                     run,
                     nodeRun,
                     DevWorkflowFailureClasses.BudgetExhausted,
                     $"{failure.SanitizedReason} Node '{retryTarget}' has already been attempted {target.Attempt} times, which is as many as it allows.",
                     failure.OutputJson,
                     cancellationToken)
-                .ConfigureAwait(false));
+                .ConfigureAwait(false);
         }
 
         // The WHOLE cascade has to fit, not just the target's own attempt. Admitting a fan-out one attempt at a time is
@@ -281,8 +258,8 @@ internal sealed class DevWorkflowRetryPolicy
         var cost = reset.Count + 1;
         if (await PromisedAsync(store, run.Id, nodeRuns, cancellationToken).ConfigureAwait(false) + cost > _options.MaxTotalAttempts)
         {
-            return Settled(await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken)
-                .ConfigureAwait(false));
+            return await BlockAsync(store, run, nodeRun, DevWorkflowFailureClasses.BudgetExhausted, BudgetExhausted(failure), failure.OutputJson, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         _ = await store.AppendEventAsync(new AppendDevWorkflowEventCommand(run.Id,
@@ -325,7 +302,7 @@ internal sealed class DevWorkflowRetryPolicy
                 cancellationToken,
                 PriorFailure(target.InputJson, nodeRun.NodeKey, failure.OutputJson))
             .ConfigureAwait(false);
-        return Settled(written);
+        return written;
     }
 
     /// <summary>
@@ -512,9 +489,6 @@ internal sealed class DevWorkflowRetryPolicy
 
     private static string BudgetExhausted(DevWorkflowFailure failure) =>
         $"{failure.SanitizedReason} This run has spent every re-attempt it allows, so nothing here can try again without a decision.";
-
-    private static DevWorkflowFailureSettlement Settled(int written) =>
-        new(written, Settled: true);
 
     /// <summary>
     ///     What a <c>node.retry.scheduled</c> event carries. The attempt is the one that FAILED, which is what makes the

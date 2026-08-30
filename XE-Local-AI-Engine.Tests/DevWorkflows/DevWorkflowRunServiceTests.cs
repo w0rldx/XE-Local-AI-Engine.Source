@@ -330,7 +330,7 @@ public sealed class DevWorkflowRunServiceTests
                                             "operator@localhost.test")))
                                     .ConfigureAwait(false);
 
-        AssertEx.Contains(refusal.Message, "cannot move to Skipped");
+        AssertEx.Contains(refusal.Message, "cannot be answered Skip");
         AssertEx.Equal(expected: 0,
             (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "gate.decided"),
             "a refused answer is not recorded — there is no decision row for the runtime to settle later.");

@@ -77,13 +77,11 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         {
             // The commands are already running: the only thing that can have left the row behind them is the Running
             // write below having failed. Re-running them would spend a whole build to arrive at the answer already in
-            // hand, so the row is caught up instead and the next poll settles it.
-            if (nodeRun.Status == DevWorkflowNodeRunStatus.Running)
-            {
-                return 0;
-            }
-
-            return await RunningAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false);
+            // hand, so the row is caught up instead and the next poll settles it. A pass whose row has been re-attempted
+            // since is not here to be found — the tick drops those before it admits anything.
+            return nodeRun.Status == DevWorkflowNodeRunStatus.Running
+                ? 0
+                : await RunningAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false);
         }
 
         var written = 0;
@@ -134,7 +132,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             // restart, which is precisely why the startup reconciler collapses such rows before the dispatcher runs.
             // Reaching here means it did not, so the row is judged for what it is rather than swept forever — and an
             // interrupted sandbox pass is retryable, so what that costs is the retry policy's answer.
-            return (await _retries.SettleFailureAsync(store,
+            return await _retries.SettleFailureAsync(store,
                     graph,
                     run,
                     nodeRun,
@@ -144,7 +142,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                         Output(nodeRun, DevWorkflowFailureClasses.Interrupted, run: null),
                         DevWorkflowOutcomes.Interrupted),
                     cancellationToken)
-                .ConfigureAwait(false)).Written;
+                .ConfigureAwait(false);
         }
 
         var written = 0;
@@ -166,9 +164,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             return written;
         }
 
-        if (flight.Work.IsCanceled)
-        {
-            written += await SettleAsync(store,
+        written += flight.Work.IsCanceled
+            ? await SettleAsync(store,
                     run,
                     nodeRun,
                     nodeRuns,
@@ -178,21 +175,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                     Output(nodeRun, DevWorkflowFailureClasses.Cancelled, run: null),
                     DevWorkflowOutcomes.Cancelled,
                     cancellationToken)
-                .ConfigureAwait(false);
-        }
-        else
-        {
-            var settlement = await SettleLandedAsync(store, graph, run, nodeRun, nodeRuns, await flight.Work.ConfigureAwait(false), cancellationToken)
-                .ConfigureAwait(false);
-            written += settlement.Written;
-            if (!settlement.Settled)
-            {
-                // A routed retry waiting on a sibling that is still working. The result stays here, because the tick
-                // that finds the graph quiescent has to decide from it — and a lane that had forgotten it would then
-                // record "the host stopped" about a pass that answered perfectly.
-                return written;
-            }
-        }
+                .ConfigureAwait(false)
+            : await SettleLandedAsync(store, graph, run, nodeRun, nodeRuns, await flight.Work.ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
 
         // Consumed only once the settle has COMMITTED. Doing it first would spend the result on a write that may throw
         // — an over-budget blob, a lost version race — and the next poll would then find no entry, take the branch
@@ -204,7 +188,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     }
 
     /// <summary>Turns one landed pass into evidence and a status. Idempotent: every write it makes is keyed.</summary>
-    private async Task<DevWorkflowFailureSettlement> SettleLandedAsync(IDevWorkflowStore store,
+    private async Task<int> SettleLandedAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
@@ -220,18 +204,17 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
 
         if (result.Passed)
         {
-            return new DevWorkflowFailureSettlement(await SettleAsync(store,
-                        run,
-                        nodeRun,
-                        nodeRuns,
-                        DevWorkflowNodeRunStatus.Succeeded,
-                        failureClass: null,
-                        terminalReason: null,
-                        Output(nodeRun, failureClass: null, result),
-                        outcome: null,
-                        cancellationToken)
-                    .ConfigureAwait(false),
-                Settled: true);
+            return await SettleAsync(store,
+                    run,
+                    nodeRun,
+                    nodeRuns,
+                    DevWorkflowNodeRunStatus.Succeeded,
+                    failureClass: null,
+                    terminalReason: null,
+                    Output(nodeRun, failureClass: null, result),
+                    outcome: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
 
         // A failed verdict is the fix loop's fuel rather than an error, so where it goes — another attempt here, another
@@ -270,6 +253,57 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     }
 
     /// <summary>
+    ///     Drops every pass whose row has moved on: re-attempted by a fix loop resetting the subtree it belongs to, or
+    ///     otherwise no longer this lane's to settle.
+    ///     <para>
+    ///         Called once a tick before anything is polled, because a reset reaches rows this lane is driving WITHOUT
+    ///         coming through it — the node that routes a failure need not be the node whose pass is in flight. Without
+    ///         it the registry would claim to be driving a row that has been re-attempted, and the answer in hand would
+    ///         eventually be settled onto an attempt it never ran.
+    ///     </para>
+    /// </summary>
+    public async Task ForgetSupersededAsync(IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns)
+    {
+        ArgumentNullException.ThrowIfNull(nodeRuns);
+
+        foreach (var nodeRun in nodeRuns)
+        {
+            if (_inflight.TryGetValue(nodeRun.Id, out var flight)
+                && (flight.Attempt != nodeRun.Attempt || nodeRun.Status is not (DevWorkflowNodeRunStatus.Queued or DevWorkflowNodeRunStatus.Running)))
+            {
+                await DiscardAsync(nodeRun.Id).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Drops a pass whose row has moved on, so nothing settles an attempt from an answer about the one before it.
+    ///     <para>
+    ///         The result is thrown away deliberately: it describes work the run has decided to do again. The pass is
+    ///         cancelled and left to unwind on its own — it releases its own lane slot in its <c>finally</c>, and waiting
+    ///         for that here would hold the advance gate, and with it every other run, for as long as a build takes to
+    ///         notice it has been cancelled.
+    ///     </para>
+    /// </summary>
+    private async Task DiscardAsync(Guid nodeRunId)
+    {
+        if (!_inflight.TryRemove(nodeRunId, out var flight))
+        {
+            return;
+        }
+
+        await flight.Cancellation.CancelAsync().ConfigureAwait(false);
+        _ = DisposeWhenDoneAsync(flight);
+    }
+
+    /// <summary>Disposes a discarded pass's cancellation once the pass has actually stopped using its token.</summary>
+    private static async Task DisposeWhenDoneAsync(InFlight flight)
+    {
+        await SwallowAsync(flight.Work).ConfigureAwait(false);
+        flight.Cancellation.Dispose();
+    }
+
+    /// <summary>
     ///     Waits for one node run's commands to land, so a test that provisions a real sandbox can drive ticks rather
     ///     than sleep between them. Returns immediately when nothing is in flight.
     /// </summary>
@@ -304,7 +338,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     private InFlight Start(DevWorkflowRunSnapshot run, DevWorkflowGraphNode node, DevWorkflowNodeRunSnapshot nodeRun)
     {
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
-        return new InFlight(cancellation, RunAsync(run, node, nodeRun, cancellation.Token));
+        return new InFlight(cancellation, RunAsync(run, node, nodeRun, cancellation.Token), nodeRun.Attempt);
     }
 
     private async Task<DevWorkflowToolRun> RunAsync(DevWorkflowRunSnapshot run,
@@ -508,7 +542,12 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         }
     }
 
-    private sealed record InFlight(CancellationTokenSource Cancellation, Task<DevWorkflowToolRun> Work);
+    /// <summary>
+    ///     One detached pass. <see cref="Attempt" /> is what makes the entry belong to an ATTEMPT rather than to a row:
+    ///     the fix loop can re-attempt a node run this lane is driving, and an answer about the attempt before is not an
+    ///     answer about this one.
+    /// </summary>
+    private sealed record InFlight(CancellationTokenSource Cancellation, Task<DevWorkflowToolRun> Work, int Attempt);
 
     private sealed record SecretsDetail(IReadOnlyList<string> Paths);
 

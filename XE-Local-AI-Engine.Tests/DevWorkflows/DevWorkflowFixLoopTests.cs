@@ -140,6 +140,39 @@ public sealed class DevWorkflowFixLoopTests
     }
 
     /// <summary>
+    ///     Two checks that both route to the same producer and both fail in the same round. Exactly one of them routes:
+    ///     the first one settled resets the other along with everything else downstream, and the pass that was running
+    ///     for it is dropped rather than settled onto an attempt it never ran. Neither waits for the other, which is
+    ///     what a fix loop that deferred to its siblings would do — for ever, since each is the other's sibling.
+    /// </summary>
+    [Test]
+    public async Task TwoChecksThatBothRouteInOneRoundResolveToASingleReRun()
+    {
+        await using var harness = new DevWorkflowHarness();
+        harness.Tools.Answer("checkone", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
+        harness.Tools.Answer("checktwo", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.TwoChecksBothRoutingBack, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 1,
+            (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Count(static entry => entry.EventType == "node.retry.routed"),
+            "one round of the loop is one re-run, however many of its checks failed.");
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false)).Attempt);
+
+        await harness.SettleAgentAsync(runId, "implement").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Completed,
+            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            "and the round finished rather than the two checks waiting on each other.");
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "checkone").ConfigureAwait(false)).Attempt);
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunAsync(runId, "checktwo").ConfigureAwait(false)).Attempt);
+    }
+
+    /// <summary>
     ///     A gate that is still open when the check beside it routes its failure upstream. The approval it is asking for
     ///     is about work that is being replaced, so it is re-asked from a fresh attempt rather than left standing over
     ///     the round that has been thrown away — and answering the old round would approve something that no longer

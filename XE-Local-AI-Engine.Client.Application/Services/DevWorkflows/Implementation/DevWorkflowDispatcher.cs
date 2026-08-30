@@ -262,6 +262,11 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         CancellationToken cancellationToken)
     {
         var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+
+        // Before anything is read off the lane: a fix loop can re-attempt a row the lane is driving without going
+        // through the lane, and a pass belonging to the attempt before is not an answer about the one the row is on now.
+        await _tools.ForgetSupersededAsync(nodeRuns).ConfigureAwait(false);
+
         // A Tool row still reading Queued is polled too, when the lane is in fact already driving it: the Running write
         // can fail after the slot and the registry entry were taken, and outside a drain the next admission repairs
         // that — but a drain admits nothing, so without this the run waits on a row nothing would ever move again.
@@ -273,11 +278,28 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                               .ToList();
 
         var written = 0;
-        foreach (var nodeRun in running)
+        foreach (var candidate in running)
         {
-            written += nodeRun.NodeType == DevWorkflowNodeType.Agent
-                ? await agent.PollAsync(store, graph, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false)
-                : await _tools.PollAsync(store, graph, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false);
+            // One poll can move rows that are not its own: a failure routed to an upstream node resets that node's whole
+            // subtree, and the rest of this list is then a picture of a graph that has changed underneath it. So once
+            // anything has been written the rows are re-read, and one this lane no longer owns is left alone — settling
+            // it would write an answer about the round the run has just decided to do again.
+            if (written > 0)
+            {
+                nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (nodeRuns.FirstOrDefault(nodeRun => nodeRun.Id == candidate.Id) is not
+                {
+                    Status: DevWorkflowNodeRunStatus.Running or DevWorkflowNodeRunStatus.Queued
+                } current)
+            {
+                continue;
+            }
+
+            written += current.NodeType == DevWorkflowNodeType.Agent
+                ? await agent.PollAsync(store, graph, run, current, nodeRuns, cancellationToken).ConfigureAwait(false)
+                : await _tools.PollAsync(store, graph, run, current, nodeRuns, cancellationToken).ConfigureAwait(false);
         }
 
         return written;
