@@ -179,36 +179,49 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
             // The node's own budget, not the drain's — the drain's cancel propagates, because only the lane knows
             // whether a run was cancelled or paused.
             //
-            // ponytail: the commands that DID finish before the budget ran out are dropped, so the row's reason is all
-            // an operator gets. Carry a partial report here when B5 takes over node deadlines — it already has to
-            // decide what a timed-out attempt leaves behind, and composing one in two places would let them disagree.
-            return Refused(DevWorkflowFailureClasses.Timeout,
-                $"This node run did not finish its validation commands within the {budgetSeconds} seconds it was given.",
-                secrets);
+            // The commands that DID finish are still evidence, and the report says which of them passed before the
+            // clock ran out: that is what tells an operator whether this node is slow or stuck, and it is the same
+            // artifact every other outcome leaves, so the node run that times out is not the one nobody can read.
+            return Result(timedOutAfterSeconds: budgetSeconds);
         }
 
-        var protectedRoots = DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session);
-        var evidence = tools.CommandEvidence.Select(command => DevelopmentArtifactSanitizer.Sanitize(command, protectedRoots)).ToArray();
+        return Result(timedOutAfterSeconds: null);
 
-        // Evaluated against the list this node actually ran. The verdict's first rule is that every declared command
-        // produced evidence, and a node narrowing the profile's list would otherwise fail that rule by construction.
-        var verdict = DevelopmentValidationVerdict.Evaluate(profile with
+        DevWorkflowToolRun Result(int? timedOutAfterSeconds)
         {
-            ValidationCommandIds = commandIds
-        }, evidence);
+            var protectedRoots = DevelopmentArtifactSanitizer.ResolveProtectedRoots(repository.RepositoryRoot, session);
+            var evidence = tools.CommandEvidence.Select(command => DevelopmentArtifactSanitizer.Sanitize(command, protectedRoots)).ToArray();
 
-        var tests = evidence.Select(static command => command.TestOutcome).OfType<DevelopmentTestOutcome>().Where(static outcome => outcome.Parsed).ToList();
+            // Evaluated against the list this node actually ran. The verdict's first rule is that every declared command
+            // produced evidence, and a node narrowing the profile's list would otherwise fail that rule by construction.
+            // A timed-out pass fails that same rule for a real reason — the commands it never reached — so the report
+            // names the missing evidence and the row names the clock.
+            var verdict = DevelopmentValidationVerdict.Evaluate(profile with
+            {
+                ValidationCommandIds = commandIds
+            }, evidence);
 
-        return new DevWorkflowToolRun(verdict.Passed,
-            verdict.Passed ? null : DevWorkflowFailureClasses.ToolCommandFailed,
-            verdict.FailureCode,
-            verdict.FailureDetail,
-            evidence.Length,
-            evidence.Count(static command => !command.Completed || command.ExitCode != 0),
-            tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Passed),
-            tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Failed),
-            Compose(verdict, profile, session, nodeRun, evidence),
-            secrets.Paths);
+            var tests = evidence.Select(static command => command.TestOutcome).OfType<DevelopmentTestOutcome>().Where(static outcome => outcome.Parsed).ToList();
+            var passed = verdict.Passed && timedOutAfterSeconds is null;
+            var failureClass = passed
+                ? null
+                : timedOutAfterSeconds is null
+                    ? DevWorkflowFailureClasses.ToolCommandFailed
+                    : DevWorkflowFailureClasses.Timeout;
+
+            return new DevWorkflowToolRun(passed,
+                failureClass,
+                verdict.FailureCode,
+                timedOutAfterSeconds is { } seconds
+                    ? $"This node run did not finish its validation commands within the {seconds} seconds it was given."
+                    : verdict.FailureDetail,
+                evidence.Length,
+                evidence.Count(static command => !command.Completed || command.ExitCode != 0),
+                tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Passed),
+                tests.Count == 0 ? null : tests.Sum(static outcome => outcome.Failed),
+                Compose(verdict, profile, session, nodeRun, evidence),
+                secrets.Paths);
+        }
     }
 
     /// <summary>
@@ -259,6 +272,12 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     /// <summary>
     ///     The node's budget, the project's and the hard attempt cap, whichever is smallest. The cap is the outer bound
     ///     it claims to be, so a node asking for more than it gets less.
+    ///     <para>
+    ///         This bounds the PASS; the row's own deadline (<see cref="DevWorkflowDeadline" />, the node's timeout from
+    ///         the instant the row started) bounds the node run. The two cannot disagree about the node's number because
+    ///         this takes the smaller of it and the sandbox's, and this one is counted from the earlier instant — so a
+    ///         pass answers with its evidence before the dispatcher would have to end the row without any.
+    ///     </para>
     /// </summary>
     private int BudgetSeconds(DevWorkflowGraphNode node, DevelopmentProjectSnapshot project) =>
         Math.Min(Math.Min(node.NodeTimeoutSeconds ?? int.MaxValue, project.MaxDurationSeconds ?? int.MaxValue), _developmentOptions.MaxAttemptDurationSeconds);

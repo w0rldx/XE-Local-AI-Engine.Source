@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Tests.Development;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -41,6 +42,27 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
                                                 "edges": []
                                               }
                                               """;
+
+    /// <summary>
+    ///     The whole four-command profile under a budget nothing that really compiles and tests a solution can finish
+    ///     inside.
+    ///     <para>
+    ///         One second, and the four commands rather than three, so the assertion holds in the direction machines
+    ///         vary in: a slower host runs out of time sooner, and the only way this could stop timing out is a host
+    ///         that restores, builds AND tests a real solution inside a second. <c>maxAttempts</c> is 1, so the node
+    ///         stands down instead of spending a second workspace on the same clock.
+    ///     </para>
+    /// </summary>
+    private const string ImpatientBuildGraph = """
+                                               {
+                                                 "schemaVersion": 1,
+                                                 "nodes": [
+                                                   { "nodeKey": "build", "nodeType": "Tool", "label": "Build and test", "maxAttempts": 1,
+                                                     "nodeTimeoutSeconds": 1 }
+                                                 ],
+                                                 "edges": []
+                                               }
+                                               """;
 
     // Short prefix on purpose: the workspace provider appends development/workspaces/<projectId>/<attempt id> as two
     // more full GUIDs under this root, and a long one pushes `git clone` past the path limit on Windows.
@@ -109,6 +131,44 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
                 .ConfigureAwait(false),
             "CS1002",
             message: "the report names the compiler error, which is the whole point of keeping it.");
+    }
+
+    /// <summary>
+    ///     A real pass that runs out of time keeps what it had gathered. The commands it never reached are the reason
+    ///     the report says no, and the report exists at all — which is the whole difference from the answer this used to
+    ///     give, where a timed-out node run left an operator one sentence and no evidence.
+    ///     <para>
+    ///         Deliberately no assertion that a particular command finished inside the budget: how many of them do is a
+    ///         property of the machine, and the claim under test is that whatever DID finish is written down.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ARealBuildThatRunsOutOfTimeKeepsTheEvidenceItGathered()
+    {
+        var repository = Path.Combine(_root, "repo");
+        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests: true).ConfigureAwait(false);
+        await WriteAndCommitAsync(repository, DevelopmentSyntheticSolutionRepository.PassingLibrarySource, "implement the feature").ConfigureAwait(false);
+
+        await using var harness = DevWorkflowHarness.WithARealSandbox(("Development:Enabled", "true"));
+        var projectId = await CreateProjectAsync(harness, repository).ConfigureAwait(false);
+
+        var runId = await harness.StartRunAsync(ImpatientBuildGraph, "Build the solution, quickly.", projectId).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var timedOut = await harness.ReadNodeRunAsync(runId, "build").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, timedOut.Status, AssertEx.NotNull(timedOut.TerminalReason ?? timedOut.OutputJson));
+        AssertEx.Equal(DevWorkflowFailureClasses.Timeout, timedOut.FailureClass, "the clock ended it, which is a different fact from the build's verdict.");
+        AssertEx.Contains(AssertEx.NotNull(timedOut.TerminalReason), "1 seconds");
+        AssertEx.Contains(AssertEx.NotNull(timedOut.OutputJson), "\"passed\":false");
+        AssertEx.False(AssertEx.NotNull(timedOut.OutputJson).Contains("\"commandsRun\":4", StringComparison.Ordinal),
+            "a pass that ran out of time cannot have finished every command it was given.");
+
+        var artifact = (await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).Single();
+        AssertEx.Equal(DevWorkflowArtifactKind.ValidationReport, artifact.Kind);
+        var report = await harness.ReadArtifactTextAsync(runId, artifact).ConfigureAwait(false);
+        AssertEx.Contains(report, "\"passed\":false");
+        AssertEx.Contains(report, DevelopmentCommandProfileCatalog.DotnetSlnx, message: "the report still names the profile and commit its evidence was gathered against.");
+        AssertEx.False(report.Contains(_root, StringComparison.OrdinalIgnoreCase), "no absolute host path survives into a stored report.");
     }
 
     /// <summary>
