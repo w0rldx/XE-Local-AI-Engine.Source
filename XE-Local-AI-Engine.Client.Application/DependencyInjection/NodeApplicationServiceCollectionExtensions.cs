@@ -48,8 +48,10 @@ public static class NodeApplicationServiceCollectionExtensions
         builder.AddNodeWorkSessions(configuration);
         builder.AddNodeDevelopment(configuration);
 
-        // After both: a workflow's agent nodes own work sessions and its DevTask nodes drive Development Mode tasks,
-        // so it is the composition of the two that came before it.
+        // After both. NOT because the dependency is one-way — it is not: a DevTask node run drives a Development task,
+        // and a Development task reports the workflow run driving it, so the two modules read each other's stores. What
+        // this order buys is hosted-service START order, which is registration order: Development's startup reconciler
+        // terminalizes its own orphaned rows before the workflow dispatcher begins admitting node runs that drive them.
         builder.AddNodeDevWorkflows(configuration);
         // Development Mode container sandbox (ADR 0004). After AddNodeDevelopment so it reads as what it is: a
         // Development Mode concern, not an AgentHome one.

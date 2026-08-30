@@ -85,7 +85,15 @@ internal sealed class DevelopmentManagementService(
     private readonly IDevelopmentAttemptExecutionSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
     private readonly IDevelopmentTemplateStore _templateStore = templateStore ?? throw new ArgumentNullException(nameof(templateStore));
 
-    /// <summary>Read-only, and for one question: which workflow run — if any — owns the approval for a task.</summary>
+    /// <summary>
+    ///     Read-only, and for one question: which workflow run — if any — owns the approval for a task.
+    ///     <para>
+    ///         Asked HERE rather than at the endpoint layer, which is the other place the answer could be composed:
+    ///         this service is the ONE place a task aggregate is built — the project detail loops back through
+    ///         <see cref="GetTaskAsync" /> for every task it carries — so composing it above would mean asking at three
+    ///         call sites today and remembering to ask at the next one. Recorded so it is not re-litigated.
+    ///     </para>
+    /// </summary>
     private readonly IDevWorkflowStore _workflows = workflows ?? throw new ArgumentNullException(nameof(workflows));
 
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));

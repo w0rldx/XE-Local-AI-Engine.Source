@@ -39,9 +39,10 @@ public sealed class DevWorkflowServiceRegistrationTests
     [Test]
     public void CompositionRoot_InvokesTheModuleAfterWorkSessionsAndDevelopment()
     {
-        // A workflow is the composition of the two: its agent nodes own work sessions and its DevTask nodes drive
-        // Development Mode tasks. The invariant is a property of the composition root's call order, which is why it is
-        // read from the source rather than from a container.
+        // Registration order is hosted-service START order: each module's startup reconciler must have judged its own
+        // rows before the workflow dispatcher admits node runs that drive them. NOT a layering claim — Development and
+        // DevWorkflows read each other's stores. The invariant is a property of the composition root's call order,
+        // which is why it is read from the source rather than from a container.
         var source = File.ReadAllText(CompositionRootPath());
         var workSessionIndex = source.IndexOf("AddNodeWorkSessions(configuration)", StringComparison.Ordinal);
         var developmentIndex = source.IndexOf("AddNodeDevelopment(configuration)", StringComparison.Ordinal);
