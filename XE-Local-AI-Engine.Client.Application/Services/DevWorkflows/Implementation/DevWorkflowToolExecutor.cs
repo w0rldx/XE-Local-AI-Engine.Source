@@ -27,32 +27,25 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    /// <summary>
-    ///     The two classes a retry cannot help. They stand the node run down for a human rather than failing it, because
-    ///     the run's other branches may still be worth finishing and a person has to change something either way.
-    /// </summary>
-    private static readonly HashSet<string> HumanOnlyFailureClasses = new(StringComparer.Ordinal)
-    {
-        DevWorkflowFailureClasses.Configuration,
-        DevWorkflowFailureClasses.Policy
-    };
-
     private readonly IDevWorkflowArtifactBlobStore _blobs;
     private readonly ConcurrentDictionary<Guid, InFlight> _inflight = new();
     private readonly SemaphoreSlim _lane;
     private readonly ILogger<DevWorkflowToolExecutor> _logger;
+    private readonly DevWorkflowRetryPolicy _retries;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly CancellationTokenSource _shutdown = new();
     private int _disposed;
 
     public DevWorkflowToolExecutor(IServiceScopeFactory scopeFactory,
         IDevWorkflowArtifactBlobStore blobs,
+        DevWorkflowRetryPolicy retries,
         IOptions<DevWorkflowOptions> options,
         ILogger<DevWorkflowToolExecutor> logger)
     {
         ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _blobs = blobs ?? throw new ArgumentNullException(nameof(blobs));
+        _retries = retries ?? throw new ArgumentNullException(nameof(retries));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _lane = new SemaphoreSlim(options.Value.MaxParallelToolNodes, options.Value.MaxParallelToolNodes);
     }
@@ -125,6 +118,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     ///     transitions it wrote.
     /// </summary>
     public async Task<int> PollAsync(IDevWorkflowStore store,
+        DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
@@ -138,18 +132,19 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         {
             // Nothing on this node is driving this row, and nothing ever will: the lane holds no memory across a
             // restart, which is precisely why the startup reconciler collapses such rows before the dispatcher runs.
-            // Reaching here means it did not, so the row is settled for what it is rather than swept forever.
-            return await SettleAsync(store,
+            // Reaching here means it did not, so the row is judged for what it is rather than swept forever — and an
+            // interrupted sandbox pass is retryable, so what that costs is the retry policy's answer.
+            return (await _retries.SettleFailureAsync(store,
+                    graph,
                     run,
                     nodeRun,
                     nodeRuns,
-                    DevWorkflowNodeRunStatus.Failed,
-                    DevWorkflowFailureClasses.Interrupted,
-                    "The host stopped while this node run was running its validation commands.",
-                    Output(nodeRun, DevWorkflowFailureClasses.Interrupted, run: null),
-                    DevWorkflowOutcomes.Interrupted,
+                    new DevWorkflowFailure(DevWorkflowFailureClasses.Interrupted,
+                        "The host stopped while this node run was running its validation commands.",
+                        Output(nodeRun, DevWorkflowFailureClasses.Interrupted, run: null),
+                        DevWorkflowOutcomes.Interrupted),
                     cancellationToken)
-                .ConfigureAwait(false);
+                .ConfigureAwait(false)).Written;
         }
 
         var written = 0;
@@ -171,8 +166,9 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             return written;
         }
 
-        written += flight.Work.IsCanceled
-            ? await SettleAsync(store,
+        if (flight.Work.IsCanceled)
+        {
+            written += await SettleAsync(store,
                     run,
                     nodeRun,
                     nodeRuns,
@@ -182,8 +178,21 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                     Output(nodeRun, DevWorkflowFailureClasses.Cancelled, run: null),
                     DevWorkflowOutcomes.Cancelled,
                     cancellationToken)
-                .ConfigureAwait(false)
-            : await SettleLandedAsync(store, run, nodeRun, nodeRuns, await flight.Work.ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            var settlement = await SettleLandedAsync(store, graph, run, nodeRun, nodeRuns, await flight.Work.ConfigureAwait(false), cancellationToken)
+                .ConfigureAwait(false);
+            written += settlement.Written;
+            if (!settlement.Settled)
+            {
+                // A routed retry waiting on a sibling that is still working. The result stays here, because the tick
+                // that finds the graph quiescent has to decide from it — and a lane that had forgotten it would then
+                // record "the host stopped" about a pass that answered perfectly.
+                return written;
+            }
+        }
 
         // Consumed only once the settle has COMMITTED. Doing it first would spend the result on a write that may throw
         // — an over-budget blob, a lost version race — and the next poll would then find no entry, take the branch
@@ -195,7 +204,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     }
 
     /// <summary>Turns one landed pass into evidence and a status. Idempotent: every write it makes is keyed.</summary>
-    private async Task<int> SettleLandedAsync(IDevWorkflowStore store,
+    private async Task<DevWorkflowFailureSettlement> SettleLandedAsync(IDevWorkflowStore store,
+        DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
@@ -210,30 +220,32 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
 
         if (result.Passed)
         {
-            return await SettleAsync(store,
-                    run,
-                    nodeRun,
-                    nodeRuns,
-                    DevWorkflowNodeRunStatus.Succeeded,
-                    failureClass: null,
-                    terminalReason: null,
-                    Output(nodeRun, failureClass: null, result),
-                    outcome: null,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            return new DevWorkflowFailureSettlement(await SettleAsync(store,
+                        run,
+                        nodeRun,
+                        nodeRuns,
+                        DevWorkflowNodeRunStatus.Succeeded,
+                        failureClass: null,
+                        terminalReason: null,
+                        Output(nodeRun, failureClass: null, result),
+                        outcome: null,
+                        cancellationToken)
+                    .ConfigureAwait(false),
+                Settled: true);
         }
 
+        // A failed verdict is the fix loop's fuel rather than an error, so where it goes — another attempt here, another
+        // attempt at the node that produced what these commands judged, or a human — is the retry policy's to decide.
         var failureClass = result.FailureClass ?? DevWorkflowFailureClasses.Internal;
-        var target = HumanOnlyFailureClasses.Contains(failureClass) ? DevWorkflowNodeRunStatus.Blocked : DevWorkflowNodeRunStatus.Failed;
-        return await SettleAsync(store,
+        return await _retries.SettleFailureAsync(store,
+                graph,
                 run,
                 nodeRun,
                 nodeRuns,
-                target,
-                failureClass,
-                result.SanitizedReason ?? "This node run's validation commands did not pass.",
-                Output(nodeRun, failureClass, result),
-                failureClass == DevWorkflowFailureClasses.Timeout ? DevWorkflowOutcomes.Timeout : null,
+                new DevWorkflowFailure(failureClass,
+                    result.SanitizedReason ?? "This node run's validation commands did not pass.",
+                    Output(nodeRun, failureClass, result),
+                    failureClass == DevWorkflowFailureClasses.Timeout ? DevWorkflowOutcomes.Timeout : null),
                 cancellationToken)
             .ConfigureAwait(false);
     }

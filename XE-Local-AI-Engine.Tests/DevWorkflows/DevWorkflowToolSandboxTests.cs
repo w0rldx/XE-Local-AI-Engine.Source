@@ -24,19 +24,25 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
     ///     Three of the four .NET profile commands: the whitespace check, the restore and the build. The test command is
     ///     left out through the NODE's own list, which is the definition-authored override — so this exercises that
     ///     override and the verdict's "every declared command produced evidence" rule agreeing about which list applies.
+    ///     <para>
+    ///         <c>maxAttempts</c> is 1 deliberately: a build that does not compile is retryable, and at the default of
+    ///         three this test would clone and build the same broken tree three times to learn what it learns on the
+    ///         first. One attempt is also what makes it the exhaustion case against a REAL build — the node has nothing
+    ///         left to try, so it stands down for a human.
+    ///     </para>
     /// </summary>
     private const string BuildOnlyToolGraph = """
                                               {
                                                 "schemaVersion": 1,
                                                 "nodes": [
-                                                  { "nodeKey": "build", "nodeType": "Tool", "label": "Build the solution",
+                                                  { "nodeKey": "build", "nodeType": "Tool", "label": "Build the solution", "maxAttempts": 1,
                                                     "validationCommandIds": ["git_diff_check", "dotnet_restore", "dotnet_build_release_no_restore"] }
                                                 ],
                                                 "edges": []
                                               }
                                               """;
 
-    // Short prefix on purpose: the workspace provider appends development/workspaces/<projectId>/<nodeRunId> as two
+    // Short prefix on purpose: the workspace provider appends development/workspaces/<projectId>/<attempt id> as two
     // more full GUIDs under this root, and a long one pushes `git clone` past the path limit on Windows.
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-dw-tool-" + Guid.NewGuid().ToString("N")[..12]);
 
@@ -94,7 +100,8 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
         await harness.AdvanceThroughToolLaneAsync(failing).ConfigureAwait(false);
 
         var broken = await harness.ReadNodeRunAsync(failing, "build").ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Failed, broken.Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, broken.Status, "the node allows one attempt, so a retryable failure has nowhere left to go but a human.");
+        AssertEx.Equal(expected: 1, broken.Attempt, "an exhausted node run spends no further attempt on its way to being blocked.");
         AssertEx.Equal("ToolCommandFailed", broken.FailureClass, "a build that does not compile is a verdict, not an engine fault.");
         AssertEx.Contains(AssertEx.NotNull(broken.OutputJson), "\"failureCode\":\"command_failed\"");
         AssertEx.Contains(await harness.ReadArtifactTextAsync(failing,

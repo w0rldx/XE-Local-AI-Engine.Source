@@ -22,7 +22,7 @@ internal sealed class FakeDevWorkflowToolCommands : IDevWorkflowToolCommands
 {
     private readonly Lock _gate = new();
     private readonly List<string> _ran = [];
-    private readonly Dictionary<string, DevWorkflowToolRun> _answers = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IReadOnlyList<DevWorkflowToolRun>> _answers = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ToolHold> _holds = new(StringComparer.Ordinal);
 
     /// <summary>Every node key whose commands were asked for, in order.</summary>
@@ -37,12 +37,17 @@ internal sealed class FakeDevWorkflowToolCommands : IDevWorkflowToolCommands
         }
     }
 
-    /// <summary>What this node key's commands answer. Without one, they pass with nothing to report.</summary>
-    public void Answer(string nodeKey, DevWorkflowToolRun result)
+    /// <summary>
+    ///     What this node key's commands answer, attempt by attempt. The last one given repeats, so one answer is a node
+    ///     that always says the same thing and two are a node that fails and then passes — which is what a retry looks
+    ///     like from here.
+    /// </summary>
+    public void Answer(string nodeKey, params DevWorkflowToolRun[] results)
     {
+        ArgumentNullException.ThrowIfNull(results);
         lock (_gate)
         {
-            _answers[nodeKey] = result;
+            _answers[nodeKey] = results;
         }
     }
 
@@ -68,12 +73,17 @@ internal sealed class FakeDevWorkflowToolCommands : IDevWorkflowToolCommands
         ArgumentNullException.ThrowIfNull(nodeRun);
 
         ToolHold? hold;
-        DevWorkflowToolRun? answer;
+        DevWorkflowToolRun? answer = null;
         lock (_gate)
         {
             _ran.Add(nodeRun.NodeKey);
             _ = _holds.TryGetValue(nodeRun.NodeKey, out hold);
-            _ = _answers.TryGetValue(nodeRun.NodeKey, out answer);
+            if (_answers.TryGetValue(nodeRun.NodeKey, out var scripted) && scripted.Count > 0)
+            {
+                // Keyed on the ATTEMPT rather than on how many times this has been called, so a replayed pass answers
+                // what its attempt answered rather than walking the script on.
+                answer = scripted[Math.Min(nodeRun.Attempt - 1, scripted.Count - 1)];
+            }
         }
 
         if (hold is not null)

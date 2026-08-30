@@ -219,6 +219,7 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
             // The container's lane, not a second one: the slot count is a property of the NODE, and a restart that
             // handed itself a fresh set of slots would be simulating a machine with twice the sandbox capacity.
             Services.GetRequiredService<DevWorkflowToolExecutor>(),
+            Services.GetRequiredService<DevWorkflowRetryPolicy>(),
             Options.Create(new DevWorkflowOptions
             {
                 Enabled = enabled,

@@ -73,6 +73,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     private readonly DevWorkflowGraphCache _graphs;
     private readonly ILogger<DevWorkflowDispatcher> _logger;
     private readonly DevWorkflowOptions _options;
+    private readonly DevWorkflowRetryPolicy _retries;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
     private readonly DevWorkflowToolExecutor _tools;
@@ -82,6 +83,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     public DevWorkflowDispatcher(IServiceScopeFactory scopeFactory,
         DevWorkflowGraphCache graphs,
         DevWorkflowToolExecutor tools,
+        DevWorkflowRetryPolicy retries,
         IOptions<DevWorkflowOptions> options,
         TimeProvider timeProvider,
         ILogger<DevWorkflowDispatcher> logger)
@@ -90,6 +92,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
         _tools = tools ?? throw new ArgumentNullException(nameof(tools));
+        _retries = retries ?? throw new ArgumentNullException(nameof(retries));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
@@ -204,7 +207,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         // Settle what the lanes have landed FIRST, before anything reads the node runs: a session that finished between
         // ticks has to be seen as finished, or the run would judge its whole graph against a row that is only still
         // Running because nothing asked.
-        var written = await PollAsync(store, agent, run, cancellationToken).ConfigureAwait(false);
+        var written = await PollAsync(store, agent, graph, run, cancellationToken).ConfigureAwait(false);
         var nodeRuns = await store.ListNodeRunsAsync(runId, cancellationToken).ConfigureAwait(false);
 
         // Settle what has landed. A recorded decision is the durable half of a human act; turning it into a transition
@@ -252,7 +255,11 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///         finish.
     ///     </para>
     /// </summary>
-    private async Task<int> PollAsync(IDevWorkflowStore store, DevWorkflowAgentExecutor agent, DevWorkflowRunSnapshot run, CancellationToken cancellationToken)
+    private async Task<int> PollAsync(IDevWorkflowStore store,
+        DevWorkflowAgentExecutor agent,
+        DevWorkflowGraph graph,
+        DevWorkflowRunSnapshot run,
+        CancellationToken cancellationToken)
     {
         var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
         // A Tool row still reading Queued is polled too, when the lane is in fact already driving it: the Running write
@@ -269,8 +276,8 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         foreach (var nodeRun in running)
         {
             written += nodeRun.NodeType == DevWorkflowNodeType.Agent
-                ? await agent.PollAsync(store, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false)
-                : await _tools.PollAsync(store, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false);
+                ? await agent.PollAsync(store, graph, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false)
+                : await _tools.PollAsync(store, graph, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false);
         }
 
         return written;
@@ -670,6 +677,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         var admissible = nodeRuns.Where(static nodeRun => nodeRun.Status is DevWorkflowNodeRunStatus.Pending or DevWorkflowNodeRunStatus.Queued).ToList();
         foreach (var nodeRun in admissible)
         {
+            if (!_retries.IsReady(nodeRun.Id))
+            {
+                // A re-attempt whose node asked for a pause before it tries again. The row stays Pending and says
+                // nothing new — a queue reason would have to name a slot, and this is waiting on a clock.
+                continue;
+            }
+
             if (!graph.Nodes.TryGetValue(nodeRun.NodeKey, out var node))
             {
                 // The run's pinned graph no longer declares this node. Nothing can route it, and nothing should guess.

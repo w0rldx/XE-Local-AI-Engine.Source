@@ -3,6 +3,8 @@ namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -20,6 +22,15 @@ public sealed class DevWorkflowToolExecutorTests
 {
     /// <summary>A project id on the work item, because a graph with tool nodes in it is only startable with one.</summary>
     private static readonly Guid DevelopmentProjectId = Guid.NewGuid();
+
+    /// <summary>One tool node that asks for a second before it tries again — the shortest delay the field can express.</summary>
+    private const string DelayedRetryToolGraph = """
+                                                 {
+                                                   "schemaVersion": 1,
+                                                   "nodes": [{ "nodeKey": "validate", "nodeType": "Tool", "retryDelaySeconds": 1 }],
+                                                   "edges": []
+                                                 }
+                                                 """;
 
     /// <summary>
     ///     The lane hands out no more slots than it has, and the node run that missed one says WHY it is waiting rather
@@ -81,11 +92,12 @@ public sealed class DevWorkflowToolExecutorTests
     }
 
     /// <summary>
-    ///     A failing verdict is a RESULT, not an error: the node run fails with the class the fix loop reads, and its
-    ///     report survives, because the report is the evidence a retry would be based on.
+    ///     A failing verdict is a RESULT, not an error: it is retryable, so the node tries again until its own cap is
+    ///     spent and only then asks a human — and every attempt's report survives, because the reports ARE the evidence
+    ///     the fix loop and the operator both read.
     /// </summary>
     [Test]
-    public async Task AFailingVerdictFailsTheNodeRunAndStillKeepsItsReport()
+    public async Task AFailingVerdictRetriesToItsCapAndKeepsEveryAttemptsReport()
     {
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing());
@@ -94,18 +106,129 @@ public sealed class DevWorkflowToolExecutorTests
         await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
 
         var nodeRun = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Failed, nodeRun.Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, nodeRun.Status, "an exhausted node asks a human rather than failing the run behind its back.");
+        AssertEx.Equal(expected: 3, nodeRun.Attempt, "three attempts is what the node allows, and all three were spent.");
         AssertEx.Equal("ToolCommandFailed", nodeRun.FailureClass, "commands that ran and reported failure are the fix loop's fuel, not an error.");
         AssertEx.Contains(AssertEx.NotNull(nodeRun.TerminalReason), "3 failing");
+        AssertEx.Contains(AssertEx.NotNull(nodeRun.TerminalReason), "as many attempts as this node allows");
+        AssertEx.Equal(DevWorkflowDecisionKind.Abandon, nodeRun.PendingDecisionKind, "a blocked row names the answer it is waiting for.");
 
         var output = AssertEx.NotNull(nodeRun.OutputJson);
         AssertEx.Contains(output, "\"passed\":false");
         AssertEx.Contains(output, "\"failureCode\":\"tests_failed\"");
         AssertEx.Contains(output, "\"testsFailed\":3");
 
-        AssertEx.Equal(DevWorkflowRunStatus.Failed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
         AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked, (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status);
-        AssertEx.Equal(expected: 1, (await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).Count, "a failed validation keeps its report; that IS the evidence.");
+
+        var reports = await harness.ReadArtifactsAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 3, reports.Count, "each attempt keeps its own report; that IS the per-attempt evidence.");
+        AssertEx.Equal(expected: 1, reports.Count(static report => report.IsLatest), "all three are versions of one lineage, so exactly one is current.");
+    }
+
+    /// <summary>
+    ///     The B3 gate on the sandbox lane: a retryable verdict is tried again, and the second attempt passes. It also
+    ///     pins the entry condition that made a Tool retry unsafe until now — the second attempt prepares a workspace of
+    ///     its OWN, because the provider reuses a preserved worktree and the base commit recorded in its manifest, so an
+    ///     identity constant across attempts would re-validate attempt one's commit in attempt one's tree.
+    /// </summary>
+    [Test]
+    public async Task AToolNodeRetriesAVerdictAndItsSecondAttemptPreparesItsOwnWorkspace()
+    {
+        await using var harness = new DevWorkflowHarness();
+        harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, nodeRun.Status, "the second attempt passed, so the node did.");
+        AssertEx.Equal(expected: 2, nodeRun.Attempt);
+        AssertEx.Null(nodeRun.FailureClass, "a re-attempt that succeeded must not still report the failure it retried.");
+        AssertEx.Equal("validate, validate", string.Join(", ", harness.Tools.Ran), "the commands really did run twice.");
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+
+        var trail = await harness.ReadEventTrailAsync(runId).ConfigureAwait(false);
+        AssertEx.Contains(trail, "node.retry.scheduled");
+
+        // The two attempts' workspaces, as the lane would ask the provider for them.
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        var first = nodeRun with
+        {
+            Attempt = 1
+        };
+        var project = Project(DevelopmentProjectId);
+        var binding = new DevelopmentRepositoryBinding(DevelopmentProjectId, project.SelectedFolderId!.Value, "repo", "/tmp/repo", project.RepositoryIdentityHash);
+        var node = DevWorkflowGraph.Parse(DevWorkflowGraphs.SingleTool).Nodes["validate"];
+
+        var attemptOne = DevWorkflowToolCommands.Synthesize(project, node, run, first, binding);
+        var attemptTwo = DevWorkflowToolCommands.Synthesize(project, node, run, nodeRun, binding);
+        AssertEx.NotEqual(attemptOne.TaskId, attemptTwo.TaskId, "the workspace a retry prepares is not the one the attempt before it left behind.");
+        AssertEx.NotEqual(attemptOne.AttemptId, attemptTwo.AttemptId);
+        AssertEx.NotEqual(nodeRun.Id, attemptTwo.TaskId, "the node-run id is constant across attempts, which is exactly what it must not key.");
+        AssertEx.Equal(attemptOne.TaskId,
+            DevWorkflowToolCommands.Synthesize(project, node, run, first, binding).TaskId,
+            "and it is derived rather than minted, so a replayed poll re-prepares the workspace its attempt already has.");
+    }
+
+    /// <summary>
+    ///     Automatic re-attempts and an operator's <c>Retry</c> spend ONE budget, because they are the same thing: a
+    ///     re-attempt of this run. So the run's own retrying is what exhausts it, and the person who then tries to
+    ///     override is told the run has nothing left rather than being handed an attempt the budget never had.
+    /// </summary>
+    [Test]
+    public async Task TheRunWideBudgetBoundsTheRuntimesOwnRetriesAndTheOperatorsAlike()
+    {
+        await using var harness = new DevWorkflowHarness(("DevWorkflows:MaxTotalAttempts", "1"));
+        harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing());
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var nodeRun = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, nodeRun.Status);
+        AssertEx.Equal(expected: 2, nodeRun.Attempt, "one re-attempt is what the run allowed, and the node's own cap of three never came into it.");
+        AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, nodeRun.FailureClass, "the run ran out of re-attempts, which is a different fact from the verdict.");
+        AssertEx.Equal("validate, validate", string.Join(", ", harness.Tools.Ran));
+
+        var refused = await AssertEx.ThrowsAsync<DevWorkflowInvalidTransitionException>(() => harness.WithRunServiceAsync(service => service.DecideAsync(runId,
+                              nodeRun.Id,
+                              Guid.NewGuid(),
+                              DevWorkflowDecisionKind.Retry,
+                              comment: null,
+                              payloadJson: null,
+                              "operator")))
+                          .ConfigureAwait(false);
+        AssertEx.Contains(refused.Message, "as many re-attempts as this run", message: "the automatic retry already spent what the operator is asking for.");
+    }
+
+    /// <summary>
+    ///     A node may ask for a pause before it tries again, and the pause is honoured: the re-attempt is scheduled
+    ///     immediately — the row is <c>Pending</c> and the log says when it may go — but nothing admits it until then.
+    /// </summary>
+    [Test]
+    public async Task ANodeThatAsksForARetryDelayIsNotReAdmittedUntilItHasPassed()
+    {
+        await using var harness = new DevWorkflowHarness();
+        harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(DelayedRetryToolGraph, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var waiting = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, waiting.Status, "the re-attempt is scheduled; what it is waiting for is a clock, not a slot.");
+        AssertEx.Equal(expected: 2, waiting.Attempt);
+        AssertEx.Null(waiting.QueueReason, "no queue reason names a wait on time, and inventing one would put a token in the row nothing can read.");
+        AssertEx.Equal(expected: 1, harness.Tools.Ran.Count, "the second attempt has not started, because its delay has not passed.");
+
+        var scheduled = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Last(static entry => entry.EventType == "node.retry.scheduled");
+        AssertEx.Contains(AssertEx.NotNull(scheduled.DetailJson), "\"delayUntil\":", message: "the log says when the re-attempt may go.");
+
+        await Task.Delay(TimeSpan.FromMilliseconds(1200)).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
+        AssertEx.Equal(expected: 2, harness.Tools.Ran.Count, "and once it had, the same node ran again.");
     }
 
     /// <summary>
@@ -313,6 +436,31 @@ public sealed class DevWorkflowToolExecutorTests
         AssertEx.Contains(AssertEx.NotNull(nodeRun.TerminalReason), "Development Mode is switched off on this node");
         AssertEx.Equal(DevWorkflowDecisionKind.Abandon, nodeRun.PendingDecisionKind);
     }
+
+    /// <summary>
+    ///     A Development project, for the one assertion that has to call the lane's snapshot synthesis directly. Only the
+    ///     identity fields matter to it; the rest are the shape the record demands.
+    /// </summary>
+    private static DevelopmentProjectSnapshot Project(Guid projectId) =>
+        new(projectId,
+            "Objective",
+            Guid.NewGuid(),
+            "identity-hash",
+            "main",
+            DevelopmentProjectStatus.Active,
+            DevelopmentEgressPolicy.LocalOnly,
+            CoderModelId: null,
+            ReviewerModelId: null,
+            MaxTokens: null,
+            MaxDurationSeconds: null,
+            ConfigurationVersion: 1,
+            TrustedRepositoryAcknowledged: true,
+            TrustedRepositoryPolicyVersion: 1,
+            TrustedRepositoryAcknowledgedAtUtc: 0,
+            CreatedAtUtc: 0,
+            UpdatedAtUtc: 0,
+            Version: 1,
+            CommandProfileJson: null);
 
     /// <summary>
     ///     Refuses its first write and then behaves. A decorator over the real store rather than a stub, so everything
