@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
@@ -47,6 +48,18 @@ internal static class AddNodeDevWorkflowsExtensions
         builder.Services.AddScoped<DevWorkflowArtifactPromotion>();
         builder.Services.AddScoped<DevWorkflowAgentExecutor>();
         builder.Services.AddScoped<IDevWorkflowRunService, DevWorkflowRunService>();
+
+        // A singleton, unlike the agent executor: the sandbox lane's slot count and its in-flight registry outlive a
+        // tick and a scope, and a second instance would hand the same slots out twice.
+        builder.Services.AddSingleton<DevWorkflowToolExecutor>();
+
+        // Only when Development Mode is on, because that is where the workspace provider, the repository bindings and
+        // the sandbox come from. A tool node on a node with it switched off then finds no commands to run and says so,
+        // which is a configuration answer rather than a container failure deep inside a detached task.
+        if (configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true))
+        {
+            builder.Services.AddScoped<IDevWorkflowToolCommands, DevWorkflowToolCommands>();
+        }
 
         // Before both, and independent of both: a template has to exist before anyone can start a run from it, and
         // seeding one neither reconciles anything nor needs a loop.

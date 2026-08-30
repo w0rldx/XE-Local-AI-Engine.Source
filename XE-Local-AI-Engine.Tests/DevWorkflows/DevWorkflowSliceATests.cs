@@ -193,6 +193,7 @@ public sealed class DevWorkflowSliceATests
 
         return new DevWorkflowDispatcher(scopes,
             new DevWorkflowGraphCache(),
+            factory.Services.GetRequiredService<DevWorkflowToolExecutor>(),
             factory.Services.GetRequiredService<IOptions<DevWorkflowOptions>>(),
             factory.Services.GetRequiredService<TimeProvider>(),
             factory.Services.GetRequiredService<ILogger<DevWorkflowDispatcher>>());

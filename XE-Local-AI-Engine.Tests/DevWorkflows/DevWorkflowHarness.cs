@@ -92,9 +92,9 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         _ownsFactory = true;
     }
 
-    private DevWorkflowHarness(bool drifting)
+    private DevWorkflowHarness(bool drifting, bool fakeTools, (string Key, string Value)[] configuration)
     {
-        _factory = NewFactory(drifting, []);
+        _factory = NewFactory(drifting, fakeTools, configuration);
         _ownsFactory = true;
     }
 
@@ -103,7 +103,15 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     ///     startup recovery, made deterministic. Name the row to move through <see cref="Drift" />.
     /// </summary>
     public static DevWorkflowHarness WithASecondWriter() =>
-        new(drifting: true);
+        new(drifting: true, fakeTools: true, []);
+
+    /// <summary>
+    ///     A host of this test's own whose tool nodes really do prepare a workspace and run their commands. Slow by
+    ///     construction — it clones a repository and runs a build — so it is for the handful of tests whose whole point
+    ///     is that the substrate works, and it needs Git and the .NET SDK on the machine running it.
+    /// </summary>
+    public static DevWorkflowHarness WithARealSandbox(params (string Key, string Value)[] configuration) =>
+        new(drifting: false, fakeTools: false, configuration);
 
     /// <summary>The class's shared host, with this test's own runs on it. See <see cref="DevWorkflowHostFixture" />.</summary>
     public DevWorkflowHarness(DevWorkflowHostFixture host) =>
@@ -111,9 +119,9 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
 
     /// <summary>The workflow host shape: the feature on, no sweep inside any test's lifetime, and the agent seam faked.</summary>
     internal static TestServerWebAppFactory NewFactory(params (string Key, string Value)[] configuration) =>
-        NewFactory(drifting: false, configuration);
+        NewFactory(drifting: false, fakeTools: true, configuration);
 
-    private static TestServerWebAppFactory NewFactory(bool drifting, (string Key, string Value)[] configuration)
+    private static TestServerWebAppFactory NewFactory(bool drifting, bool fakeTools, (string Key, string Value)[] configuration)
     {
         var settings = new Dictionary<string, string?>(StringComparer.Ordinal)
         {
@@ -141,6 +149,16 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
                     var agent = new FakeDevWorkflowAgentSession(scopes);
                     return drifting ? new DriftingWorkSessions(agent, scopes) : agent;
                 });
+
+                if (!fakeTools)
+                {
+                    return;
+                }
+
+                // The sandbox lane's one seam, replaced wholesale for the same reason the agent's is: everything above
+                // it — the slots, the in-flight registry, the report artifact, the rows — stays the real thing.
+                services.RemoveAll<IDevWorkflowToolCommands>();
+                services.AddSingleton<IDevWorkflowToolCommands, FakeDevWorkflowToolCommands>();
             }
         };
     }
@@ -158,6 +176,12 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
 
     /// <summary>The second writer, on a host that has one. See <see cref="WithASecondWriter" />.</summary>
     public DriftingWorkSessions Drift => (DriftingWorkSessions)Services.GetRequiredService<IWorkflowOwnedWorkSessionLifecycle>();
+
+    /// <summary>The scripted sandbox. Absent on a host built by <see cref="WithARealSandbox" />, which has the real one.</summary>
+    public FakeDevWorkflowToolCommands Tools => (FakeDevWorkflowToolCommands)Services.GetRequiredService<IDevWorkflowToolCommands>();
+
+    /// <summary>The sandbox lane itself, for the one test that has to await a real build rather than sleep on it.</summary>
+    public DevWorkflowToolExecutor ToolLane => Services.GetRequiredService<DevWorkflowToolExecutor>();
 
     /// <summary>
     ///     The dispatcher under test: the container's, or the one a simulated restart replaced it with. Resolved from
@@ -178,6 +202,10 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     public DevWorkflowDispatcher CreateReplacementDispatcher(bool enabled = true) =>
         new(Services.GetRequiredService<IServiceScopeFactory>(),
             new DevWorkflowGraphCache(),
+
+            // The container's lane, not a second one: the slot count is a property of the NODE, and a restart that
+            // handed itself a fresh set of slots would be simulating a machine with twice the sandbox capacity.
+            Services.GetRequiredService<DevWorkflowToolExecutor>(),
             Options.Create(new DevWorkflowOptions
             {
                 Enabled = enabled,
@@ -200,11 +228,14 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     }
 
     /// <summary>Creates a work item, a definition on <paramref name="graphJson" />, and a run pinned to it.</summary>
-    public async Task<Guid> StartRunAsync(string graphJson, string request = "Explain how the inference path works.")
+    public async Task<Guid> StartRunAsync(string graphJson,
+        string request = "Explain how the inference path works.",
+        Guid? developmentProjectId = null)
     {
         await using var scope = Services.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
-        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Seeded work item", request)).ConfigureAwait(false);
+        var workItem = await store.CreateWorkItemAsync(new CreateDevWorkflowWorkItemCommand(Guid.NewGuid(), "Seeded work item", request, developmentProjectId))
+                                  .ConfigureAwait(false);
         var definition = await store.CreateDefinitionAsync(new CreateDevWorkflowDefinitionCommand(Guid.NewGuid(), "Seeded definition", graphJson, NodeCount: 1))
                                     .ConfigureAwait(false);
         // The seeds travel with the start, exactly as the run service composes them: a run and its node runs are one
@@ -341,6 +372,36 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
 
     public Task<int> AdvanceAsync(Guid runId) =>
         Dispatcher.AdvanceOnceAsync(runId, CancellationToken.None);
+
+    /// <summary>
+    ///     Ticks until quiescent, waits for whatever the sandbox lane is driving to land, and ticks again — repeating
+    ///     until a whole pass finds nothing in flight.
+    ///     <para>
+    ///         Waiting on the lane's own task rather than sleeping, so a test that runs a REAL build is still
+    ///         deterministic: it finishes the moment the build does and not a poll interval later.
+    ///     </para>
+    /// </summary>
+    public async Task AdvanceThroughToolLaneAsync(Guid runId, int maxPasses = 12)
+    {
+        for (var pass = 1; pass <= maxPasses; pass++)
+        {
+            _ = await AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+            var inFlight = (await ReadNodeRunsAsync(runId).ConfigureAwait(false))
+                .Where(nodeRun => ToolLane.IsInFlight(nodeRun.Id))
+                .ToList();
+            if (inFlight.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var nodeRun in inFlight)
+            {
+                await ToolLane.WaitForCompletionAsync(nodeRun.Id).ConfigureAwait(false);
+            }
+        }
+
+        throw new AssertionException($"Run {runId} still had sandbox work in flight after {maxPasses} passes.");
+    }
 
     /// <summary>
     ///     Ticks until the run stops changing, and answers how many ticks it took. Bounded rather than open-ended: a run
@@ -497,6 +558,18 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListArtifactsAsync(runId).ConfigureAwait(false);
+    }
+
+    /// <summary>An artifact's stored bytes as text, verified against the row's own digest and size on the way out.</summary>
+    public async Task<string> ReadArtifactTextAsync(Guid runId, DevWorkflowArtifactSnapshot artifact)
+    {
+        ArgumentNullException.ThrowIfNull(artifact);
+        var read = await Services.GetRequiredService<IDevWorkflowArtifactBlobStore>()
+                                 .ReadAsync(runId, artifact.Id, artifact.ContentSha256, artifact.SizeBytes)
+                                 .ConfigureAwait(false);
+        return read.Status == DevWorkflowArtifactReadStatus.Found
+            ? Encoding.UTF8.GetString(read.Content.Span)
+            : throw new AssertionException($"Artifact '{artifact.Name}' of run {runId} did not read back: {read.Status}.");
     }
 
     public async Task<IReadOnlyList<Guid>> ReadConsumedArtifactIdsAsync(Guid runId, string nodeKey)

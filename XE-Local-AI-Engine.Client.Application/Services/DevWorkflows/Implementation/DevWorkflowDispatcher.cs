@@ -75,11 +75,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     private readonly DevWorkflowOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
+    private readonly DevWorkflowToolExecutor _tools;
     private int _disposed;
     private Task? _loop;
 
     public DevWorkflowDispatcher(IServiceScopeFactory scopeFactory,
         DevWorkflowGraphCache graphs,
+        DevWorkflowToolExecutor tools,
         IOptions<DevWorkflowOptions> options,
         TimeProvider timeProvider,
         ILogger<DevWorkflowDispatcher> logger)
@@ -87,6 +89,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         ArgumentNullException.ThrowIfNull(options);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
+        _tools = tools ?? throw new ArgumentNullException(nameof(tools));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
@@ -249,15 +252,19 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///         finish.
     ///     </para>
     /// </summary>
-    private static async Task<int> PollAsync(IDevWorkflowStore store, DevWorkflowAgentExecutor agent, DevWorkflowRunSnapshot run, CancellationToken cancellationToken)
+    private async Task<int> PollAsync(IDevWorkflowStore store, DevWorkflowAgentExecutor agent, DevWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
         var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
-        var running = nodeRuns.Where(static nodeRun => nodeRun is { Status: DevWorkflowNodeRunStatus.Running, NodeType: DevWorkflowNodeType.Agent }).ToList();
+        var running = nodeRuns.Where(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running
+                                                      && nodeRun.NodeType is DevWorkflowNodeType.Agent or DevWorkflowNodeType.Tool)
+                              .ToList();
 
         var written = 0;
         foreach (var nodeRun in running)
         {
-            written += await agent.PollAsync(store, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false);
+            written += nodeRun.NodeType == DevWorkflowNodeType.Agent
+                ? await agent.PollAsync(store, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false)
+                : await _tools.PollAsync(store, run, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false);
         }
 
         return written;
@@ -572,12 +579,27 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///         collapse the startup reconciler performs, for the same reason.
     ///     </para>
     /// </summary>
-    private static async Task<int> StopAsync(IDevWorkflowStore store,
+    private async Task<int> StopAsync(IDevWorkflowStore store,
         DevWorkflowAgentExecutor agent,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         CancellationToken cancellationToken)
     {
+        if (nodeRun.NodeType == DevWorkflowNodeType.Tool && _tools.IsInFlight(nodeRun.Id))
+        {
+            // A pause lets a build finish. It holds no model slot, it cannot be resumed halfway, and killing it would
+            // throw away minutes of work to save seconds — so the run stays Pausing until the poll settles the row,
+            // which is the same "once nothing is live" rule every other drain uses.
+            if (run.Status == DevWorkflowRunStatus.Pausing)
+            {
+                return 0;
+            }
+
+            // Asked, not settled: only the next tick's poll knows whether the commands stopped or finished inside the
+            // window. Counted as work so that tick comes immediately rather than a sweep later.
+            return await _tools.StopAsync(nodeRun.Id).ConfigureAwait(false) ? 1 : 0;
+        }
+
         var owned = nodeRun is { Status: DevWorkflowNodeRunStatus.Running, NodeType: DevWorkflowNodeType.Agent, WorkSessionId: { } };
         if (run.Status == DevWorkflowRunStatus.Pausing)
         {
@@ -627,7 +649,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     /// <summary>
     ///     Judges every <c>Pending</c> node run against its inbound edges and runs the ones the inline lane owns.
     /// </summary>
-    private static async Task<int> AdmitAsync(IDevWorkflowStore store,
+    private async Task<int> AdmitAsync(IDevWorkflowStore store,
         DevWorkflowAgentExecutor agent,
         DevWorkflowRunSnapshot run,
         DevWorkflowGraph graph,
@@ -695,12 +717,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     ///         all.
     ///     </para>
     ///     <para>
-    ///         <b>Seam:</b> the tool and dev-task lanes attach here. Until they do, a node run of one of those types is
-    ///         blocked for a human rather than left queued forever — a queue nothing drains is the one answer that would
-    ///         look like progress.
+    ///         <b>Seam:</b> the dev-task lane attaches here. Until it does, a node run of that type is blocked for a
+    ///         human rather than left queued forever — a queue nothing drains is the one answer that would look like
+    ///         progress.
     ///     </para>
     /// </summary>
-    private static async Task<int> DispatchAsync(IDevWorkflowStore store,
+    private async Task<int> DispatchAsync(IDevWorkflowStore store,
         DevWorkflowAgentExecutor agent,
         DevWorkflowRunSnapshot run,
         DevWorkflowGraph graph,
@@ -715,7 +737,12 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             return await agent.DispatchAsync(store, graph, run, node, nodeRun, nodeRuns, cancellationToken).ConfigureAwait(false);
         }
 
-        if (node.NodeType is DevWorkflowNodeType.Tool or DevWorkflowNodeType.DevTask)
+        if (node.NodeType == DevWorkflowNodeType.Tool)
+        {
+            return await _tools.DispatchAsync(store, run, node, nodeRun, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (node.NodeType == DevWorkflowNodeType.DevTask)
         {
             return await BlockAsync(store,
                     run,

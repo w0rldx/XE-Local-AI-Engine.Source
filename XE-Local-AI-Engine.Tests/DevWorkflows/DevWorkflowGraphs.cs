@@ -104,6 +104,77 @@ internal static class DevWorkflowGraphs
                                         }
                                         """;
 
+    /// <summary>One tool node on its own: the smallest thing the sandbox lane can be asked to run.</summary>
+    public const string SingleTool = """
+                                     {
+                                       "schemaVersion": 1,
+                                       "nodes": [{ "nodeKey": "validate", "nodeType": "Tool", "label": "Validate" }],
+                                       "edges": []
+                                     }
+                                     """;
+
+    /// <summary>Two tool nodes admitted by the same tick, so the lane's slot count is observable rather than inferred.</summary>
+    public const string TwoParallelTools = """
+                                           {
+                                             "schemaVersion": 1,
+                                             "nodes": [
+                                               { "nodeKey": "start", "nodeType": "Parallel" },
+                                               { "nodeKey": "first", "nodeType": "Tool" },
+                                               { "nodeKey": "second", "nodeType": "Tool" },
+                                               { "nodeKey": "join", "nodeType": "Join" }
+                                             ],
+                                             "edges": [
+                                               { "from": "start", "to": "first" },
+                                               { "from": "start", "to": "second" },
+                                               { "from": "first", "to": "join" },
+                                               { "from": "second", "to": "join" }
+                                             ]
+                                           }
+                                           """;
+
+    /// <summary>
+    ///     A human gate beside sandbox work that is genuinely in flight — the X10 case as it actually occurs: one branch
+    ///     is mid-build at the moment the other's approval is refused.
+    /// </summary>
+    public const string GateBesideSandboxWork = """
+                                                {
+                                                  "schemaVersion": 1,
+                                                  "nodes": [
+                                                    { "nodeKey": "start", "nodeType": "Parallel" },
+                                                    { "nodeKey": "approve", "nodeType": "HumanGate" },
+                                                    { "nodeKey": "validate", "nodeType": "Tool" },
+                                                    { "nodeKey": "done", "nodeType": "Join", "joinPolicy": "Any" }
+                                                  ],
+                                                  "edges": [
+                                                    { "from": "start", "to": "approve" },
+                                                    { "from": "start", "to": "validate" },
+                                                    { "from": "approve", "to": "done", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                    { "from": "validate", "to": "done" }
+                                                  ]
+                                                }
+                                                """;
+
+    /// <summary>
+    ///     An automatic gate routing on the document its upstream produced. The human gate above it takes every answer,
+    ///     so which way the run goes is decided by the Gate's own conditions and by nothing else.
+    /// </summary>
+    public const string GateOnADecision = """
+                                          {
+                                            "schemaVersion": 1,
+                                            "nodes": [
+                                              { "nodeKey": "approve", "nodeType": "HumanGate" },
+                                              { "nodeKey": "choose", "nodeType": "Gate" },
+                                              { "nodeKey": "ship", "nodeType": "Join" },
+                                              { "nodeKey": "revise", "nodeType": "Join" }
+                                            ],
+                                            "edges": [
+                                              { "from": "approve", "to": "choose" },
+                                              { "from": "choose", "to": "ship", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                              { "from": "choose", "to": "revise", "condition": { "path": "decision", "op": "eq", "value": "RequestChanges" } }
+                                            ]
+                                          }
+                                          """;
+
     /// <summary>Three levels of a single chain, for asserting that a skip propagates all the way down.</summary>
     public const string ThreeLevelChain = """
                                           {
