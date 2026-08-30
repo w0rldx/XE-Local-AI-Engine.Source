@@ -261,6 +261,39 @@ public sealed class DevWorkflowToolExecutorTests
     }
 
     /// <summary>
+    ///     A drain over a tool row the lane is driving but whose row never caught up still terminalizes.
+    ///     <para>
+    ///         Outside a drain the next admission repairs such a row. Inside one nothing admits, so before the poll
+    ///         learned to take it the drain re-cancelled an already-cancelled pass on every tick and the run sat in
+    ///         <c>Cancelling</c> until the host restarted, with the lane slot held.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ADrainSettlesAToolRowTheLaneIsDrivingButTheRowNeverCaughtUpWith()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var held = harness.Tools.Hold("validate");
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.SingleTool, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await held.Started.ConfigureAwait(false);
+
+        // Stands the row exactly where a failed Queued→Running write leaves it: the slot taken, the registry entry
+        // made, the row still Queued. The store does not judge transitions, so it can be put there directly.
+        await harness.TransitionNodeRunAsync(runId, "validate", DevWorkflowNodeRunStatus.Queued).ConfigureAwait(false);
+        var nodeRunId = (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Id;
+        AssertEx.True(harness.ToolLane.IsInFlight(nodeRunId), "the lane is still driving the pass this row belongs to.");
+
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled,
+            (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
+            "the drain finished rather than waiting on a row nothing would ever move.");
+        AssertEx.False(harness.ToolLane.IsInFlight(nodeRunId), "and the lane slot went back.");
+    }
+
+    /// <summary>
     ///     With Development Mode switched off there is no workspace provider, no repository binding and no sandbox, so
     ///     the node cannot run as configured. It says that, rather than surfacing a container failure from inside a
     ///     detached task as an unexplained <c>Internal</c>.

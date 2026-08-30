@@ -153,6 +153,17 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         }
 
         var written = 0;
+        if (nodeRun.Status == DevWorkflowNodeRunStatus.Queued)
+        {
+            // The row never caught up with the pass already running for it — the Running write failed after the slot
+            // and the registry entry were taken. Outside a drain the next admission repairs it; inside one nothing
+            // admits, so the poll has to, or the drain waits forever on a row nobody will ever move.
+            written = await RunningAsync(store, run, nodeRun, cancellationToken).ConfigureAwait(false);
+            nodeRun = nodeRun with
+            {
+                Status = DevWorkflowNodeRunStatus.Running
+            };
+        }
 
         if (!flight.Work.IsCompleted)
         {

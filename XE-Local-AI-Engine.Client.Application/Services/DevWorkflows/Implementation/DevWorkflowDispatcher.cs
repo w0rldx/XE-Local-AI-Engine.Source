@@ -255,8 +255,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
     private async Task<int> PollAsync(IDevWorkflowStore store, DevWorkflowAgentExecutor agent, DevWorkflowRunSnapshot run, CancellationToken cancellationToken)
     {
         var nodeRuns = await store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
-        var running = nodeRuns.Where(static nodeRun => nodeRun.Status == DevWorkflowNodeRunStatus.Running
-                                                      && nodeRun.NodeType is DevWorkflowNodeType.Agent or DevWorkflowNodeType.Tool)
+        // A Tool row still reading Queued is polled too, when the lane is in fact already driving it: the Running write
+        // can fail after the slot and the registry entry were taken, and outside a drain the next admission repairs
+        // that — but a drain admits nothing, so without this the run waits on a row nothing would ever move again.
+        var running = nodeRuns.Where(nodeRun => (nodeRun.Status == DevWorkflowNodeRunStatus.Running
+                                                 && nodeRun.NodeType is DevWorkflowNodeType.Agent or DevWorkflowNodeType.Tool)
+                                                || (nodeRun.Status == DevWorkflowNodeRunStatus.Queued
+                                                    && nodeRun.NodeType == DevWorkflowNodeType.Tool
+                                                    && _tools.IsInFlight(nodeRun.Id)))
                               .ToList();
 
         var written = 0;
