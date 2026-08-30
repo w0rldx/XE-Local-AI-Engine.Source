@@ -51,6 +51,11 @@ internal static class AddNodeDevWorkflowsExtensions
         // resolves them inside the per-tick scope it already opens.
         builder.Services.AddScoped<DevWorkflowArtifactPromotion>();
         builder.Services.AddScoped<DevWorkflowAgentExecutor>();
+
+        // Scoped like the agent lane and for the same reason, plus one of its own: the Development services it drives
+        // are scoped and are not registered at all when Development Mode is off, so it asks the scope for them and
+        // answers a node run legibly when they are absent.
+        builder.Services.AddScoped<DevWorkflowDevTaskExecutor>();
         builder.Services.AddScoped<IDevWorkflowRunService, DevWorkflowRunService>();
 
         // A singleton, unlike the agent executor: the sandbox lane's slot count and its in-flight registry outlive a

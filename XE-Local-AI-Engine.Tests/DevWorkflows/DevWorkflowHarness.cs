@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
@@ -192,6 +193,12 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
 
     /// <summary>The scripted sandbox. Absent on a host built by <see cref="WithARealSandbox" />, which has the real one.</summary>
     public FakeDevWorkflowToolCommands Tools => (FakeDevWorkflowToolCommands)Services.GetRequiredService<IDevWorkflowToolCommands>();
+
+    /// <summary>
+    ///     The scripted development chain, on a host whose construction replaced it. Absent everywhere else — the real
+    ///     one needs a repository and a model, so only the implementation-lane tests stand it in.
+    /// </summary>
+    public FakeDevelopmentTaskChain Chain => (FakeDevelopmentTaskChain)Services.GetRequiredService<IDevelopmentManagementService>();
 
     /// <summary>The sandbox lane itself, for the one test that has to await a real build rather than sleep on it.</summary>
     public DevWorkflowToolExecutor ToolLane => Services.GetRequiredService<DevWorkflowToolExecutor>();
