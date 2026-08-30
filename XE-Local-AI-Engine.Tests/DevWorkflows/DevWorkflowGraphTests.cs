@@ -376,18 +376,18 @@ public sealed class DevWorkflowGraphTests
     ///     by the time an ungated apply runs, the approval it should have waited for does not exist to be missed.
     /// </summary>
     [Test]
-    public void Parse_WithAnApplyNodeOnAPathThatPassesNoHumanGate_IsRejected()
+    public void Parse_WithAnApplyNodeReachedFromSomethingOtherThanAHumanGate_IsRejected()
     {
         var ungated = GatedApply.Replace("""{ "nodeKey": "gate", "nodeType": "HumanGate" }""",
             """{ "nodeKey": "gate", "nodeType": "Gate" }""",
             StringComparison.Ordinal);
 
-        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(ungated)).Message, "passes no human gate");
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(ungated)).Message, "other than a human gate");
     }
 
     /// <summary>
-    ///     One branch may not route around the gate. The walk is a dominance question — every path from the entry, not
-    ///     some path — and this is the shape that tells the two apart.
+    ///     One branch may not route around the gate: EVERY inbound edge has to be the decision, or the apply happens on
+    ///     whichever branch arrives first.
     /// </summary>
     [Test]
     public void Parse_WithOneBranchReachingTheApplyWithoutTheGate_IsRejected()
@@ -403,7 +403,19 @@ public sealed class DevWorkflowGraphTests
                                 }
                                 """;
 
-        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(SideDoor)).Message, "passes no human gate");
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(SideDoor)).Message, "other than a human gate");
+    }
+
+    /// <summary>
+    ///     An apply node with no inbound edge at all is the same refusal arriving from the other side: a graph whose
+    ///     entry point applies patches asks nobody anything.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnApplyNodeThatNothingLeadsTo_IsRejected()
+    {
+        const string Lonely = """{"nodes":[{"nodeKey":"only","nodeType":"Tool","toolMode":"Apply"}],"edges":[]}""";
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Lonely)).Message, "other than a human gate");
     }
 
     /// <summary>An apply inside a template would be cloned per task, and each clone would apply the whole fan-out again.</summary>

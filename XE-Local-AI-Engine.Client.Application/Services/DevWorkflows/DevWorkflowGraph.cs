@@ -398,7 +398,7 @@ internal sealed class DevWorkflowGraph
         }
 
         EnsureAcyclic();
-        EnsureAppliesAreGated(entries[0]);
+        EnsureAppliesAreGated();
 
         // Template subtrees are exempt WHOLE: the edge rule above is what makes that safe, because it says the only way
         // out of one is the join, so exempting the set cannot exempt anything the run would otherwise have to run.
@@ -425,58 +425,36 @@ internal sealed class DevWorkflowGraph
     }
 
     /// <summary>
-    ///     Y3 made structural: no path from the entry node to an apply node may avoid a human gate.
+    ///     Y3 made structural: an apply node is reached from a human gate and from nothing else.
     ///     <para>
     ///         The rule the whole integration stage rests on is that no AI-authored patch reaches a real repository
-    ///         without an operator decision recorded in the run's own audit trail. A template that placed the gate
-    ///         elsewhere — or nowhere — would be a definition that quietly applies, and nothing downstream could tell
-    ///         the difference: by the time the node runs, the decision it should have waited for does not exist to be
-    ///         missed. Checking it here costs one walk and makes the invariant a property of the graph.
+    ///         without an operator decision recorded in the run's own audit trail. A definition is the only place that
+    ///         can be checked before the fact: by the time an ungated apply runs, the approval it should have waited
+    ///         for does not exist to be missed.
     ///     </para>
     ///     <para>
-    ///         The walk is the dominance question stated the cheap way: follow the edges from the entry but never THROUGH
-    ///         a human gate, and whatever is still reachable is reachable without an approval. An apply node inside a
-    ///         materialization template is not reachable from the entry at all, so it is refused above rather than here.
+    ///         Stated as "every inbound edge comes from a human gate" rather than as "some gate lies on every path",
+    ///         which is weaker in the way that matters: an approval given before the patches existed — a plan gate, say
+    ///         — would satisfy the path reading while approving something else entirely. The immediate reading also
+    ///         leaves no window between the answer and the act for a node run to change what is being applied.
     ///     </para>
     /// </summary>
-    private void EnsureAppliesAreGated(string entry)
+    private void EnsureAppliesAreGated()
     {
-        var applies = Nodes.Values.Where(static node => node.ToolMode == DevWorkflowToolMode.Apply).Select(static node => node.NodeKey).ToList();
-        if (applies.Count == 0)
+        foreach (var apply in Nodes.Values.Where(static node => node.ToolMode == DevWorkflowToolMode.Apply).Select(static node => node.NodeKey))
         {
-            return;
-        }
-
-        if (applies.FirstOrDefault(TemplateKeys.Contains) is { } cloned)
-        {
-            throw new DevWorkflowValidationException($"Node '{cloned}' applies approved patches and is inside a materialization template, so every child would apply "
-                                                     + "the whole fan-out again. Integration runs once, after the join.");
-        }
-
-        var ungated = new HashSet<string>(StringComparer.Ordinal)
-        {
-            entry
-        };
-        var pending = new Stack<string>();
-        pending.Push(entry);
-        while (pending.Count > 0)
-        {
-            var nodeKey = pending.Pop();
-            if (Nodes[nodeKey].NodeType == DevWorkflowNodeType.HumanGate)
+            if (TemplateKeys.Contains(apply))
             {
-                continue;
+                throw new DevWorkflowValidationException($"Node '{apply}' applies approved patches and is inside a materialization template, so every child would "
+                                                         + "apply the whole fan-out again. Integration runs once, after the join.");
             }
 
-            foreach (var edge in OutboundEdges(nodeKey).Where(edge => ungated.Add(edge.To)))
+            var inbound = InboundEdges(apply);
+            if (inbound.Count == 0 || inbound.Any(edge => Nodes[edge.From].NodeType != DevWorkflowNodeType.HumanGate))
             {
-                pending.Push(edge.To);
+                throw new DevWorkflowValidationException($"Node '{apply}' applies approved patches and is reached from something other than a human gate. An apply "
+                                                         + "changes a real repository, so the decision that lets it happen has to be the step in front of it.");
             }
-        }
-
-        if (applies.FirstOrDefault(ungated.Contains) is { } exposed)
-        {
-            throw new DevWorkflowValidationException($"Node '{exposed}' applies approved patches on a path from the entry node that passes no human gate. An apply "
-                                                     + "changes a real repository, so a definition has to put an approval in front of it.");
         }
     }
 
