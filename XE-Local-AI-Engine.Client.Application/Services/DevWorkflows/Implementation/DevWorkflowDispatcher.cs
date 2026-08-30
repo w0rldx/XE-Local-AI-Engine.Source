@@ -177,7 +177,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
         var run = await store.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
         if (DevWorkflowStateMachine.IsTerminal(run.Status))
         {
-            _graphs.Forget(runId);
+            Forget(runId);
             return 0;
         }
 
@@ -426,8 +426,19 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                                WorkItemStatus: DevWorkflowWorkItemStatus.Blocked),
                            cancellationToken)
                        .ConfigureAwait(false);
-        _graphs.Forget(run.Id);
+        Forget(run.Id);
         return 1;
+    }
+
+    /// <summary>
+    ///     Drops everything the runtime holds in memory about a run that has ended: its parsed graph, and any re-attempt
+    ///     it had promised itself but will now never ask for. Both are caches over durable rows, so a run that turns out
+    ///     to be live again simply re-derives them.
+    /// </summary>
+    private void Forget(Guid runId)
+    {
+        _graphs.Forget(runId);
+        _retries.Forget(runId);
     }
 
     /// <summary>
@@ -665,6 +676,14 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                                WorkItemStatus: DevWorkflowStateMachine.WorkItemStatusFor(settledStatus, nodeRuns)),
                            cancellationToken)
                        .ConfigureAwait(false);
+
+        // A PAUSED run keeps its promised re-attempts: it is coming back, and a resume that skipped every cushion a
+        // definition asked for would be the pause spending them.
+        if (DevWorkflowStateMachine.IsTerminal(settledStatus))
+        {
+            _retries.Forget(run.Id);
+        }
+
         _graphs.Forget(run.Id);
         return written + 1;
     }
@@ -1037,7 +1056,7 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
 
         if (DevWorkflowStateMachine.IsTerminal(target))
         {
-            _graphs.Forget(run.Id);
+            Forget(run.Id);
         }
 
         return 1;

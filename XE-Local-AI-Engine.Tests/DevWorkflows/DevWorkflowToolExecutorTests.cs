@@ -234,6 +234,33 @@ public sealed class DevWorkflowToolExecutorTests
     }
 
     /// <summary>
+    ///     A run cancelled while one of its node runs is waiting out a retry delay leaves nothing behind it. The
+    ///     promises are held in memory and only cleared by the re-attempt that honours them, so one belonging to a run
+    ///     that will never ask again would sit there for the life of the process.
+    /// </summary>
+    [Test]
+    public async Task ARunCancelledMidDelayLeavesNoPromisedReAttemptBehind()
+    {
+        // A private host for the same reason it holds a clock: the promise map is a singleton, so an absolute count of
+        // it is only readable on a host no sibling test is scheduling retries on.
+        var clock = new ManualTimeProvider();
+        await using var harness = new DevWorkflowHarness(services => services.AddSingleton<TimeProvider>(clock));
+        harness.Tools.Answer("validate", FakeDevWorkflowToolCommands.Failing(), FakeDevWorkflowToolCommands.Passing());
+        var runId = await harness.StartRunAsync(DelayedRetryToolGraph, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var retries = harness.Services.GetRequiredService<DevWorkflowRetryPolicy>();
+        AssertEx.Equal(expected: 1, retries.ScheduledRetryCount, "the re-attempt is scheduled and waiting on a clock this test has not moved.");
+
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        AssertEx.Equal(expected: 0, retries.ScheduledRetryCount, "a run that will never ask again takes what it promised itself with it.");
+    }
+
+    /// <summary>
     ///     The two classes no retry can answer stand the node run down for a human instead of failing it, and they leave
     ///     no report — nothing ran, so there is nothing to report but the reason on the row.
     /// </summary>
