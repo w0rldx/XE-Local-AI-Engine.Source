@@ -396,7 +396,12 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
 
             foreach (var nodeRun in inFlight)
             {
-                await ToolLane.WaitForCompletionAsync(nodeRun.Id).ConfigureAwait(false);
+                // Bounded, because the failure this catches is a HANG: a lane entry nothing settles — a drain that
+                // wrote a terminal over a live row instead of asking it to stop — leaves a pass running that no poll
+                // will ever consume, and an unbounded wait would report that as a dead test run rather than a bug.
+                await ToolLane.WaitForCompletionAsync(nodeRun.Id)
+                              .WaitAsync(TimeSpan.FromMinutes(10))
+                              .ConfigureAwait(false);
             }
         }
 
