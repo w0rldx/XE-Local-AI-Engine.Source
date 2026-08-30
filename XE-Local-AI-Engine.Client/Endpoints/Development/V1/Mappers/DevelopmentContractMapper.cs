@@ -44,7 +44,11 @@ internal static class DevelopmentContractMapper
     public static DevelopmentTemplateResponse ToResponse(this DevelopmentTemplateReference value) =>
         new(value.Id, value.Alias, value.Availability);
 
-    public static DevelopmentTaskResponse ToResponse(this DevelopmentTaskSnapshot value) =>
+    /// <summary>
+    ///     The task's own row says nothing about workflows, so the run driving it travels beside it — from the
+    ///     aggregate, which is where the reverse lookup happens.
+    /// </summary>
+    public static DevelopmentTaskResponse ToResponse(this DevelopmentTaskSnapshot value, Guid? workflowRunId = null) =>
         new(value.Id,
             value.ProjectId,
             value.Title,
@@ -55,7 +59,8 @@ internal static class DevelopmentContractMapper
             value.MaxReviewRounds,
             value.BlockedReason,
             value.ApprovedSubjectHash,
-            value.Version);
+            value.Version,
+            workflowRunId);
 
     public static DevelopmentAttemptResponse ToResponse(this DevelopmentAttemptSnapshot value) =>
         new(value.Id,
@@ -101,7 +106,7 @@ internal static class DevelopmentContractMapper
             value.Outcome);
 
     public static DevelopmentTaskDetailResponse ToResponse(this DevelopmentTaskAggregate value) =>
-        new(value.Task.ToResponse(),
+        new(value.Task.ToResponse(value.WorkflowRunId),
             value.Attempts.Select(ToResponse).ToArray(),
             value.Artifacts.Select(ToResponse).ToArray());
 

@@ -394,6 +394,30 @@ public sealed class DevWorkflowDevTaskTests
         AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, created.Status, "the child drove its own task through the same chain.");
     }
 
+    /// <summary>
+    ///     The other side of a DevTask node's deep link: the Development task it drives names the run back, which is
+    ///     what lets that page defer the apply to the workflow's gate. A task nobody's workflow drives names nothing.
+    /// </summary>
+    [Test]
+    public async Task ATaskADevTaskNodeRunDrives_NamesThatRunBackOnTheDevelopmentTask()
+    {
+        // A host of its own with the REAL Development management service: this is about what Dev Mode's own page reads.
+        await using var harness = new DevWorkflowHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var undrivenTaskId = await AddTaskAsync(harness, projectId, "Nobody's workflow drives this").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        await PinTaskAsync(harness, runId, "implement", taskId).ConfigureAwait(false);
+
+        await using var scope = harness.Services.CreateAsyncScope();
+        var management = scope.ServiceProvider.GetRequiredService<IDevelopmentManagementService>();
+
+        AssertEx.Equal(runId,
+            (await management.GetTaskAsync(projectId, taskId).ConfigureAwait(false)).WorkflowRunId,
+            "the task a node run named names that node run's run back.");
+        AssertEx.Null((await management.GetTaskAsync(projectId, undrivenTaskId).ConfigureAwait(false)).WorkflowRunId,
+            "and a task an operator drives themselves says nothing about workflows, which is every task on a node that runs none.");
+    }
+
     /// <summary>The workflow host with the development chain scripted, and its own development project to drive.</summary>
     private static DevWorkflowHarness NewHarness(TimeProvider? clock = null) =>
         new(services =>

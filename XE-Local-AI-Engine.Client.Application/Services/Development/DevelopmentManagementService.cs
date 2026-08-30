@@ -68,6 +68,7 @@ internal sealed class DevelopmentManagementService(
     IDevelopmentCommandProfileDetector profileDetector,
     IDevelopmentProfileBackfillService profileBackfill,
     IDevelopmentTemplateStore templateStore,
+    IDevWorkflowStore workflows,
     TimeProvider timeProvider) : IDevelopmentManagementService
 {
     private const string ReviewRoundLimitReason = "The configured maximum review rounds has been reached.";
@@ -83,6 +84,10 @@ internal sealed class DevelopmentManagementService(
     private readonly IDevelopmentStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly IDevelopmentAttemptExecutionSupervisor _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
     private readonly IDevelopmentTemplateStore _templateStore = templateStore ?? throw new ArgumentNullException(nameof(templateStore));
+
+    /// <summary>Read-only, and for one question: which workflow run — if any — owns the approval for a task.</summary>
+    private readonly IDevWorkflowStore _workflows = workflows ?? throw new ArgumentNullException(nameof(workflows));
+
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     public Task<DevelopmentRepositoryReference> RegisterRepositoryAsync(string displayAlias,
@@ -216,9 +221,13 @@ internal sealed class DevelopmentManagementService(
         CancellationToken cancellationToken = default)
     {
         var task = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
+
+        // Read back through the pointer a DevTask node run stamps rather than stored on the task: the task row belongs
+        // to Development Mode, and a workflow driving one is a fact about the workflow.
         return new DevelopmentTaskAggregate(task,
             await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false),
-            await _store.ListArtifactsAsync(taskId, cancellationToken).ConfigureAwait(false));
+            await _store.ListArtifactsAsync(taskId, cancellationToken).ConfigureAwait(false),
+            await _workflows.FindRunIdForDevelopmentTaskAsync(taskId, cancellationToken).ConfigureAwait(false));
     }
 
     public async Task<DevelopmentNextActionResult> StartNextActionAsync(Guid projectId,

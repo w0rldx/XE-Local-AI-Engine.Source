@@ -406,6 +406,74 @@ public sealed class DevWorkflowNodeRunTests
             "Written to the column, not held only by the change tracker.");
     }
 
+    /// <summary>
+    ///     The pointer read backwards: a Development task a workflow drives can name the run driving it, which is what
+    ///     lets the Dev Mode task page say the approval lives somewhere else. A task no workflow touched answers
+    ///     nothing, and that is the ordinary case the page must keep behaving as it always has.
+    ///     <para>
+    ///         Two runs can name one task over its life — a re-run of the same definition drives the same task — and the
+    ///         LATEST answers, because the question is where the approval lives now.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task TheRunDrivingADevelopmentTask_IsFoundBackThroughThePointerAndTheLatestOneAnswers()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var development = new DevelopmentStore(context, TimeProvider.System);
+        await SeedSelectedFolderAsync(context, fixture.DatabasePath).ConfigureAwait(false);
+        var (task, _) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(development).ConfigureAwait(false);
+
+        // Two clocks a minute apart, because "latest" is the node run created last and two rows written this close
+        // together would otherwise be stamped inside the same millisecond.
+        var earlier = new DevWorkflowStore(context, new FixedClock(DateTimeOffset.UnixEpoch.AddDays(1)));
+        var later = new DevWorkflowStore(context, new FixedClock(DateTimeOffset.UnixEpoch.AddDays(1).AddMinutes(1)));
+
+        var first = await DevWorkflowTestFixture.SeedRunAsync(earlier, developmentProjectId: task.ProjectId).ConfigureAwait(false);
+        var firstNodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(earlier,
+                                                      first.RunId,
+                                                      firstNodeRunId,
+                                                      "implement",
+                                                      first.RunVersion,
+                                                      DevWorkflowNodeType.DevTask,
+                                                      developmentProjectId: task.ProjectId)
+                                                  .ConfigureAwait(false);
+        _ = await earlier.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(first.RunId,
+                             firstNodeRunId,
+                             version,
+                             DevWorkflowNodeRunStatus.Running,
+                             DevelopmentTaskId: task.TaskId))
+                         .ConfigureAwait(false);
+
+        AssertEx.Equal(first.RunId,
+            await earlier.FindRunIdForDevelopmentTaskAsync(task.TaskId).ConfigureAwait(false),
+            "A task a DevTask node run named is driven by that node run's run.");
+        AssertEx.Null(await earlier.FindRunIdForDevelopmentTaskAsync(Guid.NewGuid()).ConfigureAwait(false),
+            "A task no workflow drives names no run, which is every task an operator created themselves.");
+
+        var second = await DevWorkflowTestFixture.SeedRunAsync(later, developmentProjectId: task.ProjectId).ConfigureAwait(false);
+        var secondNodeRunId = Guid.NewGuid();
+        var secondVersion = await DevWorkflowTestFixture.AddNodeRunAsync(later,
+                                                            second.RunId,
+                                                            secondNodeRunId,
+                                                            "implement",
+                                                            second.RunVersion,
+                                                            DevWorkflowNodeType.DevTask,
+                                                            developmentProjectId: task.ProjectId)
+                                                        .ConfigureAwait(false);
+        _ = await later.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(second.RunId,
+                           secondNodeRunId,
+                           secondVersion,
+                           DevWorkflowNodeRunStatus.Running,
+                           DevelopmentTaskId: task.TaskId))
+                       .ConfigureAwait(false);
+
+        AssertEx.Equal(second.RunId,
+            await later.FindRunIdForDevelopmentTaskAsync(task.TaskId).ConfigureAwait(false),
+            "The run that took the task over is the one holding its approval now.");
+    }
+
     /// <summary>The repository row a development project points at; both seeded projects share it.</summary>
     private static async Task SeedSelectedFolderAsync(NodeChatDbContext context, string databasePath)
     {
@@ -418,5 +486,12 @@ public sealed class DevWorkflowNodeRunTests
             CreatedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         });
         _ = await context.SaveChangesAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>A clock that does not move, so two writes can be ordered by more than luck.</summary>
+    private sealed class FixedClock(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() =>
+            utcNow;
     }
 }

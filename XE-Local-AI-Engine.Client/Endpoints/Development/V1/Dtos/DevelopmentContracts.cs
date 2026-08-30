@@ -312,6 +312,11 @@ public sealed record DevelopmentProjectResponse(
     string? CommandProfileBuildTarget,
     string? CommandProfileDigest);
 
+/// <summary>
+///     <see cref="WorkflowRunId" /> names the development workflow run driving this task, and is absent for the
+///     ordinary task an operator drives themselves. A task that has one is approved at that run's gate, so this page
+///     defers the apply to it rather than offering its own.
+/// </summary>
 public sealed record DevelopmentTaskResponse(
     Guid Id,
     Guid ProjectId,
@@ -323,7 +328,8 @@ public sealed record DevelopmentTaskResponse(
     int MaxReviewRounds,
     string? BlockedReason,
     string? ApprovedSubjectHash,
-    long Version);
+    long Version,
+    Guid? WorkflowRunId);
 
 public sealed record DevelopmentAttemptResponse(
     Guid Id,

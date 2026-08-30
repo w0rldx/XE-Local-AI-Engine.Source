@@ -270,6 +270,9 @@ public sealed class DevelopmentManagementServiceTests
             // No materialization for these projects: they are registered repositories, not template-created ones, so
             // the profile carries no template id.
             Substitute.For<IDevelopmentTemplateStore>(),
+
+            // No workflow drives these tasks: the substitute answers null, which is the ordinary operator-driven case.
+            Substitute.For<IDevWorkflowStore>(),
             TimeProvider.System);
 
     /// <summary>Backfill is a no-op here: every project these tests build already carries a profile.</summary>

@@ -25,10 +25,16 @@ public sealed record DevelopmentProjectAggregate(
     IReadOnlyList<DevelopmentTaskAggregate> Tasks,
     IReadOnlyList<DevelopmentEventSnapshot> Events);
 
+/// <summary>
+///     <see cref="WorkflowRunId" /> names the development workflow run driving this task, and is null for a task an
+///     operator drives themselves. It is the one thing on this aggregate that is not the task's own row: apply is
+///     approved at that run's gate, so the page has to know it is not the one being asked.
+/// </summary>
 public sealed record DevelopmentTaskAggregate(
     DevelopmentTaskSnapshot Task,
     IReadOnlyList<DevelopmentAttemptSnapshot> Attempts,
-    IReadOnlyList<DevelopmentArtifactSnapshot> Artifacts);
+    IReadOnlyList<DevelopmentArtifactSnapshot> Artifacts,
+    Guid? WorkflowRunId = null);
 
 public sealed record DevelopmentNextActionResult(
     string Action,

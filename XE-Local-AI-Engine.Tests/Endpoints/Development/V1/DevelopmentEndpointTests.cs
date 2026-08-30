@@ -85,6 +85,42 @@ public sealed class DevelopmentEndpointTests
         await service.Received(1).GetTaskAsync(ProjectId, TaskId, Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    ///     A task a workflow drives says so on the wire, and one an operator drives themselves says nothing — which is
+    ///     what lets this page keep offering its own apply for every task that is not behind a workflow's gate.
+    /// </summary>
+    [Test]
+    public async Task GetTask_CarriesTheWorkflowRunDrivingItAndNothingWhenNoneDoes()
+    {
+        var runId = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        var service = Substitute.For<IDevelopmentManagementService>();
+        service.GetTaskAsync(ProjectId, TaskId, Arg.Any<CancellationToken>()).Returns(TaskAggregate(ProjectId, TaskId, []) with { WorkflowRunId = runId });
+        await using var driven = EnabledFactory(service);
+        using var drivenClient = driven.CreateClient();
+        using var drivenRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/development/projects/{ProjectId}/tasks/{TaskId}");
+        driven.AddNodeBearerToken(drivenRequest);
+
+        using var drivenResponse = await drivenClient.SendAsync(drivenRequest).ConfigureAwait(false);
+        var drivenJson = await drivenResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, drivenResponse.StatusCode);
+        AssertEx.Contains(drivenJson, $"\"workflowRunId\":\"{runId}\"", StringComparison.OrdinalIgnoreCase);
+
+        var undriven = Substitute.For<IDevelopmentManagementService>();
+        undriven.GetTaskAsync(ProjectId, TaskId, Arg.Any<CancellationToken>()).Returns(TaskAggregate(ProjectId, TaskId, []));
+        await using var ordinary = EnabledFactory(undriven);
+        using var ordinaryClient = ordinary.CreateClient();
+        using var ordinaryRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/local/v1/development/projects/{ProjectId}/tasks/{TaskId}");
+        ordinary.AddNodeBearerToken(ordinaryRequest);
+
+        using var ordinaryResponse = await ordinaryClient.SendAsync(ordinaryRequest).ConfigureAwait(false);
+        var ordinaryJson = await ordinaryResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, ordinaryResponse.StatusCode);
+        AssertEx.False(ordinaryJson.Contains(runId.ToString(), StringComparison.OrdinalIgnoreCase),
+            "An ordinary task must not be reported as driven by anything.");
+    }
+
     [Test]
     public async Task RegisterRepository_WhenSuccessful_DoesNotExposeHostPath()
     {
