@@ -37,7 +37,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     private readonly List<Guid> _cancelled = [];
     private readonly IServiceScopeFactory _scopes;
     private int _failuresOwed;
-    private bool _holdNext;
+    private int _holdsOwed;
 
     public FakeDevelopmentTaskChain(IServiceScopeFactory scopes) =>
         _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
@@ -79,14 +79,15 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     }
 
     /// <summary>
-    ///     Makes the next action start a real coder attempt and leave it RUNNING, so a test can look at a node run
-    ///     while the chain is genuinely working — which is the only state a drain has anything to ask about.
+    ///     Makes the next <paramref name="count" /> actions start a real coder attempt and leave it RUNNING, so a test
+    ///     can look at a node run while the chain is genuinely working — which is the only state a drain has anything to
+    ///     ask about, and the only way two siblings can be caught working at the same moment.
     /// </summary>
-    public void HoldNextAttempt()
+    public void HoldNextAttempt(int count = 1)
     {
         lock (_gate)
         {
-            _holdNext = true;
+            _holdsOwed = count;
         }
     }
 
@@ -110,8 +111,11 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                 _failuresOwed--;
             }
 
-            hold = !fail && _holdNext;
-            _holdNext = false;
+            hold = !fail && _holdsOwed > 0;
+            if (hold)
+            {
+                _holdsOwed--;
+            }
         }
 
         if (fail || hold)

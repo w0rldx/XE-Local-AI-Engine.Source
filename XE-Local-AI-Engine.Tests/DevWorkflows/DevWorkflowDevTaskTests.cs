@@ -1,12 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
-using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -451,60 +449,16 @@ public sealed class DevWorkflowDevTaskTests
 
     /// <summary>The workflow host with the development chain scripted, and its own development project to drive.</summary>
     private static DevWorkflowHarness NewHarness(TimeProvider? clock = null) =>
-        new(services =>
-        {
-            services.RemoveAll<IDevelopmentManagementService>();
-            services.AddSingleton<IDevelopmentManagementService>(provider => new FakeDevelopmentTaskChain(provider.GetRequiredService<IServiceScopeFactory>()));
-            if (clock is not null)
-            {
-                services.AddSingleton(clock);
-            }
-        });
+        DevWorkflowHarness.WithAScriptedChain(clock);
 
-    /// <summary>
-    ///     A development project and the one task it owns, created the way Dev Mode creates them.
-    ///     <para>
-    ///         The selected folder is registered rather than invented: the project row has a foreign key to it. Its host
-    ///         path is never opened, because nothing in these tests prepares a workspace — the chain that would is the
-    ///         part they script.
-    ///     </para>
-    /// </summary>
-    private static async Task<(Guid ProjectId, Guid TaskId)> SeedDevelopmentTaskAsync(DevWorkflowHarness harness)
-    {
-        await using var scope = harness.Services.CreateAsyncScope();
-        var folder = await scope.ServiceProvider.GetRequiredService<ISelectedFolderResolver>()
-                                .RegisterAsync(new SelectedFolderRegistration($"devtask-{Guid.NewGuid():N}"[..20],
-                                    Path.Combine(Path.GetTempPath(), $"xe-devtask-{Guid.NewGuid():N}")))
-                                .ConfigureAwait(false);
+    private static Task<(Guid ProjectId, Guid TaskId)> SeedDevelopmentTaskAsync(DevWorkflowHarness harness) =>
+        harness.SeedDevelopmentProjectAsync();
 
-        var projectId = Guid.NewGuid();
-        var taskId = Guid.NewGuid();
-        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>()
-                       .CreateProjectAsync(new DevelopmentCreateProjectCommand(projectId,
-                           taskId,
-                           Guid.NewGuid(),
-                           "Keep the product working.",
-                           Guid.Parse(folder.Id),
-                           "repository-identity-hash",
-                           "main",
-                           "Add the feature",
-                           "It has to do the thing.",
-                           "[\"it does the thing\"]"))
-                       .ConfigureAwait(false);
-        return (projectId, taskId);
-    }
+    private static Task<DevelopmentTaskSnapshot> ReadTaskAsync(DevWorkflowHarness harness, Guid taskId) =>
+        harness.ReadDevelopmentTaskAsync(taskId);
 
-    private static async Task<DevelopmentTaskSnapshot> ReadTaskAsync(DevWorkflowHarness harness, Guid taskId)
-    {
-        await using var scope = harness.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().GetTaskAsync(taskId).ConfigureAwait(false);
-    }
-
-    private static async Task<IReadOnlyList<DevelopmentTaskSnapshot>> ListTasksAsync(DevWorkflowHarness harness, Guid projectId)
-    {
-        await using var scope = harness.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListTasksAsync(projectId).ConfigureAwait(false);
-    }
+    private static Task<IReadOnlyList<DevelopmentTaskSnapshot>> ListTasksAsync(DevWorkflowHarness harness, Guid projectId) =>
+        harness.ListDevelopmentTasksAsync(projectId);
 
     /// <summary>A second task on the project, through the internal capability decomposition uses.</summary>
     private static async Task<Guid> AddTaskAsync(DevWorkflowHarness harness, Guid projectId, string title)

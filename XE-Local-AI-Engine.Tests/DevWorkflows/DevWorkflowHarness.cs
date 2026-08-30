@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
+using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -123,6 +124,21 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     /// </summary>
     public static DevWorkflowHarness WithARealSandbox(params (string Key, string Value)[] configuration) =>
         new(drifting: false, fakeTools: false, configuration);
+
+    /// <summary>
+    ///     A host of this test's own with the development chain scripted, and a clock of its own when one is given. The
+    ///     chain is a container singleton whose history every test using it reads, so it is always a private host.
+    /// </summary>
+    public static DevWorkflowHarness WithAScriptedChain(TimeProvider? clock = null) =>
+        new(services =>
+        {
+            services.RemoveAll<IDevelopmentManagementService>();
+            services.AddSingleton<IDevelopmentManagementService>(provider => new FakeDevelopmentTaskChain(provider.GetRequiredService<IServiceScopeFactory>()));
+            if (clock is not null)
+            {
+                services.AddSingleton(clock);
+            }
+        });
 
     /// <summary>The class's shared host, with this test's own runs on it. See <see cref="DevWorkflowHostFixture" />.</summary>
     public DevWorkflowHarness(DevWorkflowHostFixture host) =>
@@ -675,6 +691,51 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     {
         await using var scope = Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>().ListInterruptedNodeRunsAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     A development project and the one task it owns, created the way Dev Mode creates them.
+    ///     <para>
+    ///         The selected folder is registered rather than invented: the project row has a foreign key to it. Its host
+    ///         path is never opened, because nothing driven through this harness prepares a workspace — the chain that
+    ///         would is the part <see cref="FakeDevelopmentTaskChain" /> scripts.
+    ///     </para>
+    /// </summary>
+    public async Task<(Guid ProjectId, Guid TaskId)> SeedDevelopmentProjectAsync()
+    {
+        await using var scope = Services.CreateAsyncScope();
+        var folder = await scope.ServiceProvider.GetRequiredService<ISelectedFolderResolver>()
+                                .RegisterAsync(new SelectedFolderRegistration($"devtask-{Guid.NewGuid():N}"[..20],
+                                    Path.Combine(Path.GetTempPath(), $"xe-devtask-{Guid.NewGuid():N}")))
+                                .ConfigureAwait(false);
+
+        var projectId = Guid.NewGuid();
+        var taskId = Guid.NewGuid();
+        _ = await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>()
+                       .CreateProjectAsync(new DevelopmentCreateProjectCommand(projectId,
+                           taskId,
+                           Guid.NewGuid(),
+                           "Keep the product working.",
+                           Guid.Parse(folder.Id),
+                           "repository-identity-hash",
+                           "main",
+                           "Add the feature",
+                           "It has to do the thing.",
+                           "[\"it does the thing\"]"))
+                       .ConfigureAwait(false);
+        return (projectId, taskId);
+    }
+
+    public async Task<DevelopmentTaskSnapshot> ReadDevelopmentTaskAsync(Guid taskId)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().GetTaskAsync(taskId).ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<DevelopmentTaskSnapshot>> ListDevelopmentTasksAsync(Guid projectId)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<IDevelopmentStore>().ListTasksAsync(projectId).ConfigureAwait(false);
     }
 
     /// <summary>Moves the run itself, the way the run service's fire-and-forget commands will.</summary>
