@@ -74,10 +74,12 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(nodeRun);
 
+        ArgumentNullException.ThrowIfNull(run);
+
         var secrets = new CollectingWorkspaceSecretsSink();
         try
         {
-            return await ExecuteAsync(node, nodeRun, secrets, cancellationToken).ConfigureAwait(false);
+            return await ExecuteAsync(run, node, nodeRun, secrets, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is DevelopmentRepositoryStateConflictException
                                               or SandboxCapabilityNotSupportedException
@@ -123,7 +125,8 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         }
     }
 
-    private async Task<DevWorkflowToolRun> ExecuteAsync(DevWorkflowGraphNode node,
+    private async Task<DevWorkflowToolRun> ExecuteAsync(DevWorkflowRunSnapshot run,
+        DevWorkflowGraphNode node,
         DevWorkflowNodeRunSnapshot nodeRun,
         CollectingWorkspaceSecretsSink secrets,
         CancellationToken cancellationToken)
@@ -155,7 +158,7 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         // the Dev Mode store write, which resolves a task row that a node run does not have. Everything else it needs
         // comes from the container, so the wiring cannot drift from the registered one.
         var workspaces = ActivatorUtilities.CreateInstance<DevelopmentWorkspaceProvider>(_services, secrets);
-        var snapshot = Synthesize(project, node, nodeRun, repository);
+        var snapshot = Synthesize(project, node, run, nodeRun, repository);
         var session = await workspaces.PrepareAsync(snapshot, repository, cancellationToken).ConfigureAwait(false);
         var tools = new DevelopmentWorkspaceTools(_sandbox, session, Options.Create(_developmentOptions), profile);
 
@@ -263,19 +266,26 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     /// <summary>
     ///     The execution snapshot a Tool node-run stands in for a Dev Mode attempt with.
     ///     <para>
-    ///         <b>The node-run id is both isolation keys.</b> The workspace is partitioned by the task id and made
-    ///         idempotent by the attempt id, and a node run is the only identity there is here — which is exactly what
-    ///         the Phase 0 spike proved the provider is happy with, once the credential report is taken through its
-    ///         seam.
+    ///         <b>Both isolation keys are the ATTEMPT's, not the node run's.</b> The provider partitions its worktree by
+    ///         the task id and reuses a preserved one whole — including the base commit recorded in its manifest — so a
+    ///         node run whose identity is constant across attempts would have its second attempt re-validate the FIRST
+    ///         attempt's commit in the first attempt's tree, and report green or red about a state nothing is in any
+    ///         more. Deriving the id from the attempt is what makes a re-attempt a real second try: the directory does
+    ///         not exist, so the base branch is resolved again and the workspace is built from it.
+    ///     </para>
+    ///     <para>
+    ///         Deterministic, and the same derivation the tick's own idempotency keys use, so a poll replayed after a
+    ///         crash prepares the workspace this attempt already has rather than a second one beside it.
     ///     </para>
     /// </summary>
-    private static DevelopmentExecutionSnapshot Synthesize(DevelopmentProjectSnapshot project,
+    internal static DevelopmentExecutionSnapshot Synthesize(DevelopmentProjectSnapshot project,
         DevWorkflowGraphNode node,
+        DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         DevelopmentRepositoryBinding repository) =>
         new(project.Id,
-            nodeRun.Id,
-            nodeRun.Id,
+            WorkspaceIdentity(run, nodeRun),
+            WorkspaceIdentity(run, nodeRun),
             repository.SelectedFolderId,
             project.RepositoryIdentityHash,
             project.BaseBranch,
@@ -297,6 +307,14 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
             ExecutorIdentity,
             AttemptVersion: 1,
             project.CommandProfileJson);
+
+    /// <summary>The workspace this ATTEMPT owns. See <see cref="Synthesize" /> for why it is not the node run's id.</summary>
+    internal static Guid WorkspaceIdentity(DevWorkflowRunSnapshot run, DevWorkflowNodeRunSnapshot nodeRun)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(nodeRun);
+        return DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "workspace");
+    }
 
     private static DevWorkflowToolRun Refused(string failureClass, string sanitizedReason, CollectingWorkspaceSecretsSink secrets) =>
         new(Passed: false,
