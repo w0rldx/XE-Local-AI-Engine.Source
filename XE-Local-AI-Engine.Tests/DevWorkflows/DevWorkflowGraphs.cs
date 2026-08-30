@@ -280,6 +280,28 @@ internal static class DevWorkflowGraphs
                                             """;
 
     /// <summary>
+    ///     Two branches into an <c>Any</c> join, one of which cannot run at all: the agent node binds no definition, so
+    ///     it stands down for a human and the operator's answer decides which terminal the dead branch carries.
+    /// </summary>
+    public const string AnyJoinOverADeadBranch = """
+                                                 {
+                                                   "schemaVersion": 1,
+                                                   "nodes": [
+                                                     { "nodeKey": "anysplit", "nodeType": "Parallel" },
+                                                     { "nodeKey": "anysurvivor", "nodeType": "Tool" },
+                                                     { "nodeKey": "anydoomed", "nodeType": "Agent" },
+                                                     { "nodeKey": "anymerge", "nodeType": "Join", "joinPolicy": "Any" }
+                                                   ],
+                                                   "edges": [
+                                                     { "from": "anysplit", "to": "anysurvivor" },
+                                                     { "from": "anysplit", "to": "anydoomed" },
+                                                     { "from": "anysurvivor", "to": "anymerge" },
+                                                     { "from": "anydoomed", "to": "anymerge" }
+                                                   ]
+                                                 }
+                                                 """;
+
+    /// <summary>
     ///     A human gate beside sandbox work that is genuinely in flight — the X10 case as it actually occurs: one branch
     ///     is mid-build at the moment the other's approval is refused.
     /// </summary>
