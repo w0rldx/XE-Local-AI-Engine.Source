@@ -203,7 +203,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
 
         // Evidence first, status last — the same order the agent lane and the work-session loop use one level down. A
         // crash in that window re-derives the same answer, because the artifact write is keyed and the poll runs again.
-        await PromoteReportAsync(store, run, nodeRun, result, cancellationToken).ConfigureAwait(false);
+        await PromoteReportAsync(store, graph, run, nodeRun, result, cancellationToken).ConfigureAwait(false);
 
         if (result.Passed)
         {
@@ -357,6 +357,18 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
+            if (node.ToolMode == DevWorkflowToolMode.Apply)
+            {
+                // The integration variant takes the same lane slot as a validation pass, deliberately: it goes through
+                // the same workspace machinery against the same repository, which is the resource the slot count bounds
+                // — and it is the ONE difference from the DevTask lane, which takes no slot because what it drives is a
+                // Dev Mode attempt with a bound of its own.
+                return scope.ServiceProvider.GetService<DevWorkflowApplyCommands>() is { } apply
+                    ? await apply.RunAsync(run, nodeRun, cancellationToken).ConfigureAwait(false)
+                    : Refused(DevWorkflowFailureClasses.Configuration,
+                        "This node applies approved patches, and Development Mode is switched off on this node.");
+            }
+
             if (scope.ServiceProvider.GetService<IDevWorkflowToolCommands>() is not { } commands)
             {
                 // Development Mode is switched off on this node, so there is no workspace provider, no repository
@@ -440,11 +452,17 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
     }
 
     /// <summary>
-    ///     Writes the validation report into the run's own artifact record, so the evidence outlives the workspace it
+    ///     Writes the node run's report into the run's own artifact record, so the evidence outlives the workspace it
     ///     was produced in. Keyed on <c>(run, node key, attempt)</c>, so a replayed poll rewrites the same blob and the
     ///     store's query-first check returns the recorded result instead of appending a second version.
+    ///     <para>
+    ///         An apply node's report is a different document about a different act, so it is written under the ordinary
+    ///         <c>Report</c> kind and its own name: a reader that decodes a validation report would otherwise be handed
+    ///         one that is not, and render it as unreadable evidence rather than as the list of patches it is.
+    ///     </para>
     /// </summary>
     private async Task PromoteReportAsync(IDevWorkflowStore store,
+        DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         DevWorkflowToolRun result,
@@ -456,6 +474,7 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
             return;
         }
 
+        var apply = graph.Nodes.TryGetValue(nodeRun.NodeKey, out var node) && node.ToolMode == DevWorkflowToolMode.Apply;
         var artifactId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "validation-report");
         var write = await _blobs.WriteAsync(run.Id, artifactId, result.Report, cancellationToken).ConfigureAwait(false);
         var appended = await store.AppendArtifactAsync(new AppendDevWorkflowArtifactCommand(run.Id,
@@ -463,8 +482,8 @@ internal sealed class DevWorkflowToolExecutor : IAsyncDisposable
                                           nodeRun.Id,
                                           DevWorkflowVersions.Any,
                                           DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, "report"),
-                                          DevWorkflowArtifactKind.ValidationReport,
-                                          $"{nodeRun.NodeKey}-validation.json",
+                                          apply ? DevWorkflowArtifactKind.Report : DevWorkflowArtifactKind.ValidationReport,
+                                          apply ? $"{nodeRun.NodeKey}-apply.json" : $"{nodeRun.NodeKey}-validation.json",
                                           "application/json",
                                           write.ContentHash,
                                           write.ByteCount,

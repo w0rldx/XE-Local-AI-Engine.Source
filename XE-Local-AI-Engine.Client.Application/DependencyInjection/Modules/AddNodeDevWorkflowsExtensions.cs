@@ -72,6 +72,11 @@ internal static class AddNodeDevWorkflowsExtensions
         if (configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true))
         {
             builder.Services.AddScoped<IDevWorkflowToolCommands, DevWorkflowToolCommands>();
+
+            // The integration variant of the same lane, registered under the same condition and for a stronger reason:
+            // what it drives IS Dev Mode's apply gate, so with Development Mode off there is nothing for it to call.
+            // The lane then answers such a node run with a configuration reason, as it does a validation node's.
+            builder.Services.AddScoped<DevWorkflowApplyCommands>();
         }
 
         // Before both, and independent of both: a template has to exist before anyone can start a run from it, and

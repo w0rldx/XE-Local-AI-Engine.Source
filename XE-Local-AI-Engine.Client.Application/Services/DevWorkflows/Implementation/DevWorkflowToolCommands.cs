@@ -100,7 +100,8 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     }
 
     /// <summary>
-    ///     One exception's message, fit to be stored on a row and rendered on a wire.
+    ///     One exception's message, fit to be stored on a row and rendered on a wire. Shared with the apply variant,
+    ///     which surfaces the same kind of sentence from the same Dev Mode exceptions.
     ///     <para>
     ///         These sentences are the ONE thing this lane surfaces that nothing has already redacted: the sandbox
     ///         interpolates an inner IOException's text into its own failure message, and that text can carry a host
@@ -113,8 +114,9 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     ///         second exception, because the failure being reported is the one worth surfacing.
     ///     </para>
     /// </summary>
-    private static string Sanitized(Exception exception)
+    internal static string Sanitized(Exception exception)
     {
+        ArgumentNullException.ThrowIfNull(exception);
         try
         {
             return DevelopmentArtifactSanitizer.SanitizeText(exception.Message);
