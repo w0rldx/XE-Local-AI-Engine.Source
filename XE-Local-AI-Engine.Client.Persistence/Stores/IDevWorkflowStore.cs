@@ -347,6 +347,13 @@ public sealed record MaterializeDevWorkflowNodesCommand(
 ///         it is one the host died under, and that session's answer still counts. Releasing it on any other target
 ///         would throw away the only pointer to the transcript the row's own result came from.
 ///     </para>
+///     <para>
+///         <see cref="InputJson" /> rewrites what the node run is asked to do, which only the cross-node fix loop does:
+///         a re-attempt routed to an upstream node carries the failure that sent it there. <see cref="DetailJson" />
+///         replaces the event detail this move would otherwise derive from <see cref="TerminalReason" />, for the one
+///         move whose evidence is not on the row afterwards — a re-attempt clears the failure fields it is re-attempting
+///         because of, so its <c>node.retry.scheduled</c> event is the only place that failure survives.
+///     </para>
 /// </summary>
 public sealed record TransitionDevWorkflowNodeRunCommand(
     Guid RunId,
@@ -357,8 +364,10 @@ public sealed record TransitionDevWorkflowNodeRunCommand(
     string? QueueReason = null,
     DevWorkflowDecisionKind? PendingDecisionKind = null,
     string? OutputJson = null,
+    string? InputJson = null,
     string? FailureClass = null,
     string? TerminalReason = null,
+    string? DetailJson = null,
     Guid? DevelopmentTaskId = null,
     bool IncrementAttempt = false,
     bool ClearWorkSession = false,

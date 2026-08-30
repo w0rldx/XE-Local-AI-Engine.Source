@@ -21,7 +21,7 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
-        var (seed, version) = await SeedAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
         var operationId = Guid.NewGuid();
         var subject = new DevelopmentApprovedApplySubject(seed.ProjectId,
             seed.TaskId,
@@ -54,7 +54,7 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
-        var (seed, version) = await SeedAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
         var operationId = Guid.NewGuid();
         var subject = CreateSubject(seed, version);
 
@@ -77,7 +77,7 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
-        var (seed, version) = await SeedAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
         var operationId = Guid.NewGuid();
         var subject = CreateSubject(seed, version);
 
@@ -101,7 +101,7 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var coordinator = scope.ServiceProvider.GetRequiredService<IDevelopmentCoordinator>();
-        var (seed, version) = await SeedAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
         var operationId = Guid.NewGuid();
         var subject = CreateSubject(seed, version);
 
@@ -125,7 +125,7 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
         await using var provider = await _fixture.BuildProviderAsync().ConfigureAwait(false);
         await using var scope = provider.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
-        var (seed, version) = await SeedAwaitingApplyAsync(store).ConfigureAwait(false);
+        var (seed, version) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(store).ConfigureAwait(false);
 
         await AssertEx.ThrowsAsync<DevelopmentInvalidTransitionException>(() => store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
                           Guid.NewGuid(),
@@ -154,31 +154,4 @@ public sealed class DevelopmentApplyRecoveryTests : IDisposable
             "repo",
             seed.RepositoryIdentityHash);
 
-    private static async Task<(DevelopmentCreateProjectCommand Seed, long Version)> SeedAwaitingApplyAsync(IDevelopmentStore store)
-    {
-        var seed = DevelopmentTestFixture.CreateSeed();
-        _ = await store.CreateProjectAsync(seed).ConfigureAwait(false);
-        var version = 1L;
-        foreach (var status in new[]
-                 {
-                     DevelopmentTaskStatus.Ready,
-                     DevelopmentTaskStatus.InProgress,
-                     DevelopmentTaskStatus.Validation,
-                     DevelopmentTaskStatus.InReview,
-                     DevelopmentTaskStatus.AwaitingApply
-                 })
-        {
-            var result = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(seed.TaskId,
-                                        Guid.NewGuid(),
-                                        status,
-                                        version,
-                                        ApprovedSubjectHash: status == DevelopmentTaskStatus.AwaitingApply
-                                            ? "subject"
-                                            : null))
-                                    .ConfigureAwait(false);
-            version = result.Version;
-        }
-
-        return (seed, version);
-    }
 }

@@ -32,21 +32,17 @@ public static class DevWorkflowGraphContract
     ///     from <c>WaitingForApproval</c>, the three interventions from <c>Blocked</c>, and nothing at all from
     ///     anywhere else.
     ///     <para>
-    ///         Two gates, and both are load-bearing. The decidable-status check is the one the decision endpoint
-    ///         enforces, so without it a <c>Running</c> node run would advertise five answers that every one of which
-    ///         answers 409. The transition table then says which of the six that status can actually take, rather than
-    ///         a second list here that would drift from what the runtime accepts.
+    ///         Asked of the state machine rather than listed again here, so what is offered and what the decision
+    ///         endpoint accepts cannot drift — including the one transition that is legal for the RUNTIME and not for a
+    ///         person, the fix loop's reset of an open gate.
     ///     </para>
     /// </summary>
     public static IReadOnlyList<string> AllowedDecisions(DevWorkflowNodeRunStatus status) =>
-        status is not (DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked)
-            ? []
-            :
-            [
-                .. Enum.GetValues<DevWorkflowDecisionKind>()
-                       .Where(decision => DevWorkflowStateMachine.IsLegal(status, DevWorkflowStateMachine.TargetFor(decision)))
-                       .Select(static decision => decision.ToString())
-            ];
+    [
+        .. Enum.GetValues<DevWorkflowDecisionKind>()
+               .Where(decision => DevWorkflowStateMachine.IsDecidable(status, decision))
+               .Select(static decision => decision.ToString())
+    ];
 
     /// <summary>
     ///     Whether a <c>Reject</c> at <paramref name="nodeKey" /> has somewhere to go. False means X10: the rejection

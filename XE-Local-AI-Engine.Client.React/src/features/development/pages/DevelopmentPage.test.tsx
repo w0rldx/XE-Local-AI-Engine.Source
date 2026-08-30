@@ -124,10 +124,10 @@ function installDomMocks(): void {
 	});
 }
 
-function renderPage(): void {
+function renderPage(props: { initialProjectId?: string; initialTaskId?: string } = {}): void {
 	render(
 		<MantineProvider>
-			<DevelopmentPage />
+			<DevelopmentPage {...props} />
 		</MantineProvider>,
 	);
 }
@@ -259,5 +259,42 @@ describe("DevelopmentPage", () => {
 			},
 			expect.objectContaining({ onSuccess: expect.any(Function) }),
 		);
+	});
+
+	// X8 — the two-file search-param addition that lets a workflow's DevTask node land on the project it drove.
+	it("seeds the initial project selection from the deep link's search params", async () => {
+		hooksMock.useDevelopmentProjects.mockReturnValue({
+			data: [
+				{ id: "project-1", objective: "Ship Development mode" },
+				{ id: "project-2", objective: "The one the workflow drove" },
+			],
+			isLoading: false,
+			error: null,
+		});
+		hooksMock.useDevelopmentProject.mockReturnValue({ data: undefined, isLoading: true, error: null, refetch: vi.fn() });
+
+		renderPage({ initialProjectId: "project-2", initialTaskId: "task-9" });
+
+		// The first render already asks for the linked project: seeding through the default-to-first effect instead
+		// would have made the page flash the wrong project's evidence before correcting itself.
+		await waitFor(() => expect(hooksMock.useDevelopmentProject).toHaveBeenCalled());
+		expect(hooksMock.useDevelopmentProject.mock.calls[0]?.[0]).toBe("project-2");
+		expect(hooksMock.useDevelopmentProject.mock.calls.at(-1)?.[0]).toBe("project-2");
+	});
+
+	it("still defaults to the first project when no search params are given", async () => {
+		hooksMock.useDevelopmentProjects.mockReturnValue({
+			data: [
+				{ id: "project-1", objective: "Ship Development mode" },
+				{ id: "project-2", objective: "The one the workflow drove" },
+			],
+			isLoading: false,
+			error: null,
+		});
+		hooksMock.useDevelopmentProject.mockReturnValue({ data: undefined, isLoading: true, error: null, refetch: vi.fn() });
+
+		renderPage();
+
+		await waitFor(() => expect(hooksMock.useDevelopmentProject.mock.calls.at(-1)?.[0]).toBe("project-1"));
 	});
 });

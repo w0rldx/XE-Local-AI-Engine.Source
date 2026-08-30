@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration.Validation;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 
@@ -42,11 +43,32 @@ internal static class AddNodeDevWorkflowsExtensions
         // One entry per live run, replaced when the run's graph revision moves. A singleton because the dispatcher is.
         builder.Services.AddSingleton<DevWorkflowGraphCache>();
 
+        // A singleton because both lanes and the dispatcher have to agree about one run's re-attempts, and because the
+        // delay a node asks for before trying again outlives the tick that scheduled it.
+        builder.Services.AddSingleton<DevWorkflowRetryPolicy>();
+
         // Scoped: both reach the run store and the work-session family through scoped stores, and the dispatcher
         // resolves them inside the per-tick scope it already opens.
         builder.Services.AddScoped<DevWorkflowArtifactPromotion>();
         builder.Services.AddScoped<DevWorkflowAgentExecutor>();
+
+        // Scoped like the agent lane and for the same reason, plus one of its own: the Development services it drives
+        // are scoped and are not registered at all when Development Mode is off, so it asks the scope for them and
+        // answers a node run legibly when they are absent.
+        builder.Services.AddScoped<DevWorkflowDevTaskExecutor>();
         builder.Services.AddScoped<IDevWorkflowRunService, DevWorkflowRunService>();
+
+        // A singleton, unlike the agent executor: the sandbox lane's slot count and its in-flight registry outlive a
+        // tick and a scope, and a second instance would hand the same slots out twice.
+        builder.Services.AddSingleton<DevWorkflowToolExecutor>();
+
+        // Only when Development Mode is on, because that is where the workspace provider, the repository bindings and
+        // the sandbox come from. A tool node on a node with it switched off then finds no commands to run and says so,
+        // which is a configuration answer rather than a container failure deep inside a detached task.
+        if (configuration.GetValue($"{DevelopmentOptions.Section}:Enabled", defaultValue: true))
+        {
+            builder.Services.AddScoped<IDevWorkflowToolCommands, DevWorkflowToolCommands>();
+        }
 
         // Before both, and independent of both: a template has to exist before anyone can start a run from it, and
         // seeding one neither reconciles anything nor needs a loop.

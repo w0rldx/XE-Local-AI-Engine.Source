@@ -705,4 +705,108 @@ public sealed class DevWorkflowDispatcherTests
             (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status,
             "a dispatcher that never saw the run's earlier ticks finishes it from the rows alone.");
     }
+
+    /// <summary>
+    ///     The automatic gate's truth table: it routes on its upstream's document, records WHICH way it went, and carries
+    ///     that document through so its own out-edges and a later reader see the same evidence it decided on.
+    ///     <para>
+    ///         The branch is what a Gate node buys over a plain conditional edge — the edges would route identically
+    ///         without it — so a gate that did not record one would be pure ceremony.
+    ///     </para>
+    /// </summary>
+    [Test]
+    [Arguments("Approve", "ship", "revise")]
+    [Arguments("RequestChanges", "revise", "ship")]
+    public async Task AnAutomaticGateRecordsTheBranchItTook(string decision, string taken, string dead)
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.GateOnADecision).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        await harness.DecideAsync(runId, "approve", Enum.Parse<DevWorkflowDecisionKind>(decision)).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var gate = await harness.ReadNodeRunAsync(runId, "choose").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, gate.Status);
+        AssertEx.Contains(AssertEx.NotNull(gate.OutputJson), $"\"branch\":\"{taken}\"");
+        AssertEx.Contains(AssertEx.NotNull(gate.OutputJson),
+            $"\"decision\":\"{decision}\"",
+            message: "the upstream document is carried through, so the gate cannot decide one thing and its edges another.");
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, (await harness.ReadNodeRunAsync(runId, taken).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Skipped, (await harness.ReadNodeRunAsync(runId, dead).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     The third row of the same table: a gate whose conditions all fail records no branch, and everything below it
+    ///     skips. That is a real outcome rather than a stranding — the gate itself succeeded, and the log says which way
+    ///     it did not go.
+    /// </summary>
+    [Test]
+    public async Task AnAutomaticGateWhoseBranchesAllRefuseRecordsNoneOfThem()
+    {
+        await using var harness = new DevWorkflowHarness(Host);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.GateOnADecision).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        // The human gate's own out-edge is unconditional, so a rejection reaches the automatic gate rather than
+        // stranding the run — and neither of THAT gate's branches takes it.
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Reject).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Contains(AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "choose").ConfigureAwait(false)).OutputJson), "\"branch\":null");
+        AssertEx.Equal("approve: Succeeded, choose: Succeeded, revise: Skipped, ship: Skipped",
+            string.Join(", ",
+                (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false))
+                .OrderBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal)
+                .Select(static nodeRun => $"{nodeRun.NodeKey}: {nodeRun.Status}")));
+        AssertEx.Equal(DevWorkflowRunStatus.Completed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
+    ///     The X10 case as it actually occurs: one branch is mid-build when the other's approval is refused. The run goes
+    ///     through the drain, so the sibling settles and gives its lane slot back BEFORE the run reaches its terminal.
+    ///     <para>
+    ///         Writing the terminal directly would trip the "if terminal, return" guard at the top of every tick, and
+    ///         nothing would ever poll that sibling again — its slot would be held for the life of the process.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AGateRejectionDrainsALiveSiblingBeforeTheRunEnds()
+    {
+        // A private host: this scripts the sandbox seam, which is host-wide.
+        await using var harness = new DevWorkflowHarness();
+        var held = harness.Tools.Hold("validate");
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.GateBesideSandboxWork, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await held.Started.ConfigureAwait(false);
+
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, (await harness.ReadNodeRunAsync(runId, "approve").ConfigureAwait(false)).Status);
+
+        // Only the Approve edge leaves the gate, so a rejection has nowhere to go.
+        await harness.DecideAsync(runId, "approve", DevWorkflowDecisionKind.Reject).ConfigureAwait(false);
+        AssertEx.True(await harness.AdvanceAsync(runId).ConfigureAwait(false) > 0);
+
+        var draining = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelling, draining.Status, "the terminal is reached through the drain, never written over a live row.");
+        AssertEx.Equal("GateRejected", draining.FailureClass);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running,
+            (await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false)).Status,
+            "the sibling is still in the sandbox at the moment the rejection lands.");
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var sibling = await harness.ReadNodeRunAsync(runId, "validate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, sibling.Status);
+        AssertEx.Equal(DevWorkflowRunStatus.Cancelled, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+
+        // Filtered to the sibling's own row: the join below it is cancelled by the same drain, and it is the one that
+        // was holding a lane slot whose ordering matters.
+        var events = await harness.ReadEventsAsync(runId).ConfigureAwait(false);
+        AssertEx.True(events.Single(entry => entry.EventType == "node.cancelled" && entry.NodeRunId == sibling.Id).Sequence
+                      < events.Last(static entry => entry.EventType == "run.cancelled").Sequence,
+            "the sibling settles before the run does; the other order leaks its lane slot.");
+    }
 }

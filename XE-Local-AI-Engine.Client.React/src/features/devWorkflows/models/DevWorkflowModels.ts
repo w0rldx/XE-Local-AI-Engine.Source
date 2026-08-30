@@ -11,6 +11,7 @@ import type {
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowArtifactResponse as DevWorkflowArtifactResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse as DevWorkflowDecisionResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDefinitionSummaryResponse as DevWorkflowDefinitionSummaryResponse,
+	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowGraph as DevWorkflowGraph,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunDetailResponse as DevWorkflowNodeRunDetailResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowNodeRunSummaryResponse as DevWorkflowNodeRunSummaryResponse,
 	XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowRunEventResponse as DevWorkflowRunEventResponse,
@@ -24,6 +25,7 @@ export type {
 	DevWorkflowArtifactResponse,
 	DevWorkflowDecisionResponse,
 	DevWorkflowDefinitionSummaryResponse,
+	DevWorkflowGraph,
 	DevWorkflowNodeRunDetailResponse,
 	DevWorkflowNodeRunSummaryResponse,
 	DevWorkflowRunEventResponse,
@@ -203,20 +205,5 @@ export function devWorkflowArtifactLanguage(kind: DevWorkflowArtifactKind | unde
 	return "markdown";
 }
 
-/**
- * Decodes an artifact body for the read-only editor. `fatal` is what turns "this is not text" into an error instead
- * of a page full of replacement characters. Mirrors the work-session decoder; the shared extraction into `core/` is
- * F5's job (P4 §2.10), and duplicating twelve lines now is cheaper than moving a merged file for one caller.
- */
-export function decodeDevWorkflowArtifactContent(content: string, isBase64: boolean): { text: string; isBinary: boolean } {
-	if (!isBase64) {
-		return { text: content, isBinary: false };
-	}
-	try {
-		const binary = atob(content);
-		const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-		return { text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), isBinary: false };
-	} catch {
-		return { text: "", isBinary: true };
-	}
-}
+/** The shared decoder (P4 §2.10), kept under the feature's own name so no call site or test had to move. */
+export { decodeArtifactContent as decodeDevWorkflowArtifactContent } from "@/core/artifacts/ArtifactContent";

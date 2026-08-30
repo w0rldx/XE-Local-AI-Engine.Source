@@ -16,6 +16,7 @@ import {
 	decideDevWorkflowNodeRunMutation,
 	deleteDevWorkflowWorkItemMutation,
 	getDevWorkflowArtifactContentOptions,
+	getDevWorkflowDefinitionOptions,
 	getDevWorkflowNodeRunOptions,
 	getDevWorkflowRunOptions,
 	getDevWorkflowWorkItemOptions,
@@ -42,6 +43,7 @@ export const devWorkflowQueryIds = {
 	artifacts: "listDevWorkflowArtifacts",
 	artifactContent: "getDevWorkflowArtifactContent",
 	definitions: "listDevWorkflowDefinitions",
+	definition: "getDevWorkflowDefinition",
 } as const;
 
 export type DevWorkflowQueryId = (typeof devWorkflowQueryIds)[keyof typeof devWorkflowQueryIds];
@@ -106,6 +108,17 @@ export function useDevWorkflowDefinitions(options: FeedOptions = {}) {
 	return useQuery({
 		...withResponseValidation(listDevWorkflowDefinitionsOptions({ query: { includeArchived: false } })),
 		enabled: options.enabled ?? true,
+	});
+}
+
+/**
+ * One definition WITH its graph, which the list summaries do not carry. Read only when a definition is actually being
+ * previewed — a template's shape does not change while an operator looks at it, so this never polls.
+ */
+export function useDevWorkflowDefinition(definitionId: string | undefined) {
+	return useQuery({
+		...withResponseValidation(getDevWorkflowDefinitionOptions({ path: { definitionId: definitionId ?? "" } })),
+		enabled: Boolean(definitionId),
 	});
 }
 

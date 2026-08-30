@@ -17,6 +17,7 @@ import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { DevWorkflowArtifactsTab } from "@/features/devWorkflows/components/DevWorkflowArtifactsTab";
+import { DevWorkflowDefinitionPanel } from "@/features/devWorkflows/components/DevWorkflowDefinitionPanel";
 import { DevWorkflowEventsTab } from "@/features/devWorkflows/components/DevWorkflowEventsTab";
 import { DevWorkflowGraphView } from "@/features/devWorkflows/components/DevWorkflowGraphView";
 import { DevWorkflowNodePanel } from "@/features/devWorkflows/components/DevWorkflowNodePanel";
@@ -70,6 +71,9 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	// pane straight off it meant a click on Events threw the operator back to the graph. Accepted drift: a reload after
 	// a side-tab click opens the centre on the graph again, because the param no longer says otherwise.
 	const [centreTab, setCentreTab] = useState<"graph" | "nodes">(selection.tab === "nodes" ? "nodes" : "graph");
+	// Which template the operator is considering. Local rather than a search param: it is a pre-start preview, and it
+	// stops existing the moment a run does.
+	const [definitionId, setDefinitionId] = useState<string | null>(null);
 
 	const workItemQuery = useDevWorkflowWorkItem(workItemId);
 	// Absent `?run=` means the latest run; an explicit one renders a historical run from its OWN pinned graph snapshot.
@@ -187,6 +191,8 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 			nodes={nodes}
 			pendingDecisionCount={pendingDecisionCount}
 			startableDefinitions={canStartRun ? (definitionsQuery.data?.items ?? []) : []}
+			selectedDefinitionId={definitionId}
+			onSelectDefinition={setDefinitionId}
 			isStarting={startRun.isPending}
 			startError={
 				startRun.isError
@@ -318,9 +324,21 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 					</Tabs>
 				</>
 			) : (
-				<Alert color="blue" variant="light" data-testid="dev-workflow-detail-no-run">
-					{t("pages.devWorkflows.detail.noRunBody", "Nothing has run for this work item yet. Pick a template and start a run.")}
-				</Alert>
+				<>
+					<Alert color="blue" variant="light" data-testid="dev-workflow-detail-no-run">
+						{t("pages.devWorkflows.detail.noRunBody", "Nothing has run for this work item yet. Pick a template and start a run.")}
+					</Alert>
+					{/* The template the picker is on, drawn read-only through the run view's own canvas. This is the one place
+					    a definition's shape is answerable before starting it costs an agent an hour. */}
+					<div style={{ flex: 1, minHeight: 0 }}>
+						<DevWorkflowDefinitionPanel
+							definitionId={definitionId ?? undefined}
+							definitionName={
+								(definitionsQuery.data?.items ?? []).find((definition) => definition.id === definitionId)?.name ?? undefined
+							}
+						/>
+					</div>
+				</>
 			)}
 		</Stack>
 	);

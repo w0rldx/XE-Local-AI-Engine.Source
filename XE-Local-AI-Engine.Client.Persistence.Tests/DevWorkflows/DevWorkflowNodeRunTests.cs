@@ -1,7 +1,10 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests.DevWorkflows;
 
+using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Persistence.Tests.Development;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 public sealed class DevWorkflowNodeRunTests
@@ -321,5 +324,99 @@ public sealed class DevWorkflowNodeRunTests
         AssertEx.Equal(expected: 1, events.Count(item => item.EventType == DevWorkflowEventTypes.GraphChanged), "Exactly one graph.changed event records the rewrite.");
         AssertEx.Empty(events.Where(item => item.EventType == DevWorkflowEventTypes.NodeMaterialized),
             "A rewrite reads as graph.changed; node.materialized is the initial, graph-unchanged case.");
+    }
+
+    /// <summary>
+    ///     Gate 2's <c>DevTask</c> round-trip, at the layer P1 owns. X8 gives the node run two loose refs instead of a
+    ///     workspace string, so what has to hold is that they resolve: the project comes from the work item, the task id
+    ///     the attempt writes reads back against a REAL <c>DevelopmentTask</c> the existing Dev Mode chain drove to
+    ///     <c>AwaitingApply</c>, and a re-attempt leaves the previous attempt's task where it is — that task keeps its
+    ///     own evidence, and only the next attempt's own write replaces the pointer.
+    ///     <para>
+    ///         The executor that creates the task from the node, and drives that chain rather than a test doing it, is
+    ///         B6's; nothing above this line exists to run it yet.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ADevTaskNodeRun_CarriesItsProjectAndTheTaskTheDevModeChainDroveToAwaitingApply()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var development = new DevelopmentStore(context, TimeProvider.System);
+        await SeedSelectedFolderAsync(context, fixture.DatabasePath).ConfigureAwait(false);
+
+        var (firstTask, _) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(development).ConfigureAwait(false);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store, developmentProjectId: firstTask.ProjectId).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store,
+                                                      seed.RunId,
+                                                      nodeRunId,
+                                                      "implement",
+                                                      seed.RunVersion,
+                                                      DevWorkflowNodeType.DevTask,
+                                                      developmentProjectId: firstTask.ProjectId)
+                                                  .ConfigureAwait(false);
+
+        var workItem = await store.GetWorkItemAsync(seed.WorkItemId).ConfigureAwait(false);
+        AssertEx.Equal(firstTask.ProjectId, workItem.DevelopmentProjectId, "O12: the Dev Mode project is the work item's, and the node run inherits it.");
+
+        var started = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                     nodeRunId,
+                                     version,
+                                     DevWorkflowNodeRunStatus.Running,
+                                     DevelopmentTaskId: firstTask.TaskId))
+                                 .ConfigureAwait(false);
+
+        var running = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeType.DevTask, running.NodeType);
+        AssertEx.Equal(firstTask.ProjectId, running.DevelopmentProjectId);
+        AssertEx.Equal(firstTask.TaskId, running.DevelopmentTaskId);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
+            (await development.GetTaskAsync(firstTask.TaskId).ConfigureAwait(false)).Status,
+            "The pair is only a workspace identity if it names a task Dev Mode actually drove — a dangling id would pass every assertion above.");
+
+        var retried = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                                     nodeRunId,
+                                     started.Version,
+                                     DevWorkflowNodeRunStatus.Pending,
+                                     IncrementAttempt: true))
+                                 .ConfigureAwait(false);
+
+        var reattempting = await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false);
+        AssertEx.Equal(expected: 2, reattempting.Attempt);
+        AssertEx.Equal(firstTask.TaskId,
+            reattempting.DevelopmentTaskId,
+            "A re-attempt does not orphan the task that holds attempt 1's evidence; the executor replaces the pointer when it has a new task to point at.");
+
+        var (secondTask, _) = await DevelopmentTestFixture.SeedTaskAwaitingApplyAsync(development).ConfigureAwait(false);
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(seed.RunId,
+                           nodeRunId,
+                           retried.Version,
+                           DevWorkflowNodeRunStatus.Running,
+                           DevelopmentTaskId: secondTask.TaskId))
+                       .ConfigureAwait(false);
+
+        AssertEx.Equal(secondTask.TaskId,
+            (await store.GetNodeRunAsync(nodeRunId).ConfigureAwait(false)).DevelopmentTaskId,
+            "The row names the task of the attempt it is running, not the first one it ever had.");
+        AssertEx.Equal(expected: 1,
+            await fixture.RawCountAsync("dev_workflow_node_runs", "development_task_id", secondTask.TaskId).ConfigureAwait(false),
+            "Written to the column, not held only by the change tracker.");
+    }
+
+    /// <summary>The repository row a development project points at; both seeded projects share it.</summary>
+    private static async Task SeedSelectedFolderAsync(NodeChatDbContext context, string databasePath)
+    {
+        _ = context.Add(new NodeSelectedFolder
+        {
+            Id = DevelopmentTestFixture.SelectedFolderId,
+            Alias = "dev-workflow-test-repository",
+            HostPath = Encoding.UTF8.GetBytes(Path.GetDirectoryName(databasePath)!),
+            Mode = SelectedFolderMode.Copy,
+            CreatedAtUtc = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        });
+        _ = await context.SaveChangesAsync().ConfigureAwait(false);
     }
 }

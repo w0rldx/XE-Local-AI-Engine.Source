@@ -162,6 +162,13 @@ internal sealed partial class DevWorkflowStore
             nodeRun.OutputJson = Utf8(command.OutputJson);
         }
 
+        if (command.InputJson is not null)
+        {
+            // Only the fix loop rewrites this, and only onto a re-attempt: what the node is asked to do next has to
+            // carry the failure that sent the run back to it.
+            nodeRun.InputJson = Utf8(command.InputJson);
+        }
+
         if (command.FailureClass is not null)
         {
             nodeRun.FailureClass = command.FailureClass;
@@ -180,7 +187,10 @@ internal sealed partial class DevWorkflowStore
         await ApplyWorkItemStatusAsync(run.WorkItemId, command.WorkItemStatus, cancellationToken).ConfigureAwait(false);
         return new MutationOutcome(EventTypeFor(command.TargetStatus),
             command.Outcome ?? OutcomeFor(command.TargetStatus),
-            ReasonDetail(command.TerminalReason),
+
+            // The caller's detail wins: a re-attempt has cleared the failure fields it is re-attempting because of, so
+            // the reason alone would leave its event saying nothing about what it is re-attempting.
+            command.DetailJson is not null ? Utf8(command.DetailJson) : ReasonDetail(command.TerminalReason),
             nodeRun.Id);
     }
 

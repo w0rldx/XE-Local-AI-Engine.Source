@@ -206,9 +206,13 @@ internal sealed class DevWorkflowRunService : IDevWorkflowRunService
                 : new DevWorkflowInvalidTransitionException($"Node run '{nodeRun.NodeKey}' is {nodeRun.Status}, so there is nothing to decide on it.");
         }
 
-        // The same table the dispatcher settles against, so the endpoint cannot accept an answer the runtime would then
-        // have to refuse — a Retry on an unanswered gate, say, which has no re-attempt to schedule.
-        DevWorkflowStateMachine.EnsureLegal(nodeRun.Status, DevWorkflowStateMachine.TargetFor(decision), nodeRun.NodeKey);
+        // The same rule the API advertises the answers from, so the endpoint cannot accept one it did not offer — a
+        // Retry on an unanswered gate, say, which has no re-attempt to schedule even though the runtime's own reset
+        // moves that row to the same place.
+        if (!DevWorkflowStateMachine.IsDecidable(nodeRun.Status, decision))
+        {
+            throw new DevWorkflowInvalidTransitionException($"Node run '{nodeRun.NodeKey}' is {nodeRun.Status} and cannot be answered {decision}.");
+        }
 
         if (decision == DevWorkflowDecisionKind.Retry)
         {

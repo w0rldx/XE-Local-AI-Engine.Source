@@ -390,26 +390,62 @@ public sealed class DevWorkflowAgentExecutorTests
         AssertEx.Equal(DevWorkflowFailureClasses.BudgetExhausted, exhausted.FailureClass);
     }
 
-    /// <summary>A failed session fails its node run, and the run with it once nothing is live.</summary>
+    /// <summary>
+    ///     The B3 gate on the agent lane: a provider failure is retryable, so the node run tries again on a NEW work
+    ///     session — resuming the one that just failed would resume the context that failed with it — and only a spent
+    ///     attempt cap sends it to a human.
+    /// </summary>
     [Test]
-    public async Task AnAgentNode_WhoseSessionFails_FailsTheNodeRunAsAProviderError()
+    public async Task AnAgentNode_WhoseSessionFails_ReAttemptsOnANewSessionUntilItsCapIsSpent()
     {
-        await using var harness = new DevWorkflowHarness(Host);
+        // A host of its own: this reads the fake agent's Objectives list by position, and on the shared host that list
+        // accumulates every sibling's traffic.
+        await using var harness = new DevWorkflowHarness();
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        var first = await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false);
 
         await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
-        var failed = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
-        AssertEx.Equal(DevWorkflowNodeRunStatus.Failed, failed.Status);
-        AssertEx.Equal(DevWorkflowFailureClasses.ProviderError, failed.FailureClass);
-        AssertEx.Contains(AssertEx.NotNull(failed.OutputJson), "\"failureClass\":\"ProviderError\"");
+        var retried = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, retried.Status, "a provider failure with attempts left is re-attempted, not settled.");
+        AssertEx.Equal(expected: 2, retried.Attempt);
+        AssertEx.NotEqual(first,
+            await harness.ReadSessionIdAsync(runId, "research").ConfigureAwait(false),
+            "a retry drives a NEW session; the failed one keeps its transcript as evidence.");
+        var trail = await harness.ReadEventTrailAsync(runId).ConfigureAwait(false);
+        AssertEx.Contains(trail, "node.retry.scheduled");
 
-        AssertEx.Equal(DevWorkflowRunStatus.Failed, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
+        // A new session is only half of it: composed from the same inputs it would be handed a byte-identical
+        // objective and do the same thing again, so the attempt that failed travels into the one that follows.
+        var objectives = harness.Agent.Objectives;
+        AssertEx.NotEqual(objectives[0], objectives[1], "a re-attempt must not be asked for exactly what the attempt before it was asked for.");
+        AssertEx.Contains(objectives[1], "priorFailure");
+        AssertEx.Contains(objectives[1], "ProviderError");
+
+        var scheduled = (await harness.ReadEventsAsync(runId).ConfigureAwait(false)).Last(static entry => entry.EventType == "node.retry.scheduled");
+        AssertEx.Contains(AssertEx.NotNull(scheduled.DetailJson),
+            "\"attempt\":1",
+            message: "the event names the attempt that FAILED, which the row no longer carries.");
+        AssertEx.Contains(AssertEx.NotNull(scheduled.DetailJson), "ProviderError");
+
+        // Two more failures spend the node's three attempts, and the third has nowhere left to go.
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "research", AgentWorkSessionStatus.Failed).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var exhausted = await harness.ReadNodeRunAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, exhausted.Status);
+        AssertEx.Equal(expected: 3, exhausted.Attempt);
+        AssertEx.Equal(DevWorkflowFailureClasses.ProviderError, exhausted.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(exhausted.OutputJson), "\"failureClass\":\"ProviderError\"");
+
+        AssertEx.Equal(DevWorkflowRunStatus.WaitingForApproval, (await harness.ReadRunAsync(runId).ConfigureAwait(false)).Status);
         AssertEx.Equal(DevWorkflowWorkItemStatus.Blocked,
             (await harness.ReadWorkItemAsync(runId).ConfigureAwait(false)).Status,
-            "a failed run needs attention; it is not done.");
+            "a run waiting on a person needs attention; it is not done.");
     }
 
     /// <summary>

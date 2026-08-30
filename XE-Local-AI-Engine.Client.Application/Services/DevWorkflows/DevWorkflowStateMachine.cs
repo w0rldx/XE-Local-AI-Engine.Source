@@ -233,6 +233,24 @@ internal static class DevWorkflowStateMachine
         };
 
     /// <summary>
+    ///     Whether a human may answer <paramref name="decision" /> on a node run in <paramref name="status" />.
+    ///     <para>
+    ///         Nearly the transition table, and deliberately not quite: that table answers "may the RUNTIME move this row
+    ///         here", and one of its edges — an open gate going back to <c>Pending</c> — belongs to the fix loop's reset
+    ///         and to nothing a person clicks. A <c>Retry</c> on an unanswered gate has no failed attempt to schedule
+    ///         again, and X3 is explicit that a gate takes the first three answers and nothing else.
+    ///     </para>
+    ///     <para>
+    ///         Shared by the decision endpoint and by the surface that advertises the answers, so what is offered and
+    ///         what is accepted cannot drift.
+    ///     </para>
+    /// </summary>
+    public static bool IsDecidable(DevWorkflowNodeRunStatus status, DevWorkflowDecisionKind decision) =>
+        status is DevWorkflowNodeRunStatus.WaitingForApproval or DevWorkflowNodeRunStatus.Blocked
+        && (status != DevWorkflowNodeRunStatus.WaitingForApproval || decision != DevWorkflowDecisionKind.Retry)
+        && IsLegal(status, TargetFor(decision));
+
+    /// <summary>
     ///     Where a node-run transition about to be written leaves the work item, so the move can carry it in its own
     ///     transaction.
     ///     <para>
@@ -291,6 +309,15 @@ internal static class DevWorkflowStateMachine
     ///         edge: a retry scheduled after a retryable failure, and a collapse after the host restarted under the
     ///         node run. Both re-derive the same way, which is why the row is cleaned rather than annotated.
     ///     </para>
+    ///     <para>
+    ///         The four edges OUT of a terminal status back to <c>Pending</c> belong to the cross-node fix loop (X9) and
+    ///         to nothing else: when a failure routes to an upstream node, every node run downstream of that node has to
+    ///         re-run against the new implementation, and those rows are settled by definition — the whole point is that
+    ///         they already produced an answer to a question that is being asked again. A <c>Succeeded</c> row left
+    ///         alone would be a stale result masquerading as a current one, which is the outcome that rule exists to
+    ///         prevent. Nothing else may write them: the decision path only ever moves a row out of
+    ///         <c>WaitingForApproval</c> or <c>Blocked</c>, and every executor settles forwards.
+    ///     </para>
     /// </summary>
     public static bool IsLegal(DevWorkflowNodeRunStatus from, DevWorkflowNodeRunStatus to) =>
         from switch
@@ -315,15 +342,25 @@ internal static class DevWorkflowStateMachine
                 or DevWorkflowNodeRunStatus.Cancelled,
             // NOT Skipped (X3): a gate's three answers all SUCCEED it and route on the answer, while the three
             // interventions belong to Blocked. Skipping an open gate would be an operator walking past an approval
-            // instead of giving one — the one thing a gate exists to make impossible. The only other move is the
-            // drain's, and that is a cancel.
-            DevWorkflowNodeRunStatus.WaitingForApproval => to is DevWorkflowNodeRunStatus.Succeeded or DevWorkflowNodeRunStatus.Cancelled,
+            // instead of giving one — the one thing a gate exists to make impossible. The only other moves are the
+            // drain's cancel and the fix loop's reset, and the reset is the OPPOSITE of walking past it: an open gate
+            // downstream of a node being re-attempted is being asked to approve work that is being replaced, so it is
+            // re-asked from the start of a new attempt rather than answered about the old one.
+            DevWorkflowNodeRunStatus.WaitingForApproval => to is DevWorkflowNodeRunStatus.Succeeded
+                or DevWorkflowNodeRunStatus.Cancelled
+                or DevWorkflowNodeRunStatus.Pending,
 
             // The intervention answers: Retry re-attempts, Skip routes around, Abandon gives up for good.
             DevWorkflowNodeRunStatus.Blocked => to is DevWorkflowNodeRunStatus.Pending
                 or DevWorkflowNodeRunStatus.Skipped
                 or DevWorkflowNodeRunStatus.Failed
                 or DevWorkflowNodeRunStatus.Cancelled,
+
+            // The fix loop's reset, and only it. See the remarks above.
+            DevWorkflowNodeRunStatus.Succeeded
+                or DevWorkflowNodeRunStatus.Failed
+                or DevWorkflowNodeRunStatus.Skipped
+                or DevWorkflowNodeRunStatus.Cancelled => to is DevWorkflowNodeRunStatus.Pending,
             _ => false
         };
 

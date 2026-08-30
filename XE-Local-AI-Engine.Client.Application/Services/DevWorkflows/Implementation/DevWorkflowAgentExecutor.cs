@@ -69,6 +69,7 @@ internal sealed class DevWorkflowAgentExecutor
     private readonly ILogger<DevWorkflowAgentExecutor> _logger;
     private readonly DevWorkflowOptions _options;
     private readonly DevWorkflowArtifactPromotion _promotion;
+    private readonly DevWorkflowRetryPolicy _retries;
     private readonly IAgentWorkSessionStore _sessionStore;
     private readonly IWorkflowOwnedWorkSessionLifecycle _sessions;
 
@@ -77,6 +78,7 @@ internal sealed class DevWorkflowAgentExecutor
         IAgentDefinitionStore agents,
         DevWorkflowArtifactPromotion promotion,
         IDevWorkflowArtifactBlobStore blobs,
+        DevWorkflowRetryPolicy retries,
         IOptions<DevWorkflowOptions> options,
         ILogger<DevWorkflowAgentExecutor> logger)
     {
@@ -86,6 +88,7 @@ internal sealed class DevWorkflowAgentExecutor
         _agents = agents ?? throw new ArgumentNullException(nameof(agents));
         _promotion = promotion ?? throw new ArgumentNullException(nameof(promotion));
         _blobs = blobs ?? throw new ArgumentNullException(nameof(blobs));
+        _retries = retries ?? throw new ArgumentNullException(nameof(retries));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _options = options.Value;
     }
@@ -125,7 +128,7 @@ internal sealed class DevWorkflowAgentExecutor
                                    DevWorkflowNodeRunStatus.Running),
                                cancellationToken)
                            .ConfigureAwait(false);
-            return 1 + await PollAsync(store, run, nodeRun with
+            return 1 + await PollAsync(store, graph, run, nodeRun with
             {
                 Status = DevWorkflowNodeRunStatus.Running
             }, nodeRuns, cancellationToken).ConfigureAwait(false);
@@ -197,6 +200,7 @@ internal sealed class DevWorkflowAgentExecutor
     ///     </para>
     /// </summary>
     public async Task<int> PollAsync(IDevWorkflowStore store,
+        DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
@@ -235,14 +239,18 @@ internal sealed class DevWorkflowAgentExecutor
                 return await SucceedAsync(store, run, nodeRun, nodeRuns, session, cancellationToken).ConfigureAwait(false);
 
             case AgentWorkSessionStatus.Failed:
-                return await SettleAsync(store,
+
+                // The retry policy's answer, not this lane's: a provider failure is retryable, and whether THIS one is
+                // re-attempted depends on the node's cap, the run's budget and whether the node routes its failures
+                // upstream — none of which is the session's business.
+                return await _retries.SettleFailureAsync(store,
+                        graph,
                         run,
                         nodeRun,
                         nodeRuns,
-                        DevWorkflowNodeRunStatus.Failed,
-                        DevWorkflowFailureClasses.ProviderError,
-                        "The agent's work session failed.",
-                        FailureOutput(nodeRun, session, DevWorkflowFailureClasses.ProviderError),
+                        new DevWorkflowFailure(DevWorkflowFailureClasses.ProviderError,
+                            "The agent's work session failed.",
+                            FailureOutput(nodeRun, session, DevWorkflowFailureClasses.ProviderError)),
                         cancellationToken)
                     .ConfigureAwait(false);
 

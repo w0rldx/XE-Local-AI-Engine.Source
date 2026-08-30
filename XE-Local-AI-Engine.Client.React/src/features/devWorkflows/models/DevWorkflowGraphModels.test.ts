@@ -8,6 +8,7 @@ import {
 	type DevWorkflowCanvasNodeData,
 	devWorkflowGraphStructuralKey,
 	toDevWorkflowCanvasGraph,
+	toDevWorkflowDefinitionCanvasGraph,
 } from "@/features/devWorkflows/models/DevWorkflowGraphModels";
 import type { DevWorkflowRunResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
 import { devWorkflowNodeRunSummary, devWorkflowRun } from "@/features/devWorkflows/test/DevWorkflowFixtures";
@@ -182,5 +183,39 @@ describe("toDevWorkflowCanvasGraph", () => {
 
 		expect(graph.nodes).toEqual([]);
 		expect(graph.edges).toEqual([]);
+	});
+});
+
+describe("toDevWorkflowDefinitionCanvasGraph", () => {
+	const definitionGraph = {
+		schemaVersion: 1,
+		nodes: [
+			{ nodeKey: "research", nodeType: "Agent", label: "Research" },
+			{ nodeKey: "plan", nodeType: "HumanGate", label: "Approve the plan" },
+		],
+		edges: [{ from: "research", to: "plan" }],
+	};
+
+	it("draws a definition with NO status, because nothing has run it", () => {
+		const graph = toDevWorkflowDefinitionCanvasGraph(definitionGraph);
+
+		// A definition node painted `Pending` would claim it is materialized and waiting on a dependency, which is a
+		// run's state. The card reads the absence and renders no badge at all.
+		expect(dataOf(graph, "research").status).toBeUndefined();
+		expect(dataOf(graph, "plan").status).toBeUndefined();
+		expect(dataOf(graph, "plan").nodeType).toBe("HumanGate");
+	});
+
+	it("keys nodes and edges by node key, since a definition has no rows to join against", () => {
+		const graph = toDevWorkflowDefinitionCanvasGraph(definitionGraph);
+
+		expect(graph.nodes.filter((node) => node.type !== "anchor").map((node) => node.id)).toEqual(["research", "plan"]);
+		expect(graph.edges.some((edge) => edge.source === "research" && edge.target === "plan")).toBe(true);
+		// Y6's anchors are computed the same way for both sources: one Start, one End on a linear chain.
+		expect(graph.nodes.filter((node) => node.type === "anchor")).toHaveLength(2);
+	});
+
+	it("renders nothing rather than throwing when no definition has been picked", () => {
+		expect(toDevWorkflowDefinitionCanvasGraph(undefined).nodes).toEqual([]);
 	});
 });

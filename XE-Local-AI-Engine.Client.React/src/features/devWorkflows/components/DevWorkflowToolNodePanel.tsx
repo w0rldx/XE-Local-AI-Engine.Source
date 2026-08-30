@@ -1,0 +1,332 @@
+import { Alert, Badge, Button, Code, Group, Loader, Paper, ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
+import { IconAlertTriangle } from "@tabler/icons-react";
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
+
+import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { StatTile } from "@/core/ui/components/StatTile/StatTile";
+import {
+	type DevWorkflowNodeRunDetailResponse,
+	decodeDevWorkflowArtifactContent,
+} from "@/features/devWorkflows/models/DevWorkflowModels";
+import {
+	type DevWorkflowValidationCommand,
+	type DevWorkflowTestOutcome,
+	devWorkflowMissingEvidenceCode,
+	parseDevWorkflowValidationReport,
+} from "@/features/devWorkflows/models/DevWorkflowValidationReport";
+import { useDevWorkflowArtifactContent } from "@/features/devWorkflows/queries/useDevWorkflows";
+
+export interface DevWorkflowToolNodePanelProps {
+	readonly nodeRun: DevWorkflowNodeRunDetailResponse;
+	/** Brings the operator to the artifact list, where the report's raw document and its versions live. */
+	readonly onShowArtifacts: () => void;
+}
+
+/**
+ * A Tool node's deterministic-validation report, rendered from the `<nodeKey>-validation.json` artifact the executor
+ * wrote before it moved the row (so the evidence exists whatever the node run then became).
+ *
+ * Everything here follows one rule: never let an absence read as a pass. The two ways this panel could lie are a
+ * refusal shown as "0 commands, 0 tests" and a partial report shown as a complete one, so each has its own state:
+ *
+ * - **No report at all.** A pass refused before a single command ran — a dependency manifest the sandbox has no
+ *   network to fetch, an unacknowledged repository, a backend that cannot hold a trusted workspace — writes no
+ *   artifact and puts its sanitized sentence on the row. That sentence is the render.
+ * - **A report with no command evidence.** Same story from the other side, and the report's own `failureDetail` says
+ *   which policy refused it.
+ * - **A report whose evidence stops short** (`missing_command_evidence` on a node run whose clock ran out). It is the
+ *   commands that DID run, labelled as partial, with the row naming the timeout — not a red gate with no account.
+ *
+ * The raw document stays one click away in the artifacts tab, and an unreadable body falls back to it rather than
+ * rendering an empty panel.
+ */
+export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkflowToolNodePanelProps) {
+	const { t } = useTranslation();
+	// The Tool node's only artifact is its report, so the node's headline output is it. `primaryArtifactId` is the
+	// newest version, which is the attempt an operator is looking at.
+	const artifactId = nodeRun.primaryArtifactId ?? undefined;
+	const contentQuery = useDevWorkflowArtifactContent(nodeRun.runId ?? undefined, artifactId);
+	const raw = contentQuery.data;
+	const text = useMemo(
+		() => (raw ? decodeDevWorkflowArtifactContent(raw.content ?? "", raw.isBase64 === true).text : ""),
+		[raw],
+	);
+	const report = useMemo(() => parseDevWorkflowValidationReport(text), [text]);
+	// `primaryArtifactId` is the node's newest artifact, NOT this attempt's: a retry or an X9 fix-loop reset (which
+	// puts Succeeded rows back to Pending) leaves attempt N's report standing until attempt N+1's commands land. The
+	// report says which attempt it measured, so an older one is never painted as the current result — a stale
+	// "Validation passed" over a node that is re-validating is the one lie this panel must not tell.
+	const priorAttempt =
+		report && typeof report.attempt === "number" && report.attempt < (nodeRun.attempt ?? 1) ? report.attempt : undefined;
+
+	return (
+		<SectionCard title={t("pages.devWorkflows.node.tool", "Validation")} gap="xs" data-testid="dev-workflow-node-tool">
+			{artifactId ? null : <RefusedWithoutReport nodeRun={nodeRun} />}
+
+			{artifactId && contentQuery.isPending ? <Loader size="sm" data-testid="dev-workflow-validation-loading" /> : null}
+
+			{artifactId && contentQuery.isError ? (
+				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-error">
+					{apiErrorMessage(
+						contentQuery.error,
+						t("pages.devWorkflows.validation.loadFailed", "Could not load this node's validation report."),
+					)}
+				</Alert>
+			) : null}
+
+			{/* An unreadable body is not an empty panel: the document is still in the artifacts tab, verbatim. */}
+			{artifactId && contentQuery.isSuccess && report === null ? (
+				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-unreadable">
+					{t(
+						"pages.devWorkflows.validation.unreadable",
+						"This node's validation report could not be read, so its result cannot be trusted. Open it in the artifacts tab to see what was stored.",
+					)}
+				</Alert>
+			) : null}
+
+			{priorAttempt === undefined ? null : (
+				<Alert color="yellow" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-stale-attempt">
+					{t(
+						"pages.devWorkflows.validation.priorAttempt",
+						"The stored report is attempt {{reportAttempt}}'s, and this node is on attempt {{attempt}}. It is not the current result — open it from the artifacts tab if you want the earlier evidence.",
+						{ reportAttempt: priorAttempt, attempt: nodeRun.attempt ?? 1 },
+					)}
+				</Alert>
+			)}
+
+			{report && priorAttempt === undefined ? <ValidationReport report={report} nodeRun={nodeRun} /> : null}
+
+			{artifactId ? (
+				<Button size="xs" variant="subtle" onClick={onShowArtifacts} data-testid="dev-workflow-node-tool-report">
+					{t("pages.devWorkflows.node.openReport", "Open the validation report")}
+				</Button>
+			) : null}
+		</SectionCard>
+	);
+}
+
+/**
+ * The node ended without a report of its own. The row's sanitized `terminalReason` is the only account of why — a
+ * dependency manifest the sandbox has no network for, an unacknowledged repository, an operator's cancel, or the
+ * dispatcher's backstop discarding a flight whose deadline passed — and it is a sentence someone can act on, so it is
+ * shown as the result rather than hidden behind "no validation report yet", which reads as "nothing wrong".
+ *
+ * The copy claims only that no report was written. On the backstop-timeout path commands HAVE run — workspace prep
+ * happens before the in-lane clock starts, so a cold clone is the ORDINARY way to get here — and their evidence is
+ * simply discarded with the flight.
+ */
+function RefusedWithoutReport({ nodeRun }: { readonly nodeRun: DevWorkflowNodeRunDetailResponse }) {
+	const { t } = useTranslation();
+	if (!nodeRun.terminalReason && !nodeRun.failureClass) {
+		return (
+			<Text size="sm" c="dimmed" data-testid="dev-workflow-validation-none">
+				{t("pages.devWorkflows.node.noReport", "No validation report yet.")}
+			</Text>
+		);
+	}
+
+	// A cancel is an answer someone gave, not a fault: it says the same thing about the evidence without the alarm.
+	const cancelled = nodeRun.failureClass === "Cancelled";
+	return (
+		<Alert
+			color={cancelled ? "gray" : "red"}
+			variant="light"
+			icon={cancelled ? undefined : <IconAlertTriangle size={16} />}
+			data-testid="dev-workflow-validation-refused"
+		>
+			<Stack gap={4}>
+				<Text size="sm">
+					{t(
+						"pages.devWorkflows.validation.refused",
+						"No validation report was written, so there is nothing here that evidences the code.",
+					)}
+				</Text>
+				{nodeRun.terminalReason ? (
+					<Text size="xs" c="dimmed" style={{ whiteSpace: "pre-wrap" }} data-testid="dev-workflow-validation-refused-reason">
+						{nodeRun.terminalReason}
+					</Text>
+				) : null}
+			</Stack>
+		</Alert>
+	);
+}
+
+function ValidationReport({
+	report,
+	nodeRun,
+}: {
+	readonly report: NonNullable<ReturnType<typeof parseDevWorkflowValidationReport>>;
+	readonly nodeRun: DevWorkflowNodeRunDetailResponse;
+}) {
+	const { t } = useTranslation();
+	const commands = report.commands ?? [];
+	// A node run whose clock ran out reports the commands it never reached as missing evidence. That is a PARTIAL
+	// record, and saying so is the difference between "slow" and "broken" for whoever reads it next.
+	const partial = report.failureCode === devWorkflowMissingEvidenceCode && nodeRun.failureClass === "Timeout";
+
+	return (
+		<Stack gap="xs" data-testid="dev-workflow-validation-report">
+			<Group gap="xs" wrap="wrap">
+				<Badge color={report.passed ? "green" : "red"} data-testid="dev-workflow-validation-result">
+					{report.passed
+						? t("pages.devWorkflows.validation.passed", "Validation passed")
+						: t("pages.devWorkflows.validation.failed", "Validation failed")}
+				</Badge>
+				<Text size="xs" c="dimmed">
+					{t("pages.devWorkflows.validation.base", "base {{commit}} · profile {{profile}}", {
+						commit: (report.baseCommit ?? "").slice(0, 12) || "—",
+						profile: report.commandProfileId ?? "—",
+					})}
+				</Text>
+			</Group>
+
+			{partial ? (
+				<Alert color="orange" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-partial">
+					<Stack gap={4}>
+						<Text size="sm">
+							{t(
+								"pages.devWorkflows.validation.partial",
+								"This report is partial: the node ran out of time before every declared command had run.",
+							)}
+						</Text>
+						{/* The row's sentence, not the report's, because it is the one that names the budget in seconds. */}
+						{nodeRun.terminalReason ? (
+							<Text size="xs" c="dimmed" data-testid="dev-workflow-validation-partial-reason">
+								{nodeRun.terminalReason}
+							</Text>
+						) : null}
+					</Stack>
+				</Alert>
+			) : null}
+
+			{/* Server prose, displayed verbatim (§2.11): the verdict's detail already names the command and the reason,
+			    and the raw code is shown beside it so an unrecognised one is never silently dropped. */}
+			{report.failureCode && !partial ? (
+				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-failure">
+					<Stack gap={4}>
+						{report.failureDetail ? <Text size="sm">{report.failureDetail}</Text> : null}
+						<Code data-testid="dev-workflow-validation-failure-code">{report.failureCode}</Code>
+					</Stack>
+				</Alert>
+			) : null}
+
+			{commands.length === 0 ? (
+				// Never a count. "0 commands · 0 tests" over a refusal is the exact false green this panel exists to
+				// prevent: it reads as a clean run, and the report's own sentence says it was nothing of the kind.
+				<Text size="sm" c="dimmed" data-testid="dev-workflow-validation-no-commands">
+					{t(
+						"pages.devWorkflows.validation.noCommands",
+						"No validation command ran, so this report evidences nothing about the code.",
+					)}
+				</Text>
+			) : (
+				<Stack gap="xs">
+					{commands.map((command) => (
+						<ValidationCommandCard key={command.commandId} command={command} />
+					))}
+				</Stack>
+			)}
+		</Stack>
+	);
+}
+
+function ValidationCommandCard({ command }: { readonly command: DevWorkflowValidationCommand }) {
+	const { t } = useTranslation();
+	const failed = !command.completed || command.exitCode !== 0;
+	// Only a failing command's captured output is rendered: on a pass it is noise, on a failure it is the only record
+	// of why. It is sanitized server-side, and when the whole report would not fit it is the server's own sentence
+	// saying the text was left out — which is why it is printed verbatim rather than pattern-matched.
+	const capturedOutput = failed ? [command.standardError, command.standardOutput].filter((output) => !!output?.trim()) : [];
+
+	return (
+		<Paper withBorder={true} p="xs" data-testid={`dev-workflow-validation-command-${command.commandId}`}>
+			<Group justify="space-between" wrap="nowrap" align="flex-start">
+				<Code>{command.commandId}</Code>
+				<Group gap={4} wrap="wrap">
+					{command.completed ? null : (
+						<Badge size="xs" color="red">
+							{t("pages.devWorkflows.validation.command.incomplete", "Did not complete")}
+						</Badge>
+					)}
+					{command.outputTruncated ? (
+						<Badge size="xs" color="yellow" variant="light">
+							{t("pages.devWorkflows.validation.command.truncated", "Output truncated")}
+						</Badge>
+					) : null}
+					<Badge size="xs" color={failed ? "red" : "green"} variant="light">
+						{t("pages.devWorkflows.validation.command.exitCode", "exit {{code}}", { code: command.exitCode })}
+					</Badge>
+					<Text size="xs" c="dimmed">
+						{((command.durationMilliseconds ?? 0) / 1000).toFixed(1)}s
+					</Text>
+				</Group>
+			</Group>
+			{command.testOutcome ? <TestOutcomeView outcome={command.testOutcome} /> : null}
+			{capturedOutput.length > 0 ? (
+				<ScrollArea.Autosize mah={200} mt="xs">
+					<Code block={true} data-testid={`dev-workflow-validation-output-${command.commandId}`}>
+						{capturedOutput.join("\n")}
+					</Code>
+				</ScrollArea.Autosize>
+			) : null}
+		</Paper>
+	);
+}
+
+/** A parse failure is a validation failure, never missing data — so it renders instead of the counts, never beside them. */
+function TestOutcomeView({ outcome }: { readonly outcome: DevWorkflowTestOutcome }) {
+	const { t } = useTranslation();
+
+	if (!outcome.parsed) {
+		return (
+			<Alert mt="xs" color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-tests-unparsed">
+				<Stack gap={4}>
+					<Text size="sm">
+						{t(
+							"pages.devWorkflows.validation.tests.unparsed",
+							"The test results could not be read, so no executed, passed or failed count is available for this run.",
+						)}
+					</Text>
+					<Code>{outcome.parseFailureCode ?? "unknown"}</Code>
+					{outcome.parseFailureDetail ? (
+						<Text size="xs" c="dimmed">
+							{outcome.parseFailureDetail}
+						</Text>
+					) : null}
+				</Stack>
+			</Alert>
+		);
+	}
+
+	return (
+		<SimpleGrid cols={{ base: 2, sm: 4 }} mt="xs" data-testid="dev-workflow-validation-tests">
+			{/* The test ids sit on the VALUES: a test that could only find the tile would pass against four zeroes. */}
+			<StatTile
+				variant="paper"
+				label={t("pages.devWorkflows.validation.tests.discovered", "Discovered")}
+				value={outcome.discovered}
+				valueTestId="dev-workflow-validation-tests-discovered"
+			/>
+			<StatTile
+				variant="paper"
+				label={t("pages.devWorkflows.validation.tests.executed", "Executed")}
+				value={outcome.executed}
+				valueTestId="dev-workflow-validation-tests-executed"
+			/>
+			<StatTile
+				variant="paper"
+				label={t("pages.devWorkflows.validation.tests.passed", "Passed")}
+				value={outcome.passed}
+				valueTestId="dev-workflow-validation-tests-passed"
+			/>
+			<StatTile
+				variant="paper"
+				label={t("pages.devWorkflows.validation.tests.failed", "Failed")}
+				value={outcome.failed}
+				valueTestId="dev-workflow-validation-tests-failed"
+			/>
+		</SimpleGrid>
+	);
+}

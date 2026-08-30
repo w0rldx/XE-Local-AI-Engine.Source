@@ -1,5 +1,4 @@
 import { Button, Divider, Group, NavLink, ScrollArea, Select, Stack, Text } from "@mantine/core";
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
@@ -21,6 +20,9 @@ export interface DevWorkflowRunSummaryPanelProps {
 	readonly pendingDecisionCount: number;
 	/** Empty while a run is live: X14 allows one live run per work item and the start is refused with a 409 anyway. */
 	readonly startableDefinitions: readonly DevWorkflowDefinitionSummaryResponse[];
+	/** Lifted, because the centre pane previews the picked template while the work item has nothing to show yet. */
+	readonly selectedDefinitionId: string | null;
+	readonly onSelectDefinition: (definitionId: string | null) => void;
 	readonly isStarting: boolean;
 	readonly startError?: string;
 	readonly onSelectRun: (runId: string) => void;
@@ -34,13 +36,15 @@ export function DevWorkflowRunSummaryPanel({
 	nodes,
 	pendingDecisionCount,
 	startableDefinitions,
+	selectedDefinitionId,
+	onSelectDefinition,
 	isStarting,
 	startError,
 	onSelectRun,
 	onStartRun,
 }: DevWorkflowRunSummaryPanelProps) {
 	const { t } = useTranslation();
-	const [definitionId, setDefinitionId] = useState<string | null>(null);
+	const definitionId = selectedDefinitionId;
 
 	const statuses = nodes.map((node) => toDevWorkflowNodeStatus(node.status));
 	const running = statuses.filter((status) => status === "Running").length;
@@ -103,7 +107,7 @@ export function DevWorkflowRunSummaryPanel({
 									label: definition.name ?? "",
 								}))}
 								value={definitionId}
-								onChange={setDefinitionId}
+								onChange={onSelectDefinition}
 								data-testid="dev-workflow-start-definition"
 							/>
 							<Button
