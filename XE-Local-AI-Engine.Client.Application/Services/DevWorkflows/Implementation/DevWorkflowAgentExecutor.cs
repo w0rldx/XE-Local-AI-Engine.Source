@@ -236,7 +236,7 @@ internal sealed class DevWorkflowAgentExecutor
         switch (session.Status)
         {
             case AgentWorkSessionStatus.Completed:
-                return await SucceedAsync(store, run, nodeRun, nodeRuns, session, cancellationToken).ConfigureAwait(false);
+                return await SucceedAsync(store, graph, run, nodeRun, nodeRuns, session, cancellationToken).ConfigureAwait(false);
 
             case AgentWorkSessionStatus.Failed:
 
@@ -580,6 +580,7 @@ internal sealed class DevWorkflowAgentExecutor
     }
 
     private async Task<int> SucceedAsync(IDevWorkflowStore store,
+        DevWorkflowGraph graph,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         IReadOnlyList<DevWorkflowNodeRunSnapshot> nodeRuns,
@@ -588,7 +589,12 @@ internal sealed class DevWorkflowAgentExecutor
     {
         // Evidence first, status last — the same order the work-session loop uses one level down. A crash in that
         // window re-derives the same answer, because the promotion is keyed and the poll runs again.
-        var promoted = await _promotion.PromoteAsync(run, nodeRun, session.Id, cancellationToken).ConfigureAwait(false);
+        //
+        // A decomposing node declares the artifact kind it produces, and that declaration is what the promotion needs:
+        // the session's own enum cannot say "task package", so without it the document this node's whole purpose is to
+        // hand downstream would land as an ordinary report and the materialization would find nothing.
+        var declaredKind = graph.Nodes.GetValueOrDefault(nodeRun.NodeKey)?.Materialization?.ArtifactKind;
+        var promoted = await _promotion.PromoteAsync(run, nodeRun, session.Id, declaredKind, cancellationToken).ConfigureAwait(false);
         var findings = await _sessionStore.ListFindingsAsync(session.Id, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
         var output = JsonSerializer.Serialize(new AgentOutput(DevWorkflowNodeOutputStatuses.Succeeded,
                 nodeRun.Attempt,
