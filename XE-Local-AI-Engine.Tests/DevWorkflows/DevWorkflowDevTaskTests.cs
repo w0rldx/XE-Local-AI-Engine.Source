@@ -395,6 +395,37 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
+    ///     A child whose brief does not say what to implement stands down for a human rather than inheriting the
+    ///     project's whole feature — and, as much to the point, rather than staying <c>Pending</c>: a row that never
+    ///     started carries no deadline anything can fire, so an exception escaping the resolve would leave it to be
+    ///     re-dispatched by every sweep for the life of the run.
+    /// </summary>
+    [Test]
+    public async Task AMaterializedChildWithNothingToImplementStandsDownInsteadOfWedging()
+    {
+        await using var harness = NewHarness();
+        var (projectId, firstTaskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        await MaterializeChildAsync(harness, runId, "implement", "implement#1", projectId, """{"title":"Implement the second slice","requirements":"   "}""")
+            .ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var child = await harness.ReadNodeRunAsync(runId, "implement#1").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, child.Status, $"the row settled on {child.Status} rather than waiting for a sweep that would never finish it.");
+        AssertEx.Equal(DevWorkflowFailureClasses.Configuration, child.FailureClass, "a brief that names nothing to build is a decided fact, not something another attempt answers.");
+        AssertEx.Contains(AssertEx.NotNull(child.TerminalReason), "implement#1");
+        AssertEx.Contains(AssertEx.NotNull(child.TerminalReason), "requirements");
+        AssertEx.Null(child.DevelopmentTaskId, "and it names no task, because it never created one.");
+        AssertEx.Equal(expected: 1,
+            (await ListTasksAsync(harness, projectId).ConfigureAwait(false)).Count,
+            "the project still carries only its own task: a child with nothing to implement must not add one.");
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
+            (await ReadTaskAsync(harness, firstTaskId).ConfigureAwait(false)).Status,
+            "and the sibling that could run was unaffected.");
+    }
+
+    /// <summary>
     ///     The other side of a DevTask node's deep link: the Development task it drives names the run back, which is
     ///     what lets that page defer the apply to the workflow's gate. A task nobody's workflow drives names nothing.
     /// </summary>
