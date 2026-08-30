@@ -173,6 +173,13 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
     ///     Which upstream nodes a <c>Pending</c> node run is still waiting on, computed here rather than left to the
     ///     client: re-deriving join semantics in the browser would duplicate the dispatcher's own evaluation and drift
     ///     from it. Only <c>Pending</c> carries it — <c>Blocked</c> means a human is the dependency.
+    ///     <para>
+    ///         A source that has SETTLED is never waited on, whichever way it settled — which is the same answer the
+    ///         dispatcher's edge rule gives for a branch whose condition did not fire, and is why an <c>Any</c> join
+    ///         needs no case of its own here: it too waits exactly while an inbound edge is undecided. The one edge that
+    ///         needs saying out loud is a materialization TEMPLATE's: it never gets a row, so it can never settle, and
+    ///         naming it would show every decomposing run as stuck on the one node nothing ever runs.
+    ///     </para>
     /// </summary>
     private static IReadOnlyList<string>? WaitingOnNodeKeys(DevWorkflowNodeRunSnapshot nodeRun,
         DevWorkflowGraph graph,
@@ -183,17 +190,50 @@ public sealed class DevWorkflowRunComposer(IDevWorkflowStore store, IAgentDefini
             return null;
         }
 
+        var templates = TemplateKeys(graph);
         var waiting = graph.Edges.Where(edge => string.Equals(edge.To, nodeRun.NodeKey, StringComparison.Ordinal))
                            .Select(static edge => edge.From)
-                           .Where(from => byKey.GetValueOrDefault(from) is not { } source
-                                          || source.Status is not (DevWorkflowNodeRunStatus.Succeeded
-                                              or DevWorkflowNodeRunStatus.Failed
-                                              or DevWorkflowNodeRunStatus.Skipped
-                                              or DevWorkflowNodeRunStatus.Cancelled))
+                           .Where(from => !templates.Contains(from)
+                                          && (byKey.GetValueOrDefault(from) is not { } source
+                                              || source.Status is not (DevWorkflowNodeRunStatus.Succeeded
+                                                  or DevWorkflowNodeRunStatus.Failed
+                                                  or DevWorkflowNodeRunStatus.Skipped
+                                                  or DevWorkflowNodeRunStatus.Cancelled)))
                            .Distinct(StringComparer.Ordinal)
                            .OrderBy(static key => key, StringComparer.Ordinal)
                            .ToList();
         return waiting.Count == 0 ? null : waiting;
+    }
+
+    /// <summary>
+    ///     Every node of every materialization template subtree — each template root plus what it reaches short of its
+    ///     join, which is exactly the set the runtime gives no node run to. Computed off the wire graph already in hand
+    ///     rather than by re-parsing the blob, and it mirrors the runtime's own reading of the same document.
+    /// </summary>
+    private static HashSet<string> TemplateKeys(DevWorkflowGraph graph)
+    {
+        var templates = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var materialization in graph.Nodes.Select(static node => node.Materialization).OfType<DevWorkflowMaterialization>())
+        {
+            var pending = new Stack<string>();
+            if (templates.Add(materialization.TemplateNodeKey))
+            {
+                pending.Push(materialization.TemplateNodeKey);
+            }
+
+            while (pending.Count > 0)
+            {
+                var key = pending.Pop();
+                foreach (var edge in graph.Edges.Where(edge => string.Equals(edge.From, key, StringComparison.Ordinal)
+                                                               && !string.Equals(edge.To, materialization.JoinNodeKey, StringComparison.Ordinal)
+                                                               && templates.Add(edge.To)))
+                {
+                    pending.Push(edge.To);
+                }
+            }
+        }
+
+        return templates;
     }
 
     /// <summary>

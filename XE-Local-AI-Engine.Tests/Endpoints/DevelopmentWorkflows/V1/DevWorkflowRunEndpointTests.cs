@@ -215,6 +215,60 @@ public sealed class DevWorkflowRunEndpointTests
         AssertEx.Equal(JsonValueKind.Null, research.GetProperty("waitingOnNodeKeys").ValueKind, "a running node is not waiting on anything.");
     }
 
+    /// <summary>
+    ///     A join is not waiting on the materialization template that declares an edge into it. The template is the one
+    ///     node deliberately never instantiated, so naming it would show every decomposing run as stuck on a node that
+    ///     has no row and never will — and it is the dispatcher's own edge rule that says so, read here rather than
+    ///     re-derived, so the page and the runtime cannot disagree about what a run is waiting for.
+    /// </summary>
+    [Test]
+    public async Task GetRun_DoesNotReportAJoinAsWaitingOnAMaterializationTemplate()
+    {
+        const string DecompositionGraph = """
+                                          {"schemaVersion":1,
+                                           "nodes":[{"nodeKey":"decompose","nodeType":"Agent","label":"Decompose",
+                                                     "materialization":{"templateNodeKey":"implement","artifactKind":"TaskPackage","joinNodeKey":"join","maxChildren":4}},
+                                                    {"nodeKey":"implement","nodeType":"DevTask"},
+                                                    {"nodeKey":"join","nodeType":"Join"}],
+                                           "edges":[{"from":"decompose","to":"join"},{"from":"implement","to":"join"}]}
+                                          """;
+
+        var decompose = GateNodeRun() with
+        {
+            NodeKey = "decompose",
+            NodeType = DevWorkflowNodeType.Agent,
+            Status = DevWorkflowNodeRunStatus.Succeeded,
+            PendingDecisionKind = null
+        };
+        var join = GateNodeRun() with
+        {
+            Id = ResearchNodeRunId,
+            NodeKey = "join",
+            NodeType = DevWorkflowNodeType.Join,
+            Status = DevWorkflowNodeRunStatus.Pending,
+            PendingDecisionKind = null
+        };
+        var runs = RunService(new DevWorkflowRunDetail(RunSnapshot() with
+            {
+                GraphJson = DecompositionGraph
+            },
+            [decompose, join],
+            PendingDecisionCount: 0,
+            BlockingGateNodeRunId: null));
+        await using var factory = EnabledFactory(Store(), runs);
+
+        using var response = await SendAsync(factory, "GET", Run).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        using var document = JsonDocument.Parse(body);
+        var waiting = document.RootElement.GetProperty("nodes")
+                              .EnumerateArray()
+                              .Single(static node => node.GetProperty("nodeKey").GetString() == "join")
+                              .GetProperty("waitingOnNodeKeys");
+
+        AssertEx.Equal(JsonValueKind.Null, waiting.ValueKind, $"the join is waiting on {waiting}, and the decomposition it really depends on has already succeeded.");
+    }
+
     [Test]
     public async Task ListRuns_ForwardsTheFilters()
     {
