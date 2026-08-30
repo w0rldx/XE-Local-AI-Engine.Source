@@ -249,6 +249,31 @@ internal static class DevWorkflowGraphs
                                                }
                                                """;
 
+    /// <summary>
+    ///     <see cref="DecompositionSubtree" /> with the implementation node the seeded template will really carry: a
+    ///     <c>DevTask</c>, so each clone drives a Development task of its OWN and the isolation those task ids buy is
+    ///     observable rather than argued. <c>nodeTimeoutSeconds</c> is mandatory on a DevTask node per the C template
+    ///     rule.
+    /// </summary>
+    public const string DecompositionIntoDevTasks = """
+                                                    {
+                                                      "schemaVersion": 1,
+                                                      "nodes": [
+                                                        { "nodeKey": "decompose", "nodeType": "Agent", "label": "Decompose",
+                                                          "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b",
+                                                          "materialization": { "templateNodeKey": "implement", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                                        { "nodeKey": "implement", "nodeType": "DevTask", "label": "Implement", "nodeTimeoutSeconds": 900 },
+                                                        { "nodeKey": "validate", "nodeType": "Tool", "retryTarget": "implement" },
+                                                        { "nodeKey": "join", "nodeType": "Join" }
+                                                      ],
+                                                      "edges": [
+                                                        { "from": "decompose", "to": "join" },
+                                                        { "from": "implement", "to": "validate" },
+                                                        { "from": "validate", "to": "join" }
+                                                      ]
+                                                    }
+                                                    """;
+
     /// <summary>One tool node on its own: the smallest thing the sandbox lane can be asked to run.</summary>
     public const string SingleTool = """
                                      {

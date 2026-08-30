@@ -649,6 +649,57 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     }
 
     /// <summary>
+    ///     The other half of the reuse rule above: the same task gets the same worktree, and two TASKS of one project
+    ///     get two — the provider partitions on <c>(ProjectId, TaskId)</c>, never on the project alone.
+    ///     <para>
+    ///         This is what makes a decomposed feature safe to implement in parallel (C3): several materialized children
+    ///         live in one Development project by design, so a project-keyed workspace would have them editing one
+    ///         checkout and overwriting each other's patches, with the apply gate hashing whichever subject won. The
+    ///         assertion is therefore not that the two paths differ as strings but that a file written in one is absent
+    ///         from the other, and that the sandbox bound to each is a different sandbox.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task WorkspaceProvider_GivesTwoTasksInOneProjectSeparateWorkspaces()
+    {
+        var repository = await CreateRepositoryAsync().ConfigureAwait(false);
+        var data = Path.Combine(_root, "sibling-tasks-data");
+        Directory.CreateDirectory(data);
+        var options = Options.Create(OptionsValue());
+        var identity = DevelopmentWorkspaceSecurity.RepositoryIdentityHash(DevelopmentWorkspaceSecurity.CanonicalRepositoryRoot(repository));
+
+        // Two tasks of ONE project: everything the provider is given is shared except the task and its attempt, which is
+        // exactly the shape a materialized fan-out hands it.
+        var first = Snapshot(identity);
+        var second = first with
+        {
+            TaskId = Guid.NewGuid(),
+            AttemptId = Guid.NewGuid()
+        };
+
+        using var sandbox = CreateSandbox();
+        var provider = new DevelopmentWorkspaceProvider(new FakeNodeDataDirectory(data), sandbox, options, TimeProvider.System, new RecordingWorkspaceSecretsSink());
+        var firstSession = await provider.PrepareAsync(first, Binding(first, repository)).ConfigureAwait(false);
+        var secondSession = await provider.PrepareAsync(second, Binding(second, repository)).ConfigureAwait(false);
+
+        AssertEx.NotEqual(firstSession.HostWorktreePath, secondSession.HostWorktreePath, "two tasks of one project must not share a worktree");
+        AssertEx.Equal(AssertEx.NotNull(Path.GetDirectoryName(firstSession.HostWorktreePath)),
+            Path.GetDirectoryName(secondSession.HostWorktreePath),
+            "and they are siblings under the one project directory: the task is the partition, not the project");
+        AssertEx.NotEqual(firstSession.RuntimePath, secondSession.RuntimePath, "the runtime directory carries the same isolation as the worktree");
+        AssertEx.NotEqual(firstSession.SandboxHandle.SandboxId,
+            secondSession.SandboxHandle.SandboxId,
+            "the attach key names the task, so neither task can attach to the other's sandbox");
+
+        // Not just differently named: genuinely separate trees.
+        var tools = new DevelopmentWorkspaceTools(sandbox, firstSession, options, GenericProfile);
+        _ = await tools.WriteFileAsync("src/feature.txt", "the first task's work\n").ConfigureAwait(false);
+        AssertEx.True(File.Exists(Path.Combine(firstSession.HostWorktreePath, "src", "feature.txt")));
+        AssertEx.False(File.Exists(Path.Combine(secondSession.HostWorktreePath, "src", "feature.txt")),
+            "a sibling task must not see, or be able to overwrite, work that is not its own");
+    }
+
+    /// <summary>
     ///     The managed workspace is an engine-owned standalone clone, not a linked worktree.
     ///     Every assertion here is a property the container boundary depends on, and each one fails a different way of
     ///     getting the clone wrong.
