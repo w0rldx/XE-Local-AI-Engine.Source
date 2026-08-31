@@ -6,6 +6,7 @@ import { DevWorkflowNodeStatusBadge } from "@/features/devWorkflows/components/D
 import {
 	type DevWorkflowNodeRunDetailResponse,
 	type DevWorkflowNodeRunSummaryResponse,
+	type DevWorkflowNodeStatus,
 	type DevWorkflowNodeType,
 	type DevWorkflowRunResponse,
 	toDevWorkflowNodeStatus,
@@ -24,8 +25,9 @@ export interface DevWorkflowStructuralNodePanelProps {
  * rows and the pinned graph's edges, never on the node-run detail response.
  *
  * - **Gate** — the condition off the EDGES (Y24: conditions live on edges only, and P3 exposes no
- *   `conditionExpression` on the node), and which successor has left `Pending`. There is no `conditionResult` field to
- *   read (P3 §4.2 deleted it); the taken branch is simply the one that started.
+ *   `conditionExpression` on the node), and which successor the run actually entered. There is no `conditionResult`
+ *   field to read (P3 §4.2 deleted it); the branch NOT taken is the one the runtime left in an untaken state, which
+ *   `untakenBranchStatuses` names.
  * - **Join** — dependencies satisfied against dependencies outstanding, which is the panel form of the
  *   `waitingOnNodeKeys` the node table already renders as a sentence.
  * - **Parallel** — the branches, each with its own status.
@@ -142,6 +144,17 @@ function DependencyRow({
 	);
 }
 
+/**
+ * The states a branch is in when the gate did NOT send the run down it.
+ *
+ * `Pending` is the branch that has not been judged yet. `Skipped` is the branch that WAS judged and lost: the state
+ * machine reads a dead edge as `Admission.Skip` and the dispatcher writes the row `Skipped`, so on any settled gate the
+ * branch not taken is a Skipped row, not a Pending one. Treating "not Pending" as taken therefore badged BOTH branches
+ * of every decided gate — a lie on the one surface an operator reads to find out which way a run went. `Cancelled`
+ * joins them: a run cancelled before a branch ran is not a branch the gate chose.
+ */
+const untakenBranchStatuses: readonly DevWorkflowNodeStatus[] = ["Pending", "Skipped", "Cancelled"];
+
 /** A successor and its state. A branch with no row has not been reached — or is a template awaiting materialization. */
 function BranchRow({ nodeKey, row }: { readonly nodeKey: string; readonly row?: DevWorkflowNodeRunSummaryResponse }) {
 	const { t } = useTranslation();
@@ -152,9 +165,10 @@ function BranchRow({ nodeKey, row }: { readonly nodeKey: string; readonly row?: 
 				{row?.label ?? nodeKey}
 			</Text>
 			{status ? <DevWorkflowNodeStatusBadge status={status} /> : null}
-			{/* The taken branch is the one that started — there is no `conditionResult` on the wire, and there never was
-			    a need for one. A branch still `Pending` is a branch the gate did not send the run down. */}
-			{status && status !== "Pending" ? (
+			{/* The taken branch is the one the run actually entered — there is no `conditionResult` on the wire, and there
+			    never was a need for one. What the branch NOT taken looks like is the runtime's answer, not a guess: see
+			    `untakenBranchStatuses`. */}
+			{status && !untakenBranchStatuses.includes(status) ? (
 				<Badge size="xs" variant="light" color="blue" data-testid={`dev-workflow-node-branch-taken-${nodeKey}`}>
 					{t("pages.devWorkflows.structural.taken", "taken")}
 				</Badge>

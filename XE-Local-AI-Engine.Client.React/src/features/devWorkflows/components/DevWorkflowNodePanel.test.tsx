@@ -344,9 +344,39 @@ describe("DevWorkflowNodePanel", () => {
 
 		// The condition is rendered as stored. A client paraphrase the runtime evaluates differently is worse than none.
 		expect(screen.getByTestId("dev-workflow-node-branch-condition-ship").textContent).toBe("$.passed eq true");
-		// The taken branch is the successor that LEFT Pending — there is no conditionResult field on the wire.
+		// There is no conditionResult field on the wire; the taken branch is the successor the run actually entered.
 		expect(screen.getByTestId("dev-workflow-node-branch-taken-ship")).toBeDefined();
 		expect(screen.queryByTestId("dev-workflow-node-branch-taken-fix")).toBeNull();
+	});
+
+	it("does not call a SKIPPED branch taken — which is what the branch not taken actually looks like", () => {
+		// A gate that has settled leaves its dead branch `Skipped`, not `Pending`: the state machine reads the dead edge
+		// as Admission.Skip and the dispatcher writes the row. So "not Pending" as a proxy for "taken" badged BOTH
+		// branches of every decided gate, which is a lie on the one surface that answers which way the run went.
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Gate", nodeKey: "verdict", label: "Verdict" }), {
+			run: devWorkflowRun({
+				graph: {
+					schemaVersion: 1,
+					nodes: [],
+					edges: [
+						{ from: "verdict", to: "ship", condition: { path: "$.passed", op: "eq", value: true } },
+						{ from: "verdict", to: "fix", condition: { path: "$.passed", op: "eq", value: false } },
+						{ from: "verdict", to: "audit", condition: { path: "$.passed", op: "eq", value: false } },
+					],
+				},
+				nodes: [
+					devWorkflowNodeRunSummary({ id: "n0", nodeKey: "verdict", status: "Succeeded" }),
+					devWorkflowNodeRunSummary({ id: "n1", nodeKey: "ship", label: "Ship it", status: "Succeeded" }),
+					devWorkflowNodeRunSummary({ id: "n2", nodeKey: "fix", label: "Fix it", status: "Skipped" }),
+					devWorkflowNodeRunSummary({ id: "n3", nodeKey: "audit", label: "Audit it", status: "Cancelled" }),
+				],
+			}),
+		});
+
+		expect(screen.getByTestId("dev-workflow-node-branch-taken-ship")).toBeDefined();
+		expect(screen.queryByTestId("dev-workflow-node-branch-taken-fix")).toBeNull();
+		// A run cancelled before a branch ran did not choose that branch either.
+		expect(screen.queryByTestId("dev-workflow-node-branch-taken-audit")).toBeNull();
 	});
 
 	it("still lists a branch whose node has not been created yet, rather than shrinking the graph", () => {
