@@ -1,12 +1,11 @@
 import { Alert, Badge, Button, Code, Group, Loader, ScrollArea, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconExternalLink } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
+import { IconAlertTriangle } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
+import { DevWorkflowAgentNodePanel } from "@/features/devWorkflows/components/DevWorkflowAgentNodePanel";
 import { DevWorkflowDevTaskNodePanel } from "@/features/devWorkflows/components/DevWorkflowDevTaskNodePanel";
 import {
 	type DevWorkflowDecisionSubmission,
@@ -52,10 +51,13 @@ export interface DevWorkflowNodePanelProps {
 }
 
 /**
- * The right-zone pane for the selected node-run. It dispatches on node type. A Tool node renders its own validation
- * report, because that evidence is workflow-owned and lives nowhere else; the Agent and DevTask sections stay LINK-OUTS,
- * because the work-session view and the Dev Mode evidence chain already exist at their own routes and re-hosting either
- * would fork the one place each is rendered.
+ * The right-zone pane for the selected node-run. It dispatches on node type, and everything above that dispatch is the
+ * same for all seven: the header, the cascade-rerun account, the gate controls and the attempt history.
+ *
+ * Where each kind's evidence comes from is the distinction that matters. A Tool node renders its own report and an
+ * Agent node its own transcript, because both are workflow-owned and neither has another home. A DevTask node stays a
+ * LINK-OUT: the Dev Mode evidence chain exists at its own route and re-hosting it would fork the one place the
+ * hash-locked apply gate is rendered (O13).
  */
 export function DevWorkflowNodePanel({
 	nodeRun,
@@ -171,7 +173,7 @@ export function DevWorkflowNodePanel({
 
 				<DevWorkflowNodeAttempts attempts={attempts} />
 
-				{nodeType === "Agent" ? <AgentSection nodeRun={nodeRun} /> : null}
+				{nodeType === "Agent" ? <DevWorkflowAgentNodePanel nodeRun={nodeRun} /> : null}
 				{nodeType === "Tool" ? <DevWorkflowToolNodePanel nodeRun={nodeRun} onShowArtifacts={onShowArtifacts} /> : null}
 				{nodeType === "DevTask" ? <DevWorkflowDevTaskNodePanel nodeRun={nodeRun} /> : null}
 				{nodeType === "Gate" || nodeType === "Parallel" || nodeType === "Join" ? (
@@ -235,48 +237,6 @@ function CascadeRerunNotice({
 				{ node: failedLabel },
 			)}
 		</Alert>
-	);
-}
-
-function AgentSection({ nodeRun }: { nodeRun: DevWorkflowNodeRunDetailResponse }) {
-	const { t } = useTranslation();
-	const navigate = useNavigate();
-	return (
-		<SectionCard title={t("pages.devWorkflows.node.agent", "Agent")} gap="xs" data-testid="dev-workflow-node-agent">
-			<Text size="sm">
-				{nodeRun.agentDisplayName ?? t("pages.devWorkflows.node.agentUnbound", "No agent is bound to this node.")}
-			</Text>
-			{nodeRun.modelLabel ? (
-				<Text size="xs" c="dimmed">
-					{nodeRun.modelLabel}
-				</Text>
-			) : null}
-			{nodeRun.workSessionId ? (
-				nodeRun.workSessionAvailable === false ? (
-					// The node-run row outlives its work session on purpose (the reference is loose). Saying WHICH thing is
-					// missing matters: the node's own events and artifacts are workflow-owned and still here.
-					<Alert color="gray" variant="light" data-testid="dev-workflow-node-session-purged">
-						{t(
-							"pages.devWorkflows.node.sessionPurged",
-							"The agent's transcript is no longer available. This node's events and artifacts are unaffected.",
-						)}
-					</Alert>
-				) : nodeCapabilities.workSessions ? (
-					// A link-out, not a re-hosted panel: the session view already exists at its own route with the plan,
-					// findings and checkpoints this pane has no room for, and the session is a first-class
-					// AgentWorkSessionKind.Workflow row that route renders unchanged.
-					<Button
-						size="xs"
-						variant="subtle"
-						leftSection={<IconExternalLink size={14} />}
-						onClick={() => navigate({ to: "/work-sessions/$sessionId", params: { sessionId: nodeRun.workSessionId ?? "" } })}
-						data-testid="dev-workflow-node-session-link"
-					>
-						{t("pages.devWorkflows.node.openSession", "Open the agent's work session")}
-					</Button>
-				) : null
-			) : null}
-		</SectionCard>
 	);
 }
 

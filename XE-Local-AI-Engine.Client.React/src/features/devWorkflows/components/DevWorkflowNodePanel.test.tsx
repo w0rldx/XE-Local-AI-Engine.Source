@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
+import type { ChatScope } from "@/features/chat/models/ChatModels";
 import { DevWorkflowNodePanel } from "@/features/devWorkflows/components/DevWorkflowNodePanel";
 import type {
 	DevWorkflowNodeRunDetailResponse,
@@ -25,7 +26,38 @@ vi.mock("@tanstack/react-router", async (importOriginal) => ({
 	useNavigate: () => navigate,
 }));
 
+// The transcript IS the real chat page, whose own contract is pinned by Chat.scope.test.tsx. What this file owes is
+// the SCOPE the node panel hands it — and, for a purged session, that it is never handed one at all.
+const lastScope = vi.hoisted(() => ({ current: undefined as ChatScope | undefined }));
+
+vi.mock("@/features/chat/pages/Chat", () => ({
+	Chat: ({ scope }: { scope?: ChatScope }) => {
+		lastScope.current = scope;
+		return <div data-testid="embedded-chat" data-conversation={scope?.conversationId} />;
+	},
+}));
+
+// The agent panel subscribes to the work-session hub for its resume nonce (R-C6). A unit test needs the subscription
+// not to reach the network, not a real one.
+const hubMock = vi.hoisted(() => {
+	// `invoke` answers a promise because the hook's own cleanup unsubscribes through it and chains off the result.
+	const connection = { state: "Connected", on: vi.fn(), off: vi.fn(), invoke: vi.fn(() => Promise.resolve()) };
+	return {
+		connection,
+		acquire: vi.fn(() => ({
+			connection,
+			whenStarted: Promise.resolve(),
+			onReconnected: vi.fn(() => vi.fn()),
+			release: vi.fn(),
+		})),
+	};
+});
+
+vi.mock("@/core/api/signalr/SharedHubConnection", () => ({ acquireHubConnection: hubMock.acquire }));
+
 const sessionId = "88888888-8888-4888-8888-888888888888";
+const conversationId = "77777777-7777-4777-8777-777777777777";
+const agentDefinitionId = "66666666-6666-4666-8666-666666666666";
 
 interface PanelOptions {
 	readonly onShowArtifacts?: () => void;
@@ -68,13 +100,15 @@ function interruptedEvents(count: number): readonly DevWorkflowRunEventResponse[
 describe("DevWorkflowNodePanel", () => {
 	beforeEach(() => {
 		navigate.mockClear();
+		hubMock.acquire.mockClear();
+		lastScope.current = undefined;
 	});
 
 	afterEach(() => {
 		cleanup();
 	});
 
-	it("links an agent node out to its work session rather than re-hosting the session view", () => {
+	it("keeps the link-out to the full session view beside the embedded transcript, not instead of it", () => {
 		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Agent", workSessionId: sessionId, workSessionAvailable: true }));
 
 		fireEvent.click(screen.getByTestId("dev-workflow-node-session-link"));
@@ -82,13 +116,49 @@ describe("DevWorkflowNodePanel", () => {
 		expect(navigate).toHaveBeenCalledWith({ to: "/work-sessions/$sessionId", params: { sessionId } });
 	});
 
+	it("embeds the node's transcript with the composer taken away, because the runtime is the single writer", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				nodeType: "Agent",
+				workSessionId: sessionId,
+				conversationId,
+				agentDefinitionId,
+				workSessionAvailable: true,
+			}),
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-transcript")).toBeDefined();
+		// N2: a follow-up typed here would be a second writer of invocations on the node's conversation.
+		expect(lastScope.current).toMatchObject({
+			conversationId,
+			pinnedAgentId: agentDefinitionId,
+			composerDisabled: true,
+			embedded: true,
+		});
+		expect(typeof lastScope.current?.resumeNonce).toBe("number");
+		// The runtime writes the invocations, so the panel offers neither override — a redirected composer would be
+		// the second writer this scope exists to prevent.
+		expect(lastScope.current?.onSendOverride).toBeUndefined();
+	});
+
 	it("says the transcript is gone — not that the node is empty — when the work session was purged", () => {
-		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Agent", workSessionId: sessionId, workSessionAvailable: false }));
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				nodeType: "Agent",
+				workSessionId: sessionId,
+				conversationId,
+				workSessionAvailable: false,
+			}),
+		);
 
 		// The node-run row outlives its session on purpose (the reference is loose), so the UI must name WHICH thing is
 		// missing: the workflow-owned events and artifacts are still there.
 		expect(screen.getByTestId("dev-workflow-node-session-purged")).toBeDefined();
 		expect(screen.queryByTestId("dev-workflow-node-session-link")).toBeNull();
+		// And nothing mounts against the dead conversation id: an empty chat pane is indistinguishable from a session
+		// that has simply not spoken yet, which was the explicitly rejected round-1 behaviour.
+		expect(screen.queryByTestId("embedded-chat")).toBeNull();
+		expect(hubMock.acquire).not.toHaveBeenCalled();
 	});
 
 	it("reports restart survival from the event log, which is the module's whole claim", () => {
