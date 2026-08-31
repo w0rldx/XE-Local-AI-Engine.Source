@@ -2,9 +2,9 @@
 // and elkjs are both correct and both a new production dependency for ~70 lines of arithmetic.
 //
 // rank(n)     = 0 with no inbound edge, else 1 + max(rank(pred))   — longest path, taken in Kahn order
-// orderInRank = ONE barycenter pass over predecessor orders, ties broken by
-//               (materializedFromNodeKey, materializationIndex, nodeKey, id)
-// x = rank * 280, y = (indexInRank - (rankCount - 1) / 2) * 130
+// orderInRank = definition nodes before materialized clones, then ONE barycenter pass over predecessor orders,
+//               ties broken by (materializedFromNodeKey, materializationIndex, nodeKey, id)
+// x = rank * 280, y = indexInRank * 130                            — TOP-ALIGNED, see below
 //
 // ponytail: single barycenter pass, no crossing-minimisation iterations — swap in dagre if edge crossings become
 // unreadable on real fan-out graphs; this module's signature is the seam.
@@ -46,8 +46,8 @@ export function devWorkflowEdgeKey(edge: DevWorkflowLayoutEdge): string {
 
 /** Total by construction — every comparison ends at `id`, so two layouts of the same graph cannot disagree. */
 function compareTieBreak(left: DevWorkflowLayoutNode, right: DevWorkflowLayoutNode): number {
-	// An empty origin sorts first, which is what keeps a materialized sibling group behind the nodes that were
-	// already there rather than interleaved with them.
+	// Origin before index, so two decompositions sharing a rank read as two blocks rather than an interleave. Which
+	// origin sorts first does not matter; that they never split does.
 	const origin = (left.materializedFromNodeKey ?? "").localeCompare(right.materializedFromNodeKey ?? "");
 	if (origin !== 0) {
 		return origin;
@@ -143,6 +143,15 @@ export function layoutDevWorkflowGraph(
 			}),
 		);
 		const ordered = inRank.toSorted((left, right) => {
+			// Materialized clones sort behind the definition's own nodes, AHEAD of the barycenter rather than only as a
+			// tie-break. Slice C grows a rank that already holds a node, and letting a clone's barycenter push a
+			// pre-existing node down the rank would move it — the exact jump top-alignment exists to prevent. Within the
+			// clones the barycenter still orders the groups.
+			const materialized =
+				Number(left.materializedFromNodeKey !== undefined) - Number(right.materializedFromNodeKey !== undefined);
+			if (materialized !== 0) {
+				return materialized;
+			}
 			const leftBarycenter = barycenters.get(left.id) ?? Number.POSITIVE_INFINITY;
 			const rightBarycenter = barycenters.get(right.id) ?? Number.POSITIVE_INFINITY;
 			if (leftBarycenter !== rightBarycenter) {
@@ -155,10 +164,13 @@ export function layoutDevWorkflowGraph(
 			orderById.set(node.id, indexInRank);
 			positions.set(node.id, {
 				x: rank * RANK_SPACING_X,
-				// ponytail: each rank is centred on its own height, so inserting into an EXISTING rank re-centres that
-				// rank's siblings. Appending a rank (what materialization does) moves nothing. Top-align if a live graph
-				// ever needs a node to hold its y while its rank grows.
-				y: (indexInRank - (ordered.length - 1) / 2) * NODE_SPACING_Y,
+				// TOP-ALIGNED, not centred (R-C5). A y that divides by the rank's population moves every node in that rank
+				// the moment a decomposition lands in it, and Slice C's canonical shape is exactly that: clones arriving
+				// beside a node that has held a row since run start. Here a node's y depends only on its own index, and the
+				// sort above keeps the clones behind the nodes that were already there — so their indices, and their
+				// positions, do not change. The graph hangs from the top instead of straddling a centre line; that is the
+				// price, and it is paid once at render rather than every time the runtime expands the graph.
+				y: indexInRank * NODE_SPACING_Y,
 				rank,
 				indexInRank,
 			});
