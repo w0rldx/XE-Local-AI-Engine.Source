@@ -11,15 +11,23 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class DevWorkflowGraphTests
 {
-    /// <summary>The smallest legal integration shape: work, a human gate, an apply behind it.</summary>
+    /// <summary>
+    ///     The smallest legal integration shape: work, a human gate, an apply behind it — with the gate's edge
+    ///     conditioned on the approval, which is half the rule rather than decoration. Every answer a gate takes
+    ///     SUCCEEDS it, so an edge that does not name the approval carries the rejection through as well.
+    /// </summary>
     private const string GatedApply = """
                                       {
                                         "nodes": [{ "nodeKey": "check", "nodeType": "Tool" },
                                                   { "nodeKey": "gate", "nodeType": "HumanGate" },
                                                   { "nodeKey": "apply", "nodeType": "Tool", "toolMode": "Apply" }],
-                                        "edges": [{ "from": "check", "to": "gate" }, { "from": "gate", "to": "apply" }]
+                                        "edges": [{ "from": "check", "to": "gate" },
+                                                  { "from": "gate", "to": "apply", "condition": { "path": "decision", "op": "eq", "value": "Approve" } }]
                                       }
                                       """;
+
+    /// <summary>The approval condition on its own, so a test can take it out or put something else in its place.</summary>
+    private const string ApprovalCondition = """, "condition": { "path": "decision", "op": "eq", "value": "Approve" }""";
 
     [Test]
     public void Parse_ReadsNodesEdgesAndTheirDefaults()
@@ -416,6 +424,64 @@ public sealed class DevWorkflowGraphTests
         const string Lonely = """{"nodes":[{"nodeKey":"only","nodeType":"Tool","toolMode":"Apply"}],"edges":[]}""";
 
         AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(Lonely)).Message, "other than a human gate");
+    }
+
+    /// <summary>
+    ///     The exploit the source-only rule left open, refused at the definition. A gate in front of an apply is not the
+    ///     rule if the edge takes every answer: <c>Reject</c> SUCCEEDS the gate exactly as <c>Approve</c> does — the
+    ///     rejection is meant to reach the run through an edge that matches nothing — so an unconditional edge routes it
+    ///     straight into the apply and the patches the operator declined go into the repository.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnApplyEdgeThatCarriesEveryGateAnswer_IsRejected()
+    {
+        var unconditional = GatedApply.Replace(ApprovalCondition, string.Empty, StringComparison.Ordinal);
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(unconditional)).Message, "also carries a Reject answer");
+    }
+
+    /// <summary>
+    ///     The same exploit written out: an edge that names the refusal is an apply-on-rejection in one line. It is
+    ///     refused by the rule's OTHER half — an edge conditioned on the rejection is false for the approval — which is
+    ///     the same refusal reached from the side that also catches an apply nothing could ever route to.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnApplyEdgeConditionedOnTheRejection_IsRejected()
+    {
+        var backwards = GatedApply.Replace("""{ "path": "decision", "op": "eq", "value": "Approve" }""",
+            """{ "path": "decision", "op": "eq", "value": "Reject" }""",
+            StringComparison.Ordinal);
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(backwards)).Message, "does not carry an approval");
+    }
+
+    /// <summary>
+    ///     And the rule's other side, which is a HANG rather than an apply: an edge no approval satisfies leaves the one
+    ///     answer that may reach an apply with nowhere to go, so the definition never integrates anything.
+    /// </summary>
+    [Test]
+    public void Parse_WithAnApplyEdgeNoApprovalSatisfies_IsRejected()
+    {
+        var unreachable = GatedApply.Replace("""{ "path": "decision", "op": "eq", "value": "Approve" }""",
+            """{ "path": "status", "op": "eq", "value": "Failed" }""",
+            StringComparison.Ordinal);
+
+        AssertEx.Contains(AssertEx.Throws<DevWorkflowValidationException>(() => DevWorkflowGraph.Parse(unreachable)).Message, "does not carry an approval");
+    }
+
+    /// <summary>
+    ///     The definition-time rule is the runtime's own routing asked a question, not a second reading of it: the same
+    ///     call the tick makes to decide where a landed answer goes is the call that refuses the definition.
+    /// </summary>
+    [Test]
+    public void GateEdgeFires_AnswersTheApprovalAndNeitherOfTheOtherTwo()
+    {
+        var edge = DevWorkflowGraph.Parse(GatedApply).InboundEdges("apply").Single();
+
+        AssertEx.Equal("Approve, Reject, RequestChanges", string.Join(", ", DevWorkflowStateMachine.GateAnswers));
+        AssertEx.True(DevWorkflowStateMachine.GateEdgeFires(edge, DevWorkflowDecisionKind.Approve));
+        AssertEx.False(DevWorkflowStateMachine.GateEdgeFires(edge, DevWorkflowDecisionKind.Reject));
+        AssertEx.False(DevWorkflowStateMachine.GateEdgeFires(edge, DevWorkflowDecisionKind.RequestChanges));
     }
 
     /// <summary>An apply inside a template would be cloned per task, and each clone would apply the whole fan-out again.</summary>

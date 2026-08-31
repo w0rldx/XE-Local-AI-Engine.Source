@@ -53,6 +53,33 @@ internal static class DevWorkflowStateMachine
     public static string GateOutputJson(DevWorkflowDecisionKind decision) =>
         JsonSerializer.Serialize(new GateOutput(DevWorkflowNodeOutputStatuses.Succeeded, decision.ToString()), JsonOptions);
 
+    /// <summary>
+    ///     Every answer a human gate SUCCEEDS on — the three that part company in the graph rather than on the row. What
+    ///     a gate's out-edges route is exactly this set, so anything that reasons about where an answer can go reads it
+    ///     from <see cref="TargetFor" /> rather than listing the three by hand.
+    /// </summary>
+    public static IReadOnlyList<DevWorkflowDecisionKind> GateAnswers { get; } =
+    [
+        .. Enum.GetValues<DevWorkflowDecisionKind>().Where(static decision => TargetFor(decision) == DevWorkflowNodeRunStatus.Succeeded)
+    ];
+
+    /// <summary>
+    ///     Whether an out-edge of a human gate fires for one answer, asked of the gate's own output document rather than
+    ///     of a row — which is what a check made BEFORE the run has instead of one.
+    ///     <para>
+    ///         Composed from this class's own <see cref="GateOutputJson" /> and read by the same pair
+    ///         <see cref="EdgeState" /> reads a landed row's output with, so a definition-time rule about where an answer
+    ///         goes and the routing that actually takes it there cannot answer differently. Three callers ask: the parse
+    ///         rule that refuses an apply a rejection could reach, the dispatcher when a recorded answer has landed, and
+    ///         the API when it tells an operator in advance whether an answer has anywhere to go.
+    ///     </para>
+    /// </summary>
+    public static bool GateEdgeFires(DevWorkflowGraphEdge edge, DevWorkflowDecisionKind decision)
+    {
+        ArgumentNullException.ThrowIfNull(edge);
+        return Fires(edge, GateOutputJson(decision));
+    }
+
     /// <summary>A node run nothing further will happen to on its own.</summary>
     public static bool IsTerminal(DevWorkflowNodeRunStatus status) =>
         status is DevWorkflowNodeRunStatus.Succeeded
@@ -90,10 +117,12 @@ internal static class DevWorkflowStateMachine
             return DevWorkflowEdgeState.Dead;
         }
 
-        return DevWorkflowCondition.Evaluate(edge.Condition, ParseOutput(source.OutputJson))
-            ? DevWorkflowEdgeState.Satisfied
-            : DevWorkflowEdgeState.Dead;
+        return Fires(edge, source.OutputJson) ? DevWorkflowEdgeState.Satisfied : DevWorkflowEdgeState.Dead;
     }
+
+    /// <summary>Whether one edge's condition accepts one output document. The only place either question is answered.</summary>
+    private static bool Fires(DevWorkflowGraphEdge edge, string? outputJson) =>
+        DevWorkflowCondition.Evaluate(edge.Condition, ParseOutput(outputJson));
 
     /// <summary>
     ///     Whether a <c>Pending</c> node run may be queued, must be skipped, or is still waiting.

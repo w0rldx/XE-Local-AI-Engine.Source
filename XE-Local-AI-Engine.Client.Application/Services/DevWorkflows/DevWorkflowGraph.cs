@@ -438,6 +438,13 @@ internal sealed class DevWorkflowGraph
     ///         — would satisfy the path reading while approving something else entirely. The immediate reading also
     ///         leaves no window between the answer and the act for a node run to change what is being applied.
     ///     </para>
+    ///     <para>
+    ///         The SOURCE being a gate is only half of it, and on its own it is not the rule at all: all three answers a
+    ///         gate takes leave it <c>Succeeded</c> — a rejection reaches the run through an out-edge that matches
+    ///         nothing, never through a node failure — so an unconditional gate-to-apply edge fires on a REJECTION and
+    ///         applies the patches the operator declined. The condition is therefore checked too, and checked by asking
+    ///         the dispatcher's own routing what it would do with each answer.
+    ///     </para>
     /// </summary>
     private void EnsureAppliesAreGated()
     {
@@ -454,6 +461,42 @@ internal sealed class DevWorkflowGraph
             {
                 throw new DevWorkflowValidationException($"Node '{apply}' applies approved patches and is reached from something other than a human gate. An apply "
                                                          + "changes a real repository, so the decision that lets it happen has to be the step in front of it.");
+            }
+
+            EnsureCarriesOnlyTheApproval(apply, inbound);
+        }
+    }
+
+    /// <summary>
+    ///     The condition half of the rule above: an apply's inbound edges carry the approval and carry nothing else.
+    ///     <para>
+    ///         Asked through <see cref="DevWorkflowStateMachine.GateEdgeFires" />, over the set of answers
+    ///         <see cref="DevWorkflowStateMachine.GateAnswers" /> derives from the transition table — so the document
+    ///         evaluated here is the document the tick composes, the evaluation is the one the tick performs, and the
+    ///         three answers are the three the tick can route. Re-deriving any of it — reading the condition and asking
+    ///         whether it compares <c>decision</c> to <c>Approve</c> — would be a second account of routing that could
+    ///         drift from the first, and that drift would be silent and would end in an apply.
+    ///     </para>
+    /// </summary>
+    private static void EnsureCarriesOnlyTheApproval(string apply, IReadOnlyList<DevWorkflowGraphEdge> inbound)
+    {
+        foreach (var edge in inbound)
+        {
+            foreach (var decision in DevWorkflowStateMachine.GateAnswers)
+            {
+                var fires = DevWorkflowStateMachine.GateEdgeFires(edge, decision);
+                if (decision == DevWorkflowDecisionKind.Approve && !fires)
+                {
+                    throw new DevWorkflowValidationException($"Node '{apply}' applies approved patches, and the edge {edge} does not carry an approval: it is false "
+                                                             + "when the gate is answered Approve, so the one answer that may reach an apply never would.");
+                }
+
+                if (decision != DevWorkflowDecisionKind.Approve && fires)
+                {
+                    throw new DevWorkflowValidationException($"Node '{apply}' applies approved patches, and the edge {edge} also carries a {decision} answer. Every "
+                                                             + "answer succeeds the gate and routing is the edge's own job, so this edge would apply the patches the "
+                                                             + "operator declined. Condition it on the approval.");
+                }
             }
         }
     }

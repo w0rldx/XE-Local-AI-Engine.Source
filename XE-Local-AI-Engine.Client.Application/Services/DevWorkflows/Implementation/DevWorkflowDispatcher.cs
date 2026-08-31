@@ -624,19 +624,13 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
             if (outputJson is not null
                 && nodeRun.NodeType == DevWorkflowNodeType.HumanGate
                 && (settled.Decision != DevWorkflowDecisionKind.Approve || graph.OutboundEdges(nodeRun.NodeKey).Count > 0)
-                && !graph.OutboundEdges(nodeRun.NodeKey).Any(edge => Matches(edge, outputJson)))
+                && !graph.OutboundEdges(nodeRun.NodeKey).Any(edge => DevWorkflowStateMachine.GateEdgeFires(edge, settled.Decision)))
             {
                 rejection ??= $"The gate '{nodeRun.NodeKey}' was answered {settled.Decision}, which none of its branches accepts.";
             }
         }
 
         return (written, rejection);
-
-        static bool Matches(DevWorkflowGraphEdge edge, string outputJson)
-        {
-            using var document = JsonDocument.Parse(outputJson);
-            return DevWorkflowCondition.Evaluate(edge.Condition, document.RootElement);
-        }
 
         static (DevWorkflowNodeRunStatus Target, string? Outcome, bool IncrementAttempt) Resolve(DevWorkflowDecisionKind decision) =>
             (DevWorkflowStateMachine.TargetFor(decision),

@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
-using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
@@ -85,7 +84,6 @@ public static class DevWorkflowGraphContract
         ArgumentException.ThrowIfNullOrWhiteSpace(nodeKey);
 
         var graph = DevWorkflowGraph.Parse(graphJson);
-        using var output = JsonDocument.Parse(DevWorkflowStateMachine.GateOutputJson(DevWorkflowDecisionKind.Reject));
-        return graph.OutboundEdges(nodeKey).Any(edge => DevWorkflowCondition.Evaluate(edge.Condition, output.RootElement));
+        return graph.OutboundEdges(nodeKey).Any(static edge => DevWorkflowStateMachine.GateEdgeFires(edge, DevWorkflowDecisionKind.Reject));
     }
 }
