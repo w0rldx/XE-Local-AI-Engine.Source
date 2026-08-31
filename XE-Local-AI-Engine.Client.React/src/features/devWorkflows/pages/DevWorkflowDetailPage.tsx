@@ -33,6 +33,7 @@ import {
 	toDevWorkflowWorkItemStatus,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
 import {
+	type DevWorkflowEventsAnchor,
 	useDecideDevWorkflowNodeRun,
 	useDeleteDevWorkflowWorkItem,
 	useDevWorkflowArtifacts,
@@ -74,6 +75,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	// Which template the operator is considering. Local rather than a search param: it is a pre-start preview, and it
 	// stops existing the moment a run does.
 	const [definitionId, setDefinitionId] = useState<string | null>(null);
+	const [eventsAnchor, setEventsAnchor] = useState<DevWorkflowEventsAnchor>("newest");
 
 	const workItemQuery = useDevWorkflowWorkItem(workItemId);
 	// Absent `?run=` means the latest run; an explicit one renders a historical run from its OWN pinned graph snapshot.
@@ -87,7 +89,9 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 
 	const runQuery = useDevWorkflowRun(runId, poll);
 	const nodeRunQuery = useDevWorkflowNodeRun(runId, selection.node, poll);
-	const eventsQuery = useDevWorkflowRunEvents(runId, poll);
+	// The feed opens on the newest events (R-C4) and needs the run's high-water mark to compute that cursor. `?tab=`
+	// carries no anchor: which end of a log you are reading is a scroll position, not a shareable view of the run.
+	const eventsQuery = useDevWorkflowRunEvents(runId, runQuery.data?.lastSequence, { ...poll, anchor: eventsAnchor });
 	const artifactsQuery = useDevWorkflowArtifacts(runId, poll);
 	const definitionsQuery = useDevWorkflowDefinitions();
 	const lifecycle = useDevWorkflowRunLifecycle(runId, workItemId);
@@ -248,6 +252,8 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 					labelByNodeRunId={labelByNodeRunId}
 					hasMore={eventsQuery.hasNextPage}
 					isLoadingMore={eventsQuery.isFetchingNextPage}
+					anchor={eventsAnchor}
+					onAnchorChange={setEventsAnchor}
 					// The promise is the caller's to ignore: a failed page read is already the query's error state.
 					onLoadMore={() => {
 						eventsQuery.fetchNextPage().catch(() => undefined);

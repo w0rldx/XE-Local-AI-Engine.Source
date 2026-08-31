@@ -5026,7 +5026,10 @@
 				"meta": "#{{sequence}}",
 				"showDetail": "Details anzeigen",
 				"hideDetail": "Details ausblenden",
-				"loadMore": "Mehr laden"
+				"loadMore": "Mehr laden",
+				"loadOlder": "Ältere laden",
+				"jumpNewest": "Neueste",
+				"jumpOldest": "Älteste"
 			},
 			"artifacts": {
 				"title": "Artefakte",

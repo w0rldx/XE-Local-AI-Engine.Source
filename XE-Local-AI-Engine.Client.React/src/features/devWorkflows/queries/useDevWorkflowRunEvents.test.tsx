@@ -87,7 +87,7 @@ describe("useDevWorkflowRunEvents", () => {
 		// 12 → 19 is a gap, not a loss: the run's counter is shared with node-runs and artifacts.
 		eventFeed({ "0": { sequences: [7, 12], hasMore: true }, "12": { sequences: [19, 40], hasMore: false } });
 		const { wrapper } = harness();
-		const { result } = renderHook(() => useDevWorkflowRunEvents(runId), { wrapper });
+		const { result } = renderHook(() => useDevWorkflowRunEvents(runId, undefined), { wrapper });
 
 		await waitFor(() => expect(result.current.hasNextPage).toBe(true));
 		await loadMore(result);
@@ -99,7 +99,7 @@ describe("useDevWorkflowRunEvents", () => {
 	it("asks for the next page from the WATERMARK, never a grown limit", async () => {
 		const requests = eventFeed({ "0": { sequences: [7, 12], hasMore: true }, "12": { sequences: [19], hasMore: false } });
 		const { wrapper } = harness();
-		const { result } = renderHook(() => useDevWorkflowRunEvents(runId), { wrapper });
+		const { result } = renderHook(() => useDevWorkflowRunEvents(runId, undefined), { wrapper });
 
 		await waitFor(() => expect(result.current.hasNextPage).toBe(true));
 		await loadMore(result);
@@ -115,7 +115,7 @@ describe("useDevWorkflowRunEvents", () => {
 		// produces. Un-deduplicated it is a repeated React key and one event rendered twice in an audit log.
 		eventFeed({ "0": { sequences: [7, 12], hasMore: true }, "12": { sequences: [12, 19], hasMore: false } });
 		const { wrapper } = harness();
-		const { result } = renderHook(() => useDevWorkflowRunEvents(runId), { wrapper });
+		const { result } = renderHook(() => useDevWorkflowRunEvents(runId, undefined), { wrapper });
 
 		await waitFor(() => expect(result.current.hasNextPage).toBe(true));
 		await loadMore(result);
@@ -123,10 +123,59 @@ describe("useDevWorkflowRunEvents", () => {
 		await waitFor(() => expect(sequences(result.current.data)).toEqual([7, 12, 19]));
 	});
 
+	it("opens on the NEWEST events by computing the cursor from the run's last sequence", async () => {
+		// A fan-out run is exactly the run this matters for: opening at sequence 1 pinned the feed to the run's first
+		// minute and put current activity a dozen clicks away. The cursor is quantized to a page boundary — 903 sits in
+		// the window starting at 800, and the tail cursor is one window below that — so it changes once per page rather
+		// than on every event, which is what keeps loaded older pages from being thrown away.
+		const requests = eventFeed({ "600": { sequences: [780, 903], hasMore: false } });
+		const { wrapper } = harness();
+		const { result } = renderHook(() => useDevWorkflowRunEvents(runId, 903), { wrapper });
+
+		await waitFor(() => expect(sequences(result.current.data)).toEqual([780, 903]));
+		expect(requests.map((request) => request.sinceSeq)).toEqual(["600"]);
+		// Two windows wide, so the page spans the boundary all the way to the run's actual last sequence.
+		expect(requests.map((request) => request.limit)).toEqual([`${devWorkflowEventsPageSize * 2}`]);
+	});
+
+	it("walks BACKWARD one window at a time from the tail, and stops at the start of the log", async () => {
+		const requests = eventFeed({
+			"600": { sequences: [780, 903], hasMore: false },
+			"400": { sequences: [455], hasMore: true },
+			"200": { sequences: [300], hasMore: true },
+			"0": { sequences: [7], hasMore: true },
+		});
+		const { wrapper } = harness();
+		const { result } = renderHook(() => useDevWorkflowRunEvents(runId, 903), { wrapper });
+
+		await waitFor(() => expect(result.current.hasNextPage).toBe(true));
+		await loadMore(result);
+		await loadMore(result);
+		await loadMore(result);
+
+		await waitFor(() => expect(sequences(result.current.data)).toEqual([7, 300, 455, 780, 903]));
+		expect(requests.map((request) => request.sinceSeq)).toEqual(["600", "400", "200", "0"]);
+		// A window is one page WIDE and run sequences are unique, so a page-sized limit cannot skip a row inside it. At
+		// cursor 0 there is nothing older, so the walk ends there even though the server still reports `hasMore`.
+		expect(result.current.hasNextPage).toBe(false);
+	});
+
+	it("reads a run from its start when the operator anchors on the oldest end", async () => {
+		const requests = eventFeed({ "0": { sequences: [7, 12], hasMore: true }, "12": { sequences: [19], hasMore: false } });
+		const { wrapper } = harness();
+		const { result } = renderHook(() => useDevWorkflowRunEvents(runId, 903, { anchor: "oldest" }), { wrapper });
+
+		await waitFor(() => expect(result.current.hasNextPage).toBe(true));
+		await loadMore(result);
+
+		await waitFor(() => expect(sequences(result.current.data)).toEqual([7, 12, 19]));
+		expect(requests.map((request) => request.sinceSeq)).toEqual(["0", "12"]);
+	});
+
 	it("re-reads every loaded page on a hub-driven invalidation, keeping the merged list intact", async () => {
 		const requests = eventFeed({ "0": { sequences: [7, 12], hasMore: true }, "12": { sequences: [19], hasMore: false } });
 		const { queryClient, wrapper } = harness();
-		const { result } = renderHook(() => useDevWorkflowRunEvents(runId), { wrapper });
+		const { result } = renderHook(() => useDevWorkflowRunEvents(runId, undefined), { wrapper });
 
 		await waitFor(() => expect(result.current.hasNextPage).toBe(true));
 		await loadMore(result);
