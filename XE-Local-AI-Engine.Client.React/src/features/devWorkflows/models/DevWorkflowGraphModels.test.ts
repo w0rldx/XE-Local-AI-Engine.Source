@@ -76,6 +76,37 @@ describe("toDevWorkflowCanvasGraph", () => {
 		});
 	});
 
+	it("counts each materialization's siblings per origin, so one group's size is never another's", () => {
+		const graph = toDevWorkflowCanvasGraph(
+			chainRun({
+				nodes: [
+					devWorkflowNodeRunSummary({ id: "node-plan", nodeKey: "plan" }),
+					...[0, 1, 2].map((index) =>
+						devWorkflowNodeRunSummary({
+							id: `node-implement-${index}`,
+							nodeKey: `implement#${index}`,
+							isMaterialized: true,
+							materializedFromNodeKey: "decompose",
+							materializationIndex: index,
+						}),
+					),
+					devWorkflowNodeRunSummary({
+						id: "node-verify-0",
+						nodeKey: "verify#0",
+						isMaterialized: true,
+						materializedFromNodeKey: "review",
+						materializationIndex: 0,
+					}),
+				],
+			}),
+		);
+
+		expect([0, 1, 2].map((index) => dataOf(graph, `node-implement-${index}`).materializationCount)).toEqual([3, 3, 3]);
+		expect(dataOf(graph, "node-verify-0").materializationCount).toBe(1);
+		// A node the definition named is not part of anyone's group, so it carries no count at all.
+		expect(dataOf(graph, "node-plan").materializationCount).toBeUndefined();
+	});
+
 	it("joins graph edges to node-runs by node key, so the drawn edge is between node-run ids", () => {
 		const graph = toDevWorkflowCanvasGraph(chainRun());
 

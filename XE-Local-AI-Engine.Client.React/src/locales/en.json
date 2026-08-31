@@ -4997,6 +4997,7 @@
 				"finished": "finished",
 				"attempt": "attempt {{attempt}} of {{maxAttempts}}",
 				"materialized": "generated",
+				"materializedOf": "generated · {{index}} of {{count}}",
 				"staleInputs": "Stale inputs",
 				"agentWithModel": "{{agent}} · {{model}}"
 			},

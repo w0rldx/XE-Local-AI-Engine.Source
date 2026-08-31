@@ -159,6 +159,41 @@ describe("DevWorkflowGraphView", () => {
 		expect(screen.getByTestId("dev-workflow-graph-node-attempt-node-research").textContent).toBe("attempt 3 of 3");
 	});
 
+	it("says which part of a decomposition a generated card is, and stays quiet about a group of one", () => {
+		renderWithProviders(
+			<DevWorkflowGraphView
+				run={chainRun([
+					...[0, 1].map((index) =>
+						devWorkflowNodeRunSummary({
+							id: `node-implement-${index}`,
+							nodeKey: `implement#${index}`,
+							isMaterialized: true,
+							materializedFromNodeKey: "decompose",
+							materializationIndex: index,
+						}),
+					),
+					devWorkflowNodeRunSummary({
+						id: "node-verify",
+						nodeKey: "verify#0",
+						isMaterialized: true,
+						materializedFromNodeKey: "review",
+						materializationIndex: 0,
+					}),
+				])}
+				onSelect={vi.fn()}
+			/>,
+		);
+
+		// The index is one-based on the card and zero-based on the wire, because "generated · 0 of 2" is not a sentence.
+		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-0").textContent).toBe(
+			"generated · 1 of 2",
+		);
+		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-1").textContent).toBe(
+			"generated · 2 of 2",
+		);
+		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-verify").textContent).toBe("generated");
+	});
+
 	it("selects a node-run when its card is clicked, the same change a table row makes", () => {
 		const onSelect = vi.fn();
 		renderWithProviders(

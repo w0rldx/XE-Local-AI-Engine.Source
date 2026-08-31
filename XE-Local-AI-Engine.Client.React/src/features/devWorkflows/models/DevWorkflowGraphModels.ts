@@ -50,6 +50,12 @@ export interface DevWorkflowCanvasNodeData extends Record<string, unknown> {
 	readonly isMaterialized: boolean;
 	readonly materializedFromNodeKey?: string;
 	readonly materializationIndex?: number;
+	/**
+	 * How many nodes in THIS graph came out of the same materialization. Counted here rather than read off a DTO: the
+	 * runtime has no group-size column, and the answer a card needs is "how many of these am I looking at", which is a
+	 * question about the rendered graph. Absent on a definition render, where nothing has been materialized.
+	 */
+	readonly materializationCount?: number;
 	readonly hasStaleInputs: boolean;
 	readonly waitingOnNodeKeys?: readonly string[];
 	readonly developmentProjectId?: string;
@@ -113,6 +119,15 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 		return { nodes: [], edges: [], structuralKey, nodeRunCount: nodeRuns.length, isOverCap: true };
 	}
 
+	// One pass for the group sizes, so a card can say "2 of 5" without every card counting the whole node list.
+	const materializationCounts = new Map<string, number>();
+	for (const node of nodeRuns) {
+		const origin = node.materializedFromNodeKey;
+		if (origin) {
+			materializationCounts.set(origin, (materializationCounts.get(origin) ?? 0) + 1);
+		}
+	}
+
 	const entries: DevWorkflowCanvasEntry[] = nodeRuns.map((node) => ({
 		id: node.id ?? "",
 		nodeKey: node.nodeKey ?? "",
@@ -132,6 +147,9 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 			isMaterialized: node.isMaterialized ?? false,
 			materializedFromNodeKey: optional(node.materializedFromNodeKey),
 			materializationIndex: optional(node.materializationIndex),
+			materializationCount: node.materializedFromNodeKey
+				? materializationCounts.get(node.materializedFromNodeKey)
+				: undefined,
 			hasStaleInputs: node.hasStaleInputs ?? false,
 			waitingOnNodeKeys: optional(node.waitingOnNodeKeys),
 			developmentProjectId: optional(node.developmentProjectId),
