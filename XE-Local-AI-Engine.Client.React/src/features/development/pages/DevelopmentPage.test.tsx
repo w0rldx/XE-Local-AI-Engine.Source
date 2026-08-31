@@ -357,15 +357,50 @@ describe("DevelopmentPage", () => {
 		});
 	});
 
-	it("takes the apply button away from a workflow-driven task and says where the decision lives (Y3)", async () => {
+	/** A task a workflow created and still owns, plus whatever the run lookup answers about that run. */
+	function workflowTask(runQuery: Record<string, unknown>) {
 		const base = detail("AwaitingApply");
-		const workflowDetail = {
-			...base,
-			tasks: [{ ...base.tasks[0], task: { ...base.tasks[0]?.task, workflowRunId: "run-9" } }],
-		};
-		hooksMock.useDevelopmentProject.mockReturnValue({ data: workflowDetail, isLoading: false, error: null, refetch: vi.fn() });
-		hooksMock.useDevelopmentTaskWorkflowRun.mockReturnValue({
-			data: { id: "run-9", workItemId: "item-4" },
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: { ...base, tasks: [{ ...base.tasks[0], task: { ...base.tasks[0]?.task, workflowRunId: "run-9" } }] },
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		hooksMock.useDevelopmentTaskWorkflowRun.mockReturnValue(runQuery);
+	}
+
+	it("gives the apply button BACK when the workflow run has ended, so a validated patch is not stranded", async () => {
+		// A terminal run can answer no further gate — DecideAsync refuses anything that is not WaitingForApproval or
+		// Blocked, and the dispatcher does not tick a terminal run at all. Withholding Apply here would strand a
+		// hash-locked, already-validated patch for good rather than protect it.
+		workflowTask({ data: { id: "run-9", workItemId: "item-4", status: "Failed" }, isError: false, isLoading: false, error: null });
+		renderPage();
+
+		expect(await screen.findByTestId("development-apply-patch")).toBeDefined();
+		expect(screen.getByTestId("development-workflow-banner").textContent).toContain("can no longer approve");
+	});
+
+	it("gives it back when the run cannot be read at all, for the same reason", async () => {
+		// A run this node cannot even fetch is not going to decide anything either.
+		workflowTask({ data: undefined, isError: true, isLoading: false, error: new Error("gone") });
+		renderPage();
+
+		expect(await screen.findByTestId("development-apply-patch")).toBeDefined();
+	});
+
+	it("stays read-only while the run status is still in flight, which is the safe side of that race", async () => {
+		// A live run's gate is the authority; offering a second Apply for the moment before the status lands is a bypass.
+		workflowTask({ data: undefined, isError: false, isLoading: true, error: null });
+		renderPage();
+
+		await screen.findByTestId("development-workflow-banner");
+		expect(screen.queryByTestId("development-apply-patch")).toBeNull();
+	});
+
+	it("takes the apply button away from a workflow-driven task and says where the decision lives (Y3)", async () => {
+		workflowTask({
+			data: { id: "run-9", workItemId: "item-4", status: "Running" },
+			isError: false,
 			isLoading: false,
 			error: null,
 		});

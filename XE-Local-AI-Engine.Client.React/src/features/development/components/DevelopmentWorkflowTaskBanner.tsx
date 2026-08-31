@@ -7,22 +7,28 @@ export interface DevelopmentWorkflowTaskBannerProps {
 	readonly workflowRunId: string | null | undefined;
 	/** The run's work item, which the controller resolves through R6. Null until it lands, or where the route is off. */
 	readonly workItemId: string | null;
+	/** The run reached a terminal status, or cannot be read at all — either way it will answer no further gate. */
+	readonly runEnded: boolean;
 }
 
 /**
  * Says that a workflow drove this task, and where the decision that lets its patch land actually lives (Y3).
  *
- * This matters because Dev Mode's own apply gate is still on the page. A workflow-driven task's approval is a
- * HumanGate node upstream of the integration node, and the apply itself is the workflow's to perform — so an operator
- * looking at the Dev Mode panel needs to know that the button in front of them is not the authority here. The banner
- * says it; the panel is rendered read-only alongside.
+ * This matters because Dev Mode's own apply gate is still on the page. While the run is LIVE its approval is a
+ * HumanGate node upstream of the integration node and the apply is the workflow's to perform — so an operator looking
+ * at the Dev Mode panel needs to know that the button in front of them is not the authority. The banner says it; the
+ * panel is rendered read-only alongside.
+ *
+ * A run that has ENDED is the other half of the same fact, and the copy has to change with it: a terminal run answers
+ * no further gate, so this page is the only authority left over a patch that is already validated. Saying "the
+ * workflow decides" over a run that can no longer decide anything would leave an operator waiting on nothing.
  *
  * The link is built from the run rather than guessed: the Dev Mode task carries only a run id, and the workflow detail
  * route is keyed by WORK ITEM. R6 already answers both — `GET runs/{runId}` returns the run's `workItemId` — so the
  * controller reads that one existing endpoint rather than asking P3 for a new field. No link is offered until it
  * resolves, and none at all where the capability is off: a route that redirects home is worse than prose.
  */
-export function DevelopmentWorkflowTaskBanner({ workflowRunId, workItemId }: DevelopmentWorkflowTaskBannerProps) {
+export function DevelopmentWorkflowTaskBanner({ workflowRunId, workItemId, runEnded }: DevelopmentWorkflowTaskBannerProps) {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 
@@ -31,13 +37,18 @@ export function DevelopmentWorkflowTaskBanner({ workflowRunId, workItemId }: Dev
 	}
 
 	return (
-		<Alert color="blue" variant="light" data-testid="development-workflow-banner">
+		<Alert color={runEnded ? "yellow" : "blue"} variant="light" data-testid="development-workflow-banner">
 			<Stack gap={4} align="flex-start">
 				<Text size="sm">
-					{t(
-						"pages.development.workflow.body",
-						"A development workflow created this task and is driving it. The approval that lets its patch land is a gate node in that workflow, so this page shows the evidence and the workflow makes the decision.",
-					)}
+					{runEnded
+						? t(
+								"pages.development.workflow.ended",
+								"The development workflow that created this task has ended, so it can no longer approve anything. This page is the remaining authority over its patch.",
+							)
+						: t(
+								"pages.development.workflow.body",
+								"A development workflow created this task and is driving it. The approval that lets its patch land is a gate node in that workflow, so this page shows the evidence and the workflow makes the decision.",
+							)}
 				</Text>
 				{workItemId ? (
 					<Anchor

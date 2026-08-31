@@ -184,7 +184,8 @@
 			},
 			"workflow": {
 				"body": "Ein Entwicklungs-Workflow hat diese Aufgabe erstellt und steuert sie. Die Freigabe, mit der ihr Patch übernommen wird, ist ein Gate-Knoten in diesem Workflow — diese Seite zeigt die Nachweise, entschieden wird im Workflow.",
-				"open": "Workflow-Lauf öffnen"
+				"open": "Workflow-Lauf öffnen",
+				"ended": "Der Entwicklungs-Workflow, der diese Aufgabe erstellt hat, ist beendet und kann daher nichts mehr freigeben. Diese Seite ist die verbleibende Instanz für ihren Patch."
 			},
 			"validation": {
 				"noReport": "Für diese Aufgabe wurde noch keine deterministische Validierung ausgeführt.",

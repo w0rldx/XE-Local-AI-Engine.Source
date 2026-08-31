@@ -18,6 +18,10 @@ import {
 } from "@/features/development/models/DevelopmentModels";
 import { nextActionLabel, operationId } from "@/features/development/models/DevelopmentStatusModel";
 import {
+	isTerminalDevWorkflowRunStatus,
+	toDevWorkflowRunStatus,
+} from "@/features/devWorkflows/models/DevWorkflowModels";
+import {
 	useApplyDevelopmentPatch,
 	useCancelDevelopmentAttempt,
 	useConfirmDevelopmentContainerRuntime,
@@ -103,9 +107,23 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	const activeAttempt = attempts.find(isActiveAttempt) ?? null;
 	const [nextActionKey, nextActionDefault] = nextActionLabel(task?.status, latestAttempt?.status);
 	const live = useDevelopmentAttemptHub(detail?.project?.id ?? null, task?.id ?? null, activeAttempt?.id ?? null);
-	// Only for the deep link back (Y3). The banner's own copy does not depend on it, so a run that has not resolved —
-	// or a node with development workflows switched off — simply offers no link rather than blocking the banner.
+	// The run that owns this task (Y3): its work item for the deep link, and its STATUS for who may apply.
 	const workflowRunQuery = useDevelopmentTaskWorkflowRun(task?.workflowRunId, nodeCapabilities.devWorkflows);
+	// A terminal run can never answer another gate — `DecideAsync` refuses anything that is not WaitingForApproval or
+	// Blocked, and the dispatcher does not tick a terminal run at all. So a workflow whose run has ENDED cannot apply
+	// its own validated patch, and if this page had also given its Apply button away that patch would be stranded for
+	// good. Authority returns here when the run can no longer take it.
+	//
+	// Unreadable counts as ended for the same reason: a run this node cannot even fetch is not going to decide anything.
+	// While the read is merely in flight the page stays read-only, which is the safe side of the race — a live run's
+	// gate is the authority, and offering a second Apply for the moment before the status lands would be a real bypass.
+	//
+	// With the capability off the query never runs, so the status is unknowable and Dev Mode behaves exactly as it did
+	// before workflows existed: its own apply gate, unchanged.
+	const workflowRunEnded =
+		workflowRunQuery.isError ||
+		(workflowRunQuery.data !== undefined && isTerminalDevWorkflowRunStatus(toDevWorkflowRunStatus(workflowRunQuery.data.status)));
+	const workflowOwnsApply = Boolean(task?.workflowRunId) && nodeCapabilities.devWorkflows && !workflowRunEnded;
 	const projectRepository = repositories.find((repository) => repository.id === detail?.project?.selectedFolderId);
 	const repositoryConnectionRequired = detail?.project?.repositoryConnectionRequired === true;
 	const repositoryReady =
@@ -255,6 +273,8 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 		selectedTaskId: taskDetail?.task?.id ?? null,
 		setSelectedTaskId,
 		workflowWorkItemId: workflowRunQuery.data?.workItemId ?? null,
+		workflowOwnsApply,
+		workflowRunEnded,
 		reconnectFolderId,
 		setReconnectFolderId,
 		previewTaskId,

@@ -42,6 +42,8 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 		selectedTaskId,
 		setSelectedTaskId,
 		workflowWorkItemId,
+		workflowOwnsApply,
+		workflowRunEnded,
 		reconnectFolderId,
 		setReconnectFolderId,
 		previewTaskId,
@@ -210,7 +212,11 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 								    controls below mean. A decomposed workflow leaves three tasks in one project, and two of
 								    them had no way to be reached from this page before. */}
 								<DevelopmentTaskSwitcher tasks={tasks} selectedTaskId={selectedTaskId} onSelect={setSelectedTaskId} />
-								<DevelopmentWorkflowTaskBanner workflowRunId={task.workflowRunId} workItemId={workflowWorkItemId} />
+								<DevelopmentWorkflowTaskBanner
+									workflowRunId={task.workflowRunId}
+									workItemId={workflowWorkItemId}
+									runEnded={workflowRunEnded}
+								/>
 								<DevelopmentProjectOverview
 									attempt={{ active: activeAttempt !== null, cancel: cancelActive, canceling: cancelMutation.isPending }}
 									nextAction={{
@@ -269,11 +275,13 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 											run: preview,
 										}}
 										repositoryReady={repositoryReady}
-										// Y3: the approval that authorises a workflow-driven apply is a gate node upstream of
-										// the integration node, and the workflow performs the apply itself. A second Apply
-										// button here would be either a duplicate authority or a bypass of the graph's audit
-										// trail — so the evidence stays and the action goes.
-										readOnly={Boolean(task.workflowRunId)}
+										// Y3: while the run is live, the approval that authorises a workflow-driven apply is a
+										// gate node upstream of the integration node and the workflow performs the apply — a
+										// second Apply button here would be a duplicate authority or a bypass of the graph's
+										// audit trail. Once the run has ENDED it can answer no further gate, so withholding
+										// the button would strand a validated patch rather than protect it, and the authority
+										// comes back here.
+										readOnly={workflowOwnsApply}
 									/>
 								) : null}
 

@@ -106,5 +106,6 @@
   "[\"no-orphans\",\"src/features/api-foundation/api/ValidationProblemProbeApi.ts\",\"src/features/api-foundation/api/ValidationProblemProbeApi.ts\"]",
   "[\"no-cross-feature\",\"src/features/devWorkflows/components/DevWorkflowAgentNodePanel.tsx\",\"src/features/chat/models/ChatModels.ts\"]",
   "[\"no-cross-feature\",\"src/features/devWorkflows/components/DevWorkflowAgentNodePanel.tsx\",\"src/features/chat/pages/Chat.tsx\"]",
-  "[\"no-cross-feature\",\"src/features/devWorkflows/components/DevWorkflowAgentNodePanel.tsx\",\"src/features/workSessions/hooks/useWorkSessionHub.ts\"]"
+  "[\"no-cross-feature\",\"src/features/devWorkflows/components/DevWorkflowAgentNodePanel.tsx\",\"src/features/workSessions/hooks/useWorkSessionHub.ts\"]",
+	"[\"no-cross-feature\",\"src/features/development/hooks/useDevelopmentPageController.ts\",\"src/features/devWorkflows/models/DevWorkflowModels.ts\"]"
 ]
