@@ -33,15 +33,6 @@ export function DevWorkflowEventsTab({
 	const { t } = useTranslation();
 	const [expandedId, setExpandedId] = useState<string | undefined>(undefined);
 
-	if (events.length === 0) {
-		return (
-			<EmptyState
-				message={t("pages.devWorkflows.events.empty", "Nothing has happened in this run yet.")}
-				data-testid="dev-workflow-events-empty"
-			/>
-		);
-	}
-
 	// Sequences are strictly increasing but NOT contiguous — the run's counter is shared with node-runs and artifacts,
 	// so a gap between two event numbers is normal and must never be read as a lost event.
 	const ordered = events.toSorted((left, right) => (right.sequence ?? 0) - (left.sequence ?? 0));
@@ -49,7 +40,12 @@ export function DevWorkflowEventsTab({
 	return (
 		<Stack gap="xs" data-testid="dev-workflow-events-tab">
 			{/* Which end of the log is on screen, and the way to the other one. The feed opens on the newest events, so
-			    "jump to the start" is the affordance that is NOT the default and has to be offered explicitly. */}
+			    "jump to the start" is the affordance that is NOT the default and has to be offered explicitly.
+
+			    Rendered ABOVE the empty check, never inside it. The anchored window is a range of SEQUENCE numbers and
+			    the run's counter is shared with node-runs and artifacts, so a tail window can legitimately hold no
+			    events at all on a wide fan-out — and an empty state that also swallowed these controls would strand the
+			    operator on a blank page, one click from a log full of rows they could no longer reach. */}
 			<Group gap="xs" wrap="wrap">
 				<Button
 					size="compact-xs"
@@ -68,6 +64,19 @@ export function DevWorkflowEventsTab({
 					{t("pages.devWorkflows.events.jumpOldest", "Oldest")}
 				</Button>
 			</Group>
+			{ordered.length === 0 ? (
+				<EmptyState
+					message={
+						anchor === "newest"
+							? t(
+									"pages.devWorkflows.events.emptyWindow",
+									"No events in the most recent part of this run's log. Older events, if there are any, are one step back.",
+								)
+							: t("pages.devWorkflows.events.empty", "Nothing has happened in this run yet.")
+					}
+					data-testid="dev-workflow-events-empty"
+				/>
+			) : null}
 			{ordered.map((event) => {
 				const nodeLabel = event.nodeRunId ? labelByNodeRunId.get(event.nodeRunId) : undefined;
 				return (

@@ -5048,6 +5048,7 @@
 			"events": {
 				"title": "Events",
 				"empty": "Nothing has happened in this run yet.",
+				"emptyWindow": "No events in the most recent part of this run's log. Older events, if there are any, are one step back.",
 				"meta": "#{{sequence}}",
 				"showDetail": "Show detail",
 				"hideDetail": "Hide detail",
@@ -5175,9 +5176,11 @@
 				"sessionPurged": "The agent's transcript is no longer available. This node's events and artifacts are unaffected.",
 				"tool": "Validation",
 				"openReport": "Open the validation report",
+				"report": "Report",
+				"openStoredReport": "Open the stored report",
 				"apply": "Patch apply",
 				"openApplyReport": "Open the apply report",
-				"noReport": "No validation report yet.",
+				"noReport": "No report yet.",
 				"devTask": "Development task",
 				"openDevelopment": "Open Development Mode",
 				"devTaskReviewRound": "review round {{round}}",
@@ -5187,9 +5190,9 @@
 				"cascadeRerun": "This node is running again because “{{node}}” failed and the run is re-doing the work that depended on it."
 			},
 			"validation": {
-				"loadFailed": "Could not load this node's validation report.",
-				"unreadable": "This node's validation report could not be read, so its result cannot be trusted. Open it in the artifacts tab to see what was stored.",
-				"refused": "No validation report was written, so there is nothing here that evidences the code.",
+				"loadFailed": "Could not load this node's report.",
+				"unreadable": "This node's report could not be read, so its result cannot be trusted. Open it in the artifacts tab to see what was stored.",
+				"refused": "No report was written, so there is nothing here that evidences what this node did.",
 				"priorAttempt": "The stored report is attempt {{reportAttempt}}'s, and this node is on attempt {{attempt}}. It is not the current result — open it from the artifacts tab if you want the earlier evidence.",
 				"passed": "Validation passed",
 				"failed": "Validation failed",

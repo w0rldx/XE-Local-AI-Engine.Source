@@ -303,4 +303,22 @@ describe("DevWorkflowToolNodePanel", () => {
 		expect(await screen.findByTestId("dev-workflow-apply-no-tasks")).toBeDefined();
 		expect(screen.getByTestId("dev-workflow-apply-count").textContent).toBe("0 of 0 patches applied");
 	});
+	it("speaks neutrally when nothing says which kind of Tool node this was", async () => {
+		// A refused APPLY node writes no artifact, and the discriminator is not on the wire — so "no validation report
+		// was written" would name a document that node was never going to write and send the reader after the wrong
+		// evidence. With no readable body the panel claims only that there is no report.
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				nodeType: "Tool",
+				primaryArtifactId: null,
+				failureClass: "Policy",
+				terminalReason: "the apply was refused before any patch was offered",
+			}),
+		);
+
+		const refused = await screen.findByTestId("dev-workflow-validation-refused");
+		expect(refused.textContent).toContain("No report was written");
+		expect(refused.textContent).not.toContain("validation");
+		expect(screen.getByTestId("dev-workflow-validation-refused-reason").textContent).toContain("apply was refused");
+	});
 });

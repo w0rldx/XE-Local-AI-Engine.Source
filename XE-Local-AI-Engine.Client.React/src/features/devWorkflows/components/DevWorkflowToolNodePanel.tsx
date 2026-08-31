@@ -68,6 +68,11 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 	const applyReport = useMemo(() => parseDevWorkflowApplyReport(text), [text]);
 	const report = useMemo(() => (applyReport ? null : parseDevWorkflowValidationReport(text)), [applyReport, text]);
 	const isApply = applyReport !== null;
+	// With no artifact at all — or a body neither reader understands — NOTHING says which kind of Tool node this is: the
+	// discriminator lives in the graph node's config and P3 does not project it. So every string on those paths is
+	// neutral. Calling a refused APPLY node's silence "no validation report was written" names a document that node was
+	// never going to write and sends whoever reads it looking for the wrong evidence; the fix is to stop guessing, not
+	// to guess better.
 	// `primaryArtifactId` is the node's newest artifact, NOT this attempt's: a retry or an X9 fix-loop reset (which
 	// puts Succeeded rows back to Pending) leaves attempt N's report standing until attempt N+1's commands land. Both
 	// documents carry the attempt they were written for, so an older one is never painted as the current result — a
@@ -78,7 +83,13 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 
 	return (
 		<SectionCard
-			title={isApply ? t("pages.devWorkflows.node.apply", "Patch apply") : t("pages.devWorkflows.node.tool", "Validation")}
+			title={
+				isApply
+					? t("pages.devWorkflows.node.apply", "Patch apply")
+					: report !== null
+						? t("pages.devWorkflows.node.tool", "Validation")
+						: t("pages.devWorkflows.node.report", "Report")
+			}
 			gap="xs"
 			data-testid="dev-workflow-node-tool"
 		>
@@ -90,7 +101,7 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-error">
 					{apiErrorMessage(
 						contentQuery.error,
-						t("pages.devWorkflows.validation.loadFailed", "Could not load this node's validation report."),
+						t("pages.devWorkflows.validation.loadFailed", "Could not load this node's report."),
 					)}
 				</Alert>
 			) : null}
@@ -100,7 +111,7 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-unreadable">
 					{t(
 						"pages.devWorkflows.validation.unreadable",
-						"This node's validation report could not be read, so its result cannot be trusted. Open it in the artifacts tab to see what was stored.",
+						"This node's report could not be read, so its result cannot be trusted. Open it in the artifacts tab to see what was stored.",
 					)}
 				</Alert>
 			) : null}
@@ -122,7 +133,9 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 				<Button size="xs" variant="subtle" onClick={onShowArtifacts} data-testid="dev-workflow-node-tool-report">
 					{isApply
 						? t("pages.devWorkflows.node.openApplyReport", "Open the apply report")
-						: t("pages.devWorkflows.node.openReport", "Open the validation report")}
+						: report !== null
+							? t("pages.devWorkflows.node.openReport", "Open the validation report")
+							: t("pages.devWorkflows.node.openStoredReport", "Open the stored report")}
 				</Button>
 			) : null}
 		</SectionCard>
@@ -144,7 +157,7 @@ function RefusedWithoutReport({ nodeRun }: { readonly nodeRun: DevWorkflowNodeRu
 	if (!nodeRun.terminalReason && !nodeRun.failureClass) {
 		return (
 			<Text size="sm" c="dimmed" data-testid="dev-workflow-validation-none">
-				{t("pages.devWorkflows.node.noReport", "No validation report yet.")}
+				{t("pages.devWorkflows.node.noReport", "No report yet.")}
 			</Text>
 		);
 	}
@@ -162,7 +175,7 @@ function RefusedWithoutReport({ nodeRun }: { readonly nodeRun: DevWorkflowNodeRu
 				<Text size="sm">
 					{t(
 						"pages.devWorkflows.validation.refused",
-						"No validation report was written, so there is nothing here that evidences the code.",
+						"No report was written, so there is nothing here that evidences what this node did.",
 					)}
 				</Text>
 				{nodeRun.terminalReason ? (

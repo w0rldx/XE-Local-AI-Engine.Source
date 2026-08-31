@@ -5048,6 +5048,7 @@
 			"events": {
 				"title": "Ereignisse",
 				"empty": "In diesem Lauf ist noch nichts passiert.",
+				"emptyWindow": "Keine Ereignisse im jüngsten Abschnitt des Protokolls. Ältere Ereignisse, falls vorhanden, sind einen Schritt zurück.",
 				"meta": "#{{sequence}}",
 				"showDetail": "Details anzeigen",
 				"hideDetail": "Details ausblenden",
@@ -5175,9 +5176,11 @@
 				"sessionPurged": "Das Transkript des Agenten ist nicht mehr verfügbar. Die Ereignisse und Artefakte dieses Knotens sind davon nicht betroffen.",
 				"tool": "Prüfung",
 				"openReport": "Prüfbericht öffnen",
+				"report": "Bericht",
+				"openStoredReport": "Gespeicherten Bericht öffnen",
 				"apply": "Patch-Übernahme",
 				"openApplyReport": "Übernahmebericht öffnen",
-				"noReport": "Noch kein Prüfbericht.",
+				"noReport": "Noch kein Bericht.",
 				"devTask": "Entwicklungsaufgabe",
 				"openDevelopment": "Development Mode öffnen",
 				"devTaskReviewRound": "Prüfrunde {{round}}",
@@ -5187,9 +5190,9 @@
 				"cascadeRerun": "Dieser Knoten läuft erneut, weil „{{node}}“ fehlgeschlagen ist und der Lauf die davon abhängige Arbeit wiederholt."
 			},
 			"validation": {
-				"loadFailed": "Der Prüfbericht dieses Knotens konnte nicht geladen werden.",
-				"unreadable": "Der Prüfbericht dieses Knotens konnte nicht gelesen werden, sein Ergebnis ist deshalb nicht belastbar. Öffnen Sie ihn im Reiter „Artefakte“, um den gespeicherten Inhalt zu sehen.",
-				"refused": "Es wurde kein Prüfbericht geschrieben, hier steht daher nichts, was den Code belegt.",
+				"loadFailed": "Der Bericht dieses Knotens konnte nicht geladen werden.",
+				"unreadable": "Der Bericht dieses Knotens konnte nicht gelesen werden, sein Ergebnis ist deshalb nicht belastbar. Öffnen Sie ihn im Reiter „Artefakte“, um den gespeicherten Inhalt zu sehen.",
+				"refused": "Es wurde kein Bericht geschrieben, hier steht daher nichts, was belegt, was dieser Knoten getan hat.",
 				"priorAttempt": "Der gespeicherte Bericht stammt aus Versuch {{reportAttempt}}, dieser Knoten ist bei Versuch {{attempt}}. Er ist nicht das aktuelle Ergebnis — öffnen Sie ihn im Reiter „Artefakte“, wenn Sie den früheren Nachweis brauchen.",
 				"passed": "Prüfung bestanden",
 				"failed": "Prüfung fehlgeschlagen",
