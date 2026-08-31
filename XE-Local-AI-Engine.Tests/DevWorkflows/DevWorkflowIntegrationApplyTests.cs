@@ -52,7 +52,7 @@ public sealed class DevWorkflowIntegrationApplyTests
 
         var gate = await harness.ReadNodeRunAsync(runId, "integrationapproval").ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowNodeRunStatus.WaitingForApproval, gate.Status, $"the run stopped at {gate.Status} instead of asking: {gate.TerminalReason}");
-        AssertEx.Empty(harness.Chain.Applied, "nothing may reach the repository before the operator has answered.");
+        AssertEx.Empty(harness.Chain.Offered, "nothing may reach the repository before the operator has answered.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Pending, (await harness.ReadNodeRunAsync(runId, "integrate").ConfigureAwait(false)).Status);
 
         await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
@@ -61,7 +61,7 @@ public sealed class DevWorkflowIntegrationApplyTests
         var alpha = await TaskIdAsync(harness, runId, "implement#alpha").ConfigureAwait(false);
         var beta = await TaskIdAsync(harness, runId, "implement#beta").ConfigureAwait(false);
         AssertEx.Equal($"{alpha:N}, {beta:N}",
-            string.Join(", ", harness.Chain.Applied.Select(static taskId => taskId.ToString("N"))),
+            string.Join(", ", harness.Chain.Offered.Select(static taskId => taskId.ToString("N"))),
             "both patches, one after the other, in the order the decomposition put the slices in.");
 
         var integrate = await harness.ReadNodeRunAsync(runId, "integrate").ConfigureAwait(false);
@@ -92,7 +92,7 @@ public sealed class DevWorkflowIntegrationApplyTests
                                 .ConfigureAwait(false);
         AssertEx.True(replay.Passed, "a run whose patches are already in is not a failure to put them in.");
         AssertEx.Contains(Encoding.UTF8.GetString(replay.Report.Span), "already-applied");
-        AssertEx.Equal(expected: 2, harness.Chain.Applied.Count, "and the gate was not asked a second time about a task that is already applied.");
+        AssertEx.Equal(expected: 2, harness.Chain.Offered.Count, "and the gate was not asked a second time about a task that is already applied.");
     }
 
     /// <summary>
@@ -109,7 +109,7 @@ public sealed class DevWorkflowIntegrationApplyTests
         await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Reject).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
-        AssertEx.Empty(harness.Chain.Applied, "a refused approval is the whole point of the gate.");
+        AssertEx.Empty(harness.Chain.Offered, "a refused approval is the whole point of the gate.");
         var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowRunStatus.Cancelled, run.Status, "a gate answer no branch accepts ends the run rather than completing it.");
         AssertEx.Equal(DevWorkflowFailureClasses.GateRejected, run.FailureClass);
@@ -160,6 +160,140 @@ public sealed class DevWorkflowIntegrationApplyTests
     }
 
     /// <summary>
+    ///     A retry of a Blocked apply ASKS the gate again. It is the operator's only in-run recovery from the v1 ceiling
+    ///     above — repair the repository by hand, then retry the node — and it is dead the moment the apply is keyed on
+    ///     anything but the attempt: Dev Mode answers a recorded operation id with what it recorded, so a retry that
+    ///     re-issued attempt 1's key would be handed attempt 1's refusal without the repository being looked at at all.
+    ///     <para>
+    ///         Read off the scripted chain's own ledger, which counts what the gate was ASKED — a memoized refusal never
+    ///         reaches it — and off the reason, which changes because the second answer is derived from the ledger as it
+    ///         stands now rather than replayed from a row.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ARetriedApplyAsksTheGateAgainInsteadOfEchoingTheRecordedRefusal()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        harness.Chain.AllowApplies(count: 0);
+        var (runId, _) = await ImplementTwoSlicesAsync(harness).ConfigureAwait(false);
+        var alpha = await TaskIdAsync(harness, runId, "implement#alpha").ConfigureAwait(false);
+
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var blocked = await harness.ReadNodeRunAsync(runId, "integrate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, blocked.Status, AssertEx.NotNull(blocked.TerminalReason ?? blocked.OutputJson));
+        AssertEx.Contains(AssertEx.NotNull(blocked.TerminalReason), "not at the exact base");
+        AssertEx.Equal($"{alpha:N}", string.Join(", ", harness.Chain.Offered.Select(static taskId => taskId.ToString("N"))));
+
+        // The repair, and the retry a Blocked node run offers.
+        harness.Chain.AllowApplies(count: 4);
+        await harness.DecideAsync(runId, "integrate", DevWorkflowDecisionKind.Retry).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var retried = await harness.ReadNodeRunAsync(runId, "integrate").ConfigureAwait(false);
+        AssertEx.Equal(blocked.Attempt + 1, retried.Attempt, "a retry is the next attempt of the node, and the apply is keyed under it.");
+        AssertEx.Equal($"{alpha:N}, {alpha:N}",
+            string.Join(", ", harness.Chain.Offered.Select(static taskId => taskId.ToString("N"))),
+            "the retry reached the apply gate a second time rather than being answered from attempt 1's recorded refusal.");
+        AssertEx.Contains(AssertEx.NotNull(retried.TerminalReason),
+            "awaiting explicit apply",
+            message: "and the answer is the ledger's own, read now: a task Dev Mode already stood down cannot complete, which is a "
+                     + "different sentence from the one attempt 1 recorded.");
+    }
+
+    /// <summary>
+    ///     A cancel that arrives BETWEEN two patches leaves evidence. One patch is in the repository by then and its task
+    ///     is Completed, so a node run that ended with no report at all would leave the operator to work out what landed
+    ///     by reading Dev Mode's task list against the run's graph — which is the one question this node exists to answer.
+    ///     <para>
+    ///         The checkpoint is what makes that possible: cancellation is answered as a RESULT naming what happened, not
+    ///         by letting the token throw out of the loop, because the throwing path settles the row off the task's own
+    ///         cancellation and never asks the pass for what it did.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ACancelBetweenTwoPatchesStillReportsWhatLanded()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        harness.Chain.HoldAfterApplies(count: 1);
+        var (runId, _) = await ImplementTwoSlicesAsync(harness).ConfigureAwait(false);
+        var alpha = await TaskIdAsync(harness, runId, "implement#alpha").ConfigureAwait(false);
+        var beta = await TaskIdAsync(harness, runId, "implement#beta").ConfigureAwait(false);
+
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        // The first patch is in and the sequence is standing between the two, which is the only moment a cancel can
+        // arrive mid-sequence at all.
+        await harness.Chain.ApplyHeld.WaitAsync(TimeSpan.FromMinutes(1)).ConfigureAwait(false);
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Cancelling).ConfigureAwait(false);
+        _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
+        harness.Chain.ReleaseApplies();
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        AssertEx.Equal($"{alpha:N}", string.Join(", ", harness.Chain.Offered.Select(static taskId => taskId.ToString("N"))), "the second patch was never offered.");
+        AssertEx.Equal(DevelopmentTaskStatus.Completed, (await harness.ReadDevelopmentTaskAsync(alpha).ConfigureAwait(false)).Status);
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
+            (await harness.ReadDevelopmentTaskAsync(beta).ConfigureAwait(false)).Status,
+            "and the one that was not offered is still waiting, unchanged.");
+
+        // The evidence first: this is the whole point. A cancel that threw out of the loop would settle the row off the
+        // task's own cancellation and never write a report at all.
+        var report = await ReadApplyReportAsync(harness, runId).ConfigureAwait(false);
+        AssertEx.Contains(report, "\"tasksApplied\":1");
+        AssertEx.Contains(report, "\"outcome\":\"applied\"");
+        AssertEx.Contains(report, "\"outcome\":\"cancelled\"", message: "the patch that was never offered is named rather than left out of the list.");
+        AssertEx.Contains(report, beta.ToString("D"));
+
+        var integrate = await harness.ReadNodeRunAsync(runId, "integrate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Cancelled, integrate.Status, "being stopped is not a failure for the retry policy to route.");
+        AssertEx.Equal(DevWorkflowFailureClasses.Cancelled, integrate.FailureClass);
+        AssertEx.Contains(AssertEx.NotNull(integrate.TerminalReason), "1 of 2 approved patches");
+    }
+
+    /// <summary>
+    ///     A task title is what the DECOMPOSING AGENT called the slice — model text — and it reaches an operator through
+    ///     this node's terminal reason and through every entry of a stored report. It goes through the same sanitizer the
+    ///     lane's exception messages do, so a host path a model wrote into a title does not survive the trip.
+    /// </summary>
+    [Test]
+    public async Task AModelAuthoredTitleIsSanitizedBeforeItReachesTheReport()
+    {
+        const string Slices = """
+                              [
+                                { "id": "alpha", "title": "Fix /home/operator/secrets/repo/parser.cs", "goal": "Parse the manifest." }
+                              ]
+                              """;
+
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        harness.Chain.AllowApplies(count: 0);
+        var (projectId, _) = await harness.SeedDevelopmentProjectAsync().ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionIntoDevTasksAndIntegration, "Add the feature.", projectId).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", Slices).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        // The title is stored on the Development task exactly as the model wrote it — the redaction is this node's, at
+        // the point where the title becomes something an operator reads.
+        var taskId = await TaskIdAsync(harness, runId, "implement#alpha").ConfigureAwait(false);
+        AssertEx.Contains((await harness.ReadDevelopmentTaskAsync(taskId).ConfigureAwait(false)).Title, "/home/operator/");
+
+        var integrate = await harness.ReadNodeRunAsync(runId, "integrate").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, integrate.Status, AssertEx.NotNull(integrate.TerminalReason ?? integrate.OutputJson));
+        AssertEx.Contains(AssertEx.NotNull(integrate.TerminalReason), "[REDACTED:development-path]");
+        AssertEx.False(AssertEx.NotNull(integrate.TerminalReason).Contains("/home/operator/", StringComparison.Ordinal),
+            $"the node's own sentence still carries the host path a model wrote: {integrate.TerminalReason}");
+
+        var report = await ReadApplyReportAsync(harness, runId).ConfigureAwait(false);
+        AssertEx.False(report.Contains("/home/operator/", StringComparison.Ordinal), $"and so does the stored report: {report}");
+    }
+
+    /// <summary>
     ///     The seeded <c>feature-development-v1</c> parses under every rule this runtime has — one entry node, an
     ///     acyclic graph, a template subtree nothing points into, an ancestor retry target, an <c>All</c> join over the
     ///     fan-out, no duplicate edge, and an apply node behind a human gate. Seeding runs the same parse, so a template
@@ -191,6 +325,14 @@ public sealed class DevWorkflowIntegrationApplyTests
         AssertEx.Equal(DevWorkflowJoinPolicy.All, graph.Nodes["join"].JoinPolicy, "an Any join over a materialized fan-out is refused at parse when it expands to one child.");
         AssertEx.True(graph.Nodes["implement"].NodeTimeoutSeconds > 0, "every DevTask node in a shipped template declares its own bound.");
         AssertEx.Equal("implement", graph.Nodes["validate"].RetryTarget);
+
+        // The gate in front of the apply carries the approval and nothing else, asked the way the tick asks it. Parsing
+        // at all already proves this — the rule is a parse rule — but the shipped template is the one definition an
+        // operator does not author, so what it routes on is pinned here rather than left implied by the absence of a throw.
+        var approval = graph.InboundEdges("integrate").Single();
+        AssertEx.True(DevWorkflowStateMachine.GateEdgeFires(approval, DevWorkflowDecisionKind.Approve));
+        AssertEx.False(DevWorkflowStateMachine.GateEdgeFires(approval, DevWorkflowDecisionKind.Reject), "a refused integration applies nothing.");
+        AssertEx.False(DevWorkflowStateMachine.GateEdgeFires(approval, DevWorkflowDecisionKind.RequestChanges));
     }
 
     private static Task SeedAsync(DevWorkflowHarness harness) =>

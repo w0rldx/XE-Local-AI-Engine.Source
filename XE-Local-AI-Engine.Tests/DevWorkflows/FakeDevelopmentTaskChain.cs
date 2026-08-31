@@ -34,10 +34,13 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
 
     private readonly Lock _gate = new();
     private readonly List<string> _actions = [];
-    private readonly List<Guid> _applied = [];
+    private readonly List<Guid> _offered = [];
     private readonly List<Guid> _cancelled = [];
+    private readonly TaskCompletionSource _applyHeld = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _applyReleased = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly IServiceScopeFactory _scopes;
     private int? _appliesAllowed;
+    private int? _holdAfterApplies;
     private int _failuresOwed;
     private int _holdsOwed;
 
@@ -56,17 +59,25 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         }
     }
 
-    /// <summary>The tasks whose patches were handed to the apply gate, in the order they were.</summary>
-    public IReadOnlyList<Guid> Applied
+    /// <summary>
+    ///     The tasks whose patches were OFFERED to the apply gate, in the order they were — the ones it declined
+    ///     included. Named for the ask rather than the outcome because that is what it records, and because a test that
+    ///     asks whether a retry reached the repository at all needs the ask, not the answer.
+    /// </summary>
+    public IReadOnlyList<Guid> Offered
     {
         get
         {
             lock (_gate)
             {
-                return [.. _applied];
+                return [.. _offered];
             }
         }
     }
+
+    /// <summary>Completes once an apply has landed and the chain is holding, for a test that has to arrive mid-sequence.</summary>
+    public Task ApplyHeld =>
+        _applyHeld.Task;
 
     /// <summary>The attempts a cancelling run asked to stop.</summary>
     public IReadOnlyList<Guid> CancelledAttempts
@@ -270,6 +281,23 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     }
 
     /// <summary>
+    ///     Makes the apply that lands <paramref name="count" />th block until <see cref="ReleaseApplies" />, with its
+    ///     ledger write already committed — which is the one moment a sequence of applies can be interrupted BETWEEN
+    ///     two patches, and so the only way to observe what a cancel arriving there leaves behind.
+    /// </summary>
+    public void HoldAfterApplies(int count)
+    {
+        lock (_gate)
+        {
+            _holdAfterApplies = count;
+        }
+    }
+
+    /// <summary>Lets a held apply return.</summary>
+    public void ReleaseApplies() =>
+        _ = _applyReleased.TrySetResult();
+
+    /// <summary>
     ///     The apply, with the host mutation scripted and the LEDGER real: the store's own <c>CompleteApply</c> /
     ///     <c>BlockApply</c> commands run, so the operation key, the task transition and the events are the ones the
     ///     real service writes. What is skipped is <c>DevelopmentApplyService</c>'s evidence verification and the git
@@ -303,10 +331,12 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         }
 
         bool blocked;
+        bool hold;
         lock (_gate)
         {
-            _applied.Add(taskId);
-            blocked = _appliesAllowed is { } allowed && _applied.Count > allowed;
+            _offered.Add(taskId);
+            blocked = _appliesAllowed is { } allowed && _offered.Count > allowed;
+            hold = !blocked && _holdAfterApplies == _offered.Count;
         }
 
         var subject = new DevelopmentApprovedApplySubject(projectId,
@@ -319,9 +349,22 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
             string.Concat(projectId.ToString("N"), "/", Guid.Empty.ToString("N")),
             string.Concat(projectId.ToString("N"), "/", Guid.Empty.ToString("N")),
             SubjectHash: task.ApprovedSubjectHash ?? string.Empty);
-        return blocked
-            ? await store.BlockApplyAsync(operationId, subject, "The scripted host repository was not at the approved base.", cancellationToken).ConfigureAwait(false)
-            : await store.CompleteApplyAsync(operationId, subject, cancellationToken).ConfigureAwait(false);
+        if (blocked)
+        {
+            return await store.BlockApplyAsync(operationId, subject, "The scripted host repository was not at the approved base.", cancellationToken).ConfigureAwait(false);
+        }
+
+        var result = await store.CompleteApplyAsync(operationId, subject, cancellationToken).ConfigureAwait(false);
+        if (hold)
+        {
+            // Bounded, and NOT on the caller's token: the point is to be holding when the cancel arrives, so observing
+            // it here would swallow the very checkpoint under test. The timeout only turns a broken test into a failure
+            // instead of a hang.
+            _ = _applyHeld.TrySetResult();
+            await _applyReleased.Task.WaitAsync(TimeSpan.FromMinutes(2), CancellationToken.None).ConfigureAwait(false);
+        }
+
+        return result;
     }
 
     public Task<DevelopmentProjectAggregate> ReconnectRepositoryAsync(Guid projectId,

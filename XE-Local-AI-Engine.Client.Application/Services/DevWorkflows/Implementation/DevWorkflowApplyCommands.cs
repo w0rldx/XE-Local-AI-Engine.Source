@@ -22,20 +22,15 @@ using XE_Local_AI_Engine.Client.Services.Development;
 ///         approved against, so continuing would be applying patches to a tree nobody judged.
 ///     </para>
 ///     <para>
-///         Each task's apply is keyed on the run, the node and the TASK — never on the attempt — so a re-attempt of this
-///         node finds the recorded result of an apply that already landed instead of asking a task that has moved on to
-///         apply again.
+///         Each task's apply is keyed on the run, the node, the ATTEMPT and the task — the ordinary key every other
+///         thing this lane writes uses. Re-applying is prevented on the task's own state rather than on the key, which
+///         is what makes the operator's retry work: a node standing Blocked because the gate declined a patch is
+///         retryable by hand, and a key that ignored the attempt would hand that retry the recorded refusal without
+///         asking the repository anything.
 ///     </para>
 /// </summary>
 internal sealed class DevWorkflowApplyCommands
 {
-    /// <summary>
-    ///     The attempt an apply is keyed under. Not a real attempt number, for the same reason a materialized child's
-    ///     task creation is not: the act belongs to the node for the life of the run, and a second attempt must find the
-    ///     first one's answer rather than re-run it against a repository it already changed.
-    /// </summary>
-    private const int ApplyAttempt = 0;
-
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -81,20 +76,37 @@ internal sealed class DevWorkflowApplyCommands
                 $"Node run '{nodeRun.NodeKey}' applies approved patches but names no development project to apply them to.");
         }
 
+        var implementations = await ImplementedAsync(run.Id, projectId, cancellationToken).ConfigureAwait(false);
         var applied = new List<AppliedTask>();
-        foreach (var implementation in await ImplementedAsync(run.Id, projectId, cancellationToken).ConfigureAwait(false))
+        for (var index = 0; index < implementations.Count; index++)
         {
+            var implementation = implementations[index];
+            if (cancellationToken.IsCancellationRequested)
+            {
+                // A stop that arrived between two patches. Answered as a RESULT rather than by letting the token throw:
+                // one patch may already be in the repository, and the sentence saying which is on a report the throwing
+                // path never writes — the poll reads cancellation off the task and settles the row without asking this
+                // for evidence. What did not happen is named too, because a report listing two of four tasks reads as a
+                // run that had two.
+                return Result(nodeRun,
+                    [.. applied, .. implementations.Skip(index).Select(Unattempted)],
+                    DevWorkflowFailureClasses.Cancelled,
+                    $"The run was cancelled after {applied.Count(static entry => entry.Outcome != AppliedOutcomes.AlreadyApplied)} of "
+                    + $"{implementations.Count} approved patches had been offered to the Development apply gate.");
+            }
+
             var taskId = implementation.DevelopmentTaskId!.Value;
             var task = await _development.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+            var title = Sanitized(task);
             if (task.Status == DevelopmentTaskStatus.Completed)
             {
                 // Already applied, by this node before a restart or by an operator in the Dev Mode view. The same answer
-                // arriving earlier, and re-applying it is exactly what the operation key exists to prevent.
-                applied.Add(new AppliedTask(implementation.NodeKey, taskId, task.Title, AppliedOutcomes.AlreadyApplied, Detail: null));
+                // arriving earlier, and re-applying it is exactly what the task's own state exists to prevent.
+                applied.Add(new AppliedTask(implementation.NodeKey, taskId, title, AppliedOutcomes.AlreadyApplied, Detail: null));
                 continue;
             }
 
-            var (entry, failureClass) = await ApplyOneAsync(projectId, implementation, task, run, nodeRun, cancellationToken).ConfigureAwait(false);
+            var (entry, failureClass) = await ApplyOneAsync(projectId, implementation, task, title, run, nodeRun, cancellationToken).ConfigureAwait(false);
             applied.Add(entry);
             if (failureClass is not null)
             {
@@ -121,44 +133,87 @@ internal sealed class DevWorkflowApplyCommands
     private async Task<(AppliedTask Entry, string? FailureClass)> ApplyOneAsync(Guid projectId,
         DevWorkflowNodeRunSnapshot implementation,
         DevelopmentTaskSnapshot task,
+        string title,
         DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         CancellationToken cancellationToken)
     {
-        var operationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, ApplyAttempt, $"apply-{task.Id:N}");
+        // Attempt-keyed, so a retry ASKS again. Applying twice is prevented by two things that do not need a constant
+        // attempt: the Completed short-circuit above, which is the state a landed apply leaves the task in, and Dev
+        // Mode's own idempotent arm, which recognises an exact approved result already present in the repository.
+        var operationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"apply-{task.Id:N}");
         try
         {
             var result = await _management.ApplyAsync(projectId, task.Id, operationId, cancellationToken).ConfigureAwait(false);
             if (!string.Equals(result.Phase, DevelopmentOperationPhases.ApplyBlocked, StringComparison.Ordinal))
             {
-                return (new AppliedTask(implementation.NodeKey, task.Id, task.Title, AppliedOutcomes.Applied, Detail: null), null);
+                return (new AppliedTask(implementation.NodeKey, task.Id, title, AppliedOutcomes.Applied, Detail: null), null);
             }
 
-            var blocked = $"The Development apply gate declined '{task.Title}': the repository is not at the exact base the approved patch was reviewed against.";
-            return (new AppliedTask(implementation.NodeKey, task.Id, task.Title, AppliedOutcomes.Blocked, blocked), DevWorkflowFailureClasses.Policy);
+            var blocked = $"The Development apply gate declined '{title}': the repository is not at the exact base the approved patch was reviewed against.";
+            return (new AppliedTask(implementation.NodeKey, task.Id, title, AppliedOutcomes.Blocked, blocked), DevWorkflowFailureClasses.Policy);
         }
         catch (Exception exception) when (exception is DevelopmentInvalidTransitionException or DevelopmentWorkspaceSecurityException)
         {
             // The evidence chain refused: the approved subject is no longer the current one, the review is not the one
             // that approved it, or the repository's trust has lapsed. None of them is answered differently by asking
             // again, so this is the class that goes straight to a human.
-            return (Refusal(implementation, task, exception), DevWorkflowFailureClasses.Policy);
+            return (Refusal(implementation, task, title, exception), DevWorkflowFailureClasses.Policy);
         }
         catch (Exception exception) when (exception is DevelopmentRepositoryStateConflictException or KeyNotFoundException)
         {
             // The node cannot run AS CONFIGURED: a repository that needs reconnecting, or a row that is gone.
-            return (Refusal(implementation, task, exception), DevWorkflowFailureClasses.Configuration);
+            return (Refusal(implementation, task, title, exception), DevWorkflowFailureClasses.Configuration);
         }
         catch (DevelopmentConcurrencyException exception)
         {
-            // Something else was writing this project's ledger. Transient, and retryable once — the apply either landed
-            // under its own key, in which case the next attempt reads the recorded result, or it did not happen at all.
-            return (Refusal(implementation, task, exception), DevWorkflowFailureClasses.Internal);
+            // Something else was writing this project's ledger. Transient, and retryable once — the apply either landed,
+            // in which case the next attempt finds the task Completed and says so, or it did not happen at all.
+            return (Refusal(implementation, task, title, exception), DevWorkflowFailureClasses.Internal);
         }
     }
 
-    private static AppliedTask Refusal(DevWorkflowNodeRunSnapshot implementation, DevelopmentTaskSnapshot task, Exception exception) =>
-        new(implementation.NodeKey, task.Id, task.Title, AppliedOutcomes.Refused, DevWorkflowToolCommands.Sanitized(exception));
+    private static AppliedTask Refusal(DevWorkflowNodeRunSnapshot implementation, DevelopmentTaskSnapshot task, string title, Exception exception) =>
+        new(implementation.NodeKey, task.Id, title, AppliedOutcomes.Refused, DevWorkflowToolCommands.Sanitized(exception));
+
+    /// <summary>
+    ///     A task the sequence never reached, because it was cancelled first.
+    ///     <para>
+    ///         Named rather than left out: the report is the operator's account of what this node did with the run's
+    ///         patches, and one that listed two of four tasks would read as a run that implemented two. It carries no
+    ///         title, because reading one is a store round-trip on a token that has already been cancelled — the node
+    ///         key and the task id are what identify the row anyway.
+    ///     </para>
+    /// </summary>
+    private static AppliedTask Unattempted(DevWorkflowNodeRunSnapshot implementation) =>
+        new(implementation.NodeKey,
+            implementation.DevelopmentTaskId!.Value,
+            Title: null,
+            AppliedOutcomes.Cancelled,
+            "The run was cancelled before this patch was offered to the Development apply gate.");
+
+    /// <summary>
+    ///     One task title, fit to be stored on a row and rendered on a wire. A title is what the decomposing agent
+    ///     called the slice — MODEL text, arriving through a task package — and it reaches an operator both in this
+    ///     node's terminal reason and in every report entry, which is the same exposure the lane's exception messages
+    ///     have and gets the same answer.
+    ///     <para>
+    ///         A title the sanitizer REFUSES — one carrying credential-like material it will not redact — is replaced by
+    ///         the task's own id rather than allowed to escape as a second exception, because the entry is about which
+    ///         task the gate answered for and the id says that.
+    ///     </para>
+    /// </summary>
+    private static string Sanitized(DevelopmentTaskSnapshot task)
+    {
+        try
+        {
+            return DevelopmentArtifactSanitizer.SanitizeText(task.Title);
+        }
+        catch (DevelopmentWorkspaceSecurityException)
+        {
+            return $"the task {task.Id:D}";
+        }
+    }
 
     /// <summary>
     ///     The tasks this run implemented: every node run that named one and succeeded at it, in materialization order.
@@ -211,9 +266,12 @@ internal sealed class DevWorkflowApplyCommands
         public const string AlreadyApplied = "already-applied";
         public const string Blocked = "blocked";
         public const string Refused = "refused";
+
+        /// <summary>The sequence was stopped before this task's patch was offered at all.</summary>
+        public const string Cancelled = "cancelled";
     }
 
-    private sealed record AppliedTask(string NodeKey, Guid TaskId, string Title, string Outcome, string? Detail);
+    private sealed record AppliedTask(string NodeKey, Guid TaskId, string? Title, string Outcome, string? Detail);
 
     /// <summary>
     ///     The report an apply node leaves behind: which task each patch belonged to, and what the gate did with it.
