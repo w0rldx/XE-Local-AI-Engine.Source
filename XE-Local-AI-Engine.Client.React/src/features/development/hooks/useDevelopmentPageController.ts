@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+
 import type {
 	CreateDevelopmentRepositoryFromTemplateValues,
 	CreatedDevelopmentRepositoryFromTemplate,
@@ -25,6 +27,7 @@ import {
 	useDevelopmentProfileDetection,
 	useDevelopmentProject,
 	useDevelopmentProjects,
+	useDevelopmentTaskWorkflowRun,
 	useDevelopmentRepositories,
 	useDevelopmentTemplates,
 	usePreviewDevelopmentPatch,
@@ -55,6 +58,7 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	const templatesQuery = useDevelopmentTemplates(developmentEnabled);
 	const projectsQuery = useDevelopmentProjects(developmentEnabled);
 	const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId ?? null);
+	const [selectedTaskId, setSelectedTaskId] = useState<string | null>(initialTaskId ?? null);
 	const [reconnectFolderId, setReconnectFolderId] = useState<string | null>(null);
 	const [previewTaskId, setPreviewTaskId] = useState<string | null>(null);
 	const [profileFolderId, setProfileFolderId] = useState<string | null>(null);
@@ -81,10 +85,16 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	}, [projects, selectedProjectId]);
 
 	const detail = projectQuery.data;
-	// A project carries exactly one task today (the project id is uniquely indexed on the task table), so the deep
-	// link's `?task=` picks the same row the fallback does. It is honoured anyway: it costs one predicate, and it is
-	// the difference between a link that keeps working and a link that quietly opens the wrong task if that ever changes.
-	const taskDetail = detail?.tasks?.find((entry) => entry.task?.id === initialTaskId) ?? detail?.tasks?.[0];
+	// A project carries MANY tasks. Phase W dropped the unique index on the task table's project id so a workflow can
+	// decompose one request into a task per child, and the ordinary decomposed case is three of them in one project.
+	// `?task=` therefore picks a real row out of several rather than restating the only one there is, and the choice is
+	// state so the switcher can move it without a navigation.
+	//
+	// A selected id that is not among this project's tasks falls back to the first, which is also what happens when the
+	// operator changes project — so project selection needs no reset of its own. `ListTasksAsync` orders by CreatedAtUtc,
+	// which is what keeps that first row the operator's own task rather than a materialized child.
+	const tasks = useMemo(() => detail?.tasks ?? [], [detail?.tasks]);
+	const taskDetail = tasks.find((entry) => entry.task?.id === selectedTaskId) ?? tasks[0];
 	const task = taskDetail?.task;
 	const attempts = taskDetail?.attempts ?? [];
 	const artifacts = taskDetail?.artifacts ?? [];
@@ -93,6 +103,9 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	const activeAttempt = attempts.find(isActiveAttempt) ?? null;
 	const [nextActionKey, nextActionDefault] = nextActionLabel(task?.status, latestAttempt?.status);
 	const live = useDevelopmentAttemptHub(detail?.project?.id ?? null, task?.id ?? null, activeAttempt?.id ?? null);
+	// Only for the deep link back (Y3). The banner's own copy does not depend on it, so a run that has not resolved —
+	// or a node with development workflows switched off — simply offers no link rather than blocking the banner.
+	const workflowRunQuery = useDevelopmentTaskWorkflowRun(task?.workflowRunId, nodeCapabilities.devWorkflows);
 	const projectRepository = repositories.find((repository) => repository.id === detail?.project?.selectedFolderId);
 	const repositoryConnectionRequired = detail?.project?.repositoryConnectionRequired === true;
 	const repositoryReady =
@@ -238,6 +251,10 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 		projectsQuery,
 		selectedProjectId,
 		setSelectedProjectId,
+		tasks,
+		selectedTaskId: taskDetail?.task?.id ?? null,
+		setSelectedTaskId,
+		workflowWorkItemId: workflowRunQuery.data?.workItemId ?? null,
 		reconnectFolderId,
 		setReconnectFolderId,
 		previewTaskId,

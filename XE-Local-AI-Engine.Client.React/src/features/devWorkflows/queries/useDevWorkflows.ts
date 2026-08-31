@@ -84,7 +84,7 @@ export type DevWorkflowEventsAnchor = "newest" | "oldest";
  * ponytail: crossing a boundary on a live run does re-anchor and discard loaded history. That is once per 200
  * sequences, and the alternative — a cursor that moves with every event — discards it on every one.
  */
-export function devWorkflowEventsAnchorParam(lastSequence: number | undefined, anchor: DevWorkflowEventsAnchor): number {
+function devWorkflowEventsAnchorParam(lastSequence: number | undefined, anchor: DevWorkflowEventsAnchor): number {
 	if (anchor === "oldest" || !lastSequence || lastSequence <= devWorkflowEventsTailPageSize) {
 		return 0;
 	}
@@ -92,6 +92,7 @@ export function devWorkflowEventsAnchorParam(lastSequence: number | undefined, a
 	const window = Math.floor((lastSequence - 1) / devWorkflowEventsPageSize) * devWorkflowEventsPageSize;
 	return Math.max(0, window - devWorkflowEventsPageSize);
 }
+
 /** Work-item list cadence while any listed run is still live (X16 Q7). A run-scoped hub cannot feed a list. */
 const devWorkflowListPollIntervalMs = 5_000;
 

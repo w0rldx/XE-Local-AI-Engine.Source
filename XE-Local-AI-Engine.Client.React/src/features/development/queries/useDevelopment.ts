@@ -10,6 +10,7 @@ import {
 	getDevelopmentArtifactOptions,
 	getDevelopmentCapabilityOptions,
 	getDevelopmentProjectOptions,
+	getDevWorkflowRunOptions,
 	listDevelopmentRepositoriesOptions,
 	listDevelopmentProjectsOptions,
 	listDevelopmentTemplatesOptions,
@@ -129,6 +130,21 @@ export function useDevelopmentProject(projectId: string | null, enabled = true) 
 		...withResponseValidation(getDevelopmentProjectOptions({ path: { projectId: projectId ?? "" } })),
 		enabled: enabled && projectId !== null,
 		refetchInterval: projectId === null ? false : 3000,
+	});
+}
+
+/**
+ * The work item a workflow-driven task's run belongs to (Y3).
+ *
+ * A Dev Mode task carries only `workflowRunId`, and the workflow detail route is keyed by WORK ITEM — so a deep link
+ * back to the run needs the one thing R6 already answers alongside everything else it returns. Read here rather than
+ * asked of P3 as a new field: the endpoint exists, the join is one hop, and a run's work item never changes, so this
+ * never polls.
+ */
+export function useDevelopmentTaskWorkflowRun(workflowRunId: string | null | undefined, enabled = true) {
+	return useQuery({
+		...withResponseValidation(getDevWorkflowRunOptions({ path: { runId: workflowRunId ?? "" } })),
+		enabled: enabled && hasIdentifier(workflowRunId),
 	});
 }
 

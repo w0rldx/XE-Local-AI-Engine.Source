@@ -92,6 +92,9 @@ describe("dev-workflow enum label maps are complete in every locale", () => {
 			],
 		},
 		{ section: "workItemStatus", members: ["Draft", "Active", "Blocked", "Completed", "Cancelled"] },
+		// C4's apply outcomes. Not narrowed client-side either — the panel falls back to the raw token — so this map is
+		// the only thing standing between a `blocked` patch and a row that reads as a key.
+		{ section: "applyOutcome", members: ["applied", "already-applied", "blocked", "refused", "cancelled"] },
 		// Not narrowed client-side, so both carry a generic `unknown` fallback for a token a newer server invents.
 		{ section: "queueReason", members: ["awaiting-agent-slot", "awaiting-sandbox-slot", "awaiting-dependency", "unknown"] },
 		{

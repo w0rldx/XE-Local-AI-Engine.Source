@@ -11,6 +11,7 @@ const hooksMock = vi.hoisted(() => ({
 	useDevelopmentProfileDetection: vi.fn(),
 	useDevelopmentProjects: vi.fn(),
 	useDevelopmentProject: vi.fn(),
+	useDevelopmentTaskWorkflowRun: vi.fn(),
 	useRegisterDevelopmentRepository: vi.fn(),
 	useRegisterDevelopmentTemplate: vi.fn(),
 	useRemoveDevelopmentTemplate: vi.fn(),
@@ -57,6 +58,19 @@ interface MutationMock {
 
 function mutation(data?: Record<string, unknown>): MutationMock {
 	return { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, error: null, data };
+}
+
+/** A project holding several tasks, which is what a workflow decomposition leaves behind (Phase W dropped the index). */
+function decomposedDetail(...titles: readonly string[]) {
+	const base = detail("Planned");
+	return {
+		...base,
+		tasks: titles.map((title, index) => ({
+			task: { id: `task-${index + 1}`, projectId: "project-1", title, requirements: "…", status: "Planned" },
+			attempts: [],
+			artifacts: [],
+		})),
+	};
 }
 
 function detail(status: string, attempts: readonly Record<string, unknown>[] = [], repositoryConnectionRequired = false) {
@@ -138,6 +152,8 @@ describe("DevelopmentPage", () => {
 		vi.clearAllMocks();
 		hooksMock.useDevelopmentCapability.mockReturnValue({ data: { enabled: true }, isLoading: false, error: null });
 		hooksMock.useDevelopmentProfileDetection.mockReturnValue({ data: undefined, isFetching: false, error: null });
+		// The Y3 banner's deep link only. Most tasks carry no workflow run, so the default is an unresolved lookup.
+		hooksMock.useDevelopmentTaskWorkflowRun.mockReturnValue({ data: undefined, isLoading: false, error: null });
 		hooksMock.useDevelopmentRepositories.mockReturnValue({
 			data: [{ id: "repository-1", alias: "Workspace", availability: "Available" }],
 			isLoading: false,
@@ -296,5 +312,71 @@ describe("DevelopmentPage", () => {
 		renderPage();
 
 		await waitFor(() => expect(hooksMock.useDevelopmentProject.mock.calls.at(-1)?.[0]).toBe("project-1"));
+	});
+	it("offers no task switcher for a project with one task, and one for a decomposed project", async () => {
+		hooksMock.useDevelopmentProject.mockReturnValue({ data: detail("Planned"), isLoading: false, error: null, refetch: vi.fn() });
+		renderPage();
+		await screen.findByTestId("development-project-detail");
+
+		// A picker with one entry is a question with one answer.
+		expect(screen.queryByTestId("development-task-switcher")).toBeNull();
+
+		cleanup();
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: decomposedDetail("Operator request", "Slice one", "Slice two"),
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		renderPage();
+
+		// The ordinary decomposed case is three tasks in one project, two of which had no way to be reached at all.
+		expect(await screen.findByTestId("development-task-switcher")).toBeDefined();
+		// `ListTasksAsync` orders by CreatedAtUtc, so the row it opens on is the operator's own task, not a child.
+		const switcher = screen.getByTestId("development-task-switcher");
+		expect((switcher.querySelector("input") as HTMLInputElement).value).toBe("Operator request");
+	});
+
+	it("opens on the task the deep link names, not on the project's first one", async () => {
+		hooksMock.useDevelopmentProject.mockReturnValue({
+			data: decomposedDetail("Operator request", "Slice one", "Slice two"),
+			isLoading: false,
+			error: null,
+			refetch: vi.fn(),
+		});
+		const start = mutation();
+		hooksMock.useStartDevelopmentNextAction.mockReturnValue(start);
+		renderPage({ initialTaskId: "task-3" });
+
+		fireEvent.click(await screen.findByTestId("development-start-next"));
+
+		// The selection reaches the mutation, so it is the shown task and not merely a highlighted row.
+		expect(start.mutate).toHaveBeenCalledWith({
+			path: { projectId: "project-1", taskId: "task-3" },
+			body: { operationId: expect.any(String) },
+		});
+	});
+
+	it("takes the apply button away from a workflow-driven task and says where the decision lives (Y3)", async () => {
+		const base = detail("AwaitingApply");
+		const workflowDetail = {
+			...base,
+			tasks: [{ ...base.tasks[0], task: { ...base.tasks[0]?.task, workflowRunId: "run-9" } }],
+		};
+		hooksMock.useDevelopmentProject.mockReturnValue({ data: workflowDetail, isLoading: false, error: null, refetch: vi.fn() });
+		hooksMock.useDevelopmentTaskWorkflowRun.mockReturnValue({
+			data: { id: "run-9", workItemId: "item-4" },
+			isLoading: false,
+			error: null,
+		});
+		renderPage();
+
+		expect((await screen.findByTestId("development-workflow-banner")).textContent).toContain("gate node");
+		// A second Apply button here would be a duplicate authority or a bypass of the graph's audit trail.
+		expect(screen.queryByTestId("development-apply-patch")).toBeNull();
+		// The evidence stays: reading the patch is not deciding on it.
+		expect(screen.getByTestId("development-preview-patch")).toBeDefined();
+		// And the way back to the run is offered, keyed by the WORK ITEM the run lookup resolved.
+		expect(screen.getByTestId("development-workflow-link")).toBeDefined();
 	});
 });

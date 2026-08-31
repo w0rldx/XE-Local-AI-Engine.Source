@@ -177,6 +177,15 @@
 	},
 	"pages": {
 		"development": {
+			"tasks": {
+				"label": "Aufgabe",
+				"untitled": "Aufgabe {{index}}",
+				"count": "{{count}} in diesem Projekt"
+			},
+			"workflow": {
+				"body": "Ein Entwicklungs-Workflow hat diese Aufgabe erstellt und steuert sie. Die Freigabe, mit der ihr Patch übernommen wird, ist ein Gate-Knoten in diesem Workflow — diese Seite zeigt die Nachweise, entschieden wird im Workflow.",
+				"open": "Workflow-Lauf öffnen"
+			},
 			"validation": {
 				"noReport": "Für diese Aufgabe wurde noch keine deterministische Validierung ausgeführt.",
 				"loading": "Validierungsbericht wird geladen",
@@ -301,6 +310,7 @@
 			"apply": {
 				"title": "Vom Menschen gesteuertes Anwenden des Patches",
 				"awaiting": "Wartet auf ausdrückliche Freigabe",
+				"workflowOwned": "Der Workflow entscheidet",
 				"preview": "Aktuellen Patch ansehen",
 				"apply": "Geprüften Patch anwenden",
 				"previewLabel": "Vorschau des geprüften Patches",

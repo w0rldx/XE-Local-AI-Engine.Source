@@ -177,6 +177,15 @@
 	},
 	"pages": {
 		"development": {
+			"tasks": {
+				"label": "Task",
+				"untitled": "Task {{index}}",
+				"count": "{{count}} in this project"
+			},
+			"workflow": {
+				"body": "A development workflow created this task and is driving it. The approval that lets its patch land is a gate node in that workflow, so this page shows the evidence and the workflow makes the decision.",
+				"open": "Open the workflow run"
+			},
 			"validation": {
 				"noReport": "No deterministic validation has run for this task yet.",
 				"loading": "Loading the validation report",
@@ -301,6 +310,7 @@
 			"apply": {
 				"title": "Human-controlled patch apply",
 				"awaiting": "Awaiting explicit approval",
+				"workflowOwned": "The workflow decides",
 				"preview": "Preview current patch",
 				"apply": "Apply verified patch",
 				"previewLabel": "Verified patch preview",

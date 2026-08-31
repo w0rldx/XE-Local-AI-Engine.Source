@@ -33,13 +33,13 @@ export interface DevWorkflowApplyReportBody {
 }
 
 /**
- * What became of one task at the gate. The set is closed server-side (`AppliedOutcomes`), but an unrecognised token is
- * still rendered verbatim rather than dropped — a newer server's vocabulary must read as itself, not disappear.
+ * Only these two mean the repository has the patch. Everything else is a task whose work did NOT land.
+ *
+ * The set is closed server-side (`AppliedOutcomes`) and is NOT narrowed here: the panel renders the token through a
+ * label map with the raw token as its fallback, so a vocabulary a newer server invents reads as itself rather than
+ * disappearing. `pages.devWorkflows.applyOutcome.*` is where the set is pinned, and the i18n parity test is what keeps
+ * that map complete.
  */
-export const devWorkflowApplyOutcomes = ["applied", "already-applied", "blocked", "refused", "cancelled"] as const;
-export type DevWorkflowApplyOutcome = (typeof devWorkflowApplyOutcomes)[number];
-
-/** Only these two mean the repository has the patch. Everything else is a task whose work did NOT land. */
 export function isDevWorkflowApplyLanded(outcome: string): boolean {
 	return outcome === "applied" || outcome === "already-applied";
 }
