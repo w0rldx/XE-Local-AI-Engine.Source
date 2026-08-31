@@ -4915,6 +4915,20 @@
 			}
 		},
 		"devWorkflows": {
+			"apply": {
+				"passed": "Every patch landed",
+				"failed": "The apply did not complete",
+				"count": "{{landed}} of {{total}} patches applied",
+				"noTasks": "This node found no completed task with a patch to apply.",
+				"stopped": "The sequence stopped before every patch was offered. After a refusal the repository is no longer in the state the remaining patches were approved against, so they were not attempted."
+			},
+			"applyOutcome": {
+				"applied": "applied",
+				"already-applied": "already applied",
+				"blocked": "blocked",
+				"refused": "refused",
+				"cancelled": "not attempted"
+			},
 			"attempts": {
 				"title": "Attempts",
 				"number": "attempt {{attempt}}",
@@ -5150,6 +5164,8 @@
 				"sessionPurged": "The agent's transcript is no longer available. This node's events and artifacts are unaffected.",
 				"tool": "Validation",
 				"openReport": "Open the validation report",
+				"apply": "Patch apply",
+				"openApplyReport": "Open the apply report",
 				"noReport": "No validation report yet.",
 				"devTask": "Development task",
 				"openDevelopment": "Open Development Mode",

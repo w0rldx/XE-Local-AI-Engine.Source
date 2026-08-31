@@ -4915,6 +4915,20 @@
 			}
 		},
 		"devWorkflows": {
+			"apply": {
+				"passed": "Alle Patches übernommen",
+				"failed": "Die Übernahme wurde nicht abgeschlossen",
+				"count": "{{landed}} von {{total}} Patches übernommen",
+				"noTasks": "Dieser Knoten hat keine abgeschlossene Aufgabe mit einem zu übernehmenden Patch gefunden.",
+				"stopped": "Die Abfolge wurde beendet, bevor alle Patches angeboten wurden. Nach einer Ablehnung ist das Repository nicht mehr in dem Zustand, für den die übrigen Patches freigegeben wurden — sie wurden daher nicht versucht."
+			},
+			"applyOutcome": {
+				"applied": "übernommen",
+				"already-applied": "bereits übernommen",
+				"blocked": "blockiert",
+				"refused": "abgelehnt",
+				"cancelled": "nicht versucht"
+			},
 			"attempts": {
 				"title": "Versuche",
 				"number": "Versuch {{attempt}}",
@@ -5150,6 +5164,8 @@
 				"sessionPurged": "Das Transkript des Agenten ist nicht mehr verfügbar. Die Ereignisse und Artefakte dieses Knotens sind davon nicht betroffen.",
 				"tool": "Prüfung",
 				"openReport": "Prüfbericht öffnen",
+				"apply": "Patch-Übernahme",
+				"openApplyReport": "Übernahmebericht öffnen",
 				"noReport": "Noch kein Prüfbericht.",
 				"devTask": "Entwicklungsaufgabe",
 				"openDevelopment": "Development Mode öffnen",
