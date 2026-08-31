@@ -4915,6 +4915,25 @@
 			}
 		},
 		"devWorkflows": {
+			"attempts": {
+				"title": "Attempts",
+				"number": "attempt {{attempt}}",
+				"noEvidence": "no record of this attempt in the events loaded so far",
+				"interrupted": "interrupted and re-dispatched {{count}}×",
+				"session": "transcript"
+			},
+			"structural": {
+				"dependencies": "Dependencies",
+				"noDependencies": "This node has no upstream dependencies in the pinned graph.",
+				"branches": "Branches",
+				"parallelBranches": "Parallel branches",
+				"noBranches": "This node has no outgoing branches in the pinned graph.",
+				"unconditional": "always taken",
+				"taken": "taken",
+				"outstanding": "outstanding",
+				"satisfied": "satisfied",
+				"notMaterialized": "not created yet"
+			},
 			"title": "Workflow Runs",
 			"subtitle": "Durable development workflows: each work item runs a graph of agent, tool and approval nodes that survives a restart.",
 			"empty": "No work items yet. Describe what you want built and pick a workflow template to run it.",
@@ -5134,7 +5153,8 @@
 				"devTaskReviewRound": "review round {{round}}",
 				"devTaskNoStage": "This task has not reported a stage yet.",
 				"devTaskEvidence": "Dev Mode shows this task's attempts, patch and validation evidence. The approval that lets a patch land is a gate node in this workflow.",
-				"objective": "Objective"
+				"objective": "Objective",
+				"cascadeRerun": "This node is running again because “{{node}}” failed and the run is re-doing the work that depended on it."
 			},
 			"validation": {
 				"loadFailed": "Could not load this node's validation report.",

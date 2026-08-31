@@ -1,6 +1,7 @@
 import { Alert, Badge, Button, Code, Group, Loader, ScrollArea, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle, IconExternalLink } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
@@ -11,10 +12,20 @@ import {
 	type DevWorkflowDecisionSubmission,
 	DevWorkflowHumanGatePanel,
 } from "@/features/devWorkflows/components/DevWorkflowHumanGatePanel";
+import { DevWorkflowNodeAttempts } from "@/features/devWorkflows/components/DevWorkflowNodeAttempts";
 import { DevWorkflowNodeStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
+import { DevWorkflowStructuralNodePanel } from "@/features/devWorkflows/components/DevWorkflowStructuralNodePanel";
 import { DevWorkflowToolNodePanel } from "@/features/devWorkflows/components/DevWorkflowToolNodePanel";
 import {
+	devWorkflowAttemptEventTypes,
+	devWorkflowNodeAttempts,
+	devWorkflowNodeEvents,
+	devWorkflowRoutedDetail,
+} from "@/features/devWorkflows/models/DevWorkflowAttempts";
+import {
 	type DevWorkflowNodeRunDetailResponse,
+	type DevWorkflowRunEventResponse,
+	type DevWorkflowRunResponse,
 	toDevWorkflowNodeStatus,
 	toDevWorkflowNodeType,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
@@ -27,8 +38,13 @@ export interface DevWorkflowNodePanelProps {
 	readonly decideError?: unknown;
 	/** Artifact id → name, for the gate's evidence list. Empty until the run's artifact feed lands. */
 	readonly artifactNameById?: ReadonlyMap<string, string>;
-	/** `node.interrupted` events counted for this node — the restart evidence `sessionResumes` does NOT carry. */
-	readonly interruptedCount?: number;
+	/**
+	 * The run's loaded event pages, and the run's own node-run rows. Both are the panel's only source for facts the
+	 * node-run DETAIL response does not carry: attempt history lives in the log (X2), and a structural node's
+	 * dependencies and branches live in its siblings' rows and the pinned graph's edges.
+	 */
+	readonly events?: readonly DevWorkflowRunEventResponse[];
+	readonly run?: DevWorkflowRunResponse;
 	readonly onDecide: (submission: DevWorkflowDecisionSubmission) => void;
 	readonly onShowArtifacts: () => void;
 	/** Clears `?node=`, which is what brings the artifacts/events tabs back into this zone. */
@@ -48,12 +64,16 @@ export function DevWorkflowNodePanel({
 	isDeciding,
 	decideError,
 	artifactNameById,
-	interruptedCount = 0,
+	events = [],
+	run,
 	onDecide,
 	onShowArtifacts,
 	onClose,
 }: DevWorkflowNodePanelProps) {
 	const { t } = useTranslation();
+	const nodeEvents = useMemo(() => devWorkflowNodeEvents(events, nodeRun?.id), [events, nodeRun?.id]);
+	const attempts = useMemo(() => devWorkflowNodeAttempts(nodeEvents, nodeRun?.attempt ?? 1), [nodeEvents, nodeRun?.attempt]);
+	const interruptedCount = attempts.reduce((total, attempt) => total + attempt.interruptedCount, 0);
 
 	if (isPending) {
 		return <Loader size="sm" data-testid="dev-workflow-node-panel-loading" />;
@@ -138,6 +158,8 @@ export function DevWorkflowNodePanel({
 					</Alert>
 				) : null}
 
+				<CascadeRerunNotice nodeRun={nodeRun} nodeEvents={nodeEvents} events={events} run={run} />
+
 				<DevWorkflowHumanGatePanel
 					nodeRun={nodeRun}
 					isSubmitting={isDeciding}
@@ -147,13 +169,72 @@ export function DevWorkflowNodePanel({
 					onShowArtifacts={onShowArtifacts}
 				/>
 
+				<DevWorkflowNodeAttempts attempts={attempts} />
+
 				{nodeType === "Agent" ? <AgentSection nodeRun={nodeRun} /> : null}
 				{nodeType === "Tool" ? <DevWorkflowToolNodePanel nodeRun={nodeRun} onShowArtifacts={onShowArtifacts} /> : null}
 				{nodeType === "DevTask" ? <DevWorkflowDevTaskNodePanel nodeRun={nodeRun} /> : null}
+				{nodeType === "Gate" || nodeType === "Parallel" || nodeType === "Join" ? (
+					<DevWorkflowStructuralNodePanel nodeRun={nodeRun} nodeType={nodeType} run={run} />
+				) : null}
 
 				<ObjectiveSection nodeRun={nodeRun} />
 			</Stack>
 		</ScrollArea>
+	);
+}
+
+/**
+ * Why completed work went back to `Pending` (C45/X9). A fix loop resets a whole cascade, so a node that had succeeded
+ * is put back to run again — and without this it simply un-completes with no account of itself, which reads as the
+ * module losing work.
+ *
+ * The evidence is `node.retry.routed`, which B4 emits against the node that FAILED, naming the target the loop routed
+ * back to. This node's own log says only that it was re-scheduled, so the two are joined on sequence: the routed event
+ * immediately preceding this node's latest reset is the round that reset it. A routed event this node's own row
+ * produced is not a cascade — it is this node failing and retrying itself, which the attempts list already says.
+ */
+function CascadeRerunNotice({
+	nodeRun,
+	nodeEvents,
+	events,
+	run,
+}: {
+	readonly nodeRun: DevWorkflowNodeRunDetailResponse;
+	readonly nodeEvents: readonly DevWorkflowRunEventResponse[];
+	readonly events: readonly DevWorkflowRunEventResponse[];
+	readonly run?: DevWorkflowRunResponse;
+}) {
+	const { t } = useTranslation();
+	const latestReset = nodeEvents
+		.filter((event) => event.eventType === devWorkflowAttemptEventTypes.retryScheduled)
+		.at(-1);
+	if (!latestReset) {
+		return null;
+	}
+
+	const routed = events
+		.filter(
+			(event) =>
+				event.eventType === devWorkflowAttemptEventTypes.retryRouted &&
+				(event.sequence ?? 0) <= (latestReset.sequence ?? 0),
+		)
+		.toSorted((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0))
+		.at(-1);
+	const failedNodeKey = devWorkflowRoutedDetail(routed?.detailJson).nodeKey;
+	if (!failedNodeKey || failedNodeKey === nodeRun.nodeKey) {
+		return null;
+	}
+
+	const failedLabel = (run?.nodes ?? []).find((node) => node.nodeKey === failedNodeKey)?.label ?? failedNodeKey;
+	return (
+		<Alert color="blue" variant="light" data-testid="dev-workflow-node-cascade-rerun">
+			{t(
+				"pages.devWorkflows.node.cascadeRerun",
+				"This node is running again because “{{node}}” failed and the run is re-doing the work that depended on it.",
+				{ node: failedLabel },
+			)}
+		</Alert>
 	);
 }
 

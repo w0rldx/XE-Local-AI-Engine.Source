@@ -4915,6 +4915,25 @@
 			}
 		},
 		"devWorkflows": {
+			"attempts": {
+				"title": "Versuche",
+				"number": "Versuch {{attempt}}",
+				"noEvidence": "kein Nachweis zu diesem Versuch in den bisher geladenen Ereignissen",
+				"interrupted": "unterbrochen und {{count}}× neu gestartet",
+				"session": "Transkript"
+			},
+			"structural": {
+				"dependencies": "Abhängigkeiten",
+				"noDependencies": "Dieser Knoten hat im festgeschriebenen Graphen keine vorgelagerten Abhängigkeiten.",
+				"branches": "Zweige",
+				"parallelBranches": "Parallele Zweige",
+				"noBranches": "Dieser Knoten hat im festgeschriebenen Graphen keine ausgehenden Zweige.",
+				"unconditional": "immer genommen",
+				"taken": "genommen",
+				"outstanding": "offen",
+				"satisfied": "erfüllt",
+				"notMaterialized": "noch nicht angelegt"
+			},
 			"title": "Workflow-Läufe",
 			"subtitle": "Dauerhafte Entwicklungs-Workflows: Jedes Arbeitspaket führt einen Graphen aus Agenten-, Tool- und Freigabeknoten aus, der einen Neustart übersteht.",
 			"empty": "Noch keine Arbeitspakete. Beschreiben Sie, was gebaut werden soll, und wählen Sie eine Workflow-Vorlage aus.",
@@ -5134,7 +5153,8 @@
 				"devTaskReviewRound": "Prüfrunde {{round}}",
 				"devTaskNoStage": "Diese Aufgabe hat noch keinen Stand gemeldet.",
 				"devTaskEvidence": "Development Mode zeigt Versuche, Patch und Prüfnachweise dieser Aufgabe. Die Freigabe, mit der ein Patch übernommen wird, ist ein Gate-Knoten in diesem Workflow.",
-				"objective": "Zielvorgabe"
+				"objective": "Zielvorgabe",
+				"cascadeRerun": "Dieser Knoten läuft erneut, weil „{{node}}“ fehlgeschlagen ist und der Lauf die davon abhängige Arbeit wiederholt."
 			},
 			"validation": {
 				"loadFailed": "Der Prüfbericht dieses Knotens konnte nicht geladen werden.",
