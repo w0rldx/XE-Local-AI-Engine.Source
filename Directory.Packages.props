@@ -6,8 +6,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Aspire.Hosting.Browsers" Version="13.5.2-preview.1.26421.6" />
-    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.5.2" />
-    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.5.2" />
+    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.5.3" />
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.5.3" />
     <PackageVersion Include="Azure.AI.OpenAI" Version="2.1.0" />
     <!-- DefaultAzureCredential for Azure Foundry managed-identity auth, consumed by the Application factory. -->
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
@@ -37,8 +37,8 @@
          Its transports ship as separate `Docker.DotNet.Enhanced.{Unix,NPipe,NativeHttp,LegacyHttp}` packages that
          arrive transitively and lock-step to the same version, so they need no entry of their own. -->
     <PackageVersion Include="Docker.DotNet.Enhanced" Version="4.3.3" />
-    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.4.0" />
-    <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.4.0" />
+    <PackageVersion Include="CommunityToolkit.Aspire.Hosting.Sqlite" Version="13.5.0" />
+    <PackageVersion Include="CommunityToolkit.Aspire.OllamaSharp" Version="13.5.0" />
     <PackageVersion Include="FastEndpoints" Version="8.3.0" />
     <PackageVersion Include="FastEndpoints.Swagger" Version="8.3.0" />
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
