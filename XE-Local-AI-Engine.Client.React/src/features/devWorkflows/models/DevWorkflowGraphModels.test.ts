@@ -81,7 +81,7 @@ describe("toDevWorkflowCanvasGraph", () => {
 			chainRun({
 				nodes: [
 					devWorkflowNodeRunSummary({ id: "node-plan", nodeKey: "plan" }),
-					...[0, 1, 2].map((index) =>
+					...[1, 2, 3].map((index) =>
 						devWorkflowNodeRunSummary({
 							id: `node-implement-${index}`,
 							nodeKey: `implement#${index}`,
@@ -91,20 +91,51 @@ describe("toDevWorkflowCanvasGraph", () => {
 						}),
 					),
 					devWorkflowNodeRunSummary({
-						id: "node-verify-0",
-						nodeKey: "verify#0",
+						id: "node-verify-1",
+						nodeKey: "verify#1",
 						isMaterialized: true,
 						materializedFromNodeKey: "review",
-						materializationIndex: 0,
+						materializationIndex: 1,
 					}),
 				],
 			}),
 		);
 
-		expect([0, 1, 2].map((index) => dataOf(graph, `node-implement-${index}`).materializationCount)).toEqual([3, 3, 3]);
-		expect(dataOf(graph, "node-verify-0").materializationCount).toBe(1);
+		expect([1, 2, 3].map((index) => dataOf(graph, `node-implement-${index}`).materializationCount)).toEqual([3, 3, 3]);
+		expect(dataOf(graph, "node-verify-1").materializationCount).toBe(1);
 		// A node the definition named is not part of anyone's group, so it carries no count at all.
 		expect(dataOf(graph, "node-plan").materializationCount).toBeUndefined();
+	});
+
+	it("counts the CHILDREN of a decomposition, not the rows a cloned subtree left behind", () => {
+		// C2 clones a template SUBTREE whole, so two children of a two-node template are FOUR rows sharing one origin.
+		// Counting rows made every card of that decomposition read "… of 4" over two children.
+		const graph = toDevWorkflowCanvasGraph(
+			chainRun({
+				nodes: [1, 2].flatMap((child) =>
+					["implement", "validate"].map((step) =>
+						devWorkflowNodeRunSummary({
+							id: `node-${step}-${child}`,
+							nodeKey: `${step}#child-${child}`,
+							isMaterialized: true,
+							materializedFromNodeKey: "decompose",
+							materializationIndex: child,
+						}),
+					),
+				),
+			}),
+		);
+
+		expect(
+			[1, 2].flatMap((child) => ["implement", "validate"].map((step) => dataOf(graph, `node-${step}-${child}`))).map(
+				(data) => [data.materializationIndex, data.materializationCount],
+			),
+		).toEqual([
+			[1, 2],
+			[1, 2],
+			[2, 2],
+			[2, 2],
+		]);
 	});
 
 	it("joins graph edges to node-runs by node key, so the drawn edge is between node-run ids", () => {

@@ -106,13 +106,15 @@ export function DevWorkflowNodeCard({ id, data, selected }: NodeProps<DevWorkflo
 					<Badge size="xs" variant="light" color="gray">
 						{t(`pages.devWorkflows.nodeType.${nodeData.nodeType}`, nodeData.nodeType)}
 					</Badge>
-					{/* "3 of 5" is the group's own count, so a card says how much of a decomposition it is one card of. A
-					    materialization of one carries no count — "1 of 1" is noise, and the dashed border already said it. */}
+					{/* "3 of 5" names the CHILD this card belongs to, so a card says how much of a decomposition it is one
+					    card of. The index is the server's, rendered unchanged: `MaterializationIndex` is already 1-based
+					    (C2), and adding one to it made the only child of a decomposition read "2 of 2". A materialization
+					    of one carries no count — "1 of 1" is noise, and the dashed border already said it. */}
 					{nodeData.isMaterialized ? (
 						<Badge size="xs" variant="outline" color="gray" data-testid={`dev-workflow-graph-node-materialized-${id}`}>
-							{(nodeData.materializationCount ?? 0) > 1
+							{(nodeData.materializationCount ?? 0) > 1 && nodeData.materializationIndex !== undefined
 								? t("pages.devWorkflows.nodes.materializedOf", "generated · {{index}} of {{count}}", {
-										index: (nodeData.materializationIndex ?? 0) + 1,
+										index: nodeData.materializationIndex,
 										count: nodeData.materializationCount ?? 0,
 									})
 								: t("pages.devWorkflows.nodes.materialized", "generated")}

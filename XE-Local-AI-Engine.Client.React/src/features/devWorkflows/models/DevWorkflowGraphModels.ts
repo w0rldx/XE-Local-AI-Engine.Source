@@ -51,9 +51,13 @@ export interface DevWorkflowCanvasNodeData extends Record<string, unknown> {
 	readonly materializedFromNodeKey?: string;
 	readonly materializationIndex?: number;
 	/**
-	 * How many nodes in THIS graph came out of the same materialization. Counted here rather than read off a DTO: the
-	 * runtime has no group-size column, and the answer a card needs is "how many of these am I looking at", which is a
-	 * question about the rendered graph. Absent on a definition render, where nothing has been materialized.
+	 * How many CHILDREN this materialization produced — the denominator beside `materializationIndex`, which is the
+	 * SERVER's index of the child this card belongs to and is already 1-based (C2). Counted here rather than read off a
+	 * DTO: the runtime has no group-size column, and the answer a card needs is "how many of these am I looking at".
+	 *
+	 * Counted as DISTINCT indices, not as rows: C2 clones a template SUBTREE whole, so one child of a two-node template
+	 * owns two rows, and counting rows told a decomposition of one that it was "2 of 2". Absent on a definition render,
+	 * where nothing has been materialized.
 	 */
 	readonly materializationCount?: number;
 	readonly hasStaleInputs: boolean;
@@ -119,13 +123,20 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 		return { nodes: [], edges: [], structuralKey, nodeRunCount: nodeRuns.length, isOverCap: true };
 	}
 
-	// One pass for the group sizes, so a card can say "2 of 5" without every card counting the whole node list.
-	const materializationCounts = new Map<string, number>();
+	// One pass for the group sizes, so a card can say "2 of 5" without every card counting the whole node list. The size
+	// is how many CHILDREN the decomposition produced — distinct `materializationIndex` values — and NOT how many rows
+	// carry the origin: a template subtree is cloned whole, so k rows per child made every denominator N·k.
+	const materializationChildren = new Map<string, Set<number>>();
 	for (const node of nodeRuns) {
 		const origin = node.materializedFromNodeKey;
-		if (origin) {
-			materializationCounts.set(origin, (materializationCounts.get(origin) ?? 0) + 1);
+		if (!origin) {
+			continue;
 		}
+		const children = materializationChildren.get(origin) ?? new Set<number>();
+		if (typeof node.materializationIndex === "number") {
+			children.add(node.materializationIndex);
+		}
+		materializationChildren.set(origin, children);
 	}
 
 	const entries: DevWorkflowCanvasEntry[] = nodeRuns.map((node) => ({
@@ -148,7 +159,7 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 			materializedFromNodeKey: optional(node.materializedFromNodeKey),
 			materializationIndex: optional(node.materializationIndex),
 			materializationCount: node.materializedFromNodeKey
-				? materializationCounts.get(node.materializedFromNodeKey)
+				? materializationChildren.get(node.materializedFromNodeKey)?.size
 				: undefined,
 			hasStaleInputs: node.hasStaleInputs ?? false,
 			waitingOnNodeKeys: optional(node.waitingOnNodeKeys),

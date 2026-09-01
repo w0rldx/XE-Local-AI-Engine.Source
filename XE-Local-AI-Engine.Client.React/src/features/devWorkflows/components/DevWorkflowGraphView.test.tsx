@@ -163,7 +163,7 @@ describe("DevWorkflowGraphView", () => {
 		renderWithProviders(
 			<DevWorkflowGraphView
 				run={chainRun([
-					...[0, 1].map((index) =>
+					...[1, 2].map((index) =>
 						devWorkflowNodeRunSummary({
 							id: `node-implement-${index}`,
 							nodeKey: `implement#${index}`,
@@ -174,24 +174,52 @@ describe("DevWorkflowGraphView", () => {
 					),
 					devWorkflowNodeRunSummary({
 						id: "node-verify",
-						nodeKey: "verify#0",
+						nodeKey: "verify#1",
 						isMaterialized: true,
 						materializedFromNodeKey: "review",
-						materializationIndex: 0,
+						materializationIndex: 1,
 					}),
 				])}
 				onSelect={vi.fn()}
 			/>,
 		);
 
-		// The index is one-based on the card and zero-based on the wire, because "generated · 0 of 2" is not a sentence.
-		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-0").textContent).toBe(
+		// `MaterializationIndex` is the SERVER's and is already 1-based (C2), so the card renders it as it stands.
+		// Adding one to it is what made a decomposition of one read "generated · 2 of 2" on live hardware.
+		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-1").textContent).toBe(
 			"generated · 1 of 2",
 		);
-		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-1").textContent).toBe(
+		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-2").textContent).toBe(
 			"generated · 2 of 2",
 		);
 		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-verify").textContent).toBe("generated");
+	});
+
+	it("badges a cloned subtree by its CHILD, so two children of a two-node template never read 3 or 4", () => {
+		renderWithProviders(
+			<DevWorkflowGraphView
+				run={chainRun(
+					[1, 2].flatMap((child) =>
+						["implement", "validate"].map((step) =>
+							devWorkflowNodeRunSummary({
+								id: `node-${step}-${child}`,
+								nodeKey: `${step}#child-${child}`,
+								isMaterialized: true,
+								materializedFromNodeKey: "decompose",
+								materializationIndex: child,
+							}),
+						),
+					),
+				)}
+				onSelect={vi.fn()}
+			/>,
+		);
+
+		expect(
+			[1, 2]
+				.flatMap((child) => ["implement", "validate"].map((step) => `node-${step}-${child}`))
+				.map((id) => screen.getByTestId(`dev-workflow-graph-node-materialized-${id}`).textContent),
+		).toEqual(["generated · 1 of 2", "generated · 1 of 2", "generated · 2 of 2", "generated · 2 of 2"]);
 	});
 
 	it("selects a node-run when its card is clicked, the same change a table row makes", () => {
