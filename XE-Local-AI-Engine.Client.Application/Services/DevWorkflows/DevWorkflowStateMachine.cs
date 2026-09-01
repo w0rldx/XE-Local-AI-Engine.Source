@@ -128,9 +128,10 @@ internal static class DevWorkflowStateMachine
     ///     Whether a <c>Pending</c> node run may be queued, must be skipped, or is still waiting.
     ///     <para>
     ///         <c>All</c> over ZERO inbound edges is vacuously satisfied, and that is load-bearing rather than pedantic:
-    ///         it is how an entry node becomes eligible at all (Start is implicit, so an entry node is one with no
-    ///         inbound edges), and it is what lets a decomposition that produced no tasks finish — its join is left with
-    ///         nothing to wait for, proceeds, and the run completes. The opposite reading hangs such a run forever.
+    ///         it is how an entry node becomes eligible at all, Start being implicit, so an entry node is one with no
+    ///         inbound edges. A decomposition that produced no tasks is a neighbouring case and no longer this one: it
+    ///         rewrites nothing, so its join keeps its edge from the decomposition, and that one Satisfied edge is what
+    ///         carries it — which is why the materializer preserves that edge on the expanding path too.
     ///     </para>
     ///     <para>
     ///         An edge whose source is a materialization TEMPLATE is not a dependency and is dropped here. The template
