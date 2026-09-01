@@ -1,10 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>
-///     What a node run inherits from the nodes immediately before it: the latest version of every artifact they
-///     produced.
+///     What a node run inherits from the work before it: the latest version of every artifact its nearest producing
+///     ancestors produced.
 ///     <para>
 ///         Recorded as consumed the moment the node run is handed them, rather than derived on read later. The record is
 ///         what the gate panel renders as its evidence list, what staleness propagation reads when an upstream artifact
@@ -14,7 +15,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </summary>
 internal static class DevWorkflowUpstreamArtifacts
 {
-    /// <summary>The latest artifacts of the node's immediate predecessors, oldest first. Empty for an entry node.</summary>
+    /// <summary>The latest artifacts of the node's nearest producing ancestors, oldest first. Empty for an entry node.</summary>
     public static async Task<IReadOnlyList<DevWorkflowArtifactSnapshot>> ResolveAsync(IDevWorkflowStore store,
         DevWorkflowGraph graph,
         Guid runId,
@@ -24,7 +25,7 @@ internal static class DevWorkflowUpstreamArtifacts
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(graph);
 
-        var sources = graph.InboundEdges(nodeKey).Select(static edge => edge.From).ToHashSet(StringComparer.Ordinal);
+        var sources = ProducingAncestors(graph, nodeKey);
         if (sources.Count == 0)
         {
             return [];
@@ -33,6 +34,50 @@ internal static class DevWorkflowUpstreamArtifacts
         var artifacts = await store.ListArtifactsAsync(runId, sinceSequence: 0, cancellationToken).ConfigureAwait(false);
         return [.. artifacts.Where(artifact => artifact.IsLatest && sources.Contains(artifact.ProducingNodeKey))];
     }
+
+    /// <summary>
+    ///     The nearest ancestors that can have produced anything, walking back through the ones that cannot.
+    ///     <para>
+    ///         Only the three work types produce artifacts; a HumanGate, Gate, Parallel or Join is a routing decision
+    ///         with no output of its own, so stopping at the immediate predecessors would hand a node behind one an
+    ///         empty inheritance — the seeded template's decompose node sits behind a gate and its verify node behind a
+    ///         join, and both were told to transform a plan they were never given.
+    ///     </para>
+    ///     <para>
+    ///         A producing node ENDS the walk on its own path: what it produced is the current version of the work
+    ///         further back, and continuing past it would hand the consumer the superseded input beside the output. The
+    ///         graph is acyclic and every edge names a declared node, so this terminates and needs no depth bound.
+    ///     </para>
+    /// </summary>
+    private static HashSet<string> ProducingAncestors(DevWorkflowGraph graph, string nodeKey)
+    {
+        var sources = new HashSet<string>(StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal)
+        {
+            nodeKey
+        };
+        var pending = new Stack<string>();
+        pending.Push(nodeKey);
+        while (pending.Count > 0)
+        {
+            foreach (var key in graph.InboundEdges(pending.Pop()).Select(static edge => edge.From).Where(key => seen.Add(key)))
+            {
+                if (graph.Nodes.TryGetValue(key, out var from) && Produces(from.NodeType))
+                {
+                    _ = sources.Add(key);
+                }
+                else
+                {
+                    pending.Push(key);
+                }
+            }
+        }
+
+        return sources;
+    }
+
+    private static bool Produces(DevWorkflowNodeType nodeType) =>
+        nodeType is DevWorkflowNodeType.Agent or DevWorkflowNodeType.Tool or DevWorkflowNodeType.DevTask;
 
     /// <summary>
     ///     Resolves and records them in one step, and answers what was recorded so a caller can put the same list in an
