@@ -7,6 +7,7 @@ import {
 	DEV_WORKFLOW_MAX_RENDERED_NODES,
 	type DevWorkflowCanvasNodeData,
 	devWorkflowGraphStructuralKey,
+	devWorkflowTemplateNodeKeys,
 	toDevWorkflowCanvasGraph,
 	toDevWorkflowDefinitionCanvasGraph,
 } from "@/features/devWorkflows/models/DevWorkflowGraphModels";
@@ -279,5 +280,47 @@ describe("toDevWorkflowDefinitionCanvasGraph", () => {
 
 	it("renders nothing rather than throwing when no definition has been picked", () => {
 		expect(toDevWorkflowDefinitionCanvasGraph(undefined).nodes).toEqual([]);
+	});
+});
+
+describe("devWorkflowTemplateNodeKeys", () => {
+	/** `feature-development-v1`'s shape: a two-node template subtree hanging off `decompose`, handed back at `join`. */
+	const graph = {
+		schemaVersion: 1,
+		nodes: [
+			{
+				nodeKey: "decompose",
+				nodeType: "Agent",
+				label: "Decompose",
+				materialization: { templateNodeKey: "implement", artifactKind: "TaskPackage", joinNodeKey: "join" },
+			},
+			{ nodeKey: "implement", nodeType: "DevTask", label: "Implement" },
+			{ nodeKey: "validate", nodeType: "Tool", label: "Validate" },
+			{ nodeKey: "join", nodeType: "Join", label: "Join" },
+			{ nodeKey: "verify", nodeType: "Agent", label: "Verify" },
+		],
+		edges: [
+			{ from: "decompose", to: "join" },
+			{ from: "implement", to: "validate" },
+			{ from: "validate", to: "join" },
+			{ from: "join", to: "verify" },
+		],
+	};
+
+	it("takes the whole template SUBTREE, because C2 clones it whole", () => {
+		expect([...devWorkflowTemplateNodeKeys(graph)].toSorted()).toEqual(["implement", "validate"]);
+	});
+
+	it("stops at the join, so the rest of the run is not swallowed into the template", () => {
+		// The join is where a template hands its work back to the graph. Walking through it would make `join` and
+		// `verify` templates too — and then a join would name itself as a dependency that never materializes.
+		const templates = devWorkflowTemplateNodeKeys(graph);
+		expect(templates.has("join")).toBe(false);
+		expect(templates.has("verify")).toBe(false);
+	});
+
+	it("declares nothing for a graph with no materialization, and nothing for no graph at all", () => {
+		expect(devWorkflowTemplateNodeKeys({ ...graph, nodes: graph.nodes.map(({ materialization, ...rest }) => rest) }).size).toBe(0);
+		expect(devWorkflowTemplateNodeKeys(undefined).size).toBe(0);
 	});
 });

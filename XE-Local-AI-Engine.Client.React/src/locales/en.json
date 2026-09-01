@@ -4957,7 +4957,8 @@
 				"taken": "taken",
 				"outstanding": "outstanding",
 				"satisfied": "satisfied",
-				"notMaterialized": "not created yet"
+				"notMaterialized": "not created yet",
+				"template": "template — materializes per task"
 			},
 			"title": "Workflow Runs",
 			"subtitle": "Durable development workflows: each work item runs a graph of agent, tool and approval nodes that survives a restart.",

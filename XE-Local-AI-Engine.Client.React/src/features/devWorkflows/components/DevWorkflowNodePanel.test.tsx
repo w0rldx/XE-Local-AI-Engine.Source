@@ -379,6 +379,45 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-node-branch-taken-audit")).toBeNull();
 	});
 
+	it("names a row-less TEMPLATE dependency as a template rather than calling it satisfied", () => {
+		// The runtime filters template keys out of `waitingOnNodeKeys` — nothing will ever have a row for one — so the
+		// join's dependency on `validate` rendered SATISFIED by a node that had not run and could not run.
+		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "join", label: "Join" }), {
+			run: devWorkflowRun({
+				graph: {
+					schemaVersion: 1,
+					nodes: [
+						{
+							nodeKey: "decompose",
+							nodeType: "Agent",
+							label: "Decompose",
+							materialization: { templateNodeKey: "implement", artifactKind: "TaskPackage", joinNodeKey: "join" },
+						},
+						{ nodeKey: "implement", nodeType: "DevTask", label: "Implement" },
+						{ nodeKey: "validate", nodeType: "Tool", label: "Validate" },
+						{ nodeKey: "plan", nodeType: "Agent", label: "Plan" },
+						{ nodeKey: "join", nodeType: "Join", label: "Join" },
+					],
+					edges: [
+						{ from: "implement", to: "validate" },
+						{ from: "validate", to: "join" },
+						{ from: "plan", to: "join" },
+					],
+				},
+				nodes: [
+					devWorkflowNodeRunSummary({ id: "n0", nodeKey: "join", waitingOnNodeKeys: ["plan"] }),
+					devWorkflowNodeRunSummary({ id: "n1", nodeKey: "plan", label: "Plan", status: "Running" }),
+				],
+			}),
+		});
+
+		// `validate` is reached from the template root without passing the join, so it is part of the template subtree.
+		expect(screen.getByTestId("dev-workflow-node-dependency-validate").textContent).toContain("template");
+		expect(screen.getByTestId("dev-workflow-node-dependency-validate").textContent).not.toContain("satisfied");
+		// A real dependency the runtime IS waiting on is unaffected.
+		expect(screen.getByTestId("dev-workflow-node-dependency-plan").textContent).toContain("outstanding");
+	});
+
 	it("shows a settled HumanGate's branches, because the seeded template's gates are the only gates it has", () => {
 		// `feature-development-v1` ships only HumanGates, so a decision panel with no branch view meant the branch a
 		// run actually took was unreachable from the one template that matters.

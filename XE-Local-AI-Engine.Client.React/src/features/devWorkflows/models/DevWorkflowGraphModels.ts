@@ -106,6 +106,48 @@ export function devWorkflowGraphStructuralKey(run: DevWorkflowRunResponse | unde
 	return `${nodeIds.join(",")}|${edgePairs.join(",")}`;
 }
 
+/**
+ * The node keys of every materialization TEMPLATE subtree — the nodes a run deliberately gives no node-run row to until
+ * their children are materialized (C2).
+ *
+ * Mirrors `DevWorkflowGraph.TemplateSubtree` exactly: each declared `materialization.templateNodeKey` plus everything
+ * reachable from it WITHOUT passing through that materialization's `joinNodeKey`, because the join is where a template
+ * hands its work back to the graph and walking through it would swallow the rest of the run. Derived rather than read
+ * off a flag because there is none on the wire — but the whole graph IS, so this is the same walk over the same
+ * document rather than a heuristic about which keys happen to have no row.
+ *
+ * Each materialization gets its own visited set, like the server's, so two templates that overlap still declare their
+ * own subtrees in full.
+ */
+export function devWorkflowTemplateNodeKeys(graph: DevWorkflowGraph | undefined): ReadonlySet<string> {
+	const edges = graph?.edges ?? [];
+	const templates = new Set<string>();
+	for (const node of graph?.nodes ?? []) {
+		const root = node.materialization?.templateNodeKey;
+		if (!root) {
+			continue;
+		}
+		const join = node.materialization?.joinNodeKey;
+		const subtree = new Set<string>([root]);
+		const pending = [root];
+		while (pending.length > 0) {
+			const from = pending.pop();
+			for (const edge of edges) {
+				const to = edge.to ?? "";
+				if (edge.from !== from || to.length === 0 || to === join || subtree.has(to)) {
+					continue;
+				}
+				subtree.add(to);
+				pending.push(to);
+			}
+		}
+		for (const key of subtree) {
+			templates.add(key);
+		}
+	}
+	return templates;
+}
+
 /** One card's worth of input, from either data source: a node-run row or a definition's graph node. */
 interface DevWorkflowCanvasEntry {
 	readonly id: string;

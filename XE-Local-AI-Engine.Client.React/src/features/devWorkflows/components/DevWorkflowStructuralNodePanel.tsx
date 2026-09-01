@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { DevWorkflowNodeStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
+import { devWorkflowTemplateNodeKeys } from "@/features/devWorkflows/models/DevWorkflowGraphModels";
 import {
 	type DevWorkflowNodeRunDetailResponse,
 	type DevWorkflowNodeRunSummaryResponse,
@@ -49,6 +50,9 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
 	const inbound = edges.filter((edge) => (edge.to ?? "") === nodeKey);
 	// `waitingOnNodeKeys` is on the SUMMARY row, not the detail response — the run payload is the only place it exists.
 	const waitingOn = new Set(summary?.waitingOnNodeKeys ?? []);
+	// The runtime filters template keys OUT of `waitingOnNodeKeys` — nothing will ever have a row for one, so a join
+	// cannot be waiting on it — which made every row-less template dependency render SATISFIED. It is neither.
+	const templates = devWorkflowTemplateNodeKeys(run?.graph);
 
 	return (
 		<SectionCard
@@ -72,6 +76,7 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
 								nodeKey={edge.from ?? ""}
 								row={rowByKey.get(edge.from ?? "")}
 								outstanding={waitingOn.has(edge.from ?? "")}
+								isTemplate={templates.has(edge.from ?? "")}
 							/>
 						))
 					)}
@@ -119,15 +124,21 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
  * A dependency and whether it is still outstanding. "Outstanding" is the runtime's own answer (`waitingOnNodeKeys`),
  * not one derived from the upstream status here: a Skipped dependency can satisfy a join under one join policy and
  * not under another, and this panel does not own that rule.
+ *
+ * A materialization TEMPLATE is neither. It has no row and never will — its children get the rows — so the runtime
+ * leaves it out of `waitingOnNodeKeys`, and reading that absence as "satisfied" told an operator a dependency had been
+ * met by a node that had not run and could not run. It is named as what it is instead.
  */
 function DependencyRow({
 	nodeKey,
 	row,
 	outstanding,
+	isTemplate,
 }: {
 	readonly nodeKey: string;
 	readonly row?: DevWorkflowNodeRunSummaryResponse;
 	readonly outstanding: boolean;
+	readonly isTemplate: boolean;
 }) {
 	const { t } = useTranslation();
 	return (
@@ -136,11 +147,17 @@ function DependencyRow({
 				{row?.label ?? nodeKey}
 			</Text>
 			{row?.status ? <DevWorkflowNodeStatusBadge status={toDevWorkflowNodeStatus(row.status)} /> : null}
-			<Badge size="xs" variant="light" color={outstanding ? "orange" : "teal"}>
-				{outstanding
-					? t("pages.devWorkflows.structural.outstanding", "outstanding")
-					: t("pages.devWorkflows.structural.satisfied", "satisfied")}
-			</Badge>
+			{isTemplate && !row ? (
+				<Badge size="xs" variant="light" color="gray">
+					{t("pages.devWorkflows.structural.template", "template — materializes per task")}
+				</Badge>
+			) : (
+				<Badge size="xs" variant="light" color={outstanding ? "orange" : "teal"}>
+					{outstanding
+						? t("pages.devWorkflows.structural.outstanding", "outstanding")
+						: t("pages.devWorkflows.structural.satisfied", "satisfied")}
+				</Badge>
+			)}
 		</Group>
 	);
 }
