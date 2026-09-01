@@ -332,6 +332,55 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
+    ///     Two tasks of ONE package can collide with each other, and that is refused as cleanly as a collision with an
+    ///     existing node.
+    ///     <para>
+    ///         <c>"{nodeKey}#{taskId}"</c> is not injective. A template carrying both <c>a</c> and <c>a#b</c> generates
+    ///         <c>a#b#c</c> for task <c>b#c</c> and again for task <c>c</c> — neither of which any existing node holds,
+    ///         so a check against the graph alone waves both through and the store answers the second with a refused
+    ///         insert on its unique <c>(run_id, node_key)</c>. That throws out of the tick, which is the wedge this
+    ///         whole rejection path exists to avoid.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task TwoTasksOfOnePackageThatWouldGenerateTheSameCloneKeyAreRefusedRatherThanWedging()
+    {
+        const string AmbiguousTemplate = """
+                                         {
+                                           "schemaVersion": 1,
+                                           "nodes": [
+                                             { "nodeKey": "decompose", "nodeType": "Agent", "label": "Decompose",
+                                               "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b",
+                                               "materialization": { "templateNodeKey": "a", "artifactKind": "TaskPackage", "joinNodeKey": "join", "maxChildren": 4 } },
+                                             { "nodeKey": "a", "nodeType": "Agent", "label": "First",
+                                               "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                             { "nodeKey": "a#b", "nodeType": "Agent", "label": "Second",
+                                               "agentDefinitionId": "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b" },
+                                             { "nodeKey": "join", "nodeType": "Join" }
+                                           ],
+                                           "edges": [
+                                             { "from": "decompose", "to": "join" },
+                                             { "from": "a", "to": "a#b" },
+                                             { "from": "a#b", "to": "join" }
+                                           ]
+                                         }
+                                         """;
+
+        await using var harness = new DevWorkflowHarness();
+        var runId = await DecomposeAsync(harness, """[{"id":"b#c","goal":"one"},{"id":"c","goal":"two"}]""", AmbiguousTemplate).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+        await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var decompose = await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, decompose.Status, $"the row settled on {decompose.Status} rather than the run wedging on a refused insert.");
+        var reason = AssertEx.NotNull(decompose.TerminalReason);
+        AssertEx.Contains(reason, "a#b#c", message: "the refusal names the key both tasks want.");
+        AssertEx.Contains(reason, "'b#c' and 'c'", message: "and both tasks that want it, because either one is the one to rename.");
+        AssertEx.Equal(expected: 2, (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Count, "a refused package clones nothing.");
+    }
+
+    /// <summary>
     ///     The seam that makes any of this reachable: a work session has no word for a task package, so the NODE declares
     ///     the kind it produces and the promotion writes it. Without it every decomposition's own output lands as an
     ///     ordinary report and §5.9 step 1 finds nothing to read.

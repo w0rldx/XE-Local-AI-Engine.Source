@@ -295,6 +295,13 @@ internal sealed class DevWorkflowMaterializer
         }
 
         var ids = new HashSet<string>(StringComparer.Ordinal);
+
+        // Every clone key this package WOULD take, against the task that first claimed it. Built as the loop goes,
+        // because the collision that wedges a run is as easily between two tasks of one package as with an existing
+        // node: "{nodeKey}#{taskId}" is not injective — a template that carries both `a` and `a#b` generates `a#b#c`
+        // for task `b#c` and again for task `c` — and the store's unique (run_id, node_key) answers that with a refused
+        // insert, which throws out of the tick instead of standing the decomposition down.
+        var generated = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var task in tasks)
         {
             if (string.IsNullOrWhiteSpace(task.Id))
@@ -315,9 +322,17 @@ internal sealed class DevWorkflowMaterializer
             // EVERY node of the subtree, not just its root: a graph that happens to declare a node named like one of
             // the other clones collides just as hard, and the collision surfaces at the store as a refused insert —
             // which throws out of the tick and wedges the run rather than standing this node down.
-            if (subtree.Select(key => CloneKey(key, task.Id)).FirstOrDefault(graph.Nodes.ContainsKey) is { } taken)
+            foreach (var key in subtree.Select(key => CloneKey(key, task.Id)))
             {
-                return $"Task '{task.Id}' would take the node key '{taken}', which this run already carries.";
+                if (graph.Nodes.ContainsKey(key))
+                {
+                    return $"Task '{task.Id}' would take the node key '{key}', which this run already carries.";
+                }
+
+                if (!generated.TryAdd(key, task.Id))
+                {
+                    return $"Tasks '{generated[key]}' and '{task.Id}' would both take the node key '{key}', and two node runs cannot share one key.";
+                }
             }
         }
 
