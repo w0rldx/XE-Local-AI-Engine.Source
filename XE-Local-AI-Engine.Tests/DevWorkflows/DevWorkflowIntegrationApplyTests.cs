@@ -37,6 +37,33 @@ public sealed class DevWorkflowIntegrationApplyTests
                                                """;
 
     /// <summary>
+    ///     Two independent implementation branches, each behind its OWN human gate and its own apply node. The shape a
+    ///     run has whenever more than one thing is integrated separately, and the one a run-wide enumeration gets wrong.
+    /// </summary>
+    private const string TwoGatedApplyLanes = """
+                                              {
+                                                "schemaVersion": 1,
+                                                "nodes": [
+                                                  { "nodeKey": "fork", "nodeType": "Parallel", "label": "Fork" },
+                                                  { "nodeKey": "alphaimplement", "nodeType": "DevTask", "label": "Implement alpha", "nodeTimeoutSeconds": 900 },
+                                                  { "nodeKey": "alphaapproval", "nodeType": "HumanGate", "label": "Approve alpha" },
+                                                  { "nodeKey": "alphaapply", "nodeType": "Tool", "toolMode": "Apply", "label": "Apply alpha" },
+                                                  { "nodeKey": "betaimplement", "nodeType": "DevTask", "label": "Implement beta", "nodeTimeoutSeconds": 900 },
+                                                  { "nodeKey": "betaapproval", "nodeType": "HumanGate", "label": "Approve beta" },
+                                                  { "nodeKey": "betaapply", "nodeType": "Tool", "toolMode": "Apply", "label": "Apply beta" }
+                                                ],
+                                                "edges": [
+                                                  { "from": "fork", "to": "alphaimplement" },
+                                                  { "from": "fork", "to": "betaimplement" },
+                                                  { "from": "alphaimplement", "to": "alphaapproval" },
+                                                  { "from": "alphaapproval", "to": "alphaapply", "condition": { "path": "decision", "op": "eq", "value": "Approve" } },
+                                                  { "from": "betaimplement", "to": "betaapproval" },
+                                                  { "from": "betaapproval", "to": "betaapply", "condition": { "path": "decision", "op": "eq", "value": "Approve" } }
+                                                ]
+                                              }
+                                              """;
+
+    /// <summary>
     ///     The named C4 gate: two task patches apply sequentially, and only after the gate approves.
     ///     <para>
     ///         The "only after" half is asserted BEFORE the decision as well as after it, because it is the half that
@@ -389,6 +416,98 @@ public sealed class DevWorkflowIntegrationApplyTests
         AssertEx.True(DevWorkflowStateMachine.GateEdgeFires(approval, DevWorkflowDecisionKind.Approve));
         AssertEx.False(DevWorkflowStateMachine.GateEdgeFires(approval, DevWorkflowDecisionKind.Reject), "a refused integration applies nothing.");
         AssertEx.False(DevWorkflowStateMachine.GateEdgeFires(approval, DevWorkflowDecisionKind.RequestChanges));
+    }
+
+    /// <summary>
+    ///     An apply node integrates ITS OWN gate's work, not the run's.
+    ///     <para>
+    ///         With two gated apply lanes in one run, a run-wide enumeration hands each gate every succeeded DevTask
+    ///         task there is — so approving alpha lands beta's patch, which alpha's gate never displayed and nobody
+    ///         approved. The gate the graph puts in front of an apply node (Y3) covers the branch that REACHES that
+    ///         node, so the enumeration is the node's graph ancestry.
+    ///     </para>
+    ///     <para>
+    ///         Driven through the production path rather than the dispatcher: what is under test is which tasks the
+    ///         pass enumerates, and standing the rows in the state a gate-approved run leaves them in is exactly what
+    ///         the dispatcher would have done to get here.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task EachGatedApplyLaneAppliesItsOwnBranchAndLeavesTheOtherAlone()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        var (projectId, _) = await harness.SeedDevelopmentProjectAsync().ConfigureAwait(false);
+        var alpha = await AwaitingApplyTaskAsync(harness, projectId, "Alpha slice").ConfigureAwait(false);
+        var beta = await AwaitingApplyTaskAsync(harness, projectId, "Beta slice").ConfigureAwait(false);
+
+        var runId = await harness.StartRunAsync(TwoGatedApplyLanes, "Add both features.", projectId).ConfigureAwait(false);
+        await ImplementedAsync(harness, runId, "alphaimplement", alpha).ConfigureAwait(false);
+        await ImplementedAsync(harness, runId, "betaimplement", beta).ConfigureAwait(false);
+
+        // Beta's gate first, and beta's lane must not reach for alpha — which is the ordering that catches a run-wide
+        // enumeration even when it stops at its first refusal, because alpha sorts ahead of beta by node key.
+        var betaReport = await ApplyAsync(harness, runId, "betaapply").ConfigureAwait(false);
+        AssertEx.Equal($"{beta:N}", string.Join(", ", harness.Chain.Offered.Select(static taskId => taskId.ToString("N"))));
+        AssertEx.Contains(betaReport, beta.ToString("D"));
+        AssertEx.False(betaReport.Contains(alpha.ToString("D"), StringComparison.Ordinal),
+            $"beta's gate approved beta's work, and its report may not name a task from a branch it never showed: {betaReport}");
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
+            (await harness.ReadDevelopmentTaskAsync(alpha).ConfigureAwait(false)).Status,
+            "and alpha's patch is still waiting for alpha's own gate.");
+
+        var alphaReport = await ApplyAsync(harness, runId, "alphaapply").ConfigureAwait(false);
+        AssertEx.Equal($"{beta:N}, {alpha:N}", string.Join(", ", harness.Chain.Offered.Select(static taskId => taskId.ToString("N"))));
+        AssertEx.Contains(alphaReport, alpha.ToString("D"));
+        AssertEx.False(alphaReport.Contains(beta.ToString("D"), StringComparison.Ordinal),
+            $"and alpha's lane does not re-offer beta's task either, already-applied or not: {alphaReport}");
+    }
+
+    /// <summary>A second task on the project, walked up the scripted chain until its patch is waiting to be applied.</summary>
+    private static async Task<Guid> AwaitingApplyTaskAsync(DevWorkflowHarness harness, Guid projectId, string title)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var created = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(projectId,
+                                     Guid.NewGuid(),
+                                     Guid.NewGuid(),
+                                     title,
+                                     "It has to do the thing.",
+                                     "[\"it does the thing\"]"))
+                                 .ConfigureAwait(false);
+        var taskId = created.TaskId ?? throw new AssertionException("The create answered without naming the task it created.");
+        while ((await store.GetTaskAsync(taskId).ConfigureAwait(false)).Status != DevelopmentTaskStatus.AwaitingApply)
+        {
+            _ = await harness.Chain.StartNextActionAsync(projectId, taskId, Guid.NewGuid()).ConfigureAwait(false);
+        }
+
+        return taskId;
+    }
+
+    /// <summary>Stands a DevTask node run where a succeeded implementation leaves it: succeeded, naming its task.</summary>
+    private static async Task ImplementedAsync(DevWorkflowHarness harness, Guid runId, string nodeKey, Guid taskId)
+    {
+        var nodeRun = await harness.ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false);
+        await using var scope = harness.Services.CreateAsyncScope();
+        _ = await scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>()
+                       .TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId,
+                           nodeRun.Id,
+                           DevWorkflowVersions.Any,
+                           DevWorkflowNodeRunStatus.Succeeded,
+                           DevelopmentTaskId: taskId))
+                       .ConfigureAwait(false);
+    }
+
+    /// <summary>Runs one apply node through the production pass and answers with its report.</summary>
+    private static async Task<string> ApplyAsync(DevWorkflowHarness harness, Guid runId, string nodeKey)
+    {
+        var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
+        var nodeRun = await harness.ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false);
+        await using var scope = harness.Services.CreateAsyncScope();
+        var result = await scope.ServiceProvider.GetRequiredService<DevWorkflowApplyCommands>()
+                                .RunAsync(run, nodeRun, CancellationToken.None)
+                                .ConfigureAwait(false);
+        AssertEx.True(result.Passed, $"the lane's own patch had to land: {result.SanitizedReason}");
+        return Encoding.UTF8.GetString(result.Report.Span);
     }
 
     private static Task SeedAsync(DevWorkflowHarness harness) =>

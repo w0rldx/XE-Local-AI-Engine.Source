@@ -35,6 +35,7 @@ internal sealed class DevWorkflowApplyCommands
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly IDevelopmentStore _development;
+    private readonly DevWorkflowGraphCache _graphs;
     private readonly IDevelopmentManagementService _management;
     private readonly IDevWorkflowStore _store;
     private readonly TimeProvider _timeProvider;
@@ -42,11 +43,13 @@ internal sealed class DevWorkflowApplyCommands
     public DevWorkflowApplyCommands(IDevWorkflowStore store,
         IDevelopmentStore development,
         IDevelopmentManagementService management,
+        DevWorkflowGraphCache graphs,
         TimeProvider timeProvider)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _development = development ?? throw new ArgumentNullException(nameof(development));
         _management = management ?? throw new ArgumentNullException(nameof(management));
+        _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
@@ -76,7 +79,7 @@ internal sealed class DevWorkflowApplyCommands
                 $"Node run '{nodeRun.NodeKey}' applies approved patches but names no development project to apply them to.");
         }
 
-        var implementations = await ImplementedAsync(run.Id, projectId, cancellationToken).ConfigureAwait(false);
+        var implementations = await ImplementedAsync(run, nodeRun, projectId, cancellationToken).ConfigureAwait(false);
         var applied = new List<AppliedTask>();
         for (var index = 0; index < implementations.Count; index++)
         {
@@ -278,7 +281,8 @@ internal sealed class DevWorkflowApplyCommands
     }
 
     /// <summary>
-    ///     The tasks this run implemented: every node run that named one and succeeded at it, in materialization order.
+    ///     The tasks THIS node is the integration of: every node run upstream of it that named a development task and
+    ///     succeeded at it, in materialization order.
     ///     <para>
     ///         Bound to the node runs rather than to the project's task list, because the project also holds the
     ///         operator's own task and whatever earlier runs left there — and the run may only integrate what IT
@@ -286,17 +290,33 @@ internal sealed class DevWorkflowApplyCommands
     ///         children of one decomposition carry their 1-based index, and a re-attempt keeps the same pointer, so
     ///         distinct task ids in index order is the whole enumeration.
     ///     </para>
+    ///     <para>
+    ///         And bound to this node's own ANCESTRY rather than to the run, because a run may carry more than one
+    ///         gated apply lane: the gate the graph is required to place in front of this node (Y3) displayed the work
+    ///         on the branch that reaches it, and applying a succeeded task from a PARALLEL branch would be this node
+    ///         landing a patch its approval never showed anyone. Resolved over the run's pinned graph — the same
+    ///         revision the tick routed on, so a materialization's clones are in it — where "upstream" is exactly the
+    ///         set the approval covers.
+    ///     </para>
     /// </summary>
-    private async Task<IReadOnlyList<DevWorkflowNodeRunSnapshot>> ImplementedAsync(Guid runId, Guid projectId, CancellationToken cancellationToken) =>
-    [
-        .. (await _store.ListNodeRunsAsync(runId, cancellationToken).ConfigureAwait(false))
-        .Where(nodeRun => nodeRun.DevelopmentTaskId is not null
-                          && nodeRun.DevelopmentProjectId == projectId
-                          && nodeRun.Status == DevWorkflowNodeRunStatus.Succeeded)
-        .OrderBy(static nodeRun => nodeRun.MaterializationIndex ?? 0)
-        .ThenBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal)
-        .DistinctBy(static nodeRun => nodeRun.DevelopmentTaskId!.Value)
-    ];
+    private async Task<IReadOnlyList<DevWorkflowNodeRunSnapshot>> ImplementedAsync(DevWorkflowRunSnapshot run,
+        DevWorkflowNodeRunSnapshot applyNodeRun,
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        var upstream = _graphs.Resolve(run).Ancestors(applyNodeRun.NodeKey);
+        return
+        [
+            .. (await _store.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false))
+            .Where(nodeRun => nodeRun.DevelopmentTaskId is not null
+                              && nodeRun.DevelopmentProjectId == projectId
+                              && nodeRun.Status == DevWorkflowNodeRunStatus.Succeeded
+                              && upstream.Contains(nodeRun.NodeKey))
+            .OrderBy(static nodeRun => nodeRun.MaterializationIndex ?? 0)
+            .ThenBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal)
+            .DistinctBy(static nodeRun => nodeRun.DevelopmentTaskId!.Value)
+        ];
+    }
 
     /// <summary>
     ///     What the node run answers with, and the report an operator reads to see which patches landed.

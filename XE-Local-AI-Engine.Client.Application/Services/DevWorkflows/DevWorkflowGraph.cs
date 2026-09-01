@@ -134,6 +134,31 @@ internal sealed class DevWorkflowGraph
     }
 
     /// <summary>
+    ///     Every node that reaches <paramref name="to" /> by following out-edges, excluding itself — the mirror of
+    ///     <see cref="Descendants" />, over the inbound index.
+    ///     <para>
+    ///         This is what "upstream of" means on a graph with more than one branch: a node on a PARALLEL branch is
+    ///         neither an ancestor nor a descendant, and the whole point of asking is to leave it alone.
+    ///     </para>
+    /// </summary>
+    public IReadOnlySet<string> Ancestors(string to)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var pending = new Stack<string>();
+        pending.Push(to);
+        while (pending.Count > 0)
+        {
+            foreach (var edge in InboundEdges(pending.Pop()).Where(edge => seen.Add(edge.From)))
+            {
+                pending.Push(edge.From);
+            }
+        }
+
+        _ = seen.Remove(to);
+        return seen;
+    }
+
+    /// <summary>
     ///     One template's nodes: its root and everything reachable from it WITHOUT passing through the join.
     ///     <para>
     ///         The join is where a template subtree hands its work back to the graph, so it belongs to the graph and not
