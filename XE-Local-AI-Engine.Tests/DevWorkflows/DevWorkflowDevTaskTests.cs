@@ -220,6 +220,37 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
+    ///     The same race one hop later, which naming a single status would lose: the supervisor FINISHES between the ask
+    ///     and the guard's re-read, so the task is no longer in Validation by the time anyone looks — it is in InReview,
+    ///     with a bumped version and still no attempt row. A guard that matched only <c>Validation</c> would stand a
+    ///     healthy task down here. A task that MOVED since the snapshot this tick opened with is working, whatever it
+    ///     moved to.
+    /// </summary>
+    [Test]
+    public async Task ATaskThatMovedOnBetweenTheAskAndTheReReadIsWaitedOnRatherThanStoodDown()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        harness.Chain.StallInValidation(1, advance: true);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var waiting = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, waiting.Status, $"the node was left on {waiting.Status}: {waiting.TerminalReason}");
+        AssertEx.Null(waiting.FailureClass, "the task is one status FURTHER on than the window, and nothing about that is a fault.");
+        AssertEx.Equal(DevelopmentTaskStatus.InReview,
+            (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status,
+            "the supervisor had already moved it past Validation by the time the guard looked.");
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
+    }
+
+    /// <summary>
     ///     Cancelling a run stops the development attempt rather than abandoning it, and the row settles on what the
     ///     attempt actually did.
     /// </summary>

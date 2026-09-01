@@ -573,12 +573,16 @@ internal sealed class DevWorkflowDevTaskExecutor
             // An attempt row is not the only way Dev Mode is busy. Deterministic validation is a phase its own
             // supervisor drives with NO attempt row at all — it runs the project's command profile and then moves the
             // task on to InReview or ChangesRequested — so a tick landing inside that window is told there is no next
-            // action, which is true and is not a fault. It is the only status left to say that about: AwaitingApply,
-            // Completed, Cancelled and Blocked are settled by AdvanceTaskAsync's switch before anything is asked,
-            // Planned is promoted to Ready by the ask itself, and Ready, InProgress, ChangesRequested and InReview all
-            // have an executable action. Reading it as a configuration fault stood tasks down 24 ms after validation
-            // started, with a SUCCEEDED coder attempt on them and Dev Mode calmly finishing.
-            if ((await development.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false)).Status == DevelopmentTaskStatus.Validation)
+            // action, which is true and is not a fault. It stood tasks down 24 ms after validation started, with a
+            // SUCCEEDED coder attempt on them and Dev Mode calmly finishing.
+            //
+            // The VERSION is what makes that general rather than a patch for one status. Naming Validation alone loses
+            // the same race one hop later: the supervisor can finish and move the task to InReview between the ask and
+            // this read, and a task that MOVED since the snapshot this tick opened with is working, whatever it moved
+            // to. Only a task sitting exactly where this tick found it, with no attempt and no next action, is
+            // genuinely stuck — and that is the one this blocks.
+            var current = await development.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
+            if (current.Status == DevelopmentTaskStatus.Validation || current.Version != task.Version)
             {
                 return 0;
             }

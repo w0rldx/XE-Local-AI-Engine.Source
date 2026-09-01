@@ -45,6 +45,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     private int _failuresOwed;
     private int _holdsOwed;
     private int _validationStallsOwed;
+    private bool _advanceOnStall;
 
     public FakeDevelopmentTaskChain(IServiceScopeFactory scopes) =>
         _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
@@ -137,13 +138,20 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     ///     phase Dev Mode's own supervisor drives with no attempt row at all. It is the window a workflow tick can land
     ///     in and be told "no" about a task that is perfectly healthy.
     /// </summary>
-    public void StallInValidation(int count)
+    public void StallInValidation(int count, bool advance = false)
     {
         lock (_gate)
         {
             _validationStallsOwed = count;
+            _advanceOnStall = advance;
         }
     }
+
+    /// <summary>
+    ///     What the gate says when it declines a patch. Settable because it lands on the TASK as its blocked reason, and
+    ///     the workflow's retried refusal reads it back — so its LENGTH is part of a contract worth testing.
+    /// </summary>
+    public string BlockedReason { get; set; } = "The scripted host repository was not at the approved base.";
 
     public async Task<DevelopmentNextActionResult> StartNextActionAsync(Guid projectId,
         Guid taskId,
@@ -188,6 +196,18 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
 
         if (stalled)
         {
+            if (_advanceOnStall)
+            {
+                // The supervisor finishing BETWEEN the ask and the caller's re-read: the ask is still refused, but by
+                // the time anyone looks again the task has moved on and its version has bumped.
+                _ = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
+                                           operationId,
+                                           DevelopmentTaskStatus.InReview,
+                                           task.Version),
+                                       cancellationToken)
+                               .ConfigureAwait(false);
+            }
+
             throw new DevelopmentInvalidTransitionException("The Development task has no executable next action in its current state.");
         }
 
@@ -426,7 +446,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
             SubjectHash: task.ApprovedSubjectHash ?? string.Empty);
         if (blocked)
         {
-            return await store.BlockApplyAsync(operationId, subject, "The scripted host repository was not at the approved base.", cancellationToken).ConfigureAwait(false);
+            return await store.BlockApplyAsync(operationId, subject, BlockedReason, cancellationToken).ConfigureAwait(false);
         }
 
         var result = await store.CompleteApplyAsync(operationId, subject, cancellationToken).ConfigureAwait(false);
