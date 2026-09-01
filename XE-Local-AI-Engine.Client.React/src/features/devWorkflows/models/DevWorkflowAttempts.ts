@@ -81,12 +81,17 @@ function statedAttempt(detail: Record<string, unknown>): number | undefined {
 	return typeof detail["attempt"] === "number" ? detail["attempt"] : undefined;
 }
 
-/** `node.retry.routed` carries `{nodeKey, retryTarget, failureClass, reason}` — the node that FAILED, not the reset one. */
-export function devWorkflowRoutedDetail(detailJson: string | null | undefined): { nodeKey?: string; retryTarget?: string } {
+/**
+ * `node.retry.routed` carries `{from, to, failureClass, reason}` — `from` is the node that FAILED, `to` the one the
+ * fix loop resets to. The keys are the server's, verbatim: `RoutedDetail(From, To, …)` under the Web serializer
+ * defaults every payload in this file is read with. This used to read `nodeKey`/`retryTarget`, which the server has
+ * never written, so both were always undefined and the cascade banner never rendered.
+ */
+export function devWorkflowRoutedDetail(detailJson: string | null | undefined): { from?: string; to?: string } {
 	const detail = detailOf(detailJson);
 	return {
-		nodeKey: typeof detail["nodeKey"] === "string" ? detail["nodeKey"] : undefined,
-		retryTarget: typeof detail["retryTarget"] === "string" ? detail["retryTarget"] : undefined,
+		from: typeof detail["from"] === "string" ? detail["from"] : undefined,
+		to: typeof detail["to"] === "string" ? detail["to"] : undefined,
 	};
 }
 

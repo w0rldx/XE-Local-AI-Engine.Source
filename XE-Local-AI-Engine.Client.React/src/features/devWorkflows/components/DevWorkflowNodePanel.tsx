@@ -232,7 +232,7 @@ function CascadeRerunNotice({
 		)
 		.toSorted((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0))
 		.at(-1);
-	const failedNodeKey = devWorkflowRoutedDetail(routed?.detailJson).nodeKey;
+	const failedNodeKey = devWorkflowRoutedDetail(routed?.detailJson).from;
 	if (!failedNodeKey || failedNodeKey === nodeRun.nodeKey) {
 		return null;
 	}
