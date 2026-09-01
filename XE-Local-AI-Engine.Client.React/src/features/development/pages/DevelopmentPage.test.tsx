@@ -380,12 +380,21 @@ describe("DevelopmentPage", () => {
 		expect(screen.getByTestId("development-workflow-banner").textContent).toContain("can no longer approve");
 	});
 
-	it("gives it back when the run cannot be read at all, for the same reason", async () => {
-		// A run this node cannot even fetch is not going to decide anything either.
-		workflowTask({ data: undefined, isError: true, isLoading: false, error: new Error("gone") });
+	it("keeps the patch read-only when the run status cannot be read, and offers the read again", async () => {
+		// An unreadable status is not an ended run. Ownership is enforced by the server — Dev Mode's apply refuses a
+		// task a live run drives — so an Apply button offered on a failed read buys a 409, while withholding it costs
+		// a retry. Fail CLOSED, and say so with a way out.
+		const refetch = vi.fn();
+		workflowTask({ data: undefined, isError: true, isLoading: false, error: new Error("gone"), refetch });
 		renderPage();
 
-		expect(await screen.findByTestId("development-apply-patch")).toBeDefined();
+		expect((await screen.findByTestId("development-workflow-banner")).textContent).toContain("could not be read");
+		expect(screen.queryByTestId("development-apply-patch")).toBeNull();
+		// The evidence stays readable, as it does for a live run.
+		expect(screen.getByTestId("development-preview-patch")).toBeDefined();
+
+		fireEvent.click(screen.getByTestId("development-workflow-retry"));
+		expect(refetch).toHaveBeenCalled();
 	});
 
 	it("stays read-only while the run status is still in flight, which is the safe side of that race", async () => {

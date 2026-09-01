@@ -114,15 +114,16 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 	// its own validated patch, and if this page had also given its Apply button away that patch would be stranded for
 	// good. Authority returns here when the run can no longer take it.
 	//
-	// Unreadable counts as ended for the same reason: a run this node cannot even fetch is not going to decide anything.
-	// While the read is merely in flight the page stays read-only, which is the safe side of the race — a live run's
-	// gate is the authority, and offering a second Apply for the moment before the status lands would be a real bypass.
+	// An UNREADABLE run is not an ended one. Ownership is enforced by the server — Dev Mode's apply refuses a task a
+	// live run drives unless the caller is that run's own lane — so a button offered on a failed status read buys
+	// nothing but a 409, while withholding it costs only a retry. Read-only is therefore the answer to both the failed
+	// read and the in-flight one, and the banner says which and offers the read again.
 	//
 	// With the capability off the query never runs, so the status is unknowable and Dev Mode behaves exactly as it did
 	// before workflows existed: its own apply gate, unchanged.
 	const workflowRunEnded =
-		workflowRunQuery.isError ||
-		(workflowRunQuery.data !== undefined && isTerminalDevWorkflowRunStatus(toDevWorkflowRunStatus(workflowRunQuery.data.status)));
+		workflowRunQuery.data !== undefined && isTerminalDevWorkflowRunStatus(toDevWorkflowRunStatus(workflowRunQuery.data.status));
+	const workflowRunUnreadable = workflowRunQuery.isError;
 	const workflowOwnsApply = Boolean(task?.workflowRunId) && nodeCapabilities.devWorkflows && !workflowRunEnded;
 	const projectRepository = repositories.find((repository) => repository.id === detail?.project?.selectedFolderId);
 	const repositoryConnectionRequired = detail?.project?.repositoryConnectionRequired === true;
@@ -275,6 +276,10 @@ export function useDevelopmentPageController({ initialProjectId, initialTaskId }
 		workflowWorkItemId: workflowRunQuery.data?.workItemId ?? null,
 		workflowOwnsApply,
 		workflowRunEnded,
+		workflowRunUnreadable,
+		retryWorkflowRun: () => {
+			void workflowRunQuery.refetch();
+		},
 		reconnectFolderId,
 		setReconnectFolderId,
 		previewTaskId,

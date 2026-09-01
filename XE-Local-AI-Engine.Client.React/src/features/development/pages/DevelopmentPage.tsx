@@ -42,8 +42,10 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 		selectedTaskId,
 		setSelectedTaskId,
 		workflowWorkItemId,
+		retryWorkflowRun,
 		workflowOwnsApply,
 		workflowRunEnded,
+		workflowRunUnreadable,
 		reconnectFolderId,
 		setReconnectFolderId,
 		previewTaskId,
@@ -216,6 +218,8 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 									workflowRunId={task.workflowRunId}
 									workItemId={workflowWorkItemId}
 									runEnded={workflowRunEnded}
+									runUnreadable={workflowRunUnreadable}
+									onRetryStatus={retryWorkflowRun}
 								/>
 								<DevelopmentProjectOverview
 									attempt={{ active: activeAttempt !== null, cancel: cancelActive, canceling: cancelMutation.isPending }}

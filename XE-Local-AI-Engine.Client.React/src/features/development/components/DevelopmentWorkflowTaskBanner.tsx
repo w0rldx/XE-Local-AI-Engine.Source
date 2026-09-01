@@ -7,8 +7,12 @@ export interface DevelopmentWorkflowTaskBannerProps {
 	readonly workflowRunId: string | null | undefined;
 	/** The run's work item, which the controller resolves through R6. Null until it lands, or where the route is off. */
 	readonly workItemId: string | null;
-	/** The run reached a terminal status, or cannot be read at all — either way it will answer no further gate. */
+	/** The run reached a terminal status, so it will answer no further gate and this page is the authority again. */
 	readonly runEnded: boolean;
+	/** The run's status could not be read, so who owns the decision is unknown and the page stays read-only. */
+	readonly runUnreadable: boolean;
+	/** Asks for the run's status again. The way out of {@link runUnreadable} without reloading the page. */
+	readonly onRetryStatus: () => void;
 }
 
 /**
@@ -23,12 +27,23 @@ export interface DevelopmentWorkflowTaskBannerProps {
  * no further gate, so this page is the only authority left over a patch that is already validated. Saying "the
  * workflow decides" over a run that can no longer decide anything would leave an operator waiting on nothing.
  *
+ * A run whose status could not be READ is neither, and is not allowed to read as either: ownership is enforced by the
+ * server, so the page keeps its patch read-only and says the status is unknown rather than implying a decision is
+ * pending in a workflow nobody can see. The retry is the way out — without it a single failed read strands the patch
+ * behind a banner with no next step.
+ *
  * The link is built from the run rather than guessed: the Dev Mode task carries only a run id, and the workflow detail
  * route is keyed by WORK ITEM. R6 already answers both — `GET runs/{runId}` returns the run's `workItemId` — so the
  * controller reads that one existing endpoint rather than asking P3 for a new field. No link is offered until it
  * resolves, and none at all where the capability is off: a route that redirects home is worse than prose.
  */
-export function DevelopmentWorkflowTaskBanner({ workflowRunId, workItemId, runEnded }: DevelopmentWorkflowTaskBannerProps) {
+export function DevelopmentWorkflowTaskBanner({
+	workflowRunId,
+	workItemId,
+	runEnded,
+	runUnreadable,
+	onRetryStatus,
+}: DevelopmentWorkflowTaskBannerProps) {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 
@@ -36,20 +51,34 @@ export function DevelopmentWorkflowTaskBanner({ workflowRunId, workItemId, runEn
 		return null;
 	}
 
+	// Ordered by precedence, not nested: an unreadable status overrides a stale "ended", and both override the default.
+	let body = t(
+		"pages.development.workflow.body",
+		"A development workflow created this task and is driving it. The approval that lets its patch land is a gate node in that workflow, so this page shows the evidence and the workflow makes the decision.",
+	);
+	if (runEnded) {
+		body = t(
+			"pages.development.workflow.ended",
+			"The development workflow that created this task has ended, so it can no longer approve anything. This page is the remaining authority over its patch.",
+		);
+	}
+
+	if (runUnreadable) {
+		body = t(
+			"pages.development.workflow.unreadable",
+			"The status of the development workflow that created this task could not be read, so it is not known whether that workflow still owns the decision. This page stays read-only until it can be.",
+		);
+	}
+
 	return (
-		<Alert color={runEnded ? "yellow" : "blue"} variant="light" data-testid="development-workflow-banner">
+		<Alert color={runEnded || runUnreadable ? "yellow" : "blue"} variant="light" data-testid="development-workflow-banner">
 			<Stack gap={4} align="flex-start">
-				<Text size="sm">
-					{runEnded
-						? t(
-								"pages.development.workflow.ended",
-								"The development workflow that created this task has ended, so it can no longer approve anything. This page is the remaining authority over its patch.",
-							)
-						: t(
-								"pages.development.workflow.body",
-								"A development workflow created this task and is driving it. The approval that lets its patch land is a gate node in that workflow, so this page shows the evidence and the workflow makes the decision.",
-							)}
-				</Text>
+				<Text size="sm">{body}</Text>
+				{runUnreadable ? (
+					<Anchor component="button" type="button" size="sm" onClick={onRetryStatus} data-testid="development-workflow-retry">
+						{t("pages.development.workflow.retry", "Check the workflow again")}
+					</Anchor>
+				) : null}
 				{workItemId ? (
 					<Anchor
 						component="button"
@@ -71,3 +100,4 @@ export function DevelopmentWorkflowTaskBanner({ workflowRunId, workItemId, runEn
 		</Alert>
 	);
 }
+

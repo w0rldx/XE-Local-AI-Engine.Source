@@ -64,6 +64,11 @@ public sealed class DevWorkflowIntegrationApplyTests
             string.Join(", ", harness.Chain.Offered.Select(static taskId => taskId.ToString("N"))),
             "both patches, one after the other, in the order the decomposition put the slices in.");
 
+        // Every apply named THIS run. The real service refuses an apply that names no run for a task a live run drives
+        // (Y3, server-side), so a lane that stopped threading its run id would refuse its own patches in production
+        // while this scripted chain applied them happily.
+        AssertEx.Equal($"{runId:D}, {runId:D}", string.Join(", ", harness.Chain.OnBehalfOf.Select(static id => id?.ToString("D") ?? "<none>")));
+
         var integrate = await harness.ReadNodeRunAsync(runId, "integrate").ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, integrate.Status, AssertEx.NotNull(integrate.TerminalReason ?? integrate.OutputJson));
         AssertEx.Equal(DevelopmentTaskStatus.Completed, (await harness.ReadDevelopmentTaskAsync(alpha).ConfigureAwait(false)).Status);

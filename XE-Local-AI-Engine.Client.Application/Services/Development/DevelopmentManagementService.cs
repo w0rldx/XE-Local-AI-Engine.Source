@@ -5,6 +5,7 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 
@@ -45,9 +46,19 @@ public interface IDevelopmentManagementService
         Guid taskId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Puts a task's approved patch into the repository.
+    ///     <para>
+    ///         <paramref name="onBehalfOfWorkflowRunId" /> names the development-workflow run whose apply lane is
+    ///         asking, and is the ONLY thing that gets an apply past a live run's ownership of that decision (Y3).
+    ///         An operator surface — the endpoint — passes <see langword="null" />, which is what makes the refusal
+    ///         server-side rather than a button a React build withholds.
+    ///     </para>
+    /// </summary>
     Task<DevelopmentOperationResult> ApplyAsync(Guid projectId,
         Guid taskId,
         Guid operationId,
+        Guid? onBehalfOfWorkflowRunId,
         CancellationToken cancellationToken = default);
 
     Task<DevelopmentProjectAggregate> ReconnectRepositoryAsync(Guid projectId,
@@ -439,11 +450,61 @@ internal sealed class DevelopmentManagementService(
     public async Task<DevelopmentOperationResult> ApplyAsync(Guid projectId,
         Guid taskId,
         Guid operationId,
+        Guid? onBehalfOfWorkflowRunId,
         CancellationToken cancellationToken = default)
     {
         _ = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
+        await EnsureApplyAuthorityAsync(taskId, onBehalfOfWorkflowRunId, cancellationToken).ConfigureAwait(false);
         var repository = await _repositoryBindings.ResolveProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
         return await _applyService.ApplyAsync(taskId, operationId, repository, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     Y3, enforced where it is actually enforceable: while the run driving a task is LIVE, the approval that lets
+    ///     that task's patch land is a gate node in the run, and this gate is not it.
+    ///     <para>
+    ///         The Development page already hides its Apply button for such a task, but a hidden button is a hint, not
+    ///         a rule — any client of this endpoint could apply the patch and leave the workflow's HumanGate trail
+    ///         describing a decision nobody made. So the refusal lives here, in the one place both apply surfaces meet:
+    ///         the endpoint and the workflow's own <c>DevWorkflowApplyCommands</c> both route through this method.
+    ///     </para>
+    ///     <para>
+    ///         The workflow's lane gets through by NAMING the run it is applying for, rather than by an ambient flag: a
+    ///         caller that says "on behalf of run X" and is refused because the task belongs to run Y is exactly the
+    ///         case that should be refused. And once the run has ENDED it can answer no further gate, so the authority
+    ///         returns here — withholding the apply then would strand an already-validated patch for good.
+    ///     </para>
+    ///     <para>
+    ///         Reads only. <c>DevWorkflows:Enabled=false</c> stops the dispatcher, not the store — no run can advance,
+    ///         but the rows a run left behind are still the truth about who owns its tasks, so the answer is the same.
+    ///     </para>
+    /// </summary>
+    private async Task EnsureApplyAuthorityAsync(Guid taskId, Guid? onBehalfOfWorkflowRunId, CancellationToken cancellationToken)
+    {
+        if (await _workflows.FindRunIdForDevelopmentTaskAsync(taskId, cancellationToken).ConfigureAwait(false) is not { } runId
+            || runId == onBehalfOfWorkflowRunId)
+        {
+            return;
+        }
+
+        DevWorkflowRunSnapshot run;
+        try
+        {
+            run = await _workflows.GetRunAsync(runId, cancellationToken).ConfigureAwait(false);
+        }
+        catch (DevWorkflowNotFoundException)
+        {
+            // The run was deleted between the two reads. There is no live owner left to defer to, and answering a 404
+            // about a workflow to somebody applying a Development patch would be the wrong subject entirely.
+            return;
+        }
+
+        if (!DevWorkflowStateMachine.IsTerminal(run.Status))
+        {
+            throw new DevelopmentInvalidTransitionException($"Development workflow run '{runId:D}' is driving this task and has not ended, so the "
+                                                            + "approval that lets its patch land is that run's own gate. Approve it there, or wait "
+                                                            + "for the run to end before applying from here.");
+        }
     }
 
     public async Task<DevelopmentProjectAggregate> ReconnectRepositoryAsync(Guid projectId,

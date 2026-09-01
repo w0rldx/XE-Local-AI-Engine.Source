@@ -246,7 +246,7 @@ public sealed class DevelopmentEndpointTests
                .Returns(Task.FromException<DevelopmentNextActionResult>(failure));
         service.PreviewAsync(ProjectId, TaskId, Arg.Any<CancellationToken>())
                .Returns(Task.FromException<DevelopmentPatchPreviewResult>(failure));
-        service.ApplyAsync(ProjectId, TaskId, Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+        service.ApplyAsync(ProjectId, TaskId, Arg.Any<Guid>(), Arg.Any<Guid?>(), Arg.Any<CancellationToken>())
                .Returns(Task.FromException<DevelopmentOperationResult>(failure));
         service.ReconnectRepositoryAsync(ProjectId, Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<CancellationToken>())
                .Returns(Task.FromException<DevelopmentProjectAggregate>(failure));

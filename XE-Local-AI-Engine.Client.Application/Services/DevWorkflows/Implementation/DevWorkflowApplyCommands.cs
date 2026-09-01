@@ -144,7 +144,9 @@ internal sealed class DevWorkflowApplyCommands
         var operationId = DevWorkflowOperationId.For(run.Id, nodeRun.NodeKey, nodeRun.Attempt, $"apply-{task.Id:N}");
         try
         {
-            var result = await _management.ApplyAsync(projectId, task.Id, operationId, cancellationToken).ConfigureAwait(false);
+            // On behalf of THIS run, which is what gets past the ownership guard the same method enforces against
+            // every other caller: the gate that authorised this apply is a node of this run.
+            var result = await _management.ApplyAsync(projectId, task.Id, operationId, run.Id, cancellationToken).ConfigureAwait(false);
             if (!string.Equals(result.Phase, DevelopmentOperationPhases.ApplyBlocked, StringComparison.Ordinal))
             {
                 return (new AppliedTask(implementation.NodeKey, task.Id, title, AppliedOutcomes.Applied, Detail: null), null);

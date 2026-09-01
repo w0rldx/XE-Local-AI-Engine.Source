@@ -35,6 +35,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     private readonly Lock _gate = new();
     private readonly List<string> _actions = [];
     private readonly List<Guid> _offered = [];
+    private readonly List<Guid?> _onBehalfOf = [];
     private readonly List<Guid> _cancelled = [];
     private readonly TaskCompletionSource _applyHeld = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _policyRefusalsOwed;
@@ -74,6 +75,22 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
             lock (_gate)
             {
                 return [.. _offered];
+            }
+        }
+    }
+
+    /// <summary>
+    ///     The workflow run each apply named itself on behalf of, in the same order as <see cref="Offered" />. The real
+    ///     service refuses an apply that names no run for a task a live run drives, so a lane that stopped threading its
+    ///     run id would refuse its own patches in production while every scripted test still passed.
+    /// </summary>
+    public IReadOnlyList<Guid?> OnBehalfOf
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _onBehalfOf];
             }
         }
     }
@@ -387,8 +404,13 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     ///         apply tests, which this phase left untouched.
     ///     </para>
     /// </summary>
-    public async Task<DevelopmentOperationResult> ApplyAsync(Guid projectId, Guid taskId, Guid operationId, CancellationToken cancellationToken = default)
+    public async Task<DevelopmentOperationResult> ApplyAsync(Guid projectId,
+        Guid taskId,
+        Guid operationId,
+        Guid? onBehalfOfWorkflowRunId,
+        CancellationToken cancellationToken = default)
     {
+
         await using var scope = _scopes.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
         var task = await store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
@@ -416,6 +438,10 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
             // refused by it still reached the gate, and that is the difference between a real second ask and a memoized
             // answer.
             _offered.Add(taskId);
+
+            // Recorded, not judged: the ownership guard is the real service's. What matters here is that the lane names
+            // its run at all, because nothing else scripted would notice if it stopped.
+            _onBehalfOf.Add(onBehalfOfWorkflowRunId);
         }
 
         // The real service's precondition, kept because it is what a RETRY meets: an apply reads the approved subject off

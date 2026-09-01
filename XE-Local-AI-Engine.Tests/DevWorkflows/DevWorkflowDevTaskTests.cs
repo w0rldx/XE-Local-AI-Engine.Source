@@ -538,6 +538,69 @@ public sealed class DevWorkflowDevTaskTests
             "and a task an operator drives themselves says nothing about workflows, which is every task on a node that runs none.");
     }
 
+    /// <summary>
+    ///     Y3 is enforced by the SERVER, not by a hidden button: while the run driving a task is live, Dev Mode's own
+    ///     apply refuses — for the endpoint, for a script, for anything that is not that run's apply lane.
+    ///     <para>
+    ///         The three answers in one test because they are one rule: no run named ⇒ refused; the OWNING run named ⇒
+    ///         through; the run ENDED ⇒ through again, because a terminal run answers no further gate and withholding
+    ///         the apply then would strand an already-validated patch.
+    ///     </para>
+    ///     <para>
+    ///         "Through" is asserted as "not refused for this reason" rather than as a landed patch: past the guard the
+    ///         apply reaches the repository binding and the approved-subject preconditions, and neither this harness's
+    ///         seeded folder nor its untouched task can satisfy them. What the guard owns is exactly the sentence.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ADevModeApply_IsRefusedWhileALiveWorkflowRunOwnsTheTask_AndOnlyForACallerThatIsNotThatRun()
+    {
+        // The REAL Development management service: the scripted chain is the thing under test's stand-in everywhere
+        // else, and a guard asserted against a stand-in is not asserted at all.
+        await using var harness = new DevWorkflowHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        await PinTaskAsync(harness, runId, "implement", taskId).ConfigureAwait(false);
+
+        var operatorApply = await ApplyFailureAsync(harness, projectId, taskId, onBehalfOfWorkflowRunId: null).ConfigureAwait(false);
+        AssertEx.Contains(operatorApply, "has not ended");
+        AssertEx.Contains(operatorApply, runId.ToString("D"));
+
+        var strangerApply = await ApplyFailureAsync(harness, projectId, taskId, Guid.NewGuid()).ConfigureAwait(false);
+        AssertEx.Contains(strangerApply, "has not ended", message: "and naming SOME run is not naming this one.");
+
+        var ownApply = await ApplyFailureAsync(harness, projectId, taskId, runId).ConfigureAwait(false);
+        AssertEx.False(ownApply.Contains("has not ended", StringComparison.Ordinal), $"the run's own lane must get past its own gate: {ownApply}");
+
+        await harness.TransitionRunAsync(runId, DevWorkflowRunStatus.Completed).ConfigureAwait(false);
+        var afterTheRunEnded = await ApplyFailureAsync(harness, projectId, taskId, onBehalfOfWorkflowRunId: null).ConfigureAwait(false);
+        AssertEx.False(afterTheRunEnded.Contains("has not ended", StringComparison.Ordinal), $"a terminal run hands the authority back: {afterTheRunEnded}");
+    }
+
+    /// <summary>A task no node run ever named is nobody's but the operator's, which is nearly every task there is.</summary>
+    [Test]
+    public async Task ADevModeApply_OnATaskNoWorkflowDrives_IsNotRefusedByTheOwnershipGuard()
+    {
+        await using var harness = new DevWorkflowHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        var undriven = await AddTaskAsync(harness, projectId, "Nobody's workflow drives this").ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+        await PinTaskAsync(harness, runId, "implement", taskId).ConfigureAwait(false);
+
+        var failure = await ApplyFailureAsync(harness, projectId, undriven, onBehalfOfWorkflowRunId: null).ConfigureAwait(false);
+        AssertEx.False(failure.Contains("has not ended", StringComparison.Ordinal), $"a live run next door owns its own task, not the project: {failure}");
+    }
+
+    /// <summary>The message Development refused an apply with, whatever refused it.</summary>
+    private static async Task<string> ApplyFailureAsync(DevWorkflowHarness harness, Guid projectId, Guid taskId, Guid? onBehalfOfWorkflowRunId)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var management = scope.ServiceProvider.GetRequiredService<IDevelopmentManagementService>();
+        return (await AssertEx.ThrowsAsync<Exception>(() => management.ApplyAsync(projectId, taskId, Guid.NewGuid(), onBehalfOfWorkflowRunId),
+                                 "an apply on a task with neither a connected repository nor an approved subject cannot succeed.")
+                              .ConfigureAwait(false)).Message;
+    }
+
     /// <summary>The workflow host with the development chain scripted, and its own development project to drive.</summary>
     private static DevWorkflowHarness NewHarness(TimeProvider? clock = null) =>
         DevWorkflowHarness.WithAScriptedChain(clock);

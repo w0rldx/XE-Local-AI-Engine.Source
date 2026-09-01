@@ -185,7 +185,9 @@
 			"workflow": {
 				"body": "A development workflow created this task and is driving it. The approval that lets its patch land is a gate node in that workflow, so this page shows the evidence and the workflow makes the decision.",
 				"open": "Open the workflow run",
-				"ended": "The development workflow that created this task has ended, so it can no longer approve anything. This page is the remaining authority over its patch."
+				"ended": "The development workflow that created this task has ended, so it can no longer approve anything. This page is the remaining authority over its patch.",
+				"unreadable": "The status of the development workflow that created this task could not be read, so it is not known whether that workflow still owns the decision. This page stays read-only until it can be.",
+				"retry": "Check the workflow again"
 			},
 			"validation": {
 				"noReport": "No deterministic validation has run for this task yet.",
