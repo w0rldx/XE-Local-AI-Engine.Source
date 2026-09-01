@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1.Mappers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 /// <summary>
 ///     Projects the store's snapshots onto the wire contracts. Entities never reach an endpoint: their text columns
@@ -46,8 +47,25 @@ internal static class DevWorkflowContractMapper
         };
     }
 
-    public static string ToGraphJson(DevWorkflowGraph graph) =>
-        JsonSerializer.Serialize(graph, GraphOptions);
+    /// <summary>
+    ///     The wire graph as the document that gets stored. Only one field is touched on the way in: <c>toolMode</c> is
+    ///     written in the parser's own spelling, so a definition saved as <c>"apply"</c> stores <c>"Apply"</c> and every
+    ///     reader of the blob — including a future one that does not parse case-insensitively — sees one form.
+    /// </summary>
+    public static string ToGraphJson(DevWorkflowGraph graph)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        return JsonSerializer.Serialize(graph with
+        {
+            Nodes =
+            [
+                .. (graph.Nodes ?? []).Select(static node => node with
+                {
+                    ToolMode = DevWorkflowGraphContract.CanonicalToolMode(node.ToolMode)
+                })
+            ]
+        }, GraphOptions);
+    }
 
     public static DevWorkflowWorkItemResponse ToResponse(this DevWorkflowWorkItemSnapshot value, IReadOnlyList<DevWorkflowRunSummary> runs) =>
         new(value.Id,

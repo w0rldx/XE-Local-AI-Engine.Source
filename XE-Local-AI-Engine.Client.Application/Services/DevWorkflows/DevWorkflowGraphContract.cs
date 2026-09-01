@@ -27,6 +27,14 @@ public static class DevWorkflowGraphContract
         DevWorkflowGraph.Parse(graphJson).Nodes.Count;
 
     /// <summary>
+    ///     A graph node's <c>toolMode</c> in the parser's own spelling, so what is STORED is canonical whatever casing
+    ///     an author sent. A value the parser would reject is handed back untouched — refusing it is
+    ///     <see cref="ValidateAndCountNodes" />'s job, and quietly rewriting it would hide the mistake.
+    /// </summary>
+    public static string? CanonicalToolMode(string? toolMode) =>
+        Enum.TryParse<DevWorkflowToolMode>(toolMode, ignoreCase: true, out var parsed) ? parsed.ToString() : toolMode;
+
+    /// <summary>
     ///     Which decisions a node run in <paramref name="status" /> can take: a gate's three answers and <c>Skip</c>
     ///     from <c>WaitingForApproval</c>, the three interventions from <c>Blocked</c>, and nothing at all from
     ///     anywhere else.

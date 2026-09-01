@@ -41,6 +41,22 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
                                       }
                                       """;
 
+    /// <summary>A clone group that offers TWO implementations upstream of the same validation.</summary>
+    private const string TwoImplementationGraph = """
+                                                  {
+                                                    "schemaVersion": 1,
+                                                    "nodes": [
+                                                      { "nodeKey": "implement#alpha", "nodeType": "DevTask", "label": "Implement", "nodeTimeoutSeconds": 900 },
+                                                      { "nodeKey": "implement#beta", "nodeType": "DevTask", "label": "Implement too", "nodeTimeoutSeconds": 900 },
+                                                      { "nodeKey": "validate#alpha", "nodeType": "Tool", "label": "Validate" }
+                                                    ],
+                                                    "edges": [
+                                                      { "from": "implement#alpha", "to": "implement#beta" },
+                                                      { "from": "implement#beta", "to": "validate#alpha" }
+                                                    ]
+                                                  }
+                                                  """;
+
     /// <summary>What the child implemented: one added file, as a plain unified diff.</summary>
     private const string Patch = """
                                  diff --git a/subtract.txt b/subtract.txt
@@ -117,23 +133,83 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
     }
 
     /// <summary>
-    ///     An implementation that has not produced an approved patch yet is not an error — the base is validated exactly
-    ///     as before. What changes is that the report says so, instead of leaving a reader to assume the child's work
-    ///     was in the tree.
+    ///     A validation node runs only after its implementation SUCCEEDED, so a sibling with no approved patch is an
+    ///     anomaly — not a licence to validate the base and report green about it. It refuses, naming the state.
     /// </summary>
     [Test]
-    public async Task WhenTheSiblingHasNoApprovedPatchYet_TheBaseIsValidatedAndTheReportSaysSo()
+    public async Task WhenTheSiblingHasNoApprovedPatchYet_TheNodeRefusesRatherThanJudgingTheBase()
     {
         var workspace = await WorkspaceAsync().ConfigureAwait(false);
         var commands = Commands(DevTask(DevelopmentTaskStatus.InProgress), Artifact(ApprovedSubject));
 
         var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None).ConfigureAwait(false);
 
-        AssertEx.Null(overlay.Refusal);
-        var basedOn = AssertEx.NotNull(overlay.BasedOn);
-        AssertEx.Null(basedOn.PatchHash);
-        AssertEx.Contains(basedOn.Detail, "judged the base commit");
+        AssertEx.Null(overlay.BasedOn);
+        AssertEx.Contains(AssertEx.NotNull(overlay.Refusal), "InProgress");
+        AssertEx.Contains(AssertEx.NotNull(overlay.Refusal), "runs only after that implementation succeeded");
         AssertEx.False(File.Exists(Path.Combine(workspace, "subtract.txt")));
+    }
+
+    /// <summary>
+    ///     A task that reached <c>AwaitingApply</c> through the generic transition can carry no approved subject at all,
+    ///     and then nothing binds its stored patch to an approval. Structurally the same hole as a subject MISMATCH, so
+    ///     it gets the same answer rather than an unbound overlay.
+    /// </summary>
+    [Test]
+    public async Task WhenTheApprovedTaskCarriesNoSubjectAtAll_TheNodeRefusesInsteadOfOverlayingUnbound()
+    {
+        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+        var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply, approvedSubjectHash: null), Artifact(ApprovedSubject));
+
+        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Null(overlay.BasedOn);
+        AssertEx.Contains(AssertEx.NotNull(overlay.Refusal), "names no approved subject");
+        AssertEx.False(File.Exists(Path.Combine(workspace, "subtract.txt")), "an unbound patch is not applied on the way to refusing.");
+    }
+
+    /// <summary>
+    ///     Two implementations upstream of one validation in the same clone group: which work the quality gate is ABOUT
+    ///     is then ambiguous, and picking one alphabetically would answer a question nobody asked. It refuses, naming
+    ///     both, because this is an authoring or materialization fault a human has to look at.
+    /// </summary>
+    [Test]
+    public async Task WhenTheCloneGroupOffersTwoImplementations_TheNodeRefusesAndNamesThem()
+    {
+        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+        var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply), Artifact(ApprovedSubject), twoImplementations: true);
+
+        var overlay = await commands.OverlayAsync(Run(TwoImplementationGraph), ValidateRow(), Session(workspace), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Null(overlay.BasedOn);
+        var refusal = AssertEx.NotNull(overlay.Refusal);
+        AssertEx.Contains(refusal, "'implement#alpha'");
+        AssertEx.Contains(refusal, "'implement#beta'");
+        AssertEx.False(File.Exists(Path.Combine(workspace, "subtract.txt")));
+    }
+
+    /// <summary>
+    ///     The patch no longer applies — the base moved under it, or the tree already carries a conflicting change. The
+    ///     node refuses rather than running its commands over whatever the workspace happens to hold.
+    /// </summary>
+    [Test]
+    public async Task WhenTheApprovedPatchNoLongerApplies_TheNodeRefusesRatherThanJudgingWhatIsThere()
+    {
+        var workspace = await WorkspaceAsync().ConfigureAwait(false);
+
+        // The same path the patch adds, already committed with different content: git apply refuses, exactly as it does
+        // when the base branch moved on after the patch was produced.
+        await File.WriteAllTextAsync(Path.Combine(workspace, "subtract.txt"), "someone else's work\n").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "add", "subtract.txt").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(workspace, "commit", "-m", "conflicting change").ConfigureAwait(false);
+
+        var commands = Commands(DevTask(DevelopmentTaskStatus.AwaitingApply), Artifact(ApprovedSubject));
+
+        var overlay = await commands.OverlayAsync(Run(), ValidateRow(), Session(workspace), CancellationToken.None).ConfigureAwait(false);
+
+        AssertEx.Null(overlay.BasedOn);
+        AssertEx.Contains(AssertEx.NotNull(overlay.Refusal), "did not apply to this node's freshly prepared workspace");
+        AssertEx.Equal("someone else's work\n", await File.ReadAllTextAsync(Path.Combine(workspace, "subtract.txt")).ConfigureAwait(false));
     }
 
     /// <summary>
@@ -176,13 +252,18 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
         AssertEx.False(File.Exists(Path.Combine(workspace, "subtract.txt")));
     }
 
-    private static DevWorkflowToolCommands Commands(DevelopmentTaskSnapshot task, DevelopmentArtifactSnapshot? patch)
+    private static DevWorkflowToolCommands Commands(DevelopmentTaskSnapshot task,
+        DevelopmentArtifactSnapshot? patch,
+        bool twoImplementations = false)
     {
         var development = Substitute.For<IDevelopmentStore>();
         _ = development.GetTaskAsync(TaskId, Arg.Any<CancellationToken>()).Returns(task);
 
         var workflows = Substitute.For<IDevWorkflowStore>();
-        _ = workflows.ListNodeRunsAsync(RunId, Arg.Any<CancellationToken>()).Returns([ImplementRow(), ValidateRow()]);
+        _ = workflows.ListNodeRunsAsync(RunId, Arg.Any<CancellationToken>())
+                     .Returns(twoImplementations
+                         ? [ImplementRow(), Row("implement#beta", DevWorkflowNodeType.DevTask, TaskId), ValidateRow()]
+                         : [ImplementRow(), ValidateRow()]);
 
         return new DevWorkflowToolCommands(development,
             Substitute.For<IDevelopmentRepositoryBindingService>(),
@@ -260,7 +341,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
         return output;
     }
 
-    private static DevelopmentTaskSnapshot DevTask(DevelopmentTaskStatus status) =>
+    private static DevelopmentTaskSnapshot DevTask(DevelopmentTaskStatus status, string? approvedSubjectHash = ApprovedSubject) =>
         new(TaskId,
             ProjectId,
             "Add Subtract",
@@ -271,7 +352,7 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
             MaxReviewRounds: 2,
             BlockedReason: null,
             BlockedAtUtc: null,
-            status == DevelopmentTaskStatus.InProgress ? null : ApprovedSubject,
+            status == DevelopmentTaskStatus.InProgress ? null : approvedSubjectHash,
             CreatedAtUtc: 1,
             UpdatedAtUtc: 2,
             Version: 3);
@@ -295,13 +376,13 @@ public sealed class DevWorkflowToolOverlayTests : IDisposable
             IsValid: true,
             "PROFILE-DIGEST");
 
-    private static DevWorkflowRunSnapshot Run() =>
+    private static DevWorkflowRunSnapshot Run(string graphJson = CloneGraph) =>
         new(RunId,
             WorkItemId: Guid.NewGuid(),
             DefinitionId: Guid.NewGuid(),
             DefinitionVersion: 1,
             "graph-hash",
-            CloneGraph,
+            graphJson,
             GraphRevision: 2,
             DevWorkflowRunStatus.Running,
             LastSequence: 9,

@@ -64,6 +64,45 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
                                                }
                                                """;
 
+    /// <summary>
+    ///     A run that starts on a human gate and nothing else, so a test can arrange a materialized clone group under it
+    ///     before any lane is asked to do anything.
+    /// </summary>
+    private const string GateOnly = """
+                                    {
+                                      "schemaVersion": 1,
+                                      "nodes": [{ "nodeKey": "gate", "nodeType": "HumanGate", "label": "Approve" }],
+                                      "edges": []
+                                    }
+                                    """;
+
+    /// <summary>The same run after a decomposition: one implementation and the validation that judges it.</summary>
+    private const string GateThenCloneGroup = """
+                                              {
+                                                "schemaVersion": 1,
+                                                "nodes": [
+                                                  { "nodeKey": "gate", "nodeType": "HumanGate", "label": "Approve" },
+                                                  { "nodeKey": "implement#1", "nodeType": "DevTask", "label": "Implement", "nodeTimeoutSeconds": 900 },
+                                                  { "nodeKey": "validate#1", "nodeType": "Tool", "label": "Validate the slice", "maxAttempts": 1 }
+                                                ],
+                                                "edges": [
+                                                  { "from": "gate", "to": "implement#1" },
+                                                  { "from": "implement#1", "to": "validate#1" }
+                                                ]
+                                              }
+                                              """;
+
+    /// <summary>What the child implemented, as the approved patch artifact's bytes: one added file.</summary>
+    private const string ChildPatch = """
+                                      diff --git a/slice.txt b/slice.txt
+                                      new file mode 100644
+                                      --- /dev/null
+                                      +++ b/slice.txt
+                                      @@ -0,0 +1 @@
+                                      +the child's own work
+
+                                      """;
+
     // Short prefix on purpose: the workspace provider appends development/workspaces/<projectId>/<attempt id> as two
     // more full GUIDs under this root, and a long one pushes `git clone` past the path limit on Windows.
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-dw-tool-" + Guid.NewGuid().ToString("N")[..12]);
@@ -175,6 +214,162 @@ public sealed class DevWorkflowToolSandboxTests : IDisposable
     ///     Registers the repository and creates the Development project the tool node runs against, with the .NET
     ///     solution profile bound to the synthetic fixture's own solution file.
     /// </summary>
+
+    /// <summary>
+    ///     The overlay's refusal reaching the ROW, through the whole lane: a materialized child's validation prepares a
+    ///     real workspace, finds that its sibling implementation's approved patch no longer applies to it, and refuses
+    ///     as a policy failure instead of running its commands over a tree nobody judged.
+    ///     <para>
+    ///         The base carries a conflicting <c>slice.txt</c>, which is what a base branch that moved on after the
+    ///         patch was produced looks like to <c>git apply</c>. No validation command runs — the refusal happens
+    ///         before them — so this is a clone and a refusal rather than a build.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task AMaterializedChildsValidationRefusesWhenItsSiblingsApprovedPatchNoLongerApplies()
+    {
+        var repository = Path.Combine(_root, "conflict");
+        await DevelopmentSyntheticSolutionRepository.CreateAsync(repository, includeTests: false).ConfigureAwait(false);
+        await WriteAndCommitAsync(repository, DevelopmentSyntheticSolutionRepository.PassingLibrarySource, "implement the feature").ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(repository, "slice.txt"), "someone else's work\n").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "add", "-A", "--", ".").ConfigureAwait(false);
+        await DevelopmentMountBrokerTests.RunGitAsync(repository, "commit", "-m", "the base moved on").ConfigureAwait(false);
+
+        await using var harness = DevWorkflowHarness.WithARealSandbox(("Development:Enabled", "true"));
+        var projectId = await CreateProjectAsync(harness, repository).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(GateOnly, "Integrate the slice.", projectId).ConfigureAwait(false);
+        var childTaskId = await ApprovedChildTaskAsync(harness, projectId).ConfigureAwait(false);
+        await MaterializeCloneGroupAsync(harness, runId, projectId, childTaskId).ConfigureAwait(false);
+
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var validation = await harness.ReadNodeRunAsync(runId, "validate#1").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, validation.Status, AssertEx.NotNull(validation.TerminalReason ?? validation.OutputJson));
+        AssertEx.Equal(DevWorkflowFailureClasses.Policy,
+            validation.FailureClass,
+            "a patch that will not apply is a refusal on evidence, not a command verdict and not an engine fault.");
+        AssertEx.Contains(AssertEx.NotNull(validation.TerminalReason), "did not apply to this node's freshly prepared workspace");
+        AssertEx.Equal(expected: 0,
+            (await harness.ReadArtifactsAsync(runId).ConfigureAwait(false)).Count,
+            "no report either: the commands never ran, so there is no evidence to keep.");
+    }
+
+    /// <summary>
+    ///     A Development task of the child's own, walked through the real transition table to <c>AwaitingApply</c> with
+    ///     an approved subject, carrying a patch artifact whose bytes are in the blob store — the arrangement the apply
+    ///     gate and the overlay both read.
+    /// </summary>
+    private static async Task<Guid> ApprovedChildTaskAsync(DevWorkflowHarness harness, Guid projectId)
+    {
+        await using var scope = harness.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevelopmentStore>();
+        var taskId = Guid.NewGuid();
+        _ = await store.CreateTaskAsync(new DevelopmentCreateTaskCommand(projectId, taskId, Guid.NewGuid(), "Add the slice", "Add slice.txt.", "[]"))
+                       .ConfigureAwait(false);
+
+        var attemptId = Guid.NewGuid();
+        var task = await store.GetTaskAsync(taskId).ConfigureAwait(false);
+        foreach (var next in new[]
+                 {
+                     DevelopmentTaskStatus.Ready,
+                     DevelopmentTaskStatus.InProgress,
+                     DevelopmentTaskStatus.Validation,
+                     DevelopmentTaskStatus.InReview,
+                     DevelopmentTaskStatus.AwaitingApply
+                 })
+        {
+            if (next == DevelopmentTaskStatus.Validation)
+            {
+                _ = await store.StartAttemptAsync(new DevelopmentStartAttemptCommand(taskId,
+                                       attemptId,
+                                       Guid.NewGuid(),
+                                       DevelopmentAttemptRole.Coder,
+                                       "scripted-model",
+                                       "local",
+                                       task.Version))
+                               .ConfigureAwait(false);
+                _ = await store.TerminalizeAttemptAsync(new DevelopmentTerminalizeAttemptCommand(attemptId,
+                                       Guid.NewGuid(),
+                                       XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus.Succeeded,
+                                       ExpectedAttemptVersion: 1))
+                               .ConfigureAwait(false);
+                task = await store.GetTaskAsync(taskId).ConfigureAwait(false);
+            }
+
+            var moved = await store.TransitionTaskAsync(new DevelopmentTransitionTaskCommand(taskId,
+                                       Guid.NewGuid(),
+                                       next,
+                                       task.Version,
+                                       ApprovedSubjectHash: next == DevelopmentTaskStatus.AwaitingApply ? "subject" : null))
+                                   .ConfigureAwait(false);
+            task = task with
+            {
+                Status = next,
+                Version = moved.Version
+            };
+        }
+
+        var artifactId = Guid.NewGuid();
+        var written = await scope.ServiceProvider.GetRequiredService<IDevelopmentArtifactBlobStore>()
+                                 .WriteAsync(projectId, artifactId, Encoding.UTF8.GetBytes(ChildPatch))
+                                 .ConfigureAwait(false);
+        _ = await store.AttachArtifactAsync(new DevelopmentAttachArtifactCommand(artifactId,
+                               projectId,
+                               taskId,
+                               attemptId,
+                               Guid.NewGuid(),
+                               XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentArtifactKind.Patch,
+                               SchemaVersion: 1,
+                               written.ContentHash,
+                               written.ByteCount,
+                               ManagedReference: written.OpaqueReference,
+                               BaseCommit: "base",
+                               SubjectHash: "subject"))
+                       .ConfigureAwait(false);
+        return taskId;
+    }
+
+    /// <summary>
+    ///     The rows a decomposition leaves behind: an implementation that already succeeded against its own task, and
+    ///     the validation that follows it, both in the same clone group.
+    /// </summary>
+    private static async Task MaterializeCloneGroupAsync(DevWorkflowHarness harness, Guid runId, Guid projectId, Guid childTaskId)
+    {
+        var gate = await harness.ReadNodeRunAsync(runId, "gate").ConfigureAwait(false);
+        var implementId = Guid.NewGuid();
+        await using var scope = harness.Services.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IDevWorkflowStore>();
+        _ = await store.MaterializeNodeRunsAsync(new MaterializeDevWorkflowNodesCommand(runId,
+                               DevWorkflowVersions.Any,
+                               Guid.NewGuid(),
+                               [
+                                   new DevWorkflowNodeRunSeed(implementId,
+                                       "implement#1",
+                                       DevWorkflowNodeType.DevTask,
+                                       MaxAttempts: 1,
+                                       DevelopmentProjectId: projectId,
+                                       MaterializedFromNodeRunId: gate.Id,
+                                       MaterializationIndex: 1),
+                                   new DevWorkflowNodeRunSeed(Guid.NewGuid(),
+                                       "validate#1",
+                                       DevWorkflowNodeType.Tool,
+                                       MaxAttempts: 1,
+                                       DevelopmentProjectId: projectId,
+                                       MaterializedFromNodeRunId: gate.Id,
+                                       MaterializationIndex: 1)
+                               ],
+                               GateThenCloneGroup))
+                       .ConfigureAwait(false);
+
+        // The implementation is done and names its task, which is the state the validation node reads it in.
+        _ = await store.TransitionNodeRunAsync(new TransitionDevWorkflowNodeRunCommand(runId,
+                               implementId,
+                               DevWorkflowVersions.Any,
+                               DevWorkflowNodeRunStatus.Succeeded,
+                               DevelopmentTaskId: childTaskId))
+                       .ConfigureAwait(false);
+    }
+
     private static async Task<Guid> CreateProjectAsync(DevWorkflowHarness harness, string repository)
     {
         await using var scope = harness.Services.CreateAsyncScope();

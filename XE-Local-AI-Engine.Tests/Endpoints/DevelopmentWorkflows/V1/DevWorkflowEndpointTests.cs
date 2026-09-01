@@ -372,7 +372,8 @@ public sealed class DevWorkflowEndpointTests
     ///     L2: <c>toolMode</c> is what makes a Tool node the one that APPLIES approved patches, and it was not on the
     ///     wire at all — so a copy of the seeded template answered 201 and silently came back with an ordinary
     ///     validation node where the integration step had been. Both directions are asserted on one round trip: what
-    ///     the store was handed, and what the caller reads back.
+    ///     the store was handed, and what the caller reads back. Sent in lower case on purpose: the stored value is
+    ///     canonical whatever an author writes, so nothing reading the blob later has to parse case-insensitively.
     /// </summary>
     [Test]
     public async Task Definition_KeepsAnApplyNodesToolModeThroughTheRoundTrip()
@@ -381,7 +382,7 @@ public sealed class DevWorkflowEndpointTests
                                   {"schemaVersion":1,
                                    "nodes":[{"nodeKey":"implement","nodeType":"DevTask","nodeTimeoutSeconds":900},
                                             {"nodeKey":"approval","nodeType":"HumanGate"},
-                                            {"nodeKey":"integrate","nodeType":"Tool","toolMode":"Apply","label":"Apply the approved patches"}],
+                                            {"nodeKey":"integrate","nodeType":"Tool","toolMode":"apply","label":"Apply the approved patches"}],
                                    "edges":[{"from":"implement","to":"approval"},
                                             {"from":"approval","to":"integrate","condition":{"path":"decision","op":"eq","value":"Approve"}}]}
                                   """;
@@ -400,7 +401,10 @@ public sealed class DevWorkflowEndpointTests
 
         AssertEx.Equal(HttpStatusCode.Created, response.StatusCode);
         AssertEx.NotNull(stored);
-        AssertEx.Contains(stored!, "\"toolMode\":\"Apply\"", StringComparison.Ordinal, "the stored graph is what a run pins, so the apply node has to survive into it.");
+        AssertEx.Contains(stored!,
+            "\"toolMode\":\"Apply\"",
+            StringComparison.Ordinal,
+            "the stored graph is what a run pins, so the apply node survives into it — in the parser's own spelling, whatever casing was sent.");
         using var document = JsonDocument.Parse(body);
         var nodes = document.RootElement.GetProperty("graph").GetProperty("nodes");
         AssertEx.Equal("Apply", nodes[2].GetProperty("toolMode").GetString());

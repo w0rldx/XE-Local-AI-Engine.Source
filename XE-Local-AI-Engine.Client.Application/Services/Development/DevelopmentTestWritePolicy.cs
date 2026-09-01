@@ -27,6 +27,14 @@ internal static class DevelopmentTestWritePolicy
     private static readonly string[] NonDestructiveChangeTypes = ["added", "copied"];
 
     /// <summary>
+    ///     The refusal, in the words the operator is given. A constant because it is now surfaced rather than replaced:
+    ///     the coder runner puts it on the attempt's terminal reason, and the workflow lane's tests script it.
+    /// </summary>
+    internal const string RefusalSentence =
+        "The attempt modified or deleted a test that existed at the base commit, which the Development test-write policy does not permit. "
+        + "Adding new test files is allowed.";
+
+    /// <summary>
     ///     Throws when the attempt's diff modifies, deletes or renames a path matching the profile's protected test
     ///     patterns.
     ///     <para>
@@ -56,8 +64,7 @@ internal static class DevelopmentTestWritePolicy
                                 .ToArray();
         if (offending.Length > 0)
         {
-            throw new DevelopmentWorkspaceSecurityException(
-                "The attempt modified or deleted a test that existed at the base commit, which the Development test-write policy does not permit. Adding new test files is allowed.");
+            throw new DevelopmentWorkspaceSecurityException(RefusalSentence);
         }
     }
 }

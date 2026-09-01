@@ -48,6 +48,14 @@ internal static class DevWorkflowUpstreamArtifacts
     ///         further back, and continuing past it would hand the consumer the superseded input beside the output. The
     ///         graph is acyclic and every edge names a declared node, so this terminates and needs no depth bound.
     ///     </para>
+    ///     <para>
+    ///         <b>It is the TYPE that stops the walk, not evidence of output.</b> A work node that produced nothing
+    ///         still ends its path, which matters for a template subtree: in <c>feature-development-v1</c> the join's
+    ///         other inbound edge comes from the unmaterialized <c>validate</c> template node, a Tool that no run ever
+    ///         instantiates — so that path stops there and contributes nothing. <c>verify</c> inherits the plan through
+    ///         the seed's direct <c>decompose → join</c> edge, which is therefore load-bearing: remove it and the
+    ///         verification node goes blind again, this time with the walk in place.
+    ///     </para>
     /// </summary>
     private static HashSet<string> ProducingAncestors(DevWorkflowGraph graph, string nodeKey)
     {

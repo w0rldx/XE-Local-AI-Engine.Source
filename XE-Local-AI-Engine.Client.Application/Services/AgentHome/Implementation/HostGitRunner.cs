@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Text;
 using XE_Local_AI_Engine.Client.Common;
 
 /// <summary>
@@ -33,13 +34,18 @@ internal sealed class HostGitRunner
     ///     <para>
     ///         <paramref name="standardInput" /> feeds a command that reads <c>-</c> — <c>git apply</c> is the one that
     ///         does — so patch bytes are handed to git directly instead of being written to a file first, which is one
-    ///         fewer copy of them on disk.
+    ///         fewer copy of them on disk. When the input is model-influenced, pass the bounds too: git echoes parts of
+    ///         a patch back on failure, and an unbounded read of that is the caller's memory in a hostile patch's hands.
+    ///         A run that exceeds a bound is answered as a non-zero exit rather than a throw, like every other failure
+    ///         here.
     ///     </para>
     /// </summary>
     public async Task<HostGitResult> RunAsync(string workingDirectory,
         IReadOnlyList<string> arguments,
         CancellationToken cancellationToken,
-        ReadOnlyMemory<byte>? standardInput = null)
+        ReadOnlyMemory<byte>? standardInput = null,
+        int? maxStandardOutputBytes = null,
+        int? maxStandardErrorBytes = null)
     {
         ArgumentNullException.ThrowIfNull(arguments);
 
@@ -87,8 +93,8 @@ internal sealed class HostGitRunner
             process.StandardInput.Close();
         }
 
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
-        var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
+        var stdoutTask = ReadBoundedAsync(process.StandardOutput, maxStandardOutputBytes, timeoutCts.Token);
+        var stderrTask = ReadBoundedAsync(process.StandardError, maxStandardErrorBytes, timeoutCts.Token);
 
         try
         {
@@ -103,6 +109,39 @@ internal sealed class HostGitRunner
 
         var standardOutput = await stdoutTask.ConfigureAwait(false);
         var standardError = await stderrTask.ConfigureAwait(false);
-        return new HostGitResult(process.ExitCode, standardOutput, standardError);
+        return standardOutput.Truncated || standardError.Truncated
+            ? new HostGitResult(ExitCode: -1, standardOutput.Text, "git produced more output than its configured bound.")
+            : new HostGitResult(process.ExitCode, standardOutput.Text, standardError.Text);
     }
+
+    /// <summary>
+    ///     Reads a stream to its end, or to <paramref name="maxBytes" /> — after which it keeps draining (so the process
+    ///     can exit) and keeps nothing. Mirrors the trusted apply port's bounded reads; the cap is counted in chars,
+    ///     which for UTF-8 is never more than the bytes it stands for.
+    /// </summary>
+    private static async Task<BoundedRead> ReadBoundedAsync(StreamReader reader, int? maxBytes, CancellationToken cancellationToken)
+    {
+        if (maxBytes is not { } cap)
+        {
+            return new BoundedRead(await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false), Truncated: false);
+        }
+
+        var buffer = new char[8192];
+        var text = new StringBuilder();
+        var truncated = false;
+        while (await reader.ReadAsync(buffer, cancellationToken).ConfigureAwait(false) is var read && read > 0)
+        {
+            if (truncated || text.Length + read > cap)
+            {
+                truncated = true;
+                continue;
+            }
+
+            _ = text.Append(buffer, 0, read);
+        }
+
+        return new BoundedRead(text.ToString(), truncated);
+    }
+
+    private readonly record struct BoundedRead(string Text, bool Truncated);
 }

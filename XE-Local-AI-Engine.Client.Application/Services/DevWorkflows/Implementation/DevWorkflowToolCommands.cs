@@ -260,8 +260,11 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     ///         (<c>Policy</c>) rather than silently validating the base underneath it.
     ///     </para>
     ///     <para>
-    ///         A sibling with no approved patch yet is not an error: the base is validated exactly as before, and the
-    ///         report says which of the two it was.
+    ///         Every anomaly on this path REFUSES rather than falling back to the base. A validation node runs only
+    ///         after its implementation succeeded, so a sibling with no approved patch, a task carrying no approved
+    ///         subject, or a group offering more than one implementation are all states this node cannot judge — and a
+    ///         green report over the base is exactly the silent lie the overlay exists to remove. The honest
+    ///         base-validation path is the one that has no sibling at all: a Tool node that is not a materialized clone.
     ///     </para>
     /// </summary>
     internal async Task<DevWorkflowOverlay> OverlayAsync(DevWorkflowRunSnapshot run,
@@ -271,44 +274,61 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
     {
         ArgumentNullException.ThrowIfNull(session);
 
-        if (await SiblingImplementationAsync(run, nodeRun, cancellationToken).ConfigureAwait(false) is not { DevelopmentTaskId: { } taskId })
+        var siblings = await SiblingImplementationsAsync(run, nodeRun, cancellationToken).ConfigureAwait(false);
+        if (siblings.Count == 0)
         {
             return default;
         }
 
+        if (siblings.Count > 1)
+        {
+            // No alphabetical pick: which implementation this validation judges decides what the quality gate is ABOUT,
+            // and a group offering two of them is an authoring or materialization fault a human has to look at.
+            return Refuse($"This validation follows more than one implementation in its materialization group "
+                          + $"({string.Join(", ", siblings.Select(static row => $"'{row.NodeKey}'"))}), so which work it should judge is "
+                          + "ambiguous. Nothing was applied to this workspace.");
+        }
+
+        var taskId = siblings[0].DevelopmentTaskId!.Value;
         var task = await _development.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
         if (task.Status is not (DevelopmentTaskStatus.AwaitingApply or DevelopmentTaskStatus.Completed))
         {
-            return new DevWorkflowOverlay(new DevWorkflowValidationBasedOn(taskId,
-                    PatchHash: null,
-                    "The implementation this validation belongs to had produced no approved patch yet, so these commands "
-                    + "judged the base commit rather than that implementation."),
-                Refusal: null);
+            return Refuse($"The implementation this validation follows is {task.Status} and has produced no approved patch. This node "
+                          + "runs only after that implementation succeeded, so its state is an anomaly rather than a licence to judge "
+                          + "the base commit instead.");
         }
 
         try
         {
             var patch = await _evidence.ReadLatestAsync(taskId, DevelopmentArtifactKind.Patch, cancellationToken).ConfigureAwait(false);
-            if (task.ApprovedSubjectHash is { } approved && !string.Equals(approved, patch.Artifact.SubjectHash, StringComparison.OrdinalIgnoreCase))
+            if (task.ApprovedSubjectHash is not { } approved)
             {
-                return new DevWorkflowOverlay(BasedOn: null,
-                    "The implementation task's stored patch is not the subject its approval names, so this node did not judge it. "
-                    + "Nothing was applied to this workspace.");
+                // A task that reached this status through the generic transition can carry no subject at all. Nothing
+                // then binds the stored patch to an approval, which is the one thing that makes it safe to apply.
+                return Refuse($"The implementation task is {task.Status} but names no approved subject, so nothing binds its stored patch "
+                              + "to an approval. Nothing was applied to this workspace.");
+            }
+
+            if (!string.Equals(approved, patch.Artifact.SubjectHash, StringComparison.OrdinalIgnoreCase))
+            {
+                return Refuse("The implementation task's stored patch is not the subject its approval names, so this node did not judge it. "
+                              + "Nothing was applied to this workspace.");
             }
 
             var applied = await new HostGitRunner(_developmentOptions.MaxAttemptDurationSeconds)
                                 .RunAsync(session.HostWorktreePath,
                                     AgentHomeGit.Arguments("apply", "--index", "--whitespace=error-all", "-"),
                                     cancellationToken,
-                                    patch.Payload)
+                                    patch.Payload,
+                                    _developmentOptions.MaxPatchBytes,
+                                    _developmentOptions.MaxCommandOutputBytes)
                                 .ConfigureAwait(false);
             if (applied.ExitCode != 0)
             {
                 // Deliberately without git's own stderr: it interpolates workspace paths, and this sentence reaches an
                 // operator through the row. The engine log keeps the detail.
-                return new DevWorkflowOverlay(BasedOn: null,
-                    "The implementation task's approved patch did not apply to this node's freshly prepared workspace, "
-                    + "so nothing was judged. The base branch has most likely moved since that patch was produced.");
+                return Refuse("The implementation task's approved patch did not apply to this node's freshly prepared workspace, "
+                              + "so nothing was judged. The base branch has most likely moved since that patch was produced.");
             }
 
             return new DevWorkflowOverlay(new DevWorkflowValidationBasedOn(taskId,
@@ -318,22 +338,26 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         }
         catch (DevelopmentInvalidTransitionException exception)
         {
-            return new DevWorkflowOverlay(BasedOn: null,
-                $"The implementation task's approved patch could not be verified, so this node judged nothing: {Sanitized(exception)}");
+            return Refuse($"The implementation task's approved patch could not be verified, so this node judged nothing: {Sanitized(exception)}");
         }
     }
 
+    /// <summary>A refusal: nothing was overlaid, so the node run is answered rather than judged.</summary>
+    private static DevWorkflowOverlay Refuse(string sanitizedReason) =>
+        new(BasedOn: null, sanitizedReason);
+
     /// <summary>
-    ///     The implementation whose work this validation node exists to judge: the <c>DevTask</c> row of the SAME
-    ///     materialization clone group — same origin node run, same 1-based index — that this node sits downstream of.
+    ///     The implementations this validation node could be judging: the <c>DevTask</c> rows of the SAME materialization
+    ///     clone group — same origin node run, same 1-based index — that this node sits downstream of.
     ///     <para>
     ///         Derived from the graph and the rows rather than from node keys: a clone's key is the template's key with
-    ///         a suffix the decomposing agent chose, and a group can hold more than one implementation, so ancestry in
-    ///         the rewritten graph is the only thing that says which one this validation follows. A node run that is not
-    ///         a clone has no sibling and validates the base, which is the v1 ceiling recorded for <c>fullvalidate</c>.
+    ///         a suffix the decomposing agent chose, so ancestry in the rewritten graph is the only thing that says which
+    ///         implementation this validation follows. Answers the whole set rather than a first match, because a group
+    ///         holding two of them is a fault to refuse rather than something to pick alphabetically. A node run that is
+    ///         not a clone has none, and validates the base — the v1 ceiling recorded for <c>fullvalidate</c>.
     ///     </para>
     /// </summary>
-    private async Task<DevWorkflowNodeRunSnapshot?> SiblingImplementationAsync(DevWorkflowRunSnapshot run,
+    private async Task<IReadOnlyList<DevWorkflowNodeRunSnapshot>> SiblingImplementationsAsync(DevWorkflowRunSnapshot run,
         DevWorkflowNodeRunSnapshot nodeRun,
         CancellationToken cancellationToken)
     {
@@ -341,17 +365,20 @@ internal sealed class DevWorkflowToolCommands : IDevWorkflowToolCommands
         ArgumentNullException.ThrowIfNull(nodeRun);
         if (nodeRun.MaterializedFromNodeRunId is not { } origin || nodeRun.MaterializationIndex is not { } index)
         {
-            return null;
+            return [];
         }
 
         var graph = _graphs.Resolve(run);
         var rows = await _workflows.ListNodeRunsAsync(run.Id, cancellationToken).ConfigureAwait(false);
-        return rows.Where(row => row.MaterializedFromNodeRunId == origin
+        return
+        [
+            .. rows.Where(row => row.MaterializedFromNodeRunId == origin
                                  && row.MaterializationIndex == index
                                  && row.NodeType == DevWorkflowNodeType.DevTask
-                                 && row.DevelopmentTaskId is not null)
+                                 && row.DevelopmentTaskId is not null
+                                 && graph.Descendants(row.NodeKey).Contains(nodeRun.NodeKey, StringComparer.Ordinal))
                    .OrderBy(static row => row.NodeKey, StringComparer.Ordinal)
-                   .FirstOrDefault(row => graph.Descendants(row.NodeKey).Contains(nodeRun.NodeKey, StringComparer.Ordinal));
+        ];
     }
 
     /// <summary>
@@ -524,7 +551,7 @@ internal readonly record struct DevWorkflowOverlay(DevWorkflowValidationBasedOn?
 
 /// <summary>
 ///     What the commands were run against, when the node is a materialized child's validation and the base commit alone
-///     would not say it: the sibling implementation task whose approved patch was overlaid onto the workspace first, or
-///     the sentence explaining that there was no patch to overlay yet.
+///     would not say it: the sibling implementation task whose approved patch was overlaid onto the workspace first.
+///     Absent means nothing was overlaid — either this node has no sibling implementation, or the pass was refused.
 /// </summary>
-internal sealed record DevWorkflowValidationBasedOn(Guid DevelopmentTaskId, string? PatchHash, string Detail);
+internal sealed record DevWorkflowValidationBasedOn(Guid DevelopmentTaskId, string PatchHash, string Detail);

@@ -74,6 +74,13 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
     ///         The implementation node declares a timeout because nothing else bounds it: Dev Mode bounds each attempt
     ///         and each review round, but not attempts back to back. Two hours is a slice of a feature, generously.
     ///     </para>
+    ///     <para>
+    ///         <b>The <c>decompose → join</c> edge is load-bearing for evidence, not only for routing.</b> Upstream
+    ///         artifacts resolve back through structural nodes to the nearest PRODUCING ancestors, and a producing TYPE
+    ///         stops that walk whether or not it produced anything — so the join's other inbound edge, from the
+    ///         unmaterialized <c>validate</c> template node, contributes nothing. This edge is what carries the approved
+    ///         plan to <c>verify</c>; removing it leaves the verification agent with an empty inheritance again.
+    ///     </para>
     /// </summary>
     internal const string FeatureDevelopmentSlug = "feature-development-v1";
 

@@ -32,10 +32,6 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
             [DevelopmentTaskStatus.InReview] = DevelopmentTaskStatus.AwaitingApply
         };
 
-    /// <summary>The test-write policy's own sentence, which is what the operator has to be told.</summary>
-    private const string PolicySentence =
-        "The attempt modified or deleted a test that existed at the base commit, which the Development test-write policy does not permit. Adding new test files is allowed.";
-
     private readonly Lock _gate = new();
     private readonly List<string> _actions = [];
     private readonly List<Guid> _offered = [];
@@ -175,7 +171,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
                     task,
                     DevelopmentAttemptStatus.Failed,
                     cancellationToken,
-                    DevelopmentAttemptEvidenceException.Compose(DevelopmentAttemptFailureCodes.WorkspacePolicyRefused, PolicySentence))
+                    DevelopmentAttemptEvidenceException.Compose(DevelopmentAttemptFailureCodes.WorkspacePolicyRefused, DevelopmentTestWritePolicy.RefusalSentence))
                 .ConfigureAwait(false);
         }
 
