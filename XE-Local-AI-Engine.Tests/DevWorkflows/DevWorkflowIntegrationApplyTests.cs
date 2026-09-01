@@ -218,6 +218,31 @@ public sealed class DevWorkflowIntegrationApplyTests
     }
 
     /// <summary>
+    ///     The retried refusal is composed — a lead sentence, a model-authored title, the stored blocked reason, and Dev
+    ///     Mode's own message — and it lands in <c>terminal_reason</c>, which the schema bounds at 1024. SQLite does not
+    ///     enforce a declared length, so an over-long one would break that contract silently and only bite on a provider
+    ///     that does. The lead survives the cut; the tail does not.
+    /// </summary>
+    [Test]
+    public async Task AComposedRefusalIsCappedAtTheColumnsOwnBound()
+    {
+        await using var harness = DevWorkflowHarness.WithAScriptedChain();
+        harness.Chain.AllowApplies(count: 0);
+        harness.Chain.BlockedReason = $"The scripted host repository was not at the approved base. {new string('x', 1200)}";
+        var (runId, _) = await ImplementTwoSlicesAsync(harness).ConfigureAwait(false);
+
+        await harness.DecideAsync(runId, "integrationapproval", DevWorkflowDecisionKind.Approve).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+        await harness.DecideAsync(runId, "integrate", DevWorkflowDecisionKind.Retry).ConfigureAwait(false);
+        await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
+
+        var reason = AssertEx.NotNull((await harness.ReadNodeRunAsync(runId, "integrate").ConfigureAwait(false)).TerminalReason);
+        AssertEx.Equal(expected: 1024, reason.Length, "the row's terminal reason is capped at the length its column declares.");
+        AssertEx.True(reason.EndsWith('…'), $"and says it was cut rather than ending mid-word: {reason[^40..]}");
+        AssertEx.Contains(reason, "is stood down in Development", message: "with the lead — what happened — kept, because the tail is what is expendable.");
+    }
+
+    /// <summary>
     ///     A cancel that arrives BETWEEN two patches leaves evidence. One patch is in the repository by then and its task
     ///     is Completed, so a node run that ended with no report at all would leave the operator to work out what landed
     ///     by reading Dev Mode's task list against the run's graph — which is the one question this node exists to answer.
@@ -344,6 +369,17 @@ public sealed class DevWorkflowIntegrationApplyTests
         // The gate in front of the apply carries the approval and nothing else, asked the way the tick asks it. Parsing
         // at all already proves this — the rule is a parse rule — but the shipped template is the one definition an
         // operator does not author, so what it routes on is pinned here rather than left implied by the absence of a throw.
+        // N1: the verification's second inbound edge is what reaches PAST the decomposition to the approved plan — the
+        // walk stops at the first producer on each path, and on the join's path that is `decompose` with its task
+        // package. Pinned on the SHIPPED seed rather than on a test graph, because deleting the line is otherwise a
+        // change no test notices and the verification goes blind again.
+        var toVerify = graph.InboundEdges("verify").Single(static edge => edge.From == "planapproval");
+        AssertEx.True(DevWorkflowStateMachine.GateEdgeFires(toVerify, DevWorkflowDecisionKind.Approve),
+            "an approved plan is what the verification is asked to judge the slices against.");
+        AssertEx.False(DevWorkflowStateMachine.GateEdgeFires(toVerify, DevWorkflowDecisionKind.Reject),
+            "and a declined plan kills BOTH paths into the verification rather than half-feeding it.");
+        AssertEx.False(DevWorkflowStateMachine.GateEdgeFires(toVerify, DevWorkflowDecisionKind.RequestChanges));
+
         var approval = graph.InboundEdges("integrate").Single();
         AssertEx.True(DevWorkflowStateMachine.GateEdgeFires(approval, DevWorkflowDecisionKind.Approve));
         AssertEx.False(DevWorkflowStateMachine.GateEdgeFires(approval, DevWorkflowDecisionKind.Reject), "a refused integration applies nothing.");

@@ -174,6 +174,9 @@ internal sealed class DevWorkflowApplyCommands
         }
     }
 
+    /// <summary>The schema's own bound on <c>terminal_reason</c> (<c>DevWorkflowNodeRunConfiguration</c>).</summary>
+    private const int MaxTerminalReason = 1024;
+
     private static AppliedTask Refusal(DevWorkflowNodeRunSnapshot implementation,
         DevelopmentTaskSnapshot task,
         string title,
@@ -293,9 +296,19 @@ internal sealed class DevWorkflowApplyCommands
         .DistinctBy(static nodeRun => nodeRun.DevelopmentTaskId!.Value)
     ];
 
-    /// <summary>What the node run answers with, and the report an operator reads to see which patches landed.</summary>
+    /// <summary>
+    ///     What the node run answers with, and the report an operator reads to see which patches landed.
+    ///     <para>
+    ///         The detail becomes the row's <c>terminal_reason</c>, which the schema bounds at
+    ///         <see cref="MaxTerminalReason" /> — and the composed refusals here are additive: a lead sentence, a model
+    ///         title, a stored blocked reason and an exception message. SQLite does not enforce a declared length, so an
+    ///         over-long one would break the contract silently and only bite on a provider that does. Capped in the ONE
+    ///         place every detail passes through, with the lead kept and the tail cut.
+    ///     </para>
+    /// </summary>
     private DevWorkflowToolRun Result(DevWorkflowNodeRunSnapshot nodeRun, IReadOnlyList<AppliedTask> applied, string? failureClass, string? detail)
     {
+        detail = detail is { Length: > MaxTerminalReason } overlong ? $"{overlong[..(MaxTerminalReason - 1)]}…" : detail;
         var failed = applied.Count(static entry => !string.Equals(entry.Outcome, AppliedOutcomes.Applied, StringComparison.Ordinal)
                                                    && !string.Equals(entry.Outcome, AppliedOutcomes.AlreadyApplied, StringComparison.Ordinal));
         var report = new DevWorkflowApplyReport(failureClass is null,
