@@ -157,8 +157,9 @@ internal sealed class DevWorkflowApplyCommands
         {
             // The evidence chain refused: the approved subject is no longer the current one, the review is not the one
             // that approved it, or the repository's trust has lapsed. None of them is answered differently by asking
-            // again, so this is the class that goes straight to a human.
-            return (Refusal(implementation, task, title, exception), DevWorkflowFailureClasses.Policy);
+            // again, so this is the class that goes straight to a human. A task the gate has already stood down gets the
+            // lane's own sentence in front of Dev Mode's, which by then is about a precondition rather than a cause.
+            return (Refusal(implementation, task, title, exception, StoodDown(task, title)), DevWorkflowFailureClasses.Policy);
         }
         catch (Exception exception) when (exception is DevelopmentRepositoryStateConflictException or KeyNotFoundException)
         {
@@ -173,8 +174,64 @@ internal sealed class DevWorkflowApplyCommands
         }
     }
 
-    private static AppliedTask Refusal(DevWorkflowNodeRunSnapshot implementation, DevelopmentTaskSnapshot task, string title, Exception exception) =>
-        new(implementation.NodeKey, task.Id, title, AppliedOutcomes.Refused, DevWorkflowToolCommands.Sanitized(exception));
+    private static AppliedTask Refusal(DevWorkflowNodeRunSnapshot implementation,
+        DevelopmentTaskSnapshot task,
+        string title,
+        Exception exception,
+        string? lead = null)
+    {
+        var sanitized = DevWorkflowToolCommands.Sanitized(exception);
+        return new AppliedTask(implementation.NodeKey,
+            task.Id,
+            title,
+            AppliedOutcomes.Refused,
+            lead is null ? sanitized : $"{lead} Development answered: {sanitized}");
+    }
+
+    /// <summary>
+    ///     The lane's own account of the one refusal a RETRY produces, in front of Dev Mode's.
+    ///     <para>
+    ///         A patch the gate declined at the base check stands its task down, and Dev Mode's answer on the next
+    ///         attempt is then about a PRECONDITION rather than about what happened: "patch preview requires an
+    ///         independently approved task awaiting explicit apply" is true, names no cause, and reads to an operator
+    ///         who just pressed Retry as a different and less serious problem than the one they were retrying. The
+    ///         sanitized original is kept after it, because it is what the Development view says about the same task.
+    ///     </para>
+    ///     <para>
+    ///         The cause is READ off the task rather than assumed: a declined apply is the usual way one of these gets
+    ///         blocked, but not the only one, and Development already recorded which. That reason went through the same
+    ///         sanitizer on its way in and gets it again here, because a second reader is a second exposure.
+    ///     </para>
+    /// </summary>
+    private static string? StoodDown(DevelopmentTaskSnapshot task, string title)
+    {
+        if (task.Status != DevelopmentTaskStatus.Blocked)
+        {
+            return null;
+        }
+
+        var reason = SanitizedReason(task.BlockedReason) ?? "Development recorded no reason";
+        return $"'{title}' is stood down in Development ({reason}), so this attempt could not offer its patch at all: a "
+               + "blocked task is no longer awaiting apply, and retrying this node does not return it there.";
+    }
+
+    /// <summary>One stored reason, fit to be read again. A reason the sanitizer refuses is dropped rather than escaping.</summary>
+    private static string? SanitizedReason(string? reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            return null;
+        }
+
+        try
+        {
+            return DevelopmentArtifactSanitizer.SanitizeText(reason).TrimEnd('.');
+        }
+        catch (DevelopmentWorkspaceSecurityException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     ///     A task the sequence never reached, because it was cancelled first.

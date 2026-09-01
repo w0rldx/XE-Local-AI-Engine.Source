@@ -200,6 +200,21 @@ public sealed class DevWorkflowIntegrationApplyTests
             "awaiting explicit apply",
             message: "and the answer is the ledger's own, read now: a task Dev Mode already stood down cannot complete, which is a "
                      + "different sentence from the one attempt 1 recorded.");
+
+        // N3: Dev Mode's sentence is about a PRECONDITION — true, and about neither the cause nor the operator's move.
+        // On its own it reads to someone who has just pressed Retry as a smaller, different problem than the one they
+        // were retrying, so the lane says what happened first and keeps Dev Mode's answer behind it.
+        AssertEx.Contains(AssertEx.NotNull(retried.TerminalReason),
+            "is stood down in Development",
+            message: "the retried refusal names the stand-down rather than only the precondition it left behind.");
+        AssertEx.Contains(AssertEx.NotNull(retried.TerminalReason),
+            "not at the approved base",
+            message: "and carries Development's own recorded reason for the stand-down, which is what attempt 1's sentence had "
+                     + "and attempt 2's had lost — read off the task rather than assumed, since a declined apply is not the only "
+                     + "way one of these gets blocked.");
+        AssertEx.Contains(AssertEx.NotNull(retried.TerminalReason),
+            "Development answered:",
+            message: "with the sanitized original still there, because it is what the Development view says about the same task.");
     }
 
     /// <summary>

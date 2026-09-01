@@ -390,11 +390,26 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
             return refused;
         }
 
+        lock (_gate)
+        {
+            // Recorded before the precondition, because this ledger counts the ASK: a retry that reaches the gate and is
+            // refused by it still reached the gate, and that is the difference between a real second ask and a memoized
+            // answer.
+            _offered.Add(taskId);
+        }
+
+        // The real service's precondition, kept because it is what a RETRY meets: an apply reads the approved subject off
+        // a task awaiting apply, and a task the gate has already declined is not one — so the second attempt is answered
+        // about the precondition rather than about the refusal that caused it.
+        if (task.Status != DevelopmentTaskStatus.AwaitingApply)
+        {
+            throw new DevelopmentInvalidTransitionException("Patch preview requires an independently approved task awaiting explicit apply.");
+        }
+
         bool blocked;
         bool hold;
         lock (_gate)
         {
-            _offered.Add(taskId);
             blocked = _appliesAllowed is { } allowed && _offered.Count > allowed;
             hold = !blocked && _holdAfterApplies == _offered.Count;
         }
