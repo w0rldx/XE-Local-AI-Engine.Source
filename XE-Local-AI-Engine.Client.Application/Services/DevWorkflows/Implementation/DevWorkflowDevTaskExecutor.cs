@@ -570,6 +570,19 @@ internal sealed class DevWorkflowDevTaskExecutor
                 return 0;
             }
 
+            // An attempt row is not the only way Dev Mode is busy. Deterministic validation is a phase its own
+            // supervisor drives with NO attempt row at all — it runs the project's command profile and then moves the
+            // task on to InReview or ChangesRequested — so a tick landing inside that window is told there is no next
+            // action, which is true and is not a fault. It is the only status left to say that about: AwaitingApply,
+            // Completed, Cancelled and Blocked are settled by AdvanceTaskAsync's switch before anything is asked,
+            // Planned is promoted to Ready by the ask itself, and Ready, InProgress, ChangesRequested and InReview all
+            // have an executable action. Reading it as a configuration fault stood tasks down 24 ms after validation
+            // started, with a SUCCEEDED coder attempt on them and Dev Mode calmly finishing.
+            if ((await development.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false)).Status == DevelopmentTaskStatus.Validation)
+            {
+                return 0;
+            }
+
             return await BlockAsync(store, graph, run, nodeRun, nodeRuns, DevWorkflowFailureClasses.Configuration, exception.Message, cancellationToken)
                 .ConfigureAwait(false);
         }

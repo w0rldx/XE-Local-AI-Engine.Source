@@ -44,6 +44,7 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
     private int? _holdAfterApplies;
     private int _failuresOwed;
     private int _holdsOwed;
+    private int _validationStallsOwed;
 
     public FakeDevelopmentTaskChain(IServiceScopeFactory scopes) =>
         _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
@@ -130,6 +131,20 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         }
     }
 
+    /// <summary>
+    ///     Makes the next <paramref name="count" /> asks made while the task sits in <c>Validation</c> answer the way
+    ///     the real management service does: there is no executable next action, because deterministic validation is a
+    ///     phase Dev Mode's own supervisor drives with no attempt row at all. It is the window a workflow tick can land
+    ///     in and be told "no" about a task that is perfectly healthy.
+    /// </summary>
+    public void StallInValidation(int count)
+    {
+        lock (_gate)
+        {
+            _validationStallsOwed = count;
+        }
+    }
+
     public async Task<DevelopmentNextActionResult> StartNextActionAsync(Guid projectId,
         Guid taskId,
         Guid operationId,
@@ -142,26 +157,38 @@ internal sealed class FakeDevelopmentTaskChain : IDevelopmentManagementService
         bool fail;
         bool hold;
         bool refused;
+        bool stalled;
         lock (_gate)
         {
             _actions.Add(task.Status.ToString());
-            refused = _policyRefusalsOwed > 0;
+            stalled = task.Status == DevelopmentTaskStatus.Validation && _validationStallsOwed > 0;
+            if (stalled)
+            {
+                _validationStallsOwed--;
+            }
+
+            refused = !stalled && _policyRefusalsOwed > 0;
             if (refused)
             {
                 _policyRefusalsOwed--;
             }
 
-            fail = !refused && _failuresOwed > 0;
+            fail = !stalled && !refused && _failuresOwed > 0;
             if (fail)
             {
                 _failuresOwed--;
             }
 
-            hold = !fail && !refused && _holdsOwed > 0;
+            hold = !stalled && !fail && !refused && _holdsOwed > 0;
             if (hold)
             {
                 _holdsOwed--;
             }
+        }
+
+        if (stalled)
+        {
+            throw new DevelopmentInvalidTransitionException("The Development task has no executable next action in its current state.");
         }
 
         if (refused)

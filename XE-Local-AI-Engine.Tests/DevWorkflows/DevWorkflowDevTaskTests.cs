@@ -185,6 +185,41 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
+    ///     N2: a task inside its own deterministic-validation window is WORKING, not misconfigured.
+    ///     <para>
+    ///         Dev Mode drives that phase from its own supervisor and holds no attempt row while it does, so a tick that
+    ///         lands inside it is told the task has no executable next action — which is true, and which the lane read
+    ///         as a configuration fault. Live, that stood two children down 24 ms after validation started, each with a
+    ///         SUCCEEDED coder attempt on it, and every operator Retry that recovered one spent an attempt out of the
+    ///         very budget the fix loop needs.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ATaskInsideItsOwnValidationWindowIsWaitedOnRatherThanStoodDown()
+    {
+        await using var harness = NewHarness();
+        var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
+        harness.Chain.StallInValidation(1);
+        var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var waiting = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Running, waiting.Status, $"the node was left on {waiting.Status}: {waiting.TerminalReason}");
+        AssertEx.Null(waiting.FailureClass, "nothing failed — Dev Mode is one status ahead of this tick, and will move the task on itself.");
+        AssertEx.Equal(expected: 1, waiting.Attempt, "and the wait cost the node none of its budget.");
+        AssertEx.Equal(DevelopmentTaskStatus.Validation, (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status);
+
+        _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+        var implemented = await harness.ReadNodeRunAsync(runId, "implement").ConfigureAwait(false);
+        AssertEx.Equal(DevWorkflowNodeRunStatus.Succeeded, implemented.Status, AssertEx.NotNull(implemented.TerminalReason ?? implemented.OutputJson));
+        AssertEx.Equal(DevelopmentTaskStatus.AwaitingApply,
+            (await ReadTaskAsync(harness, taskId).ConfigureAwait(false)).Status,
+            "the window closed and the chain carried on from where it was, without an operator being asked for anything.");
+    }
+
+    /// <summary>
     ///     Cancelling a run stops the development attempt rather than abandoning it, and the row settles on what the
     ///     attempt actually did.
     /// </summary>
