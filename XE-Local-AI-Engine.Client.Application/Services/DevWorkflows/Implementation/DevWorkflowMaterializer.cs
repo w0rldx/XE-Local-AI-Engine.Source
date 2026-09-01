@@ -319,6 +319,17 @@ internal sealed class DevWorkflowMaterializer
                 return $"The task package names '{task.Id}' twice, and two tasks cannot share one identity.";
             }
 
+            // Not enforced anywhere yet: the child brief carries the title, the requirements and the acceptance
+            // criteria, and Dev Mode's workspace policy has no per-task path restriction to hand this to (Slice D). A
+            // decomposition that leans on it for parallel-child isolation would get none, silently, so it is refused
+            // loudly instead. The field stays in the schema and on the stored artifact — this refuses a package that
+            // DEPENDS on it, not one that mentions it.
+            if (task.AllowedPaths is { Count: > 0 })
+            {
+                return $"Task '{task.Id}' restricts itself to specific paths with 'allowedPaths', which this version does not enforce. "
+                       + "Remove the field and describe the boundary in the goal instead.";
+            }
+
             // EVERY node of the subtree, not just its root: a graph that happens to declare a node named like one of
             // the other clones collides just as hard, and the collision surfaces at the store as a refused insert —
             // which throws out of the tick and wedges the run rather than standing this node down.

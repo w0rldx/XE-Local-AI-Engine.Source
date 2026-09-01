@@ -269,7 +269,12 @@ public sealed class DevWorkflowMaterializationTests
             ("""[{"id":"a","title":"no goal"}]""", "names no 'goal'"),
             ("""[{"id":"a","goal":"one","dependsOn":["ghost"]}]""", "depends on 'ghost', which the package does not declare"),
             ("""[{"id":"a","goal":"one","dependsOn":["b"]},{"id":"b","goal":"two","dependsOn":["a"]}]""", "in a cycle"),
-            ("""{"tasks":"not an array"}""", "must be an array of tasks")
+            ("""{"tasks":"not an array"}""", "must be an array of tasks"),
+
+            // Not a schema error: the parser reads `allowedPaths` and the artifact keeps it. Refused because NOTHING
+            // enforces it — a decomposition relying on it for parallel-child isolation would get no restriction at all,
+            // and a silent nothing is the one answer this module will not give.
+            ("""[{"id":"a","goal":"one","allowedPaths":["src/parser/**"]}]""", "does not enforce")
         };
 
         foreach (var (package, expected) in refusals)
