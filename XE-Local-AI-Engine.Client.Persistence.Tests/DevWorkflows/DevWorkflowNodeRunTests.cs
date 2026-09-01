@@ -65,6 +65,36 @@ public sealed class DevWorkflowNodeRunTests
     }
 
     /// <summary>
+    ///     The detail this store writes is READ BY NAME, so its casing is a contract and not a formatting choice.
+    ///     <para>
+    ///         Serialized with the framework default it came out <c>{"WorkSessionId":…,"Attempt":1}</c> while every
+    ///         reader — and every payload the Application layer writes — is camelCase, so the attempt walk and the
+    ///         transcript link saw nothing at all and said so silently. This pins the spelling at the writer, which is
+    ///         the only place it can be pinned: the log is append-only and the rows already written keep theirs.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task TheAttachedDetail_IsWrittenInTheCasingItsReadersUse()
+    {
+        using var fixture = new DevWorkflowTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = DevWorkflowTestFixture.StoreFor(context);
+        var seed = await DevWorkflowTestFixture.SeedRunAsync(store).ConfigureAwait(false);
+
+        var nodeRunId = Guid.NewGuid();
+        var version = await DevWorkflowTestFixture.AddNodeRunAsync(store, seed.RunId, nodeRunId, "implement", seed.RunVersion).ConfigureAwait(false);
+        _ = await store.AttachWorkSessionAsync(new AttachDevWorkflowWorkSessionCommand(seed.RunId, nodeRunId, version, Guid.NewGuid())).ConfigureAwait(false);
+
+        var events = await store.ListEventsAsync(seed.RunId).ConfigureAwait(false);
+        var detail = AssertEx.NotNull(events.Single(item => item.EventType == DevWorkflowEventTypes.WorkSessionAttached).DetailJson);
+        AssertEx.True(detail.Contains("\"workSessionId\":", StringComparison.Ordinal),
+            "the client reads this key; PascalCase makes the transcript link vanish with no error.");
+        AssertEx.True(detail.Contains("\"attempt\":", StringComparison.Ordinal),
+            "and this one, which is what attributes an attempt's evidence to the right attempt.");
+        AssertEx.True(detail.Contains("\"sessionResumes\":", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     ///     Releasing the session is what makes a re-attempt a fresh one. Without it a node run back at <c>Pending</c>
     ///     still points at the session that just ended, and nothing downstream can tell "this attempt is still holding
     ///     its session" from "this attempt is over" — the two need opposite answers.

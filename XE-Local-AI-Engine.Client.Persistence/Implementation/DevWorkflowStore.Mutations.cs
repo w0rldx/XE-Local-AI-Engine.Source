@@ -83,7 +83,7 @@ internal sealed partial class DevWorkflowStore
                     run.GraphRevision++;
                 }
 
-                var detail = Utf8(JsonSerializer.Serialize(new MaterializationDetail(command.NodeRuns.Count, run.GraphRevision)));
+                var detail = Utf8(JsonSerializer.Serialize(new MaterializationDetail(command.NodeRuns.Count, run.GraphRevision), JsonOptions));
                 var eventType = command.GraphJson is null ? DevWorkflowEventTypes.NodeMaterialized : DevWorkflowEventTypes.GraphChanged;
                 return new MutationOutcome(eventType, $"{command.NodeRuns.Count} node run(s)", detail);
             },
@@ -220,7 +220,7 @@ internal sealed partial class DevWorkflowStore
                     nodeRun.SessionResumes++;
                 }
 
-                var detail = Utf8(JsonSerializer.Serialize(new WorkSessionAttachedDetail(command.WorkSessionId, nodeRun.Attempt, nodeRun.SessionResumes)));
+                var detail = Utf8(JsonSerializer.Serialize(new WorkSessionAttachedDetail(command.WorkSessionId, nodeRun.Attempt, nodeRun.SessionResumes), JsonOptions));
                 return new MutationOutcome(DevWorkflowEventTypes.WorkSessionAttached, null, detail, nodeRun.Id);
             },
             cancellationToken);
@@ -291,7 +291,7 @@ internal sealed partial class DevWorkflowStore
 
                 // The superseded row and its bytes both stay: versioning is the point. The reference travels on the
                 // event and the result so the caller that owns the blob store can decide what to sweep.
-                var detail = Utf8(JsonSerializer.Serialize(new ArtifactSupersessionDetail(previous.Id, previous.ManagedReference, version)));
+                var detail = Utf8(JsonSerializer.Serialize(new ArtifactSupersessionDetail(previous.Id, previous.ManagedReference, version), JsonOptions));
                 return new MutationOutcome(DevWorkflowEventTypes.ArtifactSuperseded, command.Kind.ToString(), detail, nodeRun.Id, previous.Id);
             },
             cancellationToken);
@@ -345,7 +345,7 @@ internal sealed partial class DevWorkflowStore
 
                 return new MutationOutcome(DevWorkflowEventTypes.ArtifactUsed,
                     null,
-                    Utf8(JsonSerializer.Serialize(new ArtifactUseDetail(added))),
+                    Utf8(JsonSerializer.Serialize(new ArtifactUseDetail(added), JsonOptions)),
                     nodeRun.Id);
             },
             cancellationToken);
@@ -402,7 +402,7 @@ internal sealed partial class DevWorkflowStore
                     dependent.StaleReason = command.StaleReason;
                 }
 
-                var detail = Utf8(JsonSerializer.Serialize(new StaleMarkDetail(command.SupersededArtifactId, command.SupersedingArtifactId, dependents.Count)));
+                var detail = Utf8(JsonSerializer.Serialize(new StaleMarkDetail(command.SupersededArtifactId, command.SupersedingArtifactId, dependents.Count), JsonOptions));
                 return new MutationOutcome(DevWorkflowEventTypes.ArtifactStaleMarked, command.StaleReason, detail);
             },
             cancellationToken);

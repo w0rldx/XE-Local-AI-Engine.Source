@@ -61,6 +61,25 @@ describe("devWorkflowNodeAttempts", () => {
 		]);
 	});
 
+	it("reads a row the store wrote in PascalCase, because the event log is append-only", () => {
+		// Every `worksession.attached` written before FX-D carries `{"WorkSessionId":…,"Attempt":…}` — the store
+		// serialized with the framework default while every reader here is camelCase. Those rows never change, so a
+		// reader that takes only the new spelling reports nothing for every run that already exists.
+		const attempts = devWorkflowNodeAttempts(
+			[
+				event(9, "worksession.attached", { detailJson: JSON.stringify({ WorkSessionId: "s-legacy", Attempt: 2, SessionResumes: 0 }) }),
+				event(10, "node.completed", { outcome: "succeeded" }),
+			],
+			2,
+		);
+
+		expect(attempts.find((attempt) => attempt.attempt === 2)?.workSessionId).toBe("s-legacy");
+		expect(attempts.map((attempt) => [attempt.attempt, attempt.outcome])).toEqual([
+			[1, undefined],
+			[2, "succeeded"],
+		]);
+	});
+
 	it("takes the attempt a retry states as the one it closes", () => {
 		// `node.retry.scheduled` carries the attempt that FAILED, so a page set opening on one states where history is
 		// just as an attachment does — and the attempt it opens is the one after that, not the one after 1.

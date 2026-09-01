@@ -71,14 +71,28 @@ function detailOf(detailJson: string | null | undefined): Record<string, unknown
 }
 
 /**
+ * One field of a detail payload, under either spelling the event log holds.
+ *
+ * The store serialized its own payloads with the framework default until FX-D, so rows written before that carry
+ * `{"WorkSessionId":…,"Attempt":1}` while everything since — and every payload the Application layer ever wrote —
+ * is camelCase. The log is APPEND-ONLY: those rows keep their spelling for ever, so a reader that takes only the
+ * new one silently reports nothing for every run that already exists.
+ */
+function field(detail: Record<string, unknown>, name: string): unknown {
+	return detail[name] ?? detail[name[0]!.toUpperCase() + name.slice(1)];
+}
+
+/**
  * The attempt an event states about itself, if it states one.
  *
- * Two of the catalog's payloads carry it: `worksession.attached` (the attempt the session was attached to) and
- * `node.retry.scheduled` (the attempt that FAILED, which is the one that event closes). The rest carry a reason or
- * nothing, so reading the field generically cannot pick up a number that means something else.
+ * Two of the catalog's payloads carry it: `worksession.attached` (the attempt the session was attached to, written
+ * by the STORE) and `node.retry.scheduled` (the attempt that FAILED, which is the one that event closes, written by
+ * the Application layer). The rest carry a reason or nothing, so reading the field generically cannot pick up a
+ * number that means something else.
  */
 function statedAttempt(detail: Record<string, unknown>): number | undefined {
-	return typeof detail["attempt"] === "number" ? detail["attempt"] : undefined;
+	const stated = field(detail, "attempt");
+	return typeof stated === "number" ? stated : undefined;
 }
 
 /**
@@ -146,7 +160,8 @@ export function devWorkflowNodeAttempts(
 		const detail = detailOf(event.detailJson);
 		if (type === devWorkflowAttemptEventTypes.workSessionAttached) {
 			const row = at(attemptOf(statedAttempt(detail)));
-			row.workSessionId = typeof detail["workSessionId"] === "string" ? detail["workSessionId"] : undefined;
+			const session = field(detail, "workSessionId");
+			row.workSessionId = typeof session === "string" ? session : undefined;
 			continue;
 		}
 		if (type === devWorkflowAttemptEventTypes.interrupted) {

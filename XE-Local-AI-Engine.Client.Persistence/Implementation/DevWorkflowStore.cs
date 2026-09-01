@@ -21,6 +21,19 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// </remarks>
 internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, TimeProvider timeProvider) : IDevWorkflowStore
 {
+    /// <summary>
+    ///     camelCase, matching the Application layer — which has always serialized its own event details with the Web
+    ///     defaults — and every other document this product puts on a wire.
+    ///     <para>
+    ///         Not optional and not cosmetic: these payloads are READ by name. Serialized with the framework default
+    ///         the store wrote <c>{"WorkSessionId":…,"Attempt":1}</c> while the client looked for
+    ///         <c>workSessionId</c> / <c>attempt</c>, so the attempt walk and the transcript link silently saw nothing
+    ///         at all. The log is append-only, so rows written before this stay PascalCase for ever and the readers
+    ///         take either spelling.
+    ///     </para>
+    /// </summary>
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly NodeChatDbContext _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
@@ -350,7 +363,7 @@ internal sealed partial class DevWorkflowStore(NodeChatDbContext dbContext, Time
         Convert.ToHexStringLower(SHA256.HashData(graphJson));
 
     private static byte[]? ReasonDetail(string? sanitizedReason) =>
-        string.IsNullOrWhiteSpace(sanitizedReason) ? null : Utf8(JsonSerializer.Serialize(new ReasonDetailPayload(sanitizedReason)));
+        string.IsNullOrWhiteSpace(sanitizedReason) ? null : Utf8(JsonSerializer.Serialize(new ReasonDetailPayload(sanitizedReason), JsonOptions));
 
     private static void EnsureNotBlank(string? value, string parameterName)
     {

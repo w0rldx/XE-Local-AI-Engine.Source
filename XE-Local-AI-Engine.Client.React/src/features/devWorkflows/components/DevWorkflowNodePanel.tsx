@@ -224,11 +224,17 @@ function CascadeRerunNotice({
 		return null;
 	}
 
+	// Only a routed event that names THIS node as its target explains this node's reset. Proximity alone does not: a
+	// same-node retry writes `node.retry.scheduled` with no routed event of its own, so the newest routed event
+	// anywhere in the run sits at-or-before it and would be read as the cause — under C2's N parallel subtrees that is
+	// the ordinary case. The cost is silence for a node reset as a DESCENDANT of the routed target rather than as the
+	// target itself: no banner where one would have been useful, which is the side to be wrong on.
 	const routed = events
 		.filter(
 			(event) =>
 				event.eventType === devWorkflowAttemptEventTypes.retryRouted &&
-				(event.sequence ?? 0) <= (latestReset.sequence ?? 0),
+				(event.sequence ?? 0) <= (latestReset.sequence ?? 0) &&
+				devWorkflowRoutedDetail(event.detailJson).to === nodeRun.nodeKey,
 		)
 		.toSorted((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0))
 		.at(-1);

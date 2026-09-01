@@ -216,6 +216,52 @@ describe("DevWorkflowNodePanel", () => {
 		expect(navigate).toHaveBeenCalledWith({ to: "/work-sessions/$sessionId", params: { sessionId } });
 	});
 
+	it("still offers the transcript of an attempt whose row the store wrote in PascalCase", () => {
+		// The pre-FX-D spelling, which every existing run keeps for ever. Read only under the new one, the session id
+		// is undefined and this link simply does not render — the failure this whole class of bug has: silence.
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		// Two attempts, because a one-row list renders nothing — the header already says "attempt 1 of N".
+		renderPanel(devWorkflowNodeRunDetail({ attempt: 2, maxAttempts: 3 }), {
+			events: [
+				devWorkflowRunEvent({
+					id: "attached-legacy",
+					sequence: 1,
+					eventType: "worksession.attached",
+					nodeRunId,
+					detailJson: JSON.stringify({ WorkSessionId: sessionId, Attempt: 1, SessionResumes: 0 }),
+				}),
+				devWorkflowRunEvent({ id: "retry-legacy", sequence: 2, eventType: "node.retry.scheduled", nodeRunId }),
+			],
+		});
+
+		fireEvent.click(screen.getByTestId("dev-workflow-node-attempt-session-1"));
+		expect(navigate).toHaveBeenCalledWith({ to: "/work-sessions/$sessionId", params: { sessionId } });
+	});
+
+	it("does not blame an unrelated fix loop for a node's own retry", () => {
+		// A same-node retry emits `node.retry.scheduled` with NO routed event of its own, so the newest routed event
+		// anywhere in the run sits at-or-before it — under C2's N subtrees that is the ordinary case, not a corner.
+		// Reading it would name a node that has nothing to do with this reset.
+		const nodeRunId = devWorkflowNodeRunDetail().id;
+		renderPanel(devWorkflowNodeRunDetail({ nodeKey: "implement", attempt: 2 }), {
+			run: devWorkflowRun({
+				nodes: [devWorkflowNodeRunSummary({ id: "node-validate", nodeKey: "validate", label: "Validate the patch" })],
+			}),
+			events: [
+				devWorkflowRunEvent({
+					id: "routed-elsewhere",
+					sequence: 3,
+					eventType: "node.retry.routed",
+					nodeRunId: "node-validate",
+					detailJson: JSON.stringify({ from: "validate", to: "document" }),
+				}),
+				devWorkflowRunEvent({ id: "reset", sequence: 5, eventType: "node.retry.scheduled", nodeRunId }),
+			],
+		});
+
+		expect(screen.queryByTestId("dev-workflow-node-cascade-rerun")).toBeNull();
+	});
+
 	it("says why a completed node is running again, rather than letting it silently un-complete", () => {
 		const nodeRunId = devWorkflowNodeRunDetail().id;
 		renderPanel(devWorkflowNodeRunDetail({ nodeKey: "implement", attempt: 2 }), {
