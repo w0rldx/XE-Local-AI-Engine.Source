@@ -379,6 +379,71 @@ describe("DevWorkflowNodePanel", () => {
 		expect(screen.queryByTestId("dev-workflow-node-branch-taken-audit")).toBeNull();
 	});
 
+	it("shows a settled HumanGate's branches, because the seeded template's gates are the only gates it has", () => {
+		// `feature-development-v1` ships only HumanGates, so a decision panel with no branch view meant the branch a
+		// run actually took was unreachable from the one template that matters.
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				nodeType: "HumanGate",
+				nodeKey: "planapproval",
+				label: "Approve the plan",
+				status: "Succeeded",
+				pendingDecisionKind: null,
+			}),
+			{
+				run: devWorkflowRun({
+					graph: {
+						schemaVersion: 1,
+						nodes: [],
+						edges: [
+							{ from: "planapproval", to: "decompose", condition: { path: "$.decision", op: "eq", value: "Approve" } },
+							{ from: "planapproval", to: "replan", condition: { path: "$.decision", op: "eq", value: "Reject" } },
+						],
+					},
+					nodes: [
+						devWorkflowNodeRunSummary({ id: "n0", nodeKey: "planapproval", status: "Succeeded" }),
+						devWorkflowNodeRunSummary({ id: "n1", nodeKey: "decompose", label: "Decompose", status: "Running" }),
+						devWorkflowNodeRunSummary({ id: "n2", nodeKey: "replan", label: "Re-plan", status: "Skipped" }),
+					],
+				}),
+			},
+		);
+
+		expect(screen.getByTestId("dev-workflow-node-branch-condition-decompose").textContent).toBe('$.decision eq "Approve"');
+		// The same untaken semantics as a `Gate`: the loser is Skipped, and Skipped is not taken.
+		expect(screen.getByTestId("dev-workflow-node-branch-taken-decompose")).toBeDefined();
+		expect(screen.queryByTestId("dev-workflow-node-branch-taken-replan")).toBeNull();
+		// A HumanGate is not a Parallel: its successors are alternatives, not concurrent work.
+		expect(screen.getByTestId("dev-workflow-node-structural-branches").textContent).toContain("Branches");
+	});
+
+	it("shows an OPEN HumanGate no branches at all, because nothing has been decided to show", () => {
+		renderPanel(
+			devWorkflowNodeRunDetail({
+				nodeType: "HumanGate",
+				nodeKey: "planapproval",
+				label: "Approve the plan",
+				status: "WaitingForApproval",
+				pendingDecisionKind: "Approve",
+				allowedDecisions: ["Approve", "Reject"],
+			}),
+			{
+				run: devWorkflowRun({
+					graph: { schemaVersion: 1, nodes: [], edges: [{ from: "planapproval", to: "decompose" }] },
+					nodes: [
+						devWorkflowNodeRunSummary({ id: "n0", nodeKey: "planapproval", status: "WaitingForApproval" }),
+						devWorkflowNodeRunSummary({ id: "n1", nodeKey: "decompose", label: "Decompose", status: "Pending" }),
+					],
+				}),
+			},
+		);
+
+		// Every successor is still Pending, so a branch list here would name no branch — the decision controls are the
+		// whole surface until the gate is answered.
+		expect(screen.getByTestId("dev-workflow-gate-panel")).toBeDefined();
+		expect(screen.queryByTestId("dev-workflow-node-structural")).toBeNull();
+	});
+
 	it("still lists a branch whose node has not been created yet, rather than shrinking the graph", () => {
 		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Parallel", nodeKey: "fanout", label: "Fan out" }), {
 			run: devWorkflowRun({

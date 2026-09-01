@@ -20,11 +20,12 @@ export interface DevWorkflowStructuralNodePanelProps {
 }
 
 /**
- * ONE panel for Gate, Parallel and Join (P4 §2.6 — no bespoke component per kind). All three are nodes with no work of
- * their own: what an operator needs from them is the shape of the graph around them, which lives in the run's OTHER
- * rows and the pinned graph's edges, never on the node-run detail response.
+ * ONE panel for Gate, Parallel and Join (P4 §2.6 — no bespoke component per kind), and for a SETTLED HumanGate, which
+ * is a gate whose condition a person answered. All of them are nodes with no work of their own: what an operator needs
+ * from them is the shape of the graph around them, which lives in the run's OTHER rows and the pinned graph's edges,
+ * never on the node-run detail response.
  *
- * - **Gate** — the condition off the EDGES (Y24: conditions live on edges only, and P3 exposes no
+ * - **Gate / settled HumanGate** — the condition off the EDGES (Y24: conditions live on edges only, and P3 exposes no
  *   `conditionExpression` on the node), and which successor the run actually entered. There is no `conditionResult`
  *   field to read (P3 §4.2 deleted it); the branch NOT taken is the one the runtime left in an untaken state, which
  *   `untakenBranchStatuses` names.
@@ -78,9 +79,9 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
 			) : (
 				<Stack gap={4} data-testid="dev-workflow-node-structural-branches">
 					<Text size="xs" c="dimmed">
-						{nodeType === "Gate"
-							? t("pages.devWorkflows.structural.branches", "Branches")
-							: t("pages.devWorkflows.structural.parallelBranches", "Parallel branches")}
+						{nodeType === "Parallel"
+							? t("pages.devWorkflows.structural.parallelBranches", "Parallel branches")
+							: t("pages.devWorkflows.structural.branches", "Branches")}
 					</Text>
 					{outbound.length === 0 ? (
 						<Text size="sm" c="dimmed">

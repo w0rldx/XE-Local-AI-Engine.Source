@@ -25,6 +25,7 @@ import {
 	type DevWorkflowNodeRunDetailResponse,
 	type DevWorkflowRunEventResponse,
 	type DevWorkflowRunResponse,
+	isSettledDevWorkflowNodeStatus,
 	toDevWorkflowNodeStatus,
 	toDevWorkflowNodeType,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
@@ -176,7 +177,15 @@ export function DevWorkflowNodePanel({
 				{nodeType === "Agent" ? <DevWorkflowAgentNodePanel nodeRun={nodeRun} /> : null}
 				{nodeType === "Tool" ? <DevWorkflowToolNodePanel nodeRun={nodeRun} onShowArtifacts={onShowArtifacts} /> : null}
 				{nodeType === "DevTask" ? <DevWorkflowDevTaskNodePanel nodeRun={nodeRun} /> : null}
-				{nodeType === "Gate" || nodeType === "Parallel" || nodeType === "Join" ? (
+				{/* A HumanGate is a gate too, and once it has been ANSWERED the branch it sent the run down is the fact an
+				    operator opened it for — `feature-development-v1` ships only HumanGates, so without this the branch
+				    list is unreachable from the one template that matters. It appears BELOW the decision controls and
+				    only when the node has settled: while the gate is still asking, every successor is Pending and the
+				    list would name no branch at all. Same panel, same edges, same untaken-branch semantics as `Gate`. */}
+				{nodeType === "Gate" ||
+				nodeType === "Parallel" ||
+				nodeType === "Join" ||
+				(nodeType === "HumanGate" && isSettledDevWorkflowNodeStatus(status)) ? (
 					<DevWorkflowStructuralNodePanel nodeRun={nodeRun} nodeType={nodeType} run={run} />
 				) : null}
 

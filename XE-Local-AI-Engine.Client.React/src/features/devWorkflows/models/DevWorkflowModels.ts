@@ -173,6 +173,14 @@ export function devWorkflowNodeAwaitsHuman(status: DevWorkflowNodeStatus): boole
 	return status === "WaitingForApproval" || status === "Blocked";
 }
 
+/**
+ * The node run has stopped for good on this attempt: the runtime has routed past it, so its successors carry the
+ * states that say which branch it took. A gate that has not reached one of these has nothing settled to show.
+ */
+export function isSettledDevWorkflowNodeStatus(status: DevWorkflowNodeStatus): boolean {
+	return status === "Succeeded" || status === "Failed" || status === "Skipped" || status === "Cancelled";
+}
+
 /** Only `Running` earns motion. `Queued` deliberately does not — see the O9 honesty rule in the table. */
 export function isDevWorkflowNodeInProgress(status: DevWorkflowNodeStatus): boolean {
 	return status === "Running";
