@@ -292,6 +292,45 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
+    ///     A package with a HOLE in it — a JSON <c>null</c> where a task should be — is refused, not thrown over.
+    ///     <para>
+    ///         `[null]` is valid JSON and deserializes to a list holding a null element, which the non-nullable
+    ///         annotation says cannot exist. Every reader past the parse dereferences the entry, so the hole reaches
+    ///         one of them as a <c>NullReferenceException</c> out of the tick — and the decomposition it happens over
+    ///         has already SUCCEEDED, so the next tick reads the same artifact and throws again. That is the wedge
+    ///         class this module refuses: the run has nothing moving, nothing failing, and nothing to read.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task ATaskPackageWithAHoleWhereATaskShouldBeIsRefusedRatherThanWedgingTheRun()
+    {
+        await using var harness = new DevWorkflowHarness();
+        string[] packages =
+        [
+            "[null]",
+            """[{"id":"alpha","goal":"one"},null]""",
+            """{"tasks":[null]}"""
+        ];
+
+        foreach (var package in packages)
+        {
+            var runId = await DecomposeAsync(harness, package).ConfigureAwait(false);
+
+            // Two quiescent passes: the first hands the complaint back to the node, the second — after the re-attempt
+            // saves nothing new — stands it down. A throw out of the tick fails this line rather than the assertions.
+            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+            await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
+            _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
+
+            var decompose = await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false);
+            AssertEx.Equal(DevWorkflowNodeRunStatus.Blocked, decompose.Status, $"'{package}' left the run on {decompose.Status} instead of standing the decomposition down.");
+            AssertEx.Equal(DevWorkflowFailureClasses.Configuration, decompose.FailureClass);
+            AssertEx.Contains(AssertEx.NotNull(decompose.TerminalReason), "where a task should be", message: "and the node is told WHICH entry is the hole, or the re-attempt has nothing to correct.");
+            AssertEx.Equal(expected: 2, (await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false)).Count, "a refused package clones nothing.");
+        }
+    }
+
+    /// <summary>
     ///     A collision on a NON-root clone is refused as cleanly as one on the root. The template's descendants are
     ///     cloned under the same "{nodeKey}#{taskId}" layout, so a graph that happens to declare a node by one of those
     ///     names collides just as hard — and reaching the store with it is not a refusal, it is a throw out of the tick

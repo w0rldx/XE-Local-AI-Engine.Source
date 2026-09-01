@@ -264,9 +264,26 @@ internal sealed class DevWorkflowMaterializer
             return TaskPackage.Rejected($"The task package '{name}' is not valid JSON: {exception.Message}");
         }
 
-        return items is null
-            ? TaskPackage.Rejected($"The task package '{name}' must be an array of tasks, or an object with a 'tasks' array.")
-            : new TaskPackage([.. items], artifactId, Error: null);
+        if (items is null)
+        {
+            return TaskPackage.Rejected($"The task package '{name}' must be an array of tasks, or an object with a 'tasks' array.");
+        }
+
+        // A JSON `null` in the array deserializes to a null ELEMENT despite the non-nullable annotation, and every
+        // reader below here — the refusal table, the composer — dereferences the entry. Refused at the parse boundary
+        // rather than in one of them, because this is the one place that makes `Tasks` element-non-null by
+        // construction: reaching any reader with the hole throws out of the tick, and a tick that throws over a
+        // decomposition that has already SUCCEEDED re-throws on every tick after it. That is the wedge this module
+        // refuses to have; the stand-down is a refusal the node can be told about instead.
+        for (var index = 0; index < items.Count; index++)
+        {
+            if (items[index] is null)
+            {
+                return TaskPackage.Rejected($"The task package '{name}' has nothing at position {index + 1} where a task should be; every entry must be an object describing one task.");
+            }
+        }
+
+        return new TaskPackage([.. items], artifactId, Error: null);
     }
 
     /// <summary>
